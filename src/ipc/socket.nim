@@ -70,6 +70,14 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdResizeHeight, deltaH: float32(parseFloat(parts[1]))))
             except: warn "Invalid height delta", delta=parts[1]
+        of "adjust-gaps":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdAdjustGaps, deltaG: int32(parseInt(parts[1]))))
+            except: warn "Invalid gap delta", delta=parts[1]
+        of "move-column-left": onMsg(Msg(kind: CmdMoveColumnLeft))
+        of "move-column-right": onMsg(Msg(kind: CmdMoveColumnRight))
+        of "move-window-up": onMsg(Msg(kind: CmdMoveWindowUp))
+        of "move-window-down": onMsg(Msg(kind: CmdMoveWindowDown))
         else: warn "Unknown IPC command", command=cmd
       
       client.close()

@@ -214,6 +214,79 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           nextModel.tags[activeTagId] = tag
           effects.add(Effect(kind: EffManageDirty))
 
+  of CmdAdjustGaps:
+    nextModel.outerGaps = max(0, nextModel.outerGaps + msg.deltaG)
+    nextModel.innerGaps = nextModel.outerGaps div 2
+    effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMoveColumnLeft:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        for i in 0 ..< tag.columns.len:
+          if tag.columns[i].windows.contains(focused):
+            colIdx = i
+            break
+        if colIdx > 0:
+          let temp = tag.columns[colIdx]
+          tag.columns[colIdx] = tag.columns[colIdx-1]
+          tag.columns[colIdx-1] = temp
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMoveColumnRight:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        for i in 0 ..< tag.columns.len:
+          if tag.columns[i].windows.contains(focused):
+            colIdx = i
+            break
+        if colIdx != -1 and colIdx < tag.columns.len - 1:
+          let temp = tag.columns[colIdx]
+          tag.columns[colIdx] = tag.columns[colIdx+1]
+          tag.columns[colIdx+1] = temp
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMoveWindowUp:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        for i in 0 ..< tag.columns.len:
+          let idx = tag.columns[i].windows.find(focused)
+          if idx > 0:
+            let temp = tag.columns[i].windows[idx]
+            tag.columns[i].windows[idx] = tag.columns[i].windows[idx-1]
+            tag.columns[i].windows[idx-1] = temp
+            nextModel.tags[activeTagId] = tag
+            effects.add(Effect(kind: EffManageDirty))
+            break
+
+  of CmdMoveWindowDown:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        for i in 0 ..< tag.columns.len:
+          let idx = tag.columns[i].windows.find(focused)
+          if idx != -1 and idx < tag.columns[i].windows.len - 1:
+            let temp = tag.columns[i].windows[idx]
+            tag.columns[i].windows[idx] = tag.columns[i].windows[idx+1]
+            tag.columns[i].windows[idx+1] = temp
+            nextModel.tags[activeTagId] = tag
+            effects.add(Effect(kind: EffManageDirty))
+            break
+
   of CmdToggleOverview:
     nextModel.overviewActive = not nextModel.overviewActive
     effects.add(Effect(kind: EffManageDirty))

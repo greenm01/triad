@@ -20,6 +20,11 @@ type
     CmdSetMasterRatio,
     CmdResizeWidth,
     CmdResizeHeight,
+    CmdAdjustGaps,
+    CmdMoveColumnLeft,
+    CmdMoveColumnRight,
+    CmdMoveWindowUp,
+    CmdMoveWindowDown,
     CmdToggleOverview,
     CmdToggleFloating,
     CmdSelectWindow,
@@ -51,5 +56,7 @@ type
       deltaW*: float32
     of CmdResizeHeight:
       deltaH*: float32
+    of CmdAdjustGaps:
+      deltaG*: int32
     else:
       discard
