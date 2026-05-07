@@ -244,10 +244,26 @@ proc main() =
       # Handle View phase during RenderStart
       if msg.kind == WlRenderStart:
         let screen = Rect(x: 0, y: 0, w: currentModel.screenWidth, h: currentModel.screenHeight)
-        if currentModel.tags.hasKey(currentModel.activeTag):
+        
+        var instructions: seq[RenderInstruction] = @[]
+
+        if currentModel.overviewActive:
+          # --- OVERVIEW MODE ---
+          # Aggregate all windows from all tags into a dummy TagState for the grid layout
+          var overviewTag = TagState(tagId: 0, layoutMode: Grid)
+          for tag in currentModel.tags.values:
+            for col in tag.columns:
+              for win in col.windows:
+                overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
+          
+          # Use large gaps for overview
+          instructions = layoutGrid(overviewTag, screen, 64, currentModel.innerGaps * 2)
+          
+        elif currentModel.tags.hasKey(currentModel.activeTag):
+          # --- NORMAL MODE ---
           let tag = currentModel.tags[currentModel.activeTag]
           
-          let instructions = case tag.layoutMode
+          instructions = case tag.layoutMode
             of Scroller:
               layoutScroller(tag, screen, currentModel.outerGaps, currentModel.innerGaps,
                              currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
@@ -259,10 +275,10 @@ proc main() =
             of Monocle:
               layoutMonocle(tag, screen, currentModel.outerGaps)
 
-          for instr in instructions:
-            executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
-                                 x: instr.geom.x, y: instr.geom.y, 
-                                 w: instr.geom.w, h: instr.geom.h))
+        for instr in instructions:
+          executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
+                               x: instr.geom.x, y: instr.geom.y, 
+                               w: instr.geom.w, h: instr.geom.h))
         
         # Must finish render
         executeEffect(Effect(kind: EffRenderFinish))

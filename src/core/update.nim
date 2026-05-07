@@ -1,4 +1,4 @@
-import model, msg, tables, strutils
+import model, msg, tables, strutils, algorithm
 
 type
   EffectKind* = enum
@@ -129,8 +129,50 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       nextModel.tags[nextModel.activeTag].masterSplitRatio = clamp(msg.ratio, 0.05, 0.95)
       effects.add(Effect(kind: EffManageDirty))
 
+  of CmdToggleOverview:
+    nextModel.overviewActive = not nextModel.overviewActive
+    effects.add(Effect(kind: EffManageDirty))
+
+  of CmdSelectWindow:
+    nextModel.overviewActive = false
+    effects.add(Effect(kind: EffManageDirty))
+
   of CmdFocusNext:
-    if nextModel.tags.hasKey(nextModel.activeTag):
+    if nextModel.overviewActive:
+      var allWindows: seq[WindowId] = @[]
+      # Sort tag IDs for consistent navigation order
+      var tagIds: seq[uint32] = @[]
+      for id in nextModel.tags.keys: tagIds.add(id)
+      tagIds.sort()
+
+      for id in tagIds:
+        let tag = nextModel.tags[id]
+        for col in tag.columns:
+          for win in col.windows:
+            allWindows.add(win)
+      
+      if allWindows.len > 0:
+        let activeTagId = nextModel.activeTag
+        let currentFocus = nextModel.tags[activeTagId].focusedWindow
+        let idx = allWindows.find(currentFocus)
+        let nextIdx = (if idx == -1: 0 else: (idx + 1) mod allWindows.len)
+        let nextFocus = allWindows[nextIdx]
+        
+        # Find owner tag
+        for id in tagIds:
+          var found = false
+          for col in nextModel.tags[id].columns:
+            if col.windows.contains(nextFocus):
+              found = true
+              break
+          if found:
+            nextModel.activeTag = id
+            nextModel.tags[id].focusedWindow = nextFocus
+            break
+            
+        effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
+
+    elif nextModel.tags.hasKey(nextModel.activeTag):
       var tag = nextModel.tags[nextModel.activeTag]
       var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
@@ -145,7 +187,40 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
   of CmdFocusPrev:
-    if nextModel.tags.hasKey(nextModel.activeTag):
+    if nextModel.overviewActive:
+      var allWindows: seq[WindowId] = @[]
+      var tagIds: seq[uint32] = @[]
+      for id in nextModel.tags.keys: tagIds.add(id)
+      tagIds.sort()
+
+      for id in tagIds:
+        let tag = nextModel.tags[id]
+        for col in tag.columns:
+          for win in col.windows:
+            allWindows.add(win)
+      
+      if allWindows.len > 0:
+        let activeTagId = nextModel.activeTag
+        let currentFocus = nextModel.tags[activeTagId].focusedWindow
+        let idx = allWindows.find(currentFocus)
+        let prevIdx = (if idx == -1: 0 else: (idx - 1 + allWindows.len) mod allWindows.len)
+        let nextFocus = allWindows[prevIdx]
+        
+        # Find owner tag
+        for id in tagIds:
+          var found = false
+          for col in nextModel.tags[id].columns:
+            if col.windows.contains(nextFocus):
+              found = true
+              break
+          if found:
+            nextModel.activeTag = id
+            nextModel.tags[id].focusedWindow = nextFocus
+            break
+
+        effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
+
+    elif nextModel.tags.hasKey(nextModel.activeTag):
       var tag = nextModel.tags[nextModel.activeTag]
       var allWindows: seq[WindowId] = @[]
       for col in tag.columns:

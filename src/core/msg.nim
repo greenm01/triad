@@ -18,6 +18,8 @@ type
     CmdMoveToTag,
     CmdSetMasterCount,
     CmdSetMasterRatio,
+    CmdToggleOverview,
+    CmdSelectWindow,
     CmdReloadConfig
 
   Msg* = object

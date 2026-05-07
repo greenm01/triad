@@ -40,6 +40,8 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "layout-tile": onMsg(Msg(kind: CmdSetLayout, newLayout: MasterStack))
         of "layout-grid": onMsg(Msg(kind: CmdSetLayout, newLayout: Grid))
         of "layout-monocle": onMsg(Msg(kind: CmdSetLayout, newLayout: Monocle))
+        of "toggle-overview": onMsg(Msg(kind: CmdToggleOverview))
+        of "select-window": onMsg(Msg(kind: CmdSelectWindow))
         of "move-to-tag":
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdMoveToTag, targetTag: uint32(parseInt(parts[1]))))

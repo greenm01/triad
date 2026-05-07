@@ -43,6 +43,7 @@ type
     windows*: Table[WindowId, WindowData]
     windowRules*: seq[WindowRule]
     activeTag*: uint32
+    overviewActive*: bool
     # Screen dimensions
     screenWidth*: int32
     screenHeight*: int32
