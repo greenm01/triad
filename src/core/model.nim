@@ -71,6 +71,7 @@ type
     # Config-driven gaps
     outerGaps*: int32
     innerGaps*: int32
+    smartGaps*: bool
     # Scroller global config
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool

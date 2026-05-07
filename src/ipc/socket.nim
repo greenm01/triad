@@ -62,6 +62,14 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdSetMasterRatio, ratio: float32(parseFloat(parts[1]))))
             except: warn "Invalid master ratio", ratio=parts[1]
+        of "resize-width":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdResizeWidth, deltaW: float32(parseFloat(parts[1]))))
+            except: warn "Invalid width delta", delta=parts[1]
+        of "resize-height":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdResizeHeight, deltaH: float32(parseFloat(parts[1]))))
+            except: warn "Invalid height delta", delta=parts[1]
         else: warn "Unknown IPC command", command=cmd
       
       client.close()

@@ -18,6 +18,8 @@ type
     CmdMoveToTag,
     CmdSetMasterCount,
     CmdSetMasterRatio,
+    CmdResizeWidth,
+    CmdResizeHeight,
     CmdToggleOverview,
     CmdToggleFloating,
     CmdSelectWindow,
@@ -45,5 +47,9 @@ type
       count*: int
     of CmdSetMasterRatio:
       ratio*: float32
+    of CmdResizeWidth:
+      deltaW*: float32
+    of CmdResizeHeight:
+      deltaH*: float32
     else:
       discard

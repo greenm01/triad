@@ -16,6 +16,7 @@ type
     scrollerPreferCenter*: bool
     enableAnimations*: bool
     animationSpeed*: float32
+    smartGaps*: bool
 
   TagRule* = object
     tagId*: uint32
@@ -34,6 +35,7 @@ proc loadConfig*(path: string): Config =
   result.layout.scrollerPreferCenter = false
   result.layout.enableAnimations = true
   result.layout.animationSpeed = 0.15
+  result.layout.smartGaps = false
   
   try:
     let doc = parseKdlFile(path)
@@ -55,6 +57,8 @@ proc loadConfig*(path: string): Config =
             result.layout.enableAnimations = child.args[0].kBool()
           elif child.name == "animation-speed":
             result.layout.animationSpeed = float32(child.args[0].kFloat())
+          elif child.name == "smart-gaps":
+            result.layout.smartGaps = child.args[0].kBool()
       
       elif node.name == "tag-rules":
         for child in node.children:
@@ -112,6 +116,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.centerFocusedColumn = config.layout.centerFocusedColumn
   model.enableAnimations = config.layout.enableAnimations
   model.animationSpeed = config.layout.animationSpeed
+  model.smartGaps = config.layout.smartGaps
   model.windowRules = config.windowRules
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell

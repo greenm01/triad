@@ -182,6 +182,38 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       nextModel.tags[nextModel.activeTag].masterSplitRatio = clamp(msg.ratio, 0.05, 0.95)
       effects.add(Effect(kind: EffManageDirty))
 
+  of CmdResizeWidth:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        if tag.layoutMode == Scroller:
+          for i in 0 ..< tag.columns.len:
+            if tag.columns[i].windows.contains(focused):
+              tag.columns[i].widthProportion = clamp(tag.columns[i].widthProportion + msg.deltaW, 0.05, 1.0)
+              break
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+        elif tag.layoutMode == MasterStack:
+          tag.masterSplitRatio = clamp(tag.masterSplitRatio + msg.deltaW, 0.05, 0.95)
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdResizeHeight:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        if tag.layoutMode == VerticalScroller:
+          for i in 0 ..< tag.columns.len:
+            if tag.columns[i].windows.contains(focused):
+              tag.columns[i].widthProportion = clamp(tag.columns[i].widthProportion + msg.deltaH, 0.05, 1.0)
+              break
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
   of CmdToggleOverview:
     nextModel.overviewActive = not nextModel.overviewActive
     effects.add(Effect(kind: EffManageDirty))

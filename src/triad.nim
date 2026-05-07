@@ -352,23 +352,36 @@ proc main() =
           var tag = currentModel.tags[currentModel.activeTag]
           let tiledTagState = getTiledTagState(tag, currentModel)
           
+          # Dynamic Layout Logic: Smart Gaps
+          var currentOuterGap = currentModel.outerGaps
+          var currentInnerGap = currentModel.innerGaps
+          
+          # Count total tiled windows across all columns
+          var tiledWindowCount = 0
+          for col in tiledTagState.columns:
+            tiledWindowCount += col.windows.len
+            
+          if currentModel.smartGaps and tiledWindowCount <= 1:
+            currentOuterGap = 0
+            currentInnerGap = 0
+
           # layout algorithms will update 'tag' for target offsets
           var tagForLayout = tiledTagState
           instructions = case tagForLayout.layoutMode
             of Scroller:
-              layoutScroller(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps,
+              layoutScroller(tagForLayout, screen, currentOuterGap, currentInnerGap,
                              currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                              currentModel.centerFocusedColumn)
             of VerticalScroller:
-              layoutVerticalScroller(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps,
+              layoutVerticalScroller(tagForLayout, screen, currentOuterGap, currentInnerGap,
                                      currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                                      currentModel.centerFocusedColumn)
             of MasterStack:
-              layoutMasterStack(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps)
+              layoutMasterStack(tagForLayout, screen, currentOuterGap, currentInnerGap)
             of Grid:
-              layoutGrid(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps)
+              layoutGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
             of Monocle:
-              layoutMonocle(tagForLayout, screen, currentModel.outerGaps)
+              layoutMonocle(tagForLayout, screen, currentOuterGap)
 
           # Copy back updated target offsets to real model
           tag.targetViewportXOffset = tagForLayout.targetViewportXOffset
