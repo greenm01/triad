@@ -55,7 +55,9 @@ River's `window-management-v1` requires a double-buffered sequence. TEA maps per
 Layouts are decoupled from the core Wayland event loop. They are simply mathematical functions called during the View phase based on the current `TagState`.
 
 *   **Tag State:** Each Tag (Workspace) maintains its own layout configuration (e.g., Tag 1 is a Scroller, Tag 2 is a Master-Stack).
-*   **Scroller Layout:** Implements Niri-style behavior by calculating a virtual horizontal strip and manipulating a `viewport_x_offset` to center focused windows. Off-screen windows are positioned outside monitor bounds.
+*   **Scroller Layout:** Implements a Mango-inspired hybrid scrolling workflow. Unlike Niri's fixed ribbon, Triad's scroller treats scrolling as a swappable policy based on window proportions.
+    *   **Proportion-Based:** Windows (or Columns) occupy a fraction of the screen width (e.g., 0.5, 0.8). If total proportions exceed 1.0, windows slide into a virtual overflow area.
+    *   **Viewport Centering (Niri Influence):** While the math is Mango-style, Triad supports an optional `center-focused-column` mode. When enabled, the `viewport_x_offset` is automatically adjusted to center the focused window, providing the smooth Niri-style navigation feel within Mango's flexible framework.
 *   **Tiling Layouts:** Traditional Mango-style layouts (Master-Stack, Grid) execute rigid geometric subdivisions based on configured ratios.
 
 ### 4. Configuration (KDL)

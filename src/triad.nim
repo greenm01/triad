@@ -205,7 +205,9 @@ proc main() =
         let screen = Rect(x: 0, y: 0, w: currentModel.screenWidth, h: currentModel.screenHeight)
         if currentModel.tags.hasKey(currentModel.activeTag):
           let tag = currentModel.tags[currentModel.activeTag]
-          let instructions = layoutScroller(tag, screen, currentModel.outerGaps, currentModel.innerGaps)
+          let instructions = layoutScroller(tag, screen, currentModel.outerGaps, currentModel.innerGaps,
+                                            currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
+                                            currentModel.centerFocusedColumn)
           for instr in instructions:
             executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
                                  x: instr.geom.x, y: instr.geom.y, 

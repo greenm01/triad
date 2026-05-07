@@ -9,6 +9,8 @@ type
     gaps*: int32
     centerFocusedColumn*: string # "never", "always", "on-overflow"
     defaultColumnWidth*: float32
+    scrollerFocusCenter*: bool
+    scrollerPreferCenter*: bool
 
   TagRule* = object
     tagId*: uint32
@@ -23,6 +25,8 @@ proc loadConfig*(path: string): Config =
   result.layout.gaps = 16
   result.layout.centerFocusedColumn = "never"
   result.layout.defaultColumnWidth = 0.5
+  result.layout.scrollerFocusCenter = false
+  result.layout.scrollerPreferCenter = false
   
   try:
     let doc = parseKdlFile(path)
@@ -34,9 +38,12 @@ proc loadConfig*(path: string): Config =
           elif child.name == "center-focused-column":
             result.layout.centerFocusedColumn = child.args[0].kString()
           elif child.name == "default-column-width":
-            # Niri uses: default-column-width { proportion 0.5; }
             if child.children.len > 0 and child.children[0].name == "proportion":
               result.layout.defaultColumnWidth = float32(child.children[0].args[0].kFloat())
+          elif child.name == "scroller-focus-center":
+            result.layout.scrollerFocusCenter = child.args[0].kBool()
+          elif child.name == "scroller-prefer-center":
+            result.layout.scrollerPreferCenter = child.args[0].kBool()
       
       elif node.name == "tag-rules":
         for child in node.children:
@@ -57,6 +64,9 @@ proc loadConfig*(path: string): Config =
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = config.layout.gaps
   model.innerGaps = config.layout.gaps div 2
+  model.scrollerFocusCenter = config.layout.scrollerFocusCenter
+  model.scrollerPreferCenter = config.layout.scrollerPreferCenter
+  model.centerFocusedColumn = config.layout.centerFocusedColumn
   
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
