@@ -1,0 +1,14 @@
+// Triad Configuration (KDL 2.0)
+
+layout {
+    gaps 16
+    center-focused-column "on-overflow"
+    default-column-width { proportion 0.5; }
+}
+
+tag-rules {
+    tag 1 default-layout="scroller"
+    tag 2 default-layout="tile"
+    tag 3 default-layout="grid"
+    tag 4 default-layout="monocle"
+}

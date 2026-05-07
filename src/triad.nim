@@ -3,9 +3,9 @@ import protocols/river/client as river
 import core/model
 import core/msg
 import core/update
-import core/view
 import layouts/scroller
-import tables, sequtils
+import config/parser
+import tables, os, fsnotify
 
 # --- Global Engine State ---
 var
@@ -22,12 +22,42 @@ var
   windowNodes: Table[WindowId, ptr RiverNodeV1]
   outputPointers: Table[uint32, ptr RiverOutputV1]
 
+  # Config Watcher
+  configPath: string
+  watcher: Watcher
+
 # --- Helpers ---
 
 proc get_id(p: pointer): uint32 =
   get_id(cast[ptr Proxy](p))
 
+proc setupConfig() =
+  configPath = getConfigPath()
+  let configDir = configPath.splitFile().dir
+  if not dirExists(configDir):
+    createDir(configDir)
+  
+  if not fileExists(configPath):
+    let defaultContent = """// Triad Configuration (KDL 2.0)
+
+layout {
+    gaps 16
+    center-focused-column "on-overflow"
+    default-column-width { proportion 0.5; }
+}
+
+tag-rules {
+    tag 1 default-layout="scroller"
+    tag 2 default-layout="tile"
+    tag 3 default-layout="grid"
+    tag 4 default-layout="monocle"
+}
+"""
+    writeFile(configPath, defaultContent)
+    echo "Created default config at ", configPath
+
 # --- Effects Execution ---
+# ... (executeEffect unchanged)
 
 proc executeEffect(eff: Effect) =
   case eff.kind
@@ -98,10 +128,22 @@ var registry_listener = RegistryListener(
 proc main() =
   # Initialize Model
   currentModel = Model(
-    activeTag: 1,
-    outerGaps: 16,
-    innerGaps: 8
+    activeTag: 1
   )
+
+  # Setup and Load Config
+  setupConfig()
+  let initialConfig = loadConfig(configPath)
+  currentModel.applyConfig(initialConfig)
+  echo "Initial config loaded from ", configPath
+
+  # Setup Watcher
+  watcher = initWatcher()
+  proc onConfigChange(events: seq[PathEvent]) {.gcsafe.} =
+    {.cast(gcsafe).}:
+      msgQueue.add(Msg(kind: CmdReloadConfig))
+  
+  watcher.register(configPath, onConfigChange)
 
   display = connectDisplay(nil)
   if display == nil:
@@ -113,11 +155,23 @@ proc main() =
   echo "Triad starting..."
   
   while display.dispatch() != -1:
+    # Poll watcher (non-blocking)
+    watcher.poll(0)
+
     # Process Message Queue
     while msgQueue.len > 0:
       let msg = msgQueue[0]
       msgQueue.delete(0)
       
+      if msg.kind == CmdReloadConfig:
+        let config = loadConfig(configPath)
+        currentModel.applyConfig(config)
+        echo "Config reloaded"
+        # Force a re-render
+        if river_manager != nil:
+          river_manager.manageDirty()
+        continue
+
       let (nextModel, effects) = update(currentModel, msg)
       currentModel = nextModel
       

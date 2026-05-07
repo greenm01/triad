@@ -12,4 +12,5 @@ bin           = @["triad"]
 
 requires "nim >= 2.0.0"
 requires "nimkdl >= 2.1.0"
-# requires "nayland" # We will add this once we verify installation
+requires "wayland >= 0.1.0"
+requires "fsnotify >= 0.1.6"
