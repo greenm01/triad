@@ -1,13 +1,5 @@
 import ../core/model
 
-type
-  Rect* = object
-    x*, y*, w*, h*: int32
-
-  RenderInstruction* = object
-    windowId*: WindowId
-    geom*: Rect
-
 proc layoutScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32, 
                     focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]

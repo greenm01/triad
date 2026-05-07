@@ -4,6 +4,7 @@ import core/model
 import core/msg
 import core/update
 import layouts/scroller
+import layouts/tiling
 import config/parser
 import ipc/socket
 import tables, os, fsnotify, asyncdispatch, chronicles
@@ -120,9 +121,10 @@ proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1
 
 proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32, interface_name: cstring, version: uint32) =
   # Bind to the river_window_manager_v1 interface
-  river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4))
-  discard river_manager.addListener(manager_listener.addr, nil)
-  info "Bound to river_window_manager_v1"
+  if $interface_name == "river_window_manager_v1":
+    river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4))
+    discard river_manager.addListener(manager_listener.addr, nil)
+    info "Bound to river_window_manager_v1"
 
 
 proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =
@@ -205,9 +207,19 @@ proc main() =
         let screen = Rect(x: 0, y: 0, w: currentModel.screenWidth, h: currentModel.screenHeight)
         if currentModel.tags.hasKey(currentModel.activeTag):
           let tag = currentModel.tags[currentModel.activeTag]
-          let instructions = layoutScroller(tag, screen, currentModel.outerGaps, currentModel.innerGaps,
-                                            currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
-                                            currentModel.centerFocusedColumn)
+          
+          let instructions = case tag.layoutMode
+            of Scroller:
+              layoutScroller(tag, screen, currentModel.outerGaps, currentModel.innerGaps,
+                             currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
+                             currentModel.centerFocusedColumn)
+            of MasterStack:
+              layoutMasterStack(tag, screen, currentModel.outerGaps, currentModel.innerGaps)
+            of Grid:
+              layoutGrid(tag, screen, currentModel.outerGaps, currentModel.innerGaps)
+            of Monocle:
+              layoutMonocle(tag, screen, currentModel.outerGaps)
+
           for instr in instructions:
             executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
                                  x: instr.geom.x, y: instr.geom.y, 

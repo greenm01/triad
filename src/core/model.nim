@@ -47,3 +47,11 @@ type
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
+
+type
+  Rect* = object
+    x*, y*, w*, h*: int32
+
+  RenderInstruction* = object
+    windowId*: WindowId
+    geom*: Rect

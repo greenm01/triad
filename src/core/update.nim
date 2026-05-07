@@ -46,7 +46,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     # Add to active tag
     let activeTag = nextModel.activeTag
     if not nextModel.tags.hasKey(activeTag):
-      nextModel.tags[activeTag] = TagState(tagId: activeTag, layoutMode: Scroller)
+      nextModel.tags[activeTag] = TagState(
+        tagId: activeTag, 
+        layoutMode: Scroller,
+        masterCount: 1,
+        masterSplitRatio: 0.55
+      )
     
     # Simple logic: each new window gets its own column for now
     var tag = nextModel.tags[activeTag]
