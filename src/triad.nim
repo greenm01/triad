@@ -6,7 +6,7 @@ import core/update
 import layouts/scroller
 import config/parser
 import ipc/socket
-import tables, os, fsnotify, asyncdispatch
+import tables, os, fsnotify, asyncdispatch, chronicles
 
 # --- Global Engine State ---
 var
@@ -56,14 +56,14 @@ tag-rules {
 }
 """
     writeFile(configPath, defaultContent)
-    echo "Created default config at ", configPath
+    info "Created default config", path=configPath
 
 # --- Effects Execution ---
 
 proc executeEffect(eff: Effect) =
   case eff.kind
   of EffLog:
-    echo eff.msg
+    info "log", msg=eff.msg
   of EffManageFinish:
     if river_manager != nil:
       river_manager.manageFinish()
@@ -119,10 +119,11 @@ proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1
 # --- Registry Callbacks ---
 
 proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32, interface_name: cstring, version: uint32) =
-  if $interface_name == "river_window_manager_v1":
-    river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4))
-    discard river_manager.addListener(manager_listener.addr, nil)
-    echo "Bound to river_window_manager_v1"
+  # Bind to the river_window_manager_v1 interface
+  river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4))
+  discard river_manager.addListener(manager_listener.addr, nil)
+  info "Bound to river_window_manager_v1"
+
 
 proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =
   discard
@@ -149,7 +150,7 @@ proc main() =
   setupConfig()
   let initialConfig = loadConfig(configPath)
   currentModel.applyConfig(initialConfig)
-  echo "Initial config loaded from ", configPath
+  info "Initial config loaded", path=configPath
 
   # Setup Watcher
   watcher = initWatcher()
@@ -167,12 +168,13 @@ proc main() =
 
   display = connectDisplay(nil)
   if display == nil:
-    quit "Failed to connect to Wayland display"
+    fatal "Failed to connect to Wayland display"
+    quit 1
 
   registry = display.getRegistry()
   discard registry.addListener(registry_listener.addr, nil)
 
-  echo "Triad starting..."
+  info "Triad starting..."
   
   while display.dispatch() != -1:
     # Poll watcher (non-blocking)
@@ -189,7 +191,7 @@ proc main() =
       if msg.kind == CmdReloadConfig:
         let config = loadConfig(configPath)
         currentModel.applyConfig(config)
-        echo "Config reloaded"
+        info "Config reloaded"
         # Force a re-render
         if river_manager != nil:
           river_manager.manageDirty()

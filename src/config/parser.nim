@@ -1,4 +1,4 @@
-import kdl, tables, ../core/model, os
+import kdl, tables, ../core/model, os, chronicles
 
 type
   Config* = object
@@ -52,7 +52,7 @@ proc loadConfig*(path: string): Config =
             result.tagRules.add(TagRule(tagId: id, defaultLayout: layout))
             
   except:
-    echo "Warning: Could not load config, using defaults"
+    warn "Could not load config, using defaults", path=path
 
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = config.layout.gaps

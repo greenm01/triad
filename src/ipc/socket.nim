@@ -1,4 +1,4 @@
-import asyncnet, asyncdispatch, os, nativesockets, ../core/msg, ../core/model
+import asyncnet, asyncdispatch, os, nativesockets, chronicles, ../core/msg, ../core/model
 
 type
   IpcServer* = object
@@ -19,7 +19,7 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
   server.bindUnix(path)
   server.listen()
   
-  echo "IPC Server listening on ", path
+  info "IPC Server listening", path=path
   
   while true:
     let client = await server.accept()
@@ -37,7 +37,7 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "layout-tile": onMsg(Msg(kind: CmdSetLayout, newLayout: MasterStack))
         of "layout-grid": onMsg(Msg(kind: CmdSetLayout, newLayout: Grid))
         of "layout-monocle": onMsg(Msg(kind: CmdSetLayout, newLayout: Monocle))
-        else: echo "Unknown IPC command: ", line
+        else: warn "Unknown IPC command", command=line
       
       client.close()
     )()
