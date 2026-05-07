@@ -1,6 +1,6 @@
 import ../core/model
 
-proc layoutScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32, 
+proc layoutScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32, 
                     focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
   
@@ -23,9 +23,7 @@ proc layoutScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32,
     virtualX.add(totalVirtualWidth)
     totalVirtualWidth += colWidth + innerGap
 
-  # Calculate offset for centering
-  var offset = tag.viewportXOffset
-  
+  # Calculate target offset for centering
   if focusedColIdx != -1:
     let col = tag.columns[focusedColIdx]
     let colWidth = int32(float32(usableWidth) * col.widthProportion)
@@ -33,18 +31,21 @@ proc layoutScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32,
     let screenCenterX = usableWidth div 2
     
     if focusCenter or centerMode == "always":
-      offset = float32(colCenterX - screenCenterX)
+      tag.targetViewportXOffset = float32(colCenterX - screenCenterX)
     elif preferCenter or centerMode == "on-overflow":
       # Only center if the column is out of view
-      let colLeft = virtualX[focusedColIdx] - int32(offset)
+      let colLeft = virtualX[focusedColIdx] - int32(tag.targetViewportXOffset)
       let colRight = colLeft + colWidth
       if colLeft < 0 or colRight > usableWidth:
-        offset = float32(colCenterX - screenCenterX)
+        tag.targetViewportXOffset = float32(colCenterX - screenCenterX)
+
+  # Use current offset for rendering (interpolated in update.nim)
+  let renderOffset = tag.currentViewportXOffset
 
   # Final coordinate mapping
   for i, col in tag.columns:
     let colWidth = int32(float32(usableWidth) * col.widthProportion) - innerGap
-    let currentX = screen.x + outerGap + virtualX[i] - int32(offset)
+    let currentX = screen.x + outerGap + virtualX[i] - int32(renderOffset)
 
     if col.windows.len == 0:
       continue
@@ -73,7 +74,7 @@ proc layoutScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32,
 
   return instructions
 
-proc layoutVerticalScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32, 
+proc layoutVerticalScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32, 
                             focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
   
@@ -84,7 +85,6 @@ proc layoutVerticalScroller*(tag: TagState, screen: Rect, outerGap, innerGap: in
   let usableHeight = screen.h - 2 * outerGap
   
   # Calculate virtual positions and find focused column
-  # In vertical mode, 'columns' are actually rows
   var virtualY: seq[int32] = @[]
   var totalVirtualHeight: int32 = 0
   var focusedColIdx = -1
@@ -98,26 +98,27 @@ proc layoutVerticalScroller*(tag: TagState, screen: Rect, outerGap, innerGap: in
     virtualY.add(totalVirtualHeight)
     totalVirtualHeight += colHeight + innerGap
 
-  # Calculate offset for centering
-  var offset = tag.viewportXOffset # Re-using XOffset as YOffset for simplicity
-  
+  # Calculate target offset for centering
   if focusedColIdx != -1:
     let colHeight = int32(float32(usableHeight) * tag.columns[focusedColIdx].widthProportion)
     let colCenterY = virtualY[focusedColIdx] + (colHeight div 2)
     let screenCenterY = usableHeight div 2
     
     if focusCenter or centerMode == "always":
-      offset = float32(colCenterY - screenCenterY)
+      tag.targetViewportYOffset = float32(colCenterY - screenCenterY)
     elif preferCenter or centerMode == "on-overflow":
-      let colTop = virtualY[focusedColIdx] - int32(offset)
+      let colTop = virtualY[focusedColIdx] - int32(tag.targetViewportYOffset)
       let colBottom = colTop + colHeight
       if colTop < 0 or colBottom > usableHeight:
-        offset = float32(colCenterY - screenCenterY)
+        tag.targetViewportYOffset = float32(colCenterY - screenCenterY)
+
+  # Use current offset for rendering
+  let renderOffset = tag.currentViewportYOffset
 
   # Final coordinate mapping
   for i, col in tag.columns:
     let colHeight = int32(float32(usableHeight) * col.widthProportion) - innerGap
-    let currentY = screen.y + outerGap + virtualY[i] - int32(offset)
+    let currentY = screen.y + outerGap + virtualY[i] - int32(renderOffset)
 
     if col.windows.len == 0:
       continue

@@ -163,6 +163,32 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     nextModel.overviewActive = false
     effects.add(Effect(kind: EffManageDirty))
 
+  of CmdTick:
+    if nextModel.enableAnimations:
+      var changed = false
+      let speed = nextModel.animationSpeed
+      let epsilon: float32 = 0.5
+
+      for tagId, tag in nextModel.tags.mpairs:
+        # X Offset interpolation
+        let dx = tag.targetViewportXOffset - tag.currentViewportXOffset
+        if abs(dx) > epsilon:
+          tag.currentViewportXOffset += dx * speed
+          changed = true
+        else:
+          tag.currentViewportXOffset = tag.targetViewportXOffset
+
+        # Y Offset interpolation
+        let dy = tag.targetViewportYOffset - tag.currentViewportYOffset
+        if abs(dy) > epsilon:
+          tag.currentViewportYOffset += dy * speed
+          changed = true
+        else:
+          tag.currentViewportYOffset = tag.targetViewportYOffset
+
+      if changed:
+        effects.add(Effect(kind: EffManageDirty))
+
   of CmdFocusNext:
     if nextModel.overviewActive:
       var allWindows: seq[WindowId] = @[]

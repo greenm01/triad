@@ -185,6 +185,12 @@ var registry_listener = RegistryListener(
   globalRemove: registry_handle_global_remove
 )
 
+proc startAnimationLoop() {.async.} =
+  while true:
+    {.cast(gcsafe).}:
+      msgQueue.add(Msg(kind: CmdTick))
+    await sleepAsync(16) # ~60fps
+
 # --- Main Loop ---
 
 proc main() =
@@ -220,6 +226,9 @@ proc main() =
     {.cast(gcsafe).}:
       msgQueue.add(msg)
   )
+
+  # Start Animation Loop
+  asyncCheck startAnimationLoop()
 
   display = connectDisplay(nil)
   if display == nil:
@@ -280,27 +289,34 @@ proc main() =
           
         elif currentModel.tags.hasKey(currentModel.activeTag):
           # --- NORMAL MODE ---
-          let originalTag = currentModel.tags[currentModel.activeTag]
-          let tiledTag = getTiledTagState(originalTag, currentModel)
+          var tag = currentModel.tags[currentModel.activeTag]
+          let tiledTagState = getTiledTagState(tag, currentModel)
           
-          instructions = case tiledTag.layoutMode
+          # layout algorithms will update 'tag' for target offsets
+          var tagForLayout = tiledTagState
+          instructions = case tagForLayout.layoutMode
             of Scroller:
-              layoutScroller(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps,
+              layoutScroller(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps,
                              currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                              currentModel.centerFocusedColumn)
             of VerticalScroller:
-              layoutVerticalScroller(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps,
+              layoutVerticalScroller(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps,
                                      currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                                      currentModel.centerFocusedColumn)
             of MasterStack:
-              layoutMasterStack(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps)
+              layoutMasterStack(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps)
             of Grid:
-              layoutGrid(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps)
+              layoutGrid(tagForLayout, screen, currentModel.outerGaps, currentModel.innerGaps)
             of Monocle:
-              layoutMonocle(tiledTag, screen, currentModel.outerGaps)
+              layoutMonocle(tagForLayout, screen, currentModel.outerGaps)
+
+          # Copy back updated target offsets to real model
+          tag.targetViewportXOffset = tagForLayout.targetViewportXOffset
+          tag.targetViewportYOffset = tagForLayout.targetViewportYOffset
+          currentModel.tags[currentModel.activeTag] = tag
 
           # Add floating windows on top
-          for col in originalTag.columns:
+          for col in tag.columns:
             for winId in col.windows:
               if currentModel.windows.hasKey(winId):
                 let winData = currentModel.windows[winId]

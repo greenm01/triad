@@ -21,6 +21,7 @@ type
     CmdToggleOverview,
     CmdToggleFloating,
     CmdSelectWindow,
+    CmdTick,
     CmdReloadConfig
 
   Msg* = object

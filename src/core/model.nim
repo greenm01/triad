@@ -38,7 +38,10 @@ type
     columns*: seq[Column]
     focusedWindow*: WindowId
     # Scroller specific state
-    viewportXOffset*: float32
+    targetViewportXOffset*: float32
+    currentViewportXOffset*: float32
+    targetViewportYOffset*: float32
+    currentViewportYOffset*: float32
     # Master-Stack specific state
     masterCount*: int
     masterSplitRatio*: float32
@@ -65,3 +68,6 @@ type
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
+    # Animation config
+    enableAnimations*: bool
+    animationSpeed*: float32

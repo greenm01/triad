@@ -12,6 +12,8 @@ type
     defaultColumnWidth*: float32
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
+    enableAnimations*: bool
+    animationSpeed*: float32
 
   TagRule* = object
     tagId*: uint32
@@ -28,6 +30,8 @@ proc loadConfig*(path: string): Config =
   result.layout.defaultColumnWidth = 0.5
   result.layout.scrollerFocusCenter = false
   result.layout.scrollerPreferCenter = false
+  result.layout.enableAnimations = true
+  result.layout.animationSpeed = 0.15
   
   try:
     let doc = parseKdlFile(path)
@@ -45,6 +49,10 @@ proc loadConfig*(path: string): Config =
             result.layout.scrollerFocusCenter = child.args[0].kBool()
           elif child.name == "scroller-prefer-center":
             result.layout.scrollerPreferCenter = child.args[0].kBool()
+          elif child.name == "enable-animations":
+            result.layout.enableAnimations = child.args[0].kBool()
+          elif child.name == "animation-speed":
+            result.layout.animationSpeed = float32(child.args[0].kFloat())
       
       elif node.name == "tag-rules":
         for child in node.children:
@@ -83,6 +91,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.centerFocusedColumn = config.layout.centerFocusedColumn
+  model.enableAnimations = config.layout.enableAnimations
+  model.animationSpeed = config.layout.animationSpeed
   model.windowRules = config.windowRules
   
   for rule in config.tagRules:
