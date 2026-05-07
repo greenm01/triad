@@ -12,6 +12,7 @@ type
 
   LayoutMode* = enum
     Scroller,
+    VerticalScroller,
     MasterStack,
     Grid,
     Monocle

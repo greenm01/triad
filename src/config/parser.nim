@@ -54,6 +54,7 @@ proc loadConfig*(path: string): Config =
             if child.props.hasKey("default-layout"):
               case child.props["default-layout"].kString()
               of "scroller": layout = Scroller
+              of "vertical-scroller": layout = VerticalScroller
               of "tile": layout = MasterStack
               of "grid": layout = Grid
               of "monocle": layout = Monocle

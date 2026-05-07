@@ -37,6 +37,7 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "focus-prev": onMsg(Msg(kind: CmdFocusPrev))
         of "reload-config": onMsg(Msg(kind: CmdReloadConfig))
         of "layout-scroller": onMsg(Msg(kind: CmdSetLayout, newLayout: Scroller))
+        of "layout-vertical-scroller": onMsg(Msg(kind: CmdSetLayout, newLayout: VerticalScroller))
         of "layout-tile": onMsg(Msg(kind: CmdSetLayout, newLayout: MasterStack))
         of "layout-grid": onMsg(Msg(kind: CmdSetLayout, newLayout: Grid))
         of "layout-monocle": onMsg(Msg(kind: CmdSetLayout, newLayout: Monocle))

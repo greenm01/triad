@@ -288,6 +288,10 @@ proc main() =
               layoutScroller(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps,
                              currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                              currentModel.centerFocusedColumn)
+            of VerticalScroller:
+              layoutVerticalScroller(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps,
+                                     currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
+                                     currentModel.centerFocusedColumn)
             of MasterStack:
               layoutMasterStack(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps)
             of Grid:
