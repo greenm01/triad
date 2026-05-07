@@ -7,7 +7,7 @@ import layouts/scroller
 import layouts/tiling
 import config/parser
 import ipc/socket
-import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc
 
 # --- Global Engine State ---
 var
@@ -61,6 +61,8 @@ layout {
     gaps 16
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
+    enable-animations true
+    animation-speed 0.15
 }
 
 tag-rules {
@@ -69,9 +71,47 @@ tag-rules {
     tag 3 default-layout="grid"
     tag 4 default-layout="monocle"
 }
+
+quickshell {
+    enabled false
+    theme "noctalia-shell"
+}
+
+// spawn-at-startup "waybar"
+
+window-rule {
+    match app-id="firefox"
+    default-tag 2
+}
+
+window-rule {
+    match app-id="alacritty"
+    default-tag 1
+}
 """
     writeFile(configPath, defaultContent)
     info "Created default config", path=configPath
+
+proc spawnStartupCommands(model: Model) =
+  for cmd in model.startupCommands:
+    if cmd.len > 0:
+      try:
+        let p = startProcess(cmd[0], args = cmd[1..^1], options = {poUsePath})
+        info "Spawned startup command", cmd=cmd[0], pid=p.processID
+      except:
+        warn "Failed to spawn startup command", cmd=cmd[0]
+
+proc spawnQuickshell(model: Model) =
+  if model.quickshell.enabled and model.quickshell.theme != "":
+    var args = @["-c", model.quickshell.theme]
+    for arg in model.quickshell.args:
+      args.add(arg)
+    
+    try:
+      let p = startProcess("qs", args = args, options = {poUsePath})
+      info "Spawned Quickshell", theme=model.quickshell.theme, pid=p.processID
+    except:
+      warn "Failed to spawn Quickshell", theme=model.quickshell.theme
 
 # --- Effects Execution ---
 
@@ -251,7 +291,14 @@ proc main() =
   registry = display.getRegistry()
   discard registry.addListener(registry_listener.addr, nil)
 
+  # Roundtrip to get the globals and listeners
+  discard display.roundtrip()
+
   info "Triad starting..."
+  
+  # Spawn startup commands (e.g. Noctalia shell)
+  spawnStartupCommands(currentModel)
+  spawnQuickshell(currentModel)
   
   while display.dispatch() != -1:
     # Poll watcher (non-blocking)

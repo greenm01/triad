@@ -4,6 +4,8 @@ layout {
     gaps 16
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
+    enable-animations true
+    animation-speed 0.15
 }
 
 tag-rules {
@@ -12,6 +14,13 @@ tag-rules {
     tag 3 default-layout="grid"
     tag 4 default-layout="monocle"
 }
+
+quickshell {
+    enabled false
+    theme "noctalia-shell"
+}
+
+// spawn-at-startup "waybar"
 
 window-rule {
     match app-id="firefox"

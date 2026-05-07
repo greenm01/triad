@@ -52,10 +52,17 @@ type
     defaultTag*: uint32
     openFloating*: bool
 
+  QuickshellConfig* = object
+    enabled*: bool
+    theme*: string
+    args*: seq[string]
+
   Model* = object
     tags*: Table[uint32, TagState]
     windows*: Table[WindowId, WindowData]
     windowRules*: seq[WindowRule]
+    startupCommands*: seq[seq[string]]
+    quickshell*: QuickshellConfig
     activeTag*: uint32
     overviewActive*: bool
     # Screen dimensions

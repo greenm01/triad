@@ -5,6 +5,8 @@ type
     layout*: LayoutConfig
     tagRules*: seq[TagRule]
     windowRules*: seq[WindowRule]
+    startupCommands*: seq[seq[string]]
+    quickshell*: QuickshellConfig
 
   LayoutConfig* = object
     gaps*: int32
@@ -81,6 +83,23 @@ proc loadConfig*(path: string): Config =
           elif child.name == "open-floating":
             rule.openFloating = child.args[0].kBool()
         result.windowRules.add(rule)
+
+      elif node.name == "spawn-at-startup":
+        var cmd: seq[string] = @[]
+        for arg in node.args:
+          cmd.add(arg.kString())
+        if cmd.len > 0:
+          result.startupCommands.add(cmd)
+
+      elif node.name == "quickshell":
+        for child in node.children:
+          if child.name == "enabled":
+            result.quickshell.enabled = child.args[0].kBool()
+          elif child.name == "theme":
+            result.quickshell.theme = child.args[0].kString()
+          elif child.name == "args":
+            for arg in child.args:
+              result.quickshell.args.add(arg.kString())
             
   except:
     warn "Could not load config, using defaults", path=path
@@ -94,6 +113,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.enableAnimations = config.layout.enableAnimations
   model.animationSpeed = config.layout.animationSpeed
   model.windowRules = config.windowRules
+  model.startupCommands = config.startupCommands
+  model.quickshell = config.quickshell
   
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
