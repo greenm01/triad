@@ -1,0 +1,18 @@
+# Binaries
+triad
+src/triad
+
+# Nim cache
+nimcache/
+src/nimcache/
+
+# User-specific
+.nimble/
+/home/niltempus/.nimble/
+
+# System / Editor
+.DS_Store
+*~
+*.swp
+.idea/
+.vscode/
