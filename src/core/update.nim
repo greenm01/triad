@@ -19,6 +19,14 @@ type
     else:
       discard
 
+proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
+  var i = 0
+  while i < s.len:
+    if pred(s[i]):
+      inc i
+    else:
+      s.delete(i)
+
 proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   var nextModel = model
   var effects: seq[Effect] = @[]
@@ -59,11 +67,3 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     discard
 
   return (nextModel, effects)
-
-proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
-  var i = 0
-  while i < s.len:
-    if pred(s[i]):
-      inc i
-    else:
-      s.delete(i)

@@ -34,7 +34,7 @@ proc layoutScroller*(tag: TagState, screen: Rect, outerGap, innerGap: int32): se
     
     for winId in col.windows:
       # For now, equal height proportions if not specified
-      let winHeight = usableColHeight div int32(numWindows)
+      let winHeight = int32(usableColHeight div int32(numWindows))
       
       instructions.add(RenderInstruction(
         windowId: winId,
