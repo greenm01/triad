@@ -5,7 +5,8 @@ import core/msg
 import core/update
 import layouts/scroller
 import config/parser
-import tables, os, fsnotify
+import ipc/socket
+import tables, os, fsnotify, asyncdispatch
 
 # --- Global Engine State ---
 var
@@ -21,6 +22,7 @@ var
   windowPointers: Table[WindowId, ptr RiverWindowV1]
   windowNodes: Table[WindowId, ptr RiverNodeV1]
   outputPointers: Table[uint32, ptr RiverOutputV1]
+  seatPointers: seq[ptr RiverSeatV1] = @[]
 
   # Config Watcher
   configPath: string
@@ -57,7 +59,6 @@ tag-rules {
     echo "Created default config at ", configPath
 
 # --- Effects Execution ---
-# ... (executeEffect unchanged)
 
 proc executeEffect(eff: Effect) =
   case eff.kind
@@ -76,6 +77,11 @@ proc executeEffect(eff: Effect) =
     if windowPointers.hasKey(eff.windowId):
       let win = windowPointers[eff.windowId]
       win.proposeDimensions(eff.w, eff.h)
+  of EffFocusWindow:
+    if windowPointers.hasKey(eff.focusId):
+      let win = windowPointers[eff.focusId]
+      for seat in seatPointers:
+        seat.focusWindow(win)
   else:
     discard
 
@@ -107,6 +113,9 @@ proc on_output(data: pointer, mgr: ptr RiverWindowManagerV1, output: ptr RiverOu
   outputPointers[id] = output
   discard output.addListener(output_listener.addr, nil)
 
+proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1) =
+  seatPointers.add(seat)
+
 # --- Registry Callbacks ---
 
 proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32, interface_name: cstring, version: uint32) =
@@ -126,6 +135,11 @@ var registry_listener = RegistryListener(
 # --- Main Loop ---
 
 proc main() =
+  if paramCount() >= 2 and paramStr(1) == "msg":
+    let cmd = paramStr(2)
+    waitFor sendIpcMsg(getTriadSocketPath(), cmd)
+    return
+
   # Initialize Model
   currentModel = Model(
     activeTag: 1
@@ -145,6 +159,12 @@ proc main() =
   
   watcher.register(configPath, onConfigChange)
 
+  # Start IPC Server
+  asyncCheck startIpcServer(getTriadSocketPath(), proc(msg: Msg) =
+    {.cast(gcsafe).}:
+      msgQueue.add(msg)
+  )
+
   display = connectDisplay(nil)
   if display == nil:
     quit "Failed to connect to Wayland display"
@@ -157,6 +177,9 @@ proc main() =
   while display.dispatch() != -1:
     # Poll watcher (non-blocking)
     watcher.poll(0)
+    
+    # Poll async (IPC)
+    asyncdispatch.poll(0)
 
     # Process Message Queue
     while msgQueue.len > 0:
@@ -198,7 +221,8 @@ if isMainModule:
     manageStart: on_manage_start,
     renderStart: on_render_start,
     window: on_window,
-    output: on_output
+    output: on_output,
+    seat: on_seat
   )
   output_listener = RiverOutputV1Listener(
     dimensions: on_output_dimensions

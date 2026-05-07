@@ -7,6 +7,7 @@ type
     EffRenderFinish,
     EffProposeDimensions,
     EffSetPosition,
+    EffFocusWindow,
     EffLog
 
   Effect* = object
@@ -16,6 +17,8 @@ type
     of EffSetPosition:
       windowId*: WindowId
       x*, y*, w*, h*: int32
+    of EffFocusWindow:
+      focusId*: WindowId
     else:
       discard
 
@@ -48,6 +51,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     # Simple logic: each new window gets its own column for now
     var tag = nextModel.tags[activeTag]
     tag.columns.add(Column(windows: @[msg.windowId], widthProportion: 0.5))
+    tag.focusedWindow = msg.windowId
     nextModel.tags[activeTag] = tag
     
   of WlWindowDestroyed:
@@ -58,10 +62,59 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         tag.columns[i].windows.keepIf(proc(id: WindowId): bool = id != msg.destroyedId)
         if tag.columns[i].windows.len == 0:
           tag.columns.delete(i)
+      
+      if tag.focusedWindow == msg.destroyedId:
+        # Simple fallback: focus first window in first column
+        if tag.columns.len > 0 and tag.columns[0].windows.len > 0:
+          tag.focusedWindow = tag.columns[0].windows[0]
+        else:
+          tag.focusedWindow = 0
+
+  of WlFocusChanged:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      nextModel.tags[nextModel.activeTag].focusedWindow = msg.newFocusedId
 
   of CmdSetLayout:
     if nextModel.tags.hasKey(nextModel.activeTag):
       nextModel.tags[nextModel.activeTag].layoutMode = msg.newLayout
+
+  of CmdFocusNext:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      var tag = nextModel.tags[nextModel.activeTag]
+      var allWindows: seq[WindowId] = @[]
+      for col in tag.columns:
+        for win in col.windows:
+          allWindows.add(win)
+      
+      if allWindows.len > 0:
+        let idx = allWindows.find(tag.focusedWindow)
+        let nextIdx = (idx + 1) mod allWindows.len
+        tag.focusedWindow = allWindows[nextIdx]
+        
+        # Recalculate viewport offset for Scroller mode
+        if tag.layoutMode == Scroller:
+          # This is a bit complex as we need to know column widths
+          # For now, let's just use a simple heuristic or a full layout preview
+          # DOD: We'll eventually move this to a shared helper
+          discard
+
+        nextModel.tags[nextModel.activeTag] = tag
+        effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
+
+  of CmdFocusPrev:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      var tag = nextModel.tags[nextModel.activeTag]
+      var allWindows: seq[WindowId] = @[]
+      for col in tag.columns:
+        for win in col.windows:
+          allWindows.add(win)
+      
+      if allWindows.len > 0:
+        let idx = allWindows.find(tag.focusedWindow)
+        let prevIdx = (idx - 1 + allWindows.len) mod allWindows.len
+        tag.focusedWindow = allWindows[prevIdx]
+        nextModel.tags[nextModel.activeTag] = tag
+        effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
   else:
     discard
