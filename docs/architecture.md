@@ -1,0 +1,74 @@
+# Triad Window Manager Architecture
+
+## Overview
+Triad is a dynamic window management client built for **River 0.4+**, leveraging the `river-window-management-v1` Wayland protocol. It is written in **Nim** for performance and safety, configured via **KDL**, and architected using **The Elm Architecture (TEA)** to ensure frame-perfect, race-condition-free state management. 
+
+Triad combines the infinite scrolling workflow of **Niri** with the flexible, per-workspace hybrid layouts of **Mango**, while remaining extensible enough to power a full desktop environment using tools like **Quickshell**.
+
+## Core Technologies
+*   **Compositor:** River 0.4+
+*   **Language:** Nim (using `nayland` or `wayland-nim` for `libwayland-client` bindings)
+*   **Protocol:** `river-window-management-v1`
+*   **Configuration:** KDL 2.0 (`nimkdl`)
+*   **State Management:** The Elm Architecture (TEA)
+
+## Implementation Principles
+
+### 1. Data-Oriented Design (DOD)
+Following the principles of Yehonathan Sharvit, Triad prioritizes the shape and flow of data over object-oriented hierarchies. 
+*   **State as Data:** The `Model` is a pure data structure (predominantly value types and flat collections).
+*   **Logic as Transformations:** Submodules provide functions that transform data from one state to another without maintaining hidden internal state.
+
+### 2. DRY (Don't Repeat Yourself)
+Common patterns, especially in Wayland protocol handling and coordinate math, are centralized into shared utility modules.
+
+### 3. Lean Submodules by Domain
+Source files are kept small and focused. The project is organized into clear domain boundaries:
+
+*   `src/triad.nim`: Entry point and main event loop orchestration.
+*   `src/core/`: The TEA engine (Model, Msg, Update, View).
+*   `src/layouts/`: Pure mathematical layout algorithms.
+*   `src/protocols/`: Generated Wayland protocol bindings.
+*   `src/config/`: KDL parsing and configuration management.
+*   `src/ipc/`: Unix socket communication for external control (e.g., Quickshell).
+*   `src/utils/`: Generic helpers and coordinate math.
+
+## Architectural Design
+...
+
+### 1. The Elm Architecture (TEA) Event Loop
+Wayland is inherently asynchronous. To prevent tearing and race conditions, Triad uses a strict unidirectional data flow.
+
+*   **Model:** A single, immutable source of truth representing the entire window manager state (Outputs, Tags, Windows, current Layout Modes, and Scroller offsets).
+*   **Update:** A pure function that takes the current `Model` and an incoming `Msg` (Wayland event, KDL hot-reload, IPC command), and returns a *new* `Model` alongside any side-effects (e.g., commands to send to River).
+*   **View (Render Phase):** A pure function that takes the finalized `Model` and executes the math for the active layout (Scroller, Master-Stack, etc.), translating abstract logical coordinates into physical Wayland screen coordinates.
+
+### 2. Double-Buffered Sequence Mapping
+River's `window-management-v1` requires a double-buffered sequence. TEA maps perfectly to this:
+
+1.  **Manage Sequence (`manage_start` -> `manage_finish`):** 
+    *   This is where the **Update** loop processes all accumulated `Msg` types (new windows, focus shifts). The `Model` is updated.
+2.  **Render Sequence (`render_start` -> `render_finish`):** 
+    *   This is where the **View** function runs. It reads the `Model`, executes the layout algorithms, and pushes `set_position` / `set_dimensions` instructions to River.
+
+### 3. Hybrid Layout Engine
+Layouts are decoupled from the core Wayland event loop. They are simply mathematical functions called during the View phase based on the current `TagState`.
+
+*   **Tag State:** Each Tag (Workspace) maintains its own layout configuration (e.g., Tag 1 is a Scroller, Tag 2 is a Master-Stack).
+*   **Scroller Layout:** Implements Niri-style behavior by calculating a virtual horizontal strip and manipulating a `viewport_x_offset` to center focused windows. Off-screen windows are positioned outside monitor bounds.
+*   **Tiling Layouts:** Traditional Mango-style layouts (Master-Stack, Grid) execute rigid geometric subdivisions based on configured ratios.
+
+### 4. Configuration (KDL)
+Triad uses KDL for robust, hot-reloadable configuration.
+*   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
+*   **Tag Rules:** Assigns default layouts to specific tags (e.g., `tag 1 default-layout="scroller"`).
+*   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific tag assignments.
+
+### 5. Future Extensibility: Quickshell Integration
+Triad is designed to act as the "backend" window manager for a full desktop environment powered by Quickshell (a QtQuick/QML-based shell).
+
+To facilitate this, the architecture will support:
+*   **Standard Wayland Protocols:** While Triad handles the `river-window-management-v1` protocol for layout, it will rely on River (or implement custom logic) to support standard protocols like `wlr-foreign-toplevel-management-unstable-v1` so that Quickshell can accurately render window lists and taskbars.
+*   **Custom IPC Socket:** Triad will expose a Unix domain socket (JSON or text-based) for two-way communication.
+    *   **Quickshell -> Triad:** Quickshell components can send commands to switch layouts, focus windows, or move workspaces.
+    *   **Triad -> Quickshell:** Triad can emit state changes (e.g., current layout mode, active tag) to update Quickshell UI widgets in real-time.
