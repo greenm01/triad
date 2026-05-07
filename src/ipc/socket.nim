@@ -1,4 +1,4 @@
-import asyncnet, asyncdispatch, os, nativesockets, chronicles, ../core/msg, ../core/model
+import asyncnet, asyncdispatch, os, nativesockets, chronicles, strutils, ../core/msg, ../core/model
 
 type
   IpcServer* = object
@@ -28,8 +28,11 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         let line = await client.recvLine()
         if line == "": break
         
-        # Simple command parsing
-        case line
+        let parts = line.split(' ')
+        if parts.len == 0: continue
+        let cmd = parts[0]
+        
+        case cmd
         of "focus-next": onMsg(Msg(kind: CmdFocusNext))
         of "focus-prev": onMsg(Msg(kind: CmdFocusPrev))
         of "reload-config": onMsg(Msg(kind: CmdReloadConfig))
@@ -37,7 +40,19 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "layout-tile": onMsg(Msg(kind: CmdSetLayout, newLayout: MasterStack))
         of "layout-grid": onMsg(Msg(kind: CmdSetLayout, newLayout: Grid))
         of "layout-monocle": onMsg(Msg(kind: CmdSetLayout, newLayout: Monocle))
-        else: warn "Unknown IPC command", command=line
+        of "move-to-tag":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdMoveToTag, targetTag: uint32(parseInt(parts[1]))))
+            except: warn "Invalid tag ID", tag=parts[1]
+        of "master-count":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdSetMasterCount, count: parseInt(parts[1])))
+            except: warn "Invalid master count", count=parts[1]
+        of "master-ratio":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdSetMasterRatio, ratio: float32(parseFloat(parts[1]))))
+            except: warn "Invalid master ratio", ratio=parts[1]
+        else: warn "Unknown IPC command", command=cmd
       
       client.close()
     )()

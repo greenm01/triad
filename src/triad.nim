@@ -71,6 +71,9 @@ proc executeEffect(eff: Effect) =
   of EffRenderFinish:
     if river_manager != nil:
       river_manager.renderFinish()
+  of EffManageDirty:
+    if river_manager != nil:
+      river_manager.manageDirty()
   of EffSetPosition:
     if windowNodes.hasKey(eff.windowId):
       let node = windowNodes[eff.windowId]
@@ -172,7 +175,10 @@ var registry_listener = RegistryListener(
 
 proc main() =
   if paramCount() >= 2 and paramStr(1) == "msg":
-    let cmd = paramStr(2)
+    var cmd = ""
+    for i in 2 .. paramCount():
+      if i > 2: cmd.add(" ")
+      cmd.add(paramStr(i))
     waitFor sendIpcMsg(getTriadSocketPath(), cmd)
     return
 

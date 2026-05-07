@@ -15,6 +15,9 @@ type
     CmdFocusNext,
     CmdFocusPrev,
     CmdMoveWindow,
+    CmdMoveToTag,
+    CmdSetMasterCount,
+    CmdSetMasterRatio,
     CmdReloadConfig
 
   Msg* = object
@@ -32,5 +35,11 @@ type
       height*: int32
     of CmdSetLayout:
       newLayout*: LayoutMode
+    of CmdMoveToTag:
+      targetTag*: uint32
+    of CmdSetMasterCount:
+      count*: int
+    of CmdSetMasterRatio:
+      ratio*: float32
     else:
       discard
