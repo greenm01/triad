@@ -7,7 +7,7 @@ import layouts/scroller
 import layouts/tiling
 import config/parser
 import ipc/socket
-import tables, os, fsnotify, asyncdispatch, chronicles
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm
 
 # --- Global Engine State ---
 var
@@ -33,6 +33,20 @@ var
 
 proc get_id(p: pointer): uint32 =
   get_id(cast[ptr Proxy](p))
+
+proc getTiledTagState(tag: TagState, model: Model): TagState =
+  # Helper to get a TagState with only non-floating windows
+  result = tag
+  result.columns = @[]
+  for col in tag.columns:
+    var filteredWindows: seq[WindowId] = @[]
+    for winId in col.windows:
+      if model.windows.hasKey(winId) and not model.windows[winId].isFloating:
+        filteredWindows.add(winId)
+    if filteredWindows.len > 0:
+      var filteredCol = col
+      filteredCol.windows = filteredWindows
+      result.columns.add(filteredCol)
 
 proc setupConfig() =
   configPath = getConfigPath()
@@ -251,7 +265,12 @@ proc main() =
           # --- OVERVIEW MODE ---
           # Aggregate all windows from all tags into a dummy TagState for the grid layout
           var overviewTag = TagState(tagId: 0, layoutMode: Grid)
-          for tag in currentModel.tags.values:
+          # Sort tag IDs for consistent navigation order
+          var tagIds: seq[uint32] = @[]
+          for id in currentModel.tags.keys: tagIds.add(id)
+          tagIds.sort()
+          for id in tagIds:
+            let tag = currentModel.tags[id]
             for col in tag.columns:
               for win in col.windows:
                 overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
@@ -261,24 +280,45 @@ proc main() =
           
         elif currentModel.tags.hasKey(currentModel.activeTag):
           # --- NORMAL MODE ---
-          let tag = currentModel.tags[currentModel.activeTag]
+          let originalTag = currentModel.tags[currentModel.activeTag]
+          let tiledTag = getTiledTagState(originalTag, currentModel)
           
-          instructions = case tag.layoutMode
+          instructions = case tiledTag.layoutMode
             of Scroller:
-              layoutScroller(tag, screen, currentModel.outerGaps, currentModel.innerGaps,
+              layoutScroller(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps,
                              currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                              currentModel.centerFocusedColumn)
             of MasterStack:
-              layoutMasterStack(tag, screen, currentModel.outerGaps, currentModel.innerGaps)
+              layoutMasterStack(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps)
             of Grid:
-              layoutGrid(tag, screen, currentModel.outerGaps, currentModel.innerGaps)
+              layoutGrid(tiledTag, screen, currentModel.outerGaps, currentModel.innerGaps)
             of Monocle:
-              layoutMonocle(tag, screen, currentModel.outerGaps)
+              layoutMonocle(tiledTag, screen, currentModel.outerGaps)
+
+          # Add floating windows on top
+          for col in originalTag.columns:
+            for winId in col.windows:
+              if currentModel.windows.hasKey(winId):
+                let winData = currentModel.windows[winId]
+                if winData.isFloating:
+                  instructions.add(RenderInstruction(
+                    windowId: winId,
+                    geom: winData.floatingGeom
+                  ))
 
         for instr in instructions:
-          executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
-                               x: instr.geom.x, y: instr.geom.y, 
-                               w: instr.geom.w, h: instr.geom.h))
+          # Execute set_position effects
+          if windowNodes.hasKey(instr.windowId):
+            let node = windowNodes[instr.windowId]
+            node.setPosition(instr.geom.x, instr.geom.y)
+            
+            # Place floating windows on top
+            if currentModel.windows.hasKey(instr.windowId) and currentModel.windows[instr.windowId].isFloating:
+              node.placeTop()
+
+          if windowPointers.hasKey(instr.windowId):
+            let win = windowPointers[instr.windowId]
+            win.proposeDimensions(instr.geom.w, instr.geom.h)
         
         # Must finish render
         executeEffect(Effect(kind: EffRenderFinish))

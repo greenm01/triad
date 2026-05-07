@@ -1,13 +1,20 @@
 import tables
 
 type
+  WindowId* = uint32
+
+  Rect* = object
+    x*, y*, w*, h*: int32
+
+  RenderInstruction* = object
+    windowId*: WindowId
+    geom*: Rect
+
   LayoutMode* = enum
     Scroller,
     MasterStack,
     Grid,
     Monocle
-
-  WindowId* = uint32
 
   WindowData* = object
     id*: WindowId
@@ -17,6 +24,8 @@ type
     # Using float32 for efficiency, following DOD
     widthProportion*: float32  # 0.0 to 1.0
     heightProportion*: float32 # 0.0 to 1.0
+    isFloating*: bool
+    floatingGeom*: Rect
 
   Column* = object
     windows*: seq[WindowId]
@@ -37,6 +46,7 @@ type
     appIdMatch*: string
     titleMatch*: string
     defaultTag*: uint32
+    openFloating*: bool
 
   Model* = object
     tags*: Table[uint32, TagState]
@@ -54,11 +64,3 @@ type
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
-
-type
-  Rect* = object
-    x*, y*, w*, h*: int32
-
-  RenderInstruction* = object
-    windowId*: WindowId
-    geom*: Rect

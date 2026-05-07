@@ -69,6 +69,8 @@ proc loadConfig*(path: string): Config =
               rule.titleMatch = child.props["title"].kString()
           elif child.name == "default-tag":
             rule.defaultTag = uint32(child.args[0].kInt())
+          elif child.name == "open-floating":
+            rule.openFloating = child.args[0].kBool()
         result.windowRules.add(rule)
             
   except:

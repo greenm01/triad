@@ -19,6 +19,7 @@ type
     CmdSetMasterCount,
     CmdSetMasterRatio,
     CmdToggleOverview,
+    CmdToggleFloating,
     CmdSelectWindow,
     CmdReloadConfig
 

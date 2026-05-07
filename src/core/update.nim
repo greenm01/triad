@@ -41,17 +41,27 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     nextModel.screenHeight = msg.height
 
   of WlWindowCreated:
-    let win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, widthProportion: 0.5, heightProportion: 1.0)
-    nextModel.windows[msg.windowId] = win
+    var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, widthProportion: 0.5, heightProportion: 1.0)
     
-    # Determine target tag based on window rules
+    # Determine target tag and floating state based on window rules
     var targetTag = nextModel.activeTag
     for rule in nextModel.windowRules:
       let appIdMatches = rule.appIdMatch == "" or msg.appId.contains(rule.appIdMatch)
       let titleMatches = rule.titleMatch == "" or msg.title.contains(rule.titleMatch)
-      if appIdMatches and titleMatches and rule.defaultTag != 0:
-        targetTag = rule.defaultTag
+      if appIdMatches and titleMatches:
+        if rule.defaultTag != 0:
+          targetTag = rule.defaultTag
+        if rule.openFloating:
+          win.isFloating = true
+          win.floatingGeom = Rect(
+            x: nextModel.screenWidth div 4,
+            y: nextModel.screenHeight div 4,
+            w: nextModel.screenWidth div 2,
+            h: nextModel.screenHeight div 2
+          )
         break
+
+    nextModel.windows[msg.windowId] = win
 
     if not nextModel.tags.hasKey(targetTag):
       nextModel.tags[targetTag] = TagState(
@@ -132,6 +142,22 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of CmdToggleOverview:
     nextModel.overviewActive = not nextModel.overviewActive
     effects.add(Effect(kind: EffManageDirty))
+
+  of CmdToggleFloating:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      if focused != 0 and nextModel.windows.hasKey(focused):
+        var win = nextModel.windows[focused]
+        win.isFloating = not win.isFloating
+        if win.isFloating:
+          win.floatingGeom = Rect(
+            x: nextModel.screenWidth div 4,
+            y: nextModel.screenHeight div 4,
+            w: nextModel.screenWidth div 2,
+            h: nextModel.screenHeight div 2
+          )
+        nextModel.windows[focused] = win
+        effects.add(Effect(kind: EffManageDirty))
 
   of CmdSelectWindow:
     nextModel.overviewActive = false
