@@ -7,7 +7,7 @@ import layouts/scroller
 import layouts/tiling
 import config/parser
 import ipc/socket
-import tables, os, fsnotify, asyncdispatch, chronicles, algorithm
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets
 
 # --- Global Engine State ---
 var
@@ -88,6 +88,8 @@ proc executeEffect(eff: Effect) =
   of EffManageDirty:
     if river_manager != nil:
       river_manager.manageDirty()
+  of EffBroadcastJson:
+    asyncCheck broadcastJson(eff.jsonPayload)
   of EffSetPosition:
     if windowNodes.hasKey(eff.windowId):
       let node = windowNodes[eff.windowId]
@@ -195,6 +197,17 @@ proc startAnimationLoop() {.async.} =
 
 proc main() =
   if paramCount() >= 2 and paramStr(1) == "msg":
+    let cmdPart = paramStr(2)
+    if cmdPart == "event-stream":
+      # Subscription client
+      let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+      waitFor client.connectUnix(getTriadSocketPath())
+      waitFor client.send("event-stream\L")
+      while not client.isClosed:
+        let line = waitFor client.recvLine()
+        if line != "": echo line
+      return
+
     var cmd = ""
     for i in 2 .. paramCount():
       if i > 2: cmd.add(" ")

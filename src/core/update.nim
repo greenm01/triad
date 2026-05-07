@@ -1,4 +1,4 @@
-import model, msg, tables, strutils, algorithm
+import model, msg, tables, strutils, algorithm, json
 
 type
   EffectKind* = enum
@@ -9,6 +9,7 @@ type
     EffSetPosition,
     EffFocusWindow,
     EffManageDirty,
+    EffBroadcastJson,
     EffLog
 
   Effect* = object
@@ -20,8 +21,47 @@ type
       x*, y*, w*, h*: int32
     of EffFocusWindow:
       focusId*: WindowId
+    of EffBroadcastJson:
+      jsonPayload*: string
     else:
       discard
+
+# --- JSON IPC Event Helpers ---
+
+proc broadcastWorkspaceActivated(tagId: uint32): Effect =
+  let payload = %*{
+    "WorkspaceActivated": {
+      "id": tagId,
+      "focused": true
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
+proc broadcastWindowFocusChanged(winId: WindowId): Effect =
+  let payload = %*{
+    "WindowFocusChanged": {
+      "id": winId
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
+proc broadcastWindowOpened(win: WindowData): Effect =
+  let payload = %*{
+    "WindowOpened": {
+      "id": win.id,
+      "title": win.title,
+      "app_id": win.appId
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
+proc broadcastWindowClosed(winId: WindowId): Effect =
+  let payload = %*{
+    "WindowClosed": {
+      "id": winId
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
 
 proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
   var i = 0
@@ -77,7 +117,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     tag.focusedWindow = msg.windowId
     nextModel.tags[targetTag] = tag
     
-    # If added to background tag, we might need a re-render if it affects something
+    effects.add(broadcastWindowOpened(win))
     effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowDestroyed:
@@ -94,11 +134,13 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           tag.focusedWindow = tag.columns[0].windows[0]
         else:
           tag.focusedWindow = 0
+    effects.add(broadcastWindowClosed(msg.destroyedId))
     effects.add(Effect(kind: EffManageDirty))
 
   of WlFocusChanged:
     if nextModel.tags.hasKey(nextModel.activeTag):
       nextModel.tags[nextModel.activeTag].focusedWindow = msg.newFocusedId
+      effects.add(broadcastWindowFocusChanged(msg.newFocusedId))
 
   of CmdSetLayout:
     if nextModel.tags.hasKey(nextModel.activeTag):
@@ -127,6 +169,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         targetTag.focusedWindow = focused
         nextModel.tags[msg.targetTag] = targetTag
         
+        effects.add(broadcastWorkspaceActivated(msg.targetTag))
         effects.add(Effect(kind: EffManageDirty))
 
   of CmdSetMasterCount:
@@ -161,6 +204,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of CmdSelectWindow:
     nextModel.overviewActive = false
+    effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
     effects.add(Effect(kind: EffManageDirty))
 
   of CmdTick:
@@ -222,6 +266,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             nextModel.tags[id].focusedWindow = nextFocus
             break
             
+        effects.add(broadcastWindowFocusChanged(nextFocus))
+        effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
         effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
 
     elif nextModel.tags.hasKey(nextModel.activeTag):
@@ -236,6 +282,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         let nextIdx = (idx + 1) mod allWindows.len
         tag.focusedWindow = allWindows[nextIdx]
         nextModel.tags[nextModel.activeTag] = tag
+        effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
         effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
   of CmdFocusPrev:
@@ -270,6 +317,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             nextModel.tags[id].focusedWindow = nextFocus
             break
 
+        effects.add(broadcastWindowFocusChanged(nextFocus))
+        effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
         effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
 
     elif nextModel.tags.hasKey(nextModel.activeTag):
@@ -284,6 +333,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         let prevIdx = (idx - 1 + allWindows.len) mod allWindows.len
         tag.focusedWindow = allWindows[prevIdx]
         nextModel.tags[nextModel.activeTag] = tag
+        effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
         effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
   else:

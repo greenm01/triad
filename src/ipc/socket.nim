@@ -4,6 +4,8 @@ type
   IpcServer* = object
     socketPath*: string
 
+var subscribers*: seq[AsyncSocket] = @[]
+
 proc getRuntimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
 
@@ -33,6 +35,10 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         let cmd = parts[0]
         
         case cmd
+        of "event-stream":
+          subscribers.add(client)
+          # Stop parsing commands from this connection, keep it open for broadcasts
+          return 
         of "focus-next": onMsg(Msg(kind: CmdFocusNext))
         of "focus-prev": onMsg(Msg(kind: CmdFocusPrev))
         of "reload-config": onMsg(Msg(kind: CmdReloadConfig))
@@ -66,3 +72,17 @@ proc sendIpcMsg*(path: string, msg: string) {.async.} =
   await client.connectUnix(path)
   await client.send(msg & "\L")
   client.close()
+
+proc broadcastJson*(payload: string) {.async.} =
+  var i = 0
+  while i < subscribers.len:
+    let client = subscribers[i]
+    if client.isClosed:
+      subscribers.delete(i)
+    else:
+      try:
+        await client.send(payload & "\L")
+        inc i
+      except:
+        client.close()
+        subscribers.delete(i)

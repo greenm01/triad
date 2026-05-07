@@ -74,3 +74,10 @@ To facilitate this, the architecture will support:
 *   **Custom IPC Socket:** Triad will expose a Unix domain socket (JSON or text-based) for two-way communication.
     *   **Quickshell -> Triad:** Quickshell components can send commands to switch layouts, focus windows, or move workspaces.
     *   **Triad -> Quickshell:** Triad can emit state changes (e.g., current layout mode, active tag) to update Quickshell UI widgets in real-time.
+
+### Niri IPC Emulation
+To maximize compatibility with existing Quickshell themes like **Noctalia-shell** without requiring forks, Triad implements a **Niri-compatible JSON IPC stream**.
+
+*   **Socket Path:** Triad can be configured to use the `$NIRI_SOCKET` path or a standard fallback.
+*   **Protocol:** Triad implements the `event-stream` command, which provides a continuous, line-delimited JSON stream of compositor events.
+*   **Event Mapping:** Triad maps its internal TEA state changes to Niri-standard JSON payloads such as `WorkspaceActivated`, `WindowFocusChanged`, `WindowOpened`, and `WindowClosed`. This allows Noctalia's workspace switcher and overview to work natively with Triad.
