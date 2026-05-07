@@ -1,4 +1,4 @@
-import model, msg, tables
+import model, msg, tables, strutils
 
 type
   EffectKind* = enum
@@ -43,21 +43,28 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     let win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, widthProportion: 0.5, heightProportion: 1.0)
     nextModel.windows[msg.windowId] = win
     
-    # Add to active tag
-    let activeTag = nextModel.activeTag
-    if not nextModel.tags.hasKey(activeTag):
-      nextModel.tags[activeTag] = TagState(
-        tagId: activeTag, 
+    # Determine target tag based on window rules
+    var targetTag = nextModel.activeTag
+    for rule in nextModel.windowRules:
+      let appIdMatches = rule.appIdMatch == "" or msg.appId.contains(rule.appIdMatch)
+      let titleMatches = rule.titleMatch == "" or msg.title.contains(rule.titleMatch)
+      if appIdMatches and titleMatches and rule.defaultTag != 0:
+        targetTag = rule.defaultTag
+        break
+
+    if not nextModel.tags.hasKey(targetTag):
+      nextModel.tags[targetTag] = TagState(
+        tagId: targetTag, 
         layoutMode: Scroller,
         masterCount: 1,
         masterSplitRatio: 0.55
       )
     
-    # Simple logic: each new window gets its own column for now
-    var tag = nextModel.tags[activeTag]
+    # Add to determined tag
+    var tag = nextModel.tags[targetTag]
     tag.columns.add(Column(windows: @[msg.windowId], widthProportion: 0.5))
     tag.focusedWindow = msg.windowId
-    nextModel.tags[activeTag] = tag
+    nextModel.tags[targetTag] = tag
     
   of WlWindowDestroyed:
     nextModel.windows.del(msg.destroyedId)

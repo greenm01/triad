@@ -86,9 +86,41 @@ proc executeEffect(eff: Effect) =
   else:
     discard
 
+# Mapping from logical IDs to window metadata for late creation
+var pendingWindows: Table[WindowId, WindowData]
+
+# --- RiverWindowV1 Callbacks ---
+
+proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
+  let id = win.get_id()
+  if pendingWindows.hasKey(id):
+    pendingWindows[id].appId = $appId
+  elif currentModel.windows.hasKey(id):
+    # Already created, maybe update and re-render?
+    discard
+
+proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
+  let id = win.get_id()
+  if pendingWindows.hasKey(id):
+    pendingWindows[id].title = $title
+
+proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
+  let id = win.get_id()
+  msgQueue.add(Msg(kind: WlWindowDestroyed, destroyedId: id))
+
+var window_listener = RiverWindowV1Listener(
+  appId: on_window_app_id,
+  title: on_window_title,
+  closed: on_window_closed
+)
+
 # --- Wayland Callbacks ---
 
 proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  # Before starting manage, move all pending windows to the message queue
+  for id, data in pendingWindows:
+    msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title))
+  pendingWindows.clear()
   msgQueue.add(Msg(kind: WlManageStart))
 
 proc on_render_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
@@ -97,9 +129,10 @@ proc on_render_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
 proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindowV1) =
   let id = win.get_id()
   windowPointers[id] = win
-  # Get the node for this window to control its position
   windowNodes[id] = win.getNode()
-  msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: "unknown", title: "unknown"))
+  # Start tracking as pending until we get metadata or manage starts
+  pendingWindows[id] = WindowData(id: id, appId: "unknown", title: "unknown")
+  discard win.addListener(window_listener.addr, nil)
 
 proc on_output_dimensions(data: pointer, output: ptr RiverOutputV1, width: int32, height: int32) =
   msgQueue.add(Msg(kind: WlOutputDimensions, width: width, height: height))

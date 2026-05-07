@@ -33,9 +33,15 @@ type
     masterCount*: int
     masterSplitRatio*: float32
 
+  WindowRule* = object
+    appIdMatch*: string
+    titleMatch*: string
+    defaultTag*: uint32
+
   Model* = object
     tags*: Table[uint32, TagState]
     windows*: Table[WindowId, WindowData]
+    windowRules*: seq[WindowRule]
     activeTag*: uint32
     # Screen dimensions
     screenWidth*: int32

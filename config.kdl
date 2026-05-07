@@ -12,3 +12,13 @@ tag-rules {
     tag 3 default-layout="grid"
     tag 4 default-layout="monocle"
 }
+
+window-rule {
+    match app-id="firefox"
+    default-tag 2
+}
+
+window-rule {
+    match app-id="alacritty"
+    default-tag 1
+}

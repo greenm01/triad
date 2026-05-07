@@ -4,6 +4,7 @@ type
   Config* = object
     layout*: LayoutConfig
     tagRules*: seq[TagRule]
+    windowRules*: seq[WindowRule]
 
   LayoutConfig* = object
     gaps*: int32
@@ -58,6 +59,18 @@ proc loadConfig*(path: string): Config =
               of "monocle": layout = Monocle
             result.tagRules.add(TagRule(tagId: id, defaultLayout: layout))
             
+      elif node.name == "window-rule":
+        var rule = WindowRule()
+        for child in node.children:
+          if child.name == "match":
+            if child.props.hasKey("app-id"):
+              rule.appIdMatch = child.props["app-id"].kString()
+            if child.props.hasKey("title"):
+              rule.titleMatch = child.props["title"].kString()
+          elif child.name == "default-tag":
+            rule.defaultTag = uint32(child.args[0].kInt())
+        result.windowRules.add(rule)
+            
   except:
     warn "Could not load config, using defaults", path=path
 
@@ -67,6 +80,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.centerFocusedColumn = config.layout.centerFocusedColumn
+  model.windowRules = config.windowRules
   
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
