@@ -31,6 +31,14 @@ private runtime environment for that process:
 
 That keeps the real `niri` command untouched for the rest of the system.
 
+Window `app_id` values in the Niri-compatible JSON are shell-facing identities,
+not Triad's internal rule keys. Triad keeps the raw River app ID internally, but
+maps exported Niri window IDs to desktop-entry-compatible IDs when it can, such
+as `foot.desktop`, `kitty.desktop`, or `alacritty.desktop`. This lets shells use
+their normal desktop-entry and icon-theme lookup paths without Noctalia or
+DankMaterialShell patches. When a value is mapped, Triad also emits `raw_app_id`
+as a debugging extension for clients that ignore unknown fields.
+
 Screenshot actions are implemented through `grim` and `slurp`:
 
 - `Screenshot` captures an interactively selected region.

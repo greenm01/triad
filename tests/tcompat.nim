@@ -38,7 +38,8 @@ suite "Shell compatibility contracts":
     check windows.len == 1
     check windows[0]["id"].getInt() == 10
     check windows[0]["title"].getStr() == "Terminal"
-    check windows[0]["app_id"].getStr() == "Alacritty"
+    check windows[0]["app_id"].getStr() == "alacritty.desktop"
+    check windows[0]["raw_app_id"].getStr() == "Alacritty"
     check windows[0]["workspace_id"].getInt() == 1
     check windows[0]["is_focused"].getBool() == true
     check windows[0]["is_maximized"].getBool() == false

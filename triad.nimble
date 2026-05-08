@@ -23,6 +23,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "src/config/parser",
     "src/triad",
     "src/triad_niri",
+    "tests/tapp_identity",
     "tests/tcompat",
     "tests/tconfig",
     "tests/tcore",

@@ -2,6 +2,7 @@ import algorithm, json, options, os, sequtils, strutils, tables, unittest
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
+import ../src/core/niri_state
 import ../src/core/update
 import ../src/ipc/commands
 import ../src/ipc/niri_compat

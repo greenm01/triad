@@ -41,7 +41,8 @@ suite "Core TEA Update Logic":
     let win = parseJson(event.jsonPayload)["WindowOpenedOrChanged"]["window"]
 
     check win["id"].getInt() == 120
-    check win["app_id"].getStr() == "alacritty"
+    check win["app_id"].getStr() == "alacritty.desktop"
+    check win["raw_app_id"].getStr() == "alacritty"
     check win["workspace_id"].getInt() == 1
     check win["is_focused"].getBool() == true
 
@@ -57,7 +58,8 @@ suite "Core TEA Update Logic":
     let windows = parseJson(event.jsonPayload)["WindowsChanged"]["windows"]
 
     check windows.len == 1
-    check windows[0]["app_id"].getStr() == "kitty"
+    check windows[0]["app_id"].getStr() == "kitty.desktop"
+    check windows[0]["raw_app_id"].getStr() == "kitty"
     check windows[0]["workspace_id"].getInt() == 2
 
   test "CmdFocusNext cycles focus correctly":

@@ -1,4 +1,5 @@
 import algorithm, json, options, tables
+import app_identity
 import model
 import model_utils
 
@@ -58,6 +59,7 @@ proc niriWorkspaceOutputName*(model: Model; tagId: uint32): string =
 proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
   let ws = model.windowWorkspaceId(win.id)
   let isFocused = ws.isSome and model.tags[ws.get()].focusedWindow == win.id
+  let compatId = compatAppId(win.appId)
   let output =
     if ws.isSome and model.tags.hasKey(ws.get()):
       model.niriWorkspaceOutputName(ws.get())
@@ -66,7 +68,7 @@ proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
   result = %*{
     "id": win.id,
     "title": if win.title == "": newJNull() else: %win.title,
-    "app_id": if win.appId == "": newJNull() else: %win.appId,
+    "app_id": if compatId == "": newJNull() else: %compatId,
     "pid": newJNull(),
     "workspace_id": if ws.isSome: %ws.get() else: newJNull(),
     "is_focused": isFocused,
@@ -79,6 +81,8 @@ proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
     "layout": niriLayout(win.id, model),
     "focus_timestamp": newJNull()
   }
+  if win.appId.len > 0 and compatId != win.appId:
+    result["raw_app_id"] = %win.appId
 
 proc niriWorkspacesJson*(model: Model): JsonNode =
   var ids: seq[uint32] = @[]
