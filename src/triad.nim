@@ -175,6 +175,22 @@ proc executeEffect(eff: Effect) =
   of EffCloseWindow:
     if windowPointers.hasKey(eff.closeId):
       windowPointers[eff.closeId].close()
+  of EffSetFullscreen:
+    if windowPointers.hasKey(eff.fsWinId):
+      let win = windowPointers[eff.fsWinId]
+      if eff.isFullscreen:
+        # Use first output for now (DOD optimization: track output per window)
+        var output: ptr RiverOutputV1 = nil
+        if outputPointers.len > 0:
+          for p in outputPointers.values: 
+            output = p
+            break
+        if output != nil:
+          win.fullscreen(output)
+          win.informFullscreen()
+      else:
+        win.exitFullscreen()
+        win.informNotFullscreen()
   else:
     discard
 

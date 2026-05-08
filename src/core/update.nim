@@ -13,6 +13,7 @@ type
     EffBroadcastJson,
     EffOpStartPointer,
     EffOpEnd,
+    EffSetFullscreen,
     EffLog
 
   Effect* = object
@@ -32,6 +33,9 @@ type
       opSeat*: pointer
     of EffOpEnd:
       endSeat*: pointer
+    of EffSetFullscreen:
+      fsWinId*: WindowId
+      isFullscreen*: bool
     else:
       discard
 
@@ -304,6 +308,17 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             win.heightProportion = clamp(win.heightProportion + msg.deltaH, 0.05, 1.0)
             nextModel.windows[focused] = win
             effects.add(Effect(kind: EffManageDirty))
+
+  of CmdResizeFloating:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      if focused != 0 and nextModel.windows.hasKey(focused):
+        var win = nextModel.windows[focused]
+        if win.isFloating:
+          win.floatingGeom.w = max(50, win.floatingGeom.w + msg.deltaFW)
+          win.floatingGeom.h = max(50, win.floatingGeom.h + msg.deltaFH)
+          nextModel.windows[focused] = win
+          effects.add(Effect(kind: EffManageDirty))
 
   of CmdMoveFloating:
     let activeTagId = nextModel.activeTag
@@ -581,6 +596,16 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         nextModel.windows[focused] = win
         effects.add(Effect(kind: EffManageDirty))
 
+  of CmdToggleFullscreen:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      if focused != 0 and nextModel.windows.hasKey(focused):
+        var win = nextModel.windows[focused]
+        win.isFullscreen = not win.isFullscreen
+        nextModel.windows[focused] = win
+        effects.add(Effect(kind: EffSetFullscreen, fsWinId: focused, isFullscreen: win.isFullscreen))
+        effects.add(Effect(kind: EffManageDirty))
+
   of CmdSelectWindow:
     nextModel.overviewActive = false
     effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
@@ -643,10 +668,11 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var tag = nextModel.tags[activeTagId]
       var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
-        for win in col.windows: allWindows.add(win)
+        for win in col.windows:
+          allWindows.add(win)
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow)
-        let nextIdx = (idx + 1) mod allWindows.len
+        let nextIdx = (if idx == -1: 0 else: (idx + 1) mod allWindows.len)
         tag.focusedWindow = allWindows[nextIdx]
         nextModel.tags[activeTagId] = tag
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
@@ -661,7 +687,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       for id in tagIds:
         let tag = nextModel.tags[id]
         for col in tag.columns:
-          for win in col.windows: allWindows.add(win)
+          for win in col.windows:
+            allWindows.add(win)
       if allWindows.len > 0:
         let activeTagId = nextModel.activeTag
         let currentFocus = nextModel.tags[activeTagId].focusedWindow
@@ -686,10 +713,11 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var tag = nextModel.tags[activeTagId]
       var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
-        for win in col.windows: allWindows.add(win)
+        for win in col.windows:
+          allWindows.add(win)
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow)
-        let prevIdx = (idx - 1 + allWindows.len) mod allWindows.len
+        let prevIdx = (if idx == -1: 0 else: (idx - 1 + allWindows.len) mod allWindows.len)
         tag.focusedWindow = allWindows[prevIdx]
         nextModel.tags[activeTagId] = tag
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow))

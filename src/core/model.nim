@@ -26,6 +26,7 @@ type
     widthProportion*: float32  # 0.0 to 1.0
     heightProportion*: float32 # 0.0 to 1.0
     isFloating*: bool
+    isFullscreen*: bool
     floatingGeom*: Rect
 
   Column* = object

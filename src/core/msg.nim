@@ -42,6 +42,8 @@ type
     CmdAdjustGaps,
     CmdToggleOverview,
     CmdToggleFloating,
+    CmdToggleFullscreen,
+    CmdResizeFloating,
     CmdSelectWindow,
     CmdTick,
     CmdReloadConfig
@@ -86,5 +88,7 @@ type
       targetWidth*: float32
     of CmdAdjustGaps:
       deltaG*: int32
+    of CmdResizeFloating:
+      deltaFW*, deltaFH*: int32
     else:
       discard

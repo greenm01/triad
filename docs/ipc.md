@@ -26,6 +26,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `move-to-tag <id>`: Banishes the focused window to the specified tag.
 *   `close-window`: Politley requests that the focused window terminate its existence.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
+*   `toggle-fullscreen`: Commands the window to occupy the entire screen, as is its right.
+*   `move-floating <dx> <dy>`: Displaces a floating window by the specified pixel deltas.
+*   `resize-floating <dw> <dh>`: Adjusts the physical dimensions of a floating window.
 *   `zoom`: Swaps the focused window with the primary window in the master position.
 *   `resize-width <delta>`: Adjusts the width proportion (e.g., `0.1` or `-0.1`).
 *   `resize-height <delta>`: Adjusts the height proportion.

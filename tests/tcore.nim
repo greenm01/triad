@@ -132,3 +132,24 @@ suite "Core TEA Update Logic":
     check nextModel.activeTag == 2
     check nextModel.tags[2].focusedWindow == 101
     check nextModel.tags[1].columns.len == 0
+
+  test "CmdToggleFullscreen toggles state and emits effect":
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
+    model.windows[101] = WindowData(id: 101, isFullscreen: false)
+    
+    let (nextModel, effects) = update(model, Msg(kind: CmdToggleFullscreen))
+    check nextModel.windows[101].isFullscreen == true
+    
+    var hasFsEffect = false
+    for eff in effects:
+      if eff.kind == EffSetFullscreen and eff.fsWinId == 101 and eff.isFullscreen == true:
+        hasFsEffect = true
+    check hasFsEffect
+
+  test "CmdResizeFloating modifies absolute geometry":
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
+    model.windows[101] = WindowData(id: 101, isFloating: true, floatingGeom: Rect(x: 100, y: 100, w: 200, h: 200))
+    
+    let (nextModel, _) = update(model, Msg(kind: CmdResizeFloating, deltaFW: 50, deltaFH: -20))
+    check nextModel.windows[101].floatingGeom.w == 250
+    check nextModel.windows[101].floatingGeom.h == 180
