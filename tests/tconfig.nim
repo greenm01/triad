@@ -58,16 +58,22 @@ window-rule {
     match title="Picture-in-Picture"
     open-floating #true
 }
+window-rule {
+    match app-id="discord"
+    forced-layout "grid"
+}
 """
     writeFile(path, kdl)
     let config = loadConfig(path)
     removeFile(path)
     
-    check config.windowRules.len == 2
+    check config.windowRules.len == 3
     check config.windowRules[0].appIdMatch == "firefox"
     check config.windowRules[0].defaultTag == 2
     check config.windowRules[1].titleMatch == "Picture-in-Picture"
     check config.windowRules[1].openFloating == true
+    check config.windowRules[2].appIdMatch == "discord"
+    check config.windowRules[2].forcedLayout == ord(Grid) + 1
 
   test "Parser correctly reads quickshell config":
     let path = getCurrentDir() / "test_qs.kdl"

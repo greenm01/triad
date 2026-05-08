@@ -51,6 +51,7 @@ type
     titleMatch*: string
     defaultTag*: uint32
     openFloating*: bool
+    forcedLayout*: int # 0: none, else: ord(LayoutMode) + 1
 
   QuickshellConfig* = object
     enabled*: bool

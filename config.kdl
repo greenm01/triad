@@ -34,6 +34,11 @@ window-rule {
 }
 
 window-rule {
+    match app-id="discord"
+    forced-layout "grid"
+}
+
+window-rule {
     match title="^Picture-in-Picture$"
     open-floating #true
 }

@@ -86,6 +86,13 @@ proc loadConfig*(path: string): Config =
             rule.defaultTag = uint32(child.args[0].kInt())
           elif child.name == "open-floating":
             rule.openFloating = child.args[0].kBool()
+          elif child.name == "forced-layout":
+            case child.args[0].kString()
+            of "scroller": rule.forcedLayout = ord(Scroller) + 1
+            of "vertical-scroller": rule.forcedLayout = ord(VerticalScroller) + 1
+            of "tile": rule.forcedLayout = ord(MasterStack) + 1
+            of "grid": rule.forcedLayout = ord(Grid) + 1
+            of "monocle": rule.forcedLayout = ord(Monocle) + 1
         result.windowRules.add(rule)
 
       elif node.name == "spawn-at-startup":

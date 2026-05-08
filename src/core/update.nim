@@ -88,6 +88,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     
     # Determine target tag and floating state based on window rules
     var targetTag = nextModel.activeTag
+    var forcedLayout = 0
     for rule in nextModel.windowRules:
       let appIdMatches = rule.appIdMatch == "" or msg.appId.contains(rule.appIdMatch)
       let titleMatches = rule.titleMatch == "" or msg.title.contains(rule.titleMatch)
@@ -102,6 +103,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             w: nextModel.screenWidth div 2,
             h: nextModel.screenHeight div 2
           )
+        if rule.forcedLayout != 0:
+          forcedLayout = rule.forcedLayout
         break
 
     nextModel.windows[msg.windowId] = win
@@ -109,10 +112,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     if not nextModel.tags.hasKey(targetTag):
       nextModel.tags[targetTag] = TagState(
         tagId: targetTag, 
-        layoutMode: Scroller,
-        masterCount: 1,
+        layoutMode: if forcedLayout != 0: LayoutMode(forcedLayout - 1) else: Scroller,
+        masterCount: 1, 
         masterSplitRatio: 0.55
       )
+    elif forcedLayout != 0:
+      nextModel.tags[targetTag].layoutMode = LayoutMode(forcedLayout - 1)
     
     # Add to determined tag
     var tag = nextModel.tags[targetTag]

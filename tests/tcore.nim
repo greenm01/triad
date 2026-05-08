@@ -73,6 +73,16 @@ suite "Core TEA Update Logic":
     check nextModel.tags[2].columns[0].windows[0] == 101
     check nextModel.tags[2].focusedWindow == 101
 
+  test "forced-layout window rule overrides tag layout":
+    # Setup rule: Discord forces Grid mode
+    model.windowRules.add(WindowRule(appIdMatch: "discord", forcedLayout: ord(Grid) + 1))
+    model.activeTag = 1
+    
+    let msg = Msg(kind: WlWindowCreated, windowId: 100, appId: "discord", title: "Discord")
+    let (nextModel, _) = update(model, msg)
+    
+    check nextModel.tags[1].layoutMode == Grid
+
   test "CmdFocusNext in Overview cycles through all tags":
     model.overviewActive = true
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
