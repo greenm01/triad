@@ -64,6 +64,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `warp-pointer <x> <y>`: Requests a River pointer warp on every active seat.
 *   `eat-next-key`: Requests River XKB handling to eat the next unbound key.
 *   `cancel-eat-next-key`: Cancels the pending River XKB key-eat request.
+*   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus, sizing, and window state.
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
 *   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.
 

@@ -1807,7 +1807,11 @@ proc main() =
       if i > 2: cmd.add(" ")
       cmd.add(paramStr(i))
     try:
-      waitFor sendIpcMsg(getTriadSocketPath(), cmd)
+      if cmd == "dump-live-restore-state":
+        let reply = waitFor sendIpcRequest(getTriadSocketPath(), cmd)
+        stdout.writeLine(reply)
+      else:
+        waitFor sendIpcMsg(getTriadSocketPath(), cmd)
     except CatchableError as e:
       failCli("socket request failed: " & e.msg)
     return

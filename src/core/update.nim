@@ -417,6 +417,62 @@ proc focusWindowOrTag(model: var Model; direction: int; effects: var seq[Effect]
   if targetTag != 0:
     model.focusTag(targetTag, effects)
 
+proc materializeRestoredTag(state: RestoredTagState): TagState =
+  result = TagState(
+    tagId: state.tagId,
+    name: state.name,
+    layoutMode: state.layoutMode,
+    focusedWindow: state.focusedWindow,
+    targetViewportXOffset: state.targetViewportXOffset,
+    currentViewportXOffset: state.currentViewportXOffset,
+    targetViewportYOffset: state.targetViewportYOffset,
+    currentViewportYOffset: state.currentViewportYOffset,
+    masterCount: max(1, state.masterCount),
+    masterSplitRatio: clamp(state.masterSplitRatio, 0.05'f32, 0.95'f32)
+  )
+  for col in state.columns:
+    result.columns.add(Column(widthProportion: clamp(col.widthProportion, 0.05'f32, 1.0'f32)))
+
+proc placeRestoredWindow(model: var Model; targetTag: uint32; winId: WindowId) =
+  if model.tags.hasKey(targetTag) and model.tags[targetTag].containsWindow(winId):
+    return
+
+  if model.restoreTags.hasKey(targetTag):
+    var tag = model.tags.getOrDefault(targetTag, materializeRestoredTag(model.restoreTags[targetTag]))
+    let restoredTag = model.restoreTags[targetTag]
+    var inserted = false
+    for colIdx, restoredCol in restoredTag.columns:
+      if restoredCol.windows.find(winId) != -1:
+        while tag.columns.len <= colIdx:
+          let width =
+            if tag.columns.len < restoredTag.columns.len:
+              clamp(restoredTag.columns[tag.columns.len].widthProportion, 0.05'f32, 1.0'f32)
+            else:
+              DefaultColumnWidth
+          tag.columns.add(Column(widthProportion: width))
+        tag.columns[colIdx].widthProportion = clamp(restoredCol.widthProportion, 0.05'f32, 1.0'f32)
+        if tag.columns[colIdx].windows.find(winId) == -1:
+          tag.columns[colIdx].windows.add(winId)
+        inserted = true
+        break
+    if not inserted:
+      tag.columns.add(Column(windows: @[winId], widthProportion: DefaultColumnWidth))
+    if tag.focusedWindow == 0 and restoredTag.focusedWindow != 0:
+      tag.focusedWindow = restoredTag.focusedWindow
+    model.tags[targetTag] = tag
+  else:
+    var tag = model.tags.getOrDefault(targetTag, initTagState(targetTag))
+    tag.columns.add(Column(windows: @[winId], widthProportion: DefaultColumnWidth))
+    model.tags[targetTag] = tag
+
+proc isRestoredScratchpad(model: Model; winId: WindowId): bool =
+  if model.scratchpadWindows.find(winId) != -1:
+    return true
+  for scratchpadWin in model.namedScratchpads.values:
+    if scratchpadWin == winId:
+      return true
+  false
+
 proc moveFocusedWindowToTag(model: var Model; targetTagId: uint32; effects: var seq[Effect]) =
   if targetTagId == 0 or not model.tags.hasKey(model.activeTag):
     return
@@ -645,6 +701,15 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       nextModel.syncPrimaryOutput()
       nextModel.syncPrimaryOutputTag()
 
+  of WlManageStart:
+    let focused = nextModel.focusedOnActiveTag()
+    if focused != 0:
+      nextModel.recordFocus(focused)
+      effects.add(broadcastWindowFocusChanged(focused))
+      if not nextModel.sessionLocked and not nextModel.layerFocusExclusive:
+        effects.add(Effect(kind: EffFocusWindow, focusId: focused))
+    effects.add(Effect(kind: EffManageDirty))
+
   of WlOutputName:
     if msg.nameOutputId != 0:
       var output = nextModel.outputs.getOrDefault(msg.nameOutputId, OutputData(id: msg.nameOutputId))
@@ -701,7 +766,16 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
     var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, identifier: msg.createdIdentifier, widthProportion: DefaultWindowWidth, heightProportion: DefaultWindowHeight)
     var hasRestoredTag = false
+    var hasRestoredWindow = false
+    var restoredWin = RestoredWindowState()
     var targetTag = if nextModel.activeTag == 0: 1'u32 else: nextModel.activeTag
+    if nextModel.restoreWindows.hasKey(msg.windowId):
+      restoredWin = nextModel.restoreWindows[msg.windowId]
+      nextModel.restoreWindows.del(msg.windowId)
+      hasRestoredWindow = true
+      if restoredWin.tagId != 0:
+        targetTag = restoredWin.tagId
+        hasRestoredTag = true
     if nextModel.restoreTagByWindow.hasKey(msg.windowId):
       targetTag = nextModel.restoreTagByWindow[msg.windowId]
       nextModel.restoreTagByWindow.del(msg.windowId)
@@ -717,18 +791,47 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           win.floatingGeom = Rect(x: nextModel.screenWidth div 4, y: nextModel.screenHeight div 4, w: nextModel.screenWidth div 2, h: nextModel.screenHeight div 2)
         if rule.forcedLayout != 0: forcedLayout = rule.forcedLayout
         break
+    if hasRestoredWindow:
+      win.widthProportion = restoredWin.widthProportion
+      win.heightProportion = restoredWin.heightProportion
+      win.isFloating = restoredWin.isFloating
+      win.isFullscreen = restoredWin.isFullscreen
+      win.isMaximized = restoredWin.isMaximized
+      win.isMinimized = restoredWin.isMinimized
+      win.fullscreenOutput = restoredWin.fullscreenOutput
+      win.floatingGeom = restoredWin.floatingGeom
+      win.actualW = restoredWin.actualW
+      win.actualH = restoredWin.actualH
     nextModel.windows[msg.windowId] = win
-    if not nextModel.tags.hasKey(targetTag):
-      nextModel.tags[targetTag] = initTagState(targetTag, if forcedLayout != 0: safeLayoutMode(forcedLayout) else: Scroller)
-    elif forcedLayout != 0:
-      var tag = nextModel.tags[targetTag]
-      tag.layoutMode = safeLayoutMode(forcedLayout, tag.layoutMode)
-      nextModel.tags[targetTag] = tag
-    var tag = nextModel.tags[targetTag]
-    tag.columns.add(Column(windows: @[msg.windowId], widthProportion: DefaultColumnWidth))
-    if not nextModel.sessionLocked:
-      tag.focusedWindow = msg.windowId
-    nextModel.tags[targetTag] = tag
+    let restoredScratchpad = hasRestoredWindow and restoredWin.tagId == 0 and nextModel.isRestoredScratchpad(msg.windowId)
+    if not restoredScratchpad:
+      if not nextModel.tags.hasKey(targetTag):
+        if nextModel.restoreTags.hasKey(targetTag):
+          nextModel.tags[targetTag] = materializeRestoredTag(nextModel.restoreTags[targetTag])
+        else:
+          nextModel.tags[targetTag] = initTagState(targetTag, if forcedLayout != 0: safeLayoutMode(forcedLayout) else: Scroller)
+      elif forcedLayout != 0:
+        var tag = nextModel.tags[targetTag]
+        if not hasRestoredTag:
+          tag.layoutMode = safeLayoutMode(forcedLayout, tag.layoutMode)
+          nextModel.tags[targetTag] = tag
+      if hasRestoredTag:
+        nextModel.placeRestoredWindow(targetTag, msg.windowId)
+      else:
+        var tag = nextModel.tags[targetTag]
+        tag.columns.add(Column(windows: @[msg.windowId], widthProportion: DefaultColumnWidth))
+        if not nextModel.sessionLocked:
+          tag.focusedWindow = msg.windowId
+        nextModel.tags[targetTag] = tag
+      if not nextModel.sessionLocked and not hasRestoredTag:
+        var tag = nextModel.tags[targetTag]
+        tag.focusedWindow = msg.windowId
+        nextModel.tags[targetTag] = tag
+    if hasRestoredWindow:
+      if win.isFullscreen:
+        effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.windowId, isFullscreen: true, fsOutputId: win.fullscreenOutput))
+      if win.isMaximized:
+        effects.add(Effect(kind: EffSetMaximized, maxWinId: msg.windowId, isMaximized: true))
     effects.add(nextModel.broadcastWindowOpened(win))
     effects.add(Effect(kind: EffManageDirty))
 

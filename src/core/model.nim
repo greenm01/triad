@@ -148,6 +148,35 @@ type
     initialGeom*: Rect
     edges*: uint32 # For resize operations
 
+  RestoredWindowState* = object
+    tagId*: uint32
+    widthProportion*: float32
+    heightProportion*: float32
+    isFloating*: bool
+    isFullscreen*: bool
+    isMaximized*: bool
+    isMinimized*: bool
+    fullscreenOutput*: uint32
+    floatingGeom*: Rect
+    actualW*, actualH*: int32
+
+  RestoredColumnState* = object
+    windows*: seq[WindowId]
+    widthProportion*: float32
+
+  RestoredTagState* = object
+    tagId*: uint32
+    name*: string
+    layoutMode*: LayoutMode
+    columns*: seq[RestoredColumnState]
+    focusedWindow*: WindowId
+    targetViewportXOffset*: float32
+    currentViewportXOffset*: float32
+    targetViewportYOffset*: float32
+    currentViewportYOffset*: float32
+    masterCount*: int
+    masterSplitRatio*: float32
+
   Model* = object
     tags*: Table[uint32, TagState]
     windows*: Table[WindowId, WindowData]
@@ -199,5 +228,7 @@ type
     focusHistory*: seq[WindowId]
     restoreActiveTag*: uint32
     restoreTagByWindow*: Table[WindowId, uint32]
+    restoreWindows*: Table[WindowId, RestoredWindowState]
+    restoreTags*: Table[uint32, RestoredTagState]
     # Grouping counter
     nextGroupId*: uint32

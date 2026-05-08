@@ -1,6 +1,7 @@
 import asyncnet, asyncdispatch, os, nativesockets, chronicles, options, strutils
 import posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import ../core/msg, ../core/model
+import ../core/restore_state
 import commands, niri_compat
 
 type
@@ -130,6 +131,10 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: p
           if line == "": break
 
           if getModel != nil:
+            if line.strip() == "dump-live-restore-state":
+              await client.send(liveRestoreJson(getModel()) & "\L")
+              break
+
             let niri = handleNiriRequest(line, getModel())
             if niri.handled:
               if niri.subscribe and not canSubscribe():

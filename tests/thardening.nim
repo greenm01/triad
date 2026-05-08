@@ -216,6 +216,10 @@ suite "Crash hardening":
     (nextModel, effects) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 9, appId: "app", title: "locked"))
     check nextModel.tags[1].focusedWindow == 7
 
+    (nextModel, effects) = update(nextModel, Msg(kind: WlManageStart))
+    check nextModel.tags[1].focusedWindow == 7
+    check not effects.anyIt(it.kind == EffFocusWindow)
+
     (nextModel, effects) = update(nextModel, Msg(kind: WlSessionUnlocked))
     check not nextModel.sessionLocked
     check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 7)
@@ -480,7 +484,7 @@ window-rule {
     {"id": 2, "is_active": true}
   ],
   "windows": [
-    {"id": 10, "workspace_id": 2},
+    {"id": 10, "workspace_id": 2, "is_maximized": true},
     {"id": 11, "workspace_id": null}
   ]
 }
@@ -490,6 +494,7 @@ window-rule {
     let state = parsed.get()
     check state.activeTag == 2
     check state.tagByWindow[10] == 2
+    check state.windows[10].isMaximized
     check not state.tagByWindow.hasKey(11)
     check parseLiveRestoreJson("{bad").isNone
 

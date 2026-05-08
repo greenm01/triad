@@ -22,6 +22,21 @@ latest_triad_pid() {
 
 snapshot_restore_state() {
   restore_path="$1"
+  snapshot=""
+
+  if snapshot="$("$repo_dir/triad" msg dump-live-restore-state 2>/dev/null)"; then
+    if printf '%s\n' "$snapshot" | grep -q '"schema":"triad-live-restore-v2"'; then
+      restore_dir="$(dirname -- "$restore_path")"
+      mkdir -p "$restore_dir"
+      tmp="$restore_path.tmp.$$"
+      printf '%s\n' "$snapshot" > "$tmp"
+      mv -f "$tmp" "$restore_path"
+      window_count="$(printf '%s\n' "$snapshot" | tr ',' '\n' | grep -c '"id"' || true)"
+      printf '%s\n' "live-reload: snapshotted native state for $window_count item(s) to $restore_path"
+      return 0
+    fi
+  fi
+
   workspaces="$("$repo_dir/triad_niri" msg -j workspaces)" ||
     fail "failed to snapshot workspaces before restart"
   windows="$("$repo_dir/triad_niri" msg -j windows)" ||

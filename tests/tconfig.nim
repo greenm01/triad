@@ -2,9 +2,41 @@ import unittest
 import ../src/config/parser
 import ../src/config/keysyms
 import ../src/core/model
+import ../src/core/model_utils
 import os, strutils, tables
 
 suite "KDL Configuration Parser":
+  test "Applying config preserves live workspace and window state":
+    var model = Model(activeTag: 1)
+    model.tags[1] = initTagState(1, Scroller, "work")
+    model.tags[1].focusedWindow = 7
+    model.tags[1].columns.add(Column(windows: @[WindowId(7)], widthProportion: 0.85))
+    model.windows[7] = WindowData(
+      id: 7,
+      appId: "brave",
+      title: "Brave",
+      widthProportion: 0.75,
+      heightProportion: 0.6,
+      isFloating: true,
+      isFullscreen: true,
+      isMaximized: true,
+      fullscreenOutput: 42,
+      floatingGeom: Rect(x: 11, y: 22, w: 333, h: 444))
+
+    model.applyConfig(Config(layout: LayoutConfig(gaps: 20, centerFocusedColumn: "on-overflow", animationSpeed: 0.2)))
+
+    check model.outerGaps == 20
+    check model.activeTag == 1
+    check model.tags[1].focusedWindow == 7
+    check model.tags[1].columns[0].widthProportion == 0.85'f32
+    check model.windows[7].widthProportion == 0.75'f32
+    check model.windows[7].heightProportion == 0.6'f32
+    check model.windows[7].isFloating
+    check model.windows[7].isFullscreen
+    check model.windows[7].isMaximized
+    check model.windows[7].fullscreenOutput == 42
+    check model.windows[7].floatingGeom == Rect(x: 11, y: 22, w: 333, h: 444)
+
   test "Parser correctly reads layout settings":
     let path = getCurrentDir() / "test_layout.kdl"
     # KDL 2.0 requires #true/#false for booleans!

@@ -1,10 +1,19 @@
-import json, options, os, tables
+import algorithm, json, options, os, strutils, tables
 import model
+
+const LiveRestoreSchema* = "triad-live-restore-v2"
 
 type
   LiveRestoreState* = object
     activeTag*: uint32
     tagByWindow*: Table[WindowId, uint32]
+    windows*: Table[WindowId, RestoredWindowState]
+    tags*: Table[uint32, RestoredTagState]
+    outputTags*: Table[uint32, uint32]
+    scratchpadWindows*: seq[WindowId]
+    namedScratchpads*: Table[string, WindowId]
+    visibleScratchpad*: WindowId
+    isScratchpadVisible*: bool
 
 proc uint32FromJson(node: JsonNode): Option[uint32] =
   try:
@@ -14,16 +23,263 @@ proc uint32FromJson(node: JsonNode): Option[uint32] =
     discard
   none(uint32)
 
-proc parseLiveRestoreJson*(payload: string): Option[LiveRestoreState] =
-  var root: JsonNode
+proc int32FromJson(node: JsonNode): int32 =
   try:
-    root = parseJson(payload)
+    if node.kind == JInt:
+      return int32(node.getInt())
   except CatchableError:
-    return none(LiveRestoreState)
+    discard
+  0'i32
 
-  if root.kind != JObject:
-    return none(LiveRestoreState)
+proc float32FromJson(node: JsonNode; fallback = 0.0'f32): float32 =
+  try:
+    if node.kind in {JFloat, JInt}:
+      return float32(node.getFloat())
+  except CatchableError:
+    discard
+  fallback
 
+proc boolFromJson(node: JsonNode): bool =
+  node.kind == JBool and node.getBool()
+
+proc stringFromJson(node: JsonNode): string =
+  if node.kind == JString:
+    node.getStr()
+  else:
+    ""
+
+proc rectJson(rect: Rect): JsonNode =
+  %*{"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h}
+
+proc rectFromJson(node: JsonNode): Rect =
+  if node.kind != JObject:
+    return Rect()
+  Rect(
+    x: if node.hasKey("x"): int32FromJson(node["x"]) else: 0'i32,
+    y: if node.hasKey("y"): int32FromJson(node["y"]) else: 0'i32,
+    w: if node.hasKey("w"): int32FromJson(node["w"]) else: 0'i32,
+    h: if node.hasKey("h"): int32FromJson(node["h"]) else: 0'i32
+  )
+
+proc layoutModeFromJson(node: JsonNode): LayoutMode =
+  try:
+    if node.kind == JInt:
+      let value = node.getInt()
+      if value >= ord(low(LayoutMode)) and value <= ord(high(LayoutMode)):
+        return LayoutMode(value)
+    elif node.kind == JString:
+      return parseEnum[LayoutMode](node.getStr())
+  except CatchableError:
+    discard
+  Scroller
+
+proc windowStateJson(win: WindowData; tagId: uint32): JsonNode =
+  %*{
+    "id": win.id,
+    "tag_id": tagId,
+    "width_proportion": win.widthProportion,
+    "height_proportion": win.heightProportion,
+    "is_floating": win.isFloating,
+    "is_fullscreen": win.isFullscreen,
+    "is_maximized": win.isMaximized,
+    "is_minimized": win.isMinimized,
+    "fullscreen_output": win.fullscreenOutput,
+    "floating_geom": rectJson(win.floatingGeom),
+    "actual_w": win.actualW,
+    "actual_h": win.actualH
+  }
+
+proc tagStateJson(tag: TagState): JsonNode =
+  let columns = newJArray()
+  for col in tag.columns:
+    let windows = newJArray()
+    for winId in col.windows:
+      windows.add(%winId)
+    columns.add(%*{
+      "windows": windows,
+      "width_proportion": col.widthProportion
+    })
+
+  %*{
+    "id": tag.tagId,
+    "name": tag.name,
+    "layout_mode": ord(tag.layoutMode),
+    "columns": columns,
+    "focused_window": tag.focusedWindow,
+    "target_viewport_x_offset": tag.targetViewportXOffset,
+    "current_viewport_x_offset": tag.currentViewportXOffset,
+    "target_viewport_y_offset": tag.targetViewportYOffset,
+    "current_viewport_y_offset": tag.currentViewportYOffset,
+    "master_count": tag.masterCount,
+    "master_split_ratio": tag.masterSplitRatio
+  }
+
+proc liveRestoreJson*(model: Model): string =
+  let tags = newJArray()
+  var tagIds: seq[uint32] = @[]
+  for tagId in model.tags.keys:
+    tagIds.add(tagId)
+  tagIds.sort()
+  for tagId in tagIds:
+    tags.add(tagStateJson(model.tags[tagId]))
+
+  let windows = newJArray()
+  var winIds: seq[WindowId] = @[]
+  for winId in model.windows.keys:
+    winIds.add(winId)
+  winIds.sort()
+  for winId in winIds:
+    var tagId = 0'u32
+    for candidateTagId, tag in model.tags.pairs:
+      for col in tag.columns:
+        if col.windows.find(winId) != -1:
+          tagId = candidateTagId
+          break
+      if tagId != 0:
+        break
+    windows.add(windowStateJson(model.windows[winId], tagId))
+
+  let outputTags = newJArray()
+  var outputIds: seq[uint32] = @[]
+  for outputId in model.outputTags.keys:
+    outputIds.add(outputId)
+  outputIds.sort()
+  for outputId in outputIds:
+    outputTags.add(%*{"output_id": outputId, "tag_id": model.outputTags[outputId]})
+
+  let scratchpads = newJArray()
+  for winId in model.scratchpadWindows:
+    scratchpads.add(%winId)
+
+  let namedScratchpads = newJArray()
+  var names: seq[string] = @[]
+  for name in model.namedScratchpads.keys:
+    names.add(name)
+  names.sort()
+  for name in names:
+    namedScratchpads.add(%*{"name": name, "window_id": model.namedScratchpads[name]})
+
+  $(%*{
+    "schema": LiveRestoreSchema,
+    "active_tag": model.activeTag,
+    "tags": tags,
+    "windows": windows,
+    "output_tags": outputTags,
+    "scratchpad_windows": scratchpads,
+    "named_scratchpads": namedScratchpads,
+    "visible_scratchpad": model.visibleScratchpad,
+    "is_scratchpad_visible": model.isScratchpadVisible
+  })
+
+proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
+  var state = LiveRestoreState()
+
+  if root.hasKey("active_tag"):
+    let activeTag = uint32FromJson(root["active_tag"])
+    if activeTag.isSome:
+      state.activeTag = activeTag.get()
+
+  if root.hasKey("tags") and root["tags"].kind == JArray:
+    for node in root["tags"]:
+      if node.kind != JObject or not node.hasKey("id"):
+        continue
+      let tagId = uint32FromJson(node["id"])
+      if tagId.isNone:
+        continue
+      var tag = RestoredTagState(
+        tagId: tagId.get(),
+        layoutMode: if node.hasKey("layout_mode"): layoutModeFromJson(node["layout_mode"]) else: Scroller,
+        masterCount: 1,
+        masterSplitRatio: 0.55'f32
+      )
+      if node.hasKey("name"): tag.name = stringFromJson(node["name"])
+      if node.hasKey("focused_window"):
+        let focused = uint32FromJson(node["focused_window"])
+        if focused.isSome: tag.focusedWindow = WindowId(focused.get())
+      if node.hasKey("target_viewport_x_offset"): tag.targetViewportXOffset = float32FromJson(node["target_viewport_x_offset"])
+      if node.hasKey("current_viewport_x_offset"): tag.currentViewportXOffset = float32FromJson(node["current_viewport_x_offset"])
+      if node.hasKey("target_viewport_y_offset"): tag.targetViewportYOffset = float32FromJson(node["target_viewport_y_offset"])
+      if node.hasKey("current_viewport_y_offset"): tag.currentViewportYOffset = float32FromJson(node["current_viewport_y_offset"])
+      if node.hasKey("master_count") and node["master_count"].kind == JInt: tag.masterCount = max(1, node["master_count"].getInt())
+      if node.hasKey("master_split_ratio"): tag.masterSplitRatio = float32FromJson(node["master_split_ratio"], 0.55'f32)
+      if node.hasKey("columns") and node["columns"].kind == JArray:
+        for colNode in node["columns"]:
+          if colNode.kind != JObject:
+            continue
+          var col = RestoredColumnState(widthProportion: 0.5'f32)
+          if colNode.hasKey("width_proportion"):
+            col.widthProportion = float32FromJson(colNode["width_proportion"], 0.5'f32)
+          if colNode.hasKey("windows") and colNode["windows"].kind == JArray:
+            for winNode in colNode["windows"]:
+              let winId = uint32FromJson(winNode)
+              if winId.isSome:
+                col.windows.add(WindowId(winId.get()))
+                state.tagByWindow[WindowId(winId.get())] = tag.tagId
+          tag.columns.add(col)
+      state.tags[tag.tagId] = tag
+
+  if root.hasKey("windows") and root["windows"].kind == JArray:
+    for node in root["windows"]:
+      if node.kind != JObject or not node.hasKey("id"):
+        continue
+      let winId = uint32FromJson(node["id"])
+      if winId.isNone:
+        continue
+      var win = RestoredWindowState(widthProportion: 0.5'f32, heightProportion: 1.0'f32)
+      if node.hasKey("tag_id"):
+        let tagId = uint32FromJson(node["tag_id"])
+        if tagId.isSome:
+          win.tagId = tagId.get()
+          state.tagByWindow[WindowId(winId.get())] = win.tagId
+      elif state.tagByWindow.hasKey(WindowId(winId.get())):
+        win.tagId = state.tagByWindow[WindowId(winId.get())]
+      if node.hasKey("width_proportion"): win.widthProportion = float32FromJson(node["width_proportion"], 0.5'f32)
+      if node.hasKey("height_proportion"): win.heightProportion = float32FromJson(node["height_proportion"], 1.0'f32)
+      if node.hasKey("is_floating"): win.isFloating = boolFromJson(node["is_floating"])
+      if node.hasKey("is_fullscreen"): win.isFullscreen = boolFromJson(node["is_fullscreen"])
+      if node.hasKey("is_maximized"): win.isMaximized = boolFromJson(node["is_maximized"])
+      if node.hasKey("is_minimized"): win.isMinimized = boolFromJson(node["is_minimized"])
+      if node.hasKey("fullscreen_output"):
+        let output = uint32FromJson(node["fullscreen_output"])
+        if output.isSome: win.fullscreenOutput = output.get()
+      if node.hasKey("floating_geom"): win.floatingGeom = rectFromJson(node["floating_geom"])
+      if node.hasKey("actual_w"): win.actualW = max(0'i32, int32FromJson(node["actual_w"]))
+      if node.hasKey("actual_h"): win.actualH = max(0'i32, int32FromJson(node["actual_h"]))
+      state.windows[WindowId(winId.get())] = win
+
+  if root.hasKey("output_tags") and root["output_tags"].kind == JArray:
+    for node in root["output_tags"]:
+      if node.kind != JObject or not node.hasKey("output_id") or not node.hasKey("tag_id"):
+        continue
+      let outputId = uint32FromJson(node["output_id"])
+      let tagId = uint32FromJson(node["tag_id"])
+      if outputId.isSome and tagId.isSome:
+        state.outputTags[outputId.get()] = tagId.get()
+
+  if root.hasKey("scratchpad_windows") and root["scratchpad_windows"].kind == JArray:
+    for node in root["scratchpad_windows"]:
+      let winId = uint32FromJson(node)
+      if winId.isSome: state.scratchpadWindows.add(WindowId(winId.get()))
+
+  if root.hasKey("named_scratchpads") and root["named_scratchpads"].kind == JArray:
+    for node in root["named_scratchpads"]:
+      if node.kind != JObject or not node.hasKey("name") or not node.hasKey("window_id"):
+        continue
+      let winId = uint32FromJson(node["window_id"])
+      if winId.isSome:
+        state.namedScratchpads[stringFromJson(node["name"])] = WindowId(winId.get())
+
+  if root.hasKey("visible_scratchpad"):
+    let winId = uint32FromJson(root["visible_scratchpad"])
+    if winId.isSome: state.visibleScratchpad = WindowId(winId.get())
+  if root.hasKey("is_scratchpad_visible"):
+    state.isScratchpadVisible = boolFromJson(root["is_scratchpad_visible"])
+
+  if state.activeTag == 0 and state.tagByWindow.len == 0 and state.windows.len == 0 and state.tags.len == 0:
+    return none(LiveRestoreState)
+  return some(state)
+
+proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
   result = some(LiveRestoreState())
   var state = result.get()
 
@@ -46,12 +302,38 @@ proc parseLiveRestoreJson*(payload: string): Option[LiveRestoreState] =
       let winId = uint32FromJson(win["id"])
       let tagId = uint32FromJson(win["workspace_id"])
       if winId.isSome and tagId.isSome:
-        state.tagByWindow[WindowId(winId.get())] = tagId.get()
+        let id = WindowId(winId.get())
+        state.tagByWindow[id] = tagId.get()
+        var restored = RestoredWindowState(tagId: tagId.get(), widthProportion: 0.5'f32, heightProportion: 1.0'f32)
+        if win.hasKey("is_floating"): restored.isFloating = boolFromJson(win["is_floating"])
+        if win.hasKey("is_fullscreen"): restored.isFullscreen = boolFromJson(win["is_fullscreen"])
+        if win.hasKey("is_maximized"): restored.isMaximized = boolFromJson(win["is_maximized"])
+        if win.hasKey("is_minimized"): restored.isMinimized = boolFromJson(win["is_minimized"])
+        if win.hasKey("layout") and win["layout"].kind == JObject:
+          let layout = win["layout"]
+          if layout.hasKey("window_size") and layout["window_size"].kind == JArray and layout["window_size"].len >= 2:
+            restored.actualW = int32FromJson(layout["window_size"][0])
+            restored.actualH = int32FromJson(layout["window_size"][1])
+        state.windows[id] = restored
 
   if state.activeTag == 0 and state.tagByWindow.len == 0:
     return none(LiveRestoreState)
+  return some(state)
 
-  result = some(state)
+proc parseLiveRestoreJson*(payload: string): Option[LiveRestoreState] =
+  var root: JsonNode
+  try:
+    root = parseJson(payload)
+  except CatchableError:
+    return none(LiveRestoreState)
+
+  if root.kind != JObject:
+    return none(LiveRestoreState)
+
+  if root.hasKey("schema") and root["schema"].kind == JString and root["schema"].getStr() == LiveRestoreSchema:
+    return parseNativeLiveRestore(root)
+  else:
+    return parseLegacyLiveRestore(root)
 
 proc defaultLiveRestorePath*(): string =
   let configured = getEnv("TRIAD_LIVE_RESTORE_PATH", "")
@@ -79,5 +361,12 @@ proc consumeLiveRestoreState*(path: string): Option[LiveRestoreState] =
 proc applyLiveRestore*(model: var Model; state: LiveRestoreState) =
   model.restoreActiveTag = state.activeTag
   model.restoreTagByWindow = state.tagByWindow
+  model.restoreWindows = state.windows
+  model.restoreTags = state.tags
+  model.outputTags = state.outputTags
+  model.scratchpadWindows = state.scratchpadWindows
+  model.namedScratchpads = state.namedScratchpads
+  model.visibleScratchpad = state.visibleScratchpad
+  model.isScratchpadVisible = state.isScratchpadVisible
   if state.activeTag != 0:
     model.activeTag = state.activeTag

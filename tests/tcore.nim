@@ -5,7 +5,7 @@ import ../src/core/msg
 import ../src/core/render_visibility
 import ../src/core/restore_state
 import ../src/core/update
-import json, os, tables, sequtils, strutils
+import json, options, os, tables, sequtils, strutils
 
 proc installAppIdentityFixture() =
   let apps = getTempDir() / ("triad-core-apps-" & $getCurrentProcessId()) / "applications"
@@ -262,6 +262,51 @@ suite "Core TEA Update Logic":
     check not nextModel.tags[1].containsWindow(112)
     check not nextModel.tags.hasKey(3) or not nextModel.tags[3].containsWindow(112)
     check not nextModel.restoreTagByWindow.hasKey(112)
+
+  test "native live restore preserves workspace layout sizing and focus":
+    var source = Model(activeTag: 2, screenWidth: 2560, screenHeight: 1440)
+    source.tags[2] = initTagState(2, Scroller, "web")
+    source.tags[2].focusedWindow = 202
+    source.tags[2].targetViewportXOffset = 128.0
+    source.tags[2].currentViewportXOffset = 64.0
+    source.tags[2].columns.add(Column(windows: @[WindowId(201)], widthProportion: 0.35))
+    source.tags[2].columns.add(Column(windows: @[WindowId(202)], widthProportion: 0.9))
+    source.windows[201] = WindowData(id: 201, appId: "foot", title: "foot", widthProportion: 0.4, heightProportion: 0.8)
+    source.windows[202] = WindowData(
+      id: 202,
+      appId: "brave",
+      title: "Brave",
+      widthProportion: 0.75,
+      heightProportion: 1.0,
+      isMaximized: true,
+      actualW: 2560,
+      actualH: 1410)
+    source.outputTags[42] = 2
+
+    let parsed = parseLiveRestoreJson(liveRestoreJson(source))
+    check parsed.isSome
+
+    var restoredModel = Model(activeTag: 1, screenWidth: 2560, screenHeight: 1440)
+    restoredModel.applyLiveRestore(parsed.get())
+
+    var (nextModel, _) = update(restoredModel, Msg(kind: WlWindowCreated, windowId: 201, appId: "foot", title: "foot"))
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].focusedWindow == 202
+    check nextModel.tags[2].columns[0].windows == @[WindowId(201)]
+    check nextModel.tags[2].columns[0].widthProportion == 0.35'f32
+
+    var effects: seq[Effect]
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 202, appId: "brave", title: "Brave"))
+    check nextModel.tags[2].name == "web"
+    check nextModel.tags[2].focusedWindow == 202
+    check nextModel.tags[2].columns.len == 2
+    check nextModel.tags[2].columns[1].windows == @[WindowId(202)]
+    check nextModel.tags[2].columns[1].widthProportion == 0.9'f32
+    check nextModel.tags[2].currentViewportXOffset == 64.0'f32
+    check nextModel.windows[202].isMaximized
+    check nextModel.windows[202].actualW == 2560
+    check nextModel.outputTags[42] == 2
+    check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 202 and it.isMaximized)
 
   test "Scratchpad management moves window out of tag":
     var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
