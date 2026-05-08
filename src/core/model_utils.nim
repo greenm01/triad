@@ -114,6 +114,18 @@ proc focusedOnActiveTag*(model: Model): WindowId =
       return tag.focusedWindow
   0
 
+proc boundedDimensions*(win: WindowData; w, h: int32): tuple[w, h: int32] =
+  result.w = max(0'i32, w)
+  result.h = max(0'i32, h)
+  if win.minWidth > 0:
+    result.w = max(result.w, win.minWidth)
+  if win.minHeight > 0:
+    result.h = max(result.h, win.minHeight)
+  if win.maxWidth > 0:
+    result.w = min(result.w, win.maxWidth)
+  if win.maxHeight > 0:
+    result.h = min(result.h, win.maxHeight)
+
 proc validateModel*(model: Model): seq[string] =
   var seen = initTable[WindowId, uint32]()
 

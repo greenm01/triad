@@ -36,6 +36,7 @@ type
     of EffSetFullscreen:
       fsWinId*: WindowId
       isFullscreen*: bool
+      fsOutputId*: uint32
     else:
       discard
 
@@ -122,6 +123,15 @@ proc syncPrimaryOutput(model: var Model) =
     model.screenWidth = output.w
     model.screenHeight = output.h
 
+proc chooseFullscreenOutput(model: Model; requested: uint32): uint32 =
+  if requested != 0 and model.outputs.hasKey(requested):
+    return requested
+  if model.primaryOutput != 0 and model.outputs.hasKey(model.primaryOutput):
+    return model.primaryOutput
+  if requested != 0:
+    return requested
+  0
+
 proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   var nextModel = model
   var effects: seq[Effect] = @[]
@@ -163,6 +173,18 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       if nextModel.primaryOutput == msg.removedOutputId:
         nextModel.primaryOutput = 0
       nextModel.syncPrimaryOutput()
+      var clearedFullscreen: seq[WindowId] = @[]
+      for winId, win in nextModel.windows.pairs:
+        if win.isFullscreen and win.fullscreenOutput == msg.removedOutputId:
+          clearedFullscreen.add(winId)
+      for winId in clearedFullscreen:
+        var win = nextModel.windows[winId]
+        win.isFullscreen = false
+        win.fullscreenOutput = 0
+        nextModel.windows[winId] = win
+        effects.add(Effect(kind: EffSetFullscreen, fsWinId: winId, isFullscreen: false))
+      if clearedFullscreen.len > 0:
+        effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowCreated:
     discard nextModel.removeWindowFromAllTags(msg.windowId)
@@ -217,15 +239,18 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of WlWindowFullscreenRequested:
     if nextModel.windows.hasKey(msg.fullscreenRequestId):
       var win = nextModel.windows[msg.fullscreenRequestId]
+      let outputId = nextModel.chooseFullscreenOutput(msg.fullscreenOutputId)
       win.isFullscreen = true
+      win.fullscreenOutput = outputId
       nextModel.windows[msg.fullscreenRequestId] = win
-      effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.fullscreenRequestId, isFullscreen: true))
+      effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.fullscreenRequestId, isFullscreen: true, fsOutputId: outputId))
       effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowExitFullscreenRequested:
     if nextModel.windows.hasKey(msg.exitFullscreenRequestId):
       var win = nextModel.windows[msg.exitFullscreenRequestId]
       win.isFullscreen = false
+      win.fullscreenOutput = 0
       nextModel.windows[msg.exitFullscreenRequestId] = win
       effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.exitFullscreenRequestId, isFullscreen: false))
       effects.add(Effect(kind: EffManageDirty))
@@ -242,6 +267,33 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var win = nextModel.windows[msg.identifierWindowId]
       win.identifier = msg.identifier
       nextModel.windows[msg.identifierWindowId] = win
+
+  of WlWindowAppId:
+    if nextModel.windows.hasKey(msg.appIdWindowId):
+      var win = nextModel.windows[msg.appIdWindowId]
+      win.appId = msg.updatedAppId
+      nextModel.windows[msg.appIdWindowId] = win
+      effects.add(broadcastWindowOpened(win))
+
+  of WlWindowTitle:
+    if nextModel.windows.hasKey(msg.titleWindowId):
+      var win = nextModel.windows[msg.titleWindowId]
+      win.title = msg.updatedTitle
+      nextModel.windows[msg.titleWindowId] = win
+      effects.add(broadcastWindowOpened(win))
+
+  of WlWindowDimensionsHint:
+    if nextModel.windows.hasKey(msg.hintWindowId):
+      var win = nextModel.windows[msg.hintWindowId]
+      win.minWidth = max(0'i32, msg.minWidth)
+      win.minHeight = max(0'i32, msg.minHeight)
+      win.maxWidth = max(0'i32, msg.maxWidth)
+      win.maxHeight = max(0'i32, msg.maxHeight)
+      if win.maxWidth > 0 and win.maxWidth < win.minWidth:
+        win.maxWidth = win.minWidth
+      if win.maxHeight > 0 and win.maxHeight < win.minHeight:
+        win.maxHeight = win.minHeight
+      nextModel.windows[msg.hintWindowId] = win
 
   of WlPointerMoveRequested:
     if nextModel.windows.hasKey(msg.moveWinId):
@@ -622,7 +674,13 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       let focused = nextModel.tags[nextModel.activeTag].focusedWindow
       if focused != 0 and nextModel.windows.hasKey(focused):
         var win = nextModel.windows[focused]; win.isFullscreen = not win.isFullscreen; nextModel.windows[focused] = win
-        effects.add(Effect(kind: EffSetFullscreen, fsWinId: focused, isFullscreen: win.isFullscreen)); effects.add(Effect(kind: EffManageDirty))
+        if not win.isFullscreen:
+          win.fullscreenOutput = 0
+          nextModel.windows[focused] = win
+        else:
+          win.fullscreenOutput = nextModel.chooseFullscreenOutput(0)
+          nextModel.windows[focused] = win
+        effects.add(Effect(kind: EffSetFullscreen, fsWinId: focused, isFullscreen: win.isFullscreen, fsOutputId: win.fullscreenOutput)); effects.add(Effect(kind: EffManageDirty))
 
   of CmdSelectWindow:
     nextModel.overviewActive = false

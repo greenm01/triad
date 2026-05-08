@@ -124,7 +124,7 @@ proc simpleCommand(rng: var FuzzRng): Msg =
   Msg(kind: kinds[rng.pick(kinds.len)])
 
 proc generatedMsg(rng: var FuzzRng; model: Model; ctx: var FuzzContext): seq[Msg] =
-  case rng.pick(15)
+  case rng.pick(20)
   of 0:
     let win = chooseWindow(rng, model)
     ctx.op = "create window " & $win
@@ -208,6 +208,34 @@ proc generatedMsg(rng: var FuzzRng; model: Model; ctx: var FuzzContext): seq[Msg
     ctx.op = "move floating " & $dx & "," & $dy
     @[Msg(kind: CmdMoveFloating, moveDX: dx, moveDY: dy)]
   of 13:
+    let win = chooseWindow(rng, model)
+    ctx.op = "window metadata " & $win
+    if rng.chance(1, 2):
+      @[Msg(kind: WlWindowAppId, appIdWindowId: win, updatedAppId: "late-app-" & $rng.pick(8))]
+    else:
+      @[Msg(kind: WlWindowTitle, titleWindowId: win, updatedTitle: "late-title-" & $rng.pick(12))]
+  of 14:
+    let win = chooseWindow(rng, model)
+    let minW = chooseDelta(rng, 120)
+    let minH = chooseDelta(rng, 120)
+    let maxW = int32(rng.pick(500))
+    let maxH = int32(rng.pick(500))
+    ctx.op = "dimension hint " & $win
+    @[Msg(kind: WlWindowDimensionsHint, hintWindowId: win, minWidth: minW, minHeight: minH, maxWidth: maxW, maxHeight: maxH)]
+  of 15:
+    let win = chooseWindow(rng, model)
+    let outputId = if rng.chance(1, 2): 0'u32 else: uint32(1 + rng.pick(4))
+    ctx.op = "fullscreen request " & $win & " output " & $outputId
+    @[Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: win, fullscreenOutputId: outputId)]
+  of 16:
+    let win = chooseWindow(rng, model)
+    ctx.op = "exit fullscreen request " & $win
+    @[Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: win)]
+  of 17:
+    let outputId = uint32(1 + rng.pick(4))
+    ctx.op = "remove output " & $outputId
+    @[Msg(kind: WlOutputRemoved, removedOutputId: outputId)]
+  of 18:
     let commands = [
       "focus-next", "focus-prev", "toggle-overview", "focus-workspace 2",
       "focus-workspace -1", "move-to-tag 4", "swap-to-tag junk",

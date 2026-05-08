@@ -10,6 +10,9 @@ type
     WlWindowExitFullscreenRequested,
     WlWindowParent,
     WlWindowIdentifier,
+    WlWindowAppId,
+    WlWindowTitle,
+    WlWindowDimensionsHint,
     WlOutputDimensions,
     WlOutputPosition,
     WlOutputUsable,
@@ -82,6 +85,7 @@ type
       newFocusedId*: WindowId
     of WlWindowFullscreenRequested:
       fullscreenRequestId*: WindowId
+      fullscreenOutputId*: uint32
     of WlWindowExitFullscreenRequested:
       exitFullscreenRequestId*: WindowId
     of WlWindowParent:
@@ -90,6 +94,15 @@ type
     of WlWindowIdentifier:
       identifierWindowId*: WindowId
       identifier*: string
+    of WlWindowAppId:
+      appIdWindowId*: WindowId
+      updatedAppId*: string
+    of WlWindowTitle:
+      titleWindowId*: WindowId
+      updatedTitle*: string
+    of WlWindowDimensionsHint:
+      hintWindowId*: WindowId
+      minWidth*, minHeight*, maxWidth*, maxHeight*: int32
     of WlOutputDimensions:
       outputId*: uint32
       width*: int32

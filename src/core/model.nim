@@ -34,8 +34,10 @@ type
     heightProportion*: float32 # 0.0 to 1.0
     isFloating*: bool
     isFullscreen*: bool
+    fullscreenOutput*: uint32
     parentId*: WindowId
     identifier*: string
+    minWidth*, minHeight*, maxWidth*, maxHeight*: int32
     floatingGeom*: Rect
 
   GroupState* = object

@@ -298,6 +298,7 @@ const
   BtnRight = 0x111'u32
   FocusedBorder = 0xffffffff'u32
   UnfocusedBorder = 0x666666ff'u32
+  RiverCapabilityFullscreen = 4'u32
   BorderWidth = 2'i32
 
 var
@@ -324,6 +325,15 @@ proc keySym(ch: char): uint32 =
 proc applyBorder(win: ptr RiverWindowV1; focused: bool) =
   let color = premulColor(if focused: FocusedBorder else: UnfocusedBorder)
   win.setBorders(RiverAllEdges, BorderWidth, color.r, color.g, color.b, color.a)
+
+proc outputIdForPointer(output: ptr RiverOutputV1): uint32 =
+  if output == nil:
+    return 0
+  let id = output.get_id()
+  if outputPointers.hasKey(id):
+    id
+  else:
+    0
 
 proc attachLayerOutput(outputId: uint32) =
   if river_layer_shell == nil or not outputPointers.hasKey(outputId) or layerOutputPointers.hasKey(outputId):
@@ -395,9 +405,11 @@ proc applyManageState() =
 
   for id, win in windowPointers.pairs:
     win.useSsd()
+    win.setCapabilities(RiverCapabilityFullscreen)
     var edges = RiverAllEdges
     if currentModel.windows.hasKey(id):
       let data = currentModel.windows[id]
+      win.setDimensionBounds(data.maxWidth, data.maxHeight)
       if data.isFloating or data.isFullscreen:
         edges = 0
     win.setTiled(edges)
@@ -578,7 +590,9 @@ proc executeManageEffect(eff: Effect) =
       let win = windowPointers[eff.fsWinId]
       if eff.isFullscreen:
         var output: ptr RiverOutputV1 = nil
-        if currentModel.primaryOutput != 0 and outputPointers.hasKey(currentModel.primaryOutput):
+        if eff.fsOutputId != 0 and outputPointers.hasKey(eff.fsOutputId):
+          output = outputPointers[eff.fsOutputId]
+        elif currentModel.primaryOutput != 0 and outputPointers.hasKey(currentModel.primaryOutput):
           output = outputPointers[currentModel.primaryOutput]
         elif outputPointers.len > 0:
           for p in outputPointers.values:
@@ -613,7 +627,11 @@ proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
   for instr in instructions:
     desiredPlacements[instr.windowId] = instr.geom
     if windowPointers.hasKey(instr.windowId):
-      let geom = instr.geom
+      var geom = instr.geom
+      if currentModel.windows.hasKey(instr.windowId):
+        let bounded = currentModel.windows[instr.windowId].boundedDimensions(geom.w, geom.h)
+        geom.w = bounded.w
+        geom.h = bounded.h
       windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(0'i32, geom.h))
 
 proc intersects(a, b: Rect): bool =
@@ -723,8 +741,7 @@ proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
   if pendingWindows.hasKey(id):
     pendingWindows[id].appId = appIdText
   elif currentModel.windows.hasKey(id):
-    # Already created, maybe update and re-render?
-    discard
+    msgQueue.add(Msg(kind: WlWindowAppId, appIdWindowId: id, updatedAppId: appIdText))
 
 proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
   let id = win.get_id()
@@ -732,6 +749,8 @@ proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
   debug "Window title received", windowId=id, title=titleText
   if pendingWindows.hasKey(id):
     pendingWindows[id].title = titleText
+  elif currentModel.windows.hasKey(id):
+    msgQueue.add(Msg(kind: WlWindowTitle, titleWindowId: id, updatedTitle: titleText))
 
 proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
   let id = win.get_id()
@@ -752,6 +771,19 @@ proc on_window_dimensions_hint(
     minHeight=minHeight,
     maxWidth=maxWidth,
     maxHeight=maxHeight
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].minWidth = max(0'i32, minWidth)
+    pendingWindows[win.get_id()].minHeight = max(0'i32, minHeight)
+    pendingWindows[win.get_id()].maxWidth = max(0'i32, maxWidth)
+    pendingWindows[win.get_id()].maxHeight = max(0'i32, maxHeight)
+  elif currentModel.windows.hasKey(win.get_id()):
+    msgQueue.add(Msg(
+      kind: WlWindowDimensionsHint,
+      hintWindowId: win.get_id(),
+      minWidth: minWidth,
+      minHeight: minHeight,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight))
 
 proc on_window_dimensions(data: pointer, win: ptr RiverWindowV1, width: int32, height: int32) =
   trace "Window dimensions acknowledged", windowId=win.get_id(), width=width, height=height
@@ -759,7 +791,10 @@ proc on_window_dimensions(data: pointer, win: ptr RiverWindowV1, width: int32, h
 proc on_window_parent(data: pointer, win: ptr RiverWindowV1, parent: ptr RiverWindowV1) =
   let parentId = if parent == nil: 0'u32 else: parent.get_id()
   trace "Window parent received", windowId=win.get_id(), parentId=parentId
-  msgQueue.add(Msg(kind: WlWindowParent, childWindowId: win.get_id(), parentWindowId: parentId))
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].parentId = parentId
+  else:
+    msgQueue.add(Msg(kind: WlWindowParent, childWindowId: win.get_id(), parentWindowId: parentId))
 
 proc on_window_decoration_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
   trace "Window decoration hint received", windowId=win.get_id(), hint=hint
@@ -782,12 +817,21 @@ proc on_window_unmaximize_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window unmaximize requested", windowId=win.get_id()
 
 proc on_window_fullscreen_requested(data: pointer, win: ptr RiverWindowV1, output: ptr RiverOutputV1) =
-  debug "Window fullscreen requested", windowId=win.get_id()
-  msgQueue.add(Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: win.get_id()))
+  let requestedOutput = outputIdForPointer(output)
+  debug "Window fullscreen requested", windowId=win.get_id(), outputId=requestedOutput
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].isFullscreen = true
+    pendingWindows[win.get_id()].fullscreenOutput = requestedOutput
+  else:
+    msgQueue.add(Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: win.get_id(), fullscreenOutputId: requestedOutput))
 
 proc on_window_exit_fullscreen_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window exit fullscreen requested", windowId=win.get_id()
-  msgQueue.add(Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: win.get_id()))
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].isFullscreen = false
+    pendingWindows[win.get_id()].fullscreenOutput = 0
+  else:
+    msgQueue.add(Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: win.get_id()))
 
 proc on_window_minimize_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window minimize requested", windowId=win.get_id()
@@ -883,6 +927,18 @@ proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
   # Before starting manage, move all pending windows to the message queue
   for id, data in pendingWindows:
     msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title, createdIdentifier: data.identifier))
+    if data.parentId != 0:
+      msgQueue.add(Msg(kind: WlWindowParent, childWindowId: id, parentWindowId: data.parentId))
+    if data.minWidth > 0 or data.minHeight > 0 or data.maxWidth > 0 or data.maxHeight > 0:
+      msgQueue.add(Msg(
+        kind: WlWindowDimensionsHint,
+        hintWindowId: id,
+        minWidth: data.minWidth,
+        minHeight: data.minHeight,
+        maxWidth: data.maxWidth,
+        maxHeight: data.maxHeight))
+    if data.isFullscreen:
+      msgQueue.add(Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: id, fullscreenOutputId: data.fullscreenOutput))
   pendingWindows.clear()
   msgQueue.add(Msg(kind: WlManageStart))
 

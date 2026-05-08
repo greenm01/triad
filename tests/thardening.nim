@@ -1,4 +1,4 @@
-import unittest, tables, os
+import unittest, tables, os, sequtils
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
@@ -78,11 +78,51 @@ suite "Crash hardening":
     var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title", createdIdentifier: "river-id"))
     check nextModel.windows[7].identifier == "river-id"
 
-    (nextModel, _) = update(nextModel, Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: 7))
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: 7, fullscreenOutputId: 42))
     check nextModel.windows[7].isFullscreen
+    check nextModel.windows[7].fullscreenOutput == 42
 
     (nextModel, _) = update(nextModel, Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: 7))
     check not nextModel.windows[7].isFullscreen
+    check nextModel.windows[7].fullscreenOutput == 0
+
+  test "river late metadata updates live window state":
+    var model = baseModel()
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "old", title: "old"))
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowAppId, appIdWindowId: 7, updatedAppId: "new-app"))
+    check nextModel.windows[7].appId == "new-app"
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowTitle, titleWindowId: 7, updatedTitle: "new title"))
+    check nextModel.windows[7].title == "new title"
+
+  test "river output removal clears affected fullscreen state":
+    var model = baseModel()
+    var (nextModel, _) = update(model, Msg(kind: WlOutputDimensions, outputId: 42, width: 1280, height: 720))
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title"))
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: 7, fullscreenOutputId: 0))
+    check nextModel.windows[7].fullscreenOutput == 42
+
+    var effects: seq[Effect]
+    (nextModel, effects) = update(nextModel, Msg(kind: WlOutputRemoved, removedOutputId: 42))
+
+    check not nextModel.windows[7].isFullscreen
+    check nextModel.windows[7].fullscreenOutput == 0
+    check effects.anyIt(it.kind == EffSetFullscreen and it.fsWinId == 7 and not it.isFullscreen)
+
+  test "river dimensions hints are normalized and bound proposals":
+    var model = baseModel()
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title"))
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowDimensionsHint, hintWindowId: 7, minWidth: -10, minHeight: 200, maxWidth: 100, maxHeight: 50))
+
+    let win = nextModel.windows[7]
+    check win.minWidth == 0
+    check win.minHeight == 200
+    check win.maxWidth == 100
+    check win.maxHeight == 200
+    check win.boundedDimensions(50, 50) == (w: 50'i32, h: 200'i32)
+    check win.boundedDimensions(500, 500) == (w: 100'i32, h: 200'i32)
 
   test "consume ignores empty next columns":
     var model = baseModel()
