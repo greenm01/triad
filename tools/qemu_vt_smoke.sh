@@ -132,6 +132,10 @@ work="/tmp/triad-vt-smoke"
 nimble_dir="/home/$guest_user/.cache/triad-vt-smoke/nimble"
 vt_cycles="${TRIAD_QEMU_VT_CYCLES:-3}"
 
+triad_msg() {
+  env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg "$@"
+}
+
 run_root mkdir -p "$mnt" "$runtime"
 run_root chown "$guest_uid:$guest_gid" "$runtime"
 chmod 700 "$runtime"
@@ -186,7 +190,7 @@ while ! kill -0 "$triad_pid" 2>/dev/null; do
 done
 
 i=0
-while ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >/tmp/triad-msg-ready.log 2>&1; do
+while ! triad_msg focus-next >/tmp/triad-msg-ready.log 2>&1; do
   i=$((i + 1))
   if [ "$i" -gt 30 ]; then
     cat /tmp/triad-msg-ready.log >&2 || true
@@ -195,11 +199,43 @@ while ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >/tmp/triad-
   kill -0 "$triad_pid" 2>/dev/null || fail "Triad exited before IPC became ready"
   sleep 1
 done
+
+for command in \
+  "focus-left" \
+  "focus-right" \
+  "focus-up" \
+  "focus-down" \
+  "focus-last" \
+  "focus-tag-left" \
+  "focus-tag-right" \
+  "focus-occupied-tag-left" \
+  "focus-occupied-tag-right" \
+  "move-to-tag-left" \
+  "move-to-tag-right" \
+  "switch-layout" \
+  "layout-deck" \
+  "layout-center-tile" \
+  "layout-right-tile" \
+  "layout-vertical-tile" \
+  "layout-vertical-grid" \
+  "layout-vertical-deck" \
+  "move-to-named-scratchpad qemu-smoke" \
+  "toggle-named-scratchpad qemu-smoke" \
+  "restore-scratchpad"
+do
+  if ! triad_msg $command >>/tmp/triad-workflow-commands.log 2>&1; then
+    cat /tmp/triad-workflow-commands.log >&2 || true
+    cat /tmp/triad-session.env >&2 || true
+    cat /tmp/triad-vt.log >&2 || true
+    fail "Triad workflow command failed: $command"
+  fi
+done
+
 cycle=1
 while [ "$cycle" -le "$vt_cycles" ]; do
   run_root chvt 3
   sleep 1
-  if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >"/tmp/triad-post-vt-msg-$cycle.log" 2>&1; then
+  if ! triad_msg focus-next >"/tmp/triad-post-vt-msg-$cycle.log" 2>&1; then
     cat "/tmp/triad-post-vt-msg-$cycle.log" >&2 || true
     cat /tmp/triad-session.env >&2 || true
     cat /tmp/triad-vt.log >&2 || true
@@ -217,7 +253,7 @@ while [ "$cycle" -le "$vt_cycles" ]; do
     fi
   fi
 
-  if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg toggle-overview >"/tmp/triad-toggle-$cycle.log" 2>&1; then
+  if ! triad_msg toggle-overview >"/tmp/triad-toggle-$cycle.log" 2>&1; then
     cat "/tmp/triad-toggle-$cycle.log" >&2 || true
     cat /tmp/triad-session.env >&2 || true
     cat /tmp/triad-vt.log >&2 || true
@@ -242,7 +278,7 @@ kill "$triad_pid" 2>/dev/null || true
 printf '%s\n' "guest-vt-smoke: ok"
 GUEST
 
-ssh_guest 'tar -C /tmp -czf - triad-vt.log triad-tty.log triad-session.env triad-outputs.json triad-post-vt-msg-*.log triad-toggle-*.log triad-niri-outputs-*.log 2>/dev/null' \
+ssh_guest 'tar -C /tmp -czf - triad-vt.log triad-tty.log triad-session.env triad-outputs.json triad-workflow-commands.log triad-post-vt-msg-*.log triad-toggle-*.log triad-niri-outputs-*.log 2>/dev/null' \
   >"$out_dir/guest-artifacts.tgz" || true
 
 printf '%s\n' "qemu-vt-smoke: ok"

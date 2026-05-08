@@ -17,6 +17,10 @@ require_log() {
   fi
 }
 
+triad_msg() {
+  ./triad msg "$@" >/dev/null
+}
+
 log="${TRIAD_LIVE_LOG:-triad-live-smoke.log}"
 out="${TRIAD_LIVE_OUT:-triad-live-smoke.out}"
 events="${TRIAD_LIVE_EVENTS:-triad-live-smoke.events}"
@@ -78,8 +82,29 @@ if [ -n "$lockme_bin" ]; then
   "$lockme_bin" --check-protocols >/dev/null
 fi
 
-./triad msg focus-next >/dev/null
-./triad msg reload-config >/dev/null
+triad_msg focus-next
+triad_msg focus-left
+triad_msg focus-right
+triad_msg focus-up
+triad_msg focus-down
+triad_msg focus-last
+triad_msg focus-tag-left
+triad_msg focus-tag-right
+triad_msg focus-occupied-tag-left
+triad_msg focus-occupied-tag-right
+triad_msg move-to-tag-left
+triad_msg move-to-tag-right
+triad_msg switch-layout
+triad_msg layout-deck
+triad_msg layout-center-tile
+triad_msg layout-right-tile
+triad_msg layout-vertical-tile
+triad_msg layout-vertical-grid
+triad_msg layout-vertical-deck
+triad_msg move-to-named-scratchpad live-smoke
+triad_msg toggle-named-scratchpad live-smoke
+triad_msg restore-scratchpad
+triad_msg reload-config
 ./triad_niri msg -j workspaces >/dev/null
 ./triad_niri msg -j outputs >/dev/null
 
@@ -92,7 +117,7 @@ if ! kill -0 "$event_stream_pid" 2>/dev/null; then
   fail "event-stream subscriber exited before receiving events"
 fi
 
-./triad msg toggle-overview >/dev/null
+triad_msg toggle-overview
 
 waited=0
 while ! grep -q "OverviewOpenedOrClosed" "$events"; do

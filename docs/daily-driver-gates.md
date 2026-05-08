@@ -25,10 +25,10 @@ Run from inside a River-compatible session:
 sh tools/live_smoke.sh
 ```
 
-The live smoke starts Triad, checks River startup milestones, sends ordinary
-IPC commands, reloads config, verifies the Niri shim, subscribes to
-`event-stream`, and confirms `toggle-overview` produces an
-`OverviewOpenedOrClosed` event.
+The live smoke starts Triad, checks River startup milestones, sends the
+navigation/layout/scratchpad workflow commands, reloads config, verifies the
+Niri shim, subscribes to `event-stream`, and confirms `toggle-overview`
+produces an `OverviewOpenedOrClosed` event.
 
 Useful optional passes:
 
@@ -58,8 +58,9 @@ sh tools/qemu_vt_smoke.sh
 ```
 
 The QEMU gate boots the reusable guest image, builds Triad inside the guest,
-starts River on VT 1, switches away and back repeatedly, verifies IPC after
-each switch, checks the bare TTY session guard, and captures guest logs.
+starts River on VT 1, sends the workflow IPC commands, switches away and back
+repeatedly, verifies IPC after each switch, checks the bare TTY session guard,
+and captures guest logs.
 
 To fold this into preflight:
 

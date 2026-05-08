@@ -36,9 +36,9 @@ sh tools/qemu_vt_smoke.sh
 
 The script boots the image, shares the current repo into the guest over 9p,
 builds Triad in `/tmp`, starts River on VT 1, starts Triad inside River,
-switches to VT 3 and back repeatedly, verifies a bare TTY Triad launch fails
-before touching the IPC socket, and checks the Triad/Niri IPC shims after each
-cycle.
+sends the navigation/layout/scratchpad workflow commands, switches to VT 3 and
+back repeatedly, verifies a bare TTY Triad launch fails before touching the IPC
+socket, and checks the Triad/Niri IPC shims after each cycle.
 
 Artifacts are written under `qemu-vt-smoke-out/`, including QEMU stderr,
 serial output, and a compressed bundle of guest logs.
