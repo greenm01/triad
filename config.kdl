@@ -21,6 +21,21 @@ quickshell {
     theme "noctalia-shell"
 }
 
+bindings {
+    bind "Super+q" "close-window"
+    bind "Super+f" "toggle-fullscreen"
+    bind "Super+m" "toggle-maximized"
+    bind "Super+n" "minimize"
+    bind "Super+r" "reload-config"
+    bind "Super+t" "spawn-terminal"
+    bind "Super+1" "focus-tag 1"
+    bind "Super+2" "focus-tag 2"
+    bind "Super+3" "focus-tag 3"
+    bind "Super+4" "focus-tag 4"
+    pointer-bind "Super+left" "move"
+    pointer-bind "Super+right" "resize"
+}
+
 // spawn-at-startup "waybar"
 
 window-rule {

@@ -34,9 +34,12 @@ type
     heightProportion*: float32 # 0.0 to 1.0
     isFloating*: bool
     isFullscreen*: bool
+    isMaximized*: bool
+    isMinimized*: bool
     fullscreenOutput*: uint32
     parentId*: WindowId
     identifier*: string
+    actualW*, actualH*: int32
     minWidth*, minHeight*, maxWidth*, maxHeight*: int32
     floatingGeom*: Rect
 
@@ -81,6 +84,16 @@ type
     OpMove,
     OpResize
 
+  KeyBindingConfig* = object
+    key*: string
+    modifiers*: uint32
+    command*: string
+
+  PointerBindingConfig* = object
+    button*: uint32
+    modifiers*: uint32
+    op*: PointerOpKind
+
   PointerOpState* = object
     kind*: PointerOpKind
     windowId*: WindowId
@@ -92,15 +105,19 @@ type
     windows*: Table[WindowId, WindowData]
     outputs*: Table[uint32, OutputData]
     primaryOutput*: uint32
+    outputTags*: Table[uint32, uint32]
     groups*: Table[uint32, GroupState]
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    keyBindings*: seq[KeyBindingConfig]
+    pointerBindings*: seq[PointerBindingConfig]
     pointerOp*: PointerOpState
     scratchpadWindows*: seq[WindowId]
     isScratchpadVisible*: bool
     activeTag*: uint32
     overviewActive*: bool
+    layerFocusExclusive*: bool
     # Screen dimensions
     screenWidth*: int32
     screenHeight*: int32

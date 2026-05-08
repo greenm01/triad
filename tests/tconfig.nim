@@ -91,3 +91,37 @@ quickshell {
     check config.quickshell.enabled == true
     check config.quickshell.theme == "DankMaterialShell"
     check config.quickshell.args == @["--debug", "--fast"]
+
+  test "Parser reads configurable key and pointer bindings":
+    let path = getCurrentDir() / "test_bindings.kdl"
+    let kdl = """
+bindings {
+    bind "Super+Return" "spawn-terminal"
+    bind "Super+Shift+q" "close-window"
+    pointer-bind "Super+left" "move"
+    pointer-bind "Super+right" "resize"
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.keyBindings.len == 2
+    check config.keyBindings[0].key == "Return"
+    check config.keyBindings[0].modifiers == 64'u32
+    check config.keyBindings[0].command == "spawn-terminal"
+    check config.keyBindings[1].key == "q"
+    check config.keyBindings[1].modifiers == 65'u32
+    check config.pointerBindings.len == 2
+    check config.pointerBindings[0].button == 0x110'u32
+    check config.pointerBindings[0].modifiers == 64'u32
+    check config.pointerBindings[0].op == OpMove
+
+  test "Parser supplies default bindings when config omits bindings":
+    let path = getCurrentDir() / "test_default_bindings.kdl"
+    writeFile(path, "layout { gaps 8 }\n")
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.keyBindings.len > 0
+    check config.pointerBindings.len > 0

@@ -1,4 +1,4 @@
-import kdl, tables, ../core/model, os, chronicles
+import kdl, tables, ../core/model, os, chronicles, strutils
 
 type
   Config* = object
@@ -7,6 +7,8 @@ type
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    keyBindings*: seq[KeyBindingConfig]
+    pointerBindings*: seq[PointerBindingConfig]
 
   LayoutConfig* = object
     gaps*: int32
@@ -46,6 +48,68 @@ proc forcedLayoutValue(name: string): int =
   of "grid": ord(Grid) + 1
   of "monocle": ord(Monocle) + 1
   else: 0
+
+proc modifierValue(name: string): uint32 =
+  case name
+  of "Shift", "shift": 1'u32
+  of "Ctrl", "Control", "ctrl", "control": 4'u32
+  of "Alt", "Mod1", "alt", "mod1": 8'u32
+  of "Mod3", "mod3": 32'u32
+  of "Super", "Logo", "Mod4", "super", "logo", "mod4": 64'u32
+  of "Mod5", "mod5": 128'u32
+  else: 0'u32
+
+proc parseModifiers(value: string): uint32 =
+  for part in value.split("+"):
+    result = result or modifierValue(part.strip())
+
+proc buttonValue(name: string): uint32 =
+  case name
+  of "left", "Left", "BTN_LEFT", "btn-left": 0x110'u32
+  of "right", "Right", "BTN_RIGHT", "btn-right": 0x111'u32
+  of "middle", "Middle", "BTN_MIDDLE", "btn-middle": 0x112'u32
+  else:
+    try:
+      let parsed = parseInt(name)
+      if parsed > 0:
+        return uint32(parsed)
+    except CatchableError:
+      discard
+    0'u32
+
+proc parseKeySpec(value: string): tuple[key: string, modifiers: uint32] =
+  let parts = value.split("+")
+  if parts.len == 0:
+    return ("", 0'u32)
+  result.key = parts[^1].strip()
+  if parts.len > 1:
+    result.modifiers = parseModifiers(parts[0 .. ^2].join("+"))
+
+proc parsePointerOp(value: string): PointerOpKind =
+  case value
+  of "move", "Move": OpMove
+  of "resize", "Resize": OpResize
+  else: OpNone
+
+proc defaultKeyBindings*(): seq[KeyBindingConfig] =
+  @[
+    KeyBindingConfig(key: "q", modifiers: 64'u32, command: "close-window"),
+    KeyBindingConfig(key: "f", modifiers: 64'u32, command: "toggle-fullscreen"),
+    KeyBindingConfig(key: "m", modifiers: 64'u32, command: "toggle-maximized"),
+    KeyBindingConfig(key: "n", modifiers: 64'u32, command: "minimize"),
+    KeyBindingConfig(key: "r", modifiers: 64'u32, command: "reload-config"),
+    KeyBindingConfig(key: "t", modifiers: 64'u32, command: "spawn-terminal"),
+    KeyBindingConfig(key: "1", modifiers: 64'u32, command: "focus-tag 1"),
+    KeyBindingConfig(key: "2", modifiers: 64'u32, command: "focus-tag 2"),
+    KeyBindingConfig(key: "3", modifiers: 64'u32, command: "focus-tag 3"),
+    KeyBindingConfig(key: "4", modifiers: 64'u32, command: "focus-tag 4")
+  ]
+
+proc defaultPointerBindings*(): seq[PointerBindingConfig] =
+  @[
+    PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32, op: OpMove),
+    PointerBindingConfig(button: 0x111'u32, modifiers: 64'u32, op: OpResize)
+  ]
 
 proc getConfigPath*(): string =
   let configHome = getEnv("XDG_CONFIG_HOME", getHomeDir() / ".config")
@@ -137,6 +201,28 @@ proc loadConfig*(path: string): Config =
         if cmd.len > 0:
           result.startupCommands.add(cmd)
 
+      elif node.name == "bindings":
+        for child in node.children:
+          try:
+            if child.name == "bind" and child.args.len >= 2:
+              let spec = parseKeySpec(child.args[0].kString())
+              if spec.key.len > 0:
+                result.keyBindings.add(KeyBindingConfig(
+                  key: spec.key,
+                  modifiers: spec.modifiers,
+                  command: child.args[1].kString()))
+            elif child.name == "pointer-bind" and child.args.len >= 2:
+              let spec = parseKeySpec(child.args[0].kString())
+              let button = buttonValue(spec.key)
+              let op = parsePointerOp(child.args[1].kString())
+              if button != 0 and op != OpNone:
+                result.pointerBindings.add(PointerBindingConfig(
+                  button: button,
+                  modifiers: spec.modifiers,
+                  op: op))
+          except CatchableError as e:
+            warn "Ignoring invalid binding config field", field=child.name, error=e.msg
+
       elif node.name == "quickshell":
         for child in node.children:
           try:
@@ -154,6 +240,11 @@ proc loadConfig*(path: string): Config =
     let e = getCurrentException()
     warn "Could not load config, using defaults", path=path, error=e.msg
 
+  if result.keyBindings.len == 0:
+    result.keyBindings = defaultKeyBindings()
+  if result.pointerBindings.len == 0:
+    result.pointerBindings = defaultPointerBindings()
+
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = clamp32(config.layout.gaps, 0, 512)
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
@@ -166,6 +257,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.windowRules = config.windowRules
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell
+  model.keyBindings = config.keyBindings
+  model.pointerBindings = config.pointerBindings
   
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
