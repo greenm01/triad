@@ -40,10 +40,14 @@ type
     CmdFocusNextInGroup,
     CmdSetMasterCount,
     CmdSetMasterRatio,
+    CmdAdjustMasterCount,
+    CmdAdjustMasterRatio,
     CmdResizeWidth,
     CmdResizeHeight,
     CmdSetColumnWidth,
     CmdAdjustGaps,
+    CmdMoveToScratchpad,
+    CmdToggleScratchpad,
     CmdToggleOverview,
     CmdToggleFloating,
     CmdToggleFullscreen,
@@ -86,6 +90,10 @@ type
       count*: int
     of CmdSetMasterRatio:
       ratio*: float32
+    of CmdAdjustMasterCount:
+      deltaMC*: int
+    of CmdAdjustMasterRatio:
+      deltaMR*: float32
     of CmdResizeWidth:
       deltaW*: float32
     of CmdResizeHeight:

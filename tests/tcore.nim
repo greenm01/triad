@@ -33,12 +33,12 @@ suite "Core TEA Update Logic":
   test "CmdFocusNext cycles focus correctly":
     # Setup model with 3 windows across 2 columns
     var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
-    tag.columns.add(Column(windows: @[101], widthProportion: 0.5))
-    tag.columns.add(Column(windows: @[102, 103], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(102), 103], widthProportion: 0.5))
     model.tags[1] = tag
     
     let msg = Msg(kind: CmdFocusNext)
-    let (nextModel, _) = update(model, msg)
+    var (nextModel, _) = update(model, msg)
     check nextModel.tags[1].focusedWindow == 102
     
     let (finalModel, _) = update(nextModel, msg)
@@ -46,8 +46,8 @@ suite "Core TEA Update Logic":
 
   test "CmdMoveColumnRight swaps columns":
     var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
-    tag.columns.add(Column(windows: @[101], widthProportion: 0.5))
-    tag.columns.add(Column(windows: @[102], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(102)], widthProportion: 0.5))
     model.tags[1] = tag
     
     let msg = Msg(kind: CmdMoveColumnRight)
@@ -59,7 +59,7 @@ suite "Core TEA Update Logic":
   test "CmdMoveToTag transfers window between tags":
     # Window 101 is on Tag 1
     var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
-    tag1.columns.add(Column(windows: @[101], widthProportion: 0.5))
+    tag1.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))
     model.tags[1] = tag1
     model.activeTag = 1
     
@@ -83,11 +83,36 @@ suite "Core TEA Update Logic":
     
     check nextModel.tags[1].layoutMode == Grid
 
+  test "Scratchpad management moves window out of tag":
+    var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
+    tag1.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))
+    model.tags[1] = tag1
+    model.activeTag = 1
+    
+    let msg = Msg(kind: CmdMoveToScratchpad)
+    let (nextModel, _) = update(model, msg)
+    
+    check nextModel.tags[1].columns.len == 0
+    check nextModel.scratchpadWindows.len == 1
+    check nextModel.scratchpadWindows[0] == 101
+
+  test "CmdAdjustMasterCount and Ratio apply deltas":
+    model.tags[1] = TagState(tagId: 1, layoutMode: MasterStack, masterCount: 1, masterSplitRatio: 0.5)
+    model.activeTag = 1
+    
+    let msgCount = Msg(kind: CmdAdjustMasterCount, deltaMC: 1)
+    let (nextModel, _) = update(model, msgCount)
+    check nextModel.tags[1].masterCount == 2
+    
+    let msgRatio = Msg(kind: CmdAdjustMasterRatio, deltaMR: 0.1)
+    let (finalModel, _) = update(nextModel, msgRatio)
+    check abs(finalModel.tags[1].masterSplitRatio - 0.6) < 0.01
+
   test "CmdMoveWindowLeft moves window to adjacent column or creates new":
     # [101] [102]
     var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 102)
-    tag.columns.add(Column(windows: @[101], widthProportion: 0.5))
-    tag.columns.add(Column(windows: @[102], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(102)], widthProportion: 0.5))
     model.tags[1] = tag
     model.activeTag = 1
     
@@ -97,7 +122,6 @@ suite "Core TEA Update Logic":
     check nextModel.tags[1].columns[0].windows == @[WindowId(101), 102]
     
     # Move 101 left -> [101] [102]
-    # We must update the focused window in the model passed to update
     var tagState = nextModel.tags[1]
     tagState.focusedWindow = 101
     nextModel.tags[1] = tagState
@@ -109,9 +133,9 @@ suite "Core TEA Update Logic":
   test "CmdFocusNext in Overview cycles through all tags":
     model.overviewActive = true
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
-    model.tags[1].columns.add(Column(windows: @[101]))
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
     model.tags[2] = TagState(tagId: 2, focusedWindow: 102)
-    model.tags[2].columns.add(Column(windows: @[102]))
+    model.tags[2].columns.add(Column(windows: @[WindowId(102)]))
     model.activeTag = 1
     
     let (nextModel, _) = update(model, Msg(kind: CmdFocusNext))
@@ -125,7 +149,7 @@ suite "Core TEA Update Logic":
   test "CmdMoveToTag in Overview updates activeTag":
     model.overviewActive = true
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
-    model.tags[1].columns.add(Column(windows: @[101]))
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
     model.activeTag = 1
     
     let (nextModel, _) = update(model, Msg(kind: CmdMoveToTag, targetTag: 2))
@@ -136,6 +160,7 @@ suite "Core TEA Update Logic":
   test "CmdToggleFullscreen toggles state and emits effect":
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
     model.windows[101] = WindowData(id: 101, isFullscreen: false)
+    model.activeTag = 1
     
     let (nextModel, effects) = update(model, Msg(kind: CmdToggleFullscreen))
     check nextModel.windows[101].isFullscreen == true
@@ -149,6 +174,7 @@ suite "Core TEA Update Logic":
   test "CmdResizeFloating modifies absolute geometry":
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
     model.windows[101] = WindowData(id: 101, isFloating: true, floatingGeom: Rect(x: 100, y: 100, w: 200, h: 200))
+    model.activeTag = 1
     
     let (nextModel, _) = update(model, Msg(kind: CmdResizeFloating, deltaFW: 50, deltaFH: -20))
     check nextModel.windows[101].floatingGeom.w == 250

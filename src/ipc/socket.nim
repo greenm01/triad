@@ -37,7 +37,6 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         case cmd
         of "event-stream":
           subscribers.add(client)
-          # Stop parsing commands from this connection, keep it open for broadcasts
           return 
         of "focus-next": onMsg(Msg(kind: CmdFocusNext))
         of "focus-prev": onMsg(Msg(kind: CmdFocusPrev))
@@ -51,6 +50,8 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "toggle-overview": onMsg(Msg(kind: CmdToggleOverview))
         of "toggle-floating": onMsg(Msg(kind: CmdToggleFloating))
         of "toggle-fullscreen": onMsg(Msg(kind: CmdToggleFullscreen))
+        of "move-to-scratchpad": onMsg(Msg(kind: CmdMoveToScratchpad))
+        of "toggle-scratchpad": onMsg(Msg(kind: CmdToggleScratchpad))
         of "select-window": onMsg(Msg(kind: CmdSelectWindow))
         of "rename-tag":
           if parts.len >= 2:
@@ -74,10 +75,18 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdSetMasterCount, count: parseInt(parts[1])))
             except: warn "Invalid master count", count=parts[1]
+        of "adjust-master-count":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdAdjustMasterCount, deltaMC: parseInt(parts[1])))
+            except: warn "Invalid master count delta", delta=parts[1]
         of "master-ratio":
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdSetMasterRatio, ratio: float32(parseFloat(parts[1]))))
             except: warn "Invalid master ratio", ratio=parts[1]
+        of "adjust-master-ratio":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdAdjustMasterRatio, deltaMR: float32(parseFloat(parts[1]))))
+            except: warn "Invalid master ratio delta", delta=parts[1]
         of "resize-width":
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdResizeWidth, deltaW: float32(parseFloat(parts[1]))))

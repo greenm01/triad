@@ -84,6 +84,8 @@ type
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
     pointerOp*: PointerOpState
+    scratchpadWindows*: seq[WindowId]
+    isScratchpadVisible*: bool
     activeTag*: uint32
     overviewActive*: bool
     # Screen dimensions

@@ -472,6 +472,21 @@ proc main() =
                     geom: winData.floatingGeom
                   ))
 
+          # --- SCRATCHPAD OVERLAY ---
+          if currentModel.isScratchpadVisible and currentModel.scratchpadWindows.len > 0:
+            let winId = currentModel.scratchpadWindows[^1]
+            let sw = int32(float32(currentModel.screenWidth) * 0.8)
+            let sh = int32(float32(currentModel.screenHeight) * 0.8)
+            instructions.add(RenderInstruction(
+              windowId: winId,
+              geom: Rect(
+                x: (currentModel.screenWidth - sw) div 2,
+                y: (currentModel.screenHeight - sh) div 2,
+                w: sw,
+                h: sh
+              )
+            ))
+
         for instr in instructions:
           # Execute set_position effects
           if windowNodes.hasKey(instr.windowId):

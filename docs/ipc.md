@@ -13,6 +13,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-next`: Shifts keyboard focus to the next window in the sequence.
 *   `focus-prev`: Shifts keyboard focus to the previous window.
 *   `toggle-overview`: Activates or deactivates the global window grid.
+*   `toggle-scratchpad`: Summons the active scratchpad window as an overlay or dismisses it to the shadows.
 *   `select-window`: In overview mode, selects the focused window and jumps to its tag.
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 
@@ -25,6 +26,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 
 #### Manipulation
 *   `move-to-tag <id>`: Banishes the focused window to the specified tag.
+*   `move-to-scratchpad`: Consigns the focused window to the scratchpad, where it awaits your summons.
 *   `close-window`: Politley requests that the focused window terminate its existence.
 *   `group-windows`: Orchestrates the union of the focused window and its neighbor into a single tabbed group.
 *   `ungroup-window`: Dissolves the group, granting the focused window its independence.
@@ -40,6 +42,12 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `adjust-gaps <delta>`: Increases or decreases the global gap size (e.g., `5` or `-5`).
 *   `toggle-gaps`: Instantly eliminates all gaps or restores them to their former glory.
 
+#### Master-Stack Refinements
+*   `master-count <n>`: Sets the exact number of windows allowed in the master area.
+*   `adjust-master-count <delta>`: Increments or decrements the master window count.
+*   `master-ratio <ratio>`: Sets the master area split ratio (e.g., `0.6`).
+*   `adjust-master-ratio <delta>`: Fine-tunes the master split ratio.
+
 #### Advanced Movement
 *   `move-column-left`: Swaps the focused column with its neighbor to the left.
 *   `move-column-right`: Swaps the focused column with its neighbor to the right.
@@ -47,6 +55,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `move-window-right`: Transports the focused window to the adjacent column on the right.
 *   `move-window-up`: Swaps the focused window with the one above it in a stack.
 *   `move-window-down`: Swaps the focused window with the one below it.
+*   `swap-window-up`: An alias for `move-window-up`, reordering windows within their column.
+*   `swap-window-down`: An alias for `move-window-down`.
 *   `consume-window`: Merges the first window of the column to the right into the currently focused column.
 *   `expel-window`: Liberates the focused window from its stack, granting it a new column to its immediate right.
 
