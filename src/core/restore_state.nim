@@ -1,12 +1,14 @@
 import algorithm, json, options, os, strutils, tables
 import defaults
 import model
+import model_utils
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
 
 type
   LiveRestoreState* = object
     activeTag*: uint32
+    focusedWindow*: WindowId
     tagByWindow*: Table[WindowId, uint32]
     windows*: Table[WindowId, RestoredWindowState]
     tags*: Table[uint32, RestoredTagState]
@@ -166,6 +168,7 @@ proc liveRestoreJson*(model: Model): string =
   $(%*{
     "schema": LiveRestoreSchema,
     "active_tag": model.activeTag,
+    "focused_window": model.focusedOnActiveTag(),
     "tags": tags,
     "windows": windows,
     "output_tags": outputTags,
@@ -182,6 +185,10 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
     let activeTag = uint32FromJson(root["active_tag"])
     if activeTag.isSome:
       state.activeTag = activeTag.get()
+  if root.hasKey("focused_window"):
+    let focused = uint32FromJson(root["focused_window"])
+    if focused.isSome:
+      state.focusedWindow = WindowId(focused.get())
 
   if root.hasKey("tags") and root["tags"].kind == JArray:
     for node in root["tags"]:
@@ -221,6 +228,9 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
                 state.tagByWindow[WindowId(winId.get())] = tag.tagId
           tag.columns.add(col)
       state.tags[tag.tagId] = tag
+
+  if state.focusedWindow == 0 and state.activeTag != 0 and state.tags.hasKey(state.activeTag):
+    state.focusedWindow = state.tags[state.activeTag].focusedWindow
 
   if root.hasKey("windows") and root["windows"].kind == JArray:
     for node in root["windows"]:
@@ -357,6 +367,7 @@ proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
           var tag = state.tags[tagId.get()]
           tag.focusedWindow = id
           state.tags[tagId.get()] = tag
+          state.focusedWindow = id
         var tagWindows = windowsByTag.getOrDefault(tagId.get())
         tagWindows.add((pos: pos, winId: id, width: restored.widthProportion))
         windowsByTag[tagId.get()] = tagWindows
@@ -417,6 +428,7 @@ proc consumeLiveRestoreState*(path: string): Option[LiveRestoreState] =
 
 proc applyLiveRestore*(model: var Model; state: LiveRestoreState) =
   model.restoreActiveTag = state.activeTag
+  model.restoreFocusedWindow = state.focusedWindow
   model.restoreTagByWindow = state.tagByWindow
   model.restoreWindows = state.windows
   model.restoreTags = state.tags
@@ -427,3 +439,15 @@ proc applyLiveRestore*(model: var Model; state: LiveRestoreState) =
   model.isScratchpadVisible = state.isScratchpadVisible
   if state.activeTag != 0:
     model.activeTag = state.activeTag
+    var activeHasRestoredWindow = false
+    for _, tagId in state.tagByWindow.pairs:
+      if tagId == state.activeTag:
+        activeHasRestoredWindow = true
+        break
+    if not activeHasRestoredWindow and state.activeTag > model.defaultWorkspaceCount():
+      let fallback = model.lowerWorkspaceFallback(state.activeTag)
+      if fallback != 0 and fallback != state.activeTag:
+        model.activeTag = fallback
+        if model.primaryOutput != 0:
+          model.outputTags[model.primaryOutput] = fallback
+  discard model.pruneDynamicWorkspaces()

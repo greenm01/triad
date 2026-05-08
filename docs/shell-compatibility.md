@@ -16,8 +16,9 @@ of actions through that socket. Triad can supply that contract directly.
 
 Triad advertises workspaces dynamically through this facade. The configured
 `workspaces.default-count` creates the initial empty floor, and extra tags appear
-only when they are active, occupied, or owned by an output. Empty non-default
-tags are pruned after focus moves away. The JSON `id` remains Triad's stable tag
+only when they are active or occupied by live windows. Empty non-default
+tags are pruned after focus moves away, and stale output ownership cannot keep
+them visible. The JSON `id` remains Triad's stable tag
 ID, while `idx` is compacted in visible order so Niri-style bars do not show
 holes or every configured tag template.
 

@@ -278,5 +278,6 @@ type
     restoreTagByWindow*: Table[WindowId, uint32]
     restoreWindows*: Table[WindowId, RestoredWindowState]
     restoreTags*: Table[uint32, RestoredTagState]
+    restoreFocusedWindow*: WindowId
     # Grouping counter
     nextGroupId*: uint32

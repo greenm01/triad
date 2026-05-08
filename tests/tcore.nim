@@ -329,6 +329,7 @@ suite "Core TEA Update Logic":
     check nextModel.tags[2].focusedWindow == 202
     check nextModel.tags[2].columns[0].windows == @[WindowId(201)]
     check nextModel.tags[2].columns[0].widthProportion == 0.35'f32
+    check nextModel.restoreFocusedWindow == 202
 
     var effects: seq[Effect]
     (nextModel, effects) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 202, appId: "brave", title: "Brave"))
@@ -341,7 +342,9 @@ suite "Core TEA Update Logic":
     check nextModel.windows[202].isMaximized
     check nextModel.windows[202].actualW == 2560
     check nextModel.outputTags[42] == 2
+    check nextModel.restoreFocusedWindow == 0
     check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 202 and it.isMaximized)
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 202)
 
   test "legacy live restore matches changed window ids by identity":
     let parsed = parseLiveRestoreJson("""
@@ -398,6 +401,7 @@ suite "Core TEA Update Logic":
     check nextModel.tags[2].columns[1].windows == @[WindowId(210)]
     check nextModel.windows[211].isMaximized
     check nextModel.windows[211].widthProportion == 0.5'f32
+    check nextModel.restoreFocusedWindow == 0
     check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 211)
 
   test "Scratchpad management moves window out of tag":
@@ -471,9 +475,11 @@ suite "Core TEA Update Logic":
   test "Relative tag commands focus and move by tag order":
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
     model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
+    model.windows[101] = WindowData(id: 101)
     model.tags[2] = TagState(tagId: 2)
     model.tags[3] = TagState(tagId: 3, focusedWindow: 103)
     model.tags[3].columns.add(Column(windows: @[WindowId(103)]))
+    model.windows[103] = WindowData(id: 103)
     model.activeTag = 2
 
     var (nextModel, _) = update(model, Msg(kind: CmdFocusTagRight))
@@ -708,6 +714,45 @@ suite "Core TEA Update Logic":
     check nextModel.tags.hasKey(4)
     check nextModel.tags[4].containsWindow(402)
     check niriWorkspacesJson(nextModel).len == 4
+
+  test "Stale missing windows do not keep dynamic workspace visible":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[2].columns.add(Column(windows: @[WindowId(201)]))
+    model.tags[2].focusedWindow = 201
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[4] = initTagState(4, Deck, "chat")
+    model.tags[4].columns.add(Column(windows: @[WindowId(401)]))
+    model.tags[4].focusedWindow = 401
+    model.windows[201] = WindowData(id: 201)
+    model.outputTags[42] = 4
+    model.activeTag = 2
+
+    let (nextModel, effects) = update(model, Msg(kind: WlModifiersChanged, newModifiers: 0))
+    check not nextModel.tags.hasKey(4)
+    check not nextModel.outputTags.hasKey(42)
+    check niriWorkspacesJson(nextModel).len == 3
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspacesChanged"))
+
+  test "Moving last window out of dynamic workspace collapses active workspace":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[4] = initTagState(4, Deck, "chat")
+    model.tags[4].columns.add(Column(windows: @[WindowId(401)]))
+    model.tags[4].focusedWindow = 401
+    model.windows[401] = WindowData(id: 401)
+    model.activeTag = 4
+
+    let (nextModel, effects) = update(model, Msg(kind: CmdMoveToTag, targetTag: 5))
+    check nextModel.activeTag == 3
+    check not nextModel.tags.hasKey(4)
+    check nextModel.tags[5].containsWindow(401)
+    check niriWorkspacesJson(nextModel).len == 4
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspaceActivated"))
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspacesChanged"))
 
   test "CmdMoveToTag in Overview updates activeTag":
     model.overviewActive = true

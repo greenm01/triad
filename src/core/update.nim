@@ -284,10 +284,9 @@ proc recordFocus(model: var Model; winId: WindowId) =
     model.focusHistory.delete(0)
 
 proc activeVisibleWindows(model: Model; tag: TagState): seq[WindowId] =
-  for col in tag.columns:
-    for win in col.windows:
-      if not model.windows.hasKey(win) or not model.windows[win].isMinimized:
-        result.add(win)
+  for win in tag.liveWindows(model):
+    if not model.windows[win].isMinimized:
+      result.add(win)
 
 proc findTagForWindow(model: Model; winId: WindowId): uint32 =
   for tagId, tag in model.tags.pairs:
@@ -334,7 +333,7 @@ proc collapseEmptyActiveDynamicWorkspace(model: var Model; effects: var seq[Effe
   let oldTag = model.activeTag
   if oldTag == 0 or oldTag <= model.defaultWorkspaceCount() or not model.tags.hasKey(oldTag):
     return false
-  if model.tags[oldTag].flattenWindows().len > 0:
+  if model.tags[oldTag].liveWindows(model).len > 0:
     return false
 
   let fallback = model.lowerWorkspaceFallback(oldTag)
@@ -818,6 +817,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     var hasRestoredWindow = false
     var restoredWinId = msg.windowId
     var restoredWin = RestoredWindowState()
+    let restoreFocusPending = nextModel.restoreFocusedWindow != 0
     var targetTag = if nextModel.activeTag == 0: 1'u32 else: nextModel.activeTag
     if nextModel.restoreWindows.hasKey(msg.windowId):
       restoredWin = nextModel.restoreWindows[msg.windowId]
@@ -869,6 +869,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       win.actualW = restoredWin.actualW
       win.actualH = restoredWin.actualH
     nextModel.windows[msg.windowId] = win
+    let restoresFocusedWindow =
+      nextModel.restoreFocusedWindow != 0 and restoredWinId == nextModel.restoreFocusedWindow
     let restoredScratchpad = hasRestoredWindow and restoredWin.tagId == 0 and nextModel.isRestoredScratchpad(msg.windowId)
     if not restoredScratchpad:
       if not nextModel.tags.hasKey(targetTag):
@@ -892,10 +894,14 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       else:
         var tag = nextModel.tags[targetTag]
         tag.columns.add(nextModel.defaultColumn(@[msg.windowId]))
-        if not nextModel.sessionLocked:
+        if not nextModel.sessionLocked and not restoreFocusPending:
           tag.focusedWindow = msg.windowId
         nextModel.tags[targetTag] = tag
-      if not nextModel.sessionLocked and not hasRestoredTag:
+      if restoresFocusedWindow and nextModel.tags.hasKey(targetTag):
+        var tag = nextModel.tags[targetTag]
+        tag.focusedWindow = msg.windowId
+        nextModel.tags[targetTag] = tag
+      if not nextModel.sessionLocked and not hasRestoredTag and not restoreFocusPending:
         var tag = nextModel.tags[targetTag]
         tag.focusedWindow = msg.windowId
         nextModel.tags[targetTag] = tag
@@ -904,11 +910,13 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.windowId, isFullscreen: true, fsOutputId: win.fullscreenOutput))
       if win.isMaximized:
         effects.add(Effect(kind: EffSetMaximized, maxWinId: msg.windowId, isMaximized: true))
-    if hasRestoredTag and targetTag == nextModel.activeTag and nextModel.tags.hasKey(targetTag) and
+    if (hasRestoredTag or restoresFocusedWindow) and targetTag == nextModel.activeTag and nextModel.tags.hasKey(targetTag) and
         nextModel.tags[targetTag].focusedWindow == msg.windowId and not nextModel.sessionLocked:
       nextModel.recordFocus(msg.windowId)
       effects.add(broadcastWindowFocusChanged(msg.windowId))
       effects.add(Effect(kind: EffFocusWindow, focusId: msg.windowId))
+      if restoresFocusedWindow:
+        nextModel.restoreFocusedWindow = 0
     effects.add(nextModel.broadcastWindowOpened(win))
     effects.add(Effect(kind: EffManageDirty))
 
@@ -1755,8 +1763,19 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   else: discard
 
+  let cleanedStaleWindows = nextModel.cleanupStaleTagWindows()
+  if nextModel.restoreFocusedWindow != 0 and nextModel.restoreWindows.len == 0 and
+      nextModel.restoreTagByWindow.len == 0 and not nextModel.windows.hasKey(nextModel.restoreFocusedWindow):
+    nextModel.restoreFocusedWindow = 0
   let collapsedWorkspace =
-    if msg.kind in {WlWindowDestroyed, CmdMoveToScratchpad, CmdMoveToNamedScratchpad}:
+    if msg.kind in {
+        WlWindowDestroyed,
+        CmdMoveToTag,
+        CmdMoveWindowUpOrToWorkspaceUp,
+        CmdMoveWindowDownOrToWorkspaceDown,
+        CmdMoveToScratchpad,
+        CmdMoveToNamedScratchpad,
+        CmdToggleNamedScratchpad}:
       nextModel.collapseEmptyActiveDynamicWorkspace(effects)
     else:
       false
@@ -1769,7 +1788,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   elif msg.kind.shouldBroadcastWindowsChanged():
     effects.add(nextModel.broadcastWorkspacesChanged())
     effects.add(nextModel.broadcastWindowsChanged())
-  elif collapsedWorkspace or prunedWorkspaces:
+  elif cleanedStaleWindows or collapsedWorkspace or prunedWorkspaces:
     effects.add(nextModel.broadcastWorkspacesChanged())
 
   return (nextModel, effects)

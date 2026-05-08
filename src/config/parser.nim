@@ -47,6 +47,12 @@ proc clamp32(value, lo, hi: int32): int32 =
 proc clampF32(value, lo, hi: float32): float32 =
   min(hi, max(lo, value))
 
+proc normalizeWorkspaceCountFromConfig(count: int): uint32 =
+  if count <= 0:
+    DefaultWorkspaceCount
+  else:
+    normalizeWorkspaceCount(uint32(count))
+
 proc parseColor(value: string; fallback: uint32): uint32 =
   var hex = value.strip()
   if hex.startsWith("#"):
@@ -274,8 +280,7 @@ proc loadConfig*(path: string): Config =
           try:
             if child.name == "default-count" and child.args.len > 0:
               let count = child.args[0].kInt()
-              if count > 0:
-                result.workspaces.defaultCount = uint32(min(count, 64))
+              result.workspaces.defaultCount = normalizeWorkspaceCountFromConfig(count)
           except CatchableError as e:
             warn "Ignoring invalid workspace config field", field=child.name, error=e.msg
 
@@ -519,8 +524,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.animationSpeed = clampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.smartGaps = config.layout.smartGaps
   model.workspaces = config.workspaces
-  if model.workspaces.defaultCount == 0:
-    model.workspaces.defaultCount = DefaultWorkspaceCount
+  model.workspaces.defaultCount = normalizeWorkspaceCount(model.workspaces.defaultCount)
   model.tagRules = config.tagRules
   model.windowRules = config.windowRules
   model.startupCommands = config.startupCommands

@@ -36,10 +36,16 @@ proc defaultMasterRatio*(model: Model): float32 =
     DefaultMasterRatio
 
 proc defaultWorkspaceCount*(model: Model): uint32 =
-  if model.workspaces.defaultCount > 0:
-    model.workspaces.defaultCount
-  else:
+  if model.workspaces.defaultCount == 0:
     DefaultWorkspaceCount
+  else:
+    min(model.workspaces.defaultCount, MaxWorkspaceCount)
+
+proc normalizeWorkspaceCount*(count: uint32): uint32 =
+  if count == 0:
+    DefaultWorkspaceCount
+  else:
+    min(count, MaxWorkspaceCount)
 
 proc tagRuleFor*(model: Model; tagId: uint32): tuple[found: bool, rule: TagRule] =
   for rule in model.tagRules:
@@ -105,6 +111,12 @@ proc flattenWindows*(tag: TagState): seq[WindowId] =
     for win in col.windows:
       result.add(win)
 
+proc liveWindows*(tag: TagState; model: Model): seq[WindowId] =
+  for col in tag.columns:
+    for win in col.windows:
+      if model.windows.hasKey(win):
+        result.add(win)
+
 proc findWindow*(tag: TagState; win: WindowId): tuple[found: bool, colIdx: int, winIdx: int] =
   for i, col in tag.columns:
     let j = col.windows.find(win)
@@ -129,6 +141,18 @@ proc recomputeFocus*(tag: var TagState) =
     if col.windows.len > 0:
       tag.focusedWindow = col.windows[0]
       return
+
+proc recomputeVisibleFocus*(tag: var TagState; model: Model) =
+  if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow) and
+      model.windows.hasKey(tag.focusedWindow) and not model.windows[tag.focusedWindow].isMinimized:
+    return
+
+  tag.focusedWindow = 0
+  for col in tag.columns:
+    for win in col.windows:
+      if model.windows.hasKey(win) and not model.windows[win].isMinimized:
+        tag.focusedWindow = win
+        return
 
 proc removeWindow*(tag: var TagState; win: WindowId): bool =
   for i in countdown(tag.columns.len - 1, 0):
@@ -175,7 +199,7 @@ proc ensureDefaultWorkspaces*(model: var Model) =
 
 proc visibleWorkspaceIds*(model: Model): seq[uint32] =
   for tagId in model.tags.keys:
-    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag or model.tags[tagId].flattenWindows().len > 0:
+    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag or model.tags[tagId].liveWindows(model).len > 0:
       result.add(tagId)
   result.sort()
 
@@ -202,7 +226,7 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
   for tagId in ids:
     if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag:
       continue
-    if model.tags[tagId].flattenWindows().len > 0:
+    if model.tags[tagId].liveWindows(model).len > 0:
       continue
     var outputIds: seq[uint32] = @[]
     for outputId, outputTag in model.outputTags.pairs:
@@ -243,21 +267,38 @@ proc focusedOnActiveTag*(model: Model): WindowId =
   if model.tags.hasKey(model.activeTag):
     let tag = model.tags[model.activeTag]
     if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow) and
-        (not model.windows.hasKey(tag.focusedWindow) or not model.windows[tag.focusedWindow].isMinimized):
+        model.windows.hasKey(tag.focusedWindow) and not model.windows[tag.focusedWindow].isMinimized:
       return tag.focusedWindow
   0
 
-proc recomputeVisibleFocus*(tag: var TagState; model: Model) =
-  if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow) and
-      model.windows.hasKey(tag.focusedWindow) and not model.windows[tag.focusedWindow].isMinimized:
-    return
+proc cleanupStaleTagWindows*(model: var Model): bool =
+  if model.windows.len == 0 and model.restoreWindows.len == 0 and model.restoreTagByWindow.len == 0:
+    return false
 
-  tag.focusedWindow = 0
-  for col in tag.columns:
-    for win in col.windows:
-      if not model.windows.hasKey(win) or not model.windows[win].isMinimized:
-        tag.focusedWindow = win
-        return
+  var updates: seq[(uint32, TagState)] = @[]
+  for tagId, tag in model.tags.pairs:
+    var nextTag = tag
+    var changed = false
+    for colIdx in countdown(nextTag.columns.len - 1, 0):
+      var winIdx = nextTag.columns[colIdx].windows.len - 1
+      while winIdx >= 0:
+        let win = nextTag.columns[colIdx].windows[winIdx]
+        if not model.windows.hasKey(win) and not model.restoreWindows.hasKey(win) and
+            not model.restoreTagByWindow.hasKey(win):
+          nextTag.columns[colIdx].windows.delete(winIdx)
+          changed = true
+        dec winIdx
+    nextTag.cleanupColumns()
+    let focusedPendingRestore =
+      nextTag.focusedWindow != 0 and
+      (model.restoreWindows.hasKey(nextTag.focusedWindow) or model.restoreTagByWindow.hasKey(nextTag.focusedWindow))
+    if not focusedPendingRestore:
+      nextTag.recomputeVisibleFocus(model)
+    if changed or nextTag.focusedWindow != tag.focusedWindow:
+      updates.add((tagId, nextTag))
+      result = true
+  for item in updates:
+    model.tags[item[0]] = item[1]
 
 proc boundedDimensions*(win: WindowData; w, h: int32): tuple[w, h: int32] =
   result.w = max(0'i32, w)

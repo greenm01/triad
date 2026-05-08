@@ -26,3 +26,4 @@ const
   DefaultScreenshotCaptureCommand* = "grim"
   DefaultScreenshotRegionSelectorCommand* = "slurp"
   DefaultWorkspaceCount* = 3'u32
+  MaxWorkspaceCount* = 64'u32

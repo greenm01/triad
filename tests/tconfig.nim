@@ -160,6 +160,46 @@ workspaces {
 
     check config.workspaces.defaultCount == 5
 
+  test "Workspace default count is hardened":
+    let negativePath = getCurrentDir() / "test_workspaces_negative.kdl"
+    writeFile(negativePath, """
+workspaces {
+    default-count -1
+}
+""")
+    let negativeConfig = loadConfig(negativePath)
+    removeFile(negativePath)
+
+    let hugePath = getCurrentDir() / "test_workspaces_huge.kdl"
+    writeFile(hugePath, """
+workspaces {
+    default-count 1000
+}
+""")
+    let hugeConfig = loadConfig(hugePath)
+    removeFile(hugePath)
+
+    var zeroModel = Model(activeTag: 1)
+    zeroModel.applyConfig(Config(
+      workspaces: WorkspaceConfig(defaultCount: 0),
+      layout: LayoutConfig(
+        borderWidth: DefaultBorderWidth,
+        focusedBorderColor: DefaultFocusedBorderColor,
+        unfocusedBorderColor: DefaultUnfocusedBorderColor)))
+
+    var hugeModel = Model(activeTag: 1)
+    hugeModel.applyConfig(Config(
+      workspaces: WorkspaceConfig(defaultCount: 1000),
+      layout: LayoutConfig(
+        borderWidth: DefaultBorderWidth,
+        focusedBorderColor: DefaultFocusedBorderColor,
+        unfocusedBorderColor: DefaultUnfocusedBorderColor)))
+
+    check negativeConfig.workspaces.defaultCount == DefaultWorkspaceCount
+    check hugeConfig.workspaces.defaultCount == MaxWorkspaceCount
+    check zeroModel.workspaces.defaultCount == DefaultWorkspaceCount
+    check hugeModel.workspaces.defaultCount == MaxWorkspaceCount
+
   test "Applying config treats tag rules as lazy workspace templates":
     var model = Model(activeTag: 1)
     model.applyConfig(Config(
