@@ -139,8 +139,14 @@ suite "Shell compatibility contracts":
     var hasOverview = false
     for event in response.initialEvents:
       let parsed = parseJson(event)
-      hasWorkspaces = hasWorkspaces or parsed.hasKey("WorkspacesChanged")
-      hasWindows = hasWindows or parsed.hasKey("WindowsChanged")
+      if parsed.hasKey("WorkspacesChanged"):
+        hasWorkspaces = true
+        let workspaces = parsed["WorkspacesChanged"]["workspaces"]
+        check workspaces[0]["occupied"].getBool() == true
+      if parsed.hasKey("WindowsChanged"):
+        hasWindows = true
+        let windows = parsed["WindowsChanged"]["windows"]
+        check windows[0]["app_id"].getStr() == "triad-alacritty"
       hasOutputs = hasOutputs or parsed.hasKey("OutputsChanged")
       hasOverview = hasOverview or parsed.hasKey("OverviewOpenedOrClosed")
 

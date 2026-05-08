@@ -85,6 +85,44 @@ suite "Core TEA Update Logic":
     check windows[0]["raw_app_id"].getStr() == "kitty"
     check windows[0]["workspace_id"].getInt() == 2
 
+  test "Output changes emit full Niri state for shell caches":
+    model.tags[1] = initTagState(1, Scroller)
+    model.activeTag = 1
+
+    var (nextModel, effects) = update(model, Msg(kind: WlOutputName, nameOutputId: 42, outputName: "DP-2"))
+    check nextModel.primaryOutput == 42
+
+    let outputEvent = effects.filterIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("OutputsChanged"))[^1]
+    let workspaceEvent = effects.filterIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspacesChanged"))[^1]
+    let windowsEvent = effects.filterIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WindowsChanged"))[^1]
+    check parseJson(outputEvent.jsonPayload)["OutputsChanged"]["outputs"].hasKey("DP-2")
+    check parseJson(workspaceEvent.jsonPayload)["WorkspacesChanged"]["workspaces"][0]["output"].getStr() == "DP-2"
+    check parseJson(windowsEvent.jsonPayload)["WindowsChanged"]["windows"].len == 0
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlOutputDimensions, outputId: 42, width: 2560, height: 1440))
+    let resizedOutput = parseJson(effects.filterIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("OutputsChanged"))[^1].jsonPayload)
+    check resizedOutput["OutputsChanged"]["outputs"]["DP-2"]["width"].getInt() == 2560
+    check resizedOutput["OutputsChanged"]["outputs"]["DP-2"]["height"].getInt() == 1440
+
+  test "Window creation emits workspace occupancy before full window state":
+    model.tags[1] = initTagState(1, Scroller)
+    model.activeTag = 1
+
+    let (_, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 122, appId: "kitty", title: "Kitty"))
+    let workspaceIdx = effects.findIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspacesChanged"))
+    let windowsIdx = effects.findIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WindowsChanged"))
+    check workspaceIdx >= 0
+    check windowsIdx >= 0
+    check workspaceIdx < windowsIdx
+
+    let workspaces = parseJson(effects[workspaceIdx].jsonPayload)["WorkspacesChanged"]["workspaces"]
+    check workspaces[0]["occupied"].getBool() == true
+
+    let windows = parseJson(effects[windowsIdx].jsonPayload)["WindowsChanged"]["windows"]
+    check windows.len == 1
+    check windows[0]["app_id"].getStr() == "triad-kitty"
+    check windows[0]["raw_app_id"].getStr() == "kitty"
+
   test "CmdFocusNext cycles focus correctly":
     # Setup model with 3 windows across 2 columns
     var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)

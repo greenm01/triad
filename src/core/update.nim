@@ -111,6 +111,22 @@ proc broadcastWindowsChanged(model: Model): Effect =
   }
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
 
+proc broadcastWorkspacesChanged(model: Model): Effect =
+  let payload = %*{
+    "WorkspacesChanged": {
+      "workspaces": model.niriWorkspacesJson()
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
+proc broadcastOutputsChanged(model: Model): Effect =
+  let payload = %*{
+    "OutputsChanged": {
+      "outputs": model.niriOutputsJson()
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
 proc broadcastWindowClosed(winId: WindowId): Effect =
   let payload = %*{
     "WindowClosed": {
@@ -184,6 +200,17 @@ proc shouldBroadcastWindowsChanged(kind: MsgKind): bool =
       CmdSelectWindow,
       CmdFocusTag,
       CmdFocusWindowById:
+    true
+  else:
+    false
+
+proc shouldBroadcastOutputsChanged(kind: MsgKind): bool =
+  case kind
+  of WlOutputDimensions,
+      WlOutputName,
+      WlOutputPosition,
+      WlOutputUsable,
+      WlOutputRemoved:
     true
   else:
     false
@@ -623,6 +650,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var output = nextModel.outputs.getOrDefault(msg.nameOutputId, OutputData(id: msg.nameOutputId))
       output.name = msg.outputName.strip()
       nextModel.outputs[msg.nameOutputId] = output
+      nextModel.syncPrimaryOutput()
+      nextModel.syncPrimaryOutputTag()
 
   of WlOutputPosition:
     if msg.positionOutputId != 0:
@@ -1546,7 +1575,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   else: discard
 
-  if msg.kind.shouldBroadcastWindowsChanged():
+  if msg.kind.shouldBroadcastOutputsChanged():
+    effects.add(nextModel.broadcastOutputsChanged())
+    effects.add(nextModel.broadcastWorkspacesChanged())
+    effects.add(nextModel.broadcastWindowsChanged())
+  elif msg.kind.shouldBroadcastWindowsChanged():
+    effects.add(nextModel.broadcastWorkspacesChanged())
     effects.add(nextModel.broadcastWindowsChanged())
 
   return (nextModel, effects)
