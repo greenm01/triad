@@ -10,6 +10,8 @@ type
     id*: uint32
     wlName*: uint32
     x*, y*, w*, h*: int32
+    usableX*, usableY*, usableW*, usableH*: int32
+    hasUsable*: bool
 
   RenderInstruction* = object
     windowId*: WindowId
@@ -32,6 +34,8 @@ type
     heightProportion*: float32 # 0.0 to 1.0
     isFloating*: bool
     isFullscreen*: bool
+    parentId*: WindowId
+    identifier*: string
     floatingGeom*: Rect
 
   GroupState* = object

@@ -64,9 +64,25 @@ suite "Crash hardening":
     check nextModel.outputs[42].w == 1280
     check nextModel.outputs[42].h == 720
 
+    (nextModel, _) = update(nextModel, Msg(kind: WlOutputUsable, usableOutputId: 42, usableX: 100, usableY: 90, usableW: 1280, usableH: 680))
+    check nextModel.outputs[42].hasUsable
+    check nextModel.outputs[42].usableY == 90
+    check nextModel.outputs[42].usableH == 680
+
     (nextModel, _) = update(nextModel, Msg(kind: WlOutputRemoved, removedOutputId: 42))
     check nextModel.primaryOutput == 0
     check not nextModel.outputs.hasKey(42)
+
+  test "river identifiers and fullscreen requests update model state":
+    var model = baseModel()
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title", createdIdentifier: "river-id"))
+    check nextModel.windows[7].identifier == "river-id"
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: 7))
+    check nextModel.windows[7].isFullscreen
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: 7))
+    check not nextModel.windows[7].isFullscreen
 
   test "consume ignores empty next columns":
     var model = baseModel()

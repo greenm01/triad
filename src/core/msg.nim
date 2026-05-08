@@ -6,8 +6,13 @@ type
     WlWindowCreated,
     WlWindowDestroyed,
     WlFocusChanged,
+    WlWindowFullscreenRequested,
+    WlWindowExitFullscreenRequested,
+    WlWindowParent,
+    WlWindowIdentifier,
     WlOutputDimensions,
     WlOutputPosition,
+    WlOutputUsable,
     WlOutputRemoved,
     WlManageStart,
     WlRenderStart,
@@ -60,6 +65,7 @@ type
     CmdFocusTag,
     CmdFocusWindowById,
     CmdCloseWindowById,
+    CmdSpawnTerminal,
     CmdTick,
     CmdReloadConfig
 
@@ -69,10 +75,21 @@ type
       windowId*: WindowId
       appId*: string
       title*: string
+      createdIdentifier*: string
     of WlWindowDestroyed:
       destroyedId*: WindowId
     of WlFocusChanged:
       newFocusedId*: WindowId
+    of WlWindowFullscreenRequested:
+      fullscreenRequestId*: WindowId
+    of WlWindowExitFullscreenRequested:
+      exitFullscreenRequestId*: WindowId
+    of WlWindowParent:
+      childWindowId*: WindowId
+      parentWindowId*: WindowId
+    of WlWindowIdentifier:
+      identifierWindowId*: WindowId
+      identifier*: string
     of WlOutputDimensions:
       outputId*: uint32
       width*: int32
@@ -81,6 +98,12 @@ type
       positionOutputId*: uint32
       outputX*: int32
       outputY*: int32
+    of WlOutputUsable:
+      usableOutputId*: uint32
+      usableX*: int32
+      usableY*: int32
+      usableW*: int32
+      usableH*: int32
     of WlOutputRemoved:
       removedOutputId*: uint32
     of WlPointerMoveRequested:

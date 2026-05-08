@@ -52,6 +52,9 @@ suite "Shell compatibility contracts":
     model.outputs[42] = OutputData(id: 42, x: 100, y: 50, w: 1280, h: 720)
     model.primaryOutput = 42
 
+    let workspaces = parseJson(handleNiriRequest("\"Workspaces\"", model).reply)["Ok"]["Workspaces"]
+    check workspaces[0]["output"].getStr() == "river-42"
+
     let outputs = parseJson(handleNiriRequest("\"Outputs\"", model).reply)["Ok"]["Outputs"]
     check outputs.hasKey("river-42")
     check outputs["river-42"]["logical"]["x"].getInt() == 100

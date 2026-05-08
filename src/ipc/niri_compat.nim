@@ -66,6 +66,7 @@ proc niriWorkspacesJson*(model: Model): JsonNode =
     ids.add(tagId)
   ids.sort()
 
+  let outputName = if model.primaryOutput != 0: "river-" & $model.primaryOutput else: "triad-0"
   result = newJArray()
   for tagId in ids:
     let tag = model.tags[tagId]
@@ -74,7 +75,7 @@ proc niriWorkspacesJson*(model: Model): JsonNode =
       "id": tagId,
       "idx": tagId,
       "name": if tag.name == "": newJNull() else: %tag.name,
-      "output": "triad-0",
+      "output": outputName,
       "is_urgent": false,
       "is_active": tagId == model.activeTag,
       "is_focused": tagId == model.activeTag,

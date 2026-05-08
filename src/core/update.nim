@@ -146,6 +146,17 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       nextModel.outputs[msg.positionOutputId] = output
       nextModel.syncPrimaryOutput()
 
+  of WlOutputUsable:
+    if msg.usableOutputId != 0:
+      var output = nextModel.outputs.getOrDefault(msg.usableOutputId, OutputData(id: msg.usableOutputId))
+      output.usableX = msg.usableX
+      output.usableY = msg.usableY
+      output.usableW = max(0'i32, msg.usableW)
+      output.usableH = max(0'i32, msg.usableH)
+      output.hasUsable = true
+      nextModel.outputs[msg.usableOutputId] = output
+      nextModel.syncPrimaryOutput()
+
   of WlOutputRemoved:
     if msg.removedOutputId != 0:
       nextModel.outputs.del(msg.removedOutputId)
@@ -157,7 +168,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     discard nextModel.removeWindowFromAllTags(msg.windowId)
     discard nextModel.removeWindowFromScratchpad(msg.windowId)
 
-    var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, widthProportion: DefaultWindowWidth, heightProportion: DefaultWindowHeight)
+    var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, identifier: msg.createdIdentifier, widthProportion: DefaultWindowWidth, heightProportion: DefaultWindowHeight)
     var targetTag = if nextModel.activeTag == 0: 1'u32 else: nextModel.activeTag
     var forcedLayout = 0
     for rule in nextModel.windowRules:
@@ -200,6 +211,37 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         tag.focusedWindow = msg.newFocusedId
         nextModel.tags[nextModel.activeTag] = tag
         effects.add(broadcastWindowFocusChanged(msg.newFocusedId))
+        if msg.newFocusedId != 0:
+          effects.add(Effect(kind: EffFocusWindow, focusId: msg.newFocusedId))
+
+  of WlWindowFullscreenRequested:
+    if nextModel.windows.hasKey(msg.fullscreenRequestId):
+      var win = nextModel.windows[msg.fullscreenRequestId]
+      win.isFullscreen = true
+      nextModel.windows[msg.fullscreenRequestId] = win
+      effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.fullscreenRequestId, isFullscreen: true))
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowExitFullscreenRequested:
+    if nextModel.windows.hasKey(msg.exitFullscreenRequestId):
+      var win = nextModel.windows[msg.exitFullscreenRequestId]
+      win.isFullscreen = false
+      nextModel.windows[msg.exitFullscreenRequestId] = win
+      effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.exitFullscreenRequestId, isFullscreen: false))
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowParent:
+    if nextModel.windows.hasKey(msg.childWindowId):
+      var win = nextModel.windows[msg.childWindowId]
+      win.parentId = msg.parentWindowId
+      nextModel.windows[msg.childWindowId] = win
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowIdentifier:
+    if nextModel.windows.hasKey(msg.identifierWindowId):
+      var win = nextModel.windows[msg.identifierWindowId]
+      win.identifier = msg.identifier
+      nextModel.windows[msg.identifierWindowId] = win
 
   of WlPointerMoveRequested:
     if nextModel.windows.hasKey(msg.moveWinId):
@@ -709,7 +751,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       let focused = nextModel.tags[nextModel.activeTag].focusedWindow
       if focused != 0: effects.add(Effect(kind: EffCloseWindow, closeId: focused))
 
-  of CmdReloadConfig: effects.add(Effect(kind: EffManageDirty))
+  of CmdReloadConfig, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
 
   else: discard
 
