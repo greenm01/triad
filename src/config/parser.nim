@@ -1,4 +1,5 @@
 import kdl, tables, ../core/model, os, chronicles, strutils
+import defaults
 
 type
   Config* = object
@@ -21,6 +22,9 @@ type
     gaps*: int32
     centerFocusedColumn*: string # "never", "always", "on-overflow"
     defaultColumnWidth*: float32
+    borderWidth*: int32
+    focusedBorderColor*: uint32
+    unfocusedBorderColor*: uint32
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     enableAnimations*: bool
@@ -38,6 +42,20 @@ proc clamp32(value, lo, hi: int32): int32 =
 
 proc clampF32(value, lo, hi: float32): float32 =
   min(hi, max(lo, value))
+
+proc parseColor(value: string; fallback: uint32): uint32 =
+  var hex = value.strip()
+  if hex.startsWith("#"):
+    hex = hex[1..^1]
+  if hex.len == 6:
+    hex.add("ff")
+  if hex.len != 8:
+    return fallback
+
+  try:
+    result = uint32(parseHexInt(hex))
+  except CatchableError:
+    result = fallback
 
 proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
   case name
@@ -158,6 +176,9 @@ proc loadConfig*(path: string): Config =
   result.layout.gaps = 16
   result.layout.centerFocusedColumn = "never"
   result.layout.defaultColumnWidth = 0.5
+  result.layout.borderWidth = DefaultBorderWidth
+  result.layout.focusedBorderColor = DefaultFocusedBorderColor
+  result.layout.unfocusedBorderColor = DefaultUnfocusedBorderColor
   result.layout.scrollerFocusCenter = false
   result.layout.scrollerPreferCenter = false
   result.layout.enableAnimations = true
@@ -183,6 +204,17 @@ proc loadConfig*(path: string): Config =
             elif child.name == "default-column-width":
               if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
                 result.layout.defaultColumnWidth = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+            elif child.name == "border":
+              for borderChild in child.children:
+                try:
+                  if borderChild.name == "width" and borderChild.args.len > 0:
+                    result.layout.borderWidth = clamp32(int32(borderChild.args[0].kInt()), 0, 64)
+                  elif borderChild.name == "active-color" and borderChild.args.len > 0:
+                    result.layout.focusedBorderColor = parseColor(borderChild.args[0].kString(), result.layout.focusedBorderColor)
+                  elif borderChild.name == "inactive-color" and borderChild.args.len > 0:
+                    result.layout.unfocusedBorderColor = parseColor(borderChild.args[0].kString(), result.layout.unfocusedBorderColor)
+                except CatchableError as e:
+                  warn "Ignoring invalid border config field", field=borderChild.name, error=e.msg
             elif child.name == "scroller-focus-center" and child.args.len > 0:
               result.layout.scrollerFocusCenter = child.args[0].kBool()
             elif child.name == "scroller-prefer-center" and child.args.len > 0:
@@ -368,6 +400,9 @@ proc loadConfig*(path: string): Config =
 
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = clamp32(config.layout.gaps, 0, 512)
+  model.borderWidth = clamp32(config.layout.borderWidth, 0, 64)
+  model.focusedBorderColor = config.layout.focusedBorderColor
+  model.unfocusedBorderColor = config.layout.unfocusedBorderColor
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.innerGaps = model.outerGaps div 2

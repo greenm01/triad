@@ -1,8 +1,10 @@
 import unittest
 import ../src/config/parser
+import ../src/config/defaults
 import ../src/config/keysyms
 import ../src/core/model
 import ../src/core/model_utils
+import ../src/utils/terminal
 import os, strutils, tables
 
 suite "KDL Configuration Parser":
@@ -23,9 +25,18 @@ suite "KDL Configuration Parser":
       fullscreenOutput: 42,
       floatingGeom: Rect(x: 11, y: 22, w: 333, h: 444))
 
-    model.applyConfig(Config(layout: LayoutConfig(gaps: 20, centerFocusedColumn: "on-overflow", animationSpeed: 0.2)))
+    model.applyConfig(Config(layout: LayoutConfig(
+      gaps: 20,
+      centerFocusedColumn: "on-overflow",
+      borderWidth: DefaultBorderWidth,
+      focusedBorderColor: DefaultFocusedBorderColor,
+      unfocusedBorderColor: DefaultUnfocusedBorderColor,
+      animationSpeed: 0.2)))
 
     check model.outerGaps == 20
+    check model.borderWidth == DefaultBorderWidth
+    check model.focusedBorderColor == DefaultFocusedBorderColor
+    check model.unfocusedBorderColor == DefaultUnfocusedBorderColor
     check model.activeTag == 1
     check model.tags[1].focusedWindow == 7
     check model.tags[1].columns[0].widthProportion == 0.85'f32
@@ -68,6 +79,44 @@ scratchpad {
     check config.layout.layoutCycle == @[Scroller, Deck, VerticalGrid]
     check config.scratchpad.widthRatio == 0.7'f32
     check config.scratchpad.heightRatio == 0.6'f32
+
+  test "Parser correctly reads border settings":
+    let path = getCurrentDir() / "test_border.kdl"
+    let kdl = """
+layout {
+    border {
+        width 3
+        active-color "#7fc8ff"
+        inactive-color "#505050"
+    }
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.layout.borderWidth == 3
+    check config.layout.focusedBorderColor == 0x7fc8ffff'u32
+    check config.layout.unfocusedBorderColor == 0x505050ff'u32
+
+  test "Invalid border settings fall back safely":
+    let path = getCurrentDir() / "test_border_invalid.kdl"
+    let kdl = """
+layout {
+    border {
+        width 999
+        active-color "not-a-color"
+        inactive-color "#12345678"
+    }
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.layout.borderWidth == 64
+    check config.layout.focusedBorderColor == DefaultFocusedBorderColor
+    check config.layout.unfocusedBorderColor == 0x12345678'u32
 
   test "Parser correctly reads tag rules":
     let path = getCurrentDir() / "test_tags.kdl"
@@ -215,6 +264,18 @@ bindings {
     check config.keyBindings.len > 0
     check config.pointerBindings.len > 0
 
+  test "Embedded fallback config stays shell and app neutral":
+    let path = getCurrentDir() / "test_fallback_defaults.kdl"
+    writeFile(path, FallbackConfigContent)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.quickshell.enabled == false
+    check config.quickshell.theme == ""
+    check config.startupCommands.len == 0
+    check config.windowRules.len == 0
+    check config.layout.borderWidth == DefaultBorderWidth
+
   test "Default config overview up down keys use Niri workspace stack navigation":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
     var commandsByKey = initTable[string, string]()
@@ -234,3 +295,41 @@ bindings {
 
     check keySymForBinding("t", 5'u32) == uint32(ord('T'))
     check keySymForBinding("t", 65'u32) == uint32(ord('T'))
+
+  test "Default config app launch bindings match Niri profile":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+    var commandsByBinding = initTable[string, string]()
+    for binding in config.keyBindings:
+      if binding.mode == BindAlways:
+        commandsByBinding[$binding.modifiers & ":" & binding.key] = binding.command
+
+    check commandsByBinding["64:Return"] == "spawn kitty"
+    check commandsByBinding["64:Space"] == "spawn fuzzel"
+    check commandsByBinding["64:b"] == "spawn brave-origin-nightly"
+    check commandsByBinding["64:e"] == "spawn env GTK_THEME=Adwaita:dark thunar"
+    check commandsByBinding["65:b"] == "minimize"
+    check commandsByBinding["68:e"] == "toggle-named-scratchpad terminal"
+    check commandsByBinding["69:e"] == "move-to-named-scratchpad terminal"
+
+  test "Default config uses Niri border colors":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+
+    check config.layout.borderWidth == 3
+    check config.layout.focusedBorderColor == 0x7fc8ffff'u32
+    check config.layout.unfocusedBorderColor == 0x505050ff'u32
+
+  test "Terminal resolver prefers env then neutral helpers then common terminals":
+    proc hasOnlyKitty(command: string): bool =
+      command == "kitty"
+
+    check resolveTerminalCommand("wezterm start", hasOnlyKitty) == @["kitty"]
+
+    proc hasConfigured(command: string): bool =
+      command in ["wezterm", "kitty"]
+
+    check resolveTerminalCommand("wezterm start", hasConfigured) == @["wezterm", "start"]
+
+    proc hasNeutral(command: string): bool =
+      command == "x-terminal-emulator"
+
+    check resolveTerminalCommand("", hasNeutral) == @["x-terminal-emulator"]

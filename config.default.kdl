@@ -8,6 +8,11 @@ layout {
     gaps 8
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
+    border {
+        width 3
+        active-color "#7fc8ff"
+        inactive-color "#505050"
+    }
     scroller-focus-center #false
     scroller-prefer-center #false
     enable-animations #true
@@ -67,8 +72,10 @@ spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || tr
 
 bindings {
     // Launch/session.
-    bind "Super+Return" "spawn-terminal"
+    bind "Super+Return" "spawn kitty"
     bind "Super+Space" "spawn fuzzel"
+    bind "Super+b" "spawn brave-origin-nightly"
+    bind "Super+e" "spawn env GTK_THEME=Adwaita:dark thunar"
     bind "Super+r" "reload-config"
     bind "Super+Escape" "lock-session"
     bind "Ctrl+Alt+Backspace" "exit-session"
@@ -130,14 +137,14 @@ bindings {
     bind "Super+m" "toggle-maximized"
     bind "Super+t" "toggle-floating"
     bind "Super+Shift+t" "toggle-floating"
-    bind "Super+b" "minimize"
+    bind "Super+Shift+b" "minimize"
     bind "Super+Shift+r" "restore-scratchpad"
 
     // Scratchpad.
     bind "Super+w" "toggle-scratchpad"
     bind "Super+Shift+w" "move-to-scratchpad"
-    bind "Super+e" "toggle-named-scratchpad terminal"
-    bind "Super+Shift+e" "move-to-named-scratchpad terminal"
+    bind "Super+Ctrl+e" "toggle-named-scratchpad terminal"
+    bind "Super+Ctrl+Shift+e" "move-to-named-scratchpad terminal"
     bind "Super+a" "toggle-named-scratchpad audio"
     bind "Super+Shift+a" "move-to-named-scratchpad audio"
 

@@ -13,10 +13,12 @@ import core/render_visibility
 import layouts/scroller
 import layouts/tiling
 import config/parser
+import config/defaults
 import config/keysyms
 import ipc/commands
 import ipc/socket
 import ipc/quickshell_compat
+import utils/terminal
 import utils/runtime_log
 import utils/session_env
 import utils/wayland_runtime
@@ -269,93 +271,7 @@ proc setupConfig() =
     createDir(configDir)
   
   if not fileExists(configPath):
-    let defaultContent = """// Triad Configuration (KDL 2.0)
-
-layout {
-    gaps 16
-    center-focused-column "on-overflow"
-    default-column-width { proportion 0.5; }
-    enable-animations #true
-    animation-speed 0.15
-    smart-gaps #false
-    layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller"
-}
-
-scratchpad {
-    width-ratio 0.8
-    height-ratio 0.9
-}
-
-tag-rules {
-    tag 1 default-layout="scroller"
-    tag 2 default-layout="tile"
-    tag 3 default-layout="grid"
-    tag 4 default-layout="monocle"
-}
-
-quickshell {
-    enabled #false
-    theme "noctalia-shell"
-}
-
-// screen-lock {
-//     command "lockme"
-//     // For compositor testing only:
-//     // command "lockme" "--dev-mode"
-// }
-
-// window-menu-command "triad-window-menu"
-// allow-exit-session #false
-// protocol-surfaces {
-//     enabled #true
-//     visible-debug #false
-// }
-// presentation-mode "vsync"
-// cursor {
-//     theme "default"
-//     size 24
-// }
-
-bindings {
-    bind "Super+q" "close-window"
-    bind "Super+f" "toggle-fullscreen"
-    bind "Super+m" "toggle-maximized"
-    bind "Super+i" "minimize"
-    bind "Super+n" "switch-layout"
-    bind "Super+r" "reload-config"
-    bind "Super+t" "spawn-terminal"
-    bind "Super+Tab" "focus-next"
-    bind "Alt+Left" "focus-left"
-    bind "Alt+Right" "focus-right"
-    bind "Alt+Up" "focus-up"
-    bind "Alt+Down" "focus-down"
-    // bind "Super+Shift+l" "lock-session"
-    bind "Super+1" "focus-tag 1"
-    bind "Super+2" "focus-tag 2"
-    bind "Super+3" "focus-tag 3"
-    bind "Super+4" "focus-tag 4"
-    pointer-bind "Super+left" "move"
-    pointer-bind "Super+right" "resize"
-}
-
-// spawn-at-startup "waybar"
-
-window-rule {
-    match app-id="firefox"
-    default-tag 2
-}
-
-window-rule {
-    match app-id="alacritty"
-    default-tag 1
-}
-
-window-rule {
-    match title="^Picture-in-Picture$"
-    open-floating #true
-}
-"""
-    writeFile(configPath, defaultContent)
+    writeFile(configPath, FallbackConfigContent)
     info "Created default config", path=configPath
 
 proc spawnStartupCommands(model: Model) =
@@ -445,21 +361,20 @@ proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
     warn "Failed to spawn window menu", cmd=command[0], windowId=windowId, error=e.msg
 
 proc spawnTerminal() =
-  var candidates: seq[string] = @[]
-  let configured = getEnv("TERMINAL", "")
-  if configured.len > 0:
-    candidates.add(configured)
-  candidates.add(@["foot", "kitty", "wezterm", "ghostty", "alacritty", "xterm"])
-
-  for terminal in candidates:
+  for command in terminalCandidates():
+    if command.len == 0 or not commandExists(command[0]):
+      continue
+    var args: seq[string] = @[]
+    if command.len > 1:
+      args = command[1..^1]
     try:
-      let p = startProcess(terminal, options = {poUsePath})
-      info "Spawned terminal", terminal=terminal, pid=p.processID
+      let p = startProcess(command[0], args = args, options = {poUsePath})
+      info "Spawned terminal", terminal=command[0], pid=p.processID
       return
     except CatchableError as e:
-      trace "Terminal candidate failed", terminal=terminal, error=e.msg
+      trace "Terminal candidate failed", terminal=command[0], error=e.msg
 
-  warn "No terminal command could be spawned", candidates=candidates
+  warn "No terminal command could be spawned"
 
 proc spawnCommand(command: seq[string]) =
   if command.len == 0:
@@ -484,8 +399,6 @@ const
   RiverEdgeLeft = 4'u32
   RiverEdgeRight = 8'u32
   RiverAllEdges = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
-  FocusedBorder = 0xffffffff'u32
-  UnfocusedBorder = 0x666666ff'u32
   RiverCapabilityFullscreen = 4'u32
   RiverCapabilityMaximize = 2'u32
   RiverCapabilityMinimize = 8'u32
@@ -495,7 +408,6 @@ const
   RiverPresentationVsync = 0'u32
   RiverPresentationAsync = 1'u32
   AllWatchedModifiers = 1'u32 or 4'u32 or 8'u32 or 32'u32 or 64'u32 or 128'u32
-  BorderWidth = 2'i32
 
 var
   xkb_binding_listener: river_xkb.RiverXkbBindingV1Listener
@@ -662,8 +574,8 @@ proc destroyAllProtocolSurfaces() =
   windowDecorationBelow.clear()
 
 proc applyBorder(win: ptr RiverWindowV1; focused: bool; edges: uint32) =
-  let color = premulColor(if focused: FocusedBorder else: UnfocusedBorder)
-  win.setBorders(edges, BorderWidth, color.r, color.g, color.b, color.a)
+  let color = premulColor(if focused: currentModel.focusedBorderColor else: currentModel.unfocusedBorderColor)
+  win.setBorders(edges, currentModel.borderWidth, color.r, color.g, color.b, color.a)
 
 proc supportedCapabilities(model: Model): uint32 =
   result = RiverBaseCapabilities
@@ -1133,7 +1045,7 @@ proc renderDesiredPlacements() =
         node.placeAbove(lastNode)
       lastNode = node
       if windowPointers.hasKey(id):
-        let visibility = renderVisibility(geom, screen, max(BorderWidth * 2, 4'i32))
+        let visibility = renderVisibility(geom, screen, max(currentModel.borderWidth * 2, 4'i32))
         windowPointers[id].applyVisibility(visibility)
         windowPointers[id].applyBorder(id == currentModel.activeFocus(), visibility.borderEdges)
 

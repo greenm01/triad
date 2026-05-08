@@ -215,6 +215,9 @@ type
     previousOuterGaps*: int32
     previousInnerGaps*: int32
     smartGaps*: bool
+    borderWidth*: int32
+    focusedBorderColor*: uint32
+    unfocusedBorderColor*: uint32
     # Scroller global config
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
