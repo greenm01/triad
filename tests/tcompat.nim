@@ -52,6 +52,26 @@ suite "Shell compatibility contracts":
     check workspaces[0]["is_focused"].getBool() == true
     check workspaces[0]["active_window_id"].getInt() == 10
 
+  test "Niri workspaces use compact indices over stable Triad tag ids":
+    var model = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080)
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[9] = initTagState(9, Monocle, "media")
+    model.tags[9].columns.add(Column(windows: @[WindowId(99)]))
+    model.windows[99] = WindowData(id: 99, appId: "player", title: "player")
+
+    let workspaces = parseJson(handleNiriRequest("\"Workspaces\"", model).reply)["Ok"]["Workspaces"]
+    check workspaces.len == 4
+    check workspaces[3]["id"].getInt() == 9
+    check workspaces[3]["idx"].getInt() == 4
+
+    let focusByIndex = handleNiriRequest("""{"Action":{"FocusWorkspace":{"reference":{"Index":4}}}}""", model)
+    check focusByIndex.messages.len == 1
+    check focusByIndex.messages[0].kind == CmdFocusTag
+    check focusByIndex.messages[0].focusTag == 9
+
   test "Noctalia Niri window and output requests have usable fields":
     let model = modelForShell()
     let windows = parseJson(handleNiriRequest("\"Windows\"", model).reply)["Ok"]["Windows"]

@@ -14,6 +14,13 @@ JSON IPC facade on `$NIRI_SOCKET`. Noctalia's Niri backend reads workspaces,
 windows, outputs, overview state, keyboard layouts, and dispatches a small set
 of actions through that socket. Triad can supply that contract directly.
 
+Triad advertises workspaces dynamically through this facade. The configured
+`workspaces.default-count` creates the initial empty floor, and extra tags appear
+only when they are active, occupied, or owned by an output. Empty non-default
+tags are pruned after focus moves away. The JSON `id` remains Triad's stable tag
+ID, while `idx` is compacted in visible order so Niri-style bars do not show
+holes or every configured tag template.
+
 DankMaterialShell also reads `$NIRI_SOCKET` directly, but it additionally shells
 out to `niri msg -j outputs`, `niri validate`, and selected `niri msg action`
 commands. Triad ships `triad_niri` for that command-side contract. It is

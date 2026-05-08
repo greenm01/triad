@@ -1,9 +1,10 @@
-import kdl, tables, ../core/model, os, chronicles, strutils
+import kdl, tables, ../core/model, ../core/model_utils, os, chronicles, strutils
 import defaults
 
 type
   Config* = object
     layout*: LayoutConfig
+    workspaces*: WorkspaceConfig
     tagRules*: seq[TagRule]
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
@@ -39,11 +40,6 @@ type
     animationSpeed*: float32
     smartGaps*: bool
     layoutCycle*: seq[LayoutMode]
-
-  TagRule* = object
-    tagId*: uint32
-    name*: string
-    defaultLayout*: LayoutMode
 
 proc clamp32(value, lo, hi: int32): int32 =
   min(hi, max(lo, value))
@@ -197,6 +193,7 @@ proc loadConfig*(path: string): Config =
   result.layout.animationSpeed = DefaultAnimationSpeed
   result.layout.smartGaps = false
   result.layout.layoutCycle = @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+  result.workspaces.defaultCount = DefaultWorkspaceCount
   result.scratchpad.widthRatio = DefaultScratchpadWidthRatio
   result.scratchpad.heightRatio = DefaultScratchpadHeightRatio
   result.overview.outerGap = DefaultOverviewOuterGap
@@ -272,6 +269,16 @@ proc loadConfig*(path: string): Config =
           except CatchableError as e:
             warn "Ignoring invalid layout config field", field=child.name, error=e.msg
       
+      elif node.name == "workspaces":
+        for child in node.children:
+          try:
+            if child.name == "default-count" and child.args.len > 0:
+              let count = child.args[0].kInt()
+              if count > 0:
+                result.workspaces.defaultCount = uint32(min(count, 64))
+          except CatchableError as e:
+            warn "Ignoring invalid workspace config field", field=child.name, error=e.msg
+
       elif node.name == "tag-rules":
         for child in node.children:
           if child.name == "tag" and child.args.len > 0:
@@ -511,6 +518,10 @@ proc applyConfig*(model: var Model, config: Config) =
   model.enableAnimations = config.layout.enableAnimations
   model.animationSpeed = clampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.smartGaps = config.layout.smartGaps
+  model.workspaces = config.workspaces
+  if model.workspaces.defaultCount == 0:
+    model.workspaces.defaultCount = DefaultWorkspaceCount
+  model.tagRules = config.tagRules
   model.windowRules = config.windowRules
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell
@@ -543,14 +554,10 @@ proc applyConfig*(model: var Model, config: Config) =
   model.scratchpadWidthRatio = clampF32(config.scratchpad.widthRatio, 0.1, 1.0)
   model.scratchpadHeightRatio = clampF32(config.scratchpad.heightRatio, 0.1, 1.0)
   
+  model.ensureDefaultWorkspaces()
+
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
       model.tags[rule.tagId].layoutMode = rule.defaultLayout
       model.tags[rule.tagId].name = rule.name
-    else:
-      model.tags[rule.tagId] = TagState(
-        tagId: rule.tagId,
-        layoutMode: rule.defaultLayout,
-        name: rule.name,
-        masterCount: model.defaultMasterCount,
-        masterSplitRatio: model.defaultMasterRatio)
+  discard model.pruneDynamicWorkspaces()

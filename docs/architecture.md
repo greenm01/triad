@@ -63,7 +63,8 @@ Layouts are decoupled from the core Wayland event loop. They are simply mathemat
 ### 4. Configuration (KDL)
 Triad uses KDL for robust, hot-reloadable configuration.
 *   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
-*   **Tag Rules:** Assigns default layouts to specific tags (e.g., `tag 1 default-layout="scroller"`).
+*   **Workspace Rules:** `workspaces.default-count` controls how many empty workspaces exist by default.
+*   **Tag Rules:** Provides lazy name/layout templates for tags when they are created (e.g., `tag 1 default-layout="scroller"`).
 *   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific tag assignments.
 
 ### 5. Future Extensibility: Quickshell Integration
@@ -80,4 +81,4 @@ To maximize compatibility with existing Quickshell themes like **Noctalia-shell*
 
 *   **Socket Path:** Triad can be configured to use the `$NIRI_SOCKET` path or a standard fallback.
 *   **Protocol:** Triad implements the `event-stream` command, which provides a continuous, line-delimited JSON stream of compositor events.
-*   **Event Mapping:** Triad maps its internal TEA state changes to Niri-standard JSON payloads such as `WorkspaceActivated`, `WindowFocusChanged`, `WindowOpened`, and `WindowClosed`. This allows Noctalia's workspace switcher and overview to work natively with Triad.
+*   **Event Mapping:** Triad maps its internal TEA state changes to Niri-standard JSON payloads such as `WorkspaceActivated`, `WindowFocusChanged`, `WindowOpened`, and `WindowClosed`. Workspace `id` values stay as stable Triad tag IDs, while workspace `idx` values are compacted for Niri-style shell bars.

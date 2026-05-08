@@ -25,3 +25,4 @@ const
   DefaultScreenshotFilenamePrefix* = "triad-screenshot"
   DefaultScreenshotCaptureCommand* = "grim"
   DefaultScreenshotRegionSelectorCommand* = "slurp"
+  DefaultWorkspaceCount* = 3'u32

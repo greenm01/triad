@@ -37,6 +37,7 @@ This means themes and shells built for Quickshell—such as **Noctalia-shell** o
 ### Features
 
 *   **Hybrid Layouts:** Toggle between Scroller, Vertical Scroller, Master-Stack, Grid, and Monocle modes independently for each workspace.
+*   **Dynamic Workspaces:** Start with a configurable workspace floor, then grow and prune extra workspaces as they are used.
 *   **Smooth Animations:** Experience fluid window movement driven by a 60FPS internal clock and exponential easing.
 *   **Interactive Controls:** Full keyboard and mouse support for resizing, moving, and reordering windows within stacks and columns.
 *   **Scratchpad:** Banish utility windows to the shadows and summon them instantly as centered overlays.

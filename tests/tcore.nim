@@ -2,6 +2,7 @@ import unittest
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
+import ../src/core/niri_state
 import ../src/core/render_visibility
 import ../src/core/restore_state
 import ../src/core/update
@@ -618,6 +619,40 @@ suite "Core TEA Update Logic":
     check nextModel.tags[2].containsWindow(102)
     check nextModel.tags[2].focusedWindow == 102
     check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 102)
+
+  test "Dynamic workspace navigation grows and prunes empty non-default tags":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.activeTag = 3
+
+    var (nextModel, _) = update(model, Msg(kind: CmdFocusTagRight))
+    check nextModel.activeTag == 4
+    check nextModel.tags.hasKey(4)
+    check niriWorkspacesJson(nextModel).len == 4
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusTagLeft))
+    check nextModel.activeTag == 3
+    check not nextModel.tags.hasKey(4)
+    check niriWorkspacesJson(nextModel).len == 3
+
+  test "Dynamic workspace creation applies lazy tag templates":
+    model.workspaces.defaultCount = 3
+    model.tagRules = @[
+      TagRule(tagId: 4, name: "chat", defaultLayout: Deck)
+    ]
+    model.tags[3] = initTagState(3, Scroller, "files")
+    model.tags[3].columns.add(Column(windows: @[WindowId(301)]))
+    model.tags[3].focusedWindow = 301
+    model.windows[301] = WindowData(id: 301)
+    model.activeTag = 3
+
+    let (nextModel, _) = update(model, Msg(kind: CmdMoveWindowDownOrToWorkspaceDown))
+    check nextModel.activeTag == 4
+    check nextModel.tags[4].name == "chat"
+    check nextModel.tags[4].layoutMode == Deck
+    check nextModel.tags[4].containsWindow(301)
 
   test "CmdMoveToTag in Overview updates activeTag":
     model.overviewActive = true

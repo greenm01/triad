@@ -35,6 +35,18 @@ proc defaultMasterRatio*(model: Model): float32 =
   else:
     DefaultMasterRatio
 
+proc defaultWorkspaceCount*(model: Model): uint32 =
+  if model.workspaces.defaultCount > 0:
+    model.workspaces.defaultCount
+  else:
+    DefaultWorkspaceCount
+
+proc tagRuleFor*(model: Model; tagId: uint32): tuple[found: bool, rule: TagRule] =
+  for rule in model.tagRules:
+    if rule.tagId == tagId:
+      return (true, rule)
+  (false, TagRule())
+
 proc floatingMinWidth*(model: Model): int32 =
   if model.floating.minWidth > 0: model.floating.minWidth else: DefaultFloatingMinWidth
 
@@ -57,8 +69,17 @@ proc initTagState*(tagId: uint32; layoutMode = Scroller; name = "";
     masterSplitRatio: clamp(masterSplitRatio, 0.05'f32, 0.95'f32)
   )
 
-proc initTagStateForModel*(model: Model; tagId: uint32; layoutMode = Scroller; name = ""): TagState =
-  initTagState(tagId, layoutMode, name, model.defaultMasterCount(), model.defaultMasterRatio())
+proc initTagStateForModel*(model: Model; tagId: uint32; layoutMode = Scroller; name = "";
+    applyTemplate = true): TagState =
+  var effectiveLayout = layoutMode
+  var effectiveName = name
+  if applyTemplate:
+    let tagTemplate = model.tagRuleFor(tagId)
+    if tagTemplate.found:
+      effectiveLayout = tagTemplate.rule.defaultLayout
+      if effectiveName.len == 0:
+        effectiveName = tagTemplate.rule.name
+  initTagState(tagId, effectiveLayout, effectiveName, model.defaultMasterCount(), model.defaultMasterRatio())
 
 proc defaultColumn*(model: Model; windows: seq[WindowId] = @[]): Column =
   Column(windows: windows, widthProportion: model.defaultColumnWidth())
@@ -144,6 +165,59 @@ proc ensureTag*(model: var Model; tagId: uint32; layoutMode = Scroller): TagStat
   if not model.tags.hasKey(tagId):
     model.tags[tagId] = model.initTagStateForModel(tagId, layoutMode)
   model.tags[tagId]
+
+proc ensureDefaultWorkspaces*(model: var Model) =
+  for tagId in 1'u32 .. model.defaultWorkspaceCount():
+    if not model.tags.hasKey(tagId):
+      model.tags[tagId] = model.initTagStateForModel(tagId)
+  if model.activeTag == 0:
+    model.activeTag = 1
+
+proc visibleWorkspaceIds*(model: Model): seq[uint32] =
+  for tagId in model.tags.keys:
+    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag or model.tags[tagId].flattenWindows().len > 0:
+      result.add(tagId)
+      continue
+    for _, outputTag in model.outputTags.pairs:
+      if outputTag == tagId:
+        result.add(tagId)
+        break
+  result.sort()
+
+proc compactWorkspaceIndexToTag*(model: Model; index: uint32): uint32 =
+  if index == 0:
+    return 0
+  let ids = model.visibleWorkspaceIds()
+  let i = int(index) - 1
+  if i >= 0 and i < ids.len:
+    return ids[i]
+  0
+
+proc nextDynamicWorkspaceId*(model: Model): uint32 =
+  result = model.defaultWorkspaceCount() + 1
+  for tagId in model.tags.keys:
+    if tagId >= result:
+      result = tagId + 1
+
+proc pruneDynamicWorkspaces*(model: var Model): bool =
+  var ids: seq[uint32] = @[]
+  for tagId in model.tags.keys:
+    ids.add(tagId)
+  ids.sort()
+  for tagId in ids:
+    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag:
+      continue
+    if model.tags[tagId].flattenWindows().len > 0:
+      continue
+    var ownedByOutput = false
+    for _, outputTag in model.outputTags.pairs:
+      if outputTag == tagId:
+        ownedByOutput = true
+        break
+    if ownedByOutput:
+      continue
+    model.tags.del(tagId)
+    result = true
 
 proc firstTagId*(model: Model): uint32 =
   if model.tags.len == 0:

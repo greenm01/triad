@@ -315,8 +315,9 @@ proc focusWindow(model: var Model; winId: WindowId; effects: var seq[Effect]) =
   effects.add(Effect(kind: EffManageDirty))
 
 proc focusTag(model: var Model; tagId: uint32; effects: var seq[Effect]) =
-  if tagId == 0 or not model.tags.hasKey(tagId):
+  if tagId == 0:
     return
+  discard model.ensureTag(tagId)
   model.activeTag = tagId
   model.syncPrimaryOutputTag()
   var tag = model.tags[tagId]
@@ -510,7 +511,7 @@ proc sortedTagIds(model: Model): seq[uint32] =
   result.sort()
 
 proc nearestTag(model: Model; direction: int; occupiedOnly: bool): uint32 =
-  let ids = model.sortedTagIds()
+  let ids = if occupiedOnly: model.sortedTagIds() else: model.visibleWorkspaceIds()
   if ids.len == 0:
     return 0
   let current = model.activeTag
@@ -523,6 +524,8 @@ proc nearestTag(model: Model; direction: int; occupiedOnly: bool): uint32 =
     for tagId in ids:
       if tagId > current and (not occupiedOnly or model.activeVisibleWindows(model.tags[tagId]).len > 0):
         return tagId
+    if not occupiedOnly:
+      return model.nextDynamicWorkspaceId()
   0
 
 proc overviewWindows(model: Model): tuple[windows: seq[WindowId], tagIds: seq[uint32]] =
@@ -847,7 +850,13 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         if nextModel.restoreTags.hasKey(targetTag):
           nextModel.tags[targetTag] = materializeRestoredTag(nextModel.restoreTags[targetTag])
         else:
-          nextModel.tags[targetTag] = nextModel.initTagStateForModel(targetTag, if forcedLayout != 0: safeLayoutMode(forcedLayout) else: Scroller)
+          let tagTemplate = nextModel.tagRuleFor(targetTag)
+          let layoutMode =
+            if forcedLayout != 0: safeLayoutMode(forcedLayout)
+            elif tagTemplate.found: tagTemplate.rule.defaultLayout
+            else: Scroller
+          let name = if tagTemplate.found: tagTemplate.rule.name else: ""
+          nextModel.tags[targetTag] = nextModel.initTagStateForModel(targetTag, layoutMode, name, applyTemplate = false)
       elif forcedLayout != 0:
         var tag = nextModel.tags[targetTag]
         if not hasRestoredTag:
@@ -1721,6 +1730,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   else: discard
 
+  let prunedWorkspaces = nextModel.pruneDynamicWorkspaces()
+
   if msg.kind.shouldBroadcastOutputsChanged():
     effects.add(nextModel.broadcastOutputsChanged())
     effects.add(nextModel.broadcastWorkspacesChanged())
@@ -1728,5 +1739,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   elif msg.kind.shouldBroadcastWindowsChanged():
     effects.add(nextModel.broadcastWorkspacesChanged())
     effects.add(nextModel.broadcastWindowsChanged())
+  elif prunedWorkspaces:
+    effects.add(nextModel.broadcastWorkspacesChanged())
 
   return (nextModel, effects)

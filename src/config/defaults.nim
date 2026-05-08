@@ -44,6 +44,10 @@ floating {
     min-height 50
 }
 
+workspaces {
+    default-count 3
+}
+
 screenshot {
     directory "~/Pictures/Screenshots"
     filename-prefix "triad-screenshot"

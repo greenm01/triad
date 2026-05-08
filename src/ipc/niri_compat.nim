@@ -1,4 +1,4 @@
-import algorithm, json, options, strutils, tables
+import json, options, strutils, tables
 import ../core/model
 import ../core/model_utils
 import ../core/msg
@@ -47,10 +47,7 @@ proc boolFromField(node: JsonNode; field: string; fallback = false): bool =
     fallback
 
 proc nextTag(model: Model; direction: int): Option[uint32] =
-  var ids: seq[uint32] = @[]
-  for tagId in model.tags.keys:
-    ids.add(tagId)
-  ids.sort()
+  let ids = model.visibleWorkspaceIds()
   if ids.len == 0:
     return none(uint32)
 
@@ -58,8 +55,11 @@ proc nextTag(model: Model; direction: int): Option[uint32] =
   var idx = ids.find(active)
   if idx == -1:
     idx = 0
-  let nextIdx = (idx + direction + ids.len) mod ids.len
-  some(ids[nextIdx])
+  if direction < 0:
+    return some(ids[max(0, idx - 1)])
+  if idx < ids.len - 1:
+    return some(ids[idx + 1])
+  some(model.nextDynamicWorkspaceId())
 
 proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messages: seq[Msg]] =
   if action.kind != JObject:
@@ -71,8 +71,10 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
       let refNode = payload["reference"]
       if refNode.kind == JObject:
         if refNode.hasKey("Index"):
-          let tag = uintFromNode(refNode["Index"])
-          if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+          let index = uintFromNode(refNode["Index"])
+          if index.isSome:
+            let tag = model.compactWorkspaceIndexToTag(index.get())
+            if tag != 0: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag)])
         elif refNode.hasKey("Id"):
           let tag = uintFromNode(refNode["Id"])
           if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])

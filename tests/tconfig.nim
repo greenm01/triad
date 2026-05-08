@@ -147,6 +147,42 @@ tag-rules {
     check config.tagRules[1].defaultLayout == Grid
     check config.tagRules[2].defaultLayout == Monocle
 
+  test "Parser correctly reads workspace defaults":
+    let path = getCurrentDir() / "test_workspaces.kdl"
+    let kdl = """
+workspaces {
+    default-count 5
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.workspaces.defaultCount == 5
+
+  test "Applying config treats tag rules as lazy workspace templates":
+    var model = Model(activeTag: 1)
+    model.applyConfig(Config(
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      layout: LayoutConfig(
+        borderWidth: DefaultBorderWidth,
+        focusedBorderColor: DefaultFocusedBorderColor,
+        unfocusedBorderColor: DefaultUnfocusedBorderColor),
+      tagRules: @[
+        TagRule(tagId: 1, name: "term", defaultLayout: Scroller),
+        TagRule(tagId: 2, name: "web", defaultLayout: Grid),
+        TagRule(tagId: 4, name: "chat", defaultLayout: Deck),
+        TagRule(tagId: 9, name: "spare", defaultLayout: Monocle)
+      ]))
+
+    check model.tags.hasKey(1)
+    check model.tags.hasKey(2)
+    check model.tags.hasKey(3)
+    check not model.tags.hasKey(4)
+    check not model.tags.hasKey(9)
+    check model.tags[1].name == "term"
+    check model.tags[2].layoutMode == Grid
+
   test "Parser correctly reads window rules":
     let path = getCurrentDir() / "test_window.kdl"
     let kdl = """
@@ -378,6 +414,11 @@ bindings {
     check config.layout.borderWidth == 3
     check config.layout.focusedBorderColor == 0x7fc8ffff'u32
     check config.layout.unfocusedBorderColor == 0x505050ff'u32
+
+  test "Default config advertises three initial workspaces":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+
+    check config.workspaces.defaultCount == 3
 
   test "Applying config installs runtime defaults without disturbing live state":
     var model = Model(activeTag: 1, screenWidth: 2000, screenHeight: 1000)

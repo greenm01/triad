@@ -96,6 +96,14 @@ type
     openFloating*: bool
     forcedLayout*: int # 0: none, else: ord(LayoutMode) + 1
 
+  TagRule* = object
+    tagId*: uint32
+    name*: string
+    defaultLayout*: LayoutMode
+
+  WorkspaceConfig* = object
+    defaultCount*: uint32
+
   QuickshellConfig* = object
     enabled*: bool
     command*: string
@@ -210,6 +218,8 @@ type
     primaryOutput*: uint32
     outputTags*: Table[uint32, uint32]
     groups*: Table[uint32, GroupState]
+    tagRules*: seq[TagRule]
+    workspaces*: WorkspaceConfig
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig

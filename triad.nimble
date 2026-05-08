@@ -69,6 +69,9 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
 task verify, "Run tests, build, tidy, and binary hygiene checks":
   exec "sh tools/preflight.sh"
 
+task buildAll, "Build all Triad binaries":
+  exec "nimble build"
+
 task testAppIdentity, "Run app identity tests":
   runTestSuite("tests/tapp_identity.nim")
 

@@ -85,19 +85,16 @@ proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
     result["raw_app_id"] = %win.appId
 
 proc niriWorkspacesJson*(model: Model): JsonNode =
-  var ids: seq[uint32] = @[]
-  for tagId in model.tags.keys:
-    ids.add(tagId)
-  ids.sort()
+  let ids = model.visibleWorkspaceIds()
 
   result = newJArray()
-  for tagId in ids:
+  for idx, tagId in ids:
     let tag = model.tags[tagId]
     let windows = tag.flattenWindows()
     let outputName = model.niriWorkspaceOutputName(tagId)
     result.add(%*{
       "id": tagId,
-      "idx": tagId,
+      "idx": idx + 1,
       "name": if tag.name == "": newJNull() else: %tag.name,
       "output": outputName,
       "is_urgent": false,
