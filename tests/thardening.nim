@@ -247,6 +247,7 @@ suite "Crash hardening":
     check parseLegacyCommand("cancel-eat-next-key").get().kind == CmdCancelEatNextKey
     check parseLegacyCommand("stop-manager").get().kind == CmdStopManager
     check parseLegacyCommand("focus-shell-ui").get().kind == CmdFocusShellUi
+    check parseLegacyCommand("spawn fuzzel").get().spawnCommand == @["fuzzel"]
     check parseLegacyCommand("focus-left").get().kind == CmdFocusDirection
     check parseLegacyCommand("focus-left").get().direction == DirLeft
     check parseLegacyCommand("focus-last").get().kind == CmdFocusLast

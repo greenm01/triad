@@ -111,6 +111,12 @@ proc parsePointerOp(value: string): PointerOpKind =
   of "resize", "Resize": OpResize
   else: OpNone
 
+proc parseBindingMode(value: string): BindingMode =
+  case value.normalize()
+  of "normal": BindNormal
+  of "overview": BindOverview
+  else: BindAlways
+
 proc parsePresentationMode(value: string): PresentationMode =
   case value
   of "vsync", "Vsync", "VSYNC": PresentationVsync
@@ -260,12 +266,15 @@ proc loadConfig*(path: string): Config =
                 var binding = KeyBindingConfig(
                   key: spec.key,
                   modifiers: spec.modifiers,
-                  command: child.args[1].kString())
+                  command: child.args[1].kString(),
+                  mode: BindAlways)
                 if child.props.hasKey("layout"):
                   let layout = child.props["layout"].kInt()
                   if layout >= 0:
                     binding.hasLayoutOverride = true
                     binding.layoutOverride = uint32(layout)
+                if child.props.hasKey("mode"):
+                  binding.mode = parseBindingMode(child.props["mode"].kString())
                 result.keyBindings.add(binding)
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())

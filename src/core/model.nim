@@ -120,10 +120,16 @@ type
     OpMove,
     OpResize
 
+  BindingMode* = enum
+    BindAlways,
+    BindNormal,
+    BindOverview
+
   KeyBindingConfig* = object
     key*: string
     modifiers*: uint32
     command*: string
+    mode*: BindingMode
     hasLayoutOverride*: bool
     layoutOverride*: uint32
 

@@ -101,6 +101,7 @@ type
     CmdFocusTag,
     CmdFocusWindowById,
     CmdCloseWindowById,
+    CmdSpawn,
     CmdSpawnTerminal,
     CmdLockSession,
     CmdWarpPointer,
@@ -235,6 +236,8 @@ type
       focusWindowId*: WindowId
     of CmdCloseWindowById:
       closeWindowId*: WindowId
+    of CmdSpawn:
+      spawnCommand*: seq[string]
     of CmdWarpPointer:
       warpX*, warpY*: int32
     of CmdScreenshot:

@@ -60,6 +60,8 @@ proc parseLegacyCommand*(line: string): Option[Msg] =
   of "toggle-fullscreen": some(Msg(kind: CmdToggleFullscreen))
   of "toggle-maximized", "toggle-maximize": some(Msg(kind: CmdToggleMaximized))
   of "minimize", "minimize-window": some(Msg(kind: CmdMinimize))
+  of "spawn":
+    if parts.len >= 2: some(Msg(kind: CmdSpawn, spawnCommand: parts[1..^1])) else: none(Msg)
   of "spawn-terminal": some(Msg(kind: CmdSpawnTerminal))
   of "lock-session": some(Msg(kind: CmdLockSession))
   of "warp-pointer":

@@ -74,6 +74,7 @@ var
   xkbSeatPointers: Table[uint32, ptr river_xkb.RiverXkbBindingsSeatV1]
   xkbSeatAteUnbound: Table[uint32, uint32]
   xkbBindingPressed: Table[uint32, bool]
+  xkbBindingModes: Table[uint32, BindingMode]
   xkbStopRepeatCount: Table[uint32, uint32]
   pointerBindings: Table[uint32, Msg]
   pointerBindingKinds: Table[uint32, PointerOpKind]
@@ -97,6 +98,7 @@ var
   # Config Watcher
   configPath: string
   watcher: Watcher
+  shouldExit = false
 
 # --- Helpers ---
 
@@ -427,6 +429,21 @@ proc spawnTerminal() =
 
   warn "No terminal command could be spawned", candidates=candidates
 
+proc spawnCommand(command: seq[string]) =
+  if command.len == 0:
+    warn "Spawn command is empty"
+    return
+
+  var args: seq[string] = @[]
+  if command.len > 1:
+    args = command[1..^1]
+
+  try:
+    let p = startProcess(command[0], args = args, options = {poUsePath})
+    info "Spawned command", cmd=command[0], pid=p.processID
+  except CatchableError as e:
+    warn "Failed to spawn command", cmd=command[0], error=e.msg
+
 proc requestManage(reason: string)
 
 const
@@ -625,6 +642,15 @@ proc keySym(key: string): uint32 =
     of "tab": 0xff09'u32
     of "backspace": 0xff08'u32
     of "space": 0x20'u32
+    of "left": 0xff51'u32
+    of "up": 0xff52'u32
+    of "right": 0xff53'u32
+    of "down": 0xff54'u32
+    of "page_up", "page-up", "prior": 0xff55'u32
+    of "page_down", "page-down", "next": 0xff56'u32
+    of "home": 0xff50'u32
+    of "end": 0xff57'u32
+    of "print": 0xff61'u32
     else: 0'u32
 
 proc applyBorder(win: ptr RiverWindowV1; focused: bool) =
@@ -688,6 +714,7 @@ proc destroyBindings() =
   xkbBindingPointers = @[]
   xkbBindings.clear()
   xkbBindingPressed.clear()
+  xkbBindingModes.clear()
   xkbStopRepeatCount.clear()
 
   for binding in pointerBindingPointers:
@@ -711,6 +738,7 @@ proc addXkbBinding(seat: ptr RiverSeatV1; bindingConfig: KeyBindingConfig; keysy
   let binding = river_xkb_bindings.getXkbBinding(seat, keysym, modifiers)
   xkbBindingPointers.add(binding)
   xkbBindings[binding.get_id()] = msg
+  xkbBindingModes[binding.get_id()] = bindingConfig.mode
   discard binding.addListener(xkb_binding_listener.addr, nil)
   if bindingConfig.hasLayoutOverride:
     binding.setLayoutOverride(bindingConfig.layoutOverride)
@@ -724,6 +752,12 @@ proc addPointerBinding(seat: ptr RiverSeatV1; button, modifiers: uint32; op: Poi
   discard binding.addListener(pointer_binding_listener.addr, nil)
   binding.enable()
 
+proc bindingModeActive(mode: BindingMode): bool =
+  case mode
+  of BindAlways: true
+  of BindNormal: not currentModel.overviewActive
+  of BindOverview: currentModel.overviewActive
+
 proc setupDefaultBindings() =
   if bindingsConfigured:
     return
@@ -734,6 +768,8 @@ proc setupDefaultBindings() =
     attachXkbSeat(seat)
 
     for binding in currentModel.keyBindings:
+      if not bindingModeActive(binding.mode):
+        continue
       let parsed = parseLegacyCommand(binding.command)
       let sym = keySym(binding.key)
       if parsed.isSome and sym != 0:
@@ -861,6 +897,8 @@ var seat_listener = RiverSeatV1Listener(
 proc on_xkb_pressed(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
   let id = binding.get_id()
   xkbBindingPressed[id] = true
+  if xkbBindingModes.hasKey(id) and not bindingModeActive(xkbBindingModes[id]):
+    return
   if xkbBindings.hasKey(id):
     msgQueue.add(xkbBindings[id])
 
@@ -1196,6 +1234,8 @@ proc executeEffect(eff: Effect) =
     spawnScreenLock(eff.screenLockCommand)
   of EffSpawnWindowMenu:
     spawnWindowMenu(eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX, eff.windowMenuY)
+  of EffSpawn:
+    spawnCommand(eff.spawnCommand)
   of EffPointerWarp:
     for seat in seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)
@@ -1478,6 +1518,7 @@ proc on_manager_finished(data: pointer, mgr: ptr RiverWindowManagerV1) =
   if river_manager != nil:
     river_manager.destroy()
     river_manager = nil
+  shouldExit = true
 
 proc on_session_locked(data: pointer, mgr: ptr RiverWindowManagerV1) =
   info "River session locked"
@@ -1707,8 +1748,11 @@ proc processQueuedMessages(configPath: string) =
       requestManage("config reload")
       continue
 
+    let previousOverview = currentModel.overviewActive
     let (nextModel, effects) = update(currentModel, msg)
     currentModel = nextModel
+    if previousOverview != currentModel.overviewActive:
+      destroyBindings()
 
     if msg.kind == WlManageStart:
       riverPhase = RiverManage
@@ -1850,6 +1894,9 @@ proc main() =
 
     # Process Message Queue
     processQueuedMessages(configPath)
+    if shouldExit:
+      running = false
+      continue
 
     if not prepareWaylandRead(display):
       break

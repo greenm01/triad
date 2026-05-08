@@ -3,7 +3,7 @@ import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/update
-import tables
+import tables, sequtils
 
 suite "Core TEA Update Logic":
   setup:
@@ -99,6 +99,19 @@ suite "Core TEA Update Logic":
     let (nextModel, _) = update(model, msg)
     
     check nextModel.tags[1].layoutMode == Grid
+
+  test "new window opens on active tag unless a rule pins it":
+    model.tags[1] = TagState(tagId: 1, layoutMode: Scroller)
+    model.tags[3] = TagState(tagId: 3, layoutMode: Grid)
+    model.activeTag = 3
+
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 110, appId: "foot", title: "foot"))
+    check nextModel.tags[3].containsWindow(110)
+    check not nextModel.tags[1].containsWindow(110)
+
+    nextModel.windowRules.add(WindowRule(appIdMatch: "pinned", defaultTag: 1))
+    let (pinnedModel, _) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 111, appId: "pinned-app", title: "pinned"))
+    check pinnedModel.tags[1].containsWindow(111)
 
   test "Scratchpad management moves window out of tag":
     var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
@@ -246,6 +259,25 @@ suite "Core TEA Update Logic":
     let (finalModel, _) = update(nextModel, Msg(kind: CmdFocusNext))
     check finalModel.activeTag == 1
     check finalModel.tags[1].focusedWindow == 101
+
+  test "Overview navigation does not focus client until selected":
+    model.overviewActive = true
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
+    model.tags[2] = TagState(tagId: 2, focusedWindow: 102)
+    model.tags[2].columns.add(Column(windows: @[WindowId(102)]))
+    model.windows[101] = WindowData(id: 101, appId: "app", title: "one")
+    model.windows[102] = WindowData(id: 102, appId: "app", title: "two")
+    model.activeTag = 1
+
+    var (nextModel, effects) = update(model, Msg(kind: CmdFocusDirection, direction: DirRight))
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].focusedWindow == 102
+    check not effects.anyIt(it.kind == EffFocusWindow)
+
+    let (selectedModel, selectedEffects) = update(nextModel, Msg(kind: CmdSelectWindow))
+    check not selectedModel.overviewActive
+    check selectedEffects.anyIt(it.kind == EffFocusWindow and it.focusId == 102)
 
   test "CmdMoveToTag in Overview updates activeTag":
     model.overviewActive = true

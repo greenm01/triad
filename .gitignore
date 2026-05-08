@@ -31,3 +31,6 @@
 *.swp
 .idea/
 .vscode/
+nimble.develop
+nimble.paths
+nimbledeps

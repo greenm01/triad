@@ -1,8 +1,8 @@
-// Triad QEMU daily-driver config.
+// Triad default daily-driver config.
 //
 // This is modeled after ~/.config/mango/config.conf, but only uses Triad
 // config and commands that the current implementation understands.
-// Install in the VM as: ~/.config/triad/config.kdl
+// Use as ~/.config/triad/config.kdl for host or VM sessions.
 
 layout {
     gaps 8
@@ -68,6 +68,7 @@ spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || tr
 bindings {
     // Launch/session.
     bind "Super+Return" "spawn-terminal"
+    bind "Super+Space" "spawn fuzzel"
     bind "Super+r" "reload-config"
     bind "Super+Escape" "lock-session"
     bind "Ctrl+Alt+Backspace" "exit-session"
@@ -78,6 +79,10 @@ bindings {
     bind "Super+j" "focus-down"
     bind "Super+k" "focus-up"
     bind "Super+l" "focus-right"
+    bind "Super+Left" "focus-left"
+    bind "Super+Down" "focus-down"
+    bind "Super+Up" "focus-up"
+    bind "Super+Right" "focus-right"
     bind "Super+Tab" "focus-last"
     bind "Super+Shift+Tab" "focus-prev"
     bind "Super+u" "focus-occupied-tag-right"
@@ -178,48 +183,21 @@ bindings {
     // Overview and shell handoff.
     bind "Super+o" "toggle-overview"
     bind "Super+p" "select-window"
-    bind "Super+Space" "focus-shell-ui"
+    bind "Super+Shift+Space" "focus-shell-ui"
+    bind "Left" "focus-left" mode="overview"
+    bind "Down" "focus-down" mode="overview"
+    bind "Up" "focus-up" mode="overview"
+    bind "Right" "focus-right" mode="overview"
+    bind "h" "focus-left" mode="overview"
+    bind "j" "focus-down" mode="overview"
+    bind "k" "focus-up" mode="overview"
+    bind "l" "focus-right" mode="overview"
+    bind "Return" "select-window" mode="overview"
+    bind "Escape" "toggle-overview" mode="overview"
 
     // Pointer operations.
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
-}
-
-window-rule {
-    match app-id="foot"
-    default-tag 1
-}
-
-window-rule {
-    match app-id="kitty"
-    default-tag 1
-}
-
-window-rule {
-    match app-id="Alacritty"
-    default-tag 1
-}
-
-window-rule {
-    match app-id="firefox"
-    default-tag 2
-}
-
-window-rule {
-    match app-id="brave-browser"
-    default-tag 2
-}
-
-window-rule {
-    match app-id="thunar"
-    default-tag 3
-    forced-layout "grid"
-}
-
-window-rule {
-    match app-id="org.pwmt.zathura"
-    default-tag 5
-    forced-layout "monocle"
 }
 
 window-rule {
