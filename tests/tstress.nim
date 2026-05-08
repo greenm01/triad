@@ -119,12 +119,12 @@ proc simpleCommand(rng: var FuzzRng): Msg =
     CmdMoveColumnRight, CmdSwapWindowUp, CmdSwapWindowDown, CmdConsumeWindow,
     CmdExpelWindow, CmdZoom, CmdToggleGaps, CmdMoveToScratchpad,
     CmdToggleScratchpad, CmdToggleOverview, CmdToggleFloating,
-    CmdToggleFullscreen, CmdSelectWindow, CmdTick
+    CmdToggleFullscreen, CmdToggleMaximized, CmdMinimize, CmdSelectWindow, CmdTick
   ]
   Msg(kind: kinds[rng.pick(kinds.len)])
 
 proc generatedMsg(rng: var FuzzRng; model: Model; ctx: var FuzzContext): seq[Msg] =
-  case rng.pick(20)
+  case rng.pick(24)
   of 0:
     let win = chooseWindow(rng, model)
     ctx.op = "create window " & $win
@@ -236,11 +236,40 @@ proc generatedMsg(rng: var FuzzRng; model: Model; ctx: var FuzzContext): seq[Msg
     ctx.op = "remove output " & $outputId
     @[Msg(kind: WlOutputRemoved, removedOutputId: outputId)]
   of 18:
+    let win = chooseWindow(rng, model)
+    let w = int32(rng.pick(2400))
+    let h = int32(rng.pick(1600))
+    ctx.op = "actual dimensions " & $win
+    @[Msg(kind: WlWindowDimensions, dimensionsWindowId: win, actualWidth: w, actualHeight: h)]
+  of 19:
+    let win = chooseWindow(rng, model)
+    case rng.pick(3)
+    of 0:
+      ctx.op = "maximize request " & $win
+      @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: win)]
+    of 1:
+      ctx.op = "unmaximize request " & $win
+      @[Msg(kind: WlWindowUnmaximizeRequested, unmaximizeRequestId: win)]
+    else:
+      ctx.op = "minimize request " & $win
+      @[Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: win)]
+  of 20:
+    case rng.pick(3)
+    of 0:
+      ctx.op = "layer focus exclusive"
+      @[Msg(kind: WlLayerFocusExclusive)]
+    of 1:
+      ctx.op = "layer focus non-exclusive"
+      @[Msg(kind: WlLayerFocusNonExclusive)]
+    else:
+      ctx.op = "layer focus none"
+      @[Msg(kind: WlLayerFocusNone)]
+  of 21:
     let commands = [
       "focus-next", "focus-prev", "toggle-overview", "focus-workspace 2",
       "focus-workspace -1", "move-to-tag 4", "swap-to-tag junk",
       "resize-width 0.25", "adjust-gaps -100", "set-column-width 8.5",
-      "mmsg -g -A", "rename-tag stress tag"
+      "toggle-maximized", "minimize", "spawn-terminal", "mmsg -g -A", "rename-tag stress tag"
     ]
     let command = commands[rng.pick(commands.len)]
     ctx.op = "legacy ipc " & command

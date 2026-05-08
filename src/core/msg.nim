@@ -13,6 +13,13 @@ type
     WlWindowAppId,
     WlWindowTitle,
     WlWindowDimensionsHint,
+    WlWindowDimensions,
+    WlWindowMaximizeRequested,
+    WlWindowUnmaximizeRequested,
+    WlWindowMinimizeRequested,
+    WlLayerFocusExclusive,
+    WlLayerFocusNonExclusive,
+    WlLayerFocusNone,
     WlOutputDimensions,
     WlOutputPosition,
     WlOutputUsable,
@@ -63,6 +70,8 @@ type
     CmdToggleOverview,
     CmdToggleFloating,
     CmdToggleFullscreen,
+    CmdToggleMaximized,
+    CmdMinimize,
     CmdResizeFloating,
     CmdSelectWindow,
     CmdFocusTag,
@@ -103,6 +112,15 @@ type
     of WlWindowDimensionsHint:
       hintWindowId*: WindowId
       minWidth*, minHeight*, maxWidth*, maxHeight*: int32
+    of WlWindowDimensions:
+      dimensionsWindowId*: WindowId
+      actualWidth*, actualHeight*: int32
+    of WlWindowMaximizeRequested:
+      maximizeRequestId*: WindowId
+    of WlWindowUnmaximizeRequested:
+      unmaximizeRequestId*: WindowId
+    of WlWindowMinimizeRequested:
+      minimizeRequestId*: WindowId
     of WlOutputDimensions:
       outputId*: uint32
       width*: int32

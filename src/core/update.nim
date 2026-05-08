@@ -14,6 +14,7 @@ type
     EffOpStartPointer,
     EffOpEnd,
     EffSetFullscreen,
+    EffSetMaximized,
     EffLog
 
   Effect* = object
@@ -37,6 +38,9 @@ type
       fsWinId*: WindowId
       isFullscreen*: bool
       fsOutputId*: uint32
+    of EffSetMaximized:
+      maxWinId*: WindowId
+      isMaximized*: bool
     else:
       discard
 
@@ -123,6 +127,10 @@ proc syncPrimaryOutput(model: var Model) =
     model.screenWidth = output.w
     model.screenHeight = output.h
 
+proc syncPrimaryOutputTag(model: var Model) =
+  if model.primaryOutput != 0 and model.activeTag != 0:
+    model.outputTags[model.primaryOutput] = model.activeTag
+
 proc chooseFullscreenOutput(model: Model; requested: uint32): uint32 =
   if requested != 0 and model.outputs.hasKey(requested):
     return requested
@@ -147,6 +155,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       output.h = max(0'i32, msg.height)
       nextModel.outputs[msg.outputId] = output
       nextModel.syncPrimaryOutput()
+      nextModel.syncPrimaryOutputTag()
 
   of WlOutputPosition:
     if msg.positionOutputId != 0:
@@ -155,6 +164,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       output.y = msg.outputY
       nextModel.outputs[msg.positionOutputId] = output
       nextModel.syncPrimaryOutput()
+      nextModel.syncPrimaryOutputTag()
 
   of WlOutputUsable:
     if msg.usableOutputId != 0:
@@ -166,13 +176,16 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       output.hasUsable = true
       nextModel.outputs[msg.usableOutputId] = output
       nextModel.syncPrimaryOutput()
+      nextModel.syncPrimaryOutputTag()
 
   of WlOutputRemoved:
     if msg.removedOutputId != 0:
       nextModel.outputs.del(msg.removedOutputId)
+      nextModel.outputTags.del(msg.removedOutputId)
       if nextModel.primaryOutput == msg.removedOutputId:
         nextModel.primaryOutput = 0
       nextModel.syncPrimaryOutput()
+      nextModel.syncPrimaryOutputTag()
       var clearedFullscreen: seq[WindowId] = @[]
       for winId, win in nextModel.windows.pairs:
         if win.isFullscreen and win.fullscreenOutput == msg.removedOutputId:
@@ -226,6 +239,13 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     effects.add(broadcastWindowClosed(msg.destroyedId))
     effects.add(Effect(kind: EffManageDirty))
 
+  of WlWindowDimensions:
+    if nextModel.windows.hasKey(msg.dimensionsWindowId):
+      var win = nextModel.windows[msg.dimensionsWindowId]
+      win.actualW = max(0'i32, msg.actualWidth)
+      win.actualH = max(0'i32, msg.actualHeight)
+      nextModel.windows[msg.dimensionsWindowId] = win
+
   of WlFocusChanged:
     if nextModel.tags.hasKey(nextModel.activeTag):
       var tag = nextModel.tags[nextModel.activeTag]
@@ -253,6 +273,37 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       win.fullscreenOutput = 0
       nextModel.windows[msg.exitFullscreenRequestId] = win
       effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.exitFullscreenRequestId, isFullscreen: false))
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowMaximizeRequested:
+    if nextModel.windows.hasKey(msg.maximizeRequestId):
+      var win = nextModel.windows[msg.maximizeRequestId]
+      win.isMaximized = true
+      win.isMinimized = false
+      nextModel.windows[msg.maximizeRequestId] = win
+      effects.add(Effect(kind: EffSetMaximized, maxWinId: msg.maximizeRequestId, isMaximized: true))
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowUnmaximizeRequested:
+    if nextModel.windows.hasKey(msg.unmaximizeRequestId):
+      var win = nextModel.windows[msg.unmaximizeRequestId]
+      win.isMaximized = false
+      nextModel.windows[msg.unmaximizeRequestId] = win
+      effects.add(Effect(kind: EffSetMaximized, maxWinId: msg.unmaximizeRequestId, isMaximized: false))
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowMinimizeRequested:
+    if nextModel.windows.hasKey(msg.minimizeRequestId):
+      var win = nextModel.windows[msg.minimizeRequestId]
+      win.isMinimized = true
+      win.isMaximized = false
+      nextModel.windows[msg.minimizeRequestId] = win
+      for tagId, tag in nextModel.tags.mpairs:
+        if tag.focusedWindow == msg.minimizeRequestId:
+          tag.recomputeVisibleFocus(nextModel)
+          if tagId == nextModel.activeTag and tag.focusedWindow != 0:
+            effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
+      effects.add(Effect(kind: EffSetMaximized, maxWinId: msg.minimizeRequestId, isMaximized: false))
       effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowParent:
@@ -294,6 +345,14 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       if win.maxHeight > 0 and win.maxHeight < win.minHeight:
         win.maxHeight = win.minHeight
       nextModel.windows[msg.hintWindowId] = win
+
+  of WlLayerFocusExclusive:
+    nextModel.layerFocusExclusive = true
+    effects.add(Effect(kind: EffManageDirty))
+
+  of WlLayerFocusNonExclusive, WlLayerFocusNone:
+    nextModel.layerFocusExclusive = false
+    effects.add(Effect(kind: EffManageDirty))
 
   of WlPointerMoveRequested:
     if nextModel.windows.hasKey(msg.moveWinId):
@@ -682,6 +741,24 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           nextModel.windows[focused] = win
         effects.add(Effect(kind: EffSetFullscreen, fsWinId: focused, isFullscreen: win.isFullscreen, fsOutputId: win.fullscreenOutput)); effects.add(Effect(kind: EffManageDirty))
 
+  of CmdToggleMaximized:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      if focused != 0 and nextModel.windows.hasKey(focused):
+        var win = nextModel.windows[focused]
+        win.isMaximized = not win.isMaximized
+        if win.isMaximized:
+          win.isMinimized = false
+        nextModel.windows[focused] = win
+        effects.add(Effect(kind: EffSetMaximized, maxWinId: focused, isMaximized: win.isMaximized))
+        effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMinimize:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      if focused != 0:
+        return update(nextModel, Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: focused))
+
   of CmdSelectWindow:
     nextModel.overviewActive = false
     let tagId = nextModel.activeTagOrFallback()
@@ -693,8 +770,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of CmdFocusTag:
     if nextModel.tags.hasKey(msg.focusTag):
       nextModel.activeTag = msg.focusTag
+      nextModel.syncPrimaryOutputTag()
       var tag = nextModel.tags[msg.focusTag]
-      tag.recomputeFocus()
+      tag.recomputeVisibleFocus(nextModel)
       nextModel.tags[msg.focusTag] = tag
       effects.add(broadcastWorkspaceActivated(msg.focusTag, tag.name))
       if tag.focusedWindow != 0:
@@ -709,7 +787,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         foundTag = tagId
         break
     if foundTag != 0 and nextModel.windows.hasKey(msg.focusWindowId):
+      var win = nextModel.windows[msg.focusWindowId]
+      if win.isMinimized:
+        win.isMinimized = false
+        nextModel.windows[msg.focusWindowId] = win
       nextModel.activeTag = foundTag
+      nextModel.syncPrimaryOutputTag()
       var tag = nextModel.tags[foundTag]
       tag.focusedWindow = msg.focusWindowId
       nextModel.tags[foundTag] = tag
@@ -742,7 +825,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       for id in tagIds:
         let tag = nextModel.tags[id]
         for col in tag.columns:
-          for win in col.windows: allWindows.add(win)
+          for win in col.windows:
+            if not nextModel.windows.hasKey(win) or not nextModel.windows[win].isMinimized:
+              allWindows.add(win)
       if allWindows.len > 0:
         let activeTagId = nextModel.activeTag
         let currentFocus = if nextModel.tags.hasKey(activeTagId): nextModel.tags[activeTagId].focusedWindow else: 0'u32
@@ -763,7 +848,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     elif nextModel.tags.hasKey(nextModel.activeTag):
       let activeTagId = nextModel.activeTag; var tag = nextModel.tags[activeTagId]; var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
-        for win in col.windows: allWindows.add(win)
+        for win in col.windows:
+          if not nextModel.windows.hasKey(win) or not nextModel.windows[win].isMinimized:
+            allWindows.add(win)
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow); let nextIdx = (if idx == -1: 0 else: (idx + 1) mod allWindows.len)
         tag.focusedWindow = allWindows[nextIdx]; nextModel.tags[activeTagId] = tag
@@ -777,7 +864,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       for id in tagIds:
         let tag = nextModel.tags[id]
         for col in tag.columns:
-          for win in col.windows: allWindows.add(win)
+          for win in col.windows:
+            if not nextModel.windows.hasKey(win) or not nextModel.windows[win].isMinimized:
+              allWindows.add(win)
       if allWindows.len > 0:
         let activeTagId = nextModel.activeTag
         let currentFocus = if nextModel.tags.hasKey(activeTagId): nextModel.tags[activeTagId].focusedWindow else: 0'u32
@@ -798,7 +887,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     elif nextModel.tags.hasKey(nextModel.activeTag):
       let activeTagId = nextModel.activeTag; var tag = nextModel.tags[activeTagId]; var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
-        for win in col.windows: allWindows.add(win)
+        for win in col.windows:
+          if not nextModel.windows.hasKey(win) or not nextModel.windows[win].isMinimized:
+            allWindows.add(win)
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow); let prevIdx = (if idx - 1 < 0: allWindows.len - 1 else: idx - 1)
         tag.focusedWindow = allWindows[prevIdx]; nextModel.tags[activeTagId] = tag

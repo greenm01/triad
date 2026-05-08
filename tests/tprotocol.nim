@@ -13,14 +13,21 @@ suite "River protocol coverage":
       check not seen.hasKey(entry.event)
       seen[entry.event] = true
 
-  test "unsupported client-facing requests are not marked implemented":
+  test "client-facing request coverage matches advertised support":
     check coverageFor("river_window_v1.show_window_menu_requested").state == pcsUnsupported
-    check coverageFor("river_window_v1.maximize_requested").state == pcsUnsupported
-    check coverageFor("river_window_v1.minimize_requested").state == pcsUnsupported
+    check coverageFor("river_window_v1.maximize_requested").state == pcsImplemented
+    check coverageFor("river_window_v1.minimize_requested").state == pcsImplemented
 
   test "implemented hardening paths are tracked":
     check coverageFor("river_window_v1.app_id").state == pcsImplemented
     check coverageFor("river_window_v1.title").state == pcsImplemented
+    check coverageFor("river_window_v1.dimensions").state == pcsImplemented
     check coverageFor("river_window_v1.dimensions_hint").state == pcsImplemented
     check coverageFor("river_window_v1.fullscreen_requested").state == pcsImplemented
     check coverageFor("river_output_v1.removed").state == pcsImplemented
+
+  test "advertised capabilities have implemented behavior":
+    check (TriadAdvertisedCapabilities and RiverCapabilityWindowMenu) == 0'u32
+    check coverageFor("river_window_v1.maximize_requested").state == pcsImplemented
+    check coverageFor("river_window_v1.fullscreen_requested").state == pcsImplemented
+    check coverageFor("river_window_v1.minimize_requested").state == pcsImplemented

@@ -9,9 +9,10 @@ import core/model_utils
 import layouts/scroller
 import layouts/tiling
 import config/parser
+import ipc/commands
 import ipc/socket
 import utils/runtime_log
-import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options
 
 type
   RiverPhase = enum
@@ -80,11 +81,7 @@ proc primaryScreen(model: Model): Rect =
     Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
 proc activeFocus(model: Model): WindowId =
-  if model.tags.hasKey(model.activeTag):
-    let tag = model.tags[model.activeTag]
-    if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow):
-      return tag.focusedWindow
-  0
+  model.focusedOnActiveTag()
 
 proc outputName(model: Model; outputId: uint32): string =
   if outputId == 0:
@@ -100,6 +97,7 @@ proc getTiledTagState(tag: TagState, model: Model): TagState =
     var filteredWindows: seq[WindowId] = @[]
     for winId in col.windows:
       let isFloating = model.windows.hasKey(winId) and model.windows[winId].isFloating
+      let isMinimized = model.windows.hasKey(winId) and model.windows[winId].isMinimized
       
       # Group filtering logic
       var isHiddenInGroup = false
@@ -108,7 +106,7 @@ proc getTiledTagState(tag: TagState, model: Model): TagState =
           isHiddenInGroup = true
           break
           
-      if not isFloating and not isHiddenInGroup:
+      if not isFloating and not isHiddenInGroup and not isMinimized:
         filteredWindows.add(winId)
     if filteredWindows.len > 0:
       var filteredCol = col
@@ -129,7 +127,8 @@ proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
       let tag = model.tags[id]
       for col in tag.columns:
         for win in col.windows:
-          overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
+          if model.windows.hasKey(win) and not model.windows[win].isMinimized:
+            overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
 
     result = layoutGrid(overviewTag, screen, 64, model.innerGaps * 2)
 
@@ -173,7 +172,7 @@ proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
       for winId in col.windows:
         if model.windows.hasKey(winId):
           let winData = model.windows[winId]
-          if winData.isFloating:
+          if winData.isFloating and not winData.isMinimized:
             result.add(RenderInstruction(
               windowId: winId,
               geom: winData.floatingGeom
@@ -194,7 +193,7 @@ proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
       ))
 
     let focused = model.activeFocus()
-    if focused != 0 and model.windows.hasKey(focused) and model.windows[focused].isFullscreen:
+    if focused != 0 and model.windows.hasKey(focused) and (model.windows[focused].isFullscreen or model.windows[focused].isMaximized):
       result = @[RenderInstruction(windowId: focused, geom: screen)]
 
 proc setupConfig() =
@@ -225,6 +224,21 @@ tag-rules {
 quickshell {
     enabled #false
     theme "noctalia-shell"
+}
+
+bindings {
+    bind "Super+q" "close-window"
+    bind "Super+f" "toggle-fullscreen"
+    bind "Super+m" "toggle-maximized"
+    bind "Super+n" "minimize"
+    bind "Super+r" "reload-config"
+    bind "Super+t" "spawn-terminal"
+    bind "Super+1" "focus-tag 1"
+    bind "Super+2" "focus-tag 2"
+    bind "Super+3" "focus-tag 3"
+    bind "Super+4" "focus-tag 4"
+    pointer-bind "Super+left" "move"
+    pointer-bind "Super+right" "resize"
 }
 
 // spawn-at-startup "waybar"
@@ -293,12 +307,12 @@ const
   RiverEdgeLeft = 4'u32
   RiverEdgeRight = 8'u32
   RiverAllEdges = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
-  RiverModSuper = 64'u32
-  BtnLeft = 0x110'u32
-  BtnRight = 0x111'u32
   FocusedBorder = 0xffffffff'u32
   UnfocusedBorder = 0x666666ff'u32
   RiverCapabilityFullscreen = 4'u32
+  RiverCapabilityMaximize = 2'u32
+  RiverCapabilityMinimize = 8'u32
+  RiverSupportedCapabilities = RiverCapabilityFullscreen or RiverCapabilityMaximize or RiverCapabilityMinimize
   BorderWidth = 2'i32
 
 var
@@ -321,6 +335,18 @@ proc premulColor(value: uint32): tuple[r, g, b, a: uint32] =
 
 proc keySym(ch: char): uint32 =
   uint32(ord(ch))
+
+proc keySym(key: string): uint32 =
+  if key.len == 1:
+    uint32(ord(key[0]))
+  else:
+    case key.toLowerAscii()
+    of "return", "enter": 0xff0d'u32
+    of "escape", "esc": 0xff1b'u32
+    of "tab": 0xff09'u32
+    of "backspace": 0xff08'u32
+    of "space": 0x20'u32
+    else: 0'u32
 
 proc applyBorder(win: ptr RiverWindowV1; focused: bool) =
   let color = premulColor(if focused: FocusedBorder else: UnfocusedBorder)
@@ -388,15 +414,14 @@ proc setupDefaultBindings() =
     return
 
   for seat in seatPointers:
-    addXkbBinding(seat, keySym('q'), RiverModSuper, Msg(kind: CmdCloseWindow))
-    addXkbBinding(seat, keySym('f'), RiverModSuper, Msg(kind: CmdToggleFullscreen))
-    addXkbBinding(seat, keySym('r'), RiverModSuper, Msg(kind: CmdReloadConfig))
-    addXkbBinding(seat, keySym('t'), RiverModSuper, Msg(kind: CmdSpawnTerminal))
-    for idx in 1'u32 .. 9'u32:
-      addXkbBinding(seat, uint32(ord('0') + int(idx)), RiverModSuper, Msg(kind: CmdFocusTag, focusTag: idx))
+    for binding in currentModel.keyBindings:
+      let parsed = parseLegacyCommand(binding.command)
+      let sym = keySym(binding.key)
+      if parsed.isSome and sym != 0:
+        addXkbBinding(seat, sym, binding.modifiers, parsed.get())
 
-    addPointerBinding(seat, BtnLeft, RiverModSuper, OpMove)
-    addPointerBinding(seat, BtnRight, RiverModSuper, OpResize)
+    for binding in currentModel.pointerBindings:
+      addPointerBinding(seat, binding.button, binding.modifiers, binding.op)
 
   bindingsConfigured = true
 
@@ -405,7 +430,7 @@ proc applyManageState() =
 
   for id, win in windowPointers.pairs:
     win.useSsd()
-    win.setCapabilities(RiverCapabilityFullscreen)
+    win.setCapabilities(RiverSupportedCapabilities)
     var edges = RiverAllEdges
     if currentModel.windows.hasKey(id):
       let data = currentModel.windows[id]
@@ -416,7 +441,9 @@ proc applyManageState() =
 
   let focused = currentModel.activeFocus()
   for seat in seatPointers:
-    if focused != 0 and windowPointers.hasKey(focused):
+    if currentModel.layerFocusExclusive:
+      seat.clearFocus()
+    elif focused != 0 and windowPointers.hasKey(focused):
       seat.focusWindow(windowPointers[focused])
     else:
       seat.clearFocus()
@@ -543,11 +570,14 @@ layer_output_listener = river_layer.RiverLayerShellOutputV1Listener(
 
 proc on_layer_seat_focus_exclusive(data: pointer, seat: ptr river_layer.RiverLayerShellSeatV1) =
   trace "Layer shell focus exclusive"
+  msgQueue.add(Msg(kind: WlLayerFocusExclusive))
 
 proc on_layer_seat_focus_non_exclusive(data: pointer, seat: ptr river_layer.RiverLayerShellSeatV1) =
   trace "Layer shell focus non-exclusive"
+  msgQueue.add(Msg(kind: WlLayerFocusNonExclusive))
 
 proc on_layer_seat_focus_none(data: pointer, seat: ptr river_layer.RiverLayerShellSeatV1) =
+  msgQueue.add(Msg(kind: WlLayerFocusNone))
   requestManage("layer focus none")
 
 layer_seat_listener = river_layer.RiverLayerShellSeatV1Listener(
@@ -604,6 +634,12 @@ proc executeManageEffect(eff: Effect) =
       else:
         win.exitFullscreen()
         win.informNotFullscreen()
+  of EffSetMaximized:
+    if windowPointers.hasKey(eff.maxWinId):
+      if eff.isMaximized:
+        windowPointers[eff.maxWinId].informMaximized()
+      else:
+        windowPointers[eff.maxWinId].informUnmaximized()
   else:
     discard
 
@@ -702,7 +738,7 @@ proc executeEffect(eff: Effect) =
     requestManage("effect")
   of EffBroadcastJson:
     asyncCheck broadcastJson(eff.jsonPayload)
-  of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffCloseWindow, EffSetFullscreen:
+  of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffCloseWindow, EffSetFullscreen, EffSetMaximized:
     queueManageEffect(eff)
   of EffSetPosition:
     if riverPhase == RiverRender and windowNodes.hasKey(eff.windowId):
@@ -787,6 +823,11 @@ proc on_window_dimensions_hint(
 
 proc on_window_dimensions(data: pointer, win: ptr RiverWindowV1, width: int32, height: int32) =
   trace "Window dimensions acknowledged", windowId=win.get_id(), width=width, height=height
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].actualW = max(0'i32, width)
+    pendingWindows[win.get_id()].actualH = max(0'i32, height)
+  else:
+    msgQueue.add(Msg(kind: WlWindowDimensions, dimensionsWindowId: win.get_id(), actualWidth: width, actualHeight: height))
 
 proc on_window_parent(data: pointer, win: ptr RiverWindowV1, parent: ptr RiverWindowV1) =
   let parentId = if parent == nil: 0'u32 else: parent.get_id()
@@ -812,9 +853,18 @@ proc on_window_show_menu_requested(data: pointer, win: ptr RiverWindowV1, x: int
 
 proc on_window_maximize_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window maximize requested", windowId=win.get_id()
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].isMaximized = true
+    pendingWindows[win.get_id()].isMinimized = false
+  else:
+    msgQueue.add(Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: win.get_id()))
 
 proc on_window_unmaximize_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window unmaximize requested", windowId=win.get_id()
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].isMaximized = false
+  else:
+    msgQueue.add(Msg(kind: WlWindowUnmaximizeRequested, unmaximizeRequestId: win.get_id()))
 
 proc on_window_fullscreen_requested(data: pointer, win: ptr RiverWindowV1, output: ptr RiverOutputV1) =
   let requestedOutput = outputIdForPointer(output)
@@ -835,6 +885,11 @@ proc on_window_exit_fullscreen_requested(data: pointer, win: ptr RiverWindowV1) 
 
 proc on_window_minimize_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window minimize requested", windowId=win.get_id()
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].isMinimized = true
+    pendingWindows[win.get_id()].isMaximized = false
+  else:
+    msgQueue.add(Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: win.get_id()))
 
 proc on_window_unreliable_pid(data: pointer, win: ptr RiverWindowV1, unreliablePid: int32) =
   trace "Window unreliable pid received", windowId=win.get_id(), pid=unreliablePid
@@ -927,6 +982,8 @@ proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
   # Before starting manage, move all pending windows to the message queue
   for id, data in pendingWindows:
     msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title, createdIdentifier: data.identifier))
+    if data.actualW > 0 or data.actualH > 0:
+      msgQueue.add(Msg(kind: WlWindowDimensions, dimensionsWindowId: id, actualWidth: data.actualW, actualHeight: data.actualH))
     if data.parentId != 0:
       msgQueue.add(Msg(kind: WlWindowParent, childWindowId: id, parentWindowId: data.parentId))
     if data.minWidth > 0 or data.minHeight > 0 or data.maxWidth > 0 or data.maxHeight > 0:
@@ -939,6 +996,10 @@ proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
         maxHeight: data.maxHeight))
     if data.isFullscreen:
       msgQueue.add(Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: id, fullscreenOutputId: data.fullscreenOutput))
+    if data.isMaximized:
+      msgQueue.add(Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: id))
+    if data.isMinimized:
+      msgQueue.add(Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: id))
   pendingWindows.clear()
   msgQueue.add(Msg(kind: WlManageStart))
 
@@ -1165,6 +1226,7 @@ proc main() =
       if msg.kind == CmdReloadConfig:
         let config = loadConfig(configPath)
         currentModel.applyConfig(config)
+        destroyBindings()
         info "Config reloaded", path=configPath
         requestManage("config reload")
         continue

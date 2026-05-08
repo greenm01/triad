@@ -110,9 +110,22 @@ proc activeTagOrFallback*(model: Model): uint32 =
 proc focusedOnActiveTag*(model: Model): WindowId =
   if model.tags.hasKey(model.activeTag):
     let tag = model.tags[model.activeTag]
-    if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow):
+    if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow) and
+        (not model.windows.hasKey(tag.focusedWindow) or not model.windows[tag.focusedWindow].isMinimized):
       return tag.focusedWindow
   0
+
+proc recomputeVisibleFocus*(tag: var TagState; model: Model) =
+  if tag.focusedWindow != 0 and tag.containsWindow(tag.focusedWindow) and
+      model.windows.hasKey(tag.focusedWindow) and not model.windows[tag.focusedWindow].isMinimized:
+    return
+
+  tag.focusedWindow = 0
+  for col in tag.columns:
+    for win in col.windows:
+      if not model.windows.hasKey(win) or not model.windows[win].isMinimized:
+        tag.focusedWindow = win
+        return
 
 proc boundedDimensions*(win: WindowData; w, h: int32): tuple[w, h: int32] =
   result.w = max(0'i32, w)

@@ -124,6 +124,49 @@ suite "Crash hardening":
     check win.boundedDimensions(50, 50) == (w: 50'i32, h: 200'i32)
     check win.boundedDimensions(500, 500) == (w: 100'i32, h: 200'i32)
 
+  test "river actual dimensions are stored for shell compatibility":
+    var model = baseModel()
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title"))
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowDimensions, dimensionsWindowId: 7, actualWidth: 801, actualHeight: 599))
+
+    check nextModel.windows[7].actualW == 801
+    check nextModel.windows[7].actualH == 599
+
+  test "river maximize and minimize requests update model and focus":
+    var model = baseModel()
+    var (nextModel, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title"))
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 8, appId: "app", title: "other"))
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: 7))
+    check nextModel.windows[7].isMaximized
+    check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 7 and it.isMaximized)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowUnmaximizeRequested, unmaximizeRequestId: 7))
+    check not nextModel.windows[7].isMaximized
+    check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 7 and not it.isMaximized)
+
+    nextModel.tags[1].focusedWindow = 7
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: 7))
+    check nextModel.windows[7].isMinimized
+    check not nextModel.windows[7].isMaximized
+    check nextModel.tags[1].focusedWindow == 8
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusWindowById, focusWindowId: 7))
+    check not nextModel.windows[7].isMinimized
+    check nextModel.tags[1].focusedWindow == 7
+
+  test "layer focus events suppress and restore normal focus policy":
+    var model = baseModel()
+
+    var (nextModel, effects) = update(model, Msg(kind: WlLayerFocusExclusive))
+    check nextModel.layerFocusExclusive
+    check effects.anyIt(it.kind == EffManageDirty)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlLayerFocusNone))
+    check not nextModel.layerFocusExclusive
+    check effects.anyIt(it.kind == EffManageDirty)
+
   test "consume ignores empty next columns":
     var model = baseModel()
     model.tags[1].columns = @[
