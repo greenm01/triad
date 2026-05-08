@@ -324,6 +324,18 @@ suite "Shell compatibility contracts":
     check fileExists(compat.niriShimPath)
     check dirExists(compat.xdgSharePath / "applications")
 
+  test "Quickshell launch and kill commands target the configured theme":
+    let config = QuickshellConfig(
+      enabled: true,
+      command: "qs",
+      theme: "noctalia-shell",
+      args: @["--verbose"])
+
+    check quickshellLaunchArgs(config) == @["-c", "noctalia-shell", "--verbose"]
+    check quickshellKillArgs(config) == @["kill", "-c", "noctalia-shell", "--any-display"]
+    check quickshellKillArgs(QuickshellConfig(enabled: false, command: "qs", theme: "noctalia-shell")) == newSeq[string]()
+    check quickshellLaunchArgs(QuickshellConfig(enabled: true, command: "qs", theme: "")) == newSeq[string]()
+
   test "shell overlay is generated from terminal desktop metadata":
     let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())
     if dirExists(tmp):

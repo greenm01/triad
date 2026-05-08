@@ -1,6 +1,7 @@
 import os, posix, strtabs, strutils
 import shell_overlay
 import socket
+import ../core/model
 import ../core/xdg
 
 type
@@ -31,6 +32,18 @@ proc findTriadNiri*(triadExe = getAppFilename()): string =
     return pathExe
 
   ""
+
+proc quickshellLaunchArgs*(config: QuickshellConfig): seq[string] =
+  if config.theme.strip().len == 0:
+    return @[]
+  result = @["-c", config.theme]
+  for arg in config.args:
+    result.add(arg)
+
+proc quickshellKillArgs*(config: QuickshellConfig): seq[string] =
+  if not config.enabled or config.theme.strip().len == 0:
+    return @[]
+  @["kill", "-c", config.theme, "--any-display"]
 
 proc defaultNiriCompatSocketPath*(): string =
   getRuntimeDir() / "triad-niri.sock"

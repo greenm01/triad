@@ -84,7 +84,10 @@ stderr so they do not corrupt stream output.
 ## Exercise Quickshell Compatibility
 
 When `quickshell { enabled #true }` is configured, Triad starts Quickshell with
-a private Niri-compatible environment. To include that in live smoke:
+a private Niri-compatible environment after the first River manage pass has
+restored window/output state. Live reload stops any stale instance of the
+configured Quickshell theme before spawning the new one. To include that in live
+smoke:
 
 ```bash
 TRIAD_LIVE_TEST_QUICKSHELL=1 ./tools/live_smoke.sh

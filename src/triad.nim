@@ -105,6 +105,7 @@ var
   watcher: Watcher
   shouldExit = false
   quickshellProcess: Process
+  quickshellSpawnPending = false
 
 # --- Helpers ---
 
@@ -287,7 +288,7 @@ proc spawnStartupCommands(model: Model) =
       except CatchableError as e:
         warn "Failed to spawn startup command", cmd=cmd[0], error=e.msg
 
-proc stopQuickshell(reason: string) =
+proc stopTrackedQuickshell(reason: string) =
   if quickshellProcess == nil:
     return
 
@@ -308,11 +309,48 @@ proc stopQuickshell(reason: string) =
     discard
   quickshellProcess = nil
 
+proc stopConfiguredQuickshell(model: Model; reason: string) =
+  let args = quickshellKillArgs(model.quickshell)
+  if args.len == 0 or model.quickshell.command.strip().len == 0:
+    return
+
+  try:
+    let p = startProcess(model.quickshell.command, args = args, options = {poUsePath})
+    let code = p.waitForExit(1000)
+    if code == -1:
+      p.kill()
+      discard p.waitForExit(1000)
+      warn "Timed out stopping configured Quickshell instance",
+        command=model.quickshell.command,
+        theme=model.quickshell.theme,
+        reason=reason
+    elif code == 0:
+      info "Stopped configured Quickshell instance",
+        command=model.quickshell.command,
+        theme=model.quickshell.theme,
+        reason=reason
+    else:
+      debug "Configured Quickshell instance was not running",
+        command=model.quickshell.command,
+        theme=model.quickshell.theme,
+        reason=reason,
+        exitCode=code
+    p.close()
+  except CatchableError as e:
+    warn "Failed to stop configured Quickshell instance",
+      command=model.quickshell.command,
+      theme=model.quickshell.theme,
+      reason=reason,
+      error=e.msg
+
+proc stopQuickshell(model: Model; reason: string; authoritative = false) =
+  stopTrackedQuickshell(reason)
+  if authoritative:
+    stopConfiguredQuickshell(model, reason)
+
 proc spawnQuickshell(model: Model; niriSocketPath: string) =
   if model.quickshell.enabled and model.quickshell.theme != "":
-    var args = @["-c", model.quickshell.theme]
-    for arg in model.quickshell.args:
-      args.add(arg)
+    let args = quickshellLaunchArgs(model.quickshell)
     
     try:
       let compat = prepareQuickshellCompatEnv(niriSocketPath)
@@ -332,8 +370,17 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
       warn "Failed to spawn Quickshell", command=model.quickshell.command, theme=model.quickshell.theme, error=e.msg
 
 proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
-  stopQuickshell(reason)
+  stopQuickshell(model, reason, authoritative = true)
   spawnQuickshell(model, niriSocketPath)
+
+proc scheduleQuickshellSpawn(model: Model) =
+  quickshellSpawnPending = model.quickshell.enabled and model.quickshell.theme.strip().len > 0
+
+proc spawnPendingQuickshell(model: Model; niriSocketPath, reason: string) =
+  if not quickshellSpawnPending:
+    return
+  quickshellSpawnPending = false
+  restartQuickshell(model, niriSocketPath, reason)
 
 proc spawnScreenLock(command: seq[string]) =
   if command.len == 0:
@@ -1190,7 +1237,8 @@ proc executeEffect(eff: Effect) =
     for xkbSeat in xkbSeatPointers.values:
       xkbSeat.cancelEnsureNextKeyEaten()
   of EffStopManager:
-    stopQuickshell("manager stop")
+    quickshellSpawnPending = false
+    stopQuickshell(currentModel, "manager stop", authoritative = true)
     if river_manager != nil:
       river_manager.stop()
   of EffExitSession:
@@ -1686,9 +1734,14 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       continue
 
     if msg.kind == CmdReloadConfig:
+      let previousModel = currentModel
       let config = loadConfig(configPath)
       currentModel.applyConfig(config)
-      restartQuickshell(currentModel, niriSocketPath, "config reload")
+      quickshellSpawnPending = false
+      if currentModel.quickshell.enabled:
+        restartQuickshell(currentModel, niriSocketPath, "config reload")
+      else:
+        stopQuickshell(previousModel, "config reload", authoritative = true)
       destroyBindings()
       info "Config reloaded", path=configPath
       requestManage("config reload")
@@ -1708,6 +1761,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       flushPendingManageEffects()
       executeEffect(Effect(kind: EffManageFinish))
       riverPhase = RiverIdle
+      spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
       continue
 
     if msg.kind == WlRenderStart:
@@ -1842,7 +1896,7 @@ proc main() =
   
   # Spawn startup commands (e.g. Noctalia shell)
   spawnStartupCommands(currentModel)
-  spawnQuickshell(currentModel, niriSocketPath)
+  scheduleQuickshellSpawn(currentModel)
   
   var running = true
   while running:

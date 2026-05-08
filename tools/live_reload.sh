@@ -20,6 +20,18 @@ latest_triad_pid() {
   pgrep -n -x triad 2>/dev/null || true
 }
 
+wait_niri_ready() {
+  i=0
+  while [ "$i" -lt 50 ]; do
+    if "$repo_dir/triad_niri" msg -j workspaces >/dev/null 2>&1; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 0.1
+  done
+  return 1
+}
+
 snapshot_restore_state() {
   restore_path="$1"
   snapshot=""
@@ -75,7 +87,9 @@ if "$repo_dir/triad" msg stop-manager; then
   while [ "$i" -lt 50 ]; do
     new_pid="$(latest_triad_pid)"
     if [ -n "$new_pid" ] && [ "$new_pid" != "$old_pid" ]; then
-      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $new_pid"
+      wait_niri_ready ||
+        fail "installed binaries and restarted manager pid $old_pid -> $new_pid, but Niri-compatible IPC did not become ready"
+      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $new_pid; Niri-compatible IPC is ready"
       exit 0
     fi
     i=$((i + 1))
