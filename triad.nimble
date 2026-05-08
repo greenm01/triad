@@ -51,3 +51,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
 
 task verify, "Run tests, build, tidy, and binary hygiene checks":
   exec "sh tools/preflight.sh"
+
+task liveReload, "Build release binaries, install them, and restart the live Triad manager":
+  exec "nimble build -d:release"
+  exec "sh tools/live_reload.sh"
