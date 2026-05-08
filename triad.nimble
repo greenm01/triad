@@ -29,6 +29,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/thardening",
     "tests/tlayouts",
     "tests/tlogging",
+    "tests/tprotocol",
     "tests/tstress"
   ]:
     if fileExists(path):
