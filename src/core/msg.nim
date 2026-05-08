@@ -14,6 +14,7 @@ type
     CmdSetLayout,
     CmdFocusNext,
     CmdFocusPrev,
+    CmdCloseWindow,
     CmdMoveWindow,
     CmdMoveToTag,
     CmdSetMasterCount,

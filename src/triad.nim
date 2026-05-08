@@ -152,6 +152,9 @@ proc executeEffect(eff: Effect) =
       let win = windowPointers[eff.focusId]
       for seat in seatPointers:
         seat.focusWindow(win)
+  of EffCloseWindow:
+    if windowPointers.hasKey(eff.closeId):
+      windowPointers[eff.closeId].close()
   else:
     discard
 

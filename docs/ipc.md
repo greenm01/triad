@@ -24,6 +24,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 
 #### Manipulation
 *   `move-to-tag <id>`: Banishes the focused window to the specified tag.
+*   `close-window`: Politley requests that the focused window terminate its existence.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
 *   `resize-width <delta>`: Adjusts the width proportion (e.g., `0.1` or `-0.1`).
 *   `resize-height <delta>`: Adjusts the height proportion.

@@ -55,3 +55,47 @@ suite "Core TEA Update Logic":
     
     check nextModel.tags[1].columns[0].windows[0] == 102
     check nextModel.tags[1].columns[1].windows[0] == 101
+
+  test "CmdMoveToTag transfers window between tags":
+    # Window 101 is on Tag 1
+    var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
+    tag1.columns.add(Column(windows: @[101], widthProportion: 0.5))
+    model.tags[1] = tag1
+    model.activeTag = 1
+    
+    let msg = Msg(kind: CmdMoveToTag, targetTag: 2)
+    let (nextModel, _) = update(model, msg)
+    
+    # Verify Tag 1 is empty
+    check nextModel.tags[1].columns.len == 0
+    # Verify Tag 2 has the window
+    check nextModel.tags[2].columns.len == 1
+    check nextModel.tags[2].columns[0].windows[0] == 101
+    check nextModel.tags[2].focusedWindow == 101
+
+  test "CmdFocusNext in Overview cycles through all tags":
+    model.overviewActive = true
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
+    model.tags[1].columns.add(Column(windows: @[101]))
+    model.tags[2] = TagState(tagId: 2, focusedWindow: 102)
+    model.tags[2].columns.add(Column(windows: @[102]))
+    model.activeTag = 1
+    
+    let (nextModel, _) = update(model, Msg(kind: CmdFocusNext))
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].focusedWindow == 102
+    
+    let (finalModel, _) = update(nextModel, Msg(kind: CmdFocusNext))
+    check finalModel.activeTag == 1
+    check finalModel.tags[1].focusedWindow == 101
+
+  test "CmdMoveToTag in Overview updates activeTag":
+    model.overviewActive = true
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
+    model.tags[1].columns.add(Column(windows: @[101]))
+    model.activeTag = 1
+    
+    let (nextModel, _) = update(model, Msg(kind: CmdMoveToTag, targetTag: 2))
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].focusedWindow == 101
+    check nextModel.tags[1].columns.len == 0

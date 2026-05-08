@@ -8,6 +8,7 @@ type
     EffProposeDimensions,
     EffSetPosition,
     EffFocusWindow,
+    EffCloseWindow,
     EffManageDirty,
     EffBroadcastJson,
     EffLog
@@ -21,6 +22,8 @@ type
       x*, y*, w*, h*: int32
     of EffFocusWindow:
       focusId*: WindowId
+    of EffCloseWindow:
+      closeId*: WindowId
     of EffBroadcastJson:
       jsonPayload*: string
     else:
@@ -158,16 +161,32 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           currentTag.columns[i].windows.keepIf(proc(id: WindowId): bool = id != focused)
           if currentTag.columns[i].windows.len == 0:
             currentTag.columns.delete(i)
+        
+        # Update focus on current tag if it was the active tag
+        if currentTag.focusedWindow == focused:
+          if currentTag.columns.len > 0 and currentTag.columns[0].windows.len > 0:
+            currentTag.focusedWindow = currentTag.columns[0].windows[0]
+          else:
+            currentTag.focusedWindow = 0
         nextModel.tags[activeTagId] = currentTag
         
         # Add to target tag
         if not nextModel.tags.hasKey(msg.targetTag):
-          nextModel.tags[msg.targetTag] = TagState(tagId: msg.targetTag, layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55)
+          nextModel.tags[msg.targetTag] = TagState(
+            tagId: msg.targetTag, 
+            layoutMode: Scroller, 
+            masterCount: 1, 
+            masterSplitRatio: 0.55
+          )
         
         var targetTag = nextModel.tags[msg.targetTag]
         targetTag.columns.add(Column(windows: @[focused], widthProportion: 0.5))
         targetTag.focusedWindow = focused
         nextModel.tags[msg.targetTag] = targetTag
+        
+        # In overview mode, follow the window to the new tag to maintain focus consistency
+        if nextModel.overviewActive:
+          nextModel.activeTag = msg.targetTag
         
         effects.add(broadcastWorkspaceActivated(msg.targetTag))
         effects.add(Effect(kind: EffManageDirty))
@@ -472,6 +491,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         nextModel.tags[nextModel.activeTag] = tag
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
         effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
+
+  of CmdCloseWindow:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      if focused != 0:
+        effects.add(Effect(kind: EffCloseWindow, closeId: focused))
 
   else:
     discard
