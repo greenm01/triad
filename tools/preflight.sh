@@ -6,6 +6,21 @@ fail() {
   exit 1
 }
 
+required_nim_version="2.2.10"
+
+version_ge() {
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$2" ]
+}
+
+nim_version="$(nim --version | awk '/Nim Compiler Version/ {print $4; exit}')"
+if [ -z "$nim_version" ]; then
+  fail "could not determine Nim compiler version"
+fi
+
+if ! version_ge "$nim_version" "$required_nim_version"; then
+  fail "Nim $required_nim_version or newer is required; found $nim_version"
+fi
+
 status="$(git status --short)"
 if [ -n "$status" ]; then
   printf '%s\n' "$status" >&2

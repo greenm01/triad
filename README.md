@@ -24,12 +24,24 @@ This means themes and shells built for Quickshell—such as **Noctalia-shell** o
 
 ### Installation
 
-Ensure you have a working River 0.4+ session. Triad is built using Nim and requires the `nimkdl`, `wayland`, `fsnotify`, and `chronicles` packages.
+Ensure you have a working River 0.4+ session. Triad is built using Nim 2.2.10+ and requires the `nimkdl`, `wayland`, `fsnotify`, and `chronicles` packages.
 
 ```bash
 nimble build
 ./triad
 ```
+
+### Toolchain
+
+Triad tracks stable Nim through `choosenim`.
+
+```bash
+choosenim update self
+choosenim update stable
+nim --version
+```
+
+The compiler must report Nim 2.2.10 or newer before running the full preflight.
 
 ### Development Checks
 

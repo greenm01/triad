@@ -10,9 +10,9 @@ bin           = @["triad", "triad_niri"]
 
 # Dependencies
 
-requires "nim >= 2.0.0"
+requires "nim >= 2.2.10"
 requires "nimkdl >= 2.1.0"
-requires "wayland >= 0.1.0"
+requires "wayland == 0.1.0"
 requires "fsnotify >= 0.1.6"
 requires "chronicles >= 0.10.3"
 
