@@ -1759,6 +1759,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       proposeDesiredDimensions(instructions)
       applyManageState()
       flushPendingManageEffects()
+      for eff in effects:
+        if eff.kind != EffManageDirty:
+          executeEffect(eff)
       executeEffect(Effect(kind: EffManageFinish))
       riverPhase = RiverIdle
       spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")

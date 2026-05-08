@@ -353,6 +353,11 @@ suite "Core TEA Update Logic":
     check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 202 and it.isMaximized)
     check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 202)
 
+    var manageEffects: seq[Effect]
+    (nextModel, manageEffects) = update(nextModel, Msg(kind: WlManageStart))
+    check nextModel.tags[2].focusedWindow == 202
+    check manageEffects.anyIt(it.kind == EffFocusWindow and it.focusId == 202)
+
   test "legacy live restore matches changed window ids by identity":
     let parsed = parseLiveRestoreJson("""
 {
