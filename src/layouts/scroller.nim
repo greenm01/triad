@@ -21,7 +21,7 @@ proc layoutScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32,
     
     let colWidth = int32(float32(usableWidth) * col.widthProportion)
     virtualX.add(totalVirtualWidth)
-    totalVirtualWidth += colWidth + innerGap
+    totalVirtualWidth += colWidth # Removed + innerGap here to match Mango's coordinate logic
 
   # Calculate target offset for centering
   if focusedColIdx != -1:
