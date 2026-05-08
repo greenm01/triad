@@ -8,6 +8,7 @@ type
     EffProposeDimensions,
     EffSetPosition,
     EffFocusWindow,
+    EffFocusShellSurface,
     EffCloseWindow,
     EffManageDirty,
     EffBroadcastJson,
@@ -15,7 +16,10 @@ type
     EffOpEnd,
     EffSetFullscreen,
     EffSetMaximized,
+    EffInformResizeStart,
+    EffInformResizeEnd,
     EffSpawnScreenLock,
+    EffSpawnWindowMenu,
     EffLog
 
   Effect* = object
@@ -27,6 +31,8 @@ type
       x*, y*, w*, h*: int32
     of EffFocusWindow:
       focusId*: WindowId
+    of EffFocusShellSurface:
+      focusShellSurfaceId*: uint32
     of EffCloseWindow:
       closeId*: WindowId
     of EffBroadcastJson:
@@ -42,8 +48,15 @@ type
     of EffSetMaximized:
       maxWinId*: WindowId
       isMaximized*: bool
+    of EffInformResizeStart, EffInformResizeEnd:
+      resizeLifecycleWinId*: WindowId
     of EffSpawnScreenLock:
       screenLockCommand*: seq[string]
+    of EffSpawnWindowMenu:
+      windowMenuCommand*: seq[string]
+      windowMenuId*: WindowId
+      windowMenuX*: int32
+      windowMenuY*: int32
     else:
       discard
 
@@ -151,7 +164,8 @@ proc isFocusChangingCommand(kind: MsgKind): bool =
     CmdFocusTag,
     CmdFocusWindowById,
     CmdSelectWindow,
-    CmdToggleScratchpad
+    CmdToggleScratchpad,
+    WlShellSurfaceInteraction
   }
 
 proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
@@ -263,6 +277,37 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       win.actualW = max(0'i32, msg.actualWidth)
       win.actualH = max(0'i32, msg.actualHeight)
       nextModel.windows[msg.dimensionsWindowId] = win
+
+  of WlWindowDecorationHint:
+    if nextModel.windows.hasKey(msg.decorationWindowId):
+      var win = nextModel.windows[msg.decorationWindowId]
+      win.hasDecorationHint = true
+      win.decorationHint = msg.decorationHint
+      nextModel.windows[msg.decorationWindowId] = win
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlWindowPresentationHint:
+    if nextModel.windows.hasKey(msg.presentationWindowId):
+      var win = nextModel.windows[msg.presentationWindowId]
+      win.hasPresentationHint = true
+      win.presentationHint = msg.presentationHint
+      nextModel.windows[msg.presentationWindowId] = win
+
+  of WlWindowMenuRequested:
+    if nextModel.windowMenu.command.len > 0 and nextModel.windows.hasKey(msg.menuWindowId):
+      effects.add(Effect(
+        kind: EffSpawnWindowMenu,
+        windowMenuCommand: nextModel.windowMenu.command,
+        windowMenuId: msg.menuWindowId,
+        windowMenuX: msg.menuX,
+        windowMenuY: msg.menuY))
+
+  of WlShellSurfaceInteraction:
+    if msg.shellSurfaceId != 0 and not nextModel.sessionLocked and not nextModel.layerFocusExclusive:
+      effects.add(Effect(kind: EffFocusShellSurface, focusShellSurfaceId: msg.shellSurfaceId))
+
+  of WlModifiersChanged:
+    nextModel.activeModifiers = msg.newModifiers
 
   of WlFocusChanged:
     if nextModel.tags.hasKey(nextModel.activeTag):
@@ -397,6 +442,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       let win = nextModel.windows[msg.resizeWinId]
       if win.isFloating:
         nextModel.pointerOp = PointerOpState(kind: OpResize, windowId: msg.resizeWinId, initialGeom: win.floatingGeom, edges: msg.resizeEdges)
+        effects.add(Effect(kind: EffInformResizeStart, resizeLifecycleWinId: msg.resizeWinId))
         effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.resizeSeat))
 
   of WlPointerDelta:
@@ -419,6 +465,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       effects.add(Effect(kind: EffManageDirty))
 
   of WlPointerRelease:
+    if nextModel.pointerOp.kind == OpResize and nextModel.pointerOp.windowId != 0:
+      effects.add(Effect(kind: EffInformResizeEnd, resizeLifecycleWinId: nextModel.pointerOp.windowId))
     nextModel.pointerOp = PointerOpState(kind: OpNone)
 
   of CmdSetLayout:

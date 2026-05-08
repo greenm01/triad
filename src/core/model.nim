@@ -13,6 +13,11 @@ type
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
 
+  PresentationMode* = enum
+    PresentationDefault,
+    PresentationVsync,
+    PresentationAsync
+
   RenderInstruction* = object
     windowId*: WindowId
     geom*: Rect
@@ -41,6 +46,10 @@ type
     identifier*: string
     actualW*, actualH*: int32
     minWidth*, minHeight*, maxWidth*, maxHeight*: int32
+    hasDecorationHint*: bool
+    decorationHint*: uint32
+    hasPresentationHint*: bool
+    presentationHint*: uint32
     floatingGeom*: Rect
 
   GroupState* = object
@@ -82,6 +91,13 @@ type
   ScreenLockConfig* = object
     command*: seq[string]
 
+  WindowMenuConfig* = object
+    command*: seq[string]
+
+  CursorConfig* = object
+    theme*: string
+    size*: uint32
+
   PointerOpKind* = enum
     OpNone,
     OpMove,
@@ -114,6 +130,9 @@ type
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
     screenLock*: ScreenLockConfig
+    windowMenu*: WindowMenuConfig
+    cursor*: CursorConfig
+    presentationMode*: PresentationMode
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
     pointerOp*: PointerOpState
@@ -123,6 +142,7 @@ type
     overviewActive*: bool
     layerFocusExclusive*: bool
     sessionLocked*: bool
+    activeModifiers*: uint32
     # Screen dimensions
     screenWidth*: int32
     screenHeight*: int32

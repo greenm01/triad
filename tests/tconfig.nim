@@ -105,6 +105,25 @@ screen-lock {
 
     check config.screenLock.command == @["lockme", "--dev-mode"]
 
+  test "Parser correctly reads River policy config":
+    let path = getCurrentDir() / "test_river_policy.kdl"
+    let kdl = """
+window-menu-command "menu-tool" "--quiet"
+presentation-mode "async"
+cursor {
+    theme "Bibata-Modern-Classic"
+    size 32
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowMenu.command == @["menu-tool", "--quiet"]
+    check config.presentationMode == PresentationAsync
+    check config.cursor.theme == "Bibata-Modern-Classic"
+    check config.cursor.size == 32'u32
+
   test "Parser reads configurable key and pointer bindings":
     let path = getCurrentDir() / "test_bindings.kdl"
     let kdl = """

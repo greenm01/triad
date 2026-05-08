@@ -47,10 +47,12 @@ var
   layerSeatPointers: seq[ptr river_layer.RiverLayerShellSeatV1] = @[]
   xkbBindings: Table[uint32, Msg]
   xkbBindingPointers: seq[ptr river_xkb.RiverXkbBindingV1] = @[]
+  xkbSeatPointers: Table[uint32, ptr river_xkb.RiverXkbBindingsSeatV1]
   pointerBindings: Table[uint32, Msg]
   pointerBindingKinds: Table[uint32, PointerOpKind]
   pointerBindingSeats: Table[uint32, ptr RiverSeatV1]
   pointerBindingPointers: seq[ptr RiverPointerBindingV1] = @[]
+  shellSurfacePointers: Table[uint32, ptr RiverShellSurfaceV1]
 
   # Config Watcher
   configPath: string
@@ -232,6 +234,13 @@ quickshell {
 //     // command "lockme" "--dev-mode"
 // }
 
+// window-menu-command "triad-window-menu"
+// presentation-mode "vsync"
+// cursor {
+//     theme "default"
+//     size 24
+// }
+
 bindings {
     bind "Super+q" "close-window"
     bind "Super+f" "toggle-fullscreen"
@@ -304,6 +313,21 @@ proc spawnScreenLock(command: seq[string]) =
   except CatchableError as e:
     warn "Failed to spawn screen lock", cmd=command[0], error=e.msg
 
+proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
+  if command.len == 0:
+    warn "Window menu command is not configured"
+    return
+
+  var args: seq[string] = @[]
+  if command.len > 1:
+    args = command[1..^1]
+
+  try:
+    let p = startProcess(command[0], args = args, options = {poUsePath})
+    info "Spawned window menu", cmd=command[0], pid=p.processID, windowId=windowId, x=x, y=y
+  except CatchableError as e:
+    warn "Failed to spawn window menu", cmd=command[0], windowId=windowId, error=e.msg
+
 proc spawnTerminal() =
   var candidates: seq[string] = @[]
   let configured = getEnv("TERMINAL", "")
@@ -334,7 +358,12 @@ const
   RiverCapabilityFullscreen = 4'u32
   RiverCapabilityMaximize = 2'u32
   RiverCapabilityMinimize = 8'u32
-  RiverSupportedCapabilities = RiverCapabilityFullscreen or RiverCapabilityMaximize or RiverCapabilityMinimize
+  RiverCapabilityWindowMenu = 1'u32
+  RiverBaseCapabilities = RiverCapabilityFullscreen or RiverCapabilityMaximize or RiverCapabilityMinimize
+  RiverDecorationOnlySupportsCsd = 0'u32
+  RiverPresentationVsync = 0'u32
+  RiverPresentationAsync = 1'u32
+  AllWatchedModifiers = 1'u32 or 4'u32 or 8'u32 or 32'u32 or 64'u32 or 128'u32
   BorderWidth = 2'i32
 
 var
@@ -342,6 +371,7 @@ var
   pointer_binding_listener: RiverPointerBindingV1Listener
   layer_output_listener: river_layer.RiverLayerShellOutputV1Listener
   layer_seat_listener: river_layer.RiverLayerShellSeatV1Listener
+  xkb_seat_listener: river_xkb.RiverXkbBindingsSeatV1Listener
 
 proc premulColor(value: uint32): tuple[r, g, b, a: uint32] =
   let r8 = (value shr 24) and 0xff
@@ -374,6 +404,19 @@ proc applyBorder(win: ptr RiverWindowV1; focused: bool) =
   let color = premulColor(if focused: FocusedBorder else: UnfocusedBorder)
   win.setBorders(RiverAllEdges, BorderWidth, color.r, color.g, color.b, color.a)
 
+proc supportedCapabilities(model: Model): uint32 =
+  result = RiverBaseCapabilities
+  if model.windowMenu.command.len > 0:
+    result = result or RiverCapabilityWindowMenu
+
+proc configuredPresentationMode(model: Model): uint32 =
+  case model.presentationMode
+  of PresentationAsync: RiverPresentationAsync
+  else: RiverPresentationVsync
+
+proc hasPresentationPreference(model: Model): bool =
+  model.presentationMode != PresentationDefault
+
 proc outputIdForPointer(output: ptr RiverOutputV1): uint32 =
   if output == nil:
     return 0
@@ -398,6 +441,19 @@ proc attachLayerSeat(seat: ptr RiverSeatV1) =
   layerSeatPointers.add(layerSeat)
   discard layerSeat.addListener(layer_seat_listener.addr, nil)
 
+proc attachXkbSeat(seat: ptr RiverSeatV1) =
+  if river_xkb_bindings == nil or seat == nil:
+    return
+  if river_xkb_bindings.getVersion() < 2'u32:
+    return
+  let seatId = seat.get_id()
+  if xkbSeatPointers.hasKey(seatId):
+    return
+  let xkbSeat = river_xkb_bindings.getSeat(seat)
+  xkbSeatPointers[seatId] = xkbSeat
+  discard xkbSeat.addListener(xkb_seat_listener.addr, nil)
+  xkbSeat.modifiersWatch(AllWatchedModifiers)
+
 proc destroyBindings() =
   for binding in xkbBindingPointers:
     binding.destroy()
@@ -411,6 +467,11 @@ proc destroyBindings() =
   pointerBindingKinds.clear()
   pointerBindingSeats.clear()
   bindingsConfigured = false
+
+proc destroyXkbSeats() =
+  for xkbSeat in xkbSeatPointers.values:
+    xkbSeat.destroy()
+  xkbSeatPointers.clear()
 
 proc addXkbBinding(seat: ptr RiverSeatV1; keysym, modifiers: uint32; msg: Msg) =
   if river_xkb_bindings == nil:
@@ -436,6 +497,8 @@ proc setupDefaultBindings() =
     return
 
   for seat in seatPointers:
+    attachXkbSeat(seat)
+
     for binding in currentModel.keyBindings:
       let parsed = parseLegacyCommand(binding.command)
       let sym = keySym(binding.key)
@@ -451,18 +514,26 @@ proc applyManageState() =
   setupDefaultBindings()
 
   for id, win in windowPointers.pairs:
-    win.useSsd()
-    win.setCapabilities(RiverSupportedCapabilities)
+    win.setCapabilities(currentModel.supportedCapabilities())
     var edges = RiverAllEdges
     if currentModel.windows.hasKey(id):
       let data = currentModel.windows[id]
+      if data.hasDecorationHint and data.decorationHint == RiverDecorationOnlySupportsCsd:
+        win.useCsd()
+      else:
+        win.useSsd()
       win.setDimensionBounds(data.maxWidth, data.maxHeight)
       if data.isFloating or data.isFullscreen:
         edges = 0
+    else:
+      win.useSsd()
     win.setTiled(edges)
 
   let focused = currentModel.activeFocus()
   for seat in seatPointers:
+    if currentModel.cursor.theme.len > 0:
+      let cursorSize = if currentModel.cursor.size == 0: 24'u32 else: currentModel.cursor.size
+      seat.setXcursorTheme(cstring(currentModel.cursor.theme), cursorSize)
     if currentModel.layerFocusExclusive or currentModel.sessionLocked:
       seat.clearFocus()
     elif focused != 0 and windowPointers.hasKey(focused):
@@ -485,7 +556,11 @@ proc removeSeatPointer(seat: ptr RiverSeatV1) =
 
 proc on_seat_removed(data: pointer, seat: ptr RiverSeatV1) =
   info "Seat removed"
+  let seatId = seat.get_id()
   removeSeatPointer(seat)
+  if xkbSeatPointers.hasKey(seatId):
+    xkbSeatPointers[seatId].destroy()
+    xkbSeatPointers.del(seatId)
   for layerSeat in layerSeatPointers:
     layerSeat.destroy()
   layerSeatPointers = @[]
@@ -509,7 +584,11 @@ proc on_seat_window_interaction(data: pointer, seat: ptr RiverSeatV1, win: ptr R
     msgQueue.add(Msg(kind: WlFocusChanged, newFocusedId: id))
 
 proc on_seat_shell_surface_interaction(data: pointer, seat: ptr RiverSeatV1, shellSurface: ptr RiverShellSurfaceV1) =
-  trace "Seat shell surface interaction"
+  if shellSurface != nil:
+    let id = shellSurface.get_id()
+    shellSurfacePointers[id] = shellSurface
+    trace "Seat shell surface interaction", shellSurfaceId=id
+    msgQueue.add(Msg(kind: WlShellSurfaceInteraction, shellSurfaceId: id))
 
 proc on_op_delta(data: pointer, seat: ptr RiverSeatV1, dx: int32, dy: int32) =
   msgQueue.add(Msg(kind: WlPointerDelta, dx: dx, dy: dy))
@@ -547,6 +626,18 @@ xkb_binding_listener = river_xkb.RiverXkbBindingV1Listener(
   pressed: on_xkb_pressed,
   released: on_xkb_released,
   stopRepeat: on_xkb_stop_repeat
+)
+
+proc on_xkb_seat_ate_unbound_key(data: pointer, seat: ptr river_xkb.RiverXkbBindingsSeatV1) =
+  trace "XKB seat ate unbound key", xkbSeatId=seat.get_id()
+
+proc on_xkb_seat_modifiers_update(data: pointer, seat: ptr river_xkb.RiverXkbBindingsSeatV1, old: uint32, new: uint32) =
+  trace "XKB modifiers updated", xkbSeatId=seat.get_id(), old=old, new=new
+  msgQueue.add(Msg(kind: WlModifiersChanged, oldModifiers: old, newModifiers: new))
+
+xkb_seat_listener = river_xkb.RiverXkbBindingsSeatV1Listener(
+  ateUnboundKey: on_xkb_seat_ate_unbound_key,
+  modifiersUpdate: on_xkb_seat_modifiers_update
 )
 
 proc on_pointer_binding_pressed(data: pointer, binding: ptr RiverPointerBindingV1) =
@@ -634,9 +725,20 @@ proc executeManageEffect(eff: Effect) =
       let win = windowPointers[eff.focusId]
       for seat in seatPointers:
         seat.focusWindow(win)
+  of EffFocusShellSurface:
+    if shellSurfacePointers.hasKey(eff.focusShellSurfaceId):
+      let shellSurface = shellSurfacePointers[eff.focusShellSurfaceId]
+      for seat in seatPointers:
+        seat.focusShellSurface(shellSurface)
   of EffCloseWindow:
     if windowPointers.hasKey(eff.closeId):
       windowPointers[eff.closeId].close()
+  of EffInformResizeStart:
+    if windowPointers.hasKey(eff.resizeLifecycleWinId):
+      windowPointers[eff.resizeLifecycleWinId].informResizeStart()
+  of EffInformResizeEnd:
+    if windowPointers.hasKey(eff.resizeLifecycleWinId):
+      windowPointers[eff.resizeLifecycleWinId].informResizeEnd()
   of EffSetFullscreen:
     if windowPointers.hasKey(eff.fsWinId):
       let win = windowPointers[eff.fsWinId]
@@ -706,13 +808,19 @@ proc applyVisibility(win: ptr RiverWindowV1; geom, screen: Rect) =
     let clipH = max(0'i32, bottom - max(geom.y, screen.y))
     if clipW < geom.w or clipH < geom.h or clipX > 0 or clipY > 0:
       win.setClipBox(clipX, clipY, clipW, clipH)
+      win.setContentClipBox(clipX, clipY, clipW, clipH)
     else:
       win.setClipBox(0, 0, 0, 0)
+      win.setContentClipBox(0, 0, 0, 0)
   else:
     win.hide()
 
 proc renderDesiredPlacements() =
   let screen = currentModel.primaryScreen()
+  if currentModel.hasPresentationPreference():
+    let mode = currentModel.configuredPresentationMode()
+    for output in outputPointers.values:
+      output.setPresentationMode(mode)
   var ids: seq[WindowId] = @[]
   for id in desiredPlacements.keys:
     ids.add(id)
@@ -762,7 +870,9 @@ proc executeEffect(eff: Effect) =
     asyncCheck broadcastJson(eff.jsonPayload)
   of EffSpawnScreenLock:
     spawnScreenLock(eff.screenLockCommand)
-  of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffCloseWindow, EffSetFullscreen, EffSetMaximized:
+  of EffSpawnWindowMenu:
+    spawnWindowMenu(eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX, eff.windowMenuY)
+  of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffFocusShellSurface, EffCloseWindow, EffSetFullscreen, EffSetMaximized, EffInformResizeStart, EffInformResizeEnd:
     queueManageEffect(eff)
   of EffSetPosition:
     if riverPhase == RiverRender and windowNodes.hasKey(eff.windowId):
@@ -863,6 +973,11 @@ proc on_window_parent(data: pointer, win: ptr RiverWindowV1, parent: ptr RiverWi
 
 proc on_window_decoration_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
   trace "Window decoration hint received", windowId=win.get_id(), hint=hint
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].hasDecorationHint = true
+    pendingWindows[win.get_id()].decorationHint = hint
+  else:
+    msgQueue.add(Msg(kind: WlWindowDecorationHint, decorationWindowId: win.get_id(), decorationHint: hint))
 
 proc on_window_pointer_move_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1) =
   debug "Pointer move requested", windowId=win.get_id()
@@ -874,6 +989,7 @@ proc on_window_pointer_resize_requested(data: pointer, win: ptr RiverWindowV1, s
 
 proc on_window_show_menu_requested(data: pointer, win: ptr RiverWindowV1, x: int32, y: int32) =
   debug "Window menu requested", windowId=win.get_id(), x=x, y=y
+  msgQueue.add(Msg(kind: WlWindowMenuRequested, menuWindowId: win.get_id(), menuX: x, menuY: y))
 
 proc on_window_maximize_requested(data: pointer, win: ptr RiverWindowV1) =
   debug "Window maximize requested", windowId=win.get_id()
@@ -920,6 +1036,11 @@ proc on_window_unreliable_pid(data: pointer, win: ptr RiverWindowV1, unreliableP
 
 proc on_window_presentation_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
   trace "Window presentation hint received", windowId=win.get_id(), hint=hint
+  if pendingWindows.hasKey(win.get_id()):
+    pendingWindows[win.get_id()].hasPresentationHint = true
+    pendingWindows[win.get_id()].presentationHint = hint
+  else:
+    msgQueue.add(Msg(kind: WlWindowPresentationHint, presentationWindowId: win.get_id(), presentationHint: hint))
 
 proc on_window_identifier(data: pointer, win: ptr RiverWindowV1, identifier: cstring) =
   let text = cstringOrEmpty(identifier)
@@ -978,6 +1099,7 @@ proc cleanupRiverObjects() =
   layerSeatPointers = @[]
 
   destroyBindings()
+  destroyXkbSeats()
 
   let seats = seatPointers
   seatPointers = @[]
@@ -1010,6 +1132,10 @@ proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
     msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title, createdIdentifier: data.identifier))
     if data.actualW > 0 or data.actualH > 0:
       msgQueue.add(Msg(kind: WlWindowDimensions, dimensionsWindowId: id, actualWidth: data.actualW, actualHeight: data.actualH))
+    if data.hasDecorationHint:
+      msgQueue.add(Msg(kind: WlWindowDecorationHint, decorationWindowId: id, decorationHint: data.decorationHint))
+    if data.hasPresentationHint:
+      msgQueue.add(Msg(kind: WlWindowPresentationHint, presentationWindowId: id, presentationHint: data.presentationHint))
     if data.parentId != 0:
       msgQueue.add(Msg(kind: WlWindowParent, childWindowId: id, parentWindowId: data.parentId))
     if data.minWidth > 0 or data.minHeight > 0 or data.maxWidth > 0 or data.maxHeight > 0:

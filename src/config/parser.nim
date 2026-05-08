@@ -8,6 +8,9 @@ type
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
     screenLock*: ScreenLockConfig
+    windowMenu*: WindowMenuConfig
+    cursor*: CursorConfig
+    presentationMode*: PresentationMode
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
 
@@ -91,6 +94,12 @@ proc parsePointerOp(value: string): PointerOpKind =
   of "move", "Move": OpMove
   of "resize", "Resize": OpResize
   else: OpNone
+
+proc parsePresentationMode(value: string): PresentationMode =
+  case value
+  of "vsync", "Vsync", "VSYNC": PresentationVsync
+  of "async", "Async", "ASYNC": PresentationAsync
+  else: PresentationDefault
 
 proc defaultKeyBindings*(): seq[KeyBindingConfig] =
   @[
@@ -202,6 +211,16 @@ proc loadConfig*(path: string): Config =
         if cmd.len > 0:
           result.startupCommands.add(cmd)
 
+      elif node.name == "window-menu-command":
+        var cmd: seq[string] = @[]
+        try:
+          for arg in node.args:
+            cmd.add(arg.kString())
+        except CatchableError as e:
+          warn "Ignoring invalid window menu command", error=e.msg
+        if cmd.len > 0:
+          result.windowMenu.command = cmd
+
       elif node.name == "bindings":
         for child in node.children:
           try:
@@ -248,6 +267,24 @@ proc loadConfig*(path: string): Config =
                 result.screenLock.command = cmd
           except CatchableError as e:
             warn "Ignoring invalid screen-lock field", field=child.name, error=e.msg
+
+      elif node.name == "cursor":
+        for child in node.children:
+          try:
+            if child.name == "theme" and child.args.len > 0:
+              result.cursor.theme = child.args[0].kString()
+            elif child.name == "size" and child.args.len > 0:
+              let size = child.args[0].kInt()
+              if size > 0:
+                result.cursor.size = uint32(min(size, 512))
+          except CatchableError as e:
+            warn "Ignoring invalid cursor field", field=child.name, error=e.msg
+
+      elif node.name == "presentation-mode" and node.args.len > 0:
+        try:
+          result.presentationMode = parsePresentationMode(node.args[0].kString())
+        except CatchableError as e:
+          warn "Ignoring invalid presentation mode", error=e.msg
             
   except:
     let e = getCurrentException()
@@ -271,6 +308,9 @@ proc applyConfig*(model: var Model, config: Config) =
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell
   model.screenLock = config.screenLock
+  model.windowMenu = config.windowMenu
+  model.cursor = config.cursor
+  model.presentationMode = config.presentationMode
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
   

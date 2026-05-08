@@ -14,6 +14,9 @@ type
     WlWindowTitle,
     WlWindowDimensionsHint,
     WlWindowDimensions,
+    WlWindowDecorationHint,
+    WlWindowPresentationHint,
+    WlWindowMenuRequested,
     WlWindowMaximizeRequested,
     WlWindowUnmaximizeRequested,
     WlWindowMinimizeRequested,
@@ -32,6 +35,8 @@ type
     WlPointerResizeRequested,
     WlPointerDelta,
     WlPointerRelease,
+    WlShellSurfaceInteraction,
+    WlModifiersChanged,
 
     # User Commands (IPC/Keybinds)
     CmdSetLayout,
@@ -118,6 +123,16 @@ type
     of WlWindowDimensions:
       dimensionsWindowId*: WindowId
       actualWidth*, actualHeight*: int32
+    of WlWindowDecorationHint:
+      decorationWindowId*: WindowId
+      decorationHint*: uint32
+    of WlWindowPresentationHint:
+      presentationWindowId*: WindowId
+      presentationHint*: uint32
+    of WlWindowMenuRequested:
+      menuWindowId*: WindowId
+      menuX*: int32
+      menuY*: int32
     of WlWindowMaximizeRequested:
       maximizeRequestId*: WindowId
     of WlWindowUnmaximizeRequested:
@@ -149,6 +164,11 @@ type
       resizeEdges*: uint32
     of WlPointerDelta:
       dx*, dy*: int32
+    of WlShellSurfaceInteraction:
+      shellSurfaceId*: uint32
+    of WlModifiersChanged:
+      oldModifiers*: uint32
+      newModifiers*: uint32
     of CmdMoveFloating:
       moveDX*, moveDY*: int32
     of CmdSetLayout:

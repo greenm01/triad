@@ -7,6 +7,11 @@ suite "River protocol coverage":
       check hasCoverage(event)
       check coverageFor(event).note.len > 0
 
+  test "known generated client requests have explicit coverage entries":
+    for request in KnownRiverClientRequests:
+      check hasCoverage(request)
+      check coverageFor(request).note.len > 0
+
   test "coverage entries are unique":
     var seen = initTable[string, bool]()
     for entry in RiverProtocolCoverage:
@@ -14,9 +19,11 @@ suite "River protocol coverage":
       seen[entry.event] = true
 
   test "client-facing request coverage matches advertised support":
-    check coverageFor("river_window_v1.show_window_menu_requested").state == pcsUnsupported
+    check coverageFor("river_window_v1.show_window_menu_requested").state == pcsImplemented
     check coverageFor("river_window_v1.maximize_requested").state == pcsImplemented
     check coverageFor("river_window_v1.minimize_requested").state == pcsImplemented
+    check coverageFor("river_window_v1.get_decoration_above").state == pcsUnsupported
+    check coverageFor("river_xkb_bindings_seat_v1.ensure_next_key_eaten").state == pcsUnsupported
 
   test "implemented hardening paths are tracked":
     check coverageFor("river_window_v1.app_id").state == pcsImplemented
@@ -25,6 +32,9 @@ suite "River protocol coverage":
     check coverageFor("river_window_v1.dimensions_hint").state == pcsImplemented
     check coverageFor("river_window_v1.fullscreen_requested").state == pcsImplemented
     check coverageFor("river_output_v1.removed").state == pcsImplemented
+    check coverageFor("river_window_v1.inform_resize_start").state == pcsImplemented
+    check coverageFor("river_window_v1.set_content_clip_box").state == pcsImplemented
+    check coverageFor("river_seat_v1.focus_shell_surface").state == pcsImplemented
 
   test "advertised capabilities have implemented behavior":
     check (TriadAdvertisedCapabilities and RiverCapabilityWindowMenu) == 0'u32

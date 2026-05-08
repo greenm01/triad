@@ -211,6 +211,35 @@ suite "Crash hardening":
     check parsed.isSome
     check parsed.get().kind == CmdLockSession
 
+  test "River decoration presentation menu resize and modifier state are modeled":
+    var model = baseModel()
+    var (nextModel, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "one"))
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowDecorationHint, decorationWindowId: 7, decorationHint: 0))
+    check nextModel.windows[7].hasDecorationHint
+    check nextModel.windows[7].decorationHint == 0'u32
+    check effects.anyIt(it.kind == EffManageDirty)
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowPresentationHint, presentationWindowId: 7, presentationHint: 1))
+    check nextModel.windows[7].hasPresentationHint
+    check nextModel.windows[7].presentationHint == 1'u32
+
+    nextModel.windowMenu.command = @["menu-tool"]
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowMenuRequested, menuWindowId: 7, menuX: 12, menuY: 34))
+    check effects.anyIt(it.kind == EffSpawnWindowMenu and it.windowMenuCommand == @["menu-tool"] and it.windowMenuId == 7 and it.windowMenuX == 12 and it.windowMenuY == 34)
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdToggleFloating))
+    (nextModel, effects) = update(nextModel, Msg(kind: WlPointerResizeRequested, resizeWinId: 7, resizeSeat: nil, resizeEdges: 8))
+    check effects.anyIt(it.kind == EffInformResizeStart and it.resizeLifecycleWinId == 7)
+    (nextModel, effects) = update(nextModel, Msg(kind: WlPointerRelease))
+    check effects.anyIt(it.kind == EffInformResizeEnd and it.resizeLifecycleWinId == 7)
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlModifiersChanged, oldModifiers: 0, newModifiers: 64))
+    check nextModel.activeModifiers == 64'u32
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlShellSurfaceInteraction, shellSurfaceId: 99))
+    check effects.anyIt(it.kind == EffFocusShellSurface and it.focusShellSurfaceId == 99)
+
   test "consume ignores empty next columns":
     var model = baseModel()
     model.tags[1].columns = @[
