@@ -322,6 +322,91 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     nextModel.innerGaps = nextModel.outerGaps div 2
     effects.add(Effect(kind: EffManageDirty))
 
+  of CmdToggleGaps:
+    if nextModel.outerGaps > 0:
+      nextModel.previousOuterGaps = nextModel.outerGaps
+      nextModel.previousInnerGaps = nextModel.innerGaps
+      nextModel.outerGaps = 0
+      nextModel.innerGaps = 0
+    else:
+      nextModel.outerGaps = nextModel.previousOuterGaps
+      nextModel.innerGaps = nextModel.previousInnerGaps
+    effects.add(Effect(kind: EffManageDirty))
+
+  of CmdSetColumnWidth:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        if tag.layoutMode == Scroller:
+          for i in 0 ..< tag.columns.len:
+            if tag.columns[i].windows.contains(focused):
+              tag.columns[i].widthProportion = clamp(msg.targetWidth, 0.05, 1.0)
+              break
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdConsumeWindow:
+    # Niri style: pull a window from the next column into this one
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        for i in 0 ..< tag.columns.len:
+          if tag.columns[i].windows.contains(focused): colIdx = i; break
+        
+        if colIdx != -1 and colIdx < tag.columns.len - 1:
+          let nextColWin = tag.columns[colIdx+1].windows[0]
+          tag.columns[colIdx+1].windows.delete(0)
+          tag.columns[colIdx].windows.add(nextColWin)
+          
+          if tag.columns[colIdx+1].windows.len == 0:
+            tag.columns.delete(colIdx+1)
+            
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdExpelWindow:
+    # Niri style: pop window out of stack into its own column
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        var winIdx = -1
+        for i in 0 ..< tag.columns.len:
+          let j = tag.columns[i].windows.find(focused)
+          if j != -1: colIdx = i; winIdx = j; break
+        
+        if colIdx != -1 and tag.columns[colIdx].windows.len > 1:
+          tag.columns[colIdx].windows.delete(winIdx)
+          tag.columns.insert(Column(windows: @[focused], widthProportion: 0.5), colIdx + 1)
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdZoom:
+    # Mango/dwm style: swap focused with master
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0 and tag.columns.len > 0 and tag.columns[0].windows.len > 0:
+        let master = tag.columns[0].windows[0]
+        if focused != master:
+          # Find focused and swap with master
+          for i in 0 ..< tag.columns.len:
+            let j = tag.columns[i].windows.find(focused)
+            if j != -1:
+              tag.columns[i].windows[j] = master
+              tag.columns[0].windows[0] = focused
+              break
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
   of CmdMoveColumnLeft:
     let activeTagId = nextModel.activeTag
     if nextModel.tags.hasKey(activeTagId):

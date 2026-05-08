@@ -71,10 +71,18 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdResizeHeight, deltaH: float32(parseFloat(parts[1]))))
             except: warn "Invalid height delta", delta=parts[1]
+        of "set-column-width":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdSetColumnWidth, targetWidth: float32(parseFloat(parts[1]))))
+            except: warn "Invalid width", width=parts[1]
         of "adjust-gaps":
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdAdjustGaps, deltaG: int32(parseInt(parts[1]))))
             except: warn "Invalid gap delta", delta=parts[1]
+        of "toggle-gaps": onMsg(Msg(kind: CmdToggleGaps))
+        of "zoom": onMsg(Msg(kind: CmdZoom))
+        of "consume-window": onMsg(Msg(kind: CmdConsumeWindow))
+        of "expel-window": onMsg(Msg(kind: CmdExpelWindow))
         of "move-column-left": onMsg(Msg(kind: CmdMoveColumnLeft))
         of "move-column-right": onMsg(Msg(kind: CmdMoveColumnRight))
         of "move-window-left": onMsg(Msg(kind: CmdMoveWindowLeft))

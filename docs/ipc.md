@@ -26,9 +26,12 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `move-to-tag <id>`: Banishes the focused window to the specified tag.
 *   `close-window`: Politley requests that the focused window terminate its existence.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
+*   `zoom`: Swaps the focused window with the primary window in the master position.
 *   `resize-width <delta>`: Adjusts the width proportion (e.g., `0.1` or `-0.1`).
 *   `resize-height <delta>`: Adjusts the height proportion.
+*   `set-column-width <proportion>`: Precisely dictates the width of the focused column (e.g., `0.5`, `1.0`).
 *   `adjust-gaps <delta>`: Increases or decreases the global gap size (e.g., `5` or `-5`).
+*   `toggle-gaps`: Instantly eliminates all gaps or restores them to their former glory.
 
 #### Advanced Movement
 *   `move-column-left`: Swaps the focused column with its neighbor to the left.
@@ -37,6 +40,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `move-window-right`: Transports the focused window to the adjacent column on the right.
 *   `move-window-up`: Swaps the focused window with the one above it in a stack.
 *   `move-window-down`: Swaps the focused window with the one below it.
+*   `consume-window`: Merges the first window of the column to the right into the currently focused column.
+*   `expel-window`: Liberates the focused window from its stack, granting it a new column to its immediate right.
 
 ---
 

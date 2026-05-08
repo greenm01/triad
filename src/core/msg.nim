@@ -28,12 +28,17 @@ type
     CmdMoveColumnRight,
     CmdSwapWindowUp,
     CmdSwapWindowDown,
+    CmdConsumeWindow,
+    CmdExpelWindow,
+    CmdZoom,
+    CmdToggleGaps,
     CmdMoveFloating,
     CmdMoveToTag,
     CmdSetMasterCount,
     CmdSetMasterRatio,
     CmdResizeWidth,
     CmdResizeHeight,
+    CmdSetColumnWidth,
     CmdAdjustGaps,
     CmdToggleOverview,
     CmdToggleFloating,
@@ -77,6 +82,8 @@ type
       deltaW*: float32
     of CmdResizeHeight:
       deltaH*: float32
+    of CmdSetColumnWidth:
+      targetWidth*: float32
     of CmdAdjustGaps:
       deltaG*: int32
     else:
