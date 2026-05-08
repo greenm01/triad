@@ -34,6 +34,49 @@ func normalizeKey(value: string): string =
 func canonicalDesktopId(id: string): string =
   id.normalizeKey()
 
+func stripDesktopSuffix*(value: string): string =
+  if value.toLowerAscii().endsWith(".desktop"):
+    value[0 ..< value.len - ".desktop".len]
+  else:
+    value
+
+func shellAliasBase(entry: DesktopEntry): string =
+  let base = entry.id.stripDesktopSuffix().toLowerAscii()
+  result = "triad-"
+  var previousDash = false
+  for ch in base:
+    if ch.isAlphaNumeric():
+      result.add(ch)
+      previousDash = false
+    elif not previousDash:
+      result.add('-')
+      previousDash = true
+  while result.endsWith("-"):
+    result.setLen(result.len - 1)
+  if result == "triad":
+    result = "triad-terminal"
+
+func shellOverlayAppId*(entry: DesktopEntry): string =
+  entry.shellAliasBase()
+
+func shellOverlayDesktopId*(entry: DesktopEntry): string =
+  entry.shellOverlayAppId() & ".desktop"
+
+func shellOverlayIconName*(entry: DesktopEntry): string =
+  entry.shellAliasBase()
+
+func isTerminalEntry*(entry: DesktopEntry): bool =
+  for category in entry.categories:
+    if category.normalizeKey() == "terminalemulator":
+      return true
+  false
+
+func compatDesktopEntryId(entry: DesktopEntry): string =
+  if entry.isTerminalEntry:
+    entry.shellOverlayAppId()
+  else:
+    canonicalDesktopId(entry.id)
+
 proc desktopIdFor(path, root: string): string =
   var rel = path
   try:
@@ -159,12 +202,6 @@ iterator desktopEntries*(index: AppIdentityIndex): DesktopEntry =
   for entry in index.entries:
     yield entry
 
-func isTerminalEntry*(entry: DesktopEntry): bool =
-  for category in entry.categories:
-    if category.normalizeKey() == "terminalemulator":
-      return true
-  false
-
 proc xdgApplicationDirs*(): seq[string] =
   let dataHome = getEnv("XDG_DATA_HOME", getHomeDir() / ".local" / "share")
   result.add(dataHome / "applications")
@@ -187,15 +224,19 @@ proc compatAppId*(rawAppId: string; index: AppIdentityIndex): string =
 
   let key = raw.normalizeKey()
   if index.byDesktopId.hasKey(key):
-    return canonicalDesktopId(index.entries[index.byDesktopId[key]].id)
+    return compatDesktopEntryId(index.entries[index.byDesktopId[key]])
   if index.byDesktopId.hasKey(key & ".desktop"):
-    return canonicalDesktopId(index.entries[index.byDesktopId[key & ".desktop"]].id)
+    return compatDesktopEntryId(index.entries[index.byDesktopId[key & ".desktop"]])
   if index.byStartupWmClass.hasKey(key):
-    return canonicalDesktopId(index.entries[index.byStartupWmClass[key]].id)
+    return compatDesktopEntryId(index.entries[index.byStartupWmClass[key]])
   if index.byExecBase.hasKey(key):
-    return canonicalDesktopId(index.entries[index.byExecBase[key]].id)
+    return compatDesktopEntryId(index.entries[index.byExecBase[key]])
   if TerminalAliases.hasKey(key):
-    return TerminalAliases[key]
+    let aliasId = TerminalAliases[key]
+    let aliasKey = aliasId.normalizeKey()
+    if index.byDesktopId.hasKey(aliasKey):
+      return compatDesktopEntryId(index.entries[index.byDesktopId[aliasKey]])
+    return aliasId
   raw
 
 proc compatAppId*(rawAppId: string): string =

@@ -36,16 +36,19 @@ That keeps the real `niri` command untouched for the rest of the system.
 Window `app_id` values in the Niri-compatible JSON are shell-facing identities,
 not Triad's internal rule keys. Triad keeps the raw River app ID internally, but
 maps exported Niri window IDs to desktop-entry-compatible IDs when it can, such
-as `foot.desktop`, `kitty.desktop`, or `alacritty.desktop`. This lets shells use
-their normal desktop-entry and icon-theme lookup paths without Noctalia or
-DankMaterialShell patches. When a value is mapped, Triad also emits `raw_app_id`
-as a debugging extension for clients that ignore unknown fields.
+as `brave-origin-nightly.desktop`. Terminal emulators use unique Triad overlay
+IDs such as `triad-foot` or `triad-kitty` instead of duplicate system IDs like
+`foot.desktop`. This avoids shell-specific precedence rules when Quickshell sees
+both the system desktop entry and Triad's runtime overlay. When a value is
+mapped, Triad also emits `raw_app_id` as a debugging extension for clients that
+ignore unknown fields.
 
 For terminal icons, Triad also generates a private XDG overlay from installed
 `.desktop` metadata. Entries advertising the freedesktop `TerminalEmulator`
-category get shell-safe desktop/icon aliases in Triad's runtime directory. This
-is data-driven from the system desktop database; Triad does not special-case
-individual terminal apps except for minimal unresolved app-id aliases.
+category get shell-safe desktop/icon aliases in Triad's runtime directory, for
+example `triad-foot.desktop` with `Icon=triad-foot`. This is data-driven from the
+system desktop database; Triad does not special-case individual terminal apps
+except for minimal unresolved app-id aliases.
 
 Screenshot actions are implemented through `grim` and `slurp`:
 

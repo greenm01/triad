@@ -4,10 +4,33 @@ import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/restore_state
 import ../src/core/update
-import json, tables, sequtils, strutils
+import json, os, tables, sequtils, strutils
+
+proc installAppIdentityFixture() =
+  let apps = getTempDir() / ("triad-core-apps-" & $getCurrentProcessId()) / "applications"
+  if dirExists(apps.parentDir()):
+    removeDir(apps.parentDir())
+  createDir(apps)
+  writeFile(apps / "Alacritty.desktop", """
+[Desktop Entry]
+Name=Alacritty
+Exec=alacritty
+Icon=Alacritty
+Categories=System;TerminalEmulator;
+""")
+  writeFile(apps / "kitty.desktop", """
+[Desktop Entry]
+Name=kitty
+Exec=kitty
+Icon=kitty
+Categories=System;TerminalEmulator;
+""")
+  putEnv("XDG_DATA_HOME", apps.parentDir())
+  putEnv("XDG_DATA_DIRS", "")
 
 suite "Core TEA Update Logic":
   setup:
+    installAppIdentityFixture()
     var model = Model(
       activeTag: 1,
       screenWidth: 1920,
@@ -41,7 +64,7 @@ suite "Core TEA Update Logic":
     let win = parseJson(event.jsonPayload)["WindowOpenedOrChanged"]["window"]
 
     check win["id"].getInt() == 120
-    check win["app_id"].getStr() == "alacritty.desktop"
+    check win["app_id"].getStr() == "triad-alacritty"
     check win["raw_app_id"].getStr() == "alacritty"
     check win["workspace_id"].getInt() == 1
     check win["is_focused"].getBool() == true
@@ -58,7 +81,7 @@ suite "Core TEA Update Logic":
     let windows = parseJson(event.jsonPayload)["WindowsChanged"]["windows"]
 
     check windows.len == 1
-    check windows[0]["app_id"].getStr() == "kitty.desktop"
+    check windows[0]["app_id"].getStr() == "triad-kitty"
     check windows[0]["raw_app_id"].getStr() == "kitty"
     check windows[0]["workspace_id"].getInt() == 2
 

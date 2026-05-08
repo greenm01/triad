@@ -19,30 +19,8 @@ const GenericTerminalSvg = """<svg xmlns="http://www.w3.org/2000/svg" width="64"
 proc defaultRuntimeDir(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
 
-func stripDesktopSuffix(value: string): string =
-  if value.toLowerAscii().endsWith(".desktop"):
-    value[0 ..< value.len - ".desktop".len]
-  else:
-    value
-
 func canonicalDesktopId(id: string): string =
   id.strip().toLowerAscii()
-
-func iconAliasName(entry: DesktopEntry): string =
-  let base = entry.id.stripDesktopSuffix().toLowerAscii()
-  result = "triad-"
-  var previousDash = false
-  for ch in base:
-    if ch.isAlphaNumeric():
-      result.add(ch)
-      previousDash = false
-    elif not previousDash:
-      result.add('-')
-      previousDash = true
-  while result.endsWith("-"):
-    result.setLen(result.len - 1)
-  if result == "triad":
-    result = "triad-terminal"
 
 proc xdgShareDirs(): seq[string] =
   let dataHome = getEnv("XDG_DATA_HOME", getHomeDir() / ".local" / "share")
@@ -98,7 +76,7 @@ proc writeIconAlias(rootPath: string; entry: DesktopEntry) =
     entry.id.stripDesktopSuffix(),
     entry.id.stripDesktopSuffix().toLowerAscii()
   ])
-  let iconName = entry.iconAliasName()
+  let iconName = entry.shellOverlayIconName()
 
   if source.len > 0:
     let ext = source.splitFile().ext.toLowerAscii()
@@ -131,7 +109,7 @@ func desktopEntryText(entry: DesktopEntry): string =
   "GenericName=Terminal\n" &
   "Comment=Terminal emulator\n" &
   "Exec=" & execLine & "\n" &
-  "Icon=" & entry.iconAliasName() & "\n" &
+  "Icon=" & entry.shellOverlayIconName() & "\n" &
   "Terminal=false\n" &
   "Categories=" & categories & "\n" &
   "X-Triad-SourceDesktopId=" & desktopId & "\n"
@@ -185,7 +163,7 @@ proc installShellOverlay*(
     writeIconThemeIndex(result.rootPath)
 
     for entry in terminalEntries(index):
-      writeFile(applicationsDir / entry.id.canonicalDesktopId(), desktopEntryText(entry))
+      writeFile(applicationsDir / entry.shellOverlayDesktopId(), desktopEntryText(entry))
       writeIconAlias(result.rootPath, entry)
 
     result.ok = true

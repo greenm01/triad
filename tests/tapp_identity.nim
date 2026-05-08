@@ -41,10 +41,11 @@ Categories=System;TerminalEmulator;
 Name=kitty
 Exec=kitty --single-instance
 Icon=kitty
+Categories=System;TerminalEmulator;
 """)
 
     let index = buildAppIdentityIndex([root])
-    check compatAppId("kitty", index) == "kitty.desktop"
+    check compatAppId("kitty", index) == "triad-kitty"
 
   test "maps startup wm class case-insensitively":
     writeDesktop(root, "Alacritty.desktop", """
@@ -53,11 +54,24 @@ Name=Alacritty
 Exec=/usr/bin/alacritty
 Icon=Alacritty
 StartupWMClass=Alacritty
+Categories=System;TerminalEmulator;
 """)
 
     let index = buildAppIdentityIndex([root])
-    check compatAppId("alacritty", index) == "alacritty.desktop"
-    check compatAppId("Alacritty", index) == "alacritty.desktop"
+    check compatAppId("alacritty", index) == "triad-alacritty"
+    check compatAppId("Alacritty", index) == "triad-alacritty"
+
+  test "keeps non-terminal app ids on standard desktop ids":
+    writeDesktop(root, "Browser.desktop", """
+[Desktop Entry]
+Name=Browser
+Exec=browser
+Icon=browser
+Categories=Network;WebBrowser;
+""")
+
+    let index = buildAppIdentityIndex([root])
+    check compatAppId("browser", index) == "browser.desktop"
 
   test "unknown app ids pass through unchanged":
     let index = buildAppIdentityIndex([root])
@@ -67,3 +81,18 @@ StartupWMClass=Alacritty
     let index = buildAppIdentityIndex([root])
     check compatAppId("footclient", index) == "foot.desktop"
     check compatAppId("ghostty", index) == "com.mitchellh.ghostty.desktop"
+
+  test "terminal aliases use overlay ids when desktop metadata is present":
+    writeDesktop(root, "foot.desktop", """
+[Desktop Entry]
+Name=Foot
+Exec=foot
+Icon=foot
+Categories=System;TerminalEmulator;
+""")
+
+    let index = buildAppIdentityIndex([root])
+    check compatAppId("footclient", index) == "triad-foot"
+    check shellOverlayAppId(index.entries[0]) == "triad-foot"
+    check shellOverlayDesktopId(index.entries[0]) == "triad-foot.desktop"
+    check shellOverlayIconName(index.entries[0]) == "triad-foot"

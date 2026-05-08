@@ -9,6 +9,21 @@ import ../src/ipc/niri_compat
 import ../src/ipc/quickshell_compat
 import ../src/ipc/shell_overlay
 
+proc installAppIdentityFixture() =
+  let apps = getTempDir() / ("triad-compat-apps-" & $getCurrentProcessId()) / "applications"
+  if dirExists(apps.parentDir()):
+    removeDir(apps.parentDir())
+  createDir(apps)
+  writeFile(apps / "Alacritty.desktop", """
+[Desktop Entry]
+Name=Alacritty
+Exec=alacritty
+Icon=Alacritty
+Categories=System;TerminalEmulator;
+""")
+  putEnv("XDG_DATA_HOME", apps.parentDir())
+  putEnv("XDG_DATA_DIRS", "")
+
 proc modelForShell(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080)
   result.tags[1] = initTagState(1, Scroller, "main")
@@ -18,6 +33,9 @@ proc modelForShell(): Model =
   result.windows[10] = WindowData(id: 10, appId: "Alacritty", title: "Terminal")
 
 suite "Shell compatibility contracts":
+  setup:
+    installAppIdentityFixture()
+
   test "Noctalia Niri workspace request has the expected shape":
     let response = handleNiriRequest("\"Workspaces\"", modelForShell())
     check response.handled
@@ -40,7 +58,7 @@ suite "Shell compatibility contracts":
     check windows.len == 1
     check windows[0]["id"].getInt() == 10
     check windows[0]["title"].getStr() == "Terminal"
-    check windows[0]["app_id"].getStr() == "alacritty.desktop"
+    check windows[0]["app_id"].getStr() == "triad-alacritty"
     check windows[0]["raw_app_id"].getStr() == "Alacritty"
     check windows[0]["workspace_id"].getInt() == 1
     check windows[0]["is_focused"].getBool() == true
@@ -315,7 +333,7 @@ Categories=Network;WebBrowser;
     let overlay = installShellOverlay(tmp / "runtime", index)
     check overlay.ok
 
-    let generatedApp = overlay.sharePath / "applications" / "demoterm.desktop"
+    let generatedApp = overlay.sharePath / "applications" / "triad-demoterm.desktop"
     check fileExists(generatedApp)
     check readFile(generatedApp).contains("Exec=demo-term --new-window")
     check readFile(generatedApp).contains("Icon=triad-demoterm")
