@@ -58,12 +58,24 @@ type
     theme*: string
     args*: seq[string]
 
+  PointerOpKind* = enum
+    OpNone,
+    OpMove,
+    OpResize
+
+  PointerOpState* = object
+    kind*: PointerOpKind
+    windowId*: WindowId
+    initialGeom*: Rect
+    edges*: uint32 # For resize operations
+
   Model* = object
     tags*: Table[uint32, TagState]
     windows*: Table[WindowId, WindowData]
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    pointerOp*: PointerOpState
     activeTag*: uint32
     overviewActive*: bool
     # Screen dimensions

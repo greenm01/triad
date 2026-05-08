@@ -11,6 +11,8 @@ type
     EffCloseWindow,
     EffManageDirty,
     EffBroadcastJson,
+    EffOpStartPointer,
+    EffOpEnd,
     EffLog
 
   Effect* = object
@@ -26,6 +28,10 @@ type
       closeId*: WindowId
     of EffBroadcastJson:
       jsonPayload*: string
+    of EffOpStartPointer:
+      opSeat*: pointer
+    of EffOpEnd:
+      endSeat*: pointer
     else:
       discard
 
@@ -117,7 +123,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         masterSplitRatio: 0.55
       )
     elif forcedLayout != 0:
-      nextModel.tags[targetTag].layoutMode = LayoutMode(forcedLayout - 1)
+      var tag = nextModel.tags[targetTag]
+      tag.layoutMode = LayoutMode(forcedLayout - 1)
+      nextModel.tags[targetTag] = tag
     
     # Add to determined tag
     var tag = nextModel.tags[targetTag]
@@ -130,7 +138,6 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of WlWindowDestroyed:
     nextModel.windows.del(msg.destroyedId)
-    # Also need to remove from columns in all tags
     for tagId, tag in nextModel.tags.mpairs:
       for i in countdown(tag.columns.len - 1, 0):
         tag.columns[i].windows.keepIf(proc(id: WindowId): bool = id != msg.destroyedId)
@@ -147,12 +154,65 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of WlFocusChanged:
     if nextModel.tags.hasKey(nextModel.activeTag):
-      nextModel.tags[nextModel.activeTag].focusedWindow = msg.newFocusedId
+      var tag = nextModel.tags[nextModel.activeTag]
+      tag.focusedWindow = msg.newFocusedId
+      nextModel.tags[nextModel.activeTag] = tag
       effects.add(broadcastWindowFocusChanged(msg.newFocusedId))
+
+  of WlPointerMoveRequested:
+    if nextModel.windows.hasKey(msg.moveWinId):
+      let win = nextModel.windows[msg.moveWinId]
+      if win.isFloating:
+        nextModel.pointerOp = PointerOpState(
+          kind: OpMove,
+          windowId: msg.moveWinId,
+          initialGeom: win.floatingGeom
+        )
+        effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.moveSeat))
+
+  of WlPointerResizeRequested:
+    if nextModel.windows.hasKey(msg.resizeWinId):
+      let win = nextModel.windows[msg.resizeWinId]
+      if win.isFloating:
+        nextModel.pointerOp = PointerOpState(
+          kind: OpResize,
+          windowId: msg.resizeWinId,
+          initialGeom: win.floatingGeom,
+          edges: msg.resizeEdges
+        )
+        effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.resizeSeat))
+
+  of WlPointerDelta:
+    let op = nextModel.pointerOp
+    if op.kind != OpNone and nextModel.windows.hasKey(op.windowId):
+      var win = nextModel.windows[op.windowId]
+      if op.kind == OpMove:
+        win.floatingGeom.x = op.initialGeom.x + msg.dx
+        win.floatingGeom.y = op.initialGeom.y + msg.dy
+      elif op.kind == OpResize:
+        if (op.edges and 1) != 0: # Top
+          win.floatingGeom.y = op.initialGeom.y + msg.dy
+          win.floatingGeom.h = max(50, op.initialGeom.h - msg.dy)
+        elif (op.edges and 2) != 0: # Bottom
+          win.floatingGeom.h = max(50, op.initialGeom.h + msg.dy)
+        
+        if (op.edges and 4) != 0: # Left
+          win.floatingGeom.x = op.initialGeom.x + msg.dx
+          win.floatingGeom.w = max(50, op.initialGeom.w - msg.dx)
+        elif (op.edges and 8) != 0: # Right
+          win.floatingGeom.w = max(50, op.initialGeom.w + msg.dx)
+
+      nextModel.windows[op.windowId] = win
+      effects.add(Effect(kind: EffManageDirty))
+
+  of WlPointerRelease:
+    nextModel.pointerOp = PointerOpState(kind: OpNone)
 
   of CmdSetLayout:
     if nextModel.tags.hasKey(nextModel.activeTag):
-      nextModel.tags[nextModel.activeTag].layoutMode = msg.newLayout
+      var tag = nextModel.tags[nextModel.activeTag]
+      tag.layoutMode = msg.newLayout
+      nextModel.tags[nextModel.activeTag] = tag
       effects.add(Effect(kind: EffManageDirty))
 
   of CmdMoveToTag:
@@ -160,14 +220,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     if nextModel.tags.hasKey(activeTagId):
       let focused = nextModel.tags[activeTagId].focusedWindow
       if focused != 0:
-        # Remove from current tag
         var currentTag = nextModel.tags[activeTagId]
         for i in countdown(currentTag.columns.len - 1, 0):
           currentTag.columns[i].windows.keepIf(proc(id: WindowId): bool = id != focused)
           if currentTag.columns[i].windows.len == 0:
             currentTag.columns.delete(i)
         
-        # Update focus on current tag if it was the active tag
         if currentTag.focusedWindow == focused:
           if currentTag.columns.len > 0 and currentTag.columns[0].windows.len > 0:
             currentTag.focusedWindow = currentTag.columns[0].windows[0]
@@ -175,35 +233,32 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             currentTag.focusedWindow = 0
         nextModel.tags[activeTagId] = currentTag
         
-        # Add to target tag
         if not nextModel.tags.hasKey(msg.targetTag):
-          nextModel.tags[msg.targetTag] = TagState(
-            tagId: msg.targetTag, 
-            layoutMode: Scroller, 
-            masterCount: 1, 
-            masterSplitRatio: 0.55
-          )
+          nextModel.tags[msg.targetTag] = TagState(tagId: msg.targetTag, layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55)
         
         var targetTag = nextModel.tags[msg.targetTag]
         targetTag.columns.add(Column(windows: @[focused], widthProportion: 0.5))
         targetTag.focusedWindow = focused
         nextModel.tags[msg.targetTag] = targetTag
         
-        # In overview mode, follow the window to the new tag to maintain focus consistency
         if nextModel.overviewActive:
           nextModel.activeTag = msg.targetTag
         
-        effects.add(broadcastWorkspaceActivated(msg.targetTag))
+        effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
         effects.add(Effect(kind: EffManageDirty))
 
   of CmdSetMasterCount:
     if nextModel.tags.hasKey(nextModel.activeTag):
-      nextModel.tags[nextModel.activeTag].masterCount = max(1, msg.count)
+      var tag = nextModel.tags[nextModel.activeTag]
+      tag.masterCount = max(1, msg.count)
+      nextModel.tags[nextModel.activeTag] = tag
       effects.add(Effect(kind: EffManageDirty))
 
   of CmdSetMasterRatio:
     if nextModel.tags.hasKey(nextModel.activeTag):
-      nextModel.tags[nextModel.activeTag].masterSplitRatio = clamp(msg.ratio, 0.05, 0.95)
+      var tag = nextModel.tags[nextModel.activeTag]
+      tag.masterSplitRatio = clamp(msg.ratio, 0.05, 0.95)
+      nextModel.tags[nextModel.activeTag] = tag
       effects.add(Effect(kind: EffManageDirty))
 
   of CmdResizeWidth:
@@ -249,6 +304,18 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             win.heightProportion = clamp(win.heightProportion + msg.deltaH, 0.05, 1.0)
             nextModel.windows[focused] = win
             effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMoveFloating:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      let focused = nextModel.tags[activeTagId].focusedWindow
+      if focused != 0 and nextModel.windows.hasKey(focused):
+        var win = nextModel.windows[focused]
+        if win.isFloating:
+          win.floatingGeom.x += msg.moveDX
+          win.floatingGeom.y += msg.moveDY
+          nextModel.windows[focused] = win
+          effects.add(Effect(kind: EffManageDirty))
 
   of CmdAdjustGaps:
     nextModel.outerGaps = max(0, nextModel.outerGaps + msg.deltaG)
@@ -305,24 +372,15 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             colIdx = i
             winIdx = j
             break
-        
         if colIdx != -1:
-          # Remove from current column
           tag.columns[colIdx].windows.delete(winIdx)
-          
           if colIdx > 0:
-            # Join column to the left
             tag.columns[colIdx-1].windows.add(focused)
           else:
-            # Create new column at the far left
             tag.columns.insert(Column(windows: @[focused], widthProportion: 0.5), 0)
-          
-          # Clean up empty column if any (might have shifted)
-          # We need to find it again because of the insert
           for i in countdown(tag.columns.len - 1, 0):
             if tag.columns[i].windows.len == 0:
               tag.columns.delete(i)
-              
           nextModel.tags[activeTagId] = tag
           effects.add(Effect(kind: EffManageDirty))
 
@@ -340,23 +398,15 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             colIdx = i
             winIdx = j
             break
-        
         if colIdx != -1:
-          # Remove from current column
           tag.columns[colIdx].windows.delete(winIdx)
-          
           if colIdx < tag.columns.len - 1:
-            # Join column to the right
             tag.columns[colIdx+1].windows.insert(focused, 0)
           else:
-            # Create new column at the far right
             tag.columns.add(Column(windows: @[focused], widthProportion: 0.5))
-          
-          # Clean up empty column if any
           for i in countdown(tag.columns.len - 1, 0):
             if tag.columns[i].windows.len == 0:
               tag.columns.delete(i)
-              
           nextModel.tags[activeTagId] = tag
           effects.add(Effect(kind: EffManageDirty))
 
@@ -430,7 +480,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of CmdToggleFloating:
     if nextModel.tags.hasKey(nextModel.activeTag):
-      let focused = nextModel.tags[nextModel.activeTag].focusedWindow
+      let activeTagId = nextModel.activeTag
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
       if focused != 0 and nextModel.windows.hasKey(focused):
         var win = nextModel.windows[focused]
         win.isFloating = not win.isFloating
@@ -454,9 +506,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var changed = false
       let speed = nextModel.animationSpeed
       let epsilon: float32 = 0.5
-
       for tagId, tag in nextModel.tags.mpairs:
-        # X Offset interpolation
         let dx = tag.targetViewportXOffset - tag.currentViewportXOffset
         if abs(dx) > epsilon:
           tag.currentViewportXOffset += dx * speed
@@ -464,66 +514,56 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         else:
           tag.currentViewportXOffset = tag.targetViewportXOffset
 
-        # Y Offset interpolation
         let dy = tag.targetViewportYOffset - tag.currentViewportYOffset
         if abs(dy) > epsilon:
           tag.currentViewportYOffset += dy * speed
           changed = true
         else:
           tag.currentViewportYOffset = tag.targetViewportYOffset
-
       if changed:
         effects.add(Effect(kind: EffManageDirty))
 
   of CmdFocusNext:
     if nextModel.overviewActive:
       var allWindows: seq[WindowId] = @[]
-      # Sort tag IDs for consistent navigation order
       var tagIds: seq[uint32] = @[]
       for id in nextModel.tags.keys: tagIds.add(id)
       tagIds.sort()
-
       for id in tagIds:
         let tag = nextModel.tags[id]
         for col in tag.columns:
           for win in col.windows:
             allWindows.add(win)
-      
       if allWindows.len > 0:
         let activeTagId = nextModel.activeTag
         let currentFocus = nextModel.tags[activeTagId].focusedWindow
         let idx = allWindows.find(currentFocus)
         let nextIdx = (if idx == -1: 0 else: (idx + 1) mod allWindows.len)
         let nextFocus = allWindows[nextIdx]
-        
-        # Find owner tag
         for id in tagIds:
           var found = false
           for col in nextModel.tags[id].columns:
-            if col.windows.contains(nextFocus):
-              found = true
-              break
+            if col.windows.contains(nextFocus): found = true; break
           if found:
             nextModel.activeTag = id
-            nextModel.tags[id].focusedWindow = nextFocus
+            var tag = nextModel.tags[id]
+            tag.focusedWindow = nextFocus
+            nextModel.tags[id] = tag
             break
-            
         effects.add(broadcastWindowFocusChanged(nextFocus))
         effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
         effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
-
     elif nextModel.tags.hasKey(nextModel.activeTag):
-      var tag = nextModel.tags[nextModel.activeTag]
+      let activeTagId = nextModel.activeTag
+      var tag = nextModel.tags[activeTagId]
       var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
-        for win in col.windows:
-          allWindows.add(win)
-      
+        for win in col.windows: allWindows.add(win)
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow)
         let nextIdx = (idx + 1) mod allWindows.len
         tag.focusedWindow = allWindows[nextIdx]
-        nextModel.tags[nextModel.activeTag] = tag
+        nextModel.tags[activeTagId] = tag
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
         effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
@@ -533,48 +573,40 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var tagIds: seq[uint32] = @[]
       for id in nextModel.tags.keys: tagIds.add(id)
       tagIds.sort()
-
       for id in tagIds:
         let tag = nextModel.tags[id]
         for col in tag.columns:
-          for win in col.windows:
-            allWindows.add(win)
-      
+          for win in col.windows: allWindows.add(win)
       if allWindows.len > 0:
         let activeTagId = nextModel.activeTag
         let currentFocus = nextModel.tags[activeTagId].focusedWindow
         let idx = allWindows.find(currentFocus)
         let prevIdx = (if idx == -1: 0 else: (idx - 1 + allWindows.len) mod allWindows.len)
         let nextFocus = allWindows[prevIdx]
-        
-        # Find owner tag
         for id in tagIds:
           var found = false
           for col in nextModel.tags[id].columns:
-            if col.windows.contains(nextFocus):
-              found = true
-              break
+            if col.windows.contains(nextFocus): found = true; break
           if found:
             nextModel.activeTag = id
-            nextModel.tags[id].focusedWindow = nextFocus
+            var tag = nextModel.tags[id]
+            tag.focusedWindow = nextFocus
+            nextModel.tags[id] = tag
             break
-
         effects.add(broadcastWindowFocusChanged(nextFocus))
         effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
         effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
-
     elif nextModel.tags.hasKey(nextModel.activeTag):
-      var tag = nextModel.tags[nextModel.activeTag]
+      let activeTagId = nextModel.activeTag
+      var tag = nextModel.tags[activeTagId]
       var allWindows: seq[WindowId] = @[]
       for col in tag.columns:
-        for win in col.windows:
-          allWindows.add(win)
-      
+        for win in col.windows: allWindows.add(win)
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow)
         let prevIdx = (idx - 1 + allWindows.len) mod allWindows.len
         tag.focusedWindow = allWindows[prevIdx]
-        nextModel.tags[nextModel.activeTag] = tag
+        nextModel.tags[activeTagId] = tag
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
         effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 

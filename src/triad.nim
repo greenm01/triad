@@ -7,7 +7,7 @@ import layouts/scroller
 import layouts/tiling
 import config/parser
 import ipc/socket
-import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils
 
 # --- Global Engine State ---
 var
@@ -63,6 +63,7 @@ layout {
     default-column-width { proportion 0.5; }
     enable-animations #true
     animation-speed 0.15
+    smart-gaps #false
 }
 
 tag-rules {
@@ -87,11 +88,6 @@ window-rule {
 window-rule {
     match app-id="alacritty"
     default-tag 1
-}
-
-window-rule {
-    match app-id="discord"
-    forced-layout "grid"
 }
 
 window-rule {
@@ -123,6 +119,19 @@ proc spawnQuickshell(model: Model) =
     except:
       warn "Failed to spawn Quickshell", theme=model.quickshell.theme
 
+# --- RiverSeatV1 Callbacks ---
+
+proc on_op_delta(data: pointer, seat: ptr RiverSeatV1, dx: int32, dy: int32) =
+  msgQueue.add(Msg(kind: WlPointerDelta, dx: dx, dy: dy))
+
+proc on_op_release(data: pointer, seat: ptr RiverSeatV1) =
+  msgQueue.add(Msg(kind: WlPointerRelease))
+
+var seat_listener = RiverSeatV1Listener(
+  opDelta: on_op_delta,
+  opRelease: on_op_release
+)
+
 # --- Effects Execution ---
 
 proc executeEffect(eff: Effect) =
@@ -140,6 +149,12 @@ proc executeEffect(eff: Effect) =
       river_manager.manageDirty()
   of EffBroadcastJson:
     asyncCheck broadcastJson(eff.jsonPayload)
+  of EffOpStartPointer:
+    if eff.opSeat != nil:
+      cast[ptr RiverSeatV1](eff.opSeat).opStartPointer()
+  of EffOpEnd:
+    if eff.endSeat != nil:
+      cast[ptr RiverSeatV1](eff.endSeat).opEnd()
   of EffSetPosition:
     if windowNodes.hasKey(eff.windowId):
       let node = windowNodes[eff.windowId]
@@ -185,10 +200,18 @@ proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
   let id = win.get_id()
   msgQueue.add(Msg(kind: WlWindowDestroyed, destroyedId: id))
 
+proc on_window_pointer_move_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1) =
+  msgQueue.add(Msg(kind: WlPointerMoveRequested, moveWinId: win.get_id(), moveSeat: seat))
+
+proc on_window_pointer_resize_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1, edges: uint32) =
+  msgQueue.add(Msg(kind: WlPointerResizeRequested, resizeWinId: win.get_id(), resizeSeat: seat, resizeEdges: edges))
+
 var window_listener = RiverWindowV1Listener(
   appId: on_window_app_id,
   title: on_window_title,
-  closed: on_window_closed
+  closed: on_window_closed,
+  pointerMoveRequested: on_window_pointer_move_requested,
+  pointerResizeRequested: on_window_pointer_resize_requested
 )
 
 # --- Wayland Callbacks ---
@@ -226,6 +249,7 @@ proc on_output(data: pointer, mgr: ptr RiverWindowManagerV1, output: ptr RiverOu
 
 proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1) =
   seatPointers.add(seat)
+  discard seat.addListener(seat_listener.addr, nil)
 
 # --- Registry Callbacks ---
 
@@ -330,6 +354,12 @@ proc main() =
       let msg = msgQueue[0]
       msgQueue.delete(0)
       
+      if msg.kind == WlPointerRelease:
+        if currentModel.pointerOp.kind != OpNone:
+          # Find the seat that was doing the operation
+          if seatPointers.len > 0:
+            executeEffect(Effect(kind: EffOpEnd, endSeat: seatPointers[0]))
+
       if msg.kind == CmdReloadConfig:
         let config = loadConfig(configPath)
         currentModel.applyConfig(config)
@@ -418,9 +448,18 @@ proc main() =
                   ))
 
         for instr in instructions:
-          executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
-                               x: instr.geom.x, y: instr.geom.y, 
-                               w: instr.geom.w, h: instr.geom.h))
+          # Execute set_position effects
+          if windowNodes.hasKey(instr.windowId):
+            let node = windowNodes[instr.windowId]
+            node.setPosition(instr.geom.x, instr.geom.y)
+            
+            # Place floating windows on top
+            if currentModel.windows.hasKey(instr.windowId) and currentModel.windows[instr.windowId].isFloating:
+              node.placeTop()
+
+          if windowPointers.hasKey(instr.windowId):
+            let win = windowPointers[instr.windowId]
+            win.proposeDimensions(instr.geom.w, instr.geom.h)
         
         # Must finish render
         executeEffect(Effect(kind: EffRenderFinish))

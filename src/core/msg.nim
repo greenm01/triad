@@ -9,6 +9,10 @@ type
     WlOutputDimensions,
     WlManageStart,
     WlRenderStart,
+    WlPointerMoveRequested,
+    WlPointerResizeRequested,
+    WlPointerDelta,
+    WlPointerRelease,
 
     # User Commands (IPC/Keybinds)
     CmdSetLayout,
@@ -16,20 +20,21 @@ type
     CmdFocusPrev,
     CmdCloseWindow,
     CmdMoveWindow,
+    CmdMoveWindowLeft,
+    CmdMoveWindowRight,
+    CmdMoveWindowUp,
+    CmdMoveWindowDown,
+    CmdMoveColumnLeft,
+    CmdMoveColumnRight,
+    CmdSwapWindowUp,
+    CmdSwapWindowDown,
+    CmdMoveFloating,
     CmdMoveToTag,
     CmdSetMasterCount,
     CmdSetMasterRatio,
     CmdResizeWidth,
     CmdResizeHeight,
     CmdAdjustGaps,
-    CmdMoveColumnLeft,
-    CmdMoveColumnRight,
-    CmdMoveWindowLeft,
-    CmdMoveWindowRight,
-    CmdMoveWindowUp,
-    CmdMoveWindowDown,
-    CmdSwapWindowUp,
-    CmdSwapWindowDown,
     CmdToggleOverview,
     CmdToggleFloating,
     CmdSelectWindow,
@@ -49,6 +54,17 @@ type
     of WlOutputDimensions:
       width*: int32
       height*: int32
+    of WlPointerMoveRequested:
+      moveWinId*: WindowId
+      moveSeat*: pointer # ptr RiverSeatV1
+    of WlPointerResizeRequested:
+      resizeWinId*: WindowId
+      resizeSeat*: pointer # ptr RiverSeatV1
+      resizeEdges*: uint32
+    of WlPointerDelta:
+      dx*, dy*: int32
+    of CmdMoveFloating:
+      moveDX*, moveDY*: int32
     of CmdSetLayout:
       newLayout*: LayoutMode
     of CmdMoveToTag:
