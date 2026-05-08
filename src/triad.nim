@@ -61,7 +61,7 @@ layout {
     gaps 16
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
-    enable-animations true
+    enable-animations #true
     animation-speed 0.15
 }
 
@@ -73,7 +73,7 @@ tag-rules {
 }
 
 quickshell {
-    enabled false
+    enabled #false
     theme "noctalia-shell"
 }
 
@@ -87,6 +87,11 @@ window-rule {
 window-rule {
     match app-id="alacritty"
     default-tag 1
+}
+
+window-rule {
+    match title="^Picture-in-Picture$"
+    open-floating #true
 }
 """
     writeFile(configPath, defaultContent)
@@ -134,6 +139,11 @@ proc executeEffect(eff: Effect) =
     if windowNodes.hasKey(eff.windowId):
       let node = windowNodes[eff.windowId]
       node.setPosition(eff.x, eff.y)
+      
+      # Place floating windows on top
+      if currentModel.windows.hasKey(eff.windowId) and currentModel.windows[eff.windowId].isFloating:
+        node.placeTop()
+
     if windowPointers.hasKey(eff.windowId):
       let win = windowPointers[eff.windowId]
       win.proposeDimensions(eff.w, eff.h)
@@ -400,18 +410,9 @@ proc main() =
                   ))
 
         for instr in instructions:
-          # Execute set_position effects
-          if windowNodes.hasKey(instr.windowId):
-            let node = windowNodes[instr.windowId]
-            node.setPosition(instr.geom.x, instr.geom.y)
-            
-            # Place floating windows on top
-            if currentModel.windows.hasKey(instr.windowId) and currentModel.windows[instr.windowId].isFloating:
-              node.placeTop()
-
-          if windowPointers.hasKey(instr.windowId):
-            let win = windowPointers[instr.windowId]
-            win.proposeDimensions(instr.geom.w, instr.geom.h)
+          executeEffect(Effect(kind: EffSetPosition, windowId: instr.windowId, 
+                               x: instr.geom.x, y: instr.geom.y, 
+                               w: instr.geom.w, h: instr.geom.h))
         
         # Must finish render
         executeEffect(Effect(kind: EffRenderFinish))

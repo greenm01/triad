@@ -106,7 +106,8 @@ proc loadConfig*(path: string): Config =
               result.quickshell.args.add(arg.kString())
             
   except:
-    warn "Could not load config, using defaults", path=path
+    let e = getCurrentException()
+    warn "Could not load config, using defaults", path=path, error=e.msg
 
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = config.layout.gaps

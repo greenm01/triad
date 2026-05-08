@@ -287,6 +287,38 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             effects.add(Effect(kind: EffManageDirty))
             break
 
+  of CmdSwapWindowUp:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        for i in 0 ..< tag.columns.len:
+          let idx = tag.columns[i].windows.find(focused)
+          if idx > 0:
+            let temp = tag.columns[i].windows[idx]
+            tag.columns[i].windows[idx] = tag.columns[i].windows[idx-1]
+            tag.columns[i].windows[idx-1] = temp
+            nextModel.tags[activeTagId] = tag
+            effects.add(Effect(kind: EffManageDirty))
+            break
+
+  of CmdSwapWindowDown:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        for i in 0 ..< tag.columns.len:
+          let idx = tag.columns[i].windows.find(focused)
+          if idx != -1 and idx < tag.columns[i].windows.len - 1:
+            let temp = tag.columns[i].windows[idx]
+            tag.columns[i].windows[idx] = tag.columns[i].windows[idx+1]
+            tag.columns[i].windows[idx+1] = temp
+            nextModel.tags[activeTagId] = tag
+            effects.add(Effect(kind: EffManageDirty))
+            break
+
   of CmdToggleOverview:
     nextModel.overviewActive = not nextModel.overviewActive
     effects.add(Effect(kind: EffManageDirty))

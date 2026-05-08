@@ -4,8 +4,9 @@ layout {
     gaps 16
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
-    enable-animations true
+    enable-animations #true
     animation-speed 0.15
+    smart-gaps #false
 }
 
 tag-rules {
@@ -16,7 +17,7 @@ tag-rules {
 }
 
 quickshell {
-    enabled false
+    enabled #false
     theme "noctalia-shell"
 }
 
@@ -30,4 +31,9 @@ window-rule {
 window-rule {
     match app-id="alacritty"
     default-tag 1
+}
+
+window-rule {
+    match title="^Picture-in-Picture$"
+    open-floating #true
 }

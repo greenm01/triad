@@ -25,6 +25,8 @@ type
     CmdMoveColumnRight,
     CmdMoveWindowUp,
     CmdMoveWindowDown,
+    CmdSwapWindowUp,
+    CmdSwapWindowDown,
     CmdToggleOverview,
     CmdToggleFloating,
     CmdSelectWindow,

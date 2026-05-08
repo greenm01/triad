@@ -78,6 +78,8 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "move-column-right": onMsg(Msg(kind: CmdMoveColumnRight))
         of "move-window-up": onMsg(Msg(kind: CmdMoveWindowUp))
         of "move-window-down": onMsg(Msg(kind: CmdMoveWindowDown))
+        of "swap-window-up": onMsg(Msg(kind: CmdSwapWindowUp))
+        of "swap-window-down": onMsg(Msg(kind: CmdSwapWindowDown))
         else: warn "Unknown IPC command", command=cmd
       
       client.close()
