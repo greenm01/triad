@@ -387,11 +387,11 @@ proc main() =
           var tagForLayout = tiledTagState
           instructions = case tagForLayout.layoutMode
             of Scroller:
-              layoutScroller(tagForLayout, screen, currentOuterGap, currentInnerGap,
+              layoutScroller(tagForLayout, currentModel.windows, screen, currentOuterGap, currentInnerGap,
                              currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                              currentModel.centerFocusedColumn)
             of VerticalScroller:
-              layoutVerticalScroller(tagForLayout, screen, currentOuterGap, currentInnerGap,
+              layoutVerticalScroller(tagForLayout, currentModel.windows, screen, currentOuterGap, currentInnerGap,
                                      currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
                                      currentModel.centerFocusedColumn)
             of MasterStack:

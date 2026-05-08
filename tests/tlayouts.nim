@@ -1,4 +1,4 @@
-import unittest
+import unittest, tables
 import ../src/core/model
 import ../src/layouts/scroller
 import ../src/layouts/tiling
@@ -16,7 +16,11 @@ suite "Layout Algorithm Math":
     tag.columns.add(Column(windows: @[101], widthProportion: 0.5))
     tag.columns.add(Column(windows: @[102], widthProportion: 0.5))
     
-    let instructions = layoutScroller(tag, screen, outerGap, innerGap, false, false, "never")
+    var windows = initTable[WindowId, WindowData]()
+    windows[101] = WindowData(id: 101, heightProportion: 1.0)
+    windows[102] = WindowData(id: 102, heightProportion: 1.0)
+
+    let instructions = layoutScroller(tag, windows, screen, outerGap, innerGap, false, false, "never")
     
     check instructions.len == 2
     

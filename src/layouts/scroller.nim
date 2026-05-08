@@ -1,6 +1,6 @@
-import ../core/model
+import ../core/model, tables
 
-proc layoutScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32, 
+proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], screen: Rect, outerGap, innerGap: int32, 
                     focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
   
@@ -21,7 +21,7 @@ proc layoutScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32,
     
     let colWidth = int32(float32(usableWidth) * col.widthProportion)
     virtualX.add(totalVirtualWidth)
-    totalVirtualWidth += colWidth # Removed + innerGap here to match Mango's coordinate logic
+    totalVirtualWidth += colWidth
 
   # Calculate target offset for centering
   if focusedColIdx != -1:
@@ -54,11 +54,20 @@ proc layoutScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32,
     let totalInnerGaps = (numWindows - 1) * innerGap
     let usableColHeight = usableHeight - totalInnerGaps
     
+    # Calculate sum of proportions for normalization
+    var totalHeightProp: float32 = 0.0
+    for winId in col.windows:
+      if windows.hasKey(winId):
+        totalHeightProp += windows[winId].heightProportion
+      else:
+        totalHeightProp += 1.0
+
     var currentY = screen.y + outerGap
     
     for winId in col.windows:
       # Vertical stacking within the column
-      let winHeight = int32(usableColHeight div int32(numWindows))
+      let winProp = if windows.hasKey(winId): windows[winId].heightProportion else: 1.0
+      let winHeight = int32(float32(usableColHeight) * (winProp / totalHeightProp))
       
       instructions.add(RenderInstruction(
         windowId: winId,
@@ -74,7 +83,7 @@ proc layoutScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32,
 
   return instructions
 
-proc layoutVerticalScroller*(tag: var TagState, screen: Rect, outerGap, innerGap: int32, 
+proc layoutVerticalScroller*(tag: var TagState, windows: Table[WindowId, WindowData], screen: Rect, outerGap, innerGap: int32, 
                             focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
   
@@ -93,7 +102,6 @@ proc layoutVerticalScroller*(tag: var TagState, screen: Rect, outerGap, innerGap
     if col.windows.contains(tag.focusedWindow):
       focusedColIdx = i
     
-    # Re-using widthProportion as heightProportion for vertical mode
     let colHeight = int32(float32(usableHeight) * col.widthProportion)
     virtualY.add(totalVirtualHeight)
     totalVirtualHeight += colHeight + innerGap
@@ -127,11 +135,20 @@ proc layoutVerticalScroller*(tag: var TagState, screen: Rect, outerGap, innerGap
     let totalInnerGaps = (numWindows - 1) * innerGap
     let usableColWidth = usableWidth - totalInnerGaps
     
+    # Calculate sum of proportions for normalization
+    var totalWidthProp: float32 = 0.0
+    for winId in col.windows:
+      if windows.hasKey(winId):
+        totalWidthProp += windows[winId].widthProportion
+      else:
+        totalWidthProp += 1.0
+
     var currentX = screen.x + outerGap
     
     for winId in col.windows:
       # Horizontal stacking within the row
-      let winWidth = int32(usableColWidth div int32(numWindows))
+      let winProp = if windows.hasKey(winId): windows[winId].widthProportion else: 1.0
+      let winWidth = int32(float32(usableColWidth) * (winProp / totalWidthProp))
       
       instructions.add(RenderInstruction(
         windowId: winId,
