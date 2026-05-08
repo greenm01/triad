@@ -22,6 +22,8 @@ proc niriLayout(winId: WindowId; model: Model): JsonNode =
   var posY = 0.0
   var tileW = float(model.screenWidth)
   var tileH = float(model.screenHeight)
+  var windowW = max(0, int(model.screenWidth))
+  var windowH = max(0, int(model.screenHeight))
 
   for tag in model.tags.values:
     for colIdx, col in tag.columns:
@@ -30,10 +32,17 @@ proc niriLayout(winId: WindowId; model: Model): JsonNode =
         posX = float(colIdx + 1)
         posY = float(winIdx + 1)
 
+  if model.windows.hasKey(winId):
+    let win = model.windows[winId]
+    if win.actualW > 0:
+      windowW = int(win.actualW)
+    if win.actualH > 0:
+      windowH = int(win.actualH)
+
   %*{
     "pos_in_scrolling_layout": [int(posX), int(posY)],
     "tile_size": [tileW, tileH],
-    "window_size": [max(0, int(model.screenWidth)), max(0, int(model.screenHeight))],
+    "window_size": [windowW, windowH],
     "tile_pos_in_workspace_view": [posX, posY],
     "window_offset_in_tile": [0.0, 0.0]
   }
@@ -55,6 +64,9 @@ proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
     "workspace_id": if ws.isSome: %ws.get() else: newJNull(),
     "is_focused": isFocused,
     "is_floating": win.isFloating,
+    "is_maximized": win.isMaximized,
+    "is_minimized": win.isMinimized,
+    "is_fullscreen": win.isFullscreen,
     "is_urgent": false,
     "layout": niriLayout(win.id, model),
     "focus_timestamp": newJNull()
@@ -66,11 +78,15 @@ proc niriWorkspacesJson*(model: Model): JsonNode =
     ids.add(tagId)
   ids.sort()
 
-  let outputName = if model.primaryOutput != 0: "river-" & $model.primaryOutput else: "triad-0"
   result = newJArray()
   for tagId in ids:
     let tag = model.tags[tagId]
     let windows = tag.flattenWindows()
+    var outputName = if model.primaryOutput != 0: "river-" & $model.primaryOutput else: "triad-0"
+    for outputId, outputTag in model.outputTags.pairs:
+      if outputTag == tagId:
+        outputName = "river-" & $outputId
+        break
     result.add(%*{
       "id": tagId,
       "idx": tagId,

@@ -30,7 +30,9 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tlayouts",
     "tests/tlogging",
     "tests/tprotocol",
-    "tests/tstress"
+    "tests/tstress",
+    "triad-live-smoke.log",
+    "triad-live-smoke.out"
   ]:
     if fileExists(path):
       rmFile(path)

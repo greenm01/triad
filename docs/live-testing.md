@@ -19,6 +19,21 @@ Run Triad from inside the River session and capture stderr:
 TRIAD_LOG_LEVEL=debug ./triad 2>triad.log
 ```
 
+For the scripted smoke check, run:
+
+```bash
+sh tools/live_smoke.sh
+```
+
+The script builds Triad, starts it in the current River-compatible session,
+checks startup milestones, exercises Triad IPC plus the Niri shim, watches for
+fatal log patterns, and stops Triad before exiting. To also launch one terminal
+client during the smoke window:
+
+```bash
+TRIAD_LIVE_LAUNCH_CLIENTS=1 sh tools/live_smoke.sh
+```
+
 Expected startup milestones in `triad.log`:
 
 - `Logging initialized`

@@ -15,6 +15,10 @@
 /tests/.nimcache/
 /tests/nimcache/
 
+# Local smoke-test logs
+/triad-live-smoke.log
+/triad-live-smoke.out
+
 # User-specific
 .nimble/
 /home/niltempus/.nimble/

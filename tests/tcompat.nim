@@ -40,6 +40,9 @@ suite "Shell compatibility contracts":
     check windows[0]["app_id"].getStr() == "Alacritty"
     check windows[0]["workspace_id"].getInt() == 1
     check windows[0]["is_focused"].getBool() == true
+    check windows[0]["is_maximized"].getBool() == false
+    check windows[0]["is_minimized"].getBool() == false
+    check windows[0]["is_fullscreen"].getBool() == false
     check windows[0]["layout"].hasKey("tile_pos_in_workspace_view")
 
     let outputs = parseJson(handleNiriRequest("\"Outputs\"", model).reply)["Ok"]["Outputs"]
@@ -61,6 +64,25 @@ suite "Shell compatibility contracts":
     check outputs["river-42"]["logical"]["y"].getInt() == 50
     check outputs["river-42"]["logical"]["width"].getInt() == 1280
     check outputs["river-42"]["logical"]["height"].getInt() == 720
+
+  test "Niri compatibility reflects actual window dimensions and output tag ownership":
+    var model = modelForShell()
+    model.outputs[42] = OutputData(id: 42, x: 0, y: 0, w: 1280, h: 720)
+    model.outputs[43] = OutputData(id: 43, x: 1280, y: 0, w: 1280, h: 720)
+    model.primaryOutput = 42
+    model.outputTags[43] = 2
+    model.windows[10].actualW = 777
+    model.windows[10].actualH = 555
+    model.windows[10].isMaximized = true
+
+    let windows = parseJson(handleNiriRequest("\"Windows\"", model).reply)["Ok"]["Windows"]
+    check windows[0]["layout"]["window_size"][0].getInt() == 777
+    check windows[0]["layout"]["window_size"][1].getInt() == 555
+    check windows[0]["is_maximized"].getBool() == true
+
+    let workspaces = parseJson(handleNiriRequest("\"Workspaces\"", model).reply)["Ok"]["Workspaces"]
+    check workspaces[0]["output"].getStr() == "river-42"
+    check workspaces[1]["output"].getStr() == "river-43"
 
   test "Niri event stream starts with full state":
     let response = handleNiriRequest("\"EventStream\"", modelForShell())
