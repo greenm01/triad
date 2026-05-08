@@ -95,6 +95,9 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
   elif action.hasKey("CloseOverview"):
     return (true, @[Msg(kind: CmdCloseOverview)])
 
+  elif action.hasKey("ToggleKeyboardShortcutsInhibit"):
+    return (true, @[Msg(kind: CmdToggleKeyboardShortcutsInhibit)])
+
   elif action.hasKey("FocusColumnLeft"):
     return (true, @[Msg(kind: CmdFocusDirection, direction: DirLeft)])
 
@@ -175,6 +178,16 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
   elif action.hasKey("FullscreenWindow"):
     return (true, @[Msg(kind: CmdToggleFullscreen)])
 
+  elif action.hasKey("MaximizeWindowToEdges"):
+    let payload = action["MaximizeWindowToEdges"]
+    if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
+      let win = uintFromNode(payload["id"])
+      if win.isSome: return (true, @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: WindowId(win.get()))])
+    let focused = model.focusedOnActiveTag()
+    if focused != 0:
+      return (true, @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: focused)])
+    return (true, @[])
+
   elif action.hasKey("ToggleWindowFloating"):
     return (true, @[Msg(kind: CmdToggleFloating)])
 
@@ -215,8 +228,7 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
       action.hasKey("CenterVisibleColumns") or
       action.hasKey("SwitchPresetColumnWidth") or
       action.hasKey("SwitchPresetWindowHeight") or
-      action.hasKey("ToggleColumnTabbedDisplay") or
-      action.hasKey("ToggleKeyboardShortcutsInhibit"):
+      action.hasKey("ToggleColumnTabbedDisplay"):
     return (true, @[])
 
   (false, @[])

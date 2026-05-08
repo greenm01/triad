@@ -985,13 +985,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       hasRestoredTag = targetTag != 0
     var forcedLayout = 0
     for rule in nextModel.windowRules:
-      let appIdMatches = rule.appIdMatch == "" or msg.appId.contains(rule.appIdMatch)
-      let titleMatches = rule.titleMatch == "" or msg.title.contains(rule.titleMatch)
-      if appIdMatches and titleMatches:
+      if rule.matchesWindowRule(msg.appId, msg.title):
         if rule.defaultTag != 0 and not hasRestoredTag: targetTag = rule.defaultTag
         if rule.openFloating:
           win.isFloating = true
           win.floatingGeom = nextModel.defaultFloatingGeom()
+        win.keyboardShortcutsInhibit = rule.keyboardShortcutsInhibit
         if rule.forcedLayout != 0: forcedLayout = rule.forcedLayout
         break
     if hasRestoredWindow:
@@ -1219,6 +1218,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     if nextModel.windows.hasKey(msg.appIdWindowId):
       var win = nextModel.windows[msg.appIdWindowId]
       win.appId = msg.updatedAppId
+      win.keyboardShortcutsInhibit = nextModel.windowKeyboardShortcutsInhibit(win.appId, win.title)
+      if not win.keyboardShortcutsInhibit:
+        win.keyboardShortcutsInhibitBypass = false
       nextModel.windows[msg.appIdWindowId] = win
       effects.add(nextModel.broadcastWindowOpened(win))
 
@@ -1226,6 +1228,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     if nextModel.windows.hasKey(msg.titleWindowId):
       var win = nextModel.windows[msg.titleWindowId]
       win.title = msg.updatedTitle
+      win.keyboardShortcutsInhibit = nextModel.windowKeyboardShortcutsInhibit(win.appId, win.title)
+      if not win.keyboardShortcutsInhibit:
+        win.keyboardShortcutsInhibitBypass = false
       nextModel.windows[msg.titleWindowId] = win
       effects.add(nextModel.broadcastWindowOpened(win))
 
@@ -1911,6 +1916,18 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of CmdCancelEatNextKey:
     effects.add(Effect(kind: EffCancelEnsureNextKeyEaten))
+
+  of CmdToggleKeyboardShortcutsInhibit:
+    let focused = nextModel.focusedOnActiveTag()
+    if focused != 0 and nextModel.windows.hasKey(focused):
+      var win = nextModel.windows[focused]
+      if win.keyboardShortcutsInhibit:
+        win.keyboardShortcutsInhibitBypass = not win.keyboardShortcutsInhibitBypass
+      else:
+        win.keyboardShortcutsInhibit = true
+        win.keyboardShortcutsInhibitBypass = false
+      nextModel.windows[focused] = win
+      effects.add(Effect(kind: EffManageDirty))
 
   of CmdStopManager:
     effects.add(Effect(kind: EffStopManager))

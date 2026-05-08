@@ -105,8 +105,17 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
     return some(%*{"Action": {"OpenOverview": {}}})
   of "closeoverview", "close-overview":
     return some(%*{"Action": {"CloseOverview": {}}})
+  of "togglekeyboardshortcutsinhibit", "toggle-keyboard-shortcuts-inhibit":
+    return some(%*{"Action": {"ToggleKeyboardShortcutsInhibit": {}}})
   of "fullscreenwindow", "fullscreen-window":
     return some(%*{"Action": {"FullscreenWindow": {}}})
+  of "maximizewindowtoedges", "maximize-window-to-edges":
+    let id = optionValue(args, "--id")
+    if id.isSome:
+      let win = intArg(id.get())
+      if win.isSome:
+        return some(%*{"Action": {"MaximizeWindowToEdges": {"id": win.get()}}})
+    return some(%*{"Action": {"MaximizeWindowToEdges": {}}})
   of "togglewindowfloating", "toggle-window-floating":
     return some(%*{"Action": {"ToggleWindowFloating": {}}})
   of "focuswindow", "focus-window":

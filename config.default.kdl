@@ -115,6 +115,7 @@ bindings {
     bind "Super+e" "spawn env GTK_THEME=Adwaita:dark thunar"
     bind "Super+r" "reload-config"
     bind "Super+Escape" "lock-session"
+    bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"
 
     // Focus. Arrow and Page keys are intentionally avoided until Triad's
@@ -246,6 +247,11 @@ bindings {
     // Pointer operations.
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
+}
+
+window-rule {
+    match app-id="qemu"
+    keyboard-shortcuts-inhibit #true
 }
 
 window-rule {

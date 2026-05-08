@@ -64,6 +64,8 @@ type
     hasPresentationHint*: bool
     presentationHint*: uint32
     floatingGeom*: Rect
+    keyboardShortcutsInhibit*: bool
+    keyboardShortcutsInhibitBypass*: bool
 
   GroupState* = object
     id*: uint32
@@ -94,6 +96,7 @@ type
     titleMatch*: string
     defaultTag*: uint32
     openFloating*: bool
+    keyboardShortcutsInhibit*: bool
     forcedLayout*: int # 0: none, else: ord(LayoutMode) + 1
 
   TagRule* = object
@@ -163,6 +166,7 @@ type
     mode*: BindingMode
     hasLayoutOverride*: bool
     layoutOverride*: uint32
+    bypassShortcutsInhibit*: bool
 
   PointerBindingConfig* = object
     button*: uint32

@@ -162,6 +162,35 @@ suite "Core TEA Update Logic":
     check windows[0]["raw_app_id"].getStr() == "kitty"
     check windows[0]["workspace_id"].getInt() == 2
 
+  test "Window rule marks focused windows as shortcut-inhibiting":
+    model.tags[1] = initTagState(1, Scroller)
+    model.windowRules.add(WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true))
+
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 140, appId: "qemu-system-x86_64", title: "Void"))
+
+    check nextModel.windows[140].keyboardShortcutsInhibit == true
+    check nextModel.keyboardShortcutsInhibited() == true
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdToggleKeyboardShortcutsInhibit))
+    check nextModel.windows[140].keyboardShortcutsInhibitBypass == true
+    check nextModel.keyboardShortcutsInhibited() == false
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdToggleKeyboardShortcutsInhibit))
+    check nextModel.windows[140].keyboardShortcutsInhibitBypass == false
+    check nextModel.keyboardShortcutsInhibited() == true
+
+  test "App id updates re-evaluate shortcut inhibition rules":
+    model.tags[1] = initTagState(1, Scroller)
+    model.tags[1].columns.add(Column(windows: @[WindowId(141)]))
+    model.tags[1].focusedWindow = 141
+    model.windows[141] = WindowData(id: 141, appId: "unknown", title: "Void")
+    model.windowRules.add(WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true))
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowAppId, appIdWindowId: 141, updatedAppId: "qemu-system-x86_64"))
+
+    check nextModel.windows[141].keyboardShortcutsInhibit == true
+    check nextModel.keyboardShortcutsInhibited() == true
+
   test "Output changes emit full Niri state for shell caches":
     model.tags[1] = initTagState(1, Scroller)
     model.activeTag = 1

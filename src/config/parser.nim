@@ -315,6 +315,8 @@ proc loadConfig*(path: string): Config =
               if rawTag > 0: rule.defaultTag = uint32(rawTag)
             elif child.name == "open-floating" and child.args.len > 0:
               rule.openFloating = child.args[0].kBool()
+            elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
+              rule.keyboardShortcutsInhibit = child.args[0].kBool()
             elif child.name == "forced-layout" and child.args.len > 0:
               rule.forcedLayout = forcedLayoutValue(child.args[0].kString())
           except CatchableError as e:
@@ -359,6 +361,8 @@ proc loadConfig*(path: string): Config =
                     binding.layoutOverride = uint32(layout)
                 if child.props.hasKey("mode"):
                   binding.mode = parseBindingMode(child.props["mode"].kString())
+                if child.props.hasKey("allow-inhibiting"):
+                  binding.bypassShortcutsInhibit = not child.props["allow-inhibiting"].kBool()
                 result.keyBindings.add(binding)
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
@@ -527,6 +531,10 @@ proc applyConfig*(model: var Model, config: Config) =
   model.workspaces.defaultCount = normalizeWorkspaceCount(model.workspaces.defaultCount)
   model.tagRules = config.tagRules
   model.windowRules = config.windowRules
+  for _, win in model.windows.mpairs:
+    win.keyboardShortcutsInhibit = model.windowKeyboardShortcutsInhibit(win.appId, win.title)
+    if not win.keyboardShortcutsInhibit:
+      win.keyboardShortcutsInhibitBypass = false
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell
   if model.quickshell.command.strip().len == 0:

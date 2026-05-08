@@ -78,6 +78,7 @@ proc parseLegacyCommand*(line: string): Option[Msg] =
     else: none(Msg)
   of "eat-next-key": some(Msg(kind: CmdEatNextKey))
   of "cancel-eat-next-key": some(Msg(kind: CmdCancelEatNextKey))
+  of "toggle-keyboard-shortcuts-inhibit", "keyboard-shortcuts-inhibit": some(Msg(kind: CmdToggleKeyboardShortcutsInhibit))
   of "stop-manager": some(Msg(kind: CmdStopManager))
   of "exit-session": some(Msg(kind: CmdExitSession))
   of "focus-shell-ui": some(Msg(kind: CmdFocusShellUi))

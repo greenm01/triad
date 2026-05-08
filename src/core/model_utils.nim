@@ -1,4 +1,4 @@
-import algorithm, tables
+import algorithm, strutils, tables
 import defaults
 import model
 
@@ -52,6 +52,17 @@ proc tagRuleFor*(model: Model; tagId: uint32): tuple[found: bool, rule: TagRule]
     if rule.tagId == tagId:
       return (true, rule)
   (false, TagRule())
+
+proc matchesWindowRule*(rule: WindowRule; appId, title: string): bool =
+  let appIdMatches = rule.appIdMatch == "" or appId.contains(rule.appIdMatch)
+  let titleMatches = rule.titleMatch == "" or title.contains(rule.titleMatch)
+  appIdMatches and titleMatches
+
+proc windowKeyboardShortcutsInhibit*(model: Model; appId, title: string): bool =
+  for rule in model.windowRules:
+    if rule.matchesWindowRule(appId, title):
+      return rule.keyboardShortcutsInhibit
+  false
 
 proc floatingMinWidth*(model: Model): int32 =
   if model.floating.minWidth > 0: model.floating.minWidth else: DefaultFloatingMinWidth
@@ -307,6 +318,15 @@ proc focusedOnActiveTag*(model: Model): WindowId =
         model.windows.hasKey(tag.focusedWindow) and not model.windows[tag.focusedWindow].isMinimized:
       return tag.focusedWindow
   0
+
+proc keyboardShortcutsInhibited*(model: Model): bool =
+  if model.sessionLocked or model.layerFocusExclusive:
+    return false
+  let focused = model.focusedOnActiveTag()
+  if focused == 0 or not model.windows.hasKey(focused):
+    return false
+  let win = model.windows[focused]
+  win.keyboardShortcutsInhibit and not win.keyboardShortcutsInhibitBypass
 
 proc cleanupStaleTagWindows*(model: var Model): bool =
   if model.windows.len == 0 and model.restoreWindows.len == 0 and model.restoreTagByWindow.len == 0:

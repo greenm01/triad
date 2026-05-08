@@ -730,6 +730,13 @@ proc bindingModeActive(mode: BindingMode): bool =
   of BindNormal: not currentModel.overviewActive
   of BindOverview: currentModel.overviewActive
 
+proc keyBindingActive(binding: KeyBindingConfig): bool =
+  if not bindingModeActive(binding.mode):
+    return false
+  if currentModel.keyboardShortcutsInhibited() and not binding.bypassShortcutsInhibit:
+    return false
+  true
+
 proc setupDefaultBindings() =
   if bindingsConfigured:
     return
@@ -740,7 +747,7 @@ proc setupDefaultBindings() =
     attachXkbSeat(seat)
 
     for binding in currentModel.keyBindings:
-      if not bindingModeActive(binding.mode):
+      if not keyBindingActive(binding):
         continue
       let parsed = parseLegacyCommand(binding.command)
       let sym = keySymForBinding(binding.key, binding.modifiers)
@@ -1748,10 +1755,13 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       continue
 
     let previousOverview = currentModel.overviewActive
+    let previousShortcutsInhibited = currentModel.keyboardShortcutsInhibited()
     let (nextModel, effects) = update(currentModel, msg)
     currentModel = nextModel
-    if previousOverview != currentModel.overviewActive:
+    if previousOverview != currentModel.overviewActive or
+        previousShortcutsInhibited != currentModel.keyboardShortcutsInhibited():
       destroyBindings()
+      requestManage("binding profile changed")
 
     if msg.kind == WlManageStart:
       riverPhase = RiverManage

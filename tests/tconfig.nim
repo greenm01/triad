@@ -242,18 +242,24 @@ window-rule {
     match app-id="discord"
     forced-layout "grid"
 }
+window-rule {
+    match app-id="qemu"
+    keyboard-shortcuts-inhibit #true
+}
 """
     writeFile(path, kdl)
     let config = loadConfig(path)
     removeFile(path)
     
-    check config.windowRules.len == 3
+    check config.windowRules.len == 4
     check config.windowRules[0].appIdMatch == "firefox"
     check config.windowRules[0].defaultTag == 2
     check config.windowRules[1].titleMatch == "Picture-in-Picture"
     check config.windowRules[1].openFloating == true
     check config.windowRules[2].appIdMatch == "discord"
     check config.windowRules[2].forcedLayout == ord(Grid) + 1
+    check config.windowRules[3].appIdMatch == "qemu"
+    check config.windowRules[3].keyboardShortcutsInhibit == true
 
   test "Parser correctly reads quickshell config":
     let path = getCurrentDir() / "test_qs.kdl"
@@ -365,7 +371,7 @@ cursor {
 bindings {
     bind "Super+Return" "spawn-terminal" layout=1
     bind "Super+Shift+q" "close-window" mode="normal"
-    bind "Return" "select-window" mode="overview"
+    bind "Return" "select-window" mode="overview" allow-inhibiting=#false
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
 }
@@ -387,6 +393,7 @@ bindings {
     check config.keyBindings[2].key == "Return"
     check config.keyBindings[2].modifiers == 0'u32
     check config.keyBindings[2].mode == BindOverview
+    check config.keyBindings[2].bypassShortcutsInhibit == true
     check config.pointerBindings.len == 2
     check config.pointerBindings[0].button == 0x110'u32
     check config.pointerBindings[0].modifiers == 64'u32
@@ -401,7 +408,7 @@ bindings {
     check config.keyBindings.len > 0
     check config.pointerBindings.len > 0
 
-  test "Embedded fallback config stays shell and app neutral":
+  test "Embedded fallback config stays shell neutral with safe QEMU inhibition":
     let path = getCurrentDir() / "test_fallback_defaults.kdl"
     writeFile(path, FallbackConfigContent)
     let config = loadConfig(path)
@@ -411,7 +418,9 @@ bindings {
     check config.quickshell.command == DefaultQuickshellCommand
     check config.quickshell.theme == ""
     check config.startupCommands.len == 0
-    check config.windowRules.len == 0
+    check config.windowRules.len == 1
+    check config.windowRules[0].appIdMatch == "qemu"
+    check config.windowRules[0].keyboardShortcutsInhibit == true
     check config.layout.borderWidth == DefaultBorderWidth
     check config.layout.centerFocusedColumn == DefaultCenterFocusedColumn
     check config.layout.defaultColumnWidth == defaults.DefaultColumnWidth

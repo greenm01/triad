@@ -119,6 +119,7 @@ type
     CmdWarpPointer,
     CmdEatNextKey,
     CmdCancelEatNextKey,
+    CmdToggleKeyboardShortcutsInhibit,
     CmdStopManager,
     CmdExitSession,
     CmdFocusShellUi,

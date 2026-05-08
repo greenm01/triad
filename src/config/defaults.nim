@@ -73,6 +73,7 @@ bindings {
     bind "Super+i" "minimize"
     bind "Super+n" "switch-layout"
     bind "Super+r" "reload-config"
+    bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Super+t" "spawn-terminal"
     bind "Super+Tab" "focus-next"
     bind "Alt+Left" "focus-left"
@@ -85,5 +86,10 @@ bindings {
     bind "Super+4" "focus-workspace 4"
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
+}
+
+window-rule {
+    match app-id="qemu"
+    keyboard-shortcuts-inhibit #true
 }
 """

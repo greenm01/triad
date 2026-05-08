@@ -193,6 +193,15 @@ suite "Shell compatibility contracts":
     check closeWin.messages[0].kind == CmdCloseWindowById
     check closeWin.messages[0].closeWindowId == 10
 
+    let inhibit = handleNiriRequest("""{"Action":{"ToggleKeyboardShortcutsInhibit":{}}}""", modelForShell())
+    check inhibit.messages.len == 1
+    check inhibit.messages[0].kind == CmdToggleKeyboardShortcutsInhibit
+
+    let maximize = handleNiriRequest("""{"Action":{"MaximizeWindowToEdges":{"id":10}}}""", modelForShell())
+    check maximize.messages.len == 1
+    check maximize.messages[0].kind == WlWindowMaximizeRequested
+    check maximize.messages[0].maximizeRequestId == 10
+
   test "DankMaterialShell Niri actions are handled":
     let toggleOverview = handleNiriRequest("""{"Action":{"ToggleOverview":{}}}""", modelForShell())
     check toggleOverview.messages.len == 1
