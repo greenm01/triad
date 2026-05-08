@@ -403,7 +403,9 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
         theme=model.quickshell.theme,
         pid=p.processID,
         niriSocket=compat.niriSocketPath,
-        shimReady=compat.shimReady
+        shimReady=compat.shimReady,
+        overlayReady=compat.overlayReady,
+        xdgShare=compat.xdgSharePath
     except CatchableError as e:
       warn "Failed to spawn Quickshell", theme=model.quickshell.theme, error=e.msg
 

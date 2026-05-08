@@ -22,6 +22,7 @@ Name=Foot
 Exec=foot --server %U
 Icon=foot
 StartupWMClass=foot
+Categories=System;TerminalEmulator;
 """)
 
     let parsed = parseDesktopEntry(root / "foot.desktop", root)
@@ -31,6 +32,8 @@ StartupWMClass=foot
     check parsed.get().execBase == "foot"
     check parsed.get().icon == "foot"
     check parsed.get().startupWmClass == "foot"
+    check parsed.get().categories == @["System", "TerminalEmulator"]
+    check parsed.get().isTerminalEntry
 
   test "maps exec basenames to desktop ids":
     writeDesktop(root, "kitty.desktop", """

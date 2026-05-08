@@ -92,7 +92,10 @@ TRIAD_LIVE_TEST_QUICKSHELL=1 ./tools/live_smoke.sh
 
 The smoke gate verifies that Quickshell was spawned, that
 `$XDG_RUNTIME_DIR/triad-compat-bin/niri` exists, and that the private shim can
-query Triad through the shell-facing `$NIRI_SOCKET`.
+query Triad through the shell-facing `$NIRI_SOCKET`. Triad also prepends
+`$XDG_RUNTIME_DIR/triad-shell-compat/share` to Quickshell's `XDG_DATA_DIRS` so
+shells can resolve Triad-provided desktop/icon aliases without changing the rest
+of the user session.
 
 DMS screenshot actions require `grim` and `slurp`. `satty` or `swappy` are
 opened by DMS after Triad emits the Niri-compatible `ScreenshotCaptured` event.

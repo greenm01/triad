@@ -25,6 +25,8 @@ private runtime environment for that process:
 
 - `$NIRI_SOCKET` points at a Triad-owned Niri-compatible socket.
 - `$XDG_RUNTIME_DIR/triad-compat-bin/niri` points at `triad_niri`.
+- `$XDG_RUNTIME_DIR/triad-shell-compat/share` is prepended to `XDG_DATA_DIRS`
+  for shell-only desktop entry and icon aliases.
 - `PATH` is prefixed only for the spawned Quickshell process.
 - `XDG_CURRENT_DESKTOP=triad`, so shells choose the Niri backend and do not
   accidentally select Mango/DWL behavior.
@@ -38,6 +40,12 @@ as `foot.desktop`, `kitty.desktop`, or `alacritty.desktop`. This lets shells use
 their normal desktop-entry and icon-theme lookup paths without Noctalia or
 DankMaterialShell patches. When a value is mapped, Triad also emits `raw_app_id`
 as a debugging extension for clients that ignore unknown fields.
+
+For terminal icons, Triad also generates a private XDG overlay from installed
+`.desktop` metadata. Entries advertising the freedesktop `TerminalEmulator`
+category get shell-safe desktop/icon aliases in Triad's runtime directory. This
+is data-driven from the system desktop database; Triad does not special-case
+individual terminal apps except for minimal unresolved app-id aliases.
 
 Screenshot actions are implemented through `grim` and `slurp`:
 
@@ -58,4 +66,5 @@ The compatibility tests in `tests/tcompat.nim` encode this decision:
 - Basic Niri actions map to Triad messages.
 - `triad_niri` translates the `niri msg -j outputs` and common action shapes
   that shell code runs.
+- The private Quickshell environment includes Triad's XDG overlay.
 - Triad text IPC remains Triad-native and does not claim to implement `mmsg`.

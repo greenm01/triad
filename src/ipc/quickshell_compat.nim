@@ -1,4 +1,5 @@
 import os, posix, strtabs, strutils
+import shell_overlay
 import socket
 
 type
@@ -6,9 +7,12 @@ type
     env*: StringTableRef
     niriSocketPath*: string
     compatBinPath*: string
+    xdgOverlayPath*: string
+    xdgSharePath*: string
     niriShimPath*: string
     triadNiriPath*: string
     shimReady*: bool
+    overlayReady*: bool
     warning*: string
 
 proc shellQuote(value: string): string =
@@ -40,6 +44,13 @@ proc copyCurrentEnv(): StringTableRef =
   result = newStringTable(modeCaseSensitive)
   for key, value in envPairs():
     result[key] = value
+
+proc appendWarning(existing, warning: string): string =
+  if warning.len == 0:
+    return existing
+  if existing.len == 0:
+    return warning
+  existing & "; " & warning
 
 proc installNiriShim(compatBinPath, triadNiriPath: string): tuple[ok: bool, warning: string] =
   if triadNiriPath.len == 0:
@@ -91,9 +102,22 @@ proc prepareQuickshellCompatEnv*(
   result.shimReady = installed.ok
   result.warning = installed.warning
 
+  let overlay = installShellOverlay(runtimeDir)
+  result.overlayReady = overlay.ok
+  result.xdgOverlayPath = overlay.rootPath
+  result.xdgSharePath = overlay.sharePath
+  result.warning = result.warning.appendWarning(overlay.warning)
+
   if result.shimReady:
     let currentPath = result.env.getOrDefault("PATH", "")
     if currentPath.len > 0:
       result.env["PATH"] = result.compatBinPath & ":" & currentPath
     else:
       result.env["PATH"] = result.compatBinPath
+
+  if result.overlayReady:
+    let currentDataDirs = result.env.getOrDefault("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
+    if currentDataDirs.len > 0:
+      result.env["XDG_DATA_DIRS"] = result.xdgSharePath & PathSep & currentDataDirs
+    else:
+      result.env["XDG_DATA_DIRS"] = result.xdgSharePath

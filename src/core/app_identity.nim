@@ -1,15 +1,18 @@
-import os, options, strutils, tables
+import os, options, sequtils, strutils, tables
 
 type
   DesktopEntry* = object
+    sourcePath*: string
     id*: string
     name*: string
     icon*: string
+    execLine*: string
     execBase*: string
     startupWmClass*: string
+    categories*: seq[string]
 
   AppIdentityIndex* = object
-    entries: seq[DesktopEntry]
+    entries*: seq[DesktopEntry]
     byDesktopId: Table[string, int]
     byExecBase: Table[string, int]
     byStartupWmClass: Table[string, int]
@@ -83,7 +86,7 @@ proc parseDesktopEntry*(path, root: string): Option[DesktopEntry] =
   if not fileExists(path):
     return none(DesktopEntry)
 
-  var entry = DesktopEntry(id: desktopIdFor(path, root))
+  var entry = DesktopEntry(sourcePath: path, id: desktopIdFor(path, root))
   var inDesktopEntry = false
   var hidden = false
 
@@ -112,9 +115,12 @@ proc parseDesktopEntry*(path, root: string): Option[DesktopEntry] =
     of "Icon":
       entry.icon = value
     of "Exec":
+      entry.execLine = value
       entry.execBase = firstExecToken(value)
     of "StartupWMClass":
       entry.startupWmClass = value
+    of "Categories":
+      entry.categories = value.split(';').filterIt(it.strip().len > 0).mapIt(it.strip())
     of "Hidden":
       hidden = value.normalizeKey() == "true"
     else:
@@ -148,6 +154,16 @@ proc buildAppIdentityIndex*(applicationDirs: openArray[string]): AppIdentityInde
         let parsed = parseDesktopEntry(path, dir)
         if parsed.isSome:
           result.addEntry(parsed.get())
+
+iterator desktopEntries*(index: AppIdentityIndex): DesktopEntry =
+  for entry in index.entries:
+    yield entry
+
+func isTerminalEntry*(entry: DesktopEntry): bool =
+  for category in entry.categories:
+    if category.normalizeKey() == "terminalemulator":
+      return true
+  false
 
 proc xdgApplicationDirs*(): seq[string] =
   let dataHome = getEnv("XDG_DATA_HOME", getHomeDir() / ".local" / "share")

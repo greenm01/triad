@@ -2,10 +2,12 @@ import unittest, json, options, os, strtabs, strutils, tables
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
+import ../src/core/app_identity
 import ../src/ipc/commands
 import ../src/ipc/niri_cli
 import ../src/ipc/niri_compat
 import ../src/ipc/quickshell_compat
+import ../src/ipc/shell_overlay
 
 proc modelForShell(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080)
@@ -250,6 +252,10 @@ suite "Shell compatibility contracts":
     let fakeTriadNiri = tmp / "triad_niri"
     writeFile(fakeTriadNiri, "#!/bin/sh\nexit 0\n")
     setFilePermissions(fakeTriadNiri, {fpUserRead, fpUserWrite, fpUserExec})
+    let oldDataDirs = getEnv("XDG_DATA_DIRS", "")
+    putEnv("XDG_DATA_DIRS", "/custom/share:/usr/share")
+    defer:
+      putEnv("XDG_DATA_DIRS", oldDataDirs)
     let compat = prepareQuickshellCompatEnv(tmp / "triad-niri.sock", tmp, fakeTriadNiri)
     defer:
       removeDir(tmp)
@@ -257,8 +263,64 @@ suite "Shell compatibility contracts":
     check compat.env["NIRI_SOCKET"] == tmp / "triad-niri.sock"
     check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
     check compat.shimReady
+    check compat.overlayReady
     check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")
+    check compat.env["XDG_DATA_DIRS"].startsWith(tmp / "triad-shell-compat" / "share")
+    check compat.env["XDG_DATA_DIRS"].endsWith("/custom/share:/usr/share")
     check fileExists(compat.niriShimPath)
+    check dirExists(compat.xdgSharePath / "applications")
+
+  test "shell overlay is generated from terminal desktop metadata":
+    let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let appRoot = tmp / "apps"
+    createDir(appRoot)
+    writeFile(appRoot / "DemoTerm.desktop", """
+[Desktop Entry]
+Type=Application
+Name=Demo Term
+Exec=demo-term --new-window
+Icon=demo-term
+StartupWMClass=DemoTerm
+Categories=System;TerminalEmulator;
+""")
+    writeFile(appRoot / "Browser.desktop", """
+[Desktop Entry]
+Type=Application
+Name=Browser
+Exec=browser
+Icon=browser
+Categories=Network;WebBrowser;
+""")
+
+    let iconRoot = tmp / "iconsrc"
+    createDir(iconRoot / "icons" / "hicolor" / "scalable" / "apps")
+    writeFile(iconRoot / "icons" / "hicolor" / "scalable" / "apps" / "demo-term.svg", "<svg/>")
+
+    let oldDataHome = getEnv("XDG_DATA_HOME", "")
+    let oldDataDirs = getEnv("XDG_DATA_DIRS", "")
+    putEnv("XDG_DATA_HOME", iconRoot)
+    putEnv("XDG_DATA_DIRS", "")
+    defer:
+      putEnv("XDG_DATA_HOME", oldDataHome)
+      putEnv("XDG_DATA_DIRS", oldDataDirs)
+
+    let index = buildAppIdentityIndex([appRoot])
+    let overlay = installShellOverlay(tmp / "runtime", index)
+    check overlay.ok
+
+    let generatedApp = overlay.sharePath / "applications" / "demoterm.desktop"
+    check fileExists(generatedApp)
+    check readFile(generatedApp).contains("Exec=demo-term --new-window")
+    check readFile(generatedApp).contains("Icon=triad-demoterm")
+    check not fileExists(overlay.sharePath / "applications" / "browser.desktop")
+    check fileExists(overlay.sharePath / "icons" / "hicolor" / "scalable" / "apps" / "triad-demoterm.svg")
 
   test "text IPC remains Triad-native, not a fake Mango mmsg shell":
     let msg = parseLegacyCommand("focus-workspace 2")
