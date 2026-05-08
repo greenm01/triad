@@ -20,6 +20,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
   for path in [
     "triad",
     "triad_niri",
+    "src/config/parser",
     "src/triad",
     "src/triad_niri",
     "tests/tcompat",

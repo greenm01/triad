@@ -1,14 +1,11 @@
 # Binaries
 /triad
 /triad_niri
+/src/config/parser
 /src/triad
 /src/triad_niri
-/tests/tcompat
-/tests/tconfig
-/tests/tcore
-/tests/thardening
-/tests/tlayouts
-/tests/tstress
+/tests/t*
+!/tests/*.nim
 
 # Nim cache
 /.nimcache/
