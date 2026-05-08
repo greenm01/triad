@@ -154,6 +154,7 @@ proc shouldBroadcastWindowsChanged(kind: MsgKind): bool =
       WlWindowUnmaximizeRequested,
       WlWindowMinimizeRequested,
       WlWindowDimensions,
+      WlWindowIdentifier,
       WlWindowAppId,
       WlWindowTitle,
       WlWindowDimensionsHint,
@@ -504,15 +505,21 @@ proc materializeRestoredTag(state: RestoredTagState): TagState =
   for col in state.columns:
     result.columns.add(Column(widthProportion: clamp(col.widthProportion, 0.05'f32, 1.0'f32)))
 
-proc restoredIdentityMatches(restored: RestoredWindowState; appId, title, identifier: string): bool =
-  if restored.identifier.len > 0 and identifier.len > 0:
-    return restored.identifier == identifier
-  restored.appId.len > 0 and restored.title.len > 0 and restored.appId == appId and restored.title == title
-
 proc findRestoredWindowByIdentity(model: Model; appId, title, identifier: string): WindowId =
+  if identifier.len > 0:
+    for oldWinId, restored in model.restoreWindows.pairs:
+      if restored.identifier.len > 0 and restored.identifier == identifier:
+        return oldWinId
+
+  var matched: WindowId = 0
+  var matches = 0
   for oldWinId, restored in model.restoreWindows.pairs:
-    if restoredIdentityMatches(restored, appId, title, identifier):
-      return oldWinId
+    if restored.identifier.len == 0 and restored.appId.len > 0 and restored.title.len > 0 and
+        restored.appId == appId and restored.title == title:
+      matched = oldWinId
+      inc matches
+  if matches == 1:
+    return matched
   0
 
 proc placeRestoredWindow(model: var Model; targetTag: uint32; restoredWinId, winId: WindowId) =
@@ -550,6 +557,88 @@ proc placeRestoredWindow(model: var Model; targetTag: uint32; restoredWinId, win
     var tag = model.tags.getOrDefault(targetTag, model.initTagStateForModel(targetTag))
     tag.columns.add(model.defaultColumn(@[winId]))
     model.tags[targetTag] = tag
+
+proc applyRestoredWindowState(model: var Model; winId: WindowId; restored: RestoredWindowState) =
+  if not model.windows.hasKey(winId):
+    return
+  var win = model.windows[winId]
+  win.widthProportion = restored.widthProportion
+  win.heightProportion = restored.heightProportion
+  win.isFloating = restored.isFloating
+  win.isFullscreen = restored.isFullscreen
+  win.isMaximized = restored.isMaximized
+  win.isMinimized = restored.isMinimized
+  win.fullscreenOutput = restored.fullscreenOutput
+  win.floatingGeom = restored.floatingGeom
+  win.actualW = restored.actualW
+  win.actualH = restored.actualH
+  model.windows[winId] = win
+
+proc rewriteRestoredWindowReferences(model: var Model; restoredWinId, winId: WindowId) =
+  if restoredWinId == winId:
+    return
+  for item in model.focusHistory.mitems:
+    if item == restoredWinId:
+      item = winId
+  for _, tag in model.tags.mpairs:
+    if tag.focusedWindow == restoredWinId:
+      tag.focusedWindow = winId
+    for col in tag.columns.mitems:
+      for item in col.windows.mitems:
+        if item == restoredWinId:
+          item = winId
+
+proc materializeRestoredTarget(model: var Model; targetTag: uint32) =
+  if targetTag == 0 or model.tags.hasKey(targetTag):
+    return
+  if model.restoreTags.hasKey(targetTag):
+    model.tags[targetTag] = materializeRestoredTag(model.restoreTags[targetTag])
+  else:
+    model.tags[targetTag] = model.initTagStateForModel(targetTag)
+
+proc isRestoredScratchpad(model: Model; winId: WindowId): bool
+
+proc applyPendingRestore(model: var Model; winId, restoredWinId: WindowId; restoredWin: RestoredWindowState;
+    effects: var seq[Effect]) =
+  if winId == 0 or restoredWinId == 0 or not model.windows.hasKey(winId):
+    return
+
+  var targetTag = restoredWin.tagId
+  if model.restoreTagByWindow.hasKey(winId):
+    targetTag = model.restoreTagByWindow[winId]
+    model.restoreTagByWindow.del(winId)
+  if model.restoreTagByWindow.hasKey(restoredWinId):
+    targetTag = model.restoreTagByWindow[restoredWinId]
+    model.restoreTagByWindow.del(restoredWinId)
+
+  model.restoreWindows.del(restoredWinId)
+  model.applyRestoredWindowState(winId, restoredWin)
+  model.rewriteRestoredWindowReferences(restoredWinId, winId)
+
+  let restoresFocusedWindow =
+    model.restoreFocusedWindow != 0 and restoredWinId == model.restoreFocusedWindow
+  let restoredScratchpad = restoredWin.tagId == 0 and model.isRestoredScratchpad(winId)
+  if not restoredScratchpad and targetTag != 0:
+    discard model.removeWindowFromAllTags(winId)
+    model.materializeRestoredTarget(targetTag)
+    model.placeRestoredWindow(targetTag, restoredWinId, winId)
+    if restoresFocusedWindow and model.tags.hasKey(targetTag):
+      var tag = model.tags[targetTag]
+      tag.focusedWindow = winId
+      model.tags[targetTag] = tag
+
+  if restoredWin.isFullscreen:
+    effects.add(Effect(kind: EffSetFullscreen, fsWinId: winId, isFullscreen: true, fsOutputId: restoredWin.fullscreenOutput))
+  if restoredWin.isMaximized:
+    effects.add(Effect(kind: EffSetMaximized, maxWinId: winId, isMaximized: true))
+
+  if restoresFocusedWindow and targetTag == model.activeTag and model.tags.hasKey(targetTag) and
+      model.tags[targetTag].focusedWindow == winId and not model.sessionLocked:
+    model.recordFocus(winId)
+    effects.add(broadcastWindowFocusChanged(winId))
+    effects.add(Effect(kind: EffFocusWindow, focusId: winId))
+    model.restoreFocusedWindow = 0
+  effects.add(Effect(kind: EffManageDirty))
 
 proc isRestoredScratchpad(model: Model; winId: WindowId): bool =
   if model.scratchpadWindows.find(winId) != -1:
@@ -1115,6 +1204,16 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var win = nextModel.windows[msg.identifierWindowId]
       win.identifier = msg.identifier
       nextModel.windows[msg.identifierWindowId] = win
+      if msg.identifier.len > 0 and nextModel.restoreWindows.len > 0:
+        var restoredWinId: WindowId = 0
+        var restoredWin = RestoredWindowState()
+        for oldWinId, restored in nextModel.restoreWindows.pairs:
+          if restored.identifier.len > 0 and restored.identifier == msg.identifier:
+            restoredWinId = oldWinId
+            restoredWin = restored
+            break
+        if restoredWinId != 0:
+          nextModel.applyPendingRestore(msg.identifierWindowId, restoredWinId, restoredWin, effects)
 
   of WlWindowAppId:
     if nextModel.windows.hasKey(msg.appIdWindowId):

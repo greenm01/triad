@@ -358,6 +358,82 @@ suite "Core TEA Update Logic":
     check nextModel.tags[2].focusedWindow == 202
     check manageEffects.anyIt(it.kind == EffFocusWindow and it.focusId == 202)
 
+  test "live restore waits for identifiers before matching duplicate terminals":
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 11)
+    restored.tags[1] = RestoredTagState(
+      tagId: 1,
+      layoutMode: Scroller,
+      masterCount: 1,
+      masterSplitRatio: 0.55,
+      focusedWindow: 11,
+      columns: @[
+        RestoredColumnState(windows: @[WindowId(10)], widthProportion: 0.35),
+        RestoredColumnState(windows: @[WindowId(11)], widthProportion: 0.8)
+      ])
+    restored.windows[10] = RestoredWindowState(
+      tagId: 1,
+      appId: "kitty",
+      title: "~ - fish",
+      identifier: "terminal-a",
+      widthProportion: 0.35,
+      heightProportion: 1.0)
+    restored.windows[11] = RestoredWindowState(
+      tagId: 1,
+      appId: "kitty",
+      title: "~ - fish",
+      identifier: "terminal-b",
+      widthProportion: 0.8,
+      heightProportion: 1.0,
+      isMaximized: true)
+
+    var restoredModel = Model(activeTag: 1, screenWidth: 2000, screenHeight: 1000)
+    restoredModel.applyLiveRestore(restored)
+
+    var (nextModel, effects) = update(restoredModel, Msg(kind: WlWindowCreated, windowId: 210, appId: "kitty", title: "~ - fish"))
+    check nextModel.restoreWindows.hasKey(10)
+    check nextModel.restoreWindows.hasKey(11)
+    check nextModel.restoreFocusedWindow == 11
+    check not effects.anyIt(it.kind == EffFocusWindow and it.focusId == 210)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 211, appId: "kitty", title: "~ - fish"))
+    check nextModel.restoreWindows.hasKey(10)
+    check nextModel.restoreWindows.hasKey(11)
+    check nextModel.restoreFocusedWindow == 11
+    check not effects.anyIt(it.kind == EffFocusWindow and it.focusId == 211)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowIdentifier, identifierWindowId: 210, identifier: "terminal-a"))
+    check not nextModel.restoreWindows.hasKey(10)
+    check nextModel.restoreWindows.hasKey(11)
+    check nextModel.tags[1].containsWindow(210)
+    check nextModel.tags[1].focusedWindow != 210
+    check nextModel.restoreFocusedWindow == 11
+    check not effects.anyIt(it.kind == EffFocusWindow and it.focusId == 210)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowIdentifier, identifierWindowId: 211, identifier: "terminal-b"))
+    check not nextModel.restoreWindows.hasKey(11)
+    check nextModel.tags[1].columns[0].windows == @[WindowId(210)]
+    check nextModel.tags[1].columns[1].windows == @[WindowId(211)]
+    check nextModel.tags[1].focusedWindow == 211
+    check nextModel.restoreFocusedWindow == 0
+    check nextModel.windows[211].isMaximized
+    check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 211 and it.isMaximized)
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 211)
+
+  test "ambiguous legacy restore does not guess by app and title":
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 10)
+    restored.tags[1] = RestoredTagState(tagId: 1, layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55, focusedWindow: 10)
+    restored.windows[10] = RestoredWindowState(tagId: 1, appId: "kitty", title: "~ - fish", widthProportion: 0.4, heightProportion: 1.0)
+    restored.windows[11] = RestoredWindowState(tagId: 1, appId: "kitty", title: "~ - fish", widthProportion: 0.7, heightProportion: 1.0)
+
+    var restoredModel = Model(activeTag: 1, screenWidth: 2000, screenHeight: 1000)
+    restoredModel.applyLiveRestore(restored)
+
+    let (nextModel, effects) = update(restoredModel, Msg(kind: WlWindowCreated, windowId: 210, appId: "kitty", title: "~ - fish"))
+    check nextModel.restoreWindows.hasKey(10)
+    check nextModel.restoreWindows.hasKey(11)
+    check nextModel.restoreFocusedWindow == 10
+    check not effects.anyIt(it.kind == EffFocusWindow and it.focusId == 210)
+
   test "legacy live restore matches changed window ids by identity":
     let parsed = parseLiveRestoreJson("""
 {
