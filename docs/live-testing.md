@@ -26,9 +26,10 @@ sh tools/live_smoke.sh
 ```
 
 The script builds Triad, starts it in the current River-compatible session,
-checks startup milestones, exercises Triad IPC plus the Niri shim, watches for
-fatal log patterns, and stops Triad before exiting. To also launch one terminal
-client during the smoke window:
+checks startup milestones, exercises Triad IPC plus the Niri shim, reloads
+config, verifies `event-stream` broadcasts, watches for fatal log patterns, and
+stops Triad before exiting. To also launch one terminal client during the smoke
+window:
 
 ```bash
 TRIAD_LIVE_LAUNCH_CLIENTS=1 sh tools/live_smoke.sh
@@ -42,6 +43,12 @@ TRIAD_LIVE_TEST_LOCKME=1 sh tools/live_smoke.sh
 ```
 
 `lockme --dev-mode` acquires the session lock and exits when you press Esc.
+
+For changes that should pass the daily-driver live gate, run:
+
+```bash
+TRIAD_DAILY_GATE_LIVE=1 nimble verify
+```
 
 Expected startup milestones in `triad.log`:
 

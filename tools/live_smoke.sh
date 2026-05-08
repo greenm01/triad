@@ -19,10 +19,12 @@ require_log() {
 
 log="${TRIAD_LIVE_LOG:-triad-live-smoke.log}"
 out="${TRIAD_LIVE_OUT:-triad-live-smoke.out}"
+events="${TRIAD_LIVE_EVENTS:-triad-live-smoke.events}"
 startup_wait="${TRIAD_LIVE_STARTUP_WAIT:-2}"
 run_seconds="${TRIAD_LIVE_SECONDS:-8}"
 lockme_bin="${TRIAD_LOCKME_BIN:-}"
 lockme_pid=""
+event_stream_pid=""
 tmpdir=""
 
 if [ -z "${WAYLAND_DISPLAY:-}" ]; then
@@ -41,6 +43,10 @@ cleanup() {
   if [ -n "$lockme_pid" ] && kill -0 "$lockme_pid" 2>/dev/null; then
     kill "$lockme_pid" 2>/dev/null || true
     wait "$lockme_pid" 2>/dev/null || true
+  fi
+  if [ -n "$event_stream_pid" ] && kill -0 "$event_stream_pid" 2>/dev/null; then
+    kill "$event_stream_pid" 2>/dev/null || true
+    wait "$event_stream_pid" 2>/dev/null || true
   fi
   if [ -n "$tmpdir" ]; then
     rm -rf "$tmpdir"
@@ -73,9 +79,36 @@ if [ -n "$lockme_bin" ]; then
 fi
 
 ./triad msg focus-next >/dev/null
-./triad msg toggle-overview >/dev/null
+./triad msg reload-config >/dev/null
 ./triad_niri msg -j workspaces >/dev/null
 ./triad_niri msg -j outputs >/dev/null
+
+: >"$events"
+./triad msg event-stream >"$events" &
+event_stream_pid="$!"
+sleep 1
+
+if ! kill -0 "$event_stream_pid" 2>/dev/null; then
+  fail "event-stream subscriber exited before receiving events"
+fi
+
+./triad msg toggle-overview >/dev/null
+
+waited=0
+while ! grep -q "OverviewOpenedOrClosed" "$events"; do
+  if ! kill -0 "$event_stream_pid" 2>/dev/null; then
+    fail "event-stream subscriber exited before overview event"
+  fi
+  if [ "$waited" -ge 30 ]; then
+    fail "event-stream did not receive overview event"
+  fi
+  waited=$((waited + 1))
+  sleep 0.1
+done
+
+kill "$event_stream_pid" 2>/dev/null || true
+wait "$event_stream_pid" 2>/dev/null || true
+event_stream_pid=""
 
 if [ "${TRIAD_LIVE_TEST_LOCKME:-0}" = "1" ]; then
   if [ -z "$lockme_bin" ]; then

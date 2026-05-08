@@ -1,4 +1,5 @@
-import unittest, tables, os, sequtils, options
+import unittest, tables, os, sequtils, options, asyncdispatch, asyncnet, json, strutils
+from nativesockets import AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
@@ -7,11 +8,29 @@ import ../src/layouts/scroller
 import ../src/layouts/tiling
 import ../src/config/parser
 import ../src/ipc/commands
+import ../src/ipc/socket
 import ../src/utils/session_env
 
 proc baseModel(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080, outerGaps: 10, innerGaps: 5)
   result.tags[1] = initTagState(1)
+
+proc waitForIpcReply(path, payload: string): string =
+  var lastError = ""
+  for _ in 0 ..< 50:
+    try:
+      return waitFor sendIpcRequest(path, payload)
+    except CatchableError as e:
+      lastError = e.msg
+      waitFor sleepAsync(20)
+  raise newException(IOError, "IPC server did not become ready: " & lastError)
+
+proc waitForSubscribers(count: int): bool =
+  for _ in 0 ..< 50:
+    if subscribers.len >= count:
+      return true
+    waitFor sleepAsync(20)
+  false
 
 suite "Crash hardening":
   test "daemon startup rejects missing Wayland session environment":
@@ -236,6 +255,71 @@ suite "Crash hardening":
     model.allowExitSession = true
     (_, effects) = update(model, Msg(kind: CmdExitSession))
     check effects.anyIt(it.kind == EffExitSession)
+
+  test "IPC accepts request and command clients independently":
+    let dir = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-request")
+    createDir(dir)
+    let path = dir / "triad.sock"
+    var messages: seq[Msg] = @[]
+    var model = baseModel()
+
+    proc onMsg(msg: Msg) {.gcsafe.} =
+      {.cast(gcsafe).}:
+        messages.add(msg)
+
+    proc getModel(): Model {.gcsafe.} =
+      {.cast(gcsafe).}:
+        model
+
+    asyncCheck startIpcServer(path, onMsg, getModel)
+
+    let reply = parseJson(waitForIpcReply(path, "\"Outputs\""))
+    check reply["Ok"].hasKey("Outputs")
+
+    waitFor sendIpcMsg(path, "focus-next")
+    for _ in 0 ..< 50:
+      if messages.len > 0:
+        break
+      waitFor sleepAsync(20)
+
+    check messages.len == 1
+    check messages[0].kind == CmdFocusNext
+    removeDir(dir)
+
+  test "IPC event stream subscribers receive broadcasts and dead subscribers are pruned":
+    let dir = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-stream")
+    createDir(dir)
+    let path = dir / "triad.sock"
+    var model = baseModel()
+
+    proc onMsg(msg: Msg) {.gcsafe.} =
+      discard msg
+
+    proc getModel(): Model {.gcsafe.} =
+      {.cast(gcsafe).}:
+        model
+
+    subscribers.setLen(0)
+    asyncCheck startIpcServer(path, onMsg, getModel)
+    discard waitForIpcReply(path, "\"Outputs\"")
+
+    let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+    waitFor client.connectUnix(path)
+    waitFor client.send("event-stream\L")
+    check waitForSubscribers(1)
+
+    waitFor broadcastJson("""{"OverviewOpenedOrClosed":{"is_open":true}}""")
+    let eventLine = client.recvLine()
+    check waitFor withTimeout(eventLine, 1000)
+    check eventLine.read().contains("OverviewOpenedOrClosed")
+
+    if not client.isClosed:
+      client.close()
+    subscribers.setLen(0)
+    subscribers.add(AsyncSocket(nil))
+    waitFor broadcastJson("""{"OverviewOpenedOrClosed":{"is_open":false}}""")
+    check subscribers.len == 0
+    removeDir(dir)
 
   test "River decoration presentation menu resize and modifier state are modeled":
     var model = baseModel()

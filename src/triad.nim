@@ -14,8 +14,8 @@ import ipc/commands
 import ipc/socket
 import utils/runtime_log
 import utils/session_env
+import utils/wayland_runtime
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options
-from posix import TFdSet, FD_ZERO, FD_SET, FD_ISSET, Timeval, Time, Suseconds, select
 
 type
   RiverPhase = enum
@@ -1523,17 +1523,6 @@ proc startAnimationLoop() {.async.} =
       msgQueue.add(Msg(kind: CmdTick))
     await sleepAsync(16) # ~60fps
 
-proc waitForWaylandEvents(timeoutMs: int): bool =
-  var readfds: TFdSet
-  FD_ZERO(readfds)
-  let fd = display.get_fd()
-  FD_SET(fd, readfds)
-  var timeout = Timeval(
-    tv_sec: Time(timeoutMs div 1000),
-    tv_usec: Suseconds((timeoutMs mod 1000) * 1000))
-  let ready = select(fd + 1, addr readfds, nil, nil, addr timeout)
-  ready > 0 and FD_ISSET(fd, readfds) != 0
-
 proc processQueuedMessages(configPath: string) =
   while msgQueue.len > 0:
     let msg = msgQueue[0]
@@ -1691,14 +1680,7 @@ proc main() =
   
   var running = true
   while running:
-    while true:
-      let dispatched = display.dispatch_pending()
-      if dispatched == -1:
-        running = false
-        break
-      if dispatched == 0:
-        break
-    if not running:
+    if not dispatchPendingWayland(display):
       break
 
     # Poll watcher (non-blocking)
@@ -1710,16 +1692,11 @@ proc main() =
     # Process Message Queue
     processQueuedMessages(configPath)
 
-    while display.prepare_read() != 0:
-      let dispatched = display.dispatch_pending()
-      if dispatched == -1:
-        running = false
-        break
-    if not running:
+    if not prepareWaylandRead(display):
       break
 
     discard display.flush()
-    if waitForWaylandEvents(16):
+    if waitForWaylandEvents(display, 16):
       if display.read_events() == -1:
         running = false
     else:

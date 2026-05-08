@@ -29,6 +29,15 @@ fi
 
 nimble test
 nimble build
+
+if [ "${TRIAD_DAILY_GATE_QEMU:-0}" = "1" ]; then
+  sh tools/qemu_vt_smoke.sh
+fi
+
+if [ "${TRIAD_DAILY_GATE_LIVE:-0}" = "1" ]; then
+  sh tools/live_smoke.sh
+fi
+
 nimble tidy
 
 tracked_execs="$(git ls-files -s | awk '$1 ~ /^100755/ {print}')"

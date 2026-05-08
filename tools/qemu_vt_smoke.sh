@@ -43,7 +43,13 @@ cpus="${TRIAD_QEMU_CPUS:-2}"
 display="${TRIAD_QEMU_DISPLAY:-gtk,gl=off}"
 image_format="${TRIAD_QEMU_IMAGE_FORMAT:-qcow2}"
 out_dir="${TRIAD_QEMU_OUT:-qemu-vt-smoke-out}"
+vt_cycles="${TRIAD_QEMU_VT_CYCLES:-3}"
 qemu_pid=""
+
+case "$vt_cycles" in
+  ''|*[!0-9]*) fail "TRIAD_QEMU_VT_CYCLES must be a positive integer" ;;
+esac
+[ "$vt_cycles" -gt 0 ] || fail "TRIAD_QEMU_VT_CYCLES must be greater than zero"
 
 mkdir -p "$out_dir"
 
@@ -86,7 +92,7 @@ while ! ssh_guest true >/dev/null 2>&1; do
 done
 
 printf '%s\n' "qemu-vt-smoke: running guest VT smoke"
-ssh_guest 'sh -s' <<'GUEST'
+ssh_guest "TRIAD_QEMU_VT_CYCLES='$vt_cycles' sh -s" <<'GUEST'
 set -eu
 
 fail() {
@@ -124,6 +130,7 @@ runtime="/run/user/$guest_uid"
 mnt="/mnt/triad_src"
 work="/tmp/triad-vt-smoke"
 nimble_dir="/home/$guest_user/.cache/triad-vt-smoke/nimble"
+vt_cycles="${TRIAD_QEMU_VT_CYCLES:-3}"
 
 run_root mkdir -p "$mnt" "$runtime"
 run_root chown "$guest_uid:$guest_gid" "$runtime"
@@ -153,7 +160,8 @@ wait "\$triad_pid"
 INIT
 chmod 755 /tmp/triad-river-init.sh
 
-rm -f /tmp/triad.pid /tmp/triad-vt.log /tmp/triad-tty.log /tmp/triad-outputs.json
+rm -f /tmp/triad.pid /tmp/triad-vt.log /tmp/triad-tty.log /tmp/triad-outputs.json \
+  /tmp/triad-post-vt-msg-*.log /tmp/triad-toggle-*.log /tmp/triad-niri-outputs-*.log
 run_root chvt 1 || true
 run_root openvt -c 1 -f -- runuser -u "$guest_user" -- \
   env XDG_RUNTIME_DIR="$runtime" dbus-run-session river -c /tmp/triad-river-init.sh
@@ -187,46 +195,54 @@ while ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >/tmp/triad-
   kill -0 "$triad_pid" 2>/dev/null || fail "Triad exited before IPC became ready"
   sleep 1
 done
-run_root chvt 3
-sleep 1
-if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >/tmp/triad-post-vt-msg.log 2>&1; then
-  cat /tmp/triad-post-vt-msg.log >&2 || true
-  cat /tmp/triad-session.env >&2 || true
-  cat /tmp/triad-vt.log >&2 || true
-  ps -fp "$triad_pid" >&2 || true
-  fail "Triad IPC failed after VT switch"
-fi
+cycle=1
+while [ "$cycle" -le "$vt_cycles" ]; do
+  run_root chvt 3
+  sleep 1
+  if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >"/tmp/triad-post-vt-msg-$cycle.log" 2>&1; then
+    cat "/tmp/triad-post-vt-msg-$cycle.log" >&2 || true
+    cat /tmp/triad-session.env >&2 || true
+    cat /tmp/triad-vt.log >&2 || true
+    ps -fp "$triad_pid" >&2 || true
+    fail "Triad IPC failed after VT switch cycle $cycle"
+  fi
 
-if env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="$runtime" "$work/triad" 2>/tmp/triad-tty.log; then
-  fail "bare TTY Triad launch unexpectedly succeeded"
-fi
+  if [ "$cycle" -eq 1 ]; then
+    if env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="$runtime" "$work/triad" 2>/tmp/triad-tty.log; then
+      fail "bare TTY Triad launch unexpectedly succeeded"
+    fi
 
-if ! grep -q "Refusing to start outside a Wayland session" /tmp/triad-tty.log; then
-  fail "bare TTY launch did not report the session guard"
-fi
+    if ! grep -q "Refusing to start outside a Wayland session" /tmp/triad-tty.log; then
+      fail "bare TTY launch did not report the session guard"
+    fi
+  fi
 
-if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg toggle-overview >/tmp/triad-toggle.log 2>&1; then
-  cat /tmp/triad-toggle.log >&2 || true
-  cat /tmp/triad-session.env >&2 || true
-  cat /tmp/triad-vt.log >&2 || true
-  ps -fp "$triad_pid" >&2 || true
-  fail "Triad IPC failed after bare TTY guard check"
-fi
-run_root chvt 1
-sleep 1
-if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad_niri" msg -j outputs >/tmp/triad-outputs.json 2>/tmp/triad-niri-outputs.log; then
-  cat /tmp/triad-niri-outputs.log >&2 || true
-  cat /tmp/triad-session.env >&2 || true
-  cat /tmp/triad-vt.log >&2 || true
-  ps -fp "$triad_pid" >&2 || true
-  fail "Triad IPC failed after returning to River VT"
-fi
+  if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg toggle-overview >"/tmp/triad-toggle-$cycle.log" 2>&1; then
+    cat "/tmp/triad-toggle-$cycle.log" >&2 || true
+    cat /tmp/triad-session.env >&2 || true
+    cat /tmp/triad-vt.log >&2 || true
+    ps -fp "$triad_pid" >&2 || true
+    fail "Triad IPC failed after bare TTY guard check cycle $cycle"
+  fi
+
+  run_root chvt 1
+  sleep 1
+  if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad_niri" msg -j outputs >/tmp/triad-outputs.json 2>"/tmp/triad-niri-outputs-$cycle.log"; then
+    cat "/tmp/triad-niri-outputs-$cycle.log" >&2 || true
+    cat /tmp/triad-session.env >&2 || true
+    cat /tmp/triad-vt.log >&2 || true
+    ps -fp "$triad_pid" >&2 || true
+    fail "Triad IPC failed after returning to River VT cycle $cycle"
+  fi
+
+  cycle=$((cycle + 1))
+done
 
 kill "$triad_pid" 2>/dev/null || true
 printf '%s\n' "guest-vt-smoke: ok"
 GUEST
 
-ssh_guest 'tar -C /tmp -czf - triad-vt.log triad-tty.log triad-session.env triad-outputs.json 2>/dev/null' \
+ssh_guest 'tar -C /tmp -czf - triad-vt.log triad-tty.log triad-session.env triad-outputs.json triad-post-vt-msg-*.log triad-toggle-*.log triad-niri-outputs-*.log 2>/dev/null' \
   >"$out_dir/guest-artifacts.tgz" || true
 
 printf '%s\n' "qemu-vt-smoke: ok"

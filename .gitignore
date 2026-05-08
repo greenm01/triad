@@ -18,6 +18,7 @@
 # Local smoke-test logs
 /triad-live-smoke.log
 /triad-live-smoke.out
+/triad-live-smoke.events
 /qemu-vt-smoke-out/
 /triad.log
 

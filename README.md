@@ -68,6 +68,9 @@ For the first real compositor run, follow the live test runbook in
 For VT switching and compositor recovery checks, use the QEMU runbook in
 `docs/qemu-vt-smoke.md`.
 
+For daily-driver risk gates and optional `nimble verify` integrations, see
+`docs/daily-driver-gates.md`.
+
 ### IPC & Navigation
 
 Triad exposes a Unix domain socket for external control. You may interact with it using the CLI:

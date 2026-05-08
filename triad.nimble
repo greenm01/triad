@@ -31,6 +31,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tlogging",
     "tests/tprotocol",
     "tests/tstress",
+    "triad-live-smoke.events",
     "triad-live-smoke.log",
     "triad-live-smoke.out"
   ]:
