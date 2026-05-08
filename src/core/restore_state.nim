@@ -77,6 +77,9 @@ proc windowStateJson(win: WindowData; tagId: uint32): JsonNode =
   %*{
     "id": win.id,
     "tag_id": tagId,
+    "app_id": win.appId,
+    "title": win.title,
+    "identifier": win.identifier,
     "width_proportion": win.widthProportion,
     "height_proportion": win.heightProportion,
     "is_floating": win.isFloating,
@@ -233,6 +236,9 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
           state.tagByWindow[WindowId(winId.get())] = win.tagId
       elif state.tagByWindow.hasKey(WindowId(winId.get())):
         win.tagId = state.tagByWindow[WindowId(winId.get())]
+      if node.hasKey("app_id"): win.appId = stringFromJson(node["app_id"])
+      if node.hasKey("title"): win.title = stringFromJson(node["title"])
+      if node.hasKey("identifier"): win.identifier = stringFromJson(node["identifier"])
       if node.hasKey("width_proportion"): win.widthProportion = float32FromJson(node["width_proportion"], 0.5'f32)
       if node.hasKey("height_proportion"): win.heightProportion = float32FromJson(node["height_proportion"], 1.0'f32)
       if node.hasKey("is_floating"): win.isFloating = boolFromJson(node["is_floating"])
@@ -282,16 +288,25 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
 proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
   result = some(LiveRestoreState())
   var state = result.get()
+  var windowsByTag = initTable[uint32, seq[tuple[pos: int, winId: WindowId, width: float32]]]()
 
   if root.hasKey("workspaces") and root["workspaces"].kind == JArray:
     for workspace in root["workspaces"]:
-      if workspace.kind == JObject and workspace.hasKey("is_active") and
-          workspace["is_active"].kind == JBool and workspace["is_active"].getBool() and
-          workspace.hasKey("id"):
-        let tagId = uint32FromJson(workspace["id"])
-        if tagId.isSome:
+      if workspace.kind != JObject or not workspace.hasKey("id"):
+        continue
+      let tagId = uint32FromJson(workspace["id"])
+      if tagId.isSome:
+        var tag = RestoredTagState(
+          tagId: tagId.get(),
+          layoutMode: Scroller,
+          masterCount: 1,
+          masterSplitRatio: 0.55'f32
+        )
+        if workspace.hasKey("name"):
+          tag.name = stringFromJson(workspace["name"])
+        state.tags[tag.tagId] = tag
+        if workspace.hasKey("is_active") and workspace["is_active"].kind == JBool and workspace["is_active"].getBool():
           state.activeTag = tagId.get()
-          break
 
   if root.hasKey("windows") and root["windows"].kind == JArray:
     for win in root["windows"]:
@@ -305,16 +320,57 @@ proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
         let id = WindowId(winId.get())
         state.tagByWindow[id] = tagId.get()
         var restored = RestoredWindowState(tagId: tagId.get(), widthProportion: 0.5'f32, heightProportion: 1.0'f32)
+        if win.hasKey("raw_app_id"):
+          restored.appId = stringFromJson(win["raw_app_id"])
+        elif win.hasKey("app_id"):
+          restored.appId = stringFromJson(win["app_id"])
+        if win.hasKey("title"):
+          restored.title = stringFromJson(win["title"])
         if win.hasKey("is_floating"): restored.isFloating = boolFromJson(win["is_floating"])
         if win.hasKey("is_fullscreen"): restored.isFullscreen = boolFromJson(win["is_fullscreen"])
         if win.hasKey("is_maximized"): restored.isMaximized = boolFromJson(win["is_maximized"])
         if win.hasKey("is_minimized"): restored.isMinimized = boolFromJson(win["is_minimized"])
+        var pos = int(high(int32))
         if win.hasKey("layout") and win["layout"].kind == JObject:
           let layout = win["layout"]
           if layout.hasKey("window_size") and layout["window_size"].kind == JArray and layout["window_size"].len >= 2:
             restored.actualW = int32FromJson(layout["window_size"][0])
             restored.actualH = int32FromJson(layout["window_size"][1])
+          if layout.hasKey("tile_size") and layout["tile_size"].kind == JArray and layout["tile_size"].len >= 2:
+            let tileW = float32FromJson(layout["tile_size"][0])
+            let tileH = float32FromJson(layout["tile_size"][1])
+            if tileW > 0 and restored.actualW > 0:
+              restored.widthProportion = min(1.0'f32, max(0.05'f32, float32(restored.actualW) / tileW))
+            if tileH > 0 and restored.actualH > 0:
+              restored.heightProportion = min(1.0'f32, max(0.05'f32, float32(restored.actualH) / tileH))
+          if layout.hasKey("pos_in_scrolling_layout") and layout["pos_in_scrolling_layout"].kind == JArray and layout["pos_in_scrolling_layout"].len > 0:
+            try:
+              if layout["pos_in_scrolling_layout"][0].kind in {JInt, JFloat}:
+                pos = int(layout["pos_in_scrolling_layout"][0].getFloat())
+            except CatchableError:
+              discard
         state.windows[id] = restored
+        if not state.tags.hasKey(tagId.get()):
+          state.tags[tagId.get()] = RestoredTagState(tagId: tagId.get(), layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55'f32)
+        if win.hasKey("is_focused") and boolFromJson(win["is_focused"]):
+          var tag = state.tags[tagId.get()]
+          tag.focusedWindow = id
+          state.tags[tagId.get()] = tag
+        var tagWindows = windowsByTag.getOrDefault(tagId.get())
+        tagWindows.add((pos: pos, winId: id, width: restored.widthProportion))
+        windowsByTag[tagId.get()] = tagWindows
+
+  for tagId, entries in windowsByTag.mpairs:
+    entries.sort(proc(a, b: tuple[pos: int, winId: WindowId, width: float32]): int =
+      result = cmp(a.pos, b.pos)
+      if result == 0:
+        result = cmp(a.winId, b.winId)
+    )
+    var tag = state.tags.getOrDefault(tagId, RestoredTagState(tagId: tagId, layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55'f32))
+    tag.columns = @[]
+    for entry in entries:
+      tag.columns.add(RestoredColumnState(windows: @[entry.winId], widthProportion: entry.width))
+    state.tags[tagId] = tag
 
   if state.activeTag == 0 and state.tagByWindow.len == 0:
     return none(LiveRestoreState)

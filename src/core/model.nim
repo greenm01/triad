@@ -150,6 +150,9 @@ type
 
   RestoredWindowState* = object
     tagId*: uint32
+    appId*: string
+    title*: string
+    identifier*: string
     widthProportion*: float32
     heightProportion*: float32
     isFloating*: bool

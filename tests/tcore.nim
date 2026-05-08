@@ -308,6 +308,63 @@ suite "Core TEA Update Logic":
     check nextModel.outputTags[42] == 2
     check effects.anyIt(it.kind == EffSetMaximized and it.maxWinId == 202 and it.isMaximized)
 
+  test "legacy live restore matches changed window ids by identity":
+    let parsed = parseLiveRestoreJson("""
+{
+  "workspaces": [
+    {"id": 1, "name": "term", "is_active": false},
+    {"id": 2, "name": "web", "is_active": true}
+  ],
+  "windows": [
+    {
+      "id": 10,
+      "title": "term",
+      "app_id": "triad-foot",
+      "raw_app_id": "foot",
+      "workspace_id": 2,
+      "is_focused": false,
+      "layout": {
+        "pos_in_scrolling_layout": [2, 1],
+        "tile_size": [2000.0, 1000.0],
+        "window_size": [800, 900]
+      }
+    },
+    {
+      "id": 11,
+      "title": "Browser",
+      "app_id": "brave-origin-nightly.desktop",
+      "raw_app_id": "brave-origin-nightly",
+      "workspace_id": 2,
+      "is_focused": true,
+      "is_maximized": true,
+      "layout": {
+        "pos_in_scrolling_layout": [1, 1],
+        "tile_size": [2000.0, 1000.0],
+        "window_size": [1000, 900]
+      }
+    }
+  ]
+}
+""")
+    check parsed.isSome
+
+    var restoredModel = Model(activeTag: 1, screenWidth: 2000, screenHeight: 1000)
+    restoredModel.applyLiveRestore(parsed.get())
+
+    var (nextModel, _) = update(restoredModel, Msg(kind: WlWindowCreated, windowId: 210, appId: "foot", title: "term"))
+    var effects: seq[Effect]
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 211, appId: "brave-origin-nightly", title: "Browser"))
+
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].name == "web"
+    check nextModel.tags[2].focusedWindow == 211
+    check nextModel.tags[2].columns.len == 2
+    check nextModel.tags[2].columns[0].windows == @[WindowId(211)]
+    check nextModel.tags[2].columns[1].windows == @[WindowId(210)]
+    check nextModel.windows[211].isMaximized
+    check nextModel.windows[211].widthProportion == 0.5'f32
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 211)
+
   test "Scratchpad management moves window out of tag":
     var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
     tag1.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))

@@ -433,16 +433,29 @@ proc materializeRestoredTag(state: RestoredTagState): TagState =
   for col in state.columns:
     result.columns.add(Column(widthProportion: clamp(col.widthProportion, 0.05'f32, 1.0'f32)))
 
-proc placeRestoredWindow(model: var Model; targetTag: uint32; winId: WindowId) =
+proc restoredIdentityMatches(restored: RestoredWindowState; appId, title, identifier: string): bool =
+  if restored.identifier.len > 0 and identifier.len > 0:
+    return restored.identifier == identifier
+  restored.appId.len > 0 and restored.title.len > 0 and restored.appId == appId and restored.title == title
+
+proc findRestoredWindowByIdentity(model: Model; appId, title, identifier: string): WindowId =
+  for oldWinId, restored in model.restoreWindows.pairs:
+    if restoredIdentityMatches(restored, appId, title, identifier):
+      return oldWinId
+  0
+
+proc placeRestoredWindow(model: var Model; targetTag: uint32; restoredWinId, winId: WindowId) =
   if model.tags.hasKey(targetTag) and model.tags[targetTag].containsWindow(winId):
     return
 
   if model.restoreTags.hasKey(targetTag):
     var tag = model.tags.getOrDefault(targetTag, materializeRestoredTag(model.restoreTags[targetTag]))
     let restoredTag = model.restoreTags[targetTag]
+    if tag.focusedWindow == restoredWinId:
+      tag.focusedWindow = winId
     var inserted = false
     for colIdx, restoredCol in restoredTag.columns:
-      if restoredCol.windows.find(winId) != -1:
+      if restoredCol.windows.find(restoredWinId) != -1:
         while tag.columns.len <= colIdx:
           let width =
             if tag.columns.len < restoredTag.columns.len:
@@ -457,8 +470,10 @@ proc placeRestoredWindow(model: var Model; targetTag: uint32; winId: WindowId) =
         break
     if not inserted:
       tag.columns.add(Column(windows: @[winId], widthProportion: DefaultColumnWidth))
-    if tag.focusedWindow == 0 and restoredTag.focusedWindow != 0:
-      tag.focusedWindow = restoredTag.focusedWindow
+    if restoredTag.focusedWindow == restoredWinId:
+      tag.focusedWindow = winId
+    elif tag.focusedWindow == 0 and restoredTag.focusedWindow == 0:
+      tag.focusedWindow = winId
     model.tags[targetTag] = tag
   else:
     var tag = model.tags.getOrDefault(targetTag, initTagState(targetTag))
@@ -767,18 +782,35 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, identifier: msg.createdIdentifier, widthProportion: DefaultWindowWidth, heightProportion: DefaultWindowHeight)
     var hasRestoredTag = false
     var hasRestoredWindow = false
+    var restoredWinId = msg.windowId
     var restoredWin = RestoredWindowState()
     var targetTag = if nextModel.activeTag == 0: 1'u32 else: nextModel.activeTag
     if nextModel.restoreWindows.hasKey(msg.windowId):
       restoredWin = nextModel.restoreWindows[msg.windowId]
       nextModel.restoreWindows.del(msg.windowId)
       hasRestoredWindow = true
+      restoredWinId = msg.windowId
       if restoredWin.tagId != 0:
         targetTag = restoredWin.tagId
         hasRestoredTag = true
+    elif nextModel.restoreWindows.len > 0:
+      let matchedWinId = nextModel.findRestoredWindowByIdentity(msg.appId, msg.title, msg.createdIdentifier)
+      if matchedWinId != 0:
+        restoredWin = nextModel.restoreWindows[matchedWinId]
+        nextModel.restoreWindows.del(matchedWinId)
+        restoredWinId = matchedWinId
+        hasRestoredWindow = true
+        if restoredWin.tagId != 0:
+          targetTag = restoredWin.tagId
+          hasRestoredTag = true
     if nextModel.restoreTagByWindow.hasKey(msg.windowId):
       targetTag = nextModel.restoreTagByWindow[msg.windowId]
       nextModel.restoreTagByWindow.del(msg.windowId)
+      hasRestoredTag = targetTag != 0
+      restoredWinId = msg.windowId
+    elif restoredWinId != msg.windowId and nextModel.restoreTagByWindow.hasKey(restoredWinId):
+      targetTag = nextModel.restoreTagByWindow[restoredWinId]
+      nextModel.restoreTagByWindow.del(restoredWinId)
       hasRestoredTag = targetTag != 0
     var forcedLayout = 0
     for rule in nextModel.windowRules:
@@ -816,7 +848,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           tag.layoutMode = safeLayoutMode(forcedLayout, tag.layoutMode)
           nextModel.tags[targetTag] = tag
       if hasRestoredTag:
-        nextModel.placeRestoredWindow(targetTag, msg.windowId)
+        nextModel.placeRestoredWindow(targetTag, restoredWinId, msg.windowId)
       else:
         var tag = nextModel.tags[targetTag]
         tag.columns.add(Column(windows: @[msg.windowId], widthProportion: DefaultColumnWidth))
@@ -832,6 +864,11 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         effects.add(Effect(kind: EffSetFullscreen, fsWinId: msg.windowId, isFullscreen: true, fsOutputId: win.fullscreenOutput))
       if win.isMaximized:
         effects.add(Effect(kind: EffSetMaximized, maxWinId: msg.windowId, isMaximized: true))
+    if hasRestoredTag and targetTag == nextModel.activeTag and nextModel.tags.hasKey(targetTag) and
+        nextModel.tags[targetTag].focusedWindow == msg.windowId and not nextModel.sessionLocked:
+      nextModel.recordFocus(msg.windowId)
+      effects.add(broadcastWindowFocusChanged(msg.windowId))
+      effects.add(Effect(kind: EffFocusWindow, focusId: msg.windowId))
     effects.add(nextModel.broadcastWindowOpened(win))
     effects.add(Effect(kind: EffManageDirty))
 

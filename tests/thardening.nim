@@ -484,7 +484,19 @@ window-rule {
     {"id": 2, "is_active": true}
   ],
   "windows": [
-    {"id": 10, "workspace_id": 2, "is_maximized": true},
+    {
+      "id": 10,
+      "title": "Browser",
+      "raw_app_id": "brave",
+      "workspace_id": 2,
+      "is_focused": true,
+      "is_maximized": true,
+      "layout": {
+        "pos_in_scrolling_layout": [1, 1],
+        "tile_size": [2000.0, 1000.0],
+        "window_size": [1000, 900]
+      }
+    },
     {"id": 11, "workspace_id": null}
   ]
 }
@@ -494,7 +506,13 @@ window-rule {
     let state = parsed.get()
     check state.activeTag == 2
     check state.tagByWindow[10] == 2
+    check state.tags[2].focusedWindow == 10
+    check state.tags[2].columns.len == 1
+    check state.tags[2].columns[0].windows == @[WindowId(10)]
     check state.windows[10].isMaximized
+    check state.windows[10].appId == "brave"
+    check state.windows[10].title == "Browser"
+    check state.windows[10].widthProportion == 0.5'f32
     check not state.tagByWindow.hasKey(11)
     check parseLiveRestoreJson("{bad").isNone
 
