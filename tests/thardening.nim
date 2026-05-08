@@ -534,6 +534,17 @@ window-rule {
     check state.get().activeTag == 3
     check not fileExists(path)
 
+  test "live restore snapshot load waits for explicit completion":
+    let path = getTempDir() / "triad-live-restore-load-test.json"
+    writeFile(path, """{"workspaces":[{"id":4,"is_active":true}],"windows":[]}""")
+
+    let state = loadLiveRestoreState(path)
+    check state.isSome
+    check state.get().activeTag == 4
+    check fileExists(path)
+    check completeLiveRestoreState(path)
+    check not fileExists(path)
+
   test "layouts never emit negative geometry for tiny screens and huge gaps":
     let screen = Rect(x: 0, y: 0, w: 20, h: 10)
     var tag = initTagState(1, Scroller)

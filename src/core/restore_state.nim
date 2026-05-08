@@ -477,6 +477,33 @@ proc consumeLiveRestoreState*(path: string): Option[LiveRestoreState] =
     except CatchableError:
       discard
 
+proc completeLiveRestoreState*(path: string): bool =
+  if path.len == 0:
+    return false
+  if not fileExists(path):
+    return true
+
+  try:
+    removeFile(path)
+    true
+  except CatchableError:
+    false
+
+proc quarantineLiveRestoreState*(path: string): bool =
+  if path.len == 0 or not fileExists(path):
+    return true
+
+  let quarantinePath = path & ".bad." & $getCurrentProcessId()
+  try:
+    moveFile(path, quarantinePath)
+    true
+  except CatchableError:
+    try:
+      removeFile(path)
+      true
+    except CatchableError:
+      false
+
 proc applyLiveRestore*(model: var Model; state: LiveRestoreState) =
   model.restoreActiveTag = state.activeTag
   model.restoreFocusedWindow = state.focusedWindow

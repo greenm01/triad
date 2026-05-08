@@ -109,6 +109,9 @@ var
   shouldExit = false
   quickshellProcess: Process
   quickshellSpawnPending = false
+  pendingLiveRestorePath: string
+  pendingLiveRestore: Option[LiveRestoreState]
+  liveRestoreCommitPending = false
 
 # --- Helpers ---
 
@@ -141,6 +144,29 @@ proc activeFocus(model: Model): WindowId =
     if model.scratchpadWindows.len > 0:
       return model.scratchpadWindows[^1]
   model.focusedOnActiveTag()
+
+proc applyPendingLiveRestore() =
+  if pendingLiveRestore.isNone:
+    return
+
+  let state = pendingLiveRestore.get()
+  currentModel.applyLiveRestore(state)
+  pendingLiveRestore = none(LiveRestoreState)
+  liveRestoreCommitPending = pendingLiveRestorePath.len > 0
+  info "Live restore snapshot applied at manage start",
+    path=pendingLiveRestorePath,
+    activeTag=state.activeTag,
+    windows=state.tagByWindow.len
+
+proc commitPendingLiveRestore() =
+  if not liveRestoreCommitPending:
+    return
+
+  if completeLiveRestoreState(pendingLiveRestorePath):
+    info "Live restore snapshot committed", path=pendingLiveRestorePath
+    liveRestoreCommitPending = false
+  else:
+    warn "Live restore snapshot could not be committed", path=pendingLiveRestorePath
 
 proc outputName(model: Model; outputId: uint32): string =
   if outputId == 0:
@@ -1256,6 +1282,7 @@ proc executeEffect(eff: Effect) =
   of EffManageFinish:
     if river_manager != nil and riverPhase == RiverManage:
       river_manager.manageFinish()
+      commitPendingLiveRestore()
   of EffRenderFinish:
     if river_manager != nil and riverPhase == RiverRender:
       river_manager.renderFinish()
@@ -1576,6 +1603,7 @@ proc on_session_unlocked(data: pointer, mgr: ptr RiverWindowManagerV1) =
 
 proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
   debug "River manage start", pendingWindows=pendingWindows.len
+  applyPendingLiveRestore()
   # Before starting manage, move all pending windows to the message queue
   for id, data in pendingWindows:
     msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title, createdIdentifier: data.identifier))
@@ -1901,18 +1929,20 @@ proc main() =
   currentModel.applyConfig(initialConfig)
   info "Initial config loaded", path=configPath
 
-  let restorePath = defaultLiveRestorePath()
-  let hadRestoreSnapshot = fileExists(restorePath)
-  let restoreSnapshot = consumeLiveRestoreState(restorePath)
-  if restoreSnapshot.isSome:
-    let state = restoreSnapshot.get()
-    currentModel.applyLiveRestore(state)
-    info "Live restore snapshot applied",
-      path=restorePath,
+  pendingLiveRestorePath = defaultLiveRestorePath()
+  let hadRestoreSnapshot = fileExists(pendingLiveRestorePath)
+  pendingLiveRestore = loadLiveRestoreState(pendingLiveRestorePath)
+  if pendingLiveRestore.isSome:
+    let state = pendingLiveRestore.get()
+    info "Live restore snapshot loaded",
+      path=pendingLiveRestorePath,
       activeTag=state.activeTag,
       windows=state.tagByWindow.len
   elif hadRestoreSnapshot:
-    warn "Live restore snapshot could not be applied", path=restorePath
+    if quarantineLiveRestoreState(pendingLiveRestorePath):
+      warn "Invalid live restore snapshot quarantined", path=pendingLiveRestorePath
+    else:
+      warn "Invalid live restore snapshot could not be quarantined", path=pendingLiveRestorePath
 
   # Setup Watcher
   watcher = initWatcher()
