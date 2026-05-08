@@ -16,7 +16,10 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent tag by numeric order.
 *   `focus-occupied-tag-left`, `focus-occupied-tag-right`: Moves to the adjacent non-empty tag.
+*   `focus-column-first`, `focus-column-last`: Focuses the first or last visible column on the active tag.
+*   `focus-window-or-workspace-up`, `focus-window-or-workspace-down`: Moves vertically within the focused column, or switches to the adjacent tag at the edge.
 *   `toggle-overview`: Activates or deactivates the global window grid.
+*   `open-overview`, `close-overview`: Idempotently opens or closes the overview.
 *   `toggle-scratchpad`: Shows the most recent scratchpad window as a centered overlay, or hides it.
 *   `toggle-named-scratchpad <name>`: Shows or hides a named scratchpad; if the name is new, the focused window is assigned to it.
 *   `restore-scratchpad`: Moves the visible or most recent scratchpad window back to the active tag.
@@ -73,10 +76,14 @@ To dispatch a command to the running Triad instance, use the following syntax:
 #### Advanced Movement
 *   `move-column-left`: Swaps the focused column with its neighbor to the left.
 *   `move-column-right`: Swaps the focused column with its neighbor to the right.
+*   `move-column-to-first`: Moves the focused column to the first position.
+*   `move-column-to-last`: Moves the focused column to the last position.
 *   `move-window-left`: Transports the focused window to the adjacent column on the left, creating a new column if necessary.
 *   `move-window-right`: Transports the focused window to the adjacent column on the right.
 *   `move-window-up`: Swaps the focused window with the one above it in a stack.
 *   `move-window-down`: Swaps the focused window with the one below it.
+*   `move-window-up-or-to-workspace-up`: Moves the focused window up in its column, or to the previous tag at the edge.
+*   `move-window-down-or-to-workspace-down`: Moves the focused window down in its column, or to the next tag at the edge.
 *   `swap-window-up`: An alias for `move-window-up`, reordering windows within their column.
 *   `swap-window-down`: An alias for `move-window-down`.
 *   `consume-window`: Merges the first window of the column to the right into the currently focused column.

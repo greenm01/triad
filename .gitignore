@@ -33,4 +33,5 @@
 .vscode/
 nimble.develop
 nimble.paths
+config.nims
 nimbledeps

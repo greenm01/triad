@@ -251,11 +251,17 @@ suite "Crash hardening":
     check parseLegacyCommand("focus-left").get().kind == CmdFocusDirection
     check parseLegacyCommand("focus-left").get().direction == DirLeft
     check parseLegacyCommand("focus-last").get().kind == CmdFocusLast
+    check parseLegacyCommand("focus-column-first").get().kind == CmdFocusColumnFirst
+    check parseLegacyCommand("focus-window-or-workspace-down").get().kind == CmdFocusWindowOrWorkspaceDown
     check parseLegacyCommand("focus-occupied-tag-right").get().kind == CmdFocusOccupiedTagRight
     check parseLegacyCommand("move-to-tag-left").get().kind == CmdMoveToTagLeft
+    check parseLegacyCommand("move-column-to-last").get().kind == CmdMoveColumnToLast
+    check parseLegacyCommand("move-window-up-or-to-workspace-up").get().kind == CmdMoveWindowUpOrToWorkspaceUp
     check parseLegacyCommand("layout-deck").get().newLayout == Deck
     check parseLegacyCommand("layout-center-tile").get().newLayout == CenterTile
     check parseLegacyCommand("switch-layout").get().kind == CmdSwitchLayout
+    check parseLegacyCommand("open-overview").get().kind == CmdOpenOverview
+    check parseLegacyCommand("close-overview").get().kind == CmdCloseOverview
     check parseLegacyCommand("move-to-named-scratchpad terminal").get().scratchpadName == "terminal"
     check parseLegacyCommand("toggle-named-scratchpad music").get().scratchpadName == "music"
     check parseLegacyCommand("restore-scratchpad").get().kind == CmdRestoreScratchpad

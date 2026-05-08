@@ -71,20 +71,40 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
     return some(%*{"Action": {"FocusWindowUp": {}}})
   of "focuswindowdown", "focus-window-down":
     return some(%*{"Action": {"FocusWindowDown": {}}})
+  of "focuswindoworworkspaceup", "focus-window-or-workspace-up":
+    return some(%*{"Action": {"FocusWindowOrWorkspaceUp": {}}})
+  of "focuswindoworworkspacedown", "focus-window-or-workspace-down":
+    return some(%*{"Action": {"FocusWindowOrWorkspaceDown": {}}})
+  of "focuscolumnfirst", "focus-column-first":
+    return some(%*{"Action": {"FocusColumnFirst": {}}})
+  of "focuscolumnlast", "focus-column-last":
+    return some(%*{"Action": {"FocusColumnLast": {}}})
   of "movecolumnleft", "move-column-left":
     return some(%*{"Action": {"MoveColumnLeft": {}}})
   of "movecolumnright", "move-column-right":
     return some(%*{"Action": {"MoveColumnRight": {}}})
+  of "movecolumntofirst", "move-column-to-first":
+    return some(%*{"Action": {"MoveColumnToFirst": {}}})
+  of "movecolumntolast", "move-column-to-last":
+    return some(%*{"Action": {"MoveColumnToLast": {}}})
   of "movewindowup", "move-window-up":
     return some(%*{"Action": {"MoveWindowUp": {}}})
   of "movewindowdown", "move-window-down":
     return some(%*{"Action": {"MoveWindowDown": {}}})
+  of "movewindowuportoworkspaceup", "move-window-up-or-to-workspace-up":
+    return some(%*{"Action": {"MoveWindowUpOrToWorkspaceUp": {}}})
+  of "movewindowdownortoworkspacedown", "move-window-down-or-to-workspace-down":
+    return some(%*{"Action": {"MoveWindowDownOrToWorkspaceDown": {}}})
   of "movewindowleft", "move-window-left":
     return some(%*{"Action": {"MoveWindowLeft": {}}})
   of "movewindowright", "move-window-right":
     return some(%*{"Action": {"MoveWindowRight": {}}})
   of "toggleoverview", "toggle-overview":
     return some(%*{"Action": {"ToggleOverview": {}}})
+  of "openoverview", "open-overview":
+    return some(%*{"Action": {"OpenOverview": {}}})
+  of "closeoverview", "close-overview":
+    return some(%*{"Action": {"CloseOverview": {}}})
   of "fullscreenwindow", "fullscreen-window":
     return some(%*{"Action": {"FullscreenWindow": {}}})
   of "togglewindowfloating", "toggle-window-floating":

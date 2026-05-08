@@ -297,11 +297,23 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
   elif action.hasKey("ToggleOverview"):
     return (true, @[Msg(kind: CmdToggleOverview)])
 
+  elif action.hasKey("OpenOverview"):
+    return (true, @[Msg(kind: CmdOpenOverview)])
+
+  elif action.hasKey("CloseOverview"):
+    return (true, @[Msg(kind: CmdCloseOverview)])
+
   elif action.hasKey("FocusColumnLeft"):
     return (true, @[Msg(kind: CmdFocusDirection, direction: DirLeft)])
 
   elif action.hasKey("FocusColumnRight"):
     return (true, @[Msg(kind: CmdFocusDirection, direction: DirRight)])
+
+  elif action.hasKey("FocusColumnFirst"):
+    return (true, @[Msg(kind: CmdFocusColumnFirst)])
+
+  elif action.hasKey("FocusColumnLast"):
+    return (true, @[Msg(kind: CmdFocusColumnLast)])
 
   elif action.hasKey("FocusWindowUp"):
     return (true, @[Msg(kind: CmdFocusDirection, direction: DirUp)])
@@ -309,17 +321,35 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
   elif action.hasKey("FocusWindowDown"):
     return (true, @[Msg(kind: CmdFocusDirection, direction: DirDown)])
 
+  elif action.hasKey("FocusWindowOrWorkspaceUp"):
+    return (true, @[Msg(kind: CmdFocusWindowOrWorkspaceUp)])
+
+  elif action.hasKey("FocusWindowOrWorkspaceDown"):
+    return (true, @[Msg(kind: CmdFocusWindowOrWorkspaceDown)])
+
   elif action.hasKey("MoveColumnLeft"):
     return (true, @[Msg(kind: CmdMoveColumnLeft)])
 
   elif action.hasKey("MoveColumnRight"):
     return (true, @[Msg(kind: CmdMoveColumnRight)])
 
+  elif action.hasKey("MoveColumnToFirst"):
+    return (true, @[Msg(kind: CmdMoveColumnToFirst)])
+
+  elif action.hasKey("MoveColumnToLast"):
+    return (true, @[Msg(kind: CmdMoveColumnToLast)])
+
   elif action.hasKey("MoveWindowUp"):
     return (true, @[Msg(kind: CmdMoveWindowUp)])
 
   elif action.hasKey("MoveWindowDown"):
     return (true, @[Msg(kind: CmdMoveWindowDown)])
+
+  elif action.hasKey("MoveWindowUpOrToWorkspaceUp"):
+    return (true, @[Msg(kind: CmdMoveWindowUpOrToWorkspaceUp)])
+
+  elif action.hasKey("MoveWindowDownOrToWorkspaceDown"):
+    return (true, @[Msg(kind: CmdMoveWindowDownOrToWorkspaceDown)])
 
   elif action.hasKey("MoveWindowLeft"):
     return (true, @[Msg(kind: CmdMoveWindowLeft)])

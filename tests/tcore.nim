@@ -3,7 +3,7 @@ import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/update
-import tables, sequtils
+import tables, sequtils, strutils
 
 suite "Core TEA Update Logic":
   setup:
@@ -250,6 +250,8 @@ suite "Core TEA Update Logic":
     model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
     model.tags[2] = TagState(tagId: 2, focusedWindow: 102)
     model.tags[2].columns.add(Column(windows: @[WindowId(102)]))
+    model.windows[101] = WindowData(id: 101)
+    model.windows[102] = WindowData(id: 102)
     model.activeTag = 1
     
     let (nextModel, _) = update(model, Msg(kind: CmdFocusNext))
@@ -260,7 +262,7 @@ suite "Core TEA Update Logic":
     check finalModel.activeTag == 1
     check finalModel.tags[1].focusedWindow == 101
 
-  test "Overview navigation does not focus client until selected":
+  test "Overview navigation commits focus immediately":
     model.overviewActive = true
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
     model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
@@ -270,14 +272,66 @@ suite "Core TEA Update Logic":
     model.windows[102] = WindowData(id: 102, appId: "app", title: "two")
     model.activeTag = 1
 
-    var (nextModel, effects) = update(model, Msg(kind: CmdFocusDirection, direction: DirRight))
+    var (nextModel, effects) = update(model, Msg(kind: CmdFocusDirection, direction: DirDown))
     check nextModel.activeTag == 2
     check nextModel.tags[2].focusedWindow == 102
-    check not effects.anyIt(it.kind == EffFocusWindow)
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 102)
 
     let (selectedModel, selectedEffects) = update(nextModel, Msg(kind: CmdSelectWindow))
     check not selectedModel.overviewActive
+    check selectedEffects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("OverviewOpenedOrClosed"))
     check selectedEffects.anyIt(it.kind == EffFocusWindow and it.focusId == 102)
+
+  test "Overview directional navigation follows columns and tag edges":
+    model.overviewActive = true
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 102)
+    model.tags[1].columns.add(Column(windows: @[WindowId(101), 102]))
+    model.tags[1].columns.add(Column(windows: @[WindowId(103), 104]))
+    model.tags[2] = TagState(tagId: 2, focusedWindow: 201)
+    model.tags[2].columns.add(Column(windows: @[WindowId(201)]))
+    for win in [WindowId(101), 102, 103, 104, 201]:
+      model.windows[win] = WindowData(id: win)
+    model.activeTag = 1
+
+    var (nextModel, effects) = update(model, Msg(kind: CmdFocusDirection, direction: DirRight))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].focusedWindow == 104
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 104)
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusDirection, direction: DirUp))
+    check nextModel.tags[1].focusedWindow == 103
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusDirection, direction: DirDown))
+    check nextModel.tags[1].focusedWindow == 104
+
+    (nextModel, effects) = update(nextModel, Msg(kind: CmdFocusDirection, direction: DirDown))
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].focusedWindow == 201
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 201)
+
+  test "Niri-style edge movement moves focused window between tags":
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 102)
+    model.tags[1].columns.add(Column(windows: @[WindowId(101), 102]))
+    model.tags[2] = TagState(tagId: 2)
+    model.windows[101] = WindowData(id: 101)
+    model.windows[102] = WindowData(id: 102)
+    model.activeTag = 1
+
+    var (nextModel, effects) = update(model, Msg(kind: CmdMoveWindowUpOrToWorkspaceUp))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].columns[0].windows == @[WindowId(102), 101]
+    check not effects.anyIt(it.kind == EffFocusWindow)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: CmdMoveWindowDownOrToWorkspaceDown))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].columns[0].windows == @[WindowId(101), 102]
+
+    (nextModel, effects) = update(nextModel, Msg(kind: CmdMoveWindowDownOrToWorkspaceDown))
+    check nextModel.activeTag == 2
+    check not nextModel.tags[1].containsWindow(102)
+    check nextModel.tags[2].containsWindow(102)
+    check nextModel.tags[2].focusedWindow == 102
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 102)
 
   test "CmdMoveToTag in Overview updates activeTag":
     model.overviewActive = true

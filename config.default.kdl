@@ -155,11 +155,13 @@ bindings {
 
     // Scroller movement and stack surgery.
     bind "Super+Ctrl+h" "move-window-left"
-    bind "Super+Ctrl+j" "move-window-down"
-    bind "Super+Ctrl+k" "move-window-up"
+    bind "Super+Ctrl+j" "move-window-down-or-to-workspace-down"
+    bind "Super+Ctrl+k" "move-window-up-or-to-workspace-up"
     bind "Super+Ctrl+l" "move-window-right"
     bind "Super+Alt+h" "move-column-left"
     bind "Super+Alt+l" "move-column-right"
+    bind "Super+Alt+Home" "move-column-to-first"
+    bind "Super+Alt+End" "move-column-to-last"
     bind "Super+z" "zoom"
     bind "Super+Shift+z" "consume-window"
     bind "Super+Ctrl+z" "expel-window"
@@ -192,8 +194,10 @@ bindings {
     bind "j" "focus-down" mode="overview"
     bind "k" "focus-up" mode="overview"
     bind "l" "focus-right" mode="overview"
+    bind "Home" "focus-column-first" mode="overview"
+    bind "End" "focus-column-last" mode="overview"
     bind "Return" "select-window" mode="overview"
-    bind "Escape" "toggle-overview" mode="overview"
+    bind "Escape" "close-overview" mode="overview"
 
     // Pointer operations.
     pointer-bind "Super+left" "move"

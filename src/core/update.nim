@@ -183,6 +183,10 @@ proc isFocusChangingCommand(kind: MsgKind): bool =
     CmdFocusTagRight,
     CmdFocusOccupiedTagLeft,
     CmdFocusOccupiedTagRight,
+    CmdFocusColumnFirst,
+    CmdFocusColumnLast,
+    CmdFocusWindowOrWorkspaceUp,
+    CmdFocusWindowOrWorkspaceDown,
     CmdFocusTag,
     CmdFocusWindowById,
     CmdSelectWindow,
@@ -246,6 +250,110 @@ proc focusTag(model: var Model; tagId: uint32; effects: var seq[Effect]) =
     effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
   effects.add(Effect(kind: EffManageDirty))
 
+proc nearestTag(model: Model; direction: int; occupiedOnly: bool): uint32
+
+proc isFocusableWindow(model: Model; winId: WindowId): bool =
+  model.windows.hasKey(winId) and not model.windows[winId].isMinimized
+
+proc visibleWindowNear(model: Model; col: Column; preferredIdx: int): WindowId =
+  if col.windows.len == 0:
+    return 0
+
+  let idx = clamp(preferredIdx, 0, col.windows.len - 1)
+  if model.isFocusableWindow(col.windows[idx]):
+    return col.windows[idx]
+
+  for distance in 1 ..< col.windows.len:
+    let before = idx - distance
+    if before >= 0 and model.isFocusableWindow(col.windows[before]):
+      return col.windows[before]
+    let after = idx + distance
+    if after < col.windows.len and model.isFocusableWindow(col.windows[after]):
+      return col.windows[after]
+
+  0
+
+proc focusColumnByStep(model: var Model; step: int; effects: var seq[Effect]) =
+  if step == 0 or not model.tags.hasKey(model.activeTag):
+    return
+
+  let tag = model.tags[model.activeTag]
+  let focused = tag.focusedWindow
+  let pos = tag.findWindow(focused)
+  if not pos.found:
+    return
+
+  var colIdx = pos.colIdx + step
+  while colIdx >= 0 and colIdx < tag.columns.len:
+    let target = model.visibleWindowNear(tag.columns[colIdx], pos.winIdx)
+    if target != 0:
+      model.focusWindow(target, effects)
+      return
+    colIdx += step
+
+proc focusColumnAtEdge(model: var Model; first: bool; effects: var seq[Effect]) =
+  if not model.tags.hasKey(model.activeTag):
+    return
+
+  let tag = model.tags[model.activeTag]
+  let focused = tag.focusedWindow
+  let pos = tag.findWindow(focused)
+  let preferredIdx = if pos.found: pos.winIdx else: 0
+
+  if first:
+    for col in tag.columns:
+      let target = model.visibleWindowNear(col, preferredIdx)
+      if target != 0:
+        model.focusWindow(target, effects)
+        return
+  else:
+    for i in countdown(tag.columns.len - 1, 0):
+      let target = model.visibleWindowNear(tag.columns[i], preferredIdx)
+      if target != 0:
+        model.focusWindow(target, effects)
+        return
+
+proc focusWindowOrTag(model: var Model; direction: int; effects: var seq[Effect]) =
+  if direction == 0:
+    return
+  if not model.tags.hasKey(model.activeTag):
+    let targetTag = model.nearestTag(direction, false)
+    if targetTag != 0:
+      model.focusTag(targetTag, effects)
+    return
+
+  let tag = model.tags[model.activeTag]
+  let focused = tag.focusedWindow
+  let pos = tag.findWindow(focused)
+  if pos.found:
+    var winIdx = pos.winIdx + direction
+    while winIdx >= 0 and winIdx < tag.columns[pos.colIdx].windows.len:
+      let target = tag.columns[pos.colIdx].windows[winIdx]
+      if model.isFocusableWindow(target):
+        model.focusWindow(target, effects)
+        return
+      winIdx += direction
+
+  let targetTag = model.nearestTag(direction, false)
+  if targetTag != 0:
+    model.focusTag(targetTag, effects)
+
+proc moveFocusedWindowToTag(model: var Model; targetTagId: uint32; effects: var seq[Effect]) =
+  if targetTagId == 0 or not model.tags.hasKey(model.activeTag):
+    return
+
+  let focused = model.tags[model.activeTag].focusedWindow
+  if focused == 0 or not model.windows.hasKey(focused):
+    return
+
+  discard model.removeWindowFromAllTags(focused)
+  discard model.removeWindowFromScratchpad(focused)
+  var targetTag = model.ensureTag(targetTagId)
+  targetTag.columns.add(Column(windows: @[focused], widthProportion: DefaultColumnWidth))
+  targetTag.focusedWindow = focused
+  model.tags[targetTagId] = targetTag
+  model.focusWindow(focused, effects)
+
 proc sortedTagIds(model: Model): seq[uint32] =
   for tagId in model.tags.keys:
     result.add(tagId)
@@ -292,23 +400,7 @@ proc focusOverviewByStep(model: var Model; step: int; effects: var seq[Effect]) 
     idx = (idx + step + overview.windows.len) mod overview.windows.len
   let nextFocus = overview.windows[idx]
 
-  for id in overview.tagIds:
-    var found = false
-    for col in model.tags[id].columns:
-      if col.windows.contains(nextFocus):
-        found = true
-        break
-    if found:
-      model.activeTag = id
-      model.syncPrimaryOutputTag()
-      var tag = model.tags[id]
-      tag.focusedWindow = nextFocus
-      model.tags[id] = tag
-      model.recordFocus(nextFocus)
-      effects.add(broadcastWindowFocusChanged(nextFocus))
-      effects.add(broadcastWorkspaceActivated(id, tag.name))
-      effects.add(Effect(kind: EffManageDirty))
-      return
+  model.focusWindow(nextFocus, effects)
 
 proc focusOverviewSelection(model: Model; effects: var seq[Effect]) =
   let tagId = model.activeTagOrFallback()
@@ -319,11 +411,15 @@ proc focusOverviewSelection(model: Model; effects: var seq[Effect]) =
 
 proc focusByDirection(model: var Model; direction: Direction; effects: var seq[Effect]) =
   if model.overviewActive:
-    let step =
-      case direction
-      of DirLeft, DirUp: -1
-      of DirRight, DirDown: 1
-    model.focusOverviewByStep(step, effects)
+    case direction
+    of DirLeft:
+      model.focusColumnByStep(-1, effects)
+    of DirRight:
+      model.focusColumnByStep(1, effects)
+    of DirUp:
+      model.focusWindowOrTag(-1, effects)
+    of DirDown:
+      model.focusWindowOrTag(1, effects)
     return
 
   if not model.tags.hasKey(model.activeTag):
@@ -1040,6 +1136,34 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           let temp = tag.columns[colIdx]; tag.columns[colIdx] = tag.columns[colIdx+1]; tag.columns[colIdx+1] = temp
           nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
 
+  of CmdMoveColumnToFirst:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]; let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        for i in 0 ..< tag.columns.len:
+          if tag.columns[i].windows.contains(focused): colIdx = i; break
+        if colIdx > 0:
+          let col = tag.columns[colIdx]
+          tag.columns.delete(colIdx)
+          tag.columns.insert(col, 0)
+          nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMoveColumnToLast:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]; let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        for i in 0 ..< tag.columns.len:
+          if tag.columns[i].windows.contains(focused): colIdx = i; break
+        if colIdx != -1 and colIdx < tag.columns.len - 1:
+          let col = tag.columns[colIdx]
+          tag.columns.delete(colIdx)
+          tag.columns.add(col)
+          nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
+
   of CmdMoveWindowLeft:
     let activeTagId = nextModel.activeTag
     if nextModel.tags.hasKey(activeTagId):
@@ -1094,6 +1218,38 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             let temp = tag.columns[i].windows[idx]; tag.columns[i].windows[idx] = tag.columns[i].windows[idx+1]; tag.columns[i].windows[idx+1] = temp
             nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty)); break
 
+  of CmdMoveWindowUpOrToWorkspaceUp:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]; let focused = tag.focusedWindow
+      if focused != 0:
+        let pos = tag.findWindow(focused)
+        if pos.found and pos.winIdx > 0:
+          let temp = tag.columns[pos.colIdx].windows[pos.winIdx]
+          tag.columns[pos.colIdx].windows[pos.winIdx] = tag.columns[pos.colIdx].windows[pos.winIdx - 1]
+          tag.columns[pos.colIdx].windows[pos.winIdx - 1] = temp
+          nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
+        else:
+          let target = nextModel.nearestTag(-1, false)
+          if target != 0:
+            nextModel.moveFocusedWindowToTag(target, effects)
+
+  of CmdMoveWindowDownOrToWorkspaceDown:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]; let focused = tag.focusedWindow
+      if focused != 0:
+        let pos = tag.findWindow(focused)
+        if pos.found and pos.winIdx < tag.columns[pos.colIdx].windows.len - 1:
+          let temp = tag.columns[pos.colIdx].windows[pos.winIdx]
+          tag.columns[pos.colIdx].windows[pos.winIdx] = tag.columns[pos.colIdx].windows[pos.winIdx + 1]
+          tag.columns[pos.colIdx].windows[pos.winIdx + 1] = temp
+          nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
+        else:
+          let target = nextModel.nearestTag(1, false)
+          if target != 0:
+            nextModel.moveFocusedWindowToTag(target, effects)
+
   of CmdSwapWindowUp:
     let activeTagId = nextModel.activeTag
     if nextModel.tags.hasKey(activeTagId):
@@ -1117,12 +1273,23 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty)); break
 
   of CmdToggleOverview:
-    nextModel.overviewActive = not nextModel.overviewActive
-    effects.add(Effect(kind: EffManageDirty))
-    effects.add(broadcastOverview(nextModel.overviewActive))
     if nextModel.overviewActive:
-      effects.add(Effect(kind: EffFocusShellUi))
+      return update(nextModel, Msg(kind: CmdCloseOverview))
     else:
+      return update(nextModel, Msg(kind: CmdOpenOverview))
+
+  of CmdOpenOverview:
+    if not nextModel.overviewActive:
+      nextModel.overviewActive = true
+      effects.add(Effect(kind: EffManageDirty))
+      effects.add(broadcastOverview(true))
+      effects.add(Effect(kind: EffFocusShellUi))
+
+  of CmdCloseOverview:
+    if nextModel.overviewActive:
+      nextModel.overviewActive = false
+      effects.add(Effect(kind: EffManageDirty))
+      effects.add(broadcastOverview(false))
       nextModel.focusOverviewSelection(effects)
 
   of CmdToggleFloating:
@@ -1165,11 +1332,14 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         return update(nextModel, Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: focused))
 
   of CmdSelectWindow:
+    let wasOverviewActive = nextModel.overviewActive
     nextModel.overviewActive = false
     let tagId = nextModel.activeTagOrFallback()
     if tagId != 0:
       nextModel.activeTag = tagId
       effects.add(broadcastWorkspaceActivated(tagId, nextModel.tags[tagId].name))
+    if wasOverviewActive:
+      effects.add(broadcastOverview(false))
     nextModel.focusOverviewSelection(effects)
     effects.add(Effect(kind: EffManageDirty))
 
@@ -1215,6 +1385,18 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of CmdFocusTagRight:
     nextModel.focusTag(nextModel.nearestTag(1, false), effects)
+
+  of CmdFocusColumnFirst:
+    nextModel.focusColumnAtEdge(true, effects)
+
+  of CmdFocusColumnLast:
+    nextModel.focusColumnAtEdge(false, effects)
+
+  of CmdFocusWindowOrWorkspaceUp:
+    nextModel.focusWindowOrTag(-1, effects)
+
+  of CmdFocusWindowOrWorkspaceDown:
+    nextModel.focusWindowOrTag(1, effects)
 
   of CmdFocusOccupiedTagLeft:
     nextModel.focusTag(nextModel.nearestTag(-1, true), effects)

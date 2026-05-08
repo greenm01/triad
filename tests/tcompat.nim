@@ -149,6 +149,14 @@ suite "Shell compatibility contracts":
     check toggleOverview.messages.len == 1
     check toggleOverview.messages[0].kind == CmdToggleOverview
 
+    let openOverview = handleNiriRequest("""{"Action":{"OpenOverview":{}}}""", modelForShell())
+    check openOverview.messages.len == 1
+    check openOverview.messages[0].kind == CmdOpenOverview
+
+    let closeOverview = handleNiriRequest("""{"Action":{"CloseOverview":{}}}""", modelForShell())
+    check closeOverview.messages.len == 1
+    check closeOverview.messages[0].kind == CmdCloseOverview
+
     let focusNextWorkspace = handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", modelForShell())
     check focusNextWorkspace.messages.len == 1
     check focusNextWorkspace.messages[0].kind == CmdFocusTag
@@ -158,6 +166,22 @@ suite "Shell compatibility contracts":
     check focusPrevColumn.messages.len == 1
     check focusPrevColumn.messages[0].kind == CmdFocusDirection
     check focusPrevColumn.messages[0].direction == DirLeft
+
+    let focusLastColumn = handleNiriRequest("""{"Action":{"FocusColumnLast":{}}}""", modelForShell())
+    check focusLastColumn.messages.len == 1
+    check focusLastColumn.messages[0].kind == CmdFocusColumnLast
+
+    let focusWindowOrWorkspace = handleNiriRequest("""{"Action":{"FocusWindowOrWorkspaceDown":{}}}""", modelForShell())
+    check focusWindowOrWorkspace.messages.len == 1
+    check focusWindowOrWorkspace.messages[0].kind == CmdFocusWindowOrWorkspaceDown
+
+    let moveColumn = handleNiriRequest("""{"Action":{"MoveColumnToFirst":{}}}""", modelForShell())
+    check moveColumn.messages.len == 1
+    check moveColumn.messages[0].kind == CmdMoveColumnToFirst
+
+    let moveWindow = handleNiriRequest("""{"Action":{"MoveWindowDownOrToWorkspaceDown":{}}}""", modelForShell())
+    check moveWindow.messages.len == 1
+    check moveWindow.messages[0].kind == CmdMoveWindowDownOrToWorkspaceDown
 
     let screenshot = handleNiriRequest("""{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""", modelForShell())
     check screenshot.handled
@@ -200,6 +224,18 @@ suite "Shell compatibility contracts":
     check screenshotForwarded.messages[0].screenshotKind == ShotScreen
     check screenshotForwarded.messages[0].screenshotPath == "/tmp/triad-screen.png"
     check screenshotForwarded.messages[0].screenshotShowPointer == true
+
+    let closeOverview = buildNiriCliRequest(@["msg", "action", "close-overview"])
+    check closeOverview.kind == NckRequest
+    let closeForwarded = handleNiriRequest(closeOverview.socketPayload, modelForShell())
+    check closeForwarded.messages.len == 1
+    check closeForwarded.messages[0].kind == CmdCloseOverview
+
+    let edgeMove = buildNiriCliRequest(@["msg", "action", "move-window-down-or-to-workspace-down"])
+    check edgeMove.kind == NckRequest
+    let edgeForwarded = handleNiriRequest(edgeMove.socketPayload, modelForShell())
+    check edgeForwarded.messages.len == 1
+    check edgeForwarded.messages[0].kind == CmdMoveWindowDownOrToWorkspaceDown
 
     let unwrapped = unwrapNiriReply("""{"Ok":{"Outputs":{"triad-0":{"logical":{"scale":1.0}}}}}""", "Outputs")
     check unwrapped.ok
