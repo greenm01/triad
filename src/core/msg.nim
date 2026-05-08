@@ -34,6 +34,10 @@ type
     CmdToggleGaps,
     CmdMoveFloating,
     CmdMoveToTag,
+    CmdRenameTag,
+    CmdGroupWindows,
+    CmdUngroupWindow,
+    CmdFocusNextInGroup,
     CmdSetMasterCount,
     CmdSetMasterRatio,
     CmdResizeWidth,
@@ -76,6 +80,8 @@ type
       newLayout*: LayoutMode
     of CmdMoveToTag:
       targetTag*: uint32
+    of CmdRenameTag:
+      newName*: string
     of CmdSetMasterCount:
       count*: int
     of CmdSetMasterRatio:

@@ -41,10 +41,11 @@ type
 
 # --- JSON IPC Event Helpers ---
 
-proc broadcastWorkspaceActivated(tagId: uint32): Effect =
+proc broadcastWorkspaceActivated(tagId: uint32, name: string): Effect =
   let payload = %*{
     "WorkspaceActivated": {
       "id": tagId,
+      "name": name,
       "focused": true
     }
   }
@@ -248,8 +249,37 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         if nextModel.overviewActive:
           nextModel.activeTag = msg.targetTag
         
-        effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
+        effects.add(broadcastWorkspaceActivated(nextModel.activeTag, nextModel.tags[nextModel.activeTag].name))
         effects.add(Effect(kind: EffManageDirty))
+
+  of CmdRenameTag:
+    if nextModel.tags.hasKey(nextModel.activeTag):
+      var tag = nextModel.tags[nextModel.activeTag]
+      tag.name = msg.newName
+      nextModel.tags[nextModel.activeTag] = tag
+      effects.add(broadcastWorkspaceActivated(nextModel.activeTag, tag.name))
+
+  of CmdGroupWindows:
+    # Basic grouping: combine current focused window with another (stub logic)
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      let tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        # For now, let's just mark the window as "grouped" in its own new group
+        # This is a foundation for complex grouping logic
+        let gid = nextModel.nextGroupId + 1
+        nextModel.nextGroupId = gid
+        nextModel.groups[gid] = GroupState(id: gid, windows: @[focused], activeWindow: focused)
+        effects.add(Effect(kind: EffManageDirty))
+
+  of CmdUngroupWindow:
+    # Remove focused window from its group (stub)
+    effects.add(Effect(kind: EffManageDirty))
+
+  of CmdFocusNextInGroup:
+    # Cycle focus within the current group (stub)
+    effects.add(Effect(kind: EffManageDirty))
 
   of CmdSetMasterCount:
     if nextModel.tags.hasKey(nextModel.activeTag):
@@ -608,7 +638,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of CmdSelectWindow:
     nextModel.overviewActive = false
-    effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
+    effects.add(broadcastWorkspaceActivated(nextModel.activeTag, nextModel.tags[nextModel.activeTag].name))
     effects.add(Effect(kind: EffManageDirty))
 
   of CmdTick:
@@ -661,7 +691,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             nextModel.tags[id] = tag
             break
         effects.add(broadcastWindowFocusChanged(nextFocus))
-        effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
+        effects.add(broadcastWorkspaceActivated(nextModel.activeTag, nextModel.tags[nextModel.activeTag].name))
         effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
     elif nextModel.tags.hasKey(nextModel.activeTag):
       let activeTagId = nextModel.activeTag
@@ -706,7 +736,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             nextModel.tags[id] = tag
             break
         effects.add(broadcastWindowFocusChanged(nextFocus))
-        effects.add(broadcastWorkspaceActivated(nextModel.activeTag))
+        effects.add(broadcastWorkspaceActivated(nextModel.activeTag, nextModel.tags[nextModel.activeTag].name))
         effects.add(Effect(kind: EffFocusWindow, focusId: nextFocus))
     elif nextModel.tags.hasKey(nextModel.activeTag):
       let activeTagId = nextModel.activeTag

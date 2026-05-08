@@ -29,12 +29,18 @@ type
     isFullscreen*: bool
     floatingGeom*: Rect
 
-  Column* = object
+  GroupState* = object
+    id*: uint32
     windows*: seq[WindowId]
+    activeWindow*: WindowId
+
+  Column* = object
+    windows*: seq[WindowId] # DOD simplification: keep flat windows for now, use GroupState to filter
     widthProportion*: float32 # For the scroller ribbon
 
   TagState* = object
     tagId*: uint32
+    name*: string
     layoutMode*: LayoutMode
     columns*: seq[Column]
     focusedWindow*: WindowId
@@ -73,6 +79,7 @@ type
   Model* = object
     tags*: Table[uint32, TagState]
     windows*: Table[WindowId, WindowData]
+    groups*: Table[uint32, GroupState]
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
@@ -95,3 +102,5 @@ type
     # Animation config
     enableAnimations*: bool
     animationSpeed*: float32
+    # Grouping counter
+    nextGroupId*: uint32

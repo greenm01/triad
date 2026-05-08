@@ -14,6 +14,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-prev`: Shifts keyboard focus to the previous window.
 *   `toggle-overview`: Activates or deactivates the global window grid.
 *   `select-window`: In overview mode, selects the focused window and jumps to its tag.
+*   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 
 #### Layout Management
 *   `layout-scroller`: Sets the active tag to horizontal scrolling mode.
@@ -25,6 +26,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 #### Manipulation
 *   `move-to-tag <id>`: Banishes the focused window to the specified tag.
 *   `close-window`: Politley requests that the focused window terminate its existence.
+*   `group-windows`: Orchestrates the union of the focused window and its neighbor into a single tabbed group.
+*   `ungroup-window`: Dissolves the group, granting the focused window its independence.
+*   `focus-next-in-group`: Cycles focus through the windows of a tabbed group.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
 *   `toggle-fullscreen`: Commands the window to occupy the entire screen, as is its right.
 *   `move-floating <dx> <dy>`: Displaces a floating window by the specified pixel deltas.
@@ -66,6 +70,7 @@ Occurs when the user switches tags or selects a window from the overview.
 {
   "WorkspaceActivated": {
     "id": 1,
+    "name": "Web",
     "focused": true
   }
 }

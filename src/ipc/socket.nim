@@ -52,6 +52,12 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
         of "toggle-floating": onMsg(Msg(kind: CmdToggleFloating))
         of "toggle-fullscreen": onMsg(Msg(kind: CmdToggleFullscreen))
         of "select-window": onMsg(Msg(kind: CmdSelectWindow))
+        of "rename-tag":
+          if parts.len >= 2:
+            onMsg(Msg(kind: CmdRenameTag, newName: parts[1..^1].join(" ")))
+        of "group-windows": onMsg(Msg(kind: CmdGroupWindows))
+        of "ungroup-window": onMsg(Msg(kind: CmdUngroupWindow))
+        of "focus-next-in-group": onMsg(Msg(kind: CmdFocusNextInGroup))
         of "move-floating":
           if parts.len >= 3:
             try: onMsg(Msg(kind: CmdMoveFloating, moveDX: int32(parseInt(parts[1])), moveDY: int32(parseInt(parts[2]))))

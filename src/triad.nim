@@ -35,13 +35,22 @@ proc get_id(p: pointer): uint32 =
   get_id(cast[ptr Proxy](p))
 
 proc getTiledTagState(tag: TagState, model: Model): TagState =
-  # Helper to get a TagState with only non-floating windows
+  # Helper to get a TagState with only non-floating and active grouped windows
   result = tag
   result.columns = @[]
   for col in tag.columns:
     var filteredWindows: seq[WindowId] = @[]
     for winId in col.windows:
-      if model.windows.hasKey(winId) and not model.windows[winId].isFloating:
+      let isFloating = model.windows.hasKey(winId) and model.windows[winId].isFloating
+      
+      # Group filtering logic
+      var isHiddenInGroup = false
+      for group in model.groups.values:
+        if group.windows.contains(winId) and group.activeWindow != winId:
+          isHiddenInGroup = true
+          break
+          
+      if not isFloating and not isHiddenInGroup:
         filteredWindows.add(winId)
     if filteredWindows.len > 0:
       var filteredCol = col

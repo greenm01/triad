@@ -20,6 +20,7 @@ type
 
   TagRule* = object
     tagId*: uint32
+    name*: string
     defaultLayout*: LayoutMode
 
 proc getConfigPath*(): string =
@@ -65,6 +66,9 @@ proc loadConfig*(path: string): Config =
           if child.name == "tag":
             let id = uint32(child.args[0].kInt())
             var layout = Scroller
+            var tagName = ""
+            if child.props.hasKey("name"):
+              tagName = child.props["name"].kString()
             if child.props.hasKey("default-layout"):
               case child.props["default-layout"].kString()
               of "scroller": layout = Scroller
@@ -72,7 +76,7 @@ proc loadConfig*(path: string): Config =
               of "tile": layout = MasterStack
               of "grid": layout = Grid
               of "monocle": layout = Monocle
-            result.tagRules.add(TagRule(tagId: id, defaultLayout: layout))
+            result.tagRules.add(TagRule(tagId: id, defaultLayout: layout, name: tagName))
             
       elif node.name == "window-rule":
         var rule = WindowRule()
@@ -132,5 +136,6 @@ proc applyConfig*(model: var Model, config: Config) =
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
       model.tags[rule.tagId].layoutMode = rule.defaultLayout
+      model.tags[rule.tagId].name = rule.name
     else:
-      model.tags[rule.tagId] = TagState(tagId: rule.tagId, layoutMode: rule.defaultLayout)
+      model.tags[rule.tagId] = TagState(tagId: rule.tagId, layoutMode: rule.defaultLayout, name: rule.name)
