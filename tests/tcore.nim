@@ -4,7 +4,7 @@ import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/restore_state
 import ../src/core/update
-import tables, sequtils, strutils
+import json, tables, sequtils, strutils
 
 suite "Core TEA Update Logic":
   setup:
@@ -31,6 +31,34 @@ suite "Core TEA Update Logic":
     for eff in effects:
       if eff.kind == EffManageDirty: hasManageDirty = true
     check hasManageDirty
+
+  test "Window open event includes Niri workspace and app identity":
+    model.tags[1] = initTagState(1, Scroller)
+    model.activeTag = 1
+
+    let (_, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 120, appId: "alacritty", title: "Alacritty"))
+    let event = effects.filterIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WindowOpenedOrChanged"))[0]
+    let win = parseJson(event.jsonPayload)["WindowOpenedOrChanged"]["window"]
+
+    check win["id"].getInt() == 120
+    check win["app_id"].getStr() == "alacritty"
+    check win["workspace_id"].getInt() == 1
+    check win["is_focused"].getBool() == true
+
+  test "Moving windows emits full Niri window state":
+    model.tags[1] = initTagState(1, Scroller)
+    model.tags[1].columns.add(Column(windows: @[WindowId(121)]))
+    model.tags[1].focusedWindow = 121
+    model.windows[121] = WindowData(id: 121, appId: "kitty", title: "Kitty")
+    model.activeTag = 1
+
+    let (_, effects) = update(model, Msg(kind: CmdMoveToTag, targetTag: 2))
+    let event = effects.filterIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WindowsChanged"))[^1]
+    let windows = parseJson(event.jsonPayload)["WindowsChanged"]["windows"]
+
+    check windows.len == 1
+    check windows[0]["app_id"].getStr() == "kitty"
+    check windows[0]["workspace_id"].getInt() == 2
 
   test "CmdFocusNext cycles focus correctly":
     # Setup model with 3 windows across 2 columns

@@ -1,4 +1,4 @@
-import model, msg, model_utils, tables, strutils, algorithm, json
+import model, msg, model_utils, niri_state, tables, strutils, algorithm, json
 
 type
   EffectKind* = enum
@@ -95,27 +95,18 @@ proc broadcastWindowFocusChanged(winId: WindowId): Effect =
   }
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
 
-proc broadcastWindowOpened(win: WindowData): Effect =
+proc broadcastWindowOpened(model: Model; win: WindowData): Effect =
   let payload = %*{
     "WindowOpenedOrChanged": {
-      "window": {
-        "id": win.id,
-        "title": if win.title == "": newJNull() else: %win.title,
-        "app_id": if win.appId == "": newJNull() else: %win.appId,
-        "pid": newJNull(),
-        "workspace_id": newJNull(),
-        "is_focused": false,
-        "is_floating": win.isFloating,
-        "is_urgent": false,
-        "layout": {
-          "pos_in_scrolling_layout": newJNull(),
-          "tile_size": [0.0, 0.0],
-          "window_size": [0, 0],
-          "tile_pos_in_workspace_view": newJNull(),
-          "window_offset_in_tile": [0.0, 0.0]
-        },
-        "focus_timestamp": newJNull()
-      }
+      "window": model.niriWindowJson(win)
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
+proc broadcastWindowsChanged(model: Model): Effect =
+  let payload = %*{
+    "WindowsChanged": {
+      "windows": model.niriWindowsJson()
     }
   }
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
@@ -135,6 +126,67 @@ proc broadcastOverview(open: bool): Effect =
     }
   }
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
+proc shouldBroadcastWindowsChanged(kind: MsgKind): bool =
+  case kind
+  of WlWindowCreated,
+      WlWindowDestroyed,
+      WlFocusChanged,
+      WlWindowFullscreenRequested,
+      WlWindowExitFullscreenRequested,
+      WlWindowMaximizeRequested,
+      WlWindowUnmaximizeRequested,
+      WlWindowMinimizeRequested,
+      WlWindowDimensions,
+      WlWindowAppId,
+      WlWindowTitle,
+      WlWindowDimensionsHint,
+      CmdFocusNext,
+      CmdFocusPrev,
+      CmdFocusDirection,
+      CmdFocusLast,
+      CmdFocusTagLeft,
+      CmdFocusTagRight,
+      CmdFocusOccupiedTagLeft,
+      CmdFocusOccupiedTagRight,
+      CmdFocusColumnFirst,
+      CmdFocusColumnLast,
+      CmdFocusWindowOrWorkspaceUp,
+      CmdFocusWindowOrWorkspaceDown,
+      CmdMoveToTagLeft,
+      CmdMoveToTagRight,
+      CmdMoveWindow,
+      CmdMoveWindowLeft,
+      CmdMoveWindowRight,
+      CmdMoveWindowUp,
+      CmdMoveWindowDown,
+      CmdMoveWindowUpOrToWorkspaceUp,
+      CmdMoveWindowDownOrToWorkspaceDown,
+      CmdMoveColumnLeft,
+      CmdMoveColumnRight,
+      CmdMoveColumnToFirst,
+      CmdMoveColumnToLast,
+      CmdSwapWindowUp,
+      CmdSwapWindowDown,
+      CmdConsumeWindow,
+      CmdExpelWindow,
+      CmdMoveToTag,
+      CmdSwapWindowToTag,
+      CmdMoveToScratchpad,
+      CmdMoveToNamedScratchpad,
+      CmdToggleScratchpad,
+      CmdToggleNamedScratchpad,
+      CmdRestoreScratchpad,
+      CmdToggleFloating,
+      CmdToggleFullscreen,
+      CmdToggleMaximized,
+      CmdMinimize,
+      CmdSelectWindow,
+      CmdFocusTag,
+      CmdFocusWindowById:
+    true
+  else:
+    false
 
 proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
   var i = 0
@@ -648,7 +700,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     if not nextModel.sessionLocked:
       tag.focusedWindow = msg.windowId
     nextModel.tags[targetTag] = tag
-    effects.add(broadcastWindowOpened(win))
+    effects.add(nextModel.broadcastWindowOpened(win))
     effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowDestroyed:
@@ -790,14 +842,14 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       var win = nextModel.windows[msg.appIdWindowId]
       win.appId = msg.updatedAppId
       nextModel.windows[msg.appIdWindowId] = win
-      effects.add(broadcastWindowOpened(win))
+      effects.add(nextModel.broadcastWindowOpened(win))
 
   of WlWindowTitle:
     if nextModel.windows.hasKey(msg.titleWindowId):
       var win = nextModel.windows[msg.titleWindowId]
       win.title = msg.updatedTitle
       nextModel.windows[msg.titleWindowId] = win
-      effects.add(broadcastWindowOpened(win))
+      effects.add(nextModel.broadcastWindowOpened(win))
 
   of WlWindowDimensionsHint:
     if nextModel.windows.hasKey(msg.hintWindowId):
@@ -1493,5 +1545,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of CmdReloadConfig, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
 
   else: discard
+
+  if msg.kind.shouldBroadcastWindowsChanged():
+    effects.add(nextModel.broadcastWindowsChanged())
 
   return (nextModel, effects)

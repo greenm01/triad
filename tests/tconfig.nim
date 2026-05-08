@@ -1,7 +1,8 @@
 import unittest
 import ../src/config/parser
+import ../src/config/keysyms
 import ../src/core/model
-import os, tables
+import os, strutils, tables
 
 suite "KDL Configuration Parser":
   test "Parser correctly reads layout settings":
@@ -193,3 +194,11 @@ bindings {
     check commandsByKey["j"] == "focus-window-or-workspace-down"
     check commandsByKey["Up"] == "focus-window-or-workspace-up"
     check commandsByKey["k"] == "focus-window-or-workspace-up"
+
+  test "Default config does not grab Kitty Ctrl Shift T":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+    for binding in config.keyBindings:
+      check not (binding.key.toLowerAscii() == "t" and binding.modifiers == 5'u32)
+
+    check keySymForBinding("t", 5'u32) == uint32(ord('T'))
+    check keySymForBinding("t", 65'u32) == uint32(ord('T'))

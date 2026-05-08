@@ -12,6 +12,7 @@ import core/restore_state
 import layouts/scroller
 import layouts/tiling
 import config/parser
+import config/keysyms
 import ipc/commands
 import ipc/socket
 import ipc/quickshell_compat
@@ -657,30 +658,6 @@ proc destroyAllProtocolSurfaces() =
   windowDecorationAbove.clear()
   windowDecorationBelow.clear()
 
-proc keySym(ch: char): uint32 =
-  uint32(ord(ch))
-
-proc keySym(key: string): uint32 =
-  if key.len == 1:
-    uint32(ord(key[0]))
-  else:
-    case key.toLowerAscii()
-    of "return", "enter": 0xff0d'u32
-    of "escape", "esc": 0xff1b'u32
-    of "tab": 0xff09'u32
-    of "backspace": 0xff08'u32
-    of "space": 0x20'u32
-    of "left": 0xff51'u32
-    of "up": 0xff52'u32
-    of "right": 0xff53'u32
-    of "down": 0xff54'u32
-    of "page_up", "page-up", "prior": 0xff55'u32
-    of "page_down", "page-down", "next": 0xff56'u32
-    of "home": 0xff50'u32
-    of "end": 0xff57'u32
-    of "print": 0xff61'u32
-    else: 0'u32
-
 proc applyBorder(win: ptr RiverWindowV1; focused: bool) =
   let color = premulColor(if focused: FocusedBorder else: UnfocusedBorder)
   win.setBorders(RiverAllEdges, BorderWidth, color.r, color.g, color.b, color.a)
@@ -799,7 +776,7 @@ proc setupDefaultBindings() =
       if not bindingModeActive(binding.mode):
         continue
       let parsed = parseLegacyCommand(binding.command)
-      let sym = keySym(binding.key)
+      let sym = keySymForBinding(binding.key, binding.modifiers)
       if parsed.isSome and sym != 0:
         addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
 
