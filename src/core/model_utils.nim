@@ -177,11 +177,6 @@ proc visibleWorkspaceIds*(model: Model): seq[uint32] =
   for tagId in model.tags.keys:
     if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag or model.tags[tagId].flattenWindows().len > 0:
       result.add(tagId)
-      continue
-    for _, outputTag in model.outputTags.pairs:
-      if outputTag == tagId:
-        result.add(tagId)
-        break
   result.sort()
 
 proc compactWorkspaceIndexToTag*(model: Model; index: uint32): uint32 =
@@ -209,15 +204,25 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
       continue
     if model.tags[tagId].flattenWindows().len > 0:
       continue
-    var ownedByOutput = false
-    for _, outputTag in model.outputTags.pairs:
+    var outputIds: seq[uint32] = @[]
+    for outputId, outputTag in model.outputTags.pairs:
       if outputTag == tagId:
-        ownedByOutput = true
-        break
-    if ownedByOutput:
-      continue
+        outputIds.add(outputId)
+    for outputId in outputIds:
+      model.outputTags.del(outputId)
     model.tags.del(tagId)
     result = true
+
+proc lowerWorkspaceFallback*(model: Model; fromTag: uint32): uint32 =
+  var ids = model.visibleWorkspaceIds()
+  for i in countdown(ids.len - 1, 0):
+    let tagId = ids[i]
+    if tagId < fromTag and tagId != fromTag:
+      return tagId
+  if model.defaultWorkspaceCount() > 0:
+    let below = if fromTag > 1: fromTag - 1 else: 1'u32
+    return min(model.defaultWorkspaceCount(), max(1'u32, below))
+  1'u32
 
 proc firstTagId*(model: Model): uint32 =
   if model.tags.len == 0:

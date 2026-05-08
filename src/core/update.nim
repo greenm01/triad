@@ -330,6 +330,31 @@ proc focusTag(model: var Model; tagId: uint32; effects: var seq[Effect]) =
     effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
   effects.add(Effect(kind: EffManageDirty))
 
+proc collapseEmptyActiveDynamicWorkspace(model: var Model; effects: var seq[Effect]): bool =
+  let oldTag = model.activeTag
+  if oldTag == 0 or oldTag <= model.defaultWorkspaceCount() or not model.tags.hasKey(oldTag):
+    return false
+  if model.tags[oldTag].flattenWindows().len > 0:
+    return false
+
+  let fallback = model.lowerWorkspaceFallback(oldTag)
+  if fallback == 0 or fallback == oldTag:
+    return false
+
+  discard model.ensureTag(fallback)
+  model.activeTag = fallback
+  model.syncPrimaryOutputTag()
+  var tag = model.tags[fallback]
+  tag.recomputeVisibleFocus(model)
+  model.tags[fallback] = tag
+  effects.add(broadcastWorkspaceActivated(fallback, tag.name))
+  if tag.focusedWindow != 0:
+    model.recordFocus(tag.focusedWindow)
+    effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
+    effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
+  effects.add(Effect(kind: EffManageDirty))
+  true
+
 proc nearestTag(model: Model; direction: int; occupiedOnly: bool): uint32
 
 proc isFocusableWindow(model: Model; winId: WindowId): bool =
@@ -1730,6 +1755,11 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   else: discard
 
+  let collapsedWorkspace =
+    if msg.kind in {WlWindowDestroyed, CmdMoveToScratchpad, CmdMoveToNamedScratchpad}:
+      nextModel.collapseEmptyActiveDynamicWorkspace(effects)
+    else:
+      false
   let prunedWorkspaces = nextModel.pruneDynamicWorkspaces()
 
   if msg.kind.shouldBroadcastOutputsChanged():
@@ -1739,7 +1769,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   elif msg.kind.shouldBroadcastWindowsChanged():
     effects.add(nextModel.broadcastWorkspacesChanged())
     effects.add(nextModel.broadcastWindowsChanged())
-  elif prunedWorkspaces:
+  elif collapsedWorkspace or prunedWorkspaces:
     effects.add(nextModel.broadcastWorkspacesChanged())
 
   return (nextModel, effects)

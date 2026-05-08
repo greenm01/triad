@@ -654,6 +654,61 @@ suite "Core TEA Update Logic":
     check nextModel.tags[4].layoutMode == Deck
     check nextModel.tags[4].containsWindow(301)
 
+  test "Closing last window on dynamic workspace collapses to lower workspace":
+    model.workspaces.defaultCount = 3
+    model.primaryOutput = 42
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[4] = initTagState(4, Deck, "chat")
+    model.tags[4].columns.add(Column(windows: @[WindowId(401)]))
+    model.tags[4].focusedWindow = 401
+    model.windows[401] = WindowData(id: 401)
+    model.outputTags[42] = 4
+    model.activeTag = 4
+
+    let (nextModel, effects) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 401))
+    check nextModel.activeTag == 3
+    check not nextModel.tags.hasKey(4)
+    check nextModel.outputTags[42] == 3
+    check niriWorkspacesJson(nextModel).len == 3
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspaceActivated"))
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspacesChanged"))
+
+  test "Closing last window on default workspace keeps workspace visible":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[3].columns.add(Column(windows: @[WindowId(301)]))
+    model.tags[3].focusedWindow = 301
+    model.windows[301] = WindowData(id: 301)
+    model.activeTag = 3
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 301))
+    check nextModel.activeTag == 3
+    check nextModel.tags.hasKey(3)
+    check nextModel.tags[3].flattenWindows().len == 0
+    check niriWorkspacesJson(nextModel).len == 3
+
+  test "Closing one of several windows on dynamic workspace keeps it":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[4] = initTagState(4, Deck, "chat")
+    model.tags[4].columns.add(Column(windows: @[WindowId(401), 402]))
+    model.tags[4].focusedWindow = 401
+    model.windows[401] = WindowData(id: 401)
+    model.windows[402] = WindowData(id: 402)
+    model.activeTag = 4
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 401))
+    check nextModel.activeTag == 4
+    check nextModel.tags.hasKey(4)
+    check nextModel.tags[4].containsWindow(402)
+    check niriWorkspacesJson(nextModel).len == 4
+
   test "CmdMoveToTag in Overview updates activeTag":
     model.overviewActive = true
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
