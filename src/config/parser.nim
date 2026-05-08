@@ -7,6 +7,7 @@ type
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    screenLock*: ScreenLockConfig
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
 
@@ -235,6 +236,18 @@ proc loadConfig*(path: string): Config =
                 result.quickshell.args.add(arg.kString())
           except CatchableError as e:
             warn "Ignoring invalid quickshell field", field=child.name, error=e.msg
+
+      elif node.name == "screen-lock":
+        for child in node.children:
+          try:
+            if child.name == "command":
+              var cmd: seq[string] = @[]
+              for arg in child.args:
+                cmd.add(arg.kString())
+              if cmd.len > 0:
+                result.screenLock.command = cmd
+          except CatchableError as e:
+            warn "Ignoring invalid screen-lock field", field=child.name, error=e.msg
             
   except:
     let e = getCurrentException()
@@ -257,6 +270,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.windowRules = config.windowRules
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell
+  model.screenLock = config.screenLock
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
   

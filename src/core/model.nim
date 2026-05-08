@@ -79,6 +79,9 @@ type
     theme*: string
     args*: seq[string]
 
+  ScreenLockConfig* = object
+    command*: seq[string]
+
   PointerOpKind* = enum
     OpNone,
     OpMove,
@@ -110,6 +113,7 @@ type
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    screenLock*: ScreenLockConfig
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
     pointerOp*: PointerOpState
@@ -118,6 +122,7 @@ type
     activeTag*: uint32
     overviewActive*: bool
     layerFocusExclusive*: bool
+    sessionLocked*: bool
     # Screen dimensions
     screenWidth*: int32
     screenHeight*: int32

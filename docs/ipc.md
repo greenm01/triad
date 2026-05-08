@@ -16,6 +16,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `toggle-scratchpad`: Summons the active scratchpad window as an overlay or dismisses it to the shadows.
 *   `select-window`: In overview mode, selects the focused window and jumps to its tag.
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
+*   `lock-session`: Launches the configured `screen-lock` command.
 
 #### Layout Management
 *   `layout-scroller`: Sets the active tag to horizontal scrolling mode.

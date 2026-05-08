@@ -226,6 +226,12 @@ quickshell {
     theme "noctalia-shell"
 }
 
+// screen-lock {
+//     command "lockme"
+//     // For compositor testing only:
+//     // command "lockme" "--dev-mode"
+// }
+
 bindings {
     bind "Super+q" "close-window"
     bind "Super+f" "toggle-fullscreen"
@@ -233,6 +239,7 @@ bindings {
     bind "Super+n" "minimize"
     bind "Super+r" "reload-config"
     bind "Super+t" "spawn-terminal"
+    // bind "Super+Shift+l" "lock-session"
     bind "Super+1" "focus-tag 1"
     bind "Super+2" "focus-tag 2"
     bind "Super+3" "focus-tag 3"
@@ -281,6 +288,21 @@ proc spawnQuickshell(model: Model) =
       info "Spawned Quickshell", theme=model.quickshell.theme, pid=p.processID
     except CatchableError as e:
       warn "Failed to spawn Quickshell", theme=model.quickshell.theme, error=e.msg
+
+proc spawnScreenLock(command: seq[string]) =
+  if command.len == 0:
+    warn "Screen lock command is not configured"
+    return
+
+  var args: seq[string] = @[]
+  if command.len > 1:
+    args = command[1..^1]
+
+  try:
+    let p = startProcess(command[0], args = args, options = {poUsePath})
+    info "Spawned screen lock", cmd=command[0], pid=p.processID
+  except CatchableError as e:
+    warn "Failed to spawn screen lock", cmd=command[0], error=e.msg
 
 proc spawnTerminal() =
   var candidates: seq[string] = @[]
@@ -441,7 +463,7 @@ proc applyManageState() =
 
   let focused = currentModel.activeFocus()
   for seat in seatPointers:
-    if currentModel.layerFocusExclusive:
+    if currentModel.layerFocusExclusive or currentModel.sessionLocked:
       seat.clearFocus()
     elif focused != 0 and windowPointers.hasKey(focused):
       seat.focusWindow(windowPointers[focused])
@@ -738,6 +760,8 @@ proc executeEffect(eff: Effect) =
     requestManage("effect")
   of EffBroadcastJson:
     asyncCheck broadcastJson(eff.jsonPayload)
+  of EffSpawnScreenLock:
+    spawnScreenLock(eff.screenLockCommand)
   of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffCloseWindow, EffSetFullscreen, EffSetMaximized:
     queueManageEffect(eff)
   of EffSetPosition:
@@ -973,9 +997,11 @@ proc on_manager_finished(data: pointer, mgr: ptr RiverWindowManagerV1) =
 
 proc on_session_locked(data: pointer, mgr: ptr RiverWindowManagerV1) =
   info "River session locked"
+  msgQueue.add(Msg(kind: WlSessionLocked))
 
 proc on_session_unlocked(data: pointer, mgr: ptr RiverWindowManagerV1) =
   info "River session unlocked"
+  msgQueue.add(Msg(kind: WlSessionUnlocked))
 
 proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
   debug "River manage start", pendingWindows=pendingWindows.len

@@ -43,6 +43,7 @@ proc parseLegacyCommand*(line: string): Option[Msg] =
   of "toggle-maximized", "toggle-maximize": some(Msg(kind: CmdToggleMaximized))
   of "minimize", "minimize-window": some(Msg(kind: CmdMinimize))
   of "spawn-terminal": some(Msg(kind: CmdSpawnTerminal))
+  of "lock-session": some(Msg(kind: CmdLockSession))
   of "move-to-scratchpad": some(Msg(kind: CmdMoveToScratchpad))
   of "toggle-scratchpad": some(Msg(kind: CmdToggleScratchpad))
   of "select-window": some(Msg(kind: CmdSelectWindow))

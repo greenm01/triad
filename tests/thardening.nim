@@ -1,4 +1,4 @@
-import unittest, tables, os, sequtils
+import unittest, tables, os, sequtils, options
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
@@ -6,6 +6,7 @@ import ../src/core/update
 import ../src/layouts/scroller
 import ../src/layouts/tiling
 import ../src/config/parser
+import ../src/ipc/commands
 
 proc baseModel(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080, outerGaps: 10, innerGaps: 5)
@@ -166,6 +167,49 @@ suite "Crash hardening":
     (nextModel, effects) = update(nextModel, Msg(kind: WlLayerFocusNone))
     check not nextModel.layerFocusExclusive
     check effects.anyIt(it.kind == EffManageDirty)
+
+  test "session lock events suppress and restore normal focus policy":
+    var model = baseModel()
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "one"))
+    (nextModel, _) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 8, appId: "app", title: "two"))
+    nextModel.tags[1].focusedWindow = 7
+
+    var effects: seq[Effect]
+    (nextModel, effects) = update(nextModel, Msg(kind: WlSessionLocked))
+    check nextModel.sessionLocked
+    check effects.anyIt(it.kind == EffManageDirty)
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlFocusChanged, newFocusedId: 8))
+    check nextModel.tags[1].focusedWindow == 7
+    check effects.len == 0
+
+    (nextModel, effects) = update(nextModel, Msg(kind: CmdFocusNext))
+    check nextModel.tags[1].focusedWindow == 7
+    check effects.len == 0
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 9, appId: "app", title: "locked"))
+    check nextModel.tags[1].focusedWindow == 7
+
+    (nextModel, effects) = update(nextModel, Msg(kind: WlSessionUnlocked))
+    check not nextModel.sessionLocked
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 7)
+    check effects.anyIt(it.kind == EffManageDirty)
+
+  test "lock-session command is non-fatal and argv based":
+    var model = baseModel()
+
+    var updated = update(model, Msg(kind: CmdLockSession))
+    var effects = updated[1]
+    check effects.anyIt(it.kind == EffLog)
+
+    model.screenLock.command = @["lockme", "--dev-mode"]
+    updated = update(model, Msg(kind: CmdLockSession))
+    effects = updated[1]
+    check effects.anyIt(it.kind == EffSpawnScreenLock and it.screenLockCommand == @["lockme", "--dev-mode"])
+
+    let parsed = parseLegacyCommand("lock-session")
+    check parsed.isSome
+    check parsed.get().kind == CmdLockSession
 
   test "consume ignores empty next columns":
     var model = baseModel()

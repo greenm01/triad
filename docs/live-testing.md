@@ -34,6 +34,15 @@ client during the smoke window:
 TRIAD_LIVE_LAUNCH_CLIENTS=1 sh tools/live_smoke.sh
 ```
 
+If `lockme` is on `PATH`, the smoke script checks its required Wayland
+protocols. To do a manual dev-mode lock/unlock pass:
+
+```bash
+TRIAD_LIVE_TEST_LOCKME=1 sh tools/live_smoke.sh
+```
+
+`lockme --dev-mode` acquires the session lock and exits when you press Esc.
+
 Expected startup milestones in `triad.log`:
 
 - `Logging initialized`

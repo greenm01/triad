@@ -15,6 +15,7 @@ type
     EffOpEnd,
     EffSetFullscreen,
     EffSetMaximized,
+    EffSpawnScreenLock,
     EffLog
 
   Effect* = object
@@ -41,6 +42,8 @@ type
     of EffSetMaximized:
       maxWinId*: WindowId
       isMaximized*: bool
+    of EffSpawnScreenLock:
+      screenLockCommand*: seq[string]
     else:
       discard
 
@@ -140,9 +143,23 @@ proc chooseFullscreenOutput(model: Model; requested: uint32): uint32 =
     return requested
   0
 
+proc isFocusChangingCommand(kind: MsgKind): bool =
+  kind in {
+    WlFocusChanged,
+    CmdFocusNext,
+    CmdFocusPrev,
+    CmdFocusTag,
+    CmdFocusWindowById,
+    CmdSelectWindow,
+    CmdToggleScratchpad
+  }
+
 proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   var nextModel = model
   var effects: seq[Effect] = @[]
+
+  if model.sessionLocked and msg.kind.isFocusChangingCommand():
+    return (nextModel, effects)
 
   case msg.kind
   of WlOutputDimensions:
@@ -225,7 +242,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       nextModel.tags[targetTag] = tag
     var tag = nextModel.tags[targetTag]
     tag.columns.add(Column(windows: @[msg.windowId], widthProportion: DefaultColumnWidth))
-    tag.focusedWindow = msg.windowId
+    if not nextModel.sessionLocked:
+      tag.focusedWindow = msg.windowId
     nextModel.tags[targetTag] = tag
     effects.add(broadcastWindowOpened(win))
     effects.add(Effect(kind: EffManageDirty))
@@ -255,6 +273,19 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         effects.add(broadcastWindowFocusChanged(msg.newFocusedId))
         if msg.newFocusedId != 0:
           effects.add(Effect(kind: EffFocusWindow, focusId: msg.newFocusedId))
+
+  of WlSessionLocked:
+    nextModel.sessionLocked = true
+    nextModel.pointerOp = PointerOpState(kind: OpNone)
+    effects.add(Effect(kind: EffManageDirty))
+
+  of WlSessionUnlocked:
+    nextModel.sessionLocked = false
+    let focused = nextModel.focusedOnActiveTag()
+    if focused != 0:
+      effects.add(broadcastWindowFocusChanged(focused))
+      effects.add(Effect(kind: EffFocusWindow, focusId: focused))
+    effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowFullscreenRequested:
     if nextModel.windows.hasKey(msg.fullscreenRequestId):
@@ -899,6 +930,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     if nextModel.tags.hasKey(nextModel.activeTag):
       let focused = nextModel.tags[nextModel.activeTag].focusedWindow
       if focused != 0: effects.add(Effect(kind: EffCloseWindow, closeId: focused))
+
+  of CmdLockSession:
+    if nextModel.screenLock.command.len > 0:
+      effects.add(Effect(kind: EffSpawnScreenLock, screenLockCommand: nextModel.screenLock.command))
+    else:
+      effects.add(Effect(kind: EffLog, msg: "screen lock command is not configured"))
 
   of CmdReloadConfig, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
 

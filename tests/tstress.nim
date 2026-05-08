@@ -269,7 +269,7 @@ proc generatedMsg(rng: var FuzzRng; model: Model; ctx: var FuzzContext): seq[Msg
       "focus-next", "focus-prev", "toggle-overview", "focus-workspace 2",
       "focus-workspace -1", "move-to-tag 4", "swap-to-tag junk",
       "resize-width 0.25", "adjust-gaps -100", "set-column-width 8.5",
-      "toggle-maximized", "minimize", "spawn-terminal", "mmsg -g -A", "rename-tag stress tag"
+      "toggle-maximized", "minimize", "spawn-terminal", "lock-session", "mmsg -g -A", "rename-tag stress tag"
     ]
     let command = commands[rng.pick(commands.len)]
     ctx.op = "legacy ipc " & command

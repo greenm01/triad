@@ -92,6 +92,19 @@ quickshell {
     check config.quickshell.theme == "DankMaterialShell"
     check config.quickshell.args == @["--debug", "--fast"]
 
+  test "Parser correctly reads screen lock command":
+    let path = getCurrentDir() / "test_lock.kdl"
+    let kdl = """
+screen-lock {
+    command "lockme" "--dev-mode"
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.screenLock.command == @["lockme", "--dev-mode"]
+
   test "Parser reads configurable key and pointer bindings":
     let path = getCurrentDir() / "test_bindings.kdl"
     let kdl = """

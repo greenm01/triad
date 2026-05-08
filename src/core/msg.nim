@@ -20,6 +20,8 @@ type
     WlLayerFocusExclusive,
     WlLayerFocusNonExclusive,
     WlLayerFocusNone,
+    WlSessionLocked,
+    WlSessionUnlocked,
     WlOutputDimensions,
     WlOutputPosition,
     WlOutputUsable,
@@ -78,6 +80,7 @@ type
     CmdFocusWindowById,
     CmdCloseWindowById,
     CmdSpawnTerminal,
+    CmdLockSession,
     CmdTick,
     CmdReloadConfig
 
