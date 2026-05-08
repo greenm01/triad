@@ -34,6 +34,7 @@ type
     CmdToggleGaps,
     CmdMoveFloating,
     CmdMoveToTag,
+    CmdSwapWindowToTag,
     CmdRenameTag,
     CmdGroupWindows,
     CmdUngroupWindow,
@@ -46,6 +47,7 @@ type
     CmdResizeHeight,
     CmdSetColumnWidth,
     CmdAdjustGaps,
+    CmdToggleGapsRel, # Unused
     CmdMoveToScratchpad,
     CmdToggleScratchpad,
     CmdToggleOverview,
@@ -84,6 +86,8 @@ type
       newLayout*: LayoutMode
     of CmdMoveToTag:
       targetTag*: uint32
+    of CmdSwapWindowToTag:
+      targetTagSwap*: uint32
     of CmdRenameTag:
       newName*: string
     of CmdSetMasterCount:

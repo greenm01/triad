@@ -71,6 +71,10 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdMoveToTag, targetTag: uint32(parseInt(parts[1]))))
             except: warn "Invalid tag ID", tag=parts[1]
+        of "swap-to-tag":
+          if parts.len >= 2:
+            try: onMsg(Msg(kind: CmdSwapWindowToTag, targetTagSwap: uint32(parseInt(parts[1]))))
+            except: warn "Invalid tag ID", tag=parts[1]
         of "master-count":
           if parts.len >= 2:
             try: onMsg(Msg(kind: CmdSetMasterCount, count: parseInt(parts[1])))

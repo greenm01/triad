@@ -73,6 +73,22 @@ suite "Core TEA Update Logic":
     check nextModel.tags[2].columns[0].windows[0] == 101
     check nextModel.tags[2].focusedWindow == 101
 
+  test "CmdSwapWindowToTag exchanges windows between tags":
+    # Tag 1: [101], Tag 2: [102]
+    var tag1 = TagState(tagId: 1, focusedWindow: 101)
+    tag1.columns.add(Column(windows: @[WindowId(101)]))
+    var tag2 = TagState(tagId: 2, focusedWindow: 102)
+    tag2.columns.add(Column(windows: @[WindowId(102)]))
+    model.tags[1] = tag1
+    model.tags[2] = tag2
+    model.activeTag = 1
+    
+    let (nextModel, _) = update(model, Msg(kind: CmdSwapWindowToTag, targetTagSwap: 2))
+    check nextModel.tags[1].columns[0].windows[0] == 102
+    check nextModel.tags[2].columns[0].windows[0] == 101
+    check nextModel.tags[1].focusedWindow == 102
+    check nextModel.tags[2].focusedWindow == 101
+
   test "forced-layout window rule overrides tag layout":
     # Setup rule: Discord forces Grid mode
     model.windowRules.add(WindowRule(appIdMatch: "discord", forcedLayout: ord(Grid) + 1))
