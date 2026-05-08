@@ -181,12 +181,16 @@ proc sendIpcMsg*(path: string, msg: string) {.async.} =
     raise
   client.close()
 
-proc sendIpcRequest*(path: string, msg: string): Future[string] {.async.} =
+proc sendIpcRequest*(path: string, msg: string; timeoutMs = 3000): Future[string] {.async.} =
   let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     await client.connectUnix(path)
     await client.send(msg & "\L")
-    result = await client.recvLine()
+    let reply = client.recvLine()
+    if await reply.withTimeout(timeoutMs):
+      result = reply.read()
+    else:
+      raise newException(IOError, "IPC request timed out after " & $timeoutMs & " ms")
   except CatchableError:
     if not client.isClosed:
       client.close()

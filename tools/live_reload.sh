@@ -24,7 +24,7 @@ snapshot_restore_state() {
   restore_path="$1"
   snapshot=""
 
-  if snapshot="$("$repo_dir/triad" msg dump-live-restore-state 2>/dev/null)"; then
+  if snapshot="$(timeout 3 "$repo_dir/triad" msg dump-live-restore-state 2>/dev/null)"; then
     if printf '%s\n' "$snapshot" | grep -q '"schema":"triad-live-restore-v2"'; then
       restore_dir="$(dirname -- "$restore_path")"
       mkdir -p "$restore_dir"
@@ -35,6 +35,8 @@ snapshot_restore_state() {
       printf '%s\n' "live-reload: snapshotted native state for $window_count item(s) to $restore_path"
       return 0
     fi
+  else
+    printf '%s\n' "live-reload: native snapshot timed out or failed; falling back to Niri-compatible snapshot" >&2
   fi
 
   workspaces="$("$repo_dir/triad_niri" msg -j workspaces)" ||
