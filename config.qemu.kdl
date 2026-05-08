@@ -1,0 +1,248 @@
+// Triad QEMU daily-driver config.
+//
+// This is modeled after ~/.config/mango/config.conf, but only uses Triad
+// config and commands that the current implementation understands.
+// Install in the VM as: ~/.config/triad/config.kdl
+
+layout {
+    gaps 8
+    center-focused-column "on-overflow"
+    default-column-width { proportion 0.5; }
+    scroller-focus-center #false
+    scroller-prefer-center #false
+    enable-animations #true
+    animation-speed 0.15
+    smart-gaps #false
+    layout-cycle "scroller" "tile" "grid" "deck" "monocle" "vertical-scroller" "center-tile" "right-tile" "vertical-grid"
+}
+
+scratchpad {
+    width-ratio 0.82
+    height-ratio 0.9
+}
+
+tag-rules {
+    tag 1 name="term" default-layout="scroller"
+    tag 2 name="web" default-layout="scroller"
+    tag 3 name="files" default-layout="grid"
+    tag 4 name="chat" default-layout="deck"
+    tag 5 name="media" default-layout="monocle"
+    tag 6 name="code" default-layout="center-tile"
+    tag 7 name="vm" default-layout="right-tile"
+    tag 8 name="float" default-layout="grid"
+    tag 9 name="spare" default-layout="scroller"
+}
+
+quickshell {
+    enabled #true
+    theme "noctalia-shell"
+}
+
+screen-lock {
+    command "sh" "-lc" "command -v lockme >/dev/null 2>&1 && exec lockme; command -v swaylock >/dev/null 2>&1 && exec swaylock -f; command -v gtklock >/dev/null 2>&1 && exec gtklock; exit 0"
+}
+
+cursor {
+    theme "default"
+    size 24
+}
+
+presentation-mode "vsync"
+allow-exit-session #true
+
+protocol-surfaces {
+    enabled #true
+    visible-debug #false
+}
+
+spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"
+spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
+spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
+spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"
+spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev/null 2>&1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE NIRI_SOCKET TRIAD_SOCKET || true"
+spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
+spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
+spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"
+spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || true"
+
+bindings {
+    // Launch/session.
+    bind "Super+Return" "spawn-terminal"
+    bind "Super+r" "reload-config"
+    bind "Super+Escape" "lock-session"
+    bind "Ctrl+Alt+Backspace" "exit-session"
+
+    // Focus. Arrow and Page keys are intentionally avoided until Triad's
+    // keysym mapper grows named-key coverage.
+    bind "Super+h" "focus-left"
+    bind "Super+j" "focus-down"
+    bind "Super+k" "focus-up"
+    bind "Super+l" "focus-right"
+    bind "Super+Tab" "focus-last"
+    bind "Super+Shift+Tab" "focus-prev"
+    bind "Super+u" "focus-occupied-tag-right"
+    bind "Super+i" "focus-occupied-tag-left"
+    bind "Super+Shift+u" "focus-tag-right"
+    bind "Super+Shift+i" "focus-tag-left"
+
+    // Tags/workspaces.
+    bind "Super+1" "focus-tag 1"
+    bind "Super+2" "focus-tag 2"
+    bind "Super+3" "focus-tag 3"
+    bind "Super+4" "focus-tag 4"
+    bind "Super+5" "focus-tag 5"
+    bind "Super+6" "focus-tag 6"
+    bind "Super+7" "focus-tag 7"
+    bind "Super+8" "focus-tag 8"
+    bind "Super+9" "focus-tag 9"
+
+    bind "Super+Ctrl+1" "move-to-tag 1"
+    bind "Super+Ctrl+2" "move-to-tag 2"
+    bind "Super+Ctrl+3" "move-to-tag 3"
+    bind "Super+Ctrl+4" "move-to-tag 4"
+    bind "Super+Ctrl+5" "move-to-tag 5"
+    bind "Super+Ctrl+6" "move-to-tag 6"
+    bind "Super+Ctrl+7" "move-to-tag 7"
+    bind "Super+Ctrl+8" "move-to-tag 8"
+    bind "Super+Ctrl+9" "move-to-tag 9"
+    bind "Super+Ctrl+u" "move-to-tag-right"
+    bind "Super+Ctrl+i" "move-to-tag-left"
+
+    bind "Super+Shift+1" "swap-to-tag 1"
+    bind "Super+Shift+2" "swap-to-tag 2"
+    bind "Super+Shift+3" "swap-to-tag 3"
+    bind "Super+Shift+4" "swap-to-tag 4"
+    bind "Super+Shift+5" "swap-to-tag 5"
+    bind "Super+Shift+6" "swap-to-tag 6"
+    bind "Super+Shift+7" "swap-to-tag 7"
+    bind "Super+Shift+8" "swap-to-tag 8"
+    bind "Super+Shift+9" "swap-to-tag 9"
+
+    // Window state.
+    bind "Super+q" "close-window"
+    bind "Super+f" "toggle-maximized"
+    bind "Super+Shift+f" "toggle-fullscreen"
+    bind "Super+m" "toggle-maximized"
+    bind "Super+t" "toggle-floating"
+    bind "Super+Shift+t" "toggle-floating"
+    bind "Super+b" "minimize"
+    bind "Super+Shift+r" "restore-scratchpad"
+
+    // Scratchpad.
+    bind "Super+w" "toggle-scratchpad"
+    bind "Super+Shift+w" "move-to-scratchpad"
+    bind "Super+e" "toggle-named-scratchpad terminal"
+    bind "Super+Shift+e" "move-to-named-scratchpad terminal"
+    bind "Super+a" "toggle-named-scratchpad audio"
+    bind "Super+Shift+a" "move-to-named-scratchpad audio"
+
+    // Layout selection.
+    bind "Super+n" "switch-layout"
+    bind "Super+s" "layout-scroller"
+    bind "Super+Shift+s" "layout-vertical-scroller"
+    bind "Super+d" "layout-tile"
+    bind "Super+g" "layout-grid"
+    bind "Super+Shift+g" "layout-vertical-grid"
+    bind "Super+v" "layout-deck"
+    bind "Super+c" "layout-center-tile"
+    bind "Super+Shift+c" "layout-right-tile"
+    bind "Super+x" "layout-monocle"
+
+    // Scroller movement and stack surgery.
+    bind "Super+Ctrl+h" "move-window-left"
+    bind "Super+Ctrl+j" "move-window-down"
+    bind "Super+Ctrl+k" "move-window-up"
+    bind "Super+Ctrl+l" "move-window-right"
+    bind "Super+Alt+h" "move-column-left"
+    bind "Super+Alt+l" "move-column-right"
+    bind "Super+z" "zoom"
+    bind "Super+Shift+z" "consume-window"
+    bind "Super+Ctrl+z" "expel-window"
+
+    // Groups.
+    bind "Super+y" "group-windows"
+    bind "Super+Shift+y" "ungroup-window"
+    bind "Super+Ctrl+y" "focus-next-in-group"
+
+    // Width, master, and gaps.
+    bind "Super+-" "resize-width -0.1"
+    bind "Super+=" "resize-width 0.1"
+    bind "Super+," "adjust-master-ratio -0.05"
+    bind "Super+." "adjust-master-ratio 0.05"
+    bind "Super+[" "adjust-master-count -1"
+    bind "Super+]" "adjust-master-count 1"
+    bind "Super+0" "toggle-gaps"
+    bind "Super+Shift+-" "adjust-gaps -2"
+    bind "Super+Shift+=" "adjust-gaps 2"
+
+    // Overview and shell handoff.
+    bind "Super+o" "toggle-overview"
+    bind "Super+p" "select-window"
+    bind "Super+Space" "focus-shell-ui"
+
+    // Pointer operations.
+    pointer-bind "Super+left" "move"
+    pointer-bind "Super+right" "resize"
+}
+
+window-rule {
+    match app-id="foot"
+    default-tag 1
+}
+
+window-rule {
+    match app-id="kitty"
+    default-tag 1
+}
+
+window-rule {
+    match app-id="Alacritty"
+    default-tag 1
+}
+
+window-rule {
+    match app-id="firefox"
+    default-tag 2
+}
+
+window-rule {
+    match app-id="brave-browser"
+    default-tag 2
+}
+
+window-rule {
+    match app-id="thunar"
+    default-tag 3
+    forced-layout "grid"
+}
+
+window-rule {
+    match app-id="org.pwmt.zathura"
+    default-tag 5
+    forced-layout "monocle"
+}
+
+window-rule {
+    match app-id="fuzzel"
+    open-floating #true
+}
+
+window-rule {
+    match app-id="pavucontrol"
+    open-floating #true
+}
+
+window-rule {
+    match app-id="swappy"
+    open-floating #true
+}
+
+window-rule {
+    match app-id="satty"
+    open-floating #true
+}
+
+window-rule {
+    match title="^Picture-in-Picture$"
+    open-floating #true
+}
