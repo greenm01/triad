@@ -105,14 +105,53 @@ proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
     if pred(s[i]): inc i
     else: s.delete(i)
 
+proc syncPrimaryOutput(model: var Model) =
+  if model.outputs.len == 0:
+    model.primaryOutput = 0
+    return
+
+  if model.primaryOutput == 0 or not model.outputs.hasKey(model.primaryOutput):
+    var ids: seq[uint32] = @[]
+    for id in model.outputs.keys:
+      ids.add(id)
+    ids.sort()
+    model.primaryOutput = ids[0]
+
+  let output = model.outputs[model.primaryOutput]
+  if output.w > 0 and output.h > 0:
+    model.screenWidth = output.w
+    model.screenHeight = output.h
+
 proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   var nextModel = model
   var effects: seq[Effect] = @[]
 
   case msg.kind
   of WlOutputDimensions:
-    nextModel.screenWidth = max(0'i32, msg.width)
-    nextModel.screenHeight = max(0'i32, msg.height)
+    if msg.outputId == 0:
+      nextModel.screenWidth = max(0'i32, msg.width)
+      nextModel.screenHeight = max(0'i32, msg.height)
+    else:
+      var output = nextModel.outputs.getOrDefault(msg.outputId, OutputData(id: msg.outputId))
+      output.w = max(0'i32, msg.width)
+      output.h = max(0'i32, msg.height)
+      nextModel.outputs[msg.outputId] = output
+      nextModel.syncPrimaryOutput()
+
+  of WlOutputPosition:
+    if msg.positionOutputId != 0:
+      var output = nextModel.outputs.getOrDefault(msg.positionOutputId, OutputData(id: msg.positionOutputId))
+      output.x = msg.outputX
+      output.y = msg.outputY
+      nextModel.outputs[msg.positionOutputId] = output
+      nextModel.syncPrimaryOutput()
+
+  of WlOutputRemoved:
+    if msg.removedOutputId != 0:
+      nextModel.outputs.del(msg.removedOutputId)
+      if nextModel.primaryOutput == msg.removedOutputId:
+        nextModel.primaryOutput = 0
+      nextModel.syncPrimaryOutput()
 
   of WlWindowCreated:
     discard nextModel.removeWindowFromAllTags(msg.windowId)

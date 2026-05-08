@@ -10,15 +10,24 @@ import ipc/socket
 import utils/runtime_log
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils
 
+type
+  RiverPhase = enum
+    RiverIdle,
+    RiverManage,
+    RiverRender
+
 # --- Global Engine State ---
 var
   display: ptr Display
   registry: ptr Registry
   river_manager: ptr RiverWindowManagerV1
+  riverPhase = RiverIdle
   
   # TEA State
   currentModel: Model
   msgQueue: seq[Msg] = @[]
+  pendingManageEffects: seq[Effect] = @[]
+  desiredPlacements: Table[WindowId, Rect]
   
   # Mapping from logical IDs to Wayland pointers
   windowPointers: Table[WindowId, ptr RiverWindowV1]
@@ -38,6 +47,19 @@ proc get_id(p: pointer): uint32 =
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
+
+proc cstringOrEmpty(value: cstring): string =
+  if value == nil:
+    ""
+  else:
+    $value
+
+proc primaryScreen(model: Model): Rect =
+  if model.primaryOutput != 0 and model.outputs.hasKey(model.primaryOutput):
+    let output = model.outputs[model.primaryOutput]
+    Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+  else:
+    Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
 proc getTiledTagState(tag: TagState, model: Model): TagState =
   # Helper to get a TagState with only non-floating and active grouped windows
@@ -61,6 +83,84 @@ proc getTiledTagState(tag: TagState, model: Model): TagState =
       var filteredCol = col
       filteredCol.windows = filteredWindows
       result.columns.add(filteredCol)
+
+proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
+  let screen = model.primaryScreen()
+  result = @[]
+
+  if model.overviewActive:
+    var overviewTag = TagState(tagId: 0, layoutMode: Grid)
+    var tagIds: seq[uint32] = @[]
+    for id in model.tags.keys:
+      tagIds.add(id)
+    tagIds.sort()
+    for id in tagIds:
+      let tag = model.tags[id]
+      for col in tag.columns:
+        for win in col.windows:
+          overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
+
+    result = layoutGrid(overviewTag, screen, 64, model.innerGaps * 2)
+
+  elif model.tags.hasKey(model.activeTag):
+    var tag = model.tags[model.activeTag]
+    let tiledTagState = getTiledTagState(tag, model)
+
+    var currentOuterGap = model.outerGaps
+    var currentInnerGap = model.innerGaps
+
+    var tiledWindowCount = 0
+    for col in tiledTagState.columns:
+      tiledWindowCount += col.windows.len
+
+    if model.smartGaps and tiledWindowCount <= 1:
+      currentOuterGap = 0
+      currentInnerGap = 0
+
+    var tagForLayout = tiledTagState
+    result = case tagForLayout.layoutMode
+      of Scroller:
+        layoutScroller(tagForLayout, model.windows, screen, currentOuterGap, currentInnerGap,
+                       model.scrollerFocusCenter, model.scrollerPreferCenter,
+                       model.centerFocusedColumn)
+      of VerticalScroller:
+        layoutVerticalScroller(tagForLayout, model.windows, screen, currentOuterGap, currentInnerGap,
+                               model.scrollerFocusCenter, model.scrollerPreferCenter,
+                               model.centerFocusedColumn)
+      of MasterStack:
+        layoutMasterStack(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of Grid:
+        layoutGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of Monocle:
+        layoutMonocle(tagForLayout, screen, currentOuterGap)
+
+    tag.targetViewportXOffset = tagForLayout.targetViewportXOffset
+    tag.targetViewportYOffset = tagForLayout.targetViewportYOffset
+    model.tags[model.activeTag] = tag
+
+    for col in tag.columns:
+      for winId in col.windows:
+        if model.windows.hasKey(winId):
+          let winData = model.windows[winId]
+          if winData.isFloating:
+            result.add(RenderInstruction(
+              windowId: winId,
+              geom: winData.floatingGeom
+            ))
+
+    if model.isScratchpadVisible and model.scratchpadWindows.len > 0:
+      let winId = model.scratchpadWindows[^1]
+      let sw = int32(float32(model.screenWidth) * 0.8)
+      let sh = int32(float32(model.screenHeight) * 0.8)
+      result.add(RenderInstruction(
+        windowId: winId,
+        geom: Rect(
+          x: screen.x + (model.screenWidth - sw) div 2,
+          y: screen.y + (model.screenHeight - sh) div 2,
+          w: sw,
+          h: sh
+        )
+      ))
 
 proc setupConfig() =
   configPath = getConfigPath()
@@ -135,34 +235,68 @@ proc spawnQuickshell(model: Model) =
 
 # --- RiverSeatV1 Callbacks ---
 
+proc removeSeatPointer(seat: ptr RiverSeatV1) =
+  var i = 0
+  while i < seatPointers.len:
+    if seatPointers[i] == seat:
+      seatPointers.delete(i)
+    else:
+      inc i
+
+proc on_seat_removed(data: pointer, seat: ptr RiverSeatV1) =
+  info "Seat removed"
+  removeSeatPointer(seat)
+  seat.destroy()
+
+proc on_seat_wl_seat(data: pointer, seat: ptr RiverSeatV1, name: uint32) =
+  trace "Seat wl_seat received", name=name
+
+proc on_seat_pointer_enter(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
+  if win != nil:
+    trace "Pointer entered window", windowId=win.get_id()
+
+proc on_seat_pointer_leave(data: pointer, seat: ptr RiverSeatV1) =
+  trace "Pointer left window"
+
+proc on_seat_window_interaction(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
+  if win != nil:
+    let id = win.get_id()
+    debug "Seat window interaction", windowId=id
+    msgQueue.add(Msg(kind: WlFocusChanged, newFocusedId: id))
+
+proc on_seat_shell_surface_interaction(data: pointer, seat: ptr RiverSeatV1, shellSurface: ptr RiverShellSurfaceV1) =
+  trace "Seat shell surface interaction"
+
 proc on_op_delta(data: pointer, seat: ptr RiverSeatV1, dx: int32, dy: int32) =
   msgQueue.add(Msg(kind: WlPointerDelta, dx: dx, dy: dy))
 
 proc on_op_release(data: pointer, seat: ptr RiverSeatV1) =
   msgQueue.add(Msg(kind: WlPointerRelease))
 
+proc on_seat_pointer_position(data: pointer, seat: ptr RiverSeatV1, x: int32, y: int32) =
+  trace "Seat pointer position", x=x, y=y
+
 var seat_listener = RiverSeatV1Listener(
+  removed: on_seat_removed,
+  seat: on_seat_wl_seat,
+  pointerEnter: on_seat_pointer_enter,
+  pointerLeave: on_seat_pointer_leave,
+  windowInteraction: on_seat_window_interaction,
+  shellSurfaceInteraction: on_seat_shell_surface_interaction,
   opDelta: on_op_delta,
-  opRelease: on_op_release
+  opRelease: on_op_release,
+  pointerPosition: on_seat_pointer_position
 )
 
 # --- Effects Execution ---
 
-proc executeEffect(eff: Effect) =
+proc requestManage(reason: string) =
+  if river_manager != nil:
+    trace "Requesting River manage sequence", reason=reason
+    river_manager.manageDirty()
+
+proc executeManageEffect(eff: Effect) =
   case eff.kind
-  of EffLog:
-    info "log", msg=eff.msg
-  of EffManageFinish:
-    if river_manager != nil:
-      river_manager.manageFinish()
-  of EffRenderFinish:
-    if river_manager != nil:
-      river_manager.renderFinish()
-  of EffManageDirty:
-    if river_manager != nil:
-      river_manager.manageDirty()
-  of EffBroadcastJson:
-    asyncCheck broadcastJson(eff.jsonPayload)
   of EffOpStartPointer:
     if eff.opSeat != nil:
       cast[ptr RiverSeatV1](eff.opSeat).opStartPointer()
@@ -170,17 +304,8 @@ proc executeEffect(eff: Effect) =
     if eff.endSeat != nil:
       cast[ptr RiverSeatV1](eff.endSeat).opEnd()
   of EffSetPosition:
-    if windowNodes.hasKey(eff.windowId):
-      let node = windowNodes[eff.windowId]
-      node.setPosition(eff.x, eff.y)
-      
-      # Place floating windows on top
-      if currentModel.windows.hasKey(eff.windowId) and currentModel.windows[eff.windowId].isFloating:
-        node.placeTop()
-
     if windowPointers.hasKey(eff.windowId):
-      let win = windowPointers[eff.windowId]
-      win.proposeDimensions(eff.w, eff.h)
+      windowPointers[eff.windowId].proposeDimensions(max(0'i32, eff.w), max(0'i32, eff.h))
   of EffFocusWindow:
     if windowPointers.hasKey(eff.focusId):
       let win = windowPointers[eff.focusId]
@@ -193,10 +318,11 @@ proc executeEffect(eff: Effect) =
     if windowPointers.hasKey(eff.fsWinId):
       let win = windowPointers[eff.fsWinId]
       if eff.isFullscreen:
-        # Use first output for now (DOD optimization: track output per window)
         var output: ptr RiverOutputV1 = nil
-        if outputPointers.len > 0:
-          for p in outputPointers.values: 
+        if currentModel.primaryOutput != 0 and outputPointers.hasKey(currentModel.primaryOutput):
+          output = outputPointers[currentModel.primaryOutput]
+        elif outputPointers.len > 0:
+          for p in outputPointers.values:
             output = p
             break
         if output != nil:
@@ -208,14 +334,102 @@ proc executeEffect(eff: Effect) =
   else:
     discard
 
+proc queueManageEffect(eff: Effect) =
+  if riverPhase == RiverManage:
+    executeManageEffect(eff)
+  else:
+    pendingManageEffects.add(eff)
+    requestManage($eff.kind)
+
+proc flushPendingManageEffects() =
+  if pendingManageEffects.len == 0:
+    return
+  let effects = pendingManageEffects
+  pendingManageEffects = @[]
+  for eff in effects:
+    executeManageEffect(eff)
+
+proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
+  desiredPlacements.clear()
+  for instr in instructions:
+    desiredPlacements[instr.windowId] = instr.geom
+    if windowPointers.hasKey(instr.windowId):
+      let geom = instr.geom
+      windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(0'i32, geom.h))
+
+proc renderDesiredPlacements() =
+  var ids: seq[WindowId] = @[]
+  for id in desiredPlacements.keys:
+    ids.add(id)
+  ids.sort()
+
+  var lastNode: ptr RiverNodeV1 = nil
+  for id in ids:
+    if windowNodes.hasKey(id):
+      let node = windowNodes[id]
+      let geom = desiredPlacements[id]
+      node.setPosition(geom.x, geom.y)
+      if lastNode != nil:
+        node.placeAbove(lastNode)
+      lastNode = node
+
+  for id in ids:
+    if windowNodes.hasKey(id):
+      let isScratchpad = currentModel.isScratchpadVisible and
+        currentModel.scratchpadWindows.len > 0 and
+        currentModel.scratchpadWindows[^1] == id
+      if (currentModel.windows.hasKey(id) and currentModel.windows[id].isFloating) or isScratchpad:
+        windowNodes[id].placeTop()
+
+proc executeEffect(eff: Effect) =
+  case eff.kind
+  of EffLog:
+    info "log", msg=eff.msg
+  of EffManageFinish:
+    if river_manager != nil and riverPhase == RiverManage:
+      river_manager.manageFinish()
+  of EffRenderFinish:
+    if river_manager != nil and riverPhase == RiverRender:
+      river_manager.renderFinish()
+  of EffManageDirty:
+    requestManage("effect")
+  of EffBroadcastJson:
+    asyncCheck broadcastJson(eff.jsonPayload)
+  of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffCloseWindow, EffSetFullscreen:
+    queueManageEffect(eff)
+  of EffSetPosition:
+    if riverPhase == RiverRender and windowNodes.hasKey(eff.windowId):
+      let node = windowNodes[eff.windowId]
+      node.setPosition(eff.x, eff.y)
+
+      if currentModel.windows.hasKey(eff.windowId) and currentModel.windows[eff.windowId].isFloating:
+        node.placeTop()
+    else:
+      desiredPlacements[eff.windowId] = Rect(x: eff.x, y: eff.y, w: eff.w, h: eff.h)
+      queueManageEffect(eff)
+  else:
+    discard
+
 # Mapping from logical IDs to window metadata for late creation
 var pendingWindows: Table[WindowId, WindowData]
 
 # --- RiverWindowV1 Callbacks ---
 
+proc forgetWindow(id: WindowId) =
+  desiredPlacements.del(id)
+  pendingWindows.del(id)
+  if windowNodes.hasKey(id):
+    let node = windowNodes[id]
+    windowNodes.del(id)
+    node.destroy()
+  if windowPointers.hasKey(id):
+    let win = windowPointers[id]
+    windowPointers.del(id)
+    win.destroy()
+
 proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
   let id = win.get_id()
-  let appIdText = $appId
+  let appIdText = cstringOrEmpty(appId)
   debug "Window app-id received", windowId=id, appId=appIdText
   if pendingWindows.hasKey(id):
     pendingWindows[id].appId = appIdText
@@ -225,7 +439,7 @@ proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
 
 proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
   let id = win.get_id()
-  let titleText = $title
+  let titleText = cstringOrEmpty(title)
   debug "Window title received", windowId=id, title=titleText
   if pendingWindows.hasKey(id):
     pendingWindows[id].title = titleText
@@ -234,6 +448,31 @@ proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
   let id = win.get_id()
   info "Window closed", windowId=id
   msgQueue.add(Msg(kind: WlWindowDestroyed, destroyedId: id))
+  forgetWindow(id)
+
+proc on_window_dimensions_hint(
+    data: pointer,
+    win: ptr RiverWindowV1,
+    minWidth: int32,
+    minHeight: int32,
+    maxWidth: int32,
+    maxHeight: int32) =
+  trace "Window dimensions hint received",
+    windowId=win.get_id(),
+    minWidth=minWidth,
+    minHeight=minHeight,
+    maxWidth=maxWidth,
+    maxHeight=maxHeight
+
+proc on_window_dimensions(data: pointer, win: ptr RiverWindowV1, width: int32, height: int32) =
+  trace "Window dimensions acknowledged", windowId=win.get_id(), width=width, height=height
+
+proc on_window_parent(data: pointer, win: ptr RiverWindowV1, parent: ptr RiverWindowV1) =
+  let parentId = if parent == nil: 0'u32 else: parent.get_id()
+  trace "Window parent received", windowId=win.get_id(), parentId=parentId
+
+proc on_window_decoration_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
+  trace "Window decoration hint received", windowId=win.get_id(), hint=hint
 
 proc on_window_pointer_move_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1) =
   debug "Pointer move requested", windowId=win.get_id()
@@ -243,15 +482,92 @@ proc on_window_pointer_resize_requested(data: pointer, win: ptr RiverWindowV1, s
   debug "Pointer resize requested", windowId=win.get_id(), edges=edges
   msgQueue.add(Msg(kind: WlPointerResizeRequested, resizeWinId: win.get_id(), resizeSeat: seat, resizeEdges: edges))
 
+proc on_window_show_menu_requested(data: pointer, win: ptr RiverWindowV1, x: int32, y: int32) =
+  debug "Window menu requested", windowId=win.get_id(), x=x, y=y
+
+proc on_window_maximize_requested(data: pointer, win: ptr RiverWindowV1) =
+  debug "Window maximize requested", windowId=win.get_id()
+
+proc on_window_unmaximize_requested(data: pointer, win: ptr RiverWindowV1) =
+  debug "Window unmaximize requested", windowId=win.get_id()
+
+proc on_window_fullscreen_requested(data: pointer, win: ptr RiverWindowV1, output: ptr RiverOutputV1) =
+  debug "Window fullscreen requested", windowId=win.get_id()
+
+proc on_window_exit_fullscreen_requested(data: pointer, win: ptr RiverWindowV1) =
+  debug "Window exit fullscreen requested", windowId=win.get_id()
+
+proc on_window_minimize_requested(data: pointer, win: ptr RiverWindowV1) =
+  debug "Window minimize requested", windowId=win.get_id()
+
+proc on_window_unreliable_pid(data: pointer, win: ptr RiverWindowV1, unreliablePid: int32) =
+  trace "Window unreliable pid received", windowId=win.get_id(), pid=unreliablePid
+
+proc on_window_presentation_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
+  trace "Window presentation hint received", windowId=win.get_id(), hint=hint
+
+proc on_window_identifier(data: pointer, win: ptr RiverWindowV1, identifier: cstring) =
+  trace "Window identifier received", windowId=win.get_id(), identifier=cstringOrEmpty(identifier)
+
 var window_listener = RiverWindowV1Listener(
+  closed: on_window_closed,
+  dimensionsHint: on_window_dimensions_hint,
+  dimensions: on_window_dimensions,
   appId: on_window_app_id,
   title: on_window_title,
-  closed: on_window_closed,
+  parent: on_window_parent,
+  decorationHint: on_window_decoration_hint,
   pointerMoveRequested: on_window_pointer_move_requested,
-  pointerResizeRequested: on_window_pointer_resize_requested
+  pointerResizeRequested: on_window_pointer_resize_requested,
+  showWindowMenuRequested: on_window_show_menu_requested,
+  maximizeRequested: on_window_maximize_requested,
+  unmaximizeRequested: on_window_unmaximize_requested,
+  fullscreenRequested: on_window_fullscreen_requested,
+  exitFullscreenRequested: on_window_exit_fullscreen_requested,
+  minimizeRequested: on_window_minimize_requested,
+  unreliablePid: on_window_unreliable_pid,
+  presentationHint: on_window_presentation_hint,
+  identifier: on_window_identifier
 )
 
 # --- Wayland Callbacks ---
+
+proc cleanupRiverObjects() =
+  var winIds: seq[WindowId] = @[]
+  for id in windowPointers.keys:
+    winIds.add(id)
+  for id in winIds:
+    forgetWindow(id)
+
+  var outputIds: seq[uint32] = @[]
+  for id in outputPointers.keys:
+    outputIds.add(id)
+  for id in outputIds:
+    let output = outputPointers[id]
+    outputPointers.del(id)
+    output.destroy()
+
+  let seats = seatPointers
+  seatPointers = @[]
+  for seat in seats:
+    seat.destroy()
+
+proc on_manager_unavailable(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  fatal "River window manager interface is unavailable"
+  quit 1
+
+proc on_manager_finished(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  warn "River window manager interface finished"
+  cleanupRiverObjects()
+  if river_manager != nil:
+    river_manager.destroy()
+    river_manager = nil
+
+proc on_session_locked(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  info "River session locked"
+
+proc on_session_unlocked(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  info "River session unlocked"
 
 proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
   debug "River manage start", pendingWindows=pendingWindows.len
@@ -276,7 +592,21 @@ proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindo
 
 proc on_output_dimensions(data: pointer, output: ptr RiverOutputV1, width: int32, height: int32) =
   info "Output dimensions changed", outputId=output.get_id(), width=width, height=height
-  msgQueue.add(Msg(kind: WlOutputDimensions, width: width, height: height))
+  msgQueue.add(Msg(kind: WlOutputDimensions, outputId: output.get_id(), width: width, height: height))
+
+proc on_output_removed(data: pointer, output: ptr RiverOutputV1) =
+  let id = output.get_id()
+  info "Output removed", outputId=id
+  outputPointers.del(id)
+  msgQueue.add(Msg(kind: WlOutputRemoved, removedOutputId: id))
+  output.destroy()
+
+proc on_output_wl_output(data: pointer, output: ptr RiverOutputV1, name: uint32) =
+  trace "Output wl_output received", outputId=output.get_id(), name=name
+
+proc on_output_position(data: pointer, output: ptr RiverOutputV1, x: int32, y: int32) =
+  info "Output position changed", outputId=output.get_id(), x=x, y=y
+  msgQueue.add(Msg(kind: WlOutputPosition, positionOutputId: output.get_id(), outputX: x, outputY: y))
 
 # Listener setup
 var 
@@ -301,9 +631,10 @@ proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32,
   debug "Wayland global advertised", name=name, interfaceName=interfaceName, version=version
   # Bind to the river_window_manager_v1 interface
   if interfaceName == "river_window_manager_v1":
-    river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4))
+    let boundVersion = min(version, 4'u32)
+    river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, boundVersion))
     discard river_manager.addListener(manager_listener.addr, nil)
-    info "Bound to river_window_manager_v1", name=name, advertisedVersion=version, boundVersion=4
+    info "Bound to river_window_manager_v1", name=name, advertisedVersion=version, boundVersion=boundVersion
 
 
 proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =
@@ -444,134 +775,52 @@ proc main() =
         let config = loadConfig(configPath)
         currentModel.applyConfig(config)
         info "Config reloaded", path=configPath
-        # Force a re-render
-        if river_manager != nil:
-          river_manager.manageDirty()
+        requestManage("config reload")
         continue
 
       let (nextModel, effects) = update(currentModel, msg)
       currentModel = nextModel
-      
-      # Handle View phase during RenderStart
+
+      if msg.kind == WlManageStart:
+        riverPhase = RiverManage
+        let instructions = computeLayoutInstructions(currentModel)
+        proposeDesiredDimensions(instructions)
+        flushPendingManageEffects()
+        executeEffect(Effect(kind: EffManageFinish))
+        riverPhase = RiverIdle
+        continue
+
       if msg.kind == WlRenderStart:
-        let screen = Rect(x: 0, y: 0, w: currentModel.screenWidth, h: currentModel.screenHeight)
-        
-        var instructions: seq[RenderInstruction] = @[]
-
-        if currentModel.overviewActive:
-          # --- OVERVIEW MODE ---
-          # Aggregate all windows from all tags into a dummy TagState for the grid layout
-          var overviewTag = TagState(tagId: 0, layoutMode: Grid)
-          # Sort tag IDs for consistent navigation order
-          var tagIds: seq[uint32] = @[]
-          for id in currentModel.tags.keys: tagIds.add(id)
-          tagIds.sort()
-          for id in tagIds:
-            let tag = currentModel.tags[id]
-            for col in tag.columns:
-              for win in col.windows:
-                overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
-          
-          # Use large gaps for overview
-          instructions = layoutGrid(overviewTag, screen, 64, currentModel.innerGaps * 2)
-          
-        elif currentModel.tags.hasKey(currentModel.activeTag):
-          # --- NORMAL MODE ---
-          var tag = currentModel.tags[currentModel.activeTag]
-          let tiledTagState = getTiledTagState(tag, currentModel)
-          
-          # Dynamic Layout Logic: Smart Gaps
-          var currentOuterGap = currentModel.outerGaps
-          var currentInnerGap = currentModel.innerGaps
-          
-          # Count total tiled windows across all columns
-          var tiledWindowCount = 0
-          for col in tiledTagState.columns:
-            tiledWindowCount += col.windows.len
-            
-          if currentModel.smartGaps and tiledWindowCount <= 1:
-            currentOuterGap = 0
-            currentInnerGap = 0
-
-          # layout algorithms will update 'tag' for target offsets
-          var tagForLayout = tiledTagState
-          instructions = case tagForLayout.layoutMode
-            of Scroller:
-              layoutScroller(tagForLayout, currentModel.windows, screen, currentOuterGap, currentInnerGap,
-                             currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
-                             currentModel.centerFocusedColumn)
-            of VerticalScroller:
-              layoutVerticalScroller(tagForLayout, currentModel.windows, screen, currentOuterGap, currentInnerGap,
-                                     currentModel.scrollerFocusCenter, currentModel.scrollerPreferCenter,
-                                     currentModel.centerFocusedColumn)
-            of MasterStack:
-              layoutMasterStack(tagForLayout, screen, currentOuterGap, currentInnerGap)
-            of Grid:
-              layoutGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
-            of Monocle:
-              layoutMonocle(tagForLayout, screen, currentOuterGap)
-
-          # Copy back updated target offsets to real model
-          tag.targetViewportXOffset = tagForLayout.targetViewportXOffset
-          tag.targetViewportYOffset = tagForLayout.targetViewportYOffset
-          currentModel.tags[currentModel.activeTag] = tag
-
-          # Add floating windows on top
-          for col in tag.columns:
-            for winId in col.windows:
-              if currentModel.windows.hasKey(winId):
-                let winData = currentModel.windows[winId]
-                if winData.isFloating:
-                  instructions.add(RenderInstruction(
-                    windowId: winId,
-                    geom: winData.floatingGeom
-                  ))
-
-          # --- SCRATCHPAD OVERLAY ---
-          if currentModel.isScratchpadVisible and currentModel.scratchpadWindows.len > 0:
-            let winId = currentModel.scratchpadWindows[^1]
-            let sw = int32(float32(currentModel.screenWidth) * 0.8)
-            let sh = int32(float32(currentModel.screenHeight) * 0.8)
-            instructions.add(RenderInstruction(
-              windowId: winId,
-              geom: Rect(
-                x: (currentModel.screenWidth - sw) div 2,
-                y: (currentModel.screenHeight - sh) div 2,
-                w: sw,
-                h: sh
-              )
-            ))
-
-        for instr in instructions:
-          # Execute set_position effects
-          if windowNodes.hasKey(instr.windowId):
-            let node = windowNodes[instr.windowId]
-            node.setPosition(instr.geom.x, instr.geom.y)
-            
-            # Place floating windows on top
-            if currentModel.windows.hasKey(instr.windowId) and currentModel.windows[instr.windowId].isFloating:
-              node.placeTop()
-
-          if windowPointers.hasKey(instr.windowId):
-            let win = windowPointers[instr.windowId]
-            win.proposeDimensions(instr.geom.w, instr.geom.h)
-        
-        # Must finish render
+        riverPhase = RiverRender
+        if desiredPlacements.len == 0:
+          let instructions = computeLayoutInstructions(currentModel)
+          for instr in instructions:
+            desiredPlacements[instr.windowId] = instr.geom
+        renderDesiredPlacements()
         executeEffect(Effect(kind: EffRenderFinish))
-      
+        riverPhase = RiverIdle
+        continue
+
       for eff in effects:
         executeEffect(eff)
 
 if isMainModule:
   # Initialize listeners
   manager_listener = RiverWindowManagerV1Listener(
+    unavailable: on_manager_unavailable,
+    finished: on_manager_finished,
     manageStart: on_manage_start,
     renderStart: on_render_start,
+    sessionLocked: on_session_locked,
+    sessionUnlocked: on_session_unlocked,
     window: on_window,
     output: on_output,
     seat: on_seat
   )
   output_listener = RiverOutputV1Listener(
+    removed: on_output_removed,
+    output: on_output_wl_output,
+    position: on_output_position,
     dimensions: on_output_dimensions
   )
   

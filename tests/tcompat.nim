@@ -47,6 +47,18 @@ suite "Shell compatibility contracts":
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
 
+  test "Niri output request reflects River output geometry when available":
+    var model = modelForShell()
+    model.outputs[42] = OutputData(id: 42, x: 100, y: 50, w: 1280, h: 720)
+    model.primaryOutput = 42
+
+    let outputs = parseJson(handleNiriRequest("\"Outputs\"", model).reply)["Ok"]["Outputs"]
+    check outputs.hasKey("river-42")
+    check outputs["river-42"]["logical"]["x"].getInt() == 100
+    check outputs["river-42"]["logical"]["y"].getInt() == 50
+    check outputs["river-42"]["logical"]["width"].getInt() == 1280
+    check outputs["river-42"]["logical"]["height"].getInt() == 720
+
   test "Niri event stream starts with full state":
     let response = handleNiriRequest("\"EventStream\"", modelForShell())
     check response.handled

@@ -48,6 +48,26 @@ suite "Crash hardening":
     check focusedModel.activeTag == 1
     check focusedModel.tags[1].focusedWindow == 1
 
+  test "river output events track primary output without crashing":
+    var model = baseModel()
+
+    var (nextModel, _) = update(model, Msg(kind: WlOutputPosition, positionOutputId: 42, outputX: 100, outputY: 50))
+    check nextModel.primaryOutput == 42
+    check nextModel.screenWidth == 1920
+    check nextModel.screenHeight == 1080
+    check nextModel.outputs[42].x == 100
+    check nextModel.outputs[42].y == 50
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlOutputDimensions, outputId: 42, width: 1280, height: 720))
+    check nextModel.screenWidth == 1280
+    check nextModel.screenHeight == 720
+    check nextModel.outputs[42].w == 1280
+    check nextModel.outputs[42].h == 720
+
+    (nextModel, _) = update(nextModel, Msg(kind: WlOutputRemoved, removedOutputId: 42))
+    check nextModel.primaryOutput == 0
+    check not nextModel.outputs.hasKey(42)
+
   test "consume ignores empty next columns":
     var model = baseModel()
     model.tags[1].columns = @[

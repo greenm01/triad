@@ -7,6 +7,8 @@ type
     WlWindowDestroyed,
     WlFocusChanged,
     WlOutputDimensions,
+    WlOutputPosition,
+    WlOutputRemoved,
     WlManageStart,
     WlRenderStart,
     WlPointerMoveRequested,
@@ -72,8 +74,15 @@ type
     of WlFocusChanged:
       newFocusedId*: WindowId
     of WlOutputDimensions:
+      outputId*: uint32
       width*: int32
       height*: int32
+    of WlOutputPosition:
+      positionOutputId*: uint32
+      outputX*: int32
+      outputY*: int32
+    of WlOutputRemoved:
+      removedOutputId*: uint32
     of WlPointerMoveRequested:
       moveWinId*: WindowId
       moveSeat*: pointer # ptr RiverSeatV1

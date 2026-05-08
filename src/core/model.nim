@@ -6,6 +6,11 @@ type
   Rect* = object
     x*, y*, w*, h*: int32
 
+  OutputData* = object
+    id*: uint32
+    wlName*: uint32
+    x*, y*, w*, h*: int32
+
   RenderInstruction* = object
     windowId*: WindowId
     geom*: Rect
@@ -79,6 +84,8 @@ type
   Model* = object
     tags*: Table[uint32, TagState]
     windows*: Table[WindowId, WindowData]
+    outputs*: Table[uint32, OutputData]
+    primaryOutput*: uint32
     groups*: Table[uint32, GroupState]
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]

@@ -93,10 +93,12 @@ proc niriWindowsJson*(model: Model): JsonNode =
     result.add(niriWindowJson(model, model.windows[winId]))
 
 proc niriOutputsJson*(model: Model): JsonNode =
-  let w = max(0, int(model.screenWidth))
-  let h = max(0, int(model.screenHeight))
-  %*{
-    "triad-0": {
+  result = newJObject()
+
+  if model.outputs.len == 0:
+    let w = max(0, int(model.screenWidth))
+    let h = max(0, int(model.screenHeight))
+    result["triad-0"] = %*{
       "name": "triad-0",
       "make": "Triad",
       "model": "River",
@@ -118,7 +120,40 @@ proc niriOutputsJson*(model: Model): JsonNode =
         "transform": "Normal"
       }
     }
-  }
+    return
+
+  var ids: seq[uint32] = @[]
+  for id in model.outputs.keys:
+    ids.add(id)
+  ids.sort()
+
+  for id in ids:
+    let output = model.outputs[id]
+    let name = "river-" & $id
+    let w = max(0, int(output.w))
+    let h = max(0, int(output.h))
+    result[name] = %*{
+      "name": name,
+      "make": "Triad",
+      "model": "River",
+      "serial": newJNull(),
+      "physical_size": newJNull(),
+      "modes": [
+        {"width": w, "height": h, "refresh_rate": 60000, "is_preferred": true}
+      ],
+      "current_mode": 0,
+      "is_custom_mode": false,
+      "vrr_supported": false,
+      "vrr_enabled": false,
+      "logical": {
+        "x": int(output.x),
+        "y": int(output.y),
+        "width": w,
+        "height": h,
+        "scale": 1.0,
+        "transform": "Normal"
+      }
+    }
 
 proc niriKeyboardLayoutsJson*(): JsonNode =
   %*{"names": [], "current_idx": 0}
