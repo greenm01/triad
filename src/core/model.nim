@@ -27,7 +27,19 @@ type
     VerticalScroller,
     MasterStack,
     Grid,
-    Monocle
+    Monocle,
+    Deck,
+    CenterTile,
+    RightTile,
+    VerticalTile,
+    VerticalGrid,
+    VerticalDeck
+
+  Direction* = enum
+    DirLeft,
+    DirRight,
+    DirUp,
+    DirDown
 
   WindowData* = object
     id*: WindowId
@@ -94,6 +106,10 @@ type
   WindowMenuConfig* = object
     command*: seq[string]
 
+  ScratchpadConfig* = object
+    widthRatio*: float32
+    heightRatio*: float32
+
   CursorConfig* = object
     theme*: string
     size*: uint32
@@ -137,6 +153,7 @@ type
     quickshell*: QuickshellConfig
     screenLock*: ScreenLockConfig
     windowMenu*: WindowMenuConfig
+    scratchpad*: ScratchpadConfig
     cursor*: CursorConfig
     presentationMode*: PresentationMode
     allowExitSession*: bool
@@ -145,6 +162,8 @@ type
     pointerBindings*: seq[PointerBindingConfig]
     pointerOp*: PointerOpState
     scratchpadWindows*: seq[WindowId]
+    namedScratchpads*: Table[string, WindowId]
+    visibleScratchpad*: WindowId
     isScratchpadVisible*: bool
     activeTag*: uint32
     overviewActive*: bool
@@ -167,5 +186,9 @@ type
     # Animation config
     enableAnimations*: bool
     animationSpeed*: float32
+    layoutCycle*: seq[LayoutMode]
+    scratchpadWidthRatio*: float32
+    scratchpadHeightRatio*: float32
+    focusHistory*: seq[WindowId]
     # Grouping counter
     nextGroupId*: uint32

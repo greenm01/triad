@@ -1,5 +1,6 @@
 import unittest
 import ../src/core/model
+import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/update
 import tables
@@ -111,6 +112,90 @@ suite "Core TEA Update Logic":
     check nextModel.tags[1].columns.len == 0
     check nextModel.scratchpadWindows.len == 1
     check nextModel.scratchpadWindows[0] == 101
+
+  test "Named scratchpad can hide show and restore a real window":
+    var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
+    tag1.columns.add(Column(windows: @[WindowId(101)], widthProportion: 0.5))
+    model.tags[1] = tag1
+    model.windows[101] = WindowData(id: 101, appId: "terminal", title: "Terminal")
+    model.activeTag = 1
+
+    var (nextModel, _) = update(model, Msg(kind: CmdMoveToNamedScratchpad, scratchpadName: "terminal"))
+    check nextModel.tags[1].columns.len == 0
+    check nextModel.namedScratchpads["terminal"] == 101
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdToggleNamedScratchpad, scratchpadName: "terminal"))
+    check nextModel.isScratchpadVisible
+    check nextModel.visibleScratchpad == 101
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdToggleNamedScratchpad, scratchpadName: "terminal"))
+    check not nextModel.isScratchpadVisible
+    check nextModel.visibleScratchpad == 0
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdRestoreScratchpad))
+    check nextModel.scratchpadWindows.len == 0
+    check not nextModel.namedScratchpads.hasKey("terminal")
+    check nextModel.tags[1].containsWindow(101)
+    check nextModel.tags[1].focusedWindow == 101
+
+  test "Directional focus follows columns and stacks":
+    var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
+    tag.columns.add(Column(windows: @[WindowId(101), 102], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[WindowId(103)], widthProportion: 0.5))
+    model.tags[1] = tag
+    model.activeTag = 1
+
+    var (nextModel, _) = update(model, Msg(kind: CmdFocusDirection, direction: DirDown))
+    check nextModel.tags[1].focusedWindow == 102
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusDirection, direction: DirRight))
+    check nextModel.tags[1].focusedWindow == 103
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusDirection, direction: DirLeft))
+    check nextModel.tags[1].focusedWindow == 101
+
+  test "Focus last uses recent window history":
+    var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)
+    tag.columns.add(Column(windows: @[WindowId(101), 102], widthProportion: 0.5))
+    model.tags[1] = tag
+    model.windows[101] = WindowData(id: 101)
+    model.windows[102] = WindowData(id: 102)
+    model.activeTag = 1
+
+    var (nextModel, _) = update(model, Msg(kind: WlFocusChanged, newFocusedId: 101))
+    (nextModel, _) = update(nextModel, Msg(kind: WlFocusChanged, newFocusedId: 102))
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusLast))
+
+    check nextModel.tags[1].focusedWindow == 101
+
+  test "Relative tag commands focus and move by tag order":
+    model.tags[1] = TagState(tagId: 1, focusedWindow: 101)
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
+    model.tags[2] = TagState(tagId: 2)
+    model.tags[3] = TagState(tagId: 3, focusedWindow: 103)
+    model.tags[3].columns.add(Column(windows: @[WindowId(103)]))
+    model.activeTag = 2
+
+    var (nextModel, _) = update(model, Msg(kind: CmdFocusTagRight))
+    check nextModel.activeTag == 3
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusOccupiedTagLeft))
+    check nextModel.activeTag == 1
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdMoveToTagRight))
+    check nextModel.tags[1].columns.len == 0
+    check nextModel.tags[2].containsWindow(101)
+
+  test "CmdSwitchLayout advances through configured layout cycle":
+    model.layoutCycle = @[Scroller, Grid]
+    model.tags[1] = TagState(tagId: 1, layoutMode: Scroller)
+    model.activeTag = 1
+
+    var (nextModel, _) = update(model, Msg(kind: CmdSwitchLayout))
+    check nextModel.tags[1].layoutMode == Grid
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdSwitchLayout))
+    check nextModel.tags[1].layoutMode == Scroller
 
   test "CmdAdjustMasterCount and Ratio apply deltas":
     model.tags[1] = TagState(tagId: 1, layoutMode: MasterStack, masterCount: 1, masterSplitRatio: 0.5)

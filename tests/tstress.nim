@@ -321,6 +321,18 @@ proc renderTag(ctx: FuzzContext; model: Model; tagId: uint32; tag: TagState) =
       layoutGrid(tagCopy, screen, model.outerGaps, model.innerGaps)
     of Monocle:
       layoutMonocle(tagCopy, screen, model.outerGaps)
+    of Deck:
+      layoutDeck(tagCopy, screen, model.outerGaps, model.innerGaps)
+    of CenterTile:
+      layoutCenterTile(tagCopy, screen, model.outerGaps, model.innerGaps)
+    of RightTile:
+      layoutRightTile(tagCopy, screen, model.outerGaps, model.innerGaps)
+    of VerticalTile:
+      layoutVerticalMasterStack(tagCopy, screen, model.outerGaps, model.innerGaps)
+    of VerticalGrid:
+      layoutVerticalGrid(tagCopy, screen, model.outerGaps, model.innerGaps)
+    of VerticalDeck:
+      layoutVerticalDeck(tagCopy, screen, model.outerGaps, model.innerGaps)
 
   for instr in instructions:
     require(ctx, model, instr.geom.w >= 0, "negative rendered width on tag " & $tagId)

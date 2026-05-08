@@ -49,3 +49,38 @@ suite "Layout Algorithm Math":
     # Stack (102): w = 980 - 588 = 392
     check instructions[1].windowId == 102
     check instructions[1].geom.w == 392 - 10
+
+  test "deck layout keeps stack windows in one deck area":
+    var tag = TagState(tagId: 1, layoutMode: Deck, masterCount: 1, masterSplitRatio: 0.6)
+    tag.columns.add(Column(windows: @[WindowId(101), 102, 103], widthProportion: 1.0))
+
+    let instructions = layoutDeck(tag, screen, outerGap, innerGap)
+
+    check instructions.len == 3
+    check instructions[0].windowId == 101
+    check instructions[1].geom == instructions[2].geom
+    check instructions[1].geom.x > instructions[0].geom.x
+
+  test "center tile places master between side stacks":
+    var tag = TagState(tagId: 1, layoutMode: CenterTile, masterCount: 1, masterSplitRatio: 0.5)
+    tag.columns.add(Column(windows: @[WindowId(101), 102, 103], widthProportion: 1.0))
+
+    let instructions = layoutCenterTile(tag, screen, outerGap, innerGap)
+
+    check instructions.len == 3
+    check instructions[0].windowId == 102
+    check instructions[1].windowId == 101
+    check instructions[2].windowId == 103
+    check instructions[0].geom.x < instructions[1].geom.x
+    check instructions[1].geom.x < instructions[2].geom.x
+
+  test "vertical grid fills rows before columns":
+    var tag = TagState(tagId: 1, layoutMode: VerticalGrid)
+    tag.columns.add(Column(windows: @[WindowId(101), 102, 103, 104], widthProportion: 1.0))
+
+    let instructions = layoutVerticalGrid(tag, screen, outerGap, innerGap)
+
+    check instructions.len == 4
+    check instructions[0].geom.x == instructions[1].geom.x
+    check instructions[1].geom.y > instructions[0].geom.y
+    check instructions[2].geom.x > instructions[0].geom.x

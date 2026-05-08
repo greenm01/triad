@@ -12,8 +12,14 @@ To dispatch a command to the running Triad instance, use the following syntax:
 #### Navigation
 *   `focus-next`: Shifts keyboard focus to the next window in the sequence.
 *   `focus-prev`: Shifts keyboard focus to the previous window.
+*   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus spatially within the active tag.
+*   `focus-last`: Returns focus to the previous focused window when it is still available.
+*   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent tag by numeric order.
+*   `focus-occupied-tag-left`, `focus-occupied-tag-right`: Moves to the adjacent non-empty tag.
 *   `toggle-overview`: Activates or deactivates the global window grid.
-*   `toggle-scratchpad`: Summons the active scratchpad window as an overlay or dismisses it to the shadows.
+*   `toggle-scratchpad`: Shows the most recent scratchpad window as a centered overlay, or hides it.
+*   `toggle-named-scratchpad <name>`: Shows or hides a named scratchpad; if the name is new, the focused window is assigned to it.
+*   `restore-scratchpad`: Moves the visible or most recent scratchpad window back to the active tag.
 *   `select-window`: In overview mode, selects the focused window and jumps to its tag.
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 *   `lock-session`: Launches the configured `screen-lock` command.
@@ -25,11 +31,20 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `layout-tile`: Sets the active tag to Master-Stack tiling mode.
 *   `layout-grid`: Sets the active tag to geometric grid mode.
 *   `layout-monocle`: Sets the active tag to fullscreen monocle mode.
+*   `layout-deck`: Sets the active tag to master plus deck-stack mode.
+*   `layout-center-tile`: Sets the active tag to a centered master with side stacks.
+*   `layout-right-tile`: Sets the active tag to a right-side master with stack on the left.
+*   `layout-vertical-tile`: Sets the active tag to a top master with horizontal stack below.
+*   `layout-vertical-grid`: Sets the active tag to a row-first grid.
+*   `layout-vertical-deck`: Sets the active tag to a top master with deck-stack below.
+*   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
 
 #### Manipulation
-*   `move-to-tag <id>`: Banishes the focused window to the specified tag.
-*   `move-to-scratchpad`: Consigns the focused window to the scratchpad, where it awaits your summons.
-*   `close-window`: Politley requests that the focused window terminate its existence.
+*   `move-to-tag <id>`: Moves the focused window to the specified tag.
+*   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent tag by numeric order.
+*   `move-to-scratchpad`: Moves the focused window to the scratchpad.
+*   `move-to-named-scratchpad <name>`: Moves the focused window to a named scratchpad.
+*   `close-window`: Politely requests that the focused window close.
 *   `group-windows`: Orchestrates the union of the focused window and its neighbor into a single tabbed group.
 *   `ungroup-window`: Dissolves the group, granting the focused window its independence.
 *   `focus-next-in-group`: Cycles focus through the windows of a tabbed group.

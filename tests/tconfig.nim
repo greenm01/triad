@@ -15,6 +15,11 @@ layout {
     enable-animations #false
     animation-speed 0.5
     smart-gaps #true
+    layout-cycle "scroller" "deck" "vertical-grid"
+}
+scratchpad {
+    width-ratio 0.7
+    height-ratio 0.6
 }
 """
     writeFile(path, kdl)
@@ -27,6 +32,9 @@ layout {
     check config.layout.enableAnimations == false
     check config.layout.animationSpeed == 0.5
     check config.layout.smartGaps == true
+    check config.layout.layoutCycle == @[Scroller, Deck, VerticalGrid]
+    check config.scratchpad.widthRatio == 0.7'f32
+    check config.scratchpad.heightRatio == 0.6'f32
 
   test "Parser correctly reads tag rules":
     let path = getCurrentDir() / "test_tags.kdl"

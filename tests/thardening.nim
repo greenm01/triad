@@ -247,6 +247,17 @@ suite "Crash hardening":
     check parseLegacyCommand("cancel-eat-next-key").get().kind == CmdCancelEatNextKey
     check parseLegacyCommand("stop-manager").get().kind == CmdStopManager
     check parseLegacyCommand("focus-shell-ui").get().kind == CmdFocusShellUi
+    check parseLegacyCommand("focus-left").get().kind == CmdFocusDirection
+    check parseLegacyCommand("focus-left").get().direction == DirLeft
+    check parseLegacyCommand("focus-last").get().kind == CmdFocusLast
+    check parseLegacyCommand("focus-occupied-tag-right").get().kind == CmdFocusOccupiedTagRight
+    check parseLegacyCommand("move-to-tag-left").get().kind == CmdMoveToTagLeft
+    check parseLegacyCommand("layout-deck").get().newLayout == Deck
+    check parseLegacyCommand("layout-center-tile").get().newLayout == CenterTile
+    check parseLegacyCommand("switch-layout").get().kind == CmdSwitchLayout
+    check parseLegacyCommand("move-to-named-scratchpad terminal").get().scratchpadName == "terminal"
+    check parseLegacyCommand("toggle-named-scratchpad music").get().scratchpadName == "music"
+    check parseLegacyCommand("restore-scratchpad").get().kind == CmdRestoreScratchpad
 
     var model = baseModel()
     var (_, effects) = update(model, Msg(kind: CmdExitSession))

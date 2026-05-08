@@ -118,6 +118,11 @@ proc primaryScreen(model: Model): Rect =
     Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
 proc activeFocus(model: Model): WindowId =
+  if model.isScratchpadVisible:
+    if model.visibleScratchpad != 0:
+      return model.visibleScratchpad
+    if model.scratchpadWindows.len > 0:
+      return model.scratchpadWindows[^1]
   model.focusedOnActiveTag()
 
 proc outputName(model: Model; outputId: uint32): string =
@@ -200,6 +205,18 @@ proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
         layoutGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
       of Monocle:
         layoutMonocle(tagForLayout, screen, currentOuterGap)
+      of Deck:
+        layoutDeck(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of CenterTile:
+        layoutCenterTile(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of RightTile:
+        layoutRightTile(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of VerticalTile:
+        layoutVerticalMasterStack(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of VerticalGrid:
+        layoutVerticalGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
+      of VerticalDeck:
+        layoutVerticalDeck(tagForLayout, screen, currentOuterGap, currentInnerGap)
 
     tag.targetViewportXOffset = tagForLayout.targetViewportXOffset
     tag.targetViewportYOffset = tagForLayout.targetViewportYOffset
@@ -216,18 +233,19 @@ proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
             ))
 
     if model.isScratchpadVisible and model.scratchpadWindows.len > 0:
-      let winId = model.scratchpadWindows[^1]
-      let sw = int32(float32(model.screenWidth) * 0.8)
-      let sh = int32(float32(model.screenHeight) * 0.8)
-      result.add(RenderInstruction(
-        windowId: winId,
-        geom: Rect(
-          x: screen.x + (model.screenWidth - sw) div 2,
-          y: screen.y + (model.screenHeight - sh) div 2,
-          w: sw,
-          h: sh
-        )
-      ))
+      let winId = if model.visibleScratchpad != 0: model.visibleScratchpad else: model.scratchpadWindows[^1]
+      if model.windows.hasKey(winId):
+        let sw = int32(float32(screen.w) * model.scratchpadWidthRatio)
+        let sh = int32(float32(screen.h) * model.scratchpadHeightRatio)
+        result.add(RenderInstruction(
+          windowId: winId,
+          geom: Rect(
+            x: screen.x + (screen.w - sw) div 2,
+            y: screen.y + (screen.h - sh) div 2,
+            w: sw,
+            h: sh
+          )
+        ))
 
     let focused = model.activeFocus()
     if focused != 0 and model.windows.hasKey(focused) and (model.windows[focused].isFullscreen or model.windows[focused].isMaximized):
@@ -249,6 +267,12 @@ layout {
     enable-animations #true
     animation-speed 0.15
     smart-gaps #false
+    layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller"
+}
+
+scratchpad {
+    width-ratio 0.8
+    height-ratio 0.9
 }
 
 tag-rules {
@@ -285,9 +309,15 @@ bindings {
     bind "Super+q" "close-window"
     bind "Super+f" "toggle-fullscreen"
     bind "Super+m" "toggle-maximized"
-    bind "Super+n" "minimize"
+    bind "Super+i" "minimize"
+    bind "Super+n" "switch-layout"
     bind "Super+r" "reload-config"
     bind "Super+t" "spawn-terminal"
+    bind "Super+Tab" "focus-next"
+    bind "Alt+Left" "focus-left"
+    bind "Alt+Right" "focus-right"
+    bind "Alt+Up" "focus-up"
+    bind "Alt+Down" "focus-down"
     // bind "Super+Shift+l" "lock-session"
     bind "Super+1" "focus-tag 1"
     bind "Super+2" "focus-tag 2"
@@ -1063,9 +1093,12 @@ proc renderDesiredPlacements() =
 
   for id in ids:
     if windowNodes.hasKey(id):
+      let visibleScratchpad =
+        if currentModel.visibleScratchpad != 0: currentModel.visibleScratchpad
+        elif currentModel.scratchpadWindows.len > 0: currentModel.scratchpadWindows[^1]
+        else: 0'u32
       let isScratchpad = currentModel.isScratchpadVisible and
-        currentModel.scratchpadWindows.len > 0 and
-        currentModel.scratchpadWindows[^1] == id
+        visibleScratchpad == id
       let isFullscreen = currentModel.windows.hasKey(id) and currentModel.windows[id].isFullscreen
       if (currentModel.windows.hasKey(id) and currentModel.windows[id].isFloating) or isScratchpad or isFullscreen or id == currentModel.activeFocus():
         windowNodes[id].placeTop()

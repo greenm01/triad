@@ -42,6 +42,14 @@ type
     CmdSetLayout,
     CmdFocusNext,
     CmdFocusPrev,
+    CmdFocusDirection,
+    CmdFocusLast,
+    CmdFocusTagLeft,
+    CmdFocusTagRight,
+    CmdFocusOccupiedTagLeft,
+    CmdFocusOccupiedTagRight,
+    CmdMoveToTagLeft,
+    CmdMoveToTagRight,
     CmdCloseWindow,
     CmdMoveWindow,
     CmdMoveWindowLeft,
@@ -73,7 +81,10 @@ type
     CmdAdjustGaps,
     CmdToggleGapsRel, # Unused
     CmdMoveToScratchpad,
+    CmdMoveToNamedScratchpad,
     CmdToggleScratchpad,
+    CmdToggleNamedScratchpad,
+    CmdRestoreScratchpad,
     CmdToggleOverview,
     CmdToggleFloating,
     CmdToggleFullscreen,
@@ -93,7 +104,8 @@ type
     CmdExitSession,
     CmdFocusShellUi,
     CmdTick,
-    CmdReloadConfig
+    CmdReloadConfig,
+    CmdSwitchLayout
 
   Msg* = object
     case kind*: MsgKind
@@ -179,12 +191,16 @@ type
       moveDX*, moveDY*: int32
     of CmdSetLayout:
       newLayout*: LayoutMode
+    of CmdFocusDirection:
+      direction*: Direction
     of CmdMoveToTag:
       targetTag*: uint32
     of CmdSwapWindowToTag:
       targetTagSwap*: uint32
     of CmdRenameTag:
       newName*: string
+    of CmdMoveToNamedScratchpad, CmdToggleNamedScratchpad:
+      scratchpadName*: string
     of CmdSetMasterCount:
       count*: int
     of CmdSetMasterRatio:

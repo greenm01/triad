@@ -9,6 +9,7 @@ type
     quickshell*: QuickshellConfig
     screenLock*: ScreenLockConfig
     windowMenu*: WindowMenuConfig
+    scratchpad*: ScratchpadConfig
     cursor*: CursorConfig
     presentationMode*: PresentationMode
     allowExitSession*: bool
@@ -25,6 +26,7 @@ type
     enableAnimations*: bool
     animationSpeed*: float32
     smartGaps*: bool
+    layoutCycle*: seq[LayoutMode]
 
   TagRule* = object
     tagId*: uint32
@@ -44,6 +46,12 @@ proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
   of "tile": MasterStack
   of "grid": Grid
   of "monocle": Monocle
+  of "deck": Deck
+  of "center-tile", "center_tile": CenterTile
+  of "right-tile", "right_tile": RightTile
+  of "vertical-tile", "vertical_tile": VerticalTile
+  of "vertical-grid", "vertical_grid": VerticalGrid
+  of "vertical-deck", "vertical_deck": VerticalDeck
   else: fallback
 
 proc forcedLayoutValue(name: string): int =
@@ -53,6 +61,12 @@ proc forcedLayoutValue(name: string): int =
   of "tile": ord(MasterStack) + 1
   of "grid": ord(Grid) + 1
   of "monocle": ord(Monocle) + 1
+  of "deck": ord(Deck) + 1
+  of "center-tile", "center_tile": ord(CenterTile) + 1
+  of "right-tile", "right_tile": ord(RightTile) + 1
+  of "vertical-tile", "vertical_tile": ord(VerticalTile) + 1
+  of "vertical-grid", "vertical_grid": ord(VerticalGrid) + 1
+  of "vertical-deck", "vertical_deck": ord(VerticalDeck) + 1
   else: 0
 
 proc modifierValue(name: string): uint32 =
@@ -108,9 +122,15 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "q", modifiers: 64'u32, command: "close-window"),
     KeyBindingConfig(key: "f", modifiers: 64'u32, command: "toggle-fullscreen"),
     KeyBindingConfig(key: "m", modifiers: 64'u32, command: "toggle-maximized"),
-    KeyBindingConfig(key: "n", modifiers: 64'u32, command: "minimize"),
+    KeyBindingConfig(key: "i", modifiers: 64'u32, command: "minimize"),
     KeyBindingConfig(key: "r", modifiers: 64'u32, command: "reload-config"),
     KeyBindingConfig(key: "t", modifiers: 64'u32, command: "spawn-terminal"),
+    KeyBindingConfig(key: "Tab", modifiers: 64'u32, command: "focus-next"),
+    KeyBindingConfig(key: "Left", modifiers: 8'u32, command: "focus-left"),
+    KeyBindingConfig(key: "Right", modifiers: 8'u32, command: "focus-right"),
+    KeyBindingConfig(key: "Up", modifiers: 8'u32, command: "focus-up"),
+    KeyBindingConfig(key: "Down", modifiers: 8'u32, command: "focus-down"),
+    KeyBindingConfig(key: "n", modifiers: 64'u32, command: "switch-layout"),
     KeyBindingConfig(key: "1", modifiers: 64'u32, command: "focus-tag 1"),
     KeyBindingConfig(key: "2", modifiers: 64'u32, command: "focus-tag 2"),
     KeyBindingConfig(key: "3", modifiers: 64'u32, command: "focus-tag 3"),
@@ -137,6 +157,9 @@ proc loadConfig*(path: string): Config =
   result.layout.enableAnimations = true
   result.layout.animationSpeed = 0.15
   result.layout.smartGaps = false
+  result.layout.layoutCycle = @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+  result.scratchpad.widthRatio = 0.8
+  result.scratchpad.heightRatio = 0.9
   result.protocolSurfaces.enabled = true
   
   try:
@@ -164,6 +187,10 @@ proc loadConfig*(path: string): Config =
               result.layout.animationSpeed = clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
             elif child.name == "smart-gaps" and child.args.len > 0:
               result.layout.smartGaps = child.args[0].kBool()
+            elif child.name == "layout-cycle":
+              result.layout.layoutCycle = @[]
+              for arg in child.args:
+                result.layout.layoutCycle.add(parseLayoutName(arg.kString(), Scroller))
           except CatchableError as e:
             warn "Ignoring invalid layout config field", field=child.name, error=e.msg
       
@@ -277,6 +304,16 @@ proc loadConfig*(path: string): Config =
           except CatchableError as e:
             warn "Ignoring invalid screen-lock field", field=child.name, error=e.msg
 
+      elif node.name == "scratchpad":
+        for child in node.children:
+          try:
+            if child.name == "width-ratio" and child.args.len > 0:
+              result.scratchpad.widthRatio = clampF32(float32(child.args[0].kFloat()), 0.1, 1.0)
+            elif child.name == "height-ratio" and child.args.len > 0:
+              result.scratchpad.heightRatio = clampF32(float32(child.args[0].kFloat()), 0.1, 1.0)
+          except CatchableError as e:
+            warn "Ignoring invalid scratchpad field", field=child.name, error=e.msg
+
       elif node.name == "cursor":
         for child in node.children:
           try:
@@ -334,12 +371,16 @@ proc applyConfig*(model: var Model, config: Config) =
   model.quickshell = config.quickshell
   model.screenLock = config.screenLock
   model.windowMenu = config.windowMenu
+  model.scratchpad = config.scratchpad
   model.cursor = config.cursor
   model.presentationMode = config.presentationMode
   model.allowExitSession = config.allowExitSession
   model.protocolSurfaces = config.protocolSurfaces
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
+  model.layoutCycle = if config.layout.layoutCycle.len > 0: config.layout.layoutCycle else: @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+  model.scratchpadWidthRatio = clampF32(config.scratchpad.widthRatio, 0.1, 1.0)
+  model.scratchpadHeightRatio = clampF32(config.scratchpad.heightRatio, 0.1, 1.0)
   
   for rule in config.tagRules:
     if model.tags.hasKey(rule.tagId):
