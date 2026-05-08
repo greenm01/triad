@@ -86,6 +86,12 @@ type
     CmdCloseWindowById,
     CmdSpawnTerminal,
     CmdLockSession,
+    CmdWarpPointer,
+    CmdEatNextKey,
+    CmdCancelEatNextKey,
+    CmdStopManager,
+    CmdExitSession,
+    CmdFocusShellUi,
     CmdTick,
     CmdReloadConfig
 
@@ -203,5 +209,7 @@ type
       focusWindowId*: WindowId
     of CmdCloseWindowById:
       closeWindowId*: WindowId
+    of CmdWarpPointer:
+      warpX*, warpY*: int32
     else:
       discard

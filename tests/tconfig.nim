@@ -110,6 +110,11 @@ screen-lock {
     let kdl = """
 window-menu-command "menu-tool" "--quiet"
 presentation-mode "async"
+allow-exit-session #true
+protocol-surfaces {
+    enabled #true
+    visible-debug #true
+}
 cursor {
     theme "Bibata-Modern-Classic"
     size 32
@@ -121,6 +126,9 @@ cursor {
 
     check config.windowMenu.command == @["menu-tool", "--quiet"]
     check config.presentationMode == PresentationAsync
+    check config.allowExitSession == true
+    check config.protocolSurfaces.enabled == true
+    check config.protocolSurfaces.visibleDebug == true
     check config.cursor.theme == "Bibata-Modern-Classic"
     check config.cursor.size == 32'u32
 
@@ -128,7 +136,7 @@ cursor {
     let path = getCurrentDir() / "test_bindings.kdl"
     let kdl = """
 bindings {
-    bind "Super+Return" "spawn-terminal"
+    bind "Super+Return" "spawn-terminal" layout=1
     bind "Super+Shift+q" "close-window"
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
@@ -142,6 +150,8 @@ bindings {
     check config.keyBindings[0].key == "Return"
     check config.keyBindings[0].modifiers == 64'u32
     check config.keyBindings[0].command == "spawn-terminal"
+    check config.keyBindings[0].hasLayoutOverride == true
+    check config.keyBindings[0].layoutOverride == 1'u32
     check config.keyBindings[1].key == "q"
     check config.keyBindings[1].modifiers == 65'u32
     check config.pointerBindings.len == 2

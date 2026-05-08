@@ -44,6 +44,17 @@ proc parseLegacyCommand*(line: string): Option[Msg] =
   of "minimize", "minimize-window": some(Msg(kind: CmdMinimize))
   of "spawn-terminal": some(Msg(kind: CmdSpawnTerminal))
   of "lock-session": some(Msg(kind: CmdLockSession))
+  of "warp-pointer":
+    if parts.len >= 3:
+      let x = parseInt32Arg(parts[1])
+      let y = parseInt32Arg(parts[2])
+      if x.isSome and y.isSome: some(Msg(kind: CmdWarpPointer, warpX: x.get(), warpY: y.get())) else: none(Msg)
+    else: none(Msg)
+  of "eat-next-key": some(Msg(kind: CmdEatNextKey))
+  of "cancel-eat-next-key": some(Msg(kind: CmdCancelEatNextKey))
+  of "stop-manager": some(Msg(kind: CmdStopManager))
+  of "exit-session": some(Msg(kind: CmdExitSession))
+  of "focus-shell-ui": some(Msg(kind: CmdFocusShellUi))
   of "move-to-scratchpad": some(Msg(kind: CmdMoveToScratchpad))
   of "toggle-scratchpad": some(Msg(kind: CmdToggleScratchpad))
   of "select-window": some(Msg(kind: CmdSelectWindow))

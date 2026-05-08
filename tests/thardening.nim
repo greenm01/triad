@@ -211,6 +211,26 @@ suite "Crash hardening":
     check parsed.isSome
     check parsed.get().kind == CmdLockSession
 
+  test "River protocol IPC commands are parsed and guarded":
+    var parsed = parseLegacyCommand("warp-pointer 12 -4")
+    check parsed.isSome
+    check parsed.get().kind == CmdWarpPointer
+    check parsed.get().warpX == 12
+    check parsed.get().warpY == -4
+
+    check parseLegacyCommand("eat-next-key").get().kind == CmdEatNextKey
+    check parseLegacyCommand("cancel-eat-next-key").get().kind == CmdCancelEatNextKey
+    check parseLegacyCommand("stop-manager").get().kind == CmdStopManager
+    check parseLegacyCommand("focus-shell-ui").get().kind == CmdFocusShellUi
+
+    var model = baseModel()
+    var (_, effects) = update(model, Msg(kind: CmdExitSession))
+    check effects.anyIt(it.kind == EffLog)
+
+    model.allowExitSession = true
+    (_, effects) = update(model, Msg(kind: CmdExitSession))
+    check effects.anyIt(it.kind == EffExitSession)
+
   test "River decoration presentation menu resize and modifier state are modeled":
     var model = baseModel()
     var (nextModel, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "one"))

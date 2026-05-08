@@ -107,11 +107,17 @@ type
     key*: string
     modifiers*: uint32
     command*: string
+    hasLayoutOverride*: bool
+    layoutOverride*: uint32
 
   PointerBindingConfig* = object
     button*: uint32
     modifiers*: uint32
     op*: PointerOpKind
+
+  ProtocolSurfacesConfig* = object
+    enabled*: bool
+    visibleDebug*: bool
 
   PointerOpState* = object
     kind*: PointerOpKind
@@ -133,6 +139,8 @@ type
     windowMenu*: WindowMenuConfig
     cursor*: CursorConfig
     presentationMode*: PresentationMode
+    allowExitSession*: bool
+    protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
     pointerOp*: PointerOpState

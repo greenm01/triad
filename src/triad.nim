@@ -2,6 +2,7 @@ import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as river_layer
 import protocols/river_xkb_bindings/client as river_xkb
+import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import core/model
 import core/msg
 import core/update
@@ -20,6 +21,23 @@ type
     RiverManage,
     RiverRender
 
+  ProtocolSurfaceKind = enum
+    PskShell,
+    PskDecorationAbove,
+    PskDecorationBelow
+
+  OwnedProtocolSurface = object
+    surface: ptr Surface
+    buffer: ptr Buffer
+    shellSurface: ptr RiverShellSurfaceV1
+    decoration: ptr RiverDecorationV1
+    node: ptr RiverNodeV1
+    windowId: WindowId
+    kind: ProtocolSurfaceKind
+    offsetX: int32
+    offsetY: int32
+    syncPending: bool
+
 # --- Global Engine State ---
 var
   display: ptr Display
@@ -27,6 +45,8 @@ var
   river_manager: ptr RiverWindowManagerV1
   river_layer_shell: ptr river_layer.RiverLayerShellV1
   river_xkb_bindings: ptr river_xkb.RiverXkbBindingsV1
+  compositor: ptr Compositor
+  singlePixelManager: ptr singlepixel.WpSinglePixelBufferManagerV1
   riverPhase = RiverIdle
   bindingsConfigured = false
   
@@ -48,11 +68,24 @@ var
   xkbBindings: Table[uint32, Msg]
   xkbBindingPointers: seq[ptr river_xkb.RiverXkbBindingV1] = @[]
   xkbSeatPointers: Table[uint32, ptr river_xkb.RiverXkbBindingsSeatV1]
+  xkbSeatAteUnbound: Table[uint32, uint32]
+  xkbBindingPressed: Table[uint32, bool]
+  xkbStopRepeatCount: Table[uint32, uint32]
   pointerBindings: Table[uint32, Msg]
   pointerBindingKinds: Table[uint32, PointerOpKind]
   pointerBindingSeats: Table[uint32, ptr RiverSeatV1]
   pointerBindingPointers: seq[ptr RiverPointerBindingV1] = @[]
+  pointerBindingPressed: Table[uint32, bool]
   shellSurfacePointers: Table[uint32, ptr RiverShellSurfaceV1]
+  ownedShellSurfaceId: uint32
+  protocolSurfaces: Table[uint32, OwnedProtocolSurface]
+  windowDecorationAbove: Table[WindowId, uint32]
+  windowDecorationBelow: Table[WindowId, uint32]
+  outputWlNames: Table[uint32, uint32]
+  seatWlNames: Table[uint32, uint32]
+  pointerWindowBySeat: Table[uint32, WindowId]
+  pointerPositionBySeat: Table[uint32, Rect]
+  windowUnreliablePids: Table[WindowId, int32]
 
   # Config Watcher
   configPath: string
@@ -235,6 +268,11 @@ quickshell {
 // }
 
 // window-menu-command "triad-window-menu"
+// allow-exit-session #false
+// protocol-surfaces {
+//     enabled #true
+//     visible-debug #false
+// }
 // presentation-mode "vsync"
 // cursor {
 //     theme "default"
@@ -385,6 +423,151 @@ proc premulColor(value: uint32): tuple[r, g, b, a: uint32] =
   result.b = uint32((uint64(b8) * uint64(a8) * max32) div (255'u64 * 255'u64))
   result.a = a32
 
+proc createProtocolBuffer(kind: ProtocolSurfaceKind): ptr Buffer =
+  if singlePixelManager == nil:
+    return nil
+  let alpha = if currentModel.protocolSurfaces.visibleDebug: 0x80000000'u32 else: 0'u32
+  let color = case kind
+    of PskShell: 0x3aa5ff00'u32 or alpha
+    of PskDecorationAbove: 0xffcc0000'u32 or alpha
+    of PskDecorationBelow: 0x2233cc00'u32 or alpha
+  let rgba = premulColor(color)
+  singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
+
+proc createProtocolWlSurface(kind: ProtocolSurfaceKind): OwnedProtocolSurface =
+  result.kind = kind
+  if compositor == nil:
+    return
+  result.surface = compositor.createSurface()
+  if result.surface == nil:
+    return
+  result.buffer = createProtocolBuffer(kind)
+
+proc commitProtocolSurface(surf: var OwnedProtocolSurface) =
+  if surf.surface == nil:
+    return
+  if surf.shellSurface != nil:
+    surf.shellSurface.syncNextCommit()
+  if surf.decoration != nil:
+    surf.decoration.syncNextCommit()
+  if compositor != nil:
+    let input = compositor.createRegion()
+    if input != nil:
+      surf.surface.setInputRegion(input)
+      input.destroy()
+  if surf.buffer != nil:
+    surf.surface.attach(surf.buffer, 0, 0)
+    surf.surface.damage(0, 0, 1, 1)
+  surf.surface.commit()
+  surf.syncPending = false
+
+proc destroyProtocolSurface(surf: var OwnedProtocolSurface) =
+  if surf.node != nil:
+    surf.node.destroy()
+    surf.node = nil
+  if surf.decoration != nil:
+    surf.decoration.destroy()
+    surf.decoration = nil
+  if surf.shellSurface != nil:
+    shellSurfacePointers.del(surf.shellSurface.get_id())
+    surf.shellSurface.destroy()
+    surf.shellSurface = nil
+  if surf.surface != nil:
+    surf.surface.attach(nil, 0, 0)
+    surf.surface.commit()
+    surf.surface.destroy()
+    surf.surface = nil
+  if surf.buffer != nil:
+    surf.buffer.destroy()
+    surf.buffer = nil
+
+proc ensureOwnedShellSurface() =
+  if not currentModel.protocolSurfaces.enabled:
+    return
+  if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
+    return
+  if river_manager == nil or compositor == nil:
+    return
+  var surf = createProtocolWlSurface(PskShell)
+  if surf.surface == nil:
+    warn "Unable to create protocol shell wl_surface"
+    return
+  surf.shellSurface = river_manager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create River shell surface"
+    destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  ownedShellSurfaceId = surf.shellSurface.get_id()
+  shellSurfacePointers[ownedShellSurfaceId] = surf.shellSurface
+  commitProtocolSurface(surf)
+  protocolSurfaces[ownedShellSurfaceId] = surf
+  debug "Created protocol shell surface", shellSurfaceId=ownedShellSurfaceId
+
+proc ensureDecorationSurface(windowId: WindowId; kind: ProtocolSurfaceKind): uint32 =
+  if not currentModel.protocolSurfaces.enabled:
+    return 0
+  if not windowPointers.hasKey(windowId) or compositor == nil:
+    return 0
+  if kind == PskDecorationAbove and windowDecorationAbove.hasKey(windowId):
+    return windowDecorationAbove[windowId]
+  if kind == PskDecorationBelow and windowDecorationBelow.hasKey(windowId):
+    return windowDecorationBelow[windowId]
+
+  var surf = createProtocolWlSurface(kind)
+  if surf.surface == nil:
+    return 0
+  surf.windowId = windowId
+  case kind
+  of PskDecorationAbove:
+    surf.decoration = windowPointers[windowId].getDecorationAbove(surf.surface)
+  of PskDecorationBelow:
+    surf.decoration = windowPointers[windowId].getDecorationBelow(surf.surface)
+  else:
+    discard
+  if surf.decoration == nil:
+    destroyProtocolSurface(surf)
+    return 0
+  surf.decoration.setOffset(0, 0)
+  commitProtocolSurface(surf)
+  let id = surf.decoration.get_id()
+  protocolSurfaces[id] = surf
+  if kind == PskDecorationAbove:
+    windowDecorationAbove[windowId] = id
+  elif kind == PskDecorationBelow:
+    windowDecorationBelow[windowId] = id
+  let kindText = $kind
+  debug "Created protocol decoration surface", windowId=windowId, decorationId=id, kind=kindText
+  id
+
+proc destroyWindowProtocolSurfaces(windowId: WindowId) =
+  if windowDecorationAbove.hasKey(windowId):
+    let id = windowDecorationAbove[windowId]
+    windowDecorationAbove.del(windowId)
+    if protocolSurfaces.hasKey(id):
+      var surf = protocolSurfaces[id]
+      protocolSurfaces.del(id)
+      destroyProtocolSurface(surf)
+  if windowDecorationBelow.hasKey(windowId):
+    let id = windowDecorationBelow[windowId]
+    windowDecorationBelow.del(windowId)
+    if protocolSurfaces.hasKey(id):
+      var surf = protocolSurfaces[id]
+      protocolSurfaces.del(id)
+      destroyProtocolSurface(surf)
+
+proc destroyAllProtocolSurfaces() =
+  var ids: seq[uint32] = @[]
+  for id in protocolSurfaces.keys:
+    ids.add(id)
+  for id in ids:
+    var surf = protocolSurfaces[id]
+    protocolSurfaces.del(id)
+    destroyProtocolSurface(surf)
+  ownedShellSurfaceId = 0
+  windowDecorationAbove.clear()
+  windowDecorationBelow.clear()
+
 proc keySym(ch: char): uint32 =
   uint32(ord(ch))
 
@@ -456,16 +639,21 @@ proc attachXkbSeat(seat: ptr RiverSeatV1) =
 
 proc destroyBindings() =
   for binding in xkbBindingPointers:
+    binding.disable()
     binding.destroy()
   xkbBindingPointers = @[]
   xkbBindings.clear()
+  xkbBindingPressed.clear()
+  xkbStopRepeatCount.clear()
 
   for binding in pointerBindingPointers:
+    binding.disable()
     binding.destroy()
   pointerBindingPointers = @[]
   pointerBindings.clear()
   pointerBindingKinds.clear()
   pointerBindingSeats.clear()
+  pointerBindingPressed.clear()
   bindingsConfigured = false
 
 proc destroyXkbSeats() =
@@ -473,13 +661,15 @@ proc destroyXkbSeats() =
     xkbSeat.destroy()
   xkbSeatPointers.clear()
 
-proc addXkbBinding(seat: ptr RiverSeatV1; keysym, modifiers: uint32; msg: Msg) =
+proc addXkbBinding(seat: ptr RiverSeatV1; bindingConfig: KeyBindingConfig; keysym, modifiers: uint32; msg: Msg) =
   if river_xkb_bindings == nil:
     return
   let binding = river_xkb_bindings.getXkbBinding(seat, keysym, modifiers)
   xkbBindingPointers.add(binding)
   xkbBindings[binding.get_id()] = msg
   discard binding.addListener(xkb_binding_listener.addr, nil)
+  if bindingConfig.hasLayoutOverride:
+    binding.setLayoutOverride(bindingConfig.layoutOverride)
   binding.enable()
 
 proc addPointerBinding(seat: ptr RiverSeatV1; button, modifiers: uint32; op: PointerOpKind) =
@@ -503,7 +693,7 @@ proc setupDefaultBindings() =
       let parsed = parseLegacyCommand(binding.command)
       let sym = keySym(binding.key)
       if parsed.isSome and sym != 0:
-        addXkbBinding(seat, sym, binding.modifiers, parsed.get())
+        addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
 
     for binding in currentModel.pointerBindings:
       addPointerBinding(seat, binding.button, binding.modifiers, binding.op)
@@ -512,6 +702,10 @@ proc setupDefaultBindings() =
 
 proc applyManageState() =
   setupDefaultBindings()
+  if currentModel.protocolSurfaces.enabled:
+    ensureOwnedShellSurface()
+  else:
+    destroyAllProtocolSurfaces()
 
   for id, win in windowPointers.pairs:
     win.setCapabilities(currentModel.supportedCapabilities())
@@ -525,6 +719,8 @@ proc applyManageState() =
       win.setDimensionBounds(data.maxWidth, data.maxHeight)
       if data.isFloating or data.isFullscreen:
         edges = 0
+      discard ensureDecorationSurface(id, PskDecorationBelow)
+      discard ensureDecorationSurface(id, PskDecorationAbove)
     else:
       win.useSsd()
     win.setTiled(edges)
@@ -558,6 +754,9 @@ proc on_seat_removed(data: pointer, seat: ptr RiverSeatV1) =
   info "Seat removed"
   let seatId = seat.get_id()
   removeSeatPointer(seat)
+  seatWlNames.del(seatId)
+  pointerWindowBySeat.del(seatId)
+  pointerPositionBySeat.del(seatId)
   if xkbSeatPointers.hasKey(seatId):
     xkbSeatPointers[seatId].destroy()
     xkbSeatPointers.del(seatId)
@@ -568,14 +767,17 @@ proc on_seat_removed(data: pointer, seat: ptr RiverSeatV1) =
   seat.destroy()
 
 proc on_seat_wl_seat(data: pointer, seat: ptr RiverSeatV1, name: uint32) =
-  trace "Seat wl_seat received", name=name
+  seatWlNames[seat.get_id()] = name
+  trace "Seat wl_seat received", seatId=seat.get_id(), name=name
 
 proc on_seat_pointer_enter(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
   if win != nil:
-    trace "Pointer entered window", windowId=win.get_id()
+    pointerWindowBySeat[seat.get_id()] = win.get_id()
+    trace "Pointer entered window", seatId=seat.get_id(), windowId=win.get_id()
 
 proc on_seat_pointer_leave(data: pointer, seat: ptr RiverSeatV1) =
-  trace "Pointer left window"
+  pointerWindowBySeat.del(seat.get_id())
+  trace "Pointer left window", seatId=seat.get_id()
 
 proc on_seat_window_interaction(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
   if win != nil:
@@ -597,7 +799,8 @@ proc on_op_release(data: pointer, seat: ptr RiverSeatV1) =
   msgQueue.add(Msg(kind: WlPointerRelease))
 
 proc on_seat_pointer_position(data: pointer, seat: ptr RiverSeatV1, x: int32, y: int32) =
-  trace "Seat pointer position", x=x, y=y
+  pointerPositionBySeat[seat.get_id()] = Rect(x: x, y: y, w: 0, h: 0)
+  trace "Seat pointer position", seatId=seat.get_id(), x=x, y=y
 
 var seat_listener = RiverSeatV1Listener(
   removed: on_seat_removed,
@@ -613,14 +816,18 @@ var seat_listener = RiverSeatV1Listener(
 
 proc on_xkb_pressed(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
   let id = binding.get_id()
+  xkbBindingPressed[id] = true
   if xkbBindings.hasKey(id):
     msgQueue.add(xkbBindings[id])
 
 proc on_xkb_released(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
-  discard
+  xkbBindingPressed[binding.get_id()] = false
+  trace "XKB binding released", bindingId=binding.get_id()
 
 proc on_xkb_stop_repeat(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
-  discard
+  let id = binding.get_id()
+  xkbStopRepeatCount[id] = xkbStopRepeatCount.getOrDefault(id, 0'u32) + 1'u32
+  trace "XKB binding stop-repeat", bindingId=id, count=xkbStopRepeatCount[id]
 
 xkb_binding_listener = river_xkb.RiverXkbBindingV1Listener(
   pressed: on_xkb_pressed,
@@ -629,7 +836,9 @@ xkb_binding_listener = river_xkb.RiverXkbBindingV1Listener(
 )
 
 proc on_xkb_seat_ate_unbound_key(data: pointer, seat: ptr river_xkb.RiverXkbBindingsSeatV1) =
-  trace "XKB seat ate unbound key", xkbSeatId=seat.get_id()
+  let id = seat.get_id()
+  xkbSeatAteUnbound[id] = xkbSeatAteUnbound.getOrDefault(id, 0'u32) + 1'u32
+  trace "XKB seat ate unbound key", xkbSeatId=id, count=xkbSeatAteUnbound[id]
 
 proc on_xkb_seat_modifiers_update(data: pointer, seat: ptr river_xkb.RiverXkbBindingsSeatV1, old: uint32, new: uint32) =
   trace "XKB modifiers updated", xkbSeatId=seat.get_id(), old=old, new=new
@@ -642,6 +851,7 @@ xkb_seat_listener = river_xkb.RiverXkbBindingsSeatV1Listener(
 
 proc on_pointer_binding_pressed(data: pointer, binding: ptr RiverPointerBindingV1) =
   let id = binding.get_id()
+  pointerBindingPressed[id] = true
   let focused = currentModel.activeFocus()
   if focused == 0 or not pointerBindingSeats.hasKey(id):
     return
@@ -658,7 +868,8 @@ proc on_pointer_binding_pressed(data: pointer, binding: ptr RiverPointerBindingV
     msgQueue.add(pointerBindings[id])
 
 proc on_pointer_binding_released(data: pointer, binding: ptr RiverPointerBindingV1) =
-  discard
+  pointerBindingPressed[binding.get_id()] = false
+  trace "Pointer binding released", bindingId=binding.get_id()
 
 pointer_binding_listener = RiverPointerBindingV1Listener(
   pressed: on_pointer_binding_pressed,
@@ -721,12 +932,12 @@ proc executeManageEffect(eff: Effect) =
     if windowPointers.hasKey(eff.windowId):
       windowPointers[eff.windowId].proposeDimensions(max(0'i32, eff.w), max(0'i32, eff.h))
   of EffFocusWindow:
-    if windowPointers.hasKey(eff.focusId):
+    if not currentModel.sessionLocked and windowPointers.hasKey(eff.focusId):
       let win = windowPointers[eff.focusId]
       for seat in seatPointers:
         seat.focusWindow(win)
   of EffFocusShellSurface:
-    if shellSurfacePointers.hasKey(eff.focusShellSurfaceId):
+    if not currentModel.sessionLocked and shellSurfacePointers.hasKey(eff.focusShellSurfaceId):
       let shellSurface = shellSurfacePointers[eff.focusShellSurfaceId]
       for seat in seatPointers:
         seat.focusShellSurface(shellSurface)
@@ -828,12 +1039,15 @@ proc renderDesiredPlacements() =
 
   var visible = initTable[WindowId, bool]()
   var lastNode: ptr RiverNodeV1 = nil
+  var firstNode: ptr RiverNodeV1 = nil
   for id in ids:
     if windowNodes.hasKey(id):
       let node = windowNodes[id]
       let geom = desiredPlacements[id]
       visible[id] = true
       node.setPosition(geom.x, geom.y)
+      if firstNode == nil:
+        firstNode = node
       if lastNode != nil:
         node.placeAbove(lastNode)
       lastNode = node
@@ -854,6 +1068,15 @@ proc renderDesiredPlacements() =
       if (currentModel.windows.hasKey(id) and currentModel.windows[id].isFloating) or isScratchpad or isFullscreen or id == currentModel.activeFocus():
         windowNodes[id].placeTop()
 
+  if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
+    var shell = protocolSurfaces[ownedShellSurfaceId]
+    if shell.node != nil:
+      shell.node.setPosition(screen.x, screen.y)
+      shell.node.placeBottom()
+      if firstNode != nil:
+        shell.node.placeBelow(firstNode)
+    protocolSurfaces[ownedShellSurfaceId] = shell
+
 proc executeEffect(eff: Effect) =
   case eff.kind
   of EffLog:
@@ -872,6 +1095,25 @@ proc executeEffect(eff: Effect) =
     spawnScreenLock(eff.screenLockCommand)
   of EffSpawnWindowMenu:
     spawnWindowMenu(eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX, eff.windowMenuY)
+  of EffPointerWarp:
+    for seat in seatPointers:
+      seat.pointerWarp(eff.warpX, eff.warpY)
+  of EffEnsureNextKeyEaten:
+    for xkbSeat in xkbSeatPointers.values:
+      xkbSeat.ensureNextKeyEaten()
+  of EffCancelEnsureNextKeyEaten:
+    for xkbSeat in xkbSeatPointers.values:
+      xkbSeat.cancelEnsureNextKeyEaten()
+  of EffStopManager:
+    if river_manager != nil:
+      river_manager.stop()
+  of EffExitSession:
+    if river_manager != nil and currentModel.allowExitSession:
+      river_manager.exitSession()
+  of EffFocusShellUi:
+    ensureOwnedShellSurface()
+    if ownedShellSurfaceId != 0:
+      queueManageEffect(Effect(kind: EffFocusShellSurface, focusShellSurfaceId: ownedShellSurfaceId))
   of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffFocusShellSurface, EffCloseWindow, EffSetFullscreen, EffSetMaximized, EffInformResizeStart, EffInformResizeEnd:
     queueManageEffect(eff)
   of EffSetPosition:
@@ -893,8 +1135,10 @@ var pendingWindows: Table[WindowId, WindowData]
 # --- RiverWindowV1 Callbacks ---
 
 proc forgetWindow(id: WindowId) =
+  destroyWindowProtocolSurfaces(id)
   desiredPlacements.del(id)
   pendingWindows.del(id)
+  windowUnreliablePids.del(id)
   if windowNodes.hasKey(id):
     let node = windowNodes[id]
     windowNodes.del(id)
@@ -1032,6 +1276,7 @@ proc on_window_minimize_requested(data: pointer, win: ptr RiverWindowV1) =
     msgQueue.add(Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: win.get_id()))
 
 proc on_window_unreliable_pid(data: pointer, win: ptr RiverWindowV1, unreliablePid: int32) =
+  windowUnreliablePids[win.get_id()] = unreliablePid
   trace "Window unreliable pid received", windowId=win.get_id(), pid=unreliablePid
 
 proc on_window_presentation_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
@@ -1075,6 +1320,8 @@ var window_listener = RiverWindowV1Listener(
 # --- Wayland Callbacks ---
 
 proc cleanupRiverObjects() =
+  destroyAllProtocolSurfaces()
+
   var winIds: seq[WindowId] = @[]
   for id in windowPointers.keys:
     winIds.add(id)
@@ -1093,6 +1340,7 @@ proc cleanupRiverObjects() =
     let output = outputPointers[id]
     outputPointers.del(id)
     output.destroy()
+  outputWlNames.clear()
 
   for seat in layerSeatPointers:
     seat.destroy()
@@ -1100,11 +1348,22 @@ proc cleanupRiverObjects() =
 
   destroyBindings()
   destroyXkbSeats()
+  xkbSeatAteUnbound.clear()
 
   let seats = seatPointers
   seatPointers = @[]
   for seat in seats:
     seat.destroy()
+  seatWlNames.clear()
+  pointerWindowBySeat.clear()
+  pointerPositionBySeat.clear()
+
+  if river_xkb_bindings != nil:
+    river_xkb_bindings.destroy()
+    river_xkb_bindings = nil
+  if river_layer_shell != nil:
+    river_layer_shell.destroy()
+    river_layer_shell = nil
 
 proc on_manager_unavailable(data: pointer, mgr: ptr RiverWindowManagerV1) =
   fatal "River window manager interface is unavailable"
@@ -1181,10 +1440,12 @@ proc on_output_removed(data: pointer, output: ptr RiverOutputV1) =
     layerOutputPointers.del(id)
     layerOutput.destroy()
   outputPointers.del(id)
+  outputWlNames.del(id)
   msgQueue.add(Msg(kind: WlOutputRemoved, removedOutputId: id))
   output.destroy()
 
 proc on_output_wl_output(data: pointer, output: ptr RiverOutputV1, name: uint32) =
+  outputWlNames[output.get_id()] = name
   trace "Output wl_output received", outputId=output.get_id(), name=name
 
 proc on_output_position(data: pointer, output: ptr RiverOutputV1, x: int32, y: int32) =
@@ -1224,6 +1485,11 @@ proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32,
     river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4'u32))
     discard river_manager.addListener(manager_listener.addr, nil)
     info "Bound to river_window_manager_v1", name=name, advertisedVersion=version, boundVersion=4
+    ensureOwnedShellSurface()
+  elif interfaceName == "wl_compositor":
+    compositor = cast[ptr Compositor](registry.`bind`(name, wl_compositor_interface.addr, min(version, 6'u32)))
+    info "Bound to wl_compositor", name=name, advertisedVersion=version
+    ensureOwnedShellSurface()
   elif interfaceName == "river_layer_shell_v1":
     river_layer_shell = cast[ptr river_layer.RiverLayerShellV1](registry.`bind`(name, river_layer.river_layer_shell_v1_interface.addr, min(version, 1'u32)))
     for outputId in outputPointers.keys:
@@ -1236,6 +1502,9 @@ proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32,
     bindingsConfigured = false
     requestManage("xkb bindings discovered")
     info "Bound to river_xkb_bindings_v1", name=name, advertisedVersion=version
+  elif interfaceName == "wp_single_pixel_buffer_manager_v1":
+    singlePixelManager = cast[ptr singlepixel.WpSinglePixelBufferManagerV1](registry.`bind`(name, singlepixel.wp_single_pixel_buffer_manager_v1_interface.addr, min(version, 1'u32)))
+    info "Bound to wp_single_pixel_buffer_manager_v1", name=name, advertisedVersion=version
 
 
 proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =

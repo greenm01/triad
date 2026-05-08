@@ -17,6 +17,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `select-window`: In overview mode, selects the focused window and jumps to its tag.
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 *   `lock-session`: Launches the configured `screen-lock` command.
+*   `focus-shell-ui`: Focuses Triad's internal River shell surface when present.
 
 #### Layout Management
 *   `layout-scroller`: Sets the active tag to horizontal scrolling mode.
@@ -42,6 +43,11 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `set-column-width <proportion>`: Precisely dictates the width of the focused column (e.g., `0.5`, `1.0`).
 *   `adjust-gaps <delta>`: Increases or decreases the global gap size (e.g., `5` or `-5`).
 *   `toggle-gaps`: Instantly eliminates all gaps or restores them to their former glory.
+*   `warp-pointer <x> <y>`: Requests a River pointer warp on every active seat.
+*   `eat-next-key`: Requests River XKB handling to eat the next unbound key.
+*   `cancel-eat-next-key`: Cancels the pending River XKB key-eat request.
+*   `stop-manager`: Sends `river_window_manager_v1.stop`.
+*   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.
 
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.

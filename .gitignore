@@ -21,7 +21,6 @@
 
 # User-specific
 .nimble/
-/home/niltempus/.nimble/
 
 # System / Editor
 .DS_Store

@@ -20,6 +20,12 @@ type
     EffInformResizeEnd,
     EffSpawnScreenLock,
     EffSpawnWindowMenu,
+    EffPointerWarp,
+    EffEnsureNextKeyEaten,
+    EffCancelEnsureNextKeyEaten,
+    EffStopManager,
+    EffExitSession,
+    EffFocusShellUi,
     EffLog
 
   Effect* = object
@@ -57,6 +63,8 @@ type
       windowMenuId*: WindowId
       windowMenuX*: int32
       windowMenuY*: int32
+    of EffPointerWarp:
+      warpX*, warpY*: int32
     else:
       discard
 
@@ -984,6 +992,28 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       effects.add(Effect(kind: EffSpawnScreenLock, screenLockCommand: nextModel.screenLock.command))
     else:
       effects.add(Effect(kind: EffLog, msg: "screen lock command is not configured"))
+
+  of CmdWarpPointer:
+    effects.add(Effect(kind: EffPointerWarp, warpX: msg.warpX, warpY: msg.warpY))
+
+  of CmdEatNextKey:
+    effects.add(Effect(kind: EffEnsureNextKeyEaten))
+
+  of CmdCancelEatNextKey:
+    effects.add(Effect(kind: EffCancelEnsureNextKeyEaten))
+
+  of CmdStopManager:
+    effects.add(Effect(kind: EffStopManager))
+
+  of CmdExitSession:
+    if nextModel.allowExitSession:
+      effects.add(Effect(kind: EffExitSession))
+    else:
+      effects.add(Effect(kind: EffLog, msg: "exit-session is disabled by config"))
+
+  of CmdFocusShellUi:
+    if not nextModel.sessionLocked and not nextModel.layerFocusExclusive:
+      effects.add(Effect(kind: EffFocusShellUi))
 
   of CmdReloadConfig, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
 

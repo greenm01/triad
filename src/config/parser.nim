@@ -11,6 +11,8 @@ type
     windowMenu*: WindowMenuConfig
     cursor*: CursorConfig
     presentationMode*: PresentationMode
+    allowExitSession*: bool
+    protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
 
@@ -135,6 +137,7 @@ proc loadConfig*(path: string): Config =
   result.layout.enableAnimations = true
   result.layout.animationSpeed = 0.15
   result.layout.smartGaps = false
+  result.protocolSurfaces.enabled = true
   
   try:
     let doc = parseKdlFile(path)
@@ -227,10 +230,16 @@ proc loadConfig*(path: string): Config =
             if child.name == "bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               if spec.key.len > 0:
-                result.keyBindings.add(KeyBindingConfig(
+                var binding = KeyBindingConfig(
                   key: spec.key,
                   modifiers: spec.modifiers,
-                  command: child.args[1].kString()))
+                  command: child.args[1].kString())
+                if child.props.hasKey("layout"):
+                  let layout = child.props["layout"].kInt()
+                  if layout >= 0:
+                    binding.hasLayoutOverride = true
+                    binding.layoutOverride = uint32(layout)
+                result.keyBindings.add(binding)
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               let button = buttonValue(spec.key)
@@ -285,6 +294,22 @@ proc loadConfig*(path: string): Config =
           result.presentationMode = parsePresentationMode(node.args[0].kString())
         except CatchableError as e:
           warn "Ignoring invalid presentation mode", error=e.msg
+
+      elif node.name == "allow-exit-session" and node.args.len > 0:
+        try:
+          result.allowExitSession = node.args[0].kBool()
+        except CatchableError as e:
+          warn "Ignoring invalid allow-exit-session value", error=e.msg
+
+      elif node.name == "protocol-surfaces":
+        for child in node.children:
+          try:
+            if child.name == "enabled" and child.args.len > 0:
+              result.protocolSurfaces.enabled = child.args[0].kBool()
+            elif child.name == "visible-debug" and child.args.len > 0:
+              result.protocolSurfaces.visibleDebug = child.args[0].kBool()
+          except CatchableError as e:
+            warn "Ignoring invalid protocol-surfaces field", field=child.name, error=e.msg
             
   except:
     let e = getCurrentException()
@@ -311,6 +336,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.windowMenu = config.windowMenu
   model.cursor = config.cursor
   model.presentationMode = config.presentationMode
+  model.allowExitSession = config.allowExitSession
+  model.protocolSurfaces = config.protocolSurfaces
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
   

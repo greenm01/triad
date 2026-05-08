@@ -63,6 +63,10 @@ From another terminal in the same session:
 ./triad msg focus-next
 ./triad msg layout-tile
 ./triad msg toggle-overview
+./triad msg focus-shell-ui
+./triad msg warp-pointer 100 100
+./triad msg eat-next-key
+./triad msg cancel-eat-next-key
 ./triad_niri msg -j workspaces
 ./triad_niri msg action focus-workspace 2
 ```

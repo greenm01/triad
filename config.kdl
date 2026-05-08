@@ -21,6 +21,20 @@ quickshell {
     theme "noctalia-shell"
 }
 
+allow-exit-session #false
+
+protocol-surfaces {
+    enabled #true
+    visible-debug #false
+}
+
+// window-menu-command "triad-window-menu"
+// presentation-mode "vsync"
+// cursor {
+//     theme "default"
+//     size 24
+// }
+
 bindings {
     bind "Super+q" "close-window"
     bind "Super+f" "toggle-fullscreen"
