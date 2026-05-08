@@ -39,8 +39,20 @@ proc terminalCandidates*(configured = getEnv("TERMINAL", "")): seq[seq[string]] 
   for command in CommonTerminalCommands:
     result.add(@[command])
 
+proc terminalCandidates*(configuredCommand: seq[string]; envTerminal = getEnv("TERMINAL", "")): seq[seq[string]] =
+  if configuredCommand.len > 0:
+    result.add(configuredCommand)
+  for candidate in terminalCandidates(envTerminal):
+    result.add(candidate)
+
 proc resolveTerminalCommand*(configured = getEnv("TERMINAL", "");
     exists: proc(command: string): bool {.closure.} = commandExists): seq[string] =
   for candidate in terminalCandidates(configured):
+    if candidate.len > 0 and exists(candidate[0]):
+      return candidate
+
+proc resolveTerminalCommand*(configuredCommand: seq[string]; envTerminal = getEnv("TERMINAL", "");
+    exists: proc(command: string): bool {.closure.} = commandExists): seq[string] =
+  for candidate in terminalCandidates(configuredCommand, envTerminal):
     if candidate.len > 0 and exists(candidate[0]):
       return candidate

@@ -1,15 +1,45 @@
 import algorithm, tables
+import defaults
 import model
-
-const
-  DefaultColumnWidth* = 0.5'f32
-  DefaultWindowWidth* = 0.5'f32
-  DefaultWindowHeight* = 1.0'f32
-  DefaultMasterCount* = 1
-  DefaultMasterRatio* = 0.55'f32
 
 proc clampProportion*(value: float32; lo = 0.05'f32; hi = 1.0'f32): float32 =
   clamp(value, lo, hi)
+
+proc defaultColumnWidth*(model: Model): float32 =
+  if model.defaultColumnWidth > 0:
+    clampProportion(model.defaultColumnWidth)
+  else:
+    DefaultColumnWidth
+
+proc defaultWindowWidth*(model: Model): float32 =
+  if model.defaultWindowWidth > 0:
+    clampProportion(model.defaultWindowWidth)
+  else:
+    DefaultWindowWidth
+
+proc defaultWindowHeight*(model: Model): float32 =
+  if model.defaultWindowHeight > 0:
+    clampProportion(model.defaultWindowHeight)
+  else:
+    DefaultWindowHeight
+
+proc defaultMasterCount*(model: Model): int =
+  if model.defaultMasterCount > 0:
+    max(1, model.defaultMasterCount)
+  else:
+    DefaultMasterCount
+
+proc defaultMasterRatio*(model: Model): float32 =
+  if model.defaultMasterRatio > 0:
+    clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
+  else:
+    DefaultMasterRatio
+
+proc floatingMinWidth*(model: Model): int32 =
+  if model.floating.minWidth > 0: model.floating.minWidth else: DefaultFloatingMinWidth
+
+proc floatingMinHeight*(model: Model): int32 =
+  if model.floating.minHeight > 0: model.floating.minHeight else: DefaultFloatingMinHeight
 
 proc safeLayoutMode*(stored: int; fallback = Scroller): LayoutMode =
   if stored >= ord(low(LayoutMode)) + 1 and stored <= ord(high(LayoutMode)) + 1:
@@ -17,13 +47,36 @@ proc safeLayoutMode*(stored: int; fallback = Scroller): LayoutMode =
   else:
     fallback
 
-proc initTagState*(tagId: uint32; layoutMode = Scroller; name = ""): TagState =
+proc initTagState*(tagId: uint32; layoutMode = Scroller; name = "";
+    masterCount = DefaultMasterCount; masterSplitRatio = DefaultMasterRatio): TagState =
   TagState(
     tagId: tagId,
     name: name,
     layoutMode: layoutMode,
-    masterCount: DefaultMasterCount,
-    masterSplitRatio: DefaultMasterRatio
+    masterCount: max(1, masterCount),
+    masterSplitRatio: clamp(masterSplitRatio, 0.05'f32, 0.95'f32)
+  )
+
+proc initTagStateForModel*(model: Model; tagId: uint32; layoutMode = Scroller; name = ""): TagState =
+  initTagState(tagId, layoutMode, name, model.defaultMasterCount(), model.defaultMasterRatio())
+
+proc defaultColumn*(model: Model; windows: seq[WindowId] = @[]): Column =
+  Column(windows: windows, widthProportion: model.defaultColumnWidth())
+
+proc defaultFloatingGeom*(model: Model): Rect =
+  let screenW = max(0'i32, model.screenWidth)
+  let screenH = max(0'i32, model.screenHeight)
+  let xRatio = if model.floating.xRatio > 0: model.floating.xRatio else: DefaultFloatingXRatio
+  let yRatio = if model.floating.yRatio > 0: model.floating.yRatio else: DefaultFloatingYRatio
+  let widthRatio = if model.floating.widthRatio > 0: model.floating.widthRatio else: DefaultFloatingWidthRatio
+  let heightRatio = if model.floating.heightRatio > 0: model.floating.heightRatio else: DefaultFloatingHeightRatio
+  let minWidth = model.floatingMinWidth()
+  let minHeight = model.floatingMinHeight()
+  Rect(
+    x: int32(float32(screenW) * clamp(xRatio, 0.0'f32, 1.0'f32)),
+    y: int32(float32(screenH) * clamp(yRatio, 0.0'f32, 1.0'f32)),
+    w: max(minWidth, int32(float32(screenW) * clampProportion(widthRatio))),
+    h: max(minHeight, int32(float32(screenH) * clampProportion(heightRatio)))
   )
 
 proc flattenWindows*(tag: TagState): seq[WindowId] =
@@ -89,7 +142,7 @@ proc removeWindowFromScratchpad*(model: var Model; win: WindowId): bool =
 
 proc ensureTag*(model: var Model; tagId: uint32; layoutMode = Scroller): TagState =
   if not model.tags.hasKey(tagId):
-    model.tags[tagId] = initTagState(tagId, layoutMode)
+    model.tags[tagId] = model.initTagStateForModel(tagId, layoutMode)
   model.tags[tagId]
 
 proc firstTagId*(model: Model): uint32 =

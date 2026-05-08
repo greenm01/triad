@@ -111,6 +111,40 @@ suite "Core TEA Update Logic":
     check win["workspace_id"].getInt() == 1
     check win["is_focused"].getBool() == true
 
+  test "Configured runtime defaults place new windows and floating windows":
+    model.activeTag = 1
+    model.screenWidth = 2000
+    model.screenHeight = 1000
+    model.defaultColumnWidth = 0.7
+    model.defaultWindowWidth = 0.8
+    model.defaultWindowHeight = 0.6
+    model.defaultMasterCount = 2
+    model.defaultMasterRatio = 0.65
+    model.floating = FloatingConfig(
+      xRatio: 0.1,
+      yRatio: 0.2,
+      widthRatio: 0.4,
+      heightRatio: 0.5,
+      minWidth: 120,
+      minHeight: 90)
+    model.windowRules.add(WindowRule(appIdMatch: "float-me", openFloating: true))
+
+    var (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 130, appId: "float-me", title: "Tool"))
+
+    check nextModel.windows[130].widthProportion == 0.8'f32
+    check nextModel.windows[130].heightProportion == 0.6'f32
+    check nextModel.windows[130].floatingGeom == Rect(x: 200, y: 200, w: 800, h: 500)
+    check nextModel.tags[1].masterCount == 2
+    check nextModel.tags[1].masterSplitRatio == 0.65'f32
+    check nextModel.tags[1].columns[0].widthProportion == 0.7'f32
+
+    nextModel.windows[131] = WindowData(id: 131, appId: "term", title: "Term")
+    nextModel.tags[1].columns[0].windows.add(131)
+    nextModel.tags[1].focusedWindow = 131
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdExpelWindow))
+    check nextModel.tags[1].columns[^1].widthProportion == 0.7'f32
+
   test "Moving windows emits full Niri window state":
     model.tags[1] = initTagState(1, Scroller)
     model.tags[1].columns.add(Column(windows: @[WindowId(121)]))

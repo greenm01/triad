@@ -1,6 +1,7 @@
 import unittest, tables, os, sequtils, options, asyncdispatch, asyncnet, json, strutils
 from nativesockets import AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import ../src/core/model
+import ../src/core/defaults
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/restore_state
@@ -468,7 +469,7 @@ window-rule {
 
     check config.layout.gaps == 16
     check config.layout.animationSpeed == 1.0
-    check config.layout.centerFocusedColumn == "never"
+    check config.layout.centerFocusedColumn == DefaultCenterFocusedColumn
     check config.layout.smartGaps == true
     check config.tagRules.len == 1
     check config.tagRules[0].tagId == 2

@@ -56,6 +56,12 @@ layout {
     gaps 32
     center-focused-column "always"
     default-column-width { proportion 0.75; }
+    default-window-width { proportion 0.8; }
+    default-window-height { proportion 0.9; }
+    master {
+        count 2
+        split-ratio 0.6
+    }
     enable-animations #false
     animation-speed 0.5
     smart-gaps #true
@@ -73,6 +79,10 @@ scratchpad {
     check config.layout.gaps == 32
     check config.layout.centerFocusedColumn == "always"
     check config.layout.defaultColumnWidth == 0.75
+    check abs(config.layout.defaultWindowWidth - 0.8) < 0.001
+    check abs(config.layout.defaultWindowHeight - 0.9) < 0.001
+    check config.layout.defaultMasterCount == 2
+    check abs(config.layout.defaultMasterRatio - 0.6) < 0.001
     check config.layout.enableAnimations == false
     check config.layout.animationSpeed == 0.5
     check config.layout.smartGaps == true
@@ -170,6 +180,7 @@ window-rule {
     let kdl = """
 quickshell {
     enabled #true
+    command "quickshell"
     theme "DankMaterialShell"
     args "--debug" "--fast"
 }
@@ -179,8 +190,54 @@ quickshell {
     removeFile(path)
     
     check config.quickshell.enabled == true
+    check config.quickshell.command == "quickshell"
     check config.quickshell.theme == "DankMaterialShell"
     check config.quickshell.args == @["--debug", "--fast"]
+
+  test "Parser correctly reads terminal, overview, floating, and screenshot config":
+    let path = getCurrentDir() / "test_shell_policy.kdl"
+    let kdl = """
+terminal {
+    command "wezterm" "start"
+}
+overview {
+    outer-gap 72
+    inner-gap-multiplier 1.5
+}
+floating {
+    x-ratio 0.1
+    y-ratio 0.2
+    width-ratio 0.7
+    height-ratio 0.6
+    min-width 120
+    min-height 90
+}
+screenshot {
+    directory "~/Shots"
+    filename-prefix "shot"
+    capture-command "grim"
+    region-selector-command "slurp"
+    show-pointer #true
+}
+"""
+    writeFile(path, kdl)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.terminal.command == @["wezterm", "start"]
+    check config.overview.outerGap == 72
+    check config.overview.innerGapMultiplier == 1.5
+    check config.floating.xRatio == 0.1'f32
+    check config.floating.yRatio == 0.2'f32
+    check config.floating.widthRatio == 0.7'f32
+    check config.floating.heightRatio == 0.6'f32
+    check config.floating.minWidth == 120
+    check config.floating.minHeight == 90
+    check config.screenshot.directory == "~/Shots"
+    check config.screenshot.filenamePrefix == "shot"
+    check config.screenshot.captureCommand == "grim"
+    check config.screenshot.regionSelectorCommand == "slurp"
+    check config.screenshot.showPointer == true
 
   test "Parser correctly reads screen lock command":
     let path = getCurrentDir() / "test_lock.kdl"
@@ -271,10 +328,14 @@ bindings {
     removeFile(path)
 
     check config.quickshell.enabled == false
+    check config.quickshell.command == DefaultQuickshellCommand
     check config.quickshell.theme == ""
     check config.startupCommands.len == 0
     check config.windowRules.len == 0
     check config.layout.borderWidth == DefaultBorderWidth
+    check config.layout.centerFocusedColumn == DefaultCenterFocusedColumn
+    check config.layout.defaultColumnWidth == defaults.DefaultColumnWidth
+    check config.overview.outerGap == DefaultOverviewOuterGap
 
   test "Default config overview up down keys use Niri workspace stack navigation":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
@@ -318,6 +379,44 @@ bindings {
     check config.layout.focusedBorderColor == 0x7fc8ffff'u32
     check config.layout.unfocusedBorderColor == 0x505050ff'u32
 
+  test "Applying config installs runtime defaults without disturbing live state":
+    var model = Model(activeTag: 1, screenWidth: 2000, screenHeight: 1000)
+    model.tags[1] = initTagState(1, Scroller, "work")
+    model.tags[1].focusedWindow = 9
+    model.tags[1].columns.add(Column(windows: @[WindowId(9)], widthProportion: 0.9))
+    model.windows[9] = WindowData(id: 9, appId: "term", title: "term", isMaximized: true)
+
+    model.applyConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        centerFocusedColumn: "on-overflow",
+        defaultColumnWidth: 0.7,
+        defaultWindowWidth: 0.8,
+        defaultWindowHeight: 0.6,
+        defaultMasterCount: 3,
+        defaultMasterRatio: 0.65,
+        borderWidth: DefaultBorderWidth,
+        focusedBorderColor: DefaultFocusedBorderColor,
+        unfocusedBorderColor: DefaultUnfocusedBorderColor,
+        animationSpeed: 0.2),
+      floating: FloatingConfig(
+        xRatio: 0.1,
+        yRatio: 0.2,
+        widthRatio: 0.4,
+        heightRatio: 0.5,
+        minWidth: 100,
+        minHeight: 80)))
+
+    check model.defaultColumnWidth == 0.7'f32
+    check model.defaultWindowWidth == 0.8'f32
+    check model.defaultWindowHeight == 0.6'f32
+    check model.defaultMasterCount == 3
+    check model.defaultMasterRatio == 0.65'f32
+    check model.tags[1].focusedWindow == 9
+    check model.tags[1].columns[0].widthProportion == 0.9'f32
+    check model.windows[9].isMaximized
+    check model.defaultFloatingGeom() == Rect(x: 200, y: 200, w: 800, h: 500)
+
   test "Terminal resolver prefers env then neutral helpers then common terminals":
     proc hasOnlyKitty(command: string): bool =
       command == "kitty"
@@ -328,6 +427,7 @@ bindings {
       command in ["wezterm", "kitty"]
 
     check resolveTerminalCommand("wezterm start", hasConfigured) == @["wezterm", "start"]
+    check resolveTerminalCommand(@["ghostty"], "", proc(command: string): bool = command == "ghostty") == @["ghostty"]
 
     proc hasNeutral(command: string): bool =
       command == "x-terminal-emulator"

@@ -185,7 +185,11 @@ proc computeLayoutInstructions(model: var Model): seq[RenderInstruction] =
           if model.windows.hasKey(win) and not model.windows[win].isMinimized:
             overviewTag.columns.add(Column(windows: @[win], widthProportion: 1.0))
 
-    result = layoutGrid(overviewTag, screen, 64, model.innerGaps * 2)
+    result = layoutGrid(
+      overviewTag,
+      screen,
+      max(0'i32, model.overview.outerGap),
+      max(0'i32, int32(float32(model.innerGaps) * model.overview.innerGapMultiplier)))
 
   elif model.tags.hasKey(model.activeTag):
     var tag = model.tags[model.activeTag]
@@ -314,9 +318,10 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
       let compat = prepareQuickshellCompatEnv(niriSocketPath)
       if compat.warning.len > 0:
         warn "Quickshell compatibility environment is incomplete", warning=compat.warning
-      let p = startProcess("qs", args = args, env = compat.env, options = {poUsePath})
+      let p = startProcess(model.quickshell.command, args = args, env = compat.env, options = {poUsePath})
       quickshellProcess = p
       info "Spawned Quickshell",
+        command=model.quickshell.command,
         theme=model.quickshell.theme,
         pid=p.processID,
         niriSocket=compat.niriSocketPath,
@@ -324,7 +329,7 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
         overlayReady=compat.overlayReady,
         xdgShare=compat.xdgSharePath
     except CatchableError as e:
-      warn "Failed to spawn Quickshell", theme=model.quickshell.theme, error=e.msg
+      warn "Failed to spawn Quickshell", command=model.quickshell.command, theme=model.quickshell.theme, error=e.msg
 
 proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
   stopQuickshell(reason)
@@ -360,8 +365,8 @@ proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
   except CatchableError as e:
     warn "Failed to spawn window menu", cmd=command[0], windowId=windowId, error=e.msg
 
-proc spawnTerminal() =
-  for command in terminalCandidates():
+proc spawnTerminal(model: Model) =
+  for command in terminalCandidates(model.terminal.command):
     if command.len == 0 or not commandExists(command[0]):
       continue
     var args: seq[string] = @[]
@@ -1077,11 +1082,27 @@ proc renderDesiredPlacements() =
 proc shellQuote(value: string): string =
   "'" & value.replace("'", "'\\''") & "'"
 
-proc screenshotPathOrDefault(path: string): string =
+proc expandUserPath(path: string): string =
+  if path == "~":
+    return getHomeDir().strip(chars = {'/'})
+  if path.startsWith("~/"):
+    return getHomeDir().strip(chars = {'/'}) / path[2 .. ^1]
+  path
+
+proc screenshotPathOrDefault(path: string; config: ScreenshotConfig): string =
   if path.len > 0:
-    return path
-  let dir = getHomeDir() / "Pictures" / "Screenshots"
-  dir / ("triad-screenshot-" & $getTime().toUnix() & ".png")
+    return expandUserPath(path)
+  let dir =
+    if config.directory.strip().len > 0:
+      expandUserPath(config.directory.strip())
+    else:
+      getHomeDir() / "Pictures" / "Screenshots"
+  let prefix =
+    if config.filenamePrefix.strip().len > 0:
+      config.filenamePrefix.strip()
+    else:
+      "triad-screenshot"
+  dir / (prefix & "-" & $getTime().toUnix() & ".png")
 
 proc geometryArg(rect: Rect): string =
   $rect.x & "," & $rect.y & " " & $max(1'i32, rect.w) & "x" & $max(1'i32, rect.h)
@@ -1097,7 +1118,8 @@ proc focusedWindowGeometry(): Rect =
   currentModel.primaryScreen()
 
 proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string; showPointer: bool) {.async.} =
-  let path = screenshotPathOrDefault(requestedPath)
+  let screenshotConfig = currentModel.screenshot
+  let path = screenshotPathOrDefault(requestedPath, screenshotConfig)
   let dir = path.splitFile().dir
   if dir.len > 0:
     try:
@@ -1106,15 +1128,25 @@ proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string; showPoint
       warn "Failed to create screenshot directory", path=dir, error=e.msg
       return
 
-  let pointerFlag = if showPointer: " -c" else: ""
+  let captureCommand =
+    if screenshotConfig.captureCommand.strip().len > 0:
+      screenshotConfig.captureCommand.strip()
+    else:
+      "grim"
+  let regionSelectorCommand =
+    if screenshotConfig.regionSelectorCommand.strip().len > 0:
+      screenshotConfig.regionSelectorCommand.strip()
+    else:
+      "slurp"
+  let pointerFlag = if showPointer or screenshotConfig.showPointer: " -c" else: ""
   let command =
     case kind
     of ShotRegion:
-      "grim" & pointerFlag & " -g \"$(slurp)\" " & shellQuote(path)
+      shellQuote(captureCommand) & pointerFlag & " -g \"$(" & shellQuote(regionSelectorCommand) & ")\" " & shellQuote(path)
     of ShotScreen:
-      "grim" & pointerFlag & " -g " & shellQuote(geometryArg(currentModel.primaryScreen())) & " " & shellQuote(path)
+      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(geometryArg(currentModel.primaryScreen())) & " " & shellQuote(path)
     of ShotWindow:
-      "grim" & pointerFlag & " -g " & shellQuote(geometryArg(focusedWindowGeometry())) & " " & shellQuote(path)
+      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(geometryArg(focusedWindowGeometry())) & " " & shellQuote(path)
 
   try:
     let p = startProcess("sh", args = @["-c", command], options = {poUsePath})
@@ -1650,7 +1682,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
           executeEffect(Effect(kind: EffOpEnd, endSeat: lastPointerOpSeat))
 
     if msg.kind == CmdSpawnTerminal:
-      spawnTerminal()
+      spawnTerminal(currentModel)
       continue
 
     if msg.kind == CmdReloadConfig:

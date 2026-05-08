@@ -8,6 +8,10 @@ type
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    terminal*: TerminalConfig
+    screenshot*: ScreenshotConfig
+    overview*: OverviewConfig
+    floating*: FloatingConfig
     screenLock*: ScreenLockConfig
     windowMenu*: WindowMenuConfig
     scratchpad*: ScratchpadConfig
@@ -22,6 +26,10 @@ type
     gaps*: int32
     centerFocusedColumn*: string # "never", "always", "on-overflow"
     defaultColumnWidth*: float32
+    defaultWindowWidth*: float32
+    defaultWindowHeight*: float32
+    defaultMasterCount*: int
+    defaultMasterRatio*: float32
     borderWidth*: int32
     focusedBorderColor*: uint32
     unfocusedBorderColor*: uint32
@@ -173,20 +181,37 @@ proc getConfigPath*(): string =
 
 proc loadConfig*(path: string): Config =
   # Default values
-  result.layout.gaps = 16
-  result.layout.centerFocusedColumn = "never"
-  result.layout.defaultColumnWidth = 0.5
+  result.layout.gaps = DefaultGaps
+  result.layout.centerFocusedColumn = DefaultCenterFocusedColumn
+  result.layout.defaultColumnWidth = DefaultColumnWidth
+  result.layout.defaultWindowWidth = DefaultWindowWidth
+  result.layout.defaultWindowHeight = DefaultWindowHeight
+  result.layout.defaultMasterCount = DefaultMasterCount
+  result.layout.defaultMasterRatio = DefaultMasterRatio
   result.layout.borderWidth = DefaultBorderWidth
   result.layout.focusedBorderColor = DefaultFocusedBorderColor
   result.layout.unfocusedBorderColor = DefaultUnfocusedBorderColor
   result.layout.scrollerFocusCenter = false
   result.layout.scrollerPreferCenter = false
   result.layout.enableAnimations = true
-  result.layout.animationSpeed = 0.15
+  result.layout.animationSpeed = DefaultAnimationSpeed
   result.layout.smartGaps = false
   result.layout.layoutCycle = @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
-  result.scratchpad.widthRatio = 0.8
-  result.scratchpad.heightRatio = 0.9
+  result.scratchpad.widthRatio = DefaultScratchpadWidthRatio
+  result.scratchpad.heightRatio = DefaultScratchpadHeightRatio
+  result.overview.outerGap = DefaultOverviewOuterGap
+  result.overview.innerGapMultiplier = DefaultOverviewInnerGapMultiplier
+  result.floating.xRatio = DefaultFloatingXRatio
+  result.floating.yRatio = DefaultFloatingYRatio
+  result.floating.widthRatio = DefaultFloatingWidthRatio
+  result.floating.heightRatio = DefaultFloatingHeightRatio
+  result.floating.minWidth = DefaultFloatingMinWidth
+  result.floating.minHeight = DefaultFloatingMinHeight
+  result.quickshell.command = DefaultQuickshellCommand
+  result.screenshot.directory = DefaultScreenshotDirectory
+  result.screenshot.filenamePrefix = DefaultScreenshotFilenamePrefix
+  result.screenshot.captureCommand = DefaultScreenshotCaptureCommand
+  result.screenshot.regionSelectorCommand = DefaultScreenshotRegionSelectorCommand
   result.protocolSurfaces.enabled = true
   
   try:
@@ -204,6 +229,21 @@ proc loadConfig*(path: string): Config =
             elif child.name == "default-column-width":
               if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
                 result.layout.defaultColumnWidth = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+            elif child.name == "default-window-width":
+              if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
+                result.layout.defaultWindowWidth = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+            elif child.name == "default-window-height":
+              if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
+                result.layout.defaultWindowHeight = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+            elif child.name == "master":
+              for masterChild in child.children:
+                try:
+                  if masterChild.name == "count" and masterChild.args.len > 0:
+                    result.layout.defaultMasterCount = max(1, masterChild.args[0].kInt())
+                  elif masterChild.name == "split-ratio" and masterChild.args.len > 0:
+                    result.layout.defaultMasterRatio = clampF32(float32(masterChild.args[0].kFloat()), 0.05, 0.95)
+                except CatchableError as e:
+                  warn "Ignoring invalid master config field", field=masterChild.name, error=e.msg
             elif child.name == "border":
               for borderChild in child.children:
                 try:
@@ -325,6 +365,8 @@ proc loadConfig*(path: string): Config =
           try:
             if child.name == "enabled" and child.args.len > 0:
               result.quickshell.enabled = child.args[0].kBool()
+            elif child.name == "command" and child.args.len > 0:
+              result.quickshell.command = child.args[0].kString()
             elif child.name == "theme" and child.args.len > 0:
               result.quickshell.theme = child.args[0].kString()
             elif child.name == "args":
@@ -332,6 +374,16 @@ proc loadConfig*(path: string): Config =
                 result.quickshell.args.add(arg.kString())
           except CatchableError as e:
             warn "Ignoring invalid quickshell field", field=child.name, error=e.msg
+
+      elif node.name == "terminal":
+        for child in node.children:
+          try:
+            if child.name == "command":
+              result.terminal.command = @[]
+              for arg in child.args:
+                result.terminal.command.add(arg.kString())
+          except CatchableError as e:
+            warn "Ignoring invalid terminal field", field=child.name, error=e.msg
 
       elif node.name == "screen-lock":
         for child in node.children:
@@ -354,6 +406,50 @@ proc loadConfig*(path: string): Config =
               result.scratchpad.heightRatio = clampF32(float32(child.args[0].kFloat()), 0.1, 1.0)
           except CatchableError as e:
             warn "Ignoring invalid scratchpad field", field=child.name, error=e.msg
+
+      elif node.name == "overview":
+        for child in node.children:
+          try:
+            if child.name == "outer-gap" and child.args.len > 0:
+              result.overview.outerGap = clamp32(int32(child.args[0].kInt()), 0, 512)
+            elif child.name == "inner-gap-multiplier" and child.args.len > 0:
+              result.overview.innerGapMultiplier = clampF32(float32(child.args[0].kFloat()), 0.0, 8.0)
+          except CatchableError as e:
+            warn "Ignoring invalid overview field", field=child.name, error=e.msg
+
+      elif node.name == "floating":
+        for child in node.children:
+          try:
+            if child.name == "x-ratio" and child.args.len > 0:
+              result.floating.xRatio = clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
+            elif child.name == "y-ratio" and child.args.len > 0:
+              result.floating.yRatio = clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
+            elif child.name == "width-ratio" and child.args.len > 0:
+              result.floating.widthRatio = clampF32(float32(child.args[0].kFloat()), 0.05, 1.0)
+            elif child.name == "height-ratio" and child.args.len > 0:
+              result.floating.heightRatio = clampF32(float32(child.args[0].kFloat()), 0.05, 1.0)
+            elif child.name == "min-width" and child.args.len > 0:
+              result.floating.minWidth = clamp32(int32(child.args[0].kInt()), 1, 4096)
+            elif child.name == "min-height" and child.args.len > 0:
+              result.floating.minHeight = clamp32(int32(child.args[0].kInt()), 1, 4096)
+          except CatchableError as e:
+            warn "Ignoring invalid floating field", field=child.name, error=e.msg
+
+      elif node.name == "screenshot":
+        for child in node.children:
+          try:
+            if child.name == "directory" and child.args.len > 0:
+              result.screenshot.directory = child.args[0].kString()
+            elif child.name == "filename-prefix" and child.args.len > 0:
+              result.screenshot.filenamePrefix = child.args[0].kString()
+            elif child.name == "capture-command" and child.args.len > 0:
+              result.screenshot.captureCommand = child.args[0].kString()
+            elif child.name == "region-selector-command" and child.args.len > 0:
+              result.screenshot.regionSelectorCommand = child.args[0].kString()
+            elif child.name == "show-pointer" and child.args.len > 0:
+              result.screenshot.showPointer = child.args[0].kBool()
+          except CatchableError as e:
+            warn "Ignoring invalid screenshot field", field=child.name, error=e.msg
 
       elif node.name == "cursor":
         for child in node.children:
@@ -407,12 +503,33 @@ proc applyConfig*(model: var Model, config: Config) =
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.innerGaps = model.outerGaps div 2
   model.centerFocusedColumn = if config.layout.centerFocusedColumn in ["never", "always", "on-overflow"]: config.layout.centerFocusedColumn else: "never"
+  model.defaultColumnWidth = clampF32(config.layout.defaultColumnWidth, 0.05, 1.0)
+  model.defaultWindowWidth = clampF32(config.layout.defaultWindowWidth, 0.05, 1.0)
+  model.defaultWindowHeight = clampF32(config.layout.defaultWindowHeight, 0.05, 1.0)
+  model.defaultMasterCount = max(1, config.layout.defaultMasterCount)
+  model.defaultMasterRatio = clampF32(config.layout.defaultMasterRatio, 0.05, 0.95)
   model.enableAnimations = config.layout.enableAnimations
   model.animationSpeed = clampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.smartGaps = config.layout.smartGaps
   model.windowRules = config.windowRules
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell
+  if model.quickshell.command.strip().len == 0:
+    model.quickshell.command = DefaultQuickshellCommand
+  model.terminal = config.terminal
+  model.screenshot = config.screenshot
+  if model.screenshot.directory.strip().len == 0:
+    model.screenshot.directory = DefaultScreenshotDirectory
+  if model.screenshot.filenamePrefix.strip().len == 0:
+    model.screenshot.filenamePrefix = DefaultScreenshotFilenamePrefix
+  if model.screenshot.captureCommand.strip().len == 0:
+    model.screenshot.captureCommand = DefaultScreenshotCaptureCommand
+  if model.screenshot.regionSelectorCommand.strip().len == 0:
+    model.screenshot.regionSelectorCommand = DefaultScreenshotRegionSelectorCommand
+  model.overview = config.overview
+  if model.overview.outerGap < 0:
+    model.overview.outerGap = DefaultOverviewOuterGap
+  model.floating = config.floating
   model.screenLock = config.screenLock
   model.windowMenu = config.windowMenu
   model.scratchpad = config.scratchpad
@@ -431,4 +548,9 @@ proc applyConfig*(model: var Model, config: Config) =
       model.tags[rule.tagId].layoutMode = rule.defaultLayout
       model.tags[rule.tagId].name = rule.name
     else:
-      model.tags[rule.tagId] = TagState(tagId: rule.tagId, layoutMode: rule.defaultLayout, name: rule.name, masterCount: 1, masterSplitRatio: 0.55)
+      model.tags[rule.tagId] = TagState(
+        tagId: rule.tagId,
+        layoutMode: rule.defaultLayout,
+        name: rule.name,
+        masterCount: model.defaultMasterCount,
+        masterSplitRatio: model.defaultMasterRatio)

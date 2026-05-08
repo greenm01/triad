@@ -98,8 +98,31 @@ type
 
   QuickshellConfig* = object
     enabled*: bool
+    command*: string
     theme*: string
     args*: seq[string]
+
+  TerminalConfig* = object
+    command*: seq[string]
+
+  ScreenshotConfig* = object
+    directory*: string
+    filenamePrefix*: string
+    captureCommand*: string
+    regionSelectorCommand*: string
+    showPointer*: bool
+
+  OverviewConfig* = object
+    outerGap*: int32
+    innerGapMultiplier*: float32
+
+  FloatingConfig* = object
+    xRatio*: float32
+    yRatio*: float32
+    widthRatio*: float32
+    heightRatio*: float32
+    minWidth*: int32
+    minHeight*: int32
 
   ScreenLockConfig* = object
     command*: seq[string]
@@ -190,6 +213,10 @@ type
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    terminal*: TerminalConfig
+    screenshot*: ScreenshotConfig
+    overview*: OverviewConfig
+    floating*: FloatingConfig
     screenLock*: ScreenLockConfig
     windowMenu*: WindowMenuConfig
     scratchpad*: ScratchpadConfig
@@ -225,6 +252,11 @@ type
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
+    defaultColumnWidth*: float32
+    defaultWindowWidth*: float32
+    defaultWindowHeight*: float32
+    defaultMasterCount*: int
+    defaultMasterRatio*: float32
     # Animation config
     enableAnimations*: bool
     animationSpeed*: float32

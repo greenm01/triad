@@ -1,4 +1,5 @@
 import algorithm, json, options, os, strutils, tables
+import defaults
 import model
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
@@ -192,8 +193,8 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       var tag = RestoredTagState(
         tagId: tagId.get(),
         layoutMode: if node.hasKey("layout_mode"): layoutModeFromJson(node["layout_mode"]) else: Scroller,
-        masterCount: 1,
-        masterSplitRatio: 0.55'f32
+        masterCount: DefaultMasterCount,
+        masterSplitRatio: DefaultMasterRatio
       )
       if node.hasKey("name"): tag.name = stringFromJson(node["name"])
       if node.hasKey("focused_window"):
@@ -204,14 +205,14 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if node.hasKey("target_viewport_y_offset"): tag.targetViewportYOffset = float32FromJson(node["target_viewport_y_offset"])
       if node.hasKey("current_viewport_y_offset"): tag.currentViewportYOffset = float32FromJson(node["current_viewport_y_offset"])
       if node.hasKey("master_count") and node["master_count"].kind == JInt: tag.masterCount = max(1, node["master_count"].getInt())
-      if node.hasKey("master_split_ratio"): tag.masterSplitRatio = float32FromJson(node["master_split_ratio"], 0.55'f32)
+      if node.hasKey("master_split_ratio"): tag.masterSplitRatio = float32FromJson(node["master_split_ratio"], DefaultMasterRatio)
       if node.hasKey("columns") and node["columns"].kind == JArray:
         for colNode in node["columns"]:
           if colNode.kind != JObject:
             continue
-          var col = RestoredColumnState(widthProportion: 0.5'f32)
+          var col = RestoredColumnState(widthProportion: DefaultColumnWidth)
           if colNode.hasKey("width_proportion"):
-            col.widthProportion = float32FromJson(colNode["width_proportion"], 0.5'f32)
+            col.widthProportion = float32FromJson(colNode["width_proportion"], DefaultColumnWidth)
           if colNode.hasKey("windows") and colNode["windows"].kind == JArray:
             for winNode in colNode["windows"]:
               let winId = uint32FromJson(winNode)
@@ -228,7 +229,7 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       let winId = uint32FromJson(node["id"])
       if winId.isNone:
         continue
-      var win = RestoredWindowState(widthProportion: 0.5'f32, heightProportion: 1.0'f32)
+      var win = RestoredWindowState(widthProportion: DefaultColumnWidth, heightProportion: DefaultWindowHeight)
       if node.hasKey("tag_id"):
         let tagId = uint32FromJson(node["tag_id"])
         if tagId.isSome:
@@ -239,8 +240,8 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if node.hasKey("app_id"): win.appId = stringFromJson(node["app_id"])
       if node.hasKey("title"): win.title = stringFromJson(node["title"])
       if node.hasKey("identifier"): win.identifier = stringFromJson(node["identifier"])
-      if node.hasKey("width_proportion"): win.widthProportion = float32FromJson(node["width_proportion"], 0.5'f32)
-      if node.hasKey("height_proportion"): win.heightProportion = float32FromJson(node["height_proportion"], 1.0'f32)
+      if node.hasKey("width_proportion"): win.widthProportion = float32FromJson(node["width_proportion"], DefaultColumnWidth)
+      if node.hasKey("height_proportion"): win.heightProportion = float32FromJson(node["height_proportion"], DefaultWindowHeight)
       if node.hasKey("is_floating"): win.isFloating = boolFromJson(node["is_floating"])
       if node.hasKey("is_fullscreen"): win.isFullscreen = boolFromJson(node["is_fullscreen"])
       if node.hasKey("is_maximized"): win.isMaximized = boolFromJson(node["is_maximized"])
@@ -299,8 +300,8 @@ proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
         var tag = RestoredTagState(
           tagId: tagId.get(),
           layoutMode: Scroller,
-          masterCount: 1,
-          masterSplitRatio: 0.55'f32
+          masterCount: DefaultMasterCount,
+          masterSplitRatio: DefaultMasterRatio
         )
         if workspace.hasKey("name"):
           tag.name = stringFromJson(workspace["name"])
@@ -319,7 +320,7 @@ proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if winId.isSome and tagId.isSome:
         let id = WindowId(winId.get())
         state.tagByWindow[id] = tagId.get()
-        var restored = RestoredWindowState(tagId: tagId.get(), widthProportion: 0.5'f32, heightProportion: 1.0'f32)
+        var restored = RestoredWindowState(tagId: tagId.get(), widthProportion: DefaultColumnWidth, heightProportion: DefaultWindowHeight)
         if win.hasKey("raw_app_id"):
           restored.appId = stringFromJson(win["raw_app_id"])
         elif win.hasKey("app_id"):
@@ -351,7 +352,7 @@ proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
               discard
         state.windows[id] = restored
         if not state.tags.hasKey(tagId.get()):
-          state.tags[tagId.get()] = RestoredTagState(tagId: tagId.get(), layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55'f32)
+          state.tags[tagId.get()] = RestoredTagState(tagId: tagId.get(), layoutMode: Scroller, masterCount: DefaultMasterCount, masterSplitRatio: DefaultMasterRatio)
         if win.hasKey("is_focused") and boolFromJson(win["is_focused"]):
           var tag = state.tags[tagId.get()]
           tag.focusedWindow = id
@@ -366,7 +367,7 @@ proc parseLegacyLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if result == 0:
         result = cmp(a.winId, b.winId)
     )
-    var tag = state.tags.getOrDefault(tagId, RestoredTagState(tagId: tagId, layoutMode: Scroller, masterCount: 1, masterSplitRatio: 0.55'f32))
+    var tag = state.tags.getOrDefault(tagId, RestoredTagState(tagId: tagId, layoutMode: Scroller, masterCount: DefaultMasterCount, masterSplitRatio: DefaultMasterRatio))
     tag.columns = @[]
     for entry in entries:
       tag.columns.add(RestoredColumnState(windows: @[entry.winId], widthProportion: entry.width))

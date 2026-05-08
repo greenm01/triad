@@ -54,36 +54,6 @@ snapshot_restore_state() {
   printf '%s\n' "live-reload: snapshotted $window_count window(s) to $restore_path"
 }
 
-stop_quickshell() {
-  pids="$(pgrep -f '(^|/)qs( |$)' 2>/dev/null || true)"
-  [ -n "$pids" ] || return 0
-
-  for pid in $pids; do
-    kill "$pid" 2>/dev/null || true
-  done
-
-  i=0
-  while [ "$i" -lt 20 ]; do
-    remaining=""
-    for pid in $pids; do
-      if kill -0 "$pid" 2>/dev/null; then
-        remaining="$remaining $pid"
-      fi
-    done
-    [ -z "$remaining" ] && break
-    i=$((i + 1))
-    sleep 0.05
-  done
-
-  for pid in $pids; do
-    if kill -0 "$pid" 2>/dev/null; then
-      kill -KILL "$pid" 2>/dev/null || true
-    fi
-  done
-
-  printf '%s\n' "live-reload: requested quickshell restart for pid(s): $pids"
-}
-
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 bin_dir="${TRIAD_LIVE_BIN_DIR:-$HOME/.local/bin}"
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
@@ -99,8 +69,6 @@ mkdir -p "$bin_dir"
 
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
-
-stop_quickshell
 
 if "$repo_dir/triad" msg stop-manager; then
   i=0

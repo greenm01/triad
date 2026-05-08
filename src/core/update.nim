@@ -461,7 +461,7 @@ proc placeRestoredWindow(model: var Model; targetTag: uint32; restoredWinId, win
             if tag.columns.len < restoredTag.columns.len:
               clamp(restoredTag.columns[tag.columns.len].widthProportion, 0.05'f32, 1.0'f32)
             else:
-              DefaultColumnWidth
+              model.defaultColumnWidth()
           tag.columns.add(Column(widthProportion: width))
         tag.columns[colIdx].widthProportion = clamp(restoredCol.widthProportion, 0.05'f32, 1.0'f32)
         if tag.columns[colIdx].windows.find(winId) == -1:
@@ -469,15 +469,15 @@ proc placeRestoredWindow(model: var Model; targetTag: uint32; restoredWinId, win
         inserted = true
         break
     if not inserted:
-      tag.columns.add(Column(windows: @[winId], widthProportion: DefaultColumnWidth))
+      tag.columns.add(model.defaultColumn(@[winId]))
     if restoredTag.focusedWindow == restoredWinId:
       tag.focusedWindow = winId
     elif tag.focusedWindow == 0 and restoredTag.focusedWindow == 0:
       tag.focusedWindow = winId
     model.tags[targetTag] = tag
   else:
-    var tag = model.tags.getOrDefault(targetTag, initTagState(targetTag))
-    tag.columns.add(Column(windows: @[winId], widthProportion: DefaultColumnWidth))
+    var tag = model.tags.getOrDefault(targetTag, model.initTagStateForModel(targetTag))
+    tag.columns.add(model.defaultColumn(@[winId]))
     model.tags[targetTag] = tag
 
 proc isRestoredScratchpad(model: Model; winId: WindowId): bool =
@@ -499,7 +499,7 @@ proc moveFocusedWindowToTag(model: var Model; targetTagId: uint32; effects: var 
   discard model.removeWindowFromAllTags(focused)
   discard model.removeWindowFromScratchpad(focused)
   var targetTag = model.ensureTag(targetTagId)
-  targetTag.columns.add(Column(windows: @[focused], widthProportion: DefaultColumnWidth))
+  targetTag.columns.add(model.defaultColumn(@[focused]))
   targetTag.focusedWindow = focused
   model.tags[targetTagId] = targetTag
   model.focusWindow(focused, effects)
@@ -691,7 +691,7 @@ proc restoreScratchpad(model: var Model; effects: var seq[Effect]) =
   model.isScratchpadVisible = false
   let tagId = if model.activeTag == 0: 1'u32 else: model.activeTag
   var tag = model.ensureTag(tagId)
-  tag.columns.add(Column(windows: @[winId], widthProportion: DefaultColumnWidth))
+  tag.columns.add(model.defaultColumn(@[winId]))
   tag.focusedWindow = winId
   model.tags[tagId] = tag
   model.focusWindow(winId, effects)
@@ -779,7 +779,13 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     discard nextModel.removeWindowFromAllTags(msg.windowId)
     discard nextModel.removeWindowFromScratchpad(msg.windowId)
 
-    var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, identifier: msg.createdIdentifier, widthProportion: DefaultWindowWidth, heightProportion: DefaultWindowHeight)
+    var win = WindowData(
+      id: msg.windowId,
+      appId: msg.appId,
+      title: msg.title,
+      identifier: msg.createdIdentifier,
+      widthProportion: nextModel.defaultWindowWidth(),
+      heightProportion: nextModel.defaultWindowHeight())
     var hasRestoredTag = false
     var hasRestoredWindow = false
     var restoredWinId = msg.windowId
@@ -820,7 +826,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         if rule.defaultTag != 0 and not hasRestoredTag: targetTag = rule.defaultTag
         if rule.openFloating:
           win.isFloating = true
-          win.floatingGeom = Rect(x: nextModel.screenWidth div 4, y: nextModel.screenHeight div 4, w: nextModel.screenWidth div 2, h: nextModel.screenHeight div 2)
+          win.floatingGeom = nextModel.defaultFloatingGeom()
         if rule.forcedLayout != 0: forcedLayout = rule.forcedLayout
         break
     if hasRestoredWindow:
@@ -841,7 +847,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         if nextModel.restoreTags.hasKey(targetTag):
           nextModel.tags[targetTag] = materializeRestoredTag(nextModel.restoreTags[targetTag])
         else:
-          nextModel.tags[targetTag] = initTagState(targetTag, if forcedLayout != 0: safeLayoutMode(forcedLayout) else: Scroller)
+          nextModel.tags[targetTag] = nextModel.initTagStateForModel(targetTag, if forcedLayout != 0: safeLayoutMode(forcedLayout) else: Scroller)
       elif forcedLayout != 0:
         var tag = nextModel.tags[targetTag]
         if not hasRestoredTag:
@@ -851,7 +857,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         nextModel.placeRestoredWindow(targetTag, restoredWinId, msg.windowId)
       else:
         var tag = nextModel.tags[targetTag]
-        tag.columns.add(Column(windows: @[msg.windowId], widthProportion: DefaultColumnWidth))
+        tag.columns.add(nextModel.defaultColumn(@[msg.windowId]))
         if not nextModel.sessionLocked:
           tag.focusedWindow = msg.windowId
         nextModel.tags[targetTag] = tag
@@ -1066,12 +1072,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       elif op.kind == OpResize:
         if (op.edges and 1) != 0:
           win.floatingGeom.y = op.initialGeom.y + msg.dy
-          win.floatingGeom.h = max(50, op.initialGeom.h - msg.dy)
-        elif (op.edges and 2) != 0: win.floatingGeom.h = max(50, op.initialGeom.h + msg.dy)
+          win.floatingGeom.h = max(nextModel.floatingMinHeight(), op.initialGeom.h - msg.dy)
+        elif (op.edges and 2) != 0: win.floatingGeom.h = max(nextModel.floatingMinHeight(), op.initialGeom.h + msg.dy)
         if (op.edges and 4) != 0:
           win.floatingGeom.x = op.initialGeom.x + msg.dx
-          win.floatingGeom.w = max(50, op.initialGeom.w - msg.dx)
-        elif (op.edges and 8) != 0: win.floatingGeom.w = max(50, op.initialGeom.w + msg.dx)
+          win.floatingGeom.w = max(nextModel.floatingMinWidth(), op.initialGeom.w - msg.dx)
+        elif (op.edges and 8) != 0: win.floatingGeom.w = max(nextModel.floatingMinWidth(), op.initialGeom.w + msg.dx)
       nextModel.windows[op.windowId] = win
       effects.add(Effect(kind: EffManageDirty))
 
@@ -1105,7 +1111,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         discard nextModel.removeWindowFromAllTags(focused)
         discard nextModel.removeWindowFromScratchpad(focused)
         var targetTag = nextModel.ensureTag(targetTagId)
-        targetTag.columns.add(Column(windows: @[focused], widthProportion: DefaultColumnWidth))
+        targetTag.columns.add(nextModel.defaultColumn(@[focused]))
         targetTag.focusedWindow = focused
         nextModel.tags[targetTagId] = targetTag
         if nextModel.overviewActive: nextModel.activeTag = targetTagId
@@ -1220,7 +1226,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       if focused != 0 and nextModel.windows.hasKey(focused):
         var win = nextModel.windows[focused]
         if win.isFloating:
-          win.floatingGeom.w = max(50, win.floatingGeom.w + msg.deltaFW); win.floatingGeom.h = max(50, win.floatingGeom.h + msg.deltaFH)
+          win.floatingGeom.w = max(nextModel.floatingMinWidth(), win.floatingGeom.w + msg.deltaFW); win.floatingGeom.h = max(nextModel.floatingMinHeight(), win.floatingGeom.h + msg.deltaFH)
           nextModel.windows[focused] = win; effects.add(Effect(kind: EffManageDirty))
 
   of CmdMoveFloating:
@@ -1280,7 +1286,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           let j = tag.columns[i].windows.find(focused); if j != -1: colIdx = i; winIdx = j; break
         if colIdx != -1 and tag.columns[colIdx].windows.len > 1:
           tag.columns[colIdx].windows.delete(winIdx)
-          tag.columns.insert(Column(windows: @[focused], widthProportion: 0.5), colIdx + 1)
+          tag.columns.insert(nextModel.defaultColumn(@[focused]), colIdx + 1)
           nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
 
   of CmdZoom:
@@ -1401,7 +1407,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         if colIdx != -1:
           tag.columns[colIdx].windows.delete(winIdx)
           if colIdx > 0: tag.columns[colIdx-1].windows.add(focused)
-          else: tag.columns.insert(Column(windows: @[focused], widthProportion: 0.5), 0)
+          else: tag.columns.insert(nextModel.defaultColumn(@[focused]), 0)
           for i in countdown(tag.columns.len - 1, 0):
             if tag.columns[i].windows.len == 0: tag.columns.delete(i)
           nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
@@ -1417,7 +1423,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         if colIdx != -1:
           tag.columns[colIdx].windows.delete(winIdx)
           if colIdx < tag.columns.len - 1: tag.columns[colIdx+1].windows.insert(focused, 0)
-          else: tag.columns.add(Column(windows: @[focused], widthProportion: 0.5))
+          else: tag.columns.add(nextModel.defaultColumn(@[focused]))
           for i in countdown(tag.columns.len - 1, 0):
             if tag.columns[i].windows.len == 0: tag.columns.delete(i)
           nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty))
@@ -1523,7 +1529,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       let activeTagId = nextModel.activeTag; var tag = nextModel.tags[activeTagId]; let focused = tag.focusedWindow
       if focused != 0 and nextModel.windows.hasKey(focused):
         var win = nextModel.windows[focused]; win.isFloating = not win.isFloating
-        if win.isFloating: win.floatingGeom = Rect(x: nextModel.screenWidth div 4, y: nextModel.screenHeight div 4, w: nextModel.screenWidth div 2, h: nextModel.screenHeight div 2)
+        if win.isFloating: win.floatingGeom = nextModel.defaultFloatingGeom()
         nextModel.windows[focused] = win; effects.add(Effect(kind: EffManageDirty))
 
   of CmdToggleFullscreen:

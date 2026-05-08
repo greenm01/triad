@@ -4,15 +4,29 @@ Triad is a dynamic window management client for the River 0.4+ compositor. It is
 
 ### The Triad
 
-Triad is built on the shoulders of three compositors, each contributing one note to the chord.
+Triad draws its architectural harmony from three distinct inspirations—each contributing a vital note to form a complete chord:
 
-River protocol is the root. A lean, principled Wayland compositor whose tag-based workspace model and clean architecture provide the foundation everything else stands on. Without it there is no key.
+*   **The Root (The River Protocol):** A lean, principled Wayland compositor that provides the rock-solid foundation for Triad's tag-based workspace model.
+*   **The Major Third (Mango):** Triad adopts Mango's per-workspace hybrid tiling algorithms, giving the window manager its distinct, flexible shape.
+*   **The Perfect Fifth (Niri & Quickshell):** Triad natively speaks Niri's JSON IPC language, enabling seamless integration with the rich, Qt-based Quickshell ecosystem (like Noctalia or Dank Material Shell) without the need for custom forks.
 
-Mango is the third. Its per-workspace tiling is Triad's dominant character — the difference between a session with shape and one without. Triad leans into Mango heavily, and makes no apology for it.
+Three distinct philosophies, orchestrated by one independent manager to hold them perfectly in tune.
 
-Niri is the fifth. Not its scrolling ribbon, but its JSON IPC protocol. By speaking Niri's language over Quickshell Triad gains access to a rich shell ecosystem — Noctalia, Dankshell, and whatever comes next. The fifth is what makes harmony with other instruments possible. Here it does exactly that.
+### Why the River protocol? A Brief Defense of the Non-Monolithic Compositor
 
-Three projects. Three philosophies. One manager that holds them in tune.
+Consider the monolithic Wayland compositor. It is the architectural equivalent of a Swiss Army knife that has somehow swallowed a blender: it manages your rendering, routes your inputs, paints your wallpapers, summons your applications, and calculates your window geometries, all while staggering under the weight of its own bloated ambition. It is, to put it mildly, a lot.
+
+River proposes a more civilized arrangement. By embracing a non-monolithic design, River acts strictly as the competent, uncomplaining stage manager of your display. It handles the low-level indignities of hardware abstraction—talking to your monitor, parsing your keystrokes, and shuttling pixels—and then cleanly washes its hands of the matter. 
+
+For the actual business of arranging windows, it delegates authority via a standard protocol to a dedicated layout client (such as Triad). This separation of church and state means that if your window manager crashes while attempting some avant-garde mathematical tiling algorithm, your screen does not go dark, your applications do not evaporate, and your compositor simply waits, unbothered, for the manager to restart. It is the triumph of modularity over hubris.
+
+| Technical Benefit | The Monolithic Way | The River Protocol Way |
+| :--- | :--- | :--- |
+| **Crash Survivability** | A bug in the tiling math brings down the entire display server. Your unsaved work vanishes. | The layout client crashes. The compositor keeps running, your apps stay open, and the layout client quietly restarts. |
+| **Atomic Rendering** | Layout calculations can result in visible jitter as windows resize unevenly across frames. | Global double-buffering ensures multi-window geometry changes are applied simultaneously. Frame-perfect perfection. |
+| **Language Agnosticism** | To change how windows tile, you must rewrite C/C++/Rust inside the compositor's core. | The window manager is merely a client. You may write it in Nim, Rust, Python, or bash, and the compositor will not judge you. |
+| **Hot-Swapping** | Changing core window management paradigms requires logging out and switching sessions. | You can kill one window management client and start a completely different one on the fly without losing your active windows. |
+| **Security Surface** | Every client implicitly trusts the massive, omnipotent display server. | Access to the layout protocol is strictly walled off. Only the designated manager is permitted to move the furniture. |
 
 ### The Quickshell Trick
 

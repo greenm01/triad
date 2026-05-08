@@ -1,14 +1,19 @@
-const
-  DefaultBorderWidth* = 2'i32
-  DefaultFocusedBorderColor* = 0xffffffff'u32
-  DefaultUnfocusedBorderColor* = 0x666666ff'u32
+import ../core/defaults as core_defaults
+export core_defaults
 
+const
   FallbackConfigContent* = """// Triad Configuration (KDL 2.0)
 
 layout {
     gaps 16
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
+    default-window-width { proportion 0.5; }
+    default-window-height { proportion 1.0; }
+    master {
+        count 1
+        split-ratio 0.55
+    }
     border {
         width 2
         active-color "#ffffff"
@@ -23,6 +28,28 @@ layout {
 scratchpad {
     width-ratio 0.8
     height-ratio 0.9
+}
+
+overview {
+    outer-gap 64
+    inner-gap-multiplier 2.0
+}
+
+floating {
+    x-ratio 0.25
+    y-ratio 0.25
+    width-ratio 0.5
+    height-ratio 0.5
+    min-width 50
+    min-height 50
+}
+
+screenshot {
+    directory "~/Pictures/Screenshots"
+    filename-prefix "triad-screenshot"
+    capture-command "grim"
+    region-selector-command "slurp"
+    show-pointer #false
 }
 
 tag-rules {
