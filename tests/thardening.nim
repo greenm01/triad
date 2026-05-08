@@ -7,12 +7,18 @@ import ../src/layouts/scroller
 import ../src/layouts/tiling
 import ../src/config/parser
 import ../src/ipc/commands
+import ../src/utils/session_env
 
 proc baseModel(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080, outerGaps: 10, innerGaps: 5)
   result.tags[1] = initTagState(1)
 
 suite "Crash hardening":
+  test "daemon startup rejects missing Wayland session environment":
+    check waylandSessionProblem("", "wayland-1") == "XDG_RUNTIME_DIR is not set"
+    check waylandSessionProblem("/run/user/1000", "") == "WAYLAND_DISPLAY is not set"
+    check waylandSessionProblem("/run/user/1000", "wayland-1") == ""
+
   test "duplicate window create keeps a single placement":
     var model = baseModel()
     model.tags[1].columns.add(Column(windows: @[WindowId(10)], widthProportion: 0.5))

@@ -13,6 +13,7 @@ import config/parser
 import ipc/commands
 import ipc/socket
 import utils/runtime_log
+import utils/session_env
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options
 
 type
@@ -1558,6 +1559,28 @@ proc main() =
     runtimeDir=getRuntimeDir(),
     waylandDisplay=getEnv("WAYLAND_DISPLAY", "")
 
+  let sessionProblem = currentWaylandSessionProblem()
+  if sessionProblem.len > 0:
+    fatal "Refusing to start outside a Wayland session", reason=sessionProblem
+    quit 1
+
+  display = connectDisplay(nil)
+  if display == nil:
+    fatal "Failed to connect to Wayland display"
+    quit 1
+
+  registry = display.getRegistry()
+  discard registry.addListener(registry_listener.addr, nil)
+
+  let roundtripResult = display.roundtrip()
+  debug "Wayland registry roundtrip finished", result=roundtripResult
+
+  if river_manager == nil:
+    fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"
+    quit 1
+
+  info "Triad connected to River", outputs=outputPointers.len, seats=seatPointers.len
+
   # Initialize Model
   currentModel = Model(
     activeTag: 1
@@ -1600,24 +1623,6 @@ proc main() =
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()
-
-  display = connectDisplay(nil)
-  if display == nil:
-    fatal "Failed to connect to Wayland display"
-    quit 1
-
-  registry = display.getRegistry()
-  discard registry.addListener(registry_listener.addr, nil)
-
-  # Roundtrip to get the globals and listeners
-  let roundtripResult = display.roundtrip()
-  debug "Wayland registry roundtrip finished", result=roundtripResult
-
-  if river_manager == nil:
-    fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"
-    quit 1
-
-  info "Triad connected to River", outputs=outputPointers.len, seats=seatPointers.len
   
   # Spawn startup commands (e.g. Noctalia shell)
   spawnStartupCommands(currentModel)
