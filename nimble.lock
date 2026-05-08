@@ -1,0 +1,203 @@
+{
+  "version": 2,
+  "packages": {
+    "nim": {
+      "version": "2.2.10",
+      "vcsRevision": "",
+      "url": "https://github.com/nim-lang/Nim.git",
+      "downloadMethod": "git",
+      "dependencies": [],
+      "checksums": {
+        "sha1": "17ec440fdb89f8903db29a17898af590087d2b64"
+      }
+    },
+    "unittest2": {
+      "version": "0.2.5",
+      "vcsRevision": "26f2ef3ae0ec72a2a75bfe557e02e88f6a31c189",
+      "url": "https://github.com/status-im/nim-unittest2.git",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "02bb3751ba9ddc3c17bfd89f2e41cb6bfb8fc0c9"
+      }
+    },
+    "testutils": {
+      "version": "0.8.1",
+      "vcsRevision": "6ce5e5e2301ccbc04b09d27ff78741ff4d352b4d",
+      "url": "https://github.com/status-im/nim-testutils",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "unittest2"
+      ],
+      "checksums": {
+        "sha1": "96a11cf8b84fa9bd12d4a553afa1cc4b7f9df4e3"
+      }
+    },
+    "fsnotify": {
+      "version": "0.1.6",
+      "vcsRevision": "0484be9ff57a935893ae8207b5222176edb8e3e9",
+      "url": "https://github.com/Nimaoth/fsnotify",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "8ab5cd1ff0629ac8073a55ee7e14e07ac9c46b7f"
+      }
+    },
+    "graphemes": {
+      "version": "0.12.0",
+      "vcsRevision": "cc868c314ced482ed88dca2b470aa019480ce4c9",
+      "url": "https://github.com/nitely/nim-graphemes",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "5a12349aea7c9682c87a086989a8afe7c8ade36b"
+      }
+    },
+    "wayland": {
+      "version": "0.1.0",
+      "vcsRevision": "c58e58bd6fd6c646cf78f4bf586c655d9f7419d7",
+      "url": "https://github.com/panno8M/wayland-nim",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "db8cefc566ee77fb849e28032adeb43288813f4e"
+      }
+    },
+    "results": {
+      "version": "0.5.1",
+      "vcsRevision": "df8113dda4c2d74d460a8fa98252b0b771bf1f27",
+      "url": "https://github.com/arnetheduck/nim-results",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "a9c011f74bc9ed5c91103917b9f382b12e82a9e7"
+      }
+    },
+    "stew": {
+      "version": "0.5.0",
+      "vcsRevision": "4382b18f04b3c43c8409bfcd6b62063773b2bbaa",
+      "url": "https://github.com/status-im/nim-stew",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "results",
+        "unittest2"
+      ],
+      "checksums": {
+        "sha1": "db22942939773ab7d5a0f2b2668c237240c67dd6"
+      }
+    },
+    "faststreams": {
+      "version": "0.5.1",
+      "vcsRevision": "50889cd16ec8771106cdd0eeea460039e8571e06",
+      "url": "https://github.com/status-im/nim-faststreams",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "stew",
+        "unittest2"
+      ],
+      "checksums": {
+        "sha1": "969ceb3666e807db8fe5c8df63466749822367a9"
+      }
+    },
+    "serialization": {
+      "version": "0.5.2",
+      "vcsRevision": "b0f2fa32960ea532a184394b0f27be37bd80248b",
+      "url": "https://github.com/status-im/nim-serialization",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "faststreams",
+        "unittest2",
+        "stew"
+      ],
+      "checksums": {
+        "sha1": "fa35c1bb76a0a02a2379fe86eaae0957c7527cb8"
+      }
+    },
+    "json_serialization": {
+      "version": "0.4.4",
+      "vcsRevision": "c343b0e243d9e17e2c40f3a8a24340f7c4a71d44",
+      "url": "https://github.com/status-im/nim-json-serialization",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "faststreams",
+        "serialization",
+        "stew",
+        "results"
+      ],
+      "checksums": {
+        "sha1": "8b3115354104858a0ac9019356fb29720529c2bd"
+      }
+    },
+    "chronicles": {
+      "version": "0.12.2",
+      "vcsRevision": "27ec507429a4eb81edc20f28292ee8ec420be05b",
+      "url": "https://github.com/status-im/nim-chronicles",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "faststreams",
+        "serialization",
+        "json_serialization",
+        "testutils"
+      ],
+      "checksums": {
+        "sha1": "02febb20d088120b2836d3306cfa21f434f88f65"
+      }
+    },
+    "unicodedb": {
+      "version": "0.13.0",
+      "vcsRevision": "15c5e25e2a49a924bc97647481ff50125bba2c76",
+      "url": "https://github.com/nitely/nim-unicodedb",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "5c5fc0c8a83d270aca74fe41d33158e9042bb91a"
+      }
+    },
+    "bigints": {
+      "version": "1.0.0",
+      "vcsRevision": "e45b513b7ade83c34f633266b9916c417c339bdc",
+      "url": "https://github.com/nim-lang/bigints",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim"
+      ],
+      "checksums": {
+        "sha1": "243405aea5fa2f8939aff99d1c1344ebce16a8e6"
+      }
+    },
+    "nimkdl": {
+      "version": "2.1.0",
+      "vcsRevision": "4755e537a848e5f91465ccb314013fc0a7ce7c2f",
+      "url": "https://github.com/greenm01/nimkdl",
+      "downloadMethod": "git",
+      "dependencies": [
+        "nim",
+        "bigints",
+        "graphemes",
+        "unicodedb"
+      ],
+      "checksums": {
+        "sha1": "7d7e1e14205fb29c301af77414d2a617e6c755bb"
+      }
+    }
+  },
+  "tasks": {}
+}

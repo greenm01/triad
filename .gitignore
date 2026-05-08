@@ -18,6 +18,8 @@
 # Local smoke-test logs
 /triad-live-smoke.log
 /triad-live-smoke.out
+/qemu-vt-smoke-out/
+/triad.log
 
 # User-specific
 .nimble/

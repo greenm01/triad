@@ -123,6 +123,7 @@ guest_gid="$(id -g)"
 runtime="/run/user/$guest_uid"
 mnt="/mnt/triad_src"
 work="/tmp/triad-vt-smoke"
+nimble_dir="/home/$guest_user/.cache/triad-vt-smoke/nimble"
 
 run_root mkdir -p "$mnt" "$runtime"
 run_root chown "$guest_uid:$guest_gid" "$runtime"
@@ -133,10 +134,11 @@ if ! mountpoint -q "$mnt"; then
 fi
 
 rm -rf "$work"
-mkdir -p "$work"
+mkdir -p "$work" "$nimble_dir"
 cp -a "$mnt"/. "$work"/
 cd "$work"
-nimble build
+nimble --nimbleDir:"$nimble_dir" --useSystemNim build \
+  --nimcache:"$work/.nimcache"
 
 cat >/tmp/triad-river-init.sh <<INIT
 #!/bin/sh
@@ -175,9 +177,25 @@ while ! kill -0 "$triad_pid" 2>/dev/null; do
   sleep 1
 done
 
-"$work/triad" msg focus-next
+i=0
+while ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >/tmp/triad-msg-ready.log 2>&1; do
+  i=$((i + 1))
+  if [ "$i" -gt 30 ]; then
+    cat /tmp/triad-msg-ready.log >&2 || true
+    fail "Triad IPC did not become ready"
+  fi
+  kill -0 "$triad_pid" 2>/dev/null || fail "Triad exited before IPC became ready"
+  sleep 1
+done
 run_root chvt 3
 sleep 1
+if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg focus-next >/tmp/triad-post-vt-msg.log 2>&1; then
+  cat /tmp/triad-post-vt-msg.log >&2 || true
+  cat /tmp/triad-session.env >&2 || true
+  cat /tmp/triad-vt.log >&2 || true
+  ps -fp "$triad_pid" >&2 || true
+  fail "Triad IPC failed after VT switch"
+fi
 
 if env -u WAYLAND_DISPLAY XDG_RUNTIME_DIR="$runtime" "$work/triad" 2>/tmp/triad-tty.log; then
   fail "bare TTY Triad launch unexpectedly succeeded"
@@ -187,10 +205,22 @@ if ! grep -q "Refusing to start outside a Wayland session" /tmp/triad-tty.log; t
   fail "bare TTY launch did not report the session guard"
 fi
 
-"$work/triad" msg toggle-overview
+if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad" msg toggle-overview >/tmp/triad-toggle.log 2>&1; then
+  cat /tmp/triad-toggle.log >&2 || true
+  cat /tmp/triad-session.env >&2 || true
+  cat /tmp/triad-vt.log >&2 || true
+  ps -fp "$triad_pid" >&2 || true
+  fail "Triad IPC failed after bare TTY guard check"
+fi
 run_root chvt 1
 sleep 1
-"$work/triad_niri" msg -j outputs >/tmp/triad-outputs.json
+if ! env XDG_RUNTIME_DIR="$runtime" "$work/triad_niri" msg -j outputs >/tmp/triad-outputs.json 2>/tmp/triad-niri-outputs.log; then
+  cat /tmp/triad-niri-outputs.log >&2 || true
+  cat /tmp/triad-session.env >&2 || true
+  cat /tmp/triad-vt.log >&2 || true
+  ps -fp "$triad_pid" >&2 || true
+  fail "Triad IPC failed after returning to River VT"
+fi
 
 kill "$triad_pid" 2>/dev/null || true
 printf '%s\n' "guest-vt-smoke: ok"

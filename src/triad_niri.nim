@@ -22,9 +22,6 @@ when isMainModule:
     fail(request.error)
   of NckRequest:
     let path = socketPath()
-    if not fileExists(path):
-      fail("socket does not exist: " & path)
-
     var reply = ""
     try:
       reply = waitFor sendIpcRequest(path, request.socketPayload)

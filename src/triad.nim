@@ -15,6 +15,7 @@ import ipc/socket
 import utils/runtime_log
 import utils/session_env
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options
+from posix import TFdSet, FD_ZERO, FD_SET, FD_ISSET, Timeval, Time, Suseconds, select
 
 type
   RiverPhase = enum
@@ -1522,6 +1523,66 @@ proc startAnimationLoop() {.async.} =
       msgQueue.add(Msg(kind: CmdTick))
     await sleepAsync(16) # ~60fps
 
+proc waitForWaylandEvents(timeoutMs: int): bool =
+  var readfds: TFdSet
+  FD_ZERO(readfds)
+  let fd = display.get_fd()
+  FD_SET(fd, readfds)
+  var timeout = Timeval(
+    tv_sec: Time(timeoutMs div 1000),
+    tv_usec: Suseconds((timeoutMs mod 1000) * 1000))
+  let ready = select(fd + 1, addr readfds, nil, nil, addr timeout)
+  ready > 0 and FD_ISSET(fd, readfds) != 0
+
+proc processQueuedMessages(configPath: string) =
+  while msgQueue.len > 0:
+    let msg = msgQueue[0]
+    msgQueue.delete(0)
+
+    if msg.kind == WlPointerRelease:
+      if currentModel.pointerOp.kind != OpNone:
+        if lastPointerOpSeat != nil:
+          executeEffect(Effect(kind: EffOpEnd, endSeat: lastPointerOpSeat))
+
+    if msg.kind == CmdSpawnTerminal:
+      spawnTerminal()
+      continue
+
+    if msg.kind == CmdReloadConfig:
+      let config = loadConfig(configPath)
+      currentModel.applyConfig(config)
+      destroyBindings()
+      info "Config reloaded", path=configPath
+      requestManage("config reload")
+      continue
+
+    let (nextModel, effects) = update(currentModel, msg)
+    currentModel = nextModel
+
+    if msg.kind == WlManageStart:
+      riverPhase = RiverManage
+      let instructions = computeLayoutInstructions(currentModel)
+      proposeDesiredDimensions(instructions)
+      applyManageState()
+      flushPendingManageEffects()
+      executeEffect(Effect(kind: EffManageFinish))
+      riverPhase = RiverIdle
+      continue
+
+    if msg.kind == WlRenderStart:
+      riverPhase = RiverRender
+      if desiredPlacements.len == 0:
+        let instructions = computeLayoutInstructions(currentModel)
+        for instr in instructions:
+          desiredPlacements[instr.windowId] = instr.geom
+      renderDesiredPlacements()
+      executeEffect(Effect(kind: EffRenderFinish))
+      riverPhase = RiverIdle
+      continue
+
+    for eff in effects:
+      executeEffect(eff)
+
 # --- Main Loop ---
 
 proc main() =
@@ -1628,61 +1689,41 @@ proc main() =
   spawnStartupCommands(currentModel)
   spawnQuickshell(currentModel)
   
-  while display.dispatch() != -1:
+  var running = true
+  while running:
+    while true:
+      let dispatched = display.dispatch_pending()
+      if dispatched == -1:
+        running = false
+        break
+      if dispatched == 0:
+        break
+    if not running:
+      break
+
     # Poll watcher (non-blocking)
     watcher.poll(0)
     
     # Poll async (IPC)
-    asyncdispatch.poll(0)
+    asyncdispatch.poll(16)
 
     # Process Message Queue
-    while msgQueue.len > 0:
-      let msg = msgQueue[0]
-      msgQueue.delete(0)
-      
-      if msg.kind == WlPointerRelease:
-        if currentModel.pointerOp.kind != OpNone:
-          if lastPointerOpSeat != nil:
-            executeEffect(Effect(kind: EffOpEnd, endSeat: lastPointerOpSeat))
+    processQueuedMessages(configPath)
 
-      if msg.kind == CmdSpawnTerminal:
-        spawnTerminal()
-        continue
+    while display.prepare_read() != 0:
+      let dispatched = display.dispatch_pending()
+      if dispatched == -1:
+        running = false
+        break
+    if not running:
+      break
 
-      if msg.kind == CmdReloadConfig:
-        let config = loadConfig(configPath)
-        currentModel.applyConfig(config)
-        destroyBindings()
-        info "Config reloaded", path=configPath
-        requestManage("config reload")
-        continue
-
-      let (nextModel, effects) = update(currentModel, msg)
-      currentModel = nextModel
-
-      if msg.kind == WlManageStart:
-        riverPhase = RiverManage
-        let instructions = computeLayoutInstructions(currentModel)
-        proposeDesiredDimensions(instructions)
-        applyManageState()
-        flushPendingManageEffects()
-        executeEffect(Effect(kind: EffManageFinish))
-        riverPhase = RiverIdle
-        continue
-
-      if msg.kind == WlRenderStart:
-        riverPhase = RiverRender
-        if desiredPlacements.len == 0:
-          let instructions = computeLayoutInstructions(currentModel)
-          for instr in instructions:
-            desiredPlacements[instr.windowId] = instr.geom
-        renderDesiredPlacements()
-        executeEffect(Effect(kind: EffRenderFinish))
-        riverPhase = RiverIdle
-        continue
-
-      for eff in effects:
-        executeEffect(eff)
+    discard display.flush()
+    if waitForWaylandEvents(16):
+      if display.read_events() == -1:
+        running = false
+    else:
+      display.cancel_read()
 
 if isMainModule:
   # Initialize listeners

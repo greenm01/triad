@@ -12,8 +12,8 @@ bin           = @["triad", "triad_niri"]
 
 requires "nim >= 2.2.10"
 requires "nimkdl >= 2.1.0"
-requires "wayland == 0.1.0"
-requires "fsnotify >= 0.1.6"
+requires "https://github.com/panno8M/wayland-nim == 0.1.0"
+requires "https://github.com/Nimaoth/fsnotify >= 0.1.6"
 requires "chronicles >= 0.10.3"
 
 task tidy, "Remove local Nim build outputs and project cache artifacts":

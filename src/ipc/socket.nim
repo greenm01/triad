@@ -35,15 +35,20 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: p
     var client: AsyncSocket
     try:
       client = await server.accept()
+      if client == nil:
+        warn "IPC accept returned nil client", path=path
+        continue
       debug "IPC client connected", path=path
     except CatchableError as e:
       warn "IPC accept failed", path=path, error=e.msg
       continue
 
+    let acceptedClient = client
     asyncCheck (proc() {.async.} =
+      let client = acceptedClient
       var keepOpen = false
       try:
-        while not client.isClosed:
+        while client != nil and not client.isClosed:
           let line = await client.recvLine()
           if line == "": break
 
@@ -73,7 +78,7 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: p
       except CatchableError as e:
         warn "IPC client error", path=path, error=e.msg
 
-      if not keepOpen and not client.isClosed:
+      if client != nil and not keepOpen and not client.isClosed:
         client.close()
     )()
 
@@ -104,7 +109,7 @@ proc broadcastJson*(payload: string) {.async.} =
   var i = 0
   while i < subscribers.len:
     let client = subscribers[i]
-    if client.isClosed:
+    if client == nil or client.isClosed:
       subscribers.delete(i)
     else:
       try:
