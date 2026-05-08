@@ -1,4 +1,4 @@
-import ../core/model, tables
+import ../core/model, ../core/model_utils, tables
 
 proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], screen: Rect, outerGap, innerGap: int32, 
                     focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =
@@ -7,8 +7,10 @@ proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], sc
   if tag.columns.len == 0:
     return instructions
 
-  let usableWidth = screen.w - 2 * outerGap
-  let usableHeight = screen.h - 2 * outerGap
+  let safeOuterGap = max(0'i32, outerGap)
+  let safeInnerGap = max(0'i32, innerGap)
+  let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
+  let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
   
   # Calculate virtual positions and find focused column
   var virtualX: seq[int32] = @[]
@@ -19,14 +21,14 @@ proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], sc
     if col.windows.contains(tag.focusedWindow):
       focusedColIdx = i
     
-    let colWidth = int32(float32(usableWidth) * col.widthProportion)
+    let colWidth = int32(float32(usableWidth) * clampProportion(col.widthProportion))
     virtualX.add(totalVirtualWidth)
     totalVirtualWidth += colWidth
 
   # Calculate target offset for centering
   if focusedColIdx != -1:
     let col = tag.columns[focusedColIdx]
-    let colWidth = int32(float32(usableWidth) * col.widthProportion)
+    let colWidth = int32(float32(usableWidth) * clampProportion(col.widthProportion))
     let colCenterX = virtualX[focusedColIdx] + (colWidth div 2)
     let screenCenterX = usableWidth div 2
     
@@ -44,30 +46,32 @@ proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], sc
 
   # Final coordinate mapping
   for i, col in tag.columns:
-    let colWidth = int32(float32(usableWidth) * col.widthProportion) - innerGap
-    let currentX = screen.x + outerGap + virtualX[i] - int32(renderOffset)
+    let colWidth = max(0'i32, int32(float32(usableWidth) * clampProportion(col.widthProportion)) - safeInnerGap)
+    let currentX = screen.x + safeOuterGap + virtualX[i] - int32(renderOffset)
 
     if col.windows.len == 0:
       continue
       
     let numWindows = col.windows.len
-    let totalInnerGaps = (numWindows - 1) * innerGap
-    let usableColHeight = usableHeight - totalInnerGaps
+    let totalInnerGaps = int32(numWindows - 1) * safeInnerGap
+    let usableColHeight = max(0'i32, usableHeight - totalInnerGaps)
     
     # Calculate sum of proportions for normalization
     var totalHeightProp: float32 = 0.0
     for winId in col.windows:
       if windows.hasKey(winId):
-        totalHeightProp += windows[winId].heightProportion
+        totalHeightProp += clampProportion(windows[winId].heightProportion)
       else:
         totalHeightProp += 1.0
+    if totalHeightProp <= 0:
+      totalHeightProp = 1.0
 
-    var currentY = screen.y + outerGap
+    var currentY = screen.y + safeOuterGap
     
     for winId in col.windows:
       # Vertical stacking within the column
-      let winProp = if windows.hasKey(winId): windows[winId].heightProportion else: 1.0
-      let winHeight = int32(float32(usableColHeight) * (winProp / totalHeightProp))
+      let winProp = if windows.hasKey(winId): clampProportion(windows[winId].heightProportion) else: 1.0'f32
+      let winHeight = max(0'i32, int32(float32(usableColHeight) * (winProp / totalHeightProp)))
       
       instructions.add(RenderInstruction(
         windowId: winId,
@@ -79,7 +83,7 @@ proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], sc
         )
       ))
       
-      currentY += winHeight + innerGap
+      currentY += winHeight + safeInnerGap
 
   return instructions
 
@@ -90,8 +94,10 @@ proc layoutVerticalScroller*(tag: var TagState, windows: Table[WindowId, WindowD
   if tag.columns.len == 0:
     return instructions
 
-  let usableWidth = screen.w - 2 * outerGap
-  let usableHeight = screen.h - 2 * outerGap
+  let safeOuterGap = max(0'i32, outerGap)
+  let safeInnerGap = max(0'i32, innerGap)
+  let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
+  let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
   
   # Calculate virtual positions and find focused column
   var virtualY: seq[int32] = @[]
@@ -102,13 +108,13 @@ proc layoutVerticalScroller*(tag: var TagState, windows: Table[WindowId, WindowD
     if col.windows.contains(tag.focusedWindow):
       focusedColIdx = i
     
-    let colHeight = int32(float32(usableHeight) * col.widthProportion)
+    let colHeight = int32(float32(usableHeight) * clampProportion(col.widthProportion))
     virtualY.add(totalVirtualHeight)
-    totalVirtualHeight += colHeight + innerGap
+    totalVirtualHeight += colHeight + safeInnerGap
 
   # Calculate target offset for centering
   if focusedColIdx != -1:
-    let colHeight = int32(float32(usableHeight) * tag.columns[focusedColIdx].widthProportion)
+    let colHeight = int32(float32(usableHeight) * clampProportion(tag.columns[focusedColIdx].widthProportion))
     let colCenterY = virtualY[focusedColIdx] + (colHeight div 2)
     let screenCenterY = usableHeight div 2
     
@@ -125,30 +131,32 @@ proc layoutVerticalScroller*(tag: var TagState, windows: Table[WindowId, WindowD
 
   # Final coordinate mapping
   for i, col in tag.columns:
-    let colHeight = int32(float32(usableHeight) * col.widthProportion) - innerGap
-    let currentY = screen.y + outerGap + virtualY[i] - int32(renderOffset)
+    let colHeight = max(0'i32, int32(float32(usableHeight) * clampProportion(col.widthProportion)) - safeInnerGap)
+    let currentY = screen.y + safeOuterGap + virtualY[i] - int32(renderOffset)
 
     if col.windows.len == 0:
       continue
       
     let numWindows = col.windows.len
-    let totalInnerGaps = (numWindows - 1) * innerGap
-    let usableColWidth = usableWidth - totalInnerGaps
+    let totalInnerGaps = int32(numWindows - 1) * safeInnerGap
+    let usableColWidth = max(0'i32, usableWidth - totalInnerGaps)
     
     # Calculate sum of proportions for normalization
     var totalWidthProp: float32 = 0.0
     for winId in col.windows:
       if windows.hasKey(winId):
-        totalWidthProp += windows[winId].widthProportion
+        totalWidthProp += clampProportion(windows[winId].widthProportion)
       else:
         totalWidthProp += 1.0
+    if totalWidthProp <= 0:
+      totalWidthProp = 1.0
 
-    var currentX = screen.x + outerGap
+    var currentX = screen.x + safeOuterGap
     
     for winId in col.windows:
       # Horizontal stacking within the row
-      let winProp = if windows.hasKey(winId): windows[winId].widthProportion else: 1.0
-      let winWidth = int32(float32(usableColWidth) * (winProp / totalWidthProp))
+      let winProp = if windows.hasKey(winId): clampProportion(windows[winId].widthProportion) else: 1.0'f32
+      let winWidth = max(0'i32, int32(float32(usableColWidth) * (winProp / totalWidthProp)))
       
       instructions.add(RenderInstruction(
         windowId: winId,
@@ -160,6 +168,6 @@ proc layoutVerticalScroller*(tag: var TagState, windows: Table[WindowId, WindowD
         )
       ))
       
-      currentX += winWidth + innerGap
+      currentX += winWidth + safeInnerGap
 
   return instructions

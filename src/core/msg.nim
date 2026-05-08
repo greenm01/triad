@@ -55,6 +55,9 @@ type
     CmdToggleFullscreen,
     CmdResizeFloating,
     CmdSelectWindow,
+    CmdFocusTag,
+    CmdFocusWindowById,
+    CmdCloseWindowById,
     CmdTick,
     CmdReloadConfig
 
@@ -108,5 +111,11 @@ type
       deltaG*: int32
     of CmdResizeFloating:
       deltaFW*, deltaFH*: int32
+    of CmdFocusTag:
+      focusTag*: uint32
+    of CmdFocusWindowById:
+      focusWindowId*: WindowId
+    of CmdCloseWindowById:
+      closeWindowId*: WindowId
     else:
       discard

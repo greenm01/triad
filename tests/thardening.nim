@@ -1,0 +1,115 @@
+import unittest, tables, os
+import ../src/core/model
+import ../src/core/model_utils
+import ../src/core/msg
+import ../src/core/update
+import ../src/layouts/scroller
+import ../src/layouts/tiling
+import ../src/config/parser
+
+proc baseModel(): Model =
+  result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080, outerGaps: 10, innerGaps: 5)
+  result.tags[1] = initTagState(1)
+
+suite "Crash hardening":
+  test "duplicate window create keeps a single placement":
+    var model = baseModel()
+    model.tags[1].columns.add(Column(windows: @[WindowId(10)], widthProportion: 0.5))
+    model.tags[1].focusedWindow = 10
+    model.windows[10] = WindowData(id: 10, appId: "old", title: "old")
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 10, appId: "app", title: "new"))
+
+    check nextModel.windows[10].title == "new"
+    check nextModel.validateModel().len == 0
+    check nextModel.tags[1].flattenWindows() == @[WindowId(10)]
+
+  test "stale focus command paths are no-ops, not crashes":
+    var model = baseModel()
+    model.tags[1].focusedWindow = 99
+
+    for kind in [CmdMoveToScratchpad, CmdConsumeWindow, CmdExpelWindow, CmdZoom, CmdMoveWindowLeft, CmdMoveWindowRight]:
+      let (nextModel, _) = update(model, Msg(kind: kind))
+      check nextModel.tags[1].columns.len == 0
+
+  test "select and overview focus tolerate missing active tag":
+    var model = Model(activeTag: 9, overviewActive: true)
+    model.tags[1] = initTagState(1)
+    model.tags[1].columns.add(Column(windows: @[WindowId(1)], widthProportion: 0.5))
+    model.tags[1].focusedWindow = 1
+    model.windows[1] = WindowData(id: 1, appId: "terminal", title: "Terminal")
+
+    var (nextModel, _) = update(model, Msg(kind: CmdSelectWindow))
+    check nextModel.activeTag == 1
+    check nextModel.overviewActive == false
+
+    model.overviewActive = true
+    let (focusedModel, _) = update(model, Msg(kind: CmdFocusNext))
+    check focusedModel.activeTag == 1
+    check focusedModel.tags[1].focusedWindow == 1
+
+  test "consume ignores empty next columns":
+    var model = baseModel()
+    model.tags[1].columns = @[
+      Column(windows: @[WindowId(1)], widthProportion: 0.5),
+      Column(windows: @[], widthProportion: 0.5)
+    ]
+    model.tags[1].focusedWindow = 1
+    model.windows[1] = WindowData(id: 1)
+
+    let (nextModel, _) = update(model, Msg(kind: CmdConsumeWindow))
+    check nextModel.tags[1].columns.len == 2
+
+  test "malformed config fields preserve defaults and valid fields":
+    let path = getCurrentDir() / "bad_config.kdl"
+    writeFile(path, """
+layout {
+  gaps
+  animation-speed 8.0
+  center-focused-column "invalid"
+  smart-gaps #true
+}
+tag-rules {
+  tag -1 default-layout="grid"
+  tag 2 default-layout="bad"
+}
+window-rule {
+  default-tag -3
+  forced-layout "bad"
+}
+""")
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.layout.gaps == 16
+    check config.layout.animationSpeed == 1.0
+    check config.layout.centerFocusedColumn == "never"
+    check config.layout.smartGaps == true
+    check config.tagRules.len == 1
+    check config.tagRules[0].tagId == 2
+    check config.tagRules[0].defaultLayout == Scroller
+    check config.windowRules[0].defaultTag == 0
+    check config.windowRules[0].forcedLayout == 0
+
+  test "layouts never emit negative geometry for tiny screens and huge gaps":
+    let screen = Rect(x: 0, y: 0, w: 20, h: 10)
+    var tag = initTagState(1, Scroller)
+    tag.focusedWindow = 1
+    tag.columns.add(Column(windows: @[WindowId(1), 2], widthProportion: 0.0))
+    var windows = initTable[WindowId, WindowData]()
+    windows[1] = WindowData(id: 1, heightProportion: 0.0)
+    windows[2] = WindowData(id: 2, heightProportion: 0.0)
+
+    for instr in layoutScroller(tag, windows, screen, 100, 100, false, false, "never"):
+      check instr.geom.w >= 0
+      check instr.geom.h >= 0
+
+    let layouts = [
+      layoutMasterStack(tag, screen, 100, 100),
+      layoutGrid(tag, screen, 100, 100),
+      layoutMonocle(tag, screen, 100)
+    ]
+    for rendered in layouts:
+      for instr in rendered:
+        check instr.geom.w >= 0
+        check instr.geom.h >= 0

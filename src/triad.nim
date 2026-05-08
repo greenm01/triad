@@ -342,10 +342,23 @@ proc main() =
   watcher.register(configPath, onConfigChange)
 
   # Start IPC Server
-  asyncCheck startIpcServer(getTriadSocketPath(), proc(msg: Msg) =
+  proc queueMsg(msg: Msg) {.gcsafe.} =
     {.cast(gcsafe).}:
       msgQueue.add(msg)
-  )
+
+  proc snapshotModel(): Model {.gcsafe.} =
+    {.cast(gcsafe).}:
+      currentModel
+
+  let triadSocketPath = getTriadSocketPath()
+  asyncCheck startIpcServer(triadSocketPath, queueMsg, snapshotModel)
+
+  let niriSocketPath = getEnv("NIRI_SOCKET", "")
+  if niriSocketPath.len > 0 and niriSocketPath != triadSocketPath:
+    if fileExists(niriSocketPath):
+      warn "NIRI_SOCKET already exists; not replacing another compositor socket", path=niriSocketPath
+    else:
+      asyncCheck startIpcServer(niriSocketPath, queueMsg, snapshotModel)
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()

@@ -12,14 +12,16 @@ proc layoutMasterStack*(tag: TagState, screen: Rect, outerGap, innerGap: int32):
   let n = allWindows.len
   if n == 0: return instructions
 
-  let usableWidth = screen.w - 2 * outerGap
-  let usableHeight = screen.h - 2 * outerGap
+  let safeOuterGap = max(0'i32, outerGap)
+  let safeInnerGap = max(0'i32, innerGap)
+  let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
+  let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
   
   # Smart gaps for single window
   if n == 1:
     instructions.add(RenderInstruction(
       windowId: allWindows[0],
-      geom: Rect(x: screen.x + outerGap, y: screen.y + outerGap, w: usableWidth, h: usableHeight)
+      geom: Rect(x: screen.x + safeOuterGap, y: screen.y + safeOuterGap, w: usableWidth, h: usableHeight)
     ))
     return instructions
 
@@ -27,7 +29,7 @@ proc layoutMasterStack*(tag: TagState, screen: Rect, outerGap, innerGap: int32):
   let sCount = n - mCount
   
   let mw = if mCount > 0 and sCount > 0: 
-             int32(float32(usableWidth) * tag.masterSplitRatio) 
+             int32(float32(usableWidth) * min(0.95'f32, max(0.05'f32, tag.masterSplitRatio))) 
            else: 
              usableWidth
              
@@ -35,26 +37,26 @@ proc layoutMasterStack*(tag: TagState, screen: Rect, outerGap, innerGap: int32):
   
   # Master area
   if mCount > 0:
-    let mh = (usableHeight - (int32(mCount) - 1) * innerGap) div int32(mCount)
-    var curY = screen.y + outerGap
+    let mh = max(0'i32, (usableHeight - (int32(mCount) - 1) * safeInnerGap) div int32(mCount))
+    var curY = screen.y + safeOuterGap
     for i in 0 ..< mCount:
       instructions.add(RenderInstruction(
         windowId: allWindows[i],
-        geom: Rect(x: screen.x + outerGap, y: curY, w: mw - (if sCount > 0: innerGap div 2 else: 0), h: mh)
+        geom: Rect(x: screen.x + safeOuterGap, y: curY, w: max(0'i32, mw - (if sCount > 0: safeInnerGap div 2 else: 0)), h: mh)
       ))
-      curY += mh + innerGap
+      curY += mh + safeInnerGap
 
   # Stack area
   if sCount > 0:
-    let sh = (usableHeight - (int32(sCount) - 1) * innerGap) div int32(sCount)
-    var curY = screen.y + outerGap
-    let startX = screen.x + outerGap + mw + (innerGap div 2)
+    let sh = max(0'i32, (usableHeight - (int32(sCount) - 1) * safeInnerGap) div int32(sCount))
+    var curY = screen.y + safeOuterGap
+    let startX = screen.x + safeOuterGap + mw + (safeInnerGap div 2)
     for i in 0 ..< sCount:
       instructions.add(RenderInstruction(
         windowId: allWindows[mCount + i],
-        geom: Rect(x: startX, y: curY, w: sw - (innerGap div 2), h: sh)
+        geom: Rect(x: startX, y: curY, w: max(0'i32, sw - (safeInnerGap div 2)), h: sh)
       ))
-      curY += sh + innerGap
+      curY += sh + safeInnerGap
 
   return instructions
 
@@ -72,11 +74,13 @@ proc layoutGrid*(tag: TagState, screen: Rect, outerGap, innerGap: int32): seq[Re
   let cols = int32(sqrt(float64(n)).ceil)
   let rows = int32((float64(n) / float64(cols)).ceil)
   
-  let usableWidth = screen.w - 2 * outerGap
-  let usableHeight = screen.h - 2 * outerGap
+  let safeOuterGap = max(0'i32, outerGap)
+  let safeInnerGap = max(0'i32, innerGap)
+  let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
+  let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
   
-  let winW = (usableWidth - (cols - 1) * innerGap) div cols
-  let winH = (usableHeight - (rows - 1) * innerGap) div rows
+  let winW = max(0'i32, (usableWidth - (cols - 1) * safeInnerGap) div cols)
+  let winH = max(0'i32, (usableHeight - (rows - 1) * safeInnerGap) div rows)
   
   for i in 0 ..< n:
     let col = int32(i) mod cols
@@ -85,8 +89,8 @@ proc layoutGrid*(tag: TagState, screen: Rect, outerGap, innerGap: int32): seq[Re
     instructions.add(RenderInstruction(
       windowId: allWindows[i],
       geom: Rect(
-        x: screen.x + outerGap + col * (winW + innerGap),
-        y: screen.y + outerGap + row * (winH + innerGap),
+        x: screen.x + safeOuterGap + col * (winW + safeInnerGap),
+        y: screen.y + safeOuterGap + row * (winH + safeInnerGap),
         w: winW,
         h: winH
       )
@@ -108,13 +112,14 @@ proc layoutMonocle*(tag: TagState, screen: Rect, outerGap: int32): seq[RenderIns
   let n = allWindows.len
   if n == 0: return instructions
 
-  let usableWidth = screen.w - 2 * outerGap
-  let usableHeight = screen.h - 2 * outerGap
+  let safeOuterGap = max(0'i32, outerGap)
+  let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
+  let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
 
   for winId in allWindows:
     instructions.add(RenderInstruction(
       windowId: winId,
-      geom: Rect(x: screen.x + outerGap, y: screen.y + outerGap, w: usableWidth, h: usableHeight)
+      geom: Rect(x: screen.x + safeOuterGap, y: screen.y + safeOuterGap, w: usableWidth, h: usableHeight)
     ))
 
   return instructions
