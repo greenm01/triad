@@ -1,10 +1,22 @@
 # Binaries
-triad
-src/triad
+/triad
+/triad_niri
+/src/triad
+/src/triad_niri
+/tests/tcompat
+/tests/tconfig
+/tests/tcore
+/tests/thardening
+/tests/tlayouts
+/tests/tstress
 
 # Nim cache
-nimcache/
-src/nimcache/
+/.nimcache/
+/nimcache/
+/src/.nimcache/
+/src/nimcache/
+/tests/.nimcache/
+/tests/nimcache/
 
 # User-specific
 .nimble/
