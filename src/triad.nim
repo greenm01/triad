@@ -7,6 +7,7 @@ import layouts/scroller
 import layouts/tiling
 import config/parser
 import ipc/socket
+import utils/runtime_log
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils
 
 # --- Global Engine State ---
@@ -33,6 +34,10 @@ var
 
 proc get_id(p: pointer): uint32 =
   get_id(cast[ptr Proxy](p))
+
+proc failCli(message: string) =
+  stderr.writeLine("triad: " & message)
+  quit 1
 
 proc getTiledTagState(tag: TagState, model: Model): TagState =
   # Helper to get a TagState with only non-floating and active grouped windows
@@ -113,8 +118,8 @@ proc spawnStartupCommands(model: Model) =
       try:
         let p = startProcess(cmd[0], args = cmd[1..^1], options = {poUsePath})
         info "Spawned startup command", cmd=cmd[0], pid=p.processID
-      except:
-        warn "Failed to spawn startup command", cmd=cmd[0]
+      except CatchableError as e:
+        warn "Failed to spawn startup command", cmd=cmd[0], error=e.msg
 
 proc spawnQuickshell(model: Model) =
   if model.quickshell.enabled and model.quickshell.theme != "":
@@ -125,8 +130,8 @@ proc spawnQuickshell(model: Model) =
     try:
       let p = startProcess("qs", args = args, options = {poUsePath})
       info "Spawned Quickshell", theme=model.quickshell.theme, pid=p.processID
-    except:
-      warn "Failed to spawn Quickshell", theme=model.quickshell.theme
+    except CatchableError as e:
+      warn "Failed to spawn Quickshell", theme=model.quickshell.theme, error=e.msg
 
 # --- RiverSeatV1 Callbacks ---
 
@@ -210,25 +215,32 @@ var pendingWindows: Table[WindowId, WindowData]
 
 proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
   let id = win.get_id()
+  let appIdText = $appId
+  debug "Window app-id received", windowId=id, appId=appIdText
   if pendingWindows.hasKey(id):
-    pendingWindows[id].appId = $appId
+    pendingWindows[id].appId = appIdText
   elif currentModel.windows.hasKey(id):
     # Already created, maybe update and re-render?
     discard
 
 proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
   let id = win.get_id()
+  let titleText = $title
+  debug "Window title received", windowId=id, title=titleText
   if pendingWindows.hasKey(id):
-    pendingWindows[id].title = $title
+    pendingWindows[id].title = titleText
 
 proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
   let id = win.get_id()
+  info "Window closed", windowId=id
   msgQueue.add(Msg(kind: WlWindowDestroyed, destroyedId: id))
 
 proc on_window_pointer_move_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1) =
+  debug "Pointer move requested", windowId=win.get_id()
   msgQueue.add(Msg(kind: WlPointerMoveRequested, moveWinId: win.get_id(), moveSeat: seat))
 
 proc on_window_pointer_resize_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1, edges: uint32) =
+  debug "Pointer resize requested", windowId=win.get_id(), edges=edges
   msgQueue.add(Msg(kind: WlPointerResizeRequested, resizeWinId: win.get_id(), resizeSeat: seat, resizeEdges: edges))
 
 var window_listener = RiverWindowV1Listener(
@@ -242,6 +254,7 @@ var window_listener = RiverWindowV1Listener(
 # --- Wayland Callbacks ---
 
 proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  debug "River manage start", pendingWindows=pendingWindows.len
   # Before starting manage, move all pending windows to the message queue
   for id, data in pendingWindows:
     msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title))
@@ -249,10 +262,12 @@ proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
   msgQueue.add(Msg(kind: WlManageStart))
 
 proc on_render_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
+  trace "River render start"
   msgQueue.add(Msg(kind: WlRenderStart))
 
 proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindowV1) =
   let id = win.get_id()
+  info "Window discovered", windowId=id
   windowPointers[id] = win
   windowNodes[id] = win.getNode()
   # Start tracking as pending until we get metadata or manage starts
@@ -260,6 +275,7 @@ proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindo
   discard win.addListener(window_listener.addr, nil)
 
 proc on_output_dimensions(data: pointer, output: ptr RiverOutputV1, width: int32, height: int32) =
+  info "Output dimensions changed", outputId=output.get_id(), width=width, height=height
   msgQueue.add(Msg(kind: WlOutputDimensions, width: width, height: height))
 
 # Listener setup
@@ -269,25 +285,29 @@ var
 
 proc on_output(data: pointer, mgr: ptr RiverWindowManagerV1, output: ptr RiverOutputV1) =
   let id = output.get_id()
+  info "Output discovered", outputId=id
   outputPointers[id] = output
   discard output.addListener(output_listener.addr, nil)
 
 proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1) =
+  info "Seat discovered", seatIndex=seatPointers.len
   seatPointers.add(seat)
   discard seat.addListener(seat_listener.addr, nil)
 
 # --- Registry Callbacks ---
 
 proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32, interface_name: cstring, version: uint32) =
+  let interfaceName = $interface_name
+  debug "Wayland global advertised", name=name, interfaceName=interfaceName, version=version
   # Bind to the river_window_manager_v1 interface
-  if $interface_name == "river_window_manager_v1":
+  if interfaceName == "river_window_manager_v1":
     river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4))
     discard river_manager.addListener(manager_listener.addr, nil)
-    info "Bound to river_window_manager_v1"
+    info "Bound to river_window_manager_v1", name=name, advertisedVersion=version, boundVersion=4
 
 
 proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =
-  discard
+  debug "Wayland global removed", name=name
 
 var registry_listener = RegistryListener(
   global: registry_handle_global,
@@ -303,24 +323,39 @@ proc startAnimationLoop() {.async.} =
 # --- Main Loop ---
 
 proc main() =
+  configureLogging()
+
   if paramCount() >= 2 and paramStr(1) == "msg":
     let cmdPart = paramStr(2)
     if cmdPart == "event-stream":
       # Subscription client
       let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
-      waitFor client.connectUnix(getTriadSocketPath())
-      waitFor client.send("event-stream\L")
-      while not client.isClosed:
-        let line = waitFor client.recvLine()
-        if line != "": echo line
+      try:
+        waitFor client.connectUnix(getTriadSocketPath())
+        waitFor client.send("event-stream\L")
+        while not client.isClosed:
+          let line = waitFor client.recvLine()
+          if line != "": echo line
+      except CatchableError as e:
+        if not client.isClosed:
+          client.close()
+        failCli("event stream failed: " & e.msg)
       return
 
     var cmd = ""
     for i in 2 .. paramCount():
       if i > 2: cmd.add(" ")
       cmd.add(paramStr(i))
-    waitFor sendIpcMsg(getTriadSocketPath(), cmd)
+    try:
+      waitFor sendIpcMsg(getTriadSocketPath(), cmd)
+    except CatchableError as e:
+      failCli("socket request failed: " & e.msg)
     return
+
+  info "Triad process starting",
+    pid=getCurrentProcessId(),
+    runtimeDir=getRuntimeDir(),
+    waylandDisplay=getEnv("WAYLAND_DISPLAY", "")
 
   # Initialize Model
   currentModel = Model(
@@ -351,6 +386,7 @@ proc main() =
       currentModel
 
   let triadSocketPath = getTriadSocketPath()
+  info "Starting Triad IPC server", path=triadSocketPath
   asyncCheck startIpcServer(triadSocketPath, queueMsg, snapshotModel)
 
   let niriSocketPath = getEnv("NIRI_SOCKET", "")
@@ -358,6 +394,7 @@ proc main() =
     if fileExists(niriSocketPath):
       warn "NIRI_SOCKET already exists; not replacing another compositor socket", path=niriSocketPath
     else:
+      info "Starting Niri-compatible IPC server", path=niriSocketPath
       asyncCheck startIpcServer(niriSocketPath, queueMsg, snapshotModel)
 
   # Start Animation Loop
@@ -372,9 +409,14 @@ proc main() =
   discard registry.addListener(registry_listener.addr, nil)
 
   # Roundtrip to get the globals and listeners
-  discard display.roundtrip()
+  let roundtripResult = display.roundtrip()
+  debug "Wayland registry roundtrip finished", result=roundtripResult
 
-  info "Triad starting..."
+  if river_manager == nil:
+    fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"
+    quit 1
+
+  info "Triad connected to River", outputs=outputPointers.len, seats=seatPointers.len
   
   # Spawn startup commands (e.g. Noctalia shell)
   spawnStartupCommands(currentModel)
@@ -401,7 +443,7 @@ proc main() =
       if msg.kind == CmdReloadConfig:
         let config = loadConfig(configPath)
         currentModel.applyConfig(config)
-        info "Config reloaded"
+        info "Config reloaded", path=configPath
         # Force a re-render
         if river_manager != nil:
           river_manager.manageDirty()
