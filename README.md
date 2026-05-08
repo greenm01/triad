@@ -4,9 +4,15 @@ Triad is a dynamic window management client for the River 0.4+ compositor. It is
 
 ### The Triad
 
-The name is no accident. Triad represents the synthesis of three great software philosophies: the robust Wayland foundation of **River**, the versatile per-workspace tiling of **Mango**, and the infinite, animated scrolling ribbon of **Niri**. 
+Triad is built on the shoulders of three compositors, each contributing one note to the chord.
 
-It is a hybrid manager that refuses to compromise. Whether you require a traditional master-stack layout for development or an expansive scrolling canvas for research, Triad adapts to your workflow on a per-tag basis.
+River protocol is the root. A lean, principled Wayland compositor whose tag-based workspace model and clean architecture provide the foundation everything else stands on. Without it there is no key.
+
+Mango is the third. Its per-workspace tiling is Triad's dominant character — the difference between a session with shape and one without. Triad leans into Mango heavily, and makes no apology for it.
+
+Niri is the fifth. Not its scrolling ribbon, but its JSON IPC protocol. By speaking Niri's language over Quickshell Triad gains access to a rich shell ecosystem — Noctalia, Dankshell, and whatever comes next. The fifth is what makes harmony with other instruments possible. Here it does exactly that.
+
+Three projects. Three philosophies. One manager that holds them in tune.
 
 ### The Quickshell Trick
 
