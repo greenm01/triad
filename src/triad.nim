@@ -9,6 +9,7 @@ import core/msg
 import core/update
 import core/model_utils
 import core/restore_state
+import core/render_visibility
 import layouts/scroller
 import layouts/tiling
 import config/parser
@@ -660,9 +661,9 @@ proc destroyAllProtocolSurfaces() =
   windowDecorationAbove.clear()
   windowDecorationBelow.clear()
 
-proc applyBorder(win: ptr RiverWindowV1; focused: bool) =
+proc applyBorder(win: ptr RiverWindowV1; focused: bool; edges: uint32) =
   let color = premulColor(if focused: FocusedBorder else: UnfocusedBorder)
-  win.setBorders(RiverAllEdges, BorderWidth, color.r, color.g, color.b, color.a)
+  win.setBorders(edges, BorderWidth, color.r, color.g, color.b, color.a)
 
 proc supportedCapabilities(model: Model): uint32 =
   result = RiverBaseCapabilities
@@ -1094,21 +1095,12 @@ proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
         geom.h = bounded.h
       windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(0'i32, geom.h))
 
-proc intersects(a, b: Rect): bool =
-  a.x < b.x + b.w and a.x + a.w > b.x and a.y < b.y + b.h and a.y + a.h > b.y
-
-proc applyVisibility(win: ptr RiverWindowV1; geom, screen: Rect) =
-  if geom.intersects(screen):
+proc applyVisibility(win: ptr RiverWindowV1; visibility: RenderVisibility) =
+  if visibility.visible:
     win.show()
-    var clipX = max(0'i32, screen.x - geom.x)
-    var clipY = max(0'i32, screen.y - geom.y)
-    let right = min(geom.x + geom.w, screen.x + screen.w)
-    let bottom = min(geom.y + geom.h, screen.y + screen.h)
-    let clipW = max(0'i32, right - max(geom.x, screen.x))
-    let clipH = max(0'i32, bottom - max(geom.y, screen.y))
-    if clipW < geom.w or clipH < geom.h or clipX > 0 or clipY > 0:
-      win.setClipBox(clipX, clipY, clipW, clipH)
-      win.setContentClipBox(clipX, clipY, clipW, clipH)
+    if visibility.clipped:
+      win.setClipBox(visibility.clipX, visibility.clipY, visibility.clipW, visibility.clipH)
+      win.setContentClipBox(visibility.clipX, visibility.clipY, visibility.clipW, visibility.clipH)
     else:
       win.setClipBox(0, 0, 0, 0)
       win.setContentClipBox(0, 0, 0, 0)
@@ -1141,8 +1133,9 @@ proc renderDesiredPlacements() =
         node.placeAbove(lastNode)
       lastNode = node
       if windowPointers.hasKey(id):
-        windowPointers[id].applyVisibility(geom, screen)
-        windowPointers[id].applyBorder(id == currentModel.activeFocus())
+        let visibility = renderVisibility(geom, screen, max(BorderWidth * 2, 4'i32))
+        windowPointers[id].applyVisibility(visibility)
+        windowPointers[id].applyBorder(id == currentModel.activeFocus(), visibility.borderEdges)
 
   for id, win in windowPointers.pairs:
     if not visible.hasKey(id):

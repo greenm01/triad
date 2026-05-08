@@ -2,6 +2,7 @@ import unittest
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
+import ../src/core/render_visibility
 import ../src/core/restore_state
 import ../src/core/update
 import json, os, tables, sequtils, strutils
@@ -38,6 +39,47 @@ suite "Core TEA Update Logic":
       outerGaps: 10,
       innerGaps: 5
     )
+
+  test "Render visibility suppresses clipped scroller border rails":
+    let screen = Rect(x: 0, y: 0, w: 100, h: 80)
+
+    let full = renderVisibility(Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+    check full.visible
+    check not full.clipped
+    check full.clipX == 0
+    check full.clipY == 0
+    check full.clipW == 40
+    check full.clipH == 30
+    check full.borderEdges == RenderAllEdges
+
+    let leftClip = renderVisibility(Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+    check leftClip.visible
+    check leftClip.clipped
+    check leftClip.clipX == 20
+    check leftClip.clipW == 40
+    check (leftClip.borderEdges and RenderEdgeLeft) == 0
+    check (leftClip.borderEdges and RenderEdgeRight) == 0
+    check (leftClip.borderEdges and RenderEdgeTop) != 0
+    check (leftClip.borderEdges and RenderEdgeBottom) != 0
+
+    let rightClip = renderVisibility(Rect(x: 70, y: 10, w: 60, h: 30), screen, 4)
+    check rightClip.visible
+    check rightClip.clipped
+    check rightClip.clipW == 30
+    check (rightClip.borderEdges and RenderEdgeLeft) == 0
+    check (rightClip.borderEdges and RenderEdgeRight) == 0
+
+    let topClip = renderVisibility(Rect(x: 10, y: -10, w: 40, h: 30), screen, 4)
+    check topClip.visible
+    check topClip.clipped
+    check (topClip.borderEdges and RenderEdgeTop) == 0
+    check (topClip.borderEdges and RenderEdgeBottom) == 0
+    check (topClip.borderEdges and RenderEdgeLeft) != 0
+    check (topClip.borderEdges and RenderEdgeRight) != 0
+
+    let sliver = renderVisibility(Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
+    check not sliver.visible
+    check sliver.borderEdges == 0
 
   test "WlWindowCreated initializes tag and window data":
     let msg = Msg(kind: WlWindowCreated, windowId: 100, appId: "firefox", title: "Mozilla Firefox")
