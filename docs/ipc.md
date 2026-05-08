@@ -14,7 +14,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-prev`: Shifts keyboard focus to the previous window.
 *   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus spatially within the active tag.
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
-*   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent tag by numeric order.
+*   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
+*   `focus-tag <id>`: Focuses a stable Triad tag id directly.
+*   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent visible workspace, creating the next dynamic workspace when appropriate.
 *   `focus-occupied-tag-left`, `focus-occupied-tag-right`: Moves to the adjacent non-empty tag.
 *   `focus-column-first`, `focus-column-last`: Focuses the first or last visible column on the active tag.
 *   `focus-window-or-workspace-up`, `focus-window-or-workspace-down`: Moves vertically within the focused column, or switches to the adjacent tag at the edge.
@@ -44,7 +46,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 
 #### Manipulation
 *   `move-to-tag <id>`: Moves the focused window to the specified tag.
-*   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent tag by numeric order.
+*   `move-to-workspace <index>`: Moves the focused window to the compact Niri-style workspace index.
+*   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent visible workspace, creating the next dynamic workspace when appropriate.
 *   `move-to-scratchpad`: Moves the focused window to the scratchpad.
 *   `move-to-named-scratchpad <name>`: Moves the focused window to a named scratchpad.
 *   `close-window`: Politely requests that the focused window close.

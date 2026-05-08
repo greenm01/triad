@@ -43,7 +43,7 @@ suite "Shell compatibility contracts":
 
     let json = parseJson(response.reply)
     let workspaces = json["Ok"]["Workspaces"]
-    check workspaces.len == 2
+    check workspaces.len == 3
     check workspaces[0]["id"].getInt() == 1
     check workspaces[0]["idx"].getInt() == 1
     check workspaces[0]["name"].getStr() == "main"
@@ -63,14 +63,16 @@ suite "Shell compatibility contracts":
     model.windows[99] = WindowData(id: 99, appId: "player", title: "player")
 
     let workspaces = parseJson(handleNiriRequest("\"Workspaces\"", model).reply)["Ok"]["Workspaces"]
-    check workspaces.len == 4
+    check workspaces.len == 5
     check workspaces[3]["id"].getInt() == 9
     check workspaces[3]["idx"].getInt() == 4
+    check workspaces[4]["id"].getInt() == 10
+    check workspaces[4]["idx"].getInt() == 5
 
     let focusByIndex = handleNiriRequest("""{"Action":{"FocusWorkspace":{"reference":{"Index":4}}}}""", model)
     check focusByIndex.messages.len == 1
-    check focusByIndex.messages[0].kind == CmdFocusTag
-    check focusByIndex.messages[0].focusTag == 9
+    check focusByIndex.messages[0].kind == CmdFocusWorkspaceIndex
+    check focusByIndex.messages[0].workspaceIndex == 4
 
   test "Noctalia Niri window and output requests have usable fields":
     let model = modelForShell()
@@ -178,8 +180,8 @@ suite "Shell compatibility contracts":
   test "Niri actions map to Triad messages":
     let focusWs = handleNiriRequest("""{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", modelForShell())
     check focusWs.messages.len == 1
-    check focusWs.messages[0].kind == CmdFocusTag
-    check focusWs.messages[0].focusTag == 2
+    check focusWs.messages[0].kind == CmdFocusWorkspaceIndex
+    check focusWs.messages[0].workspaceIndex == 2
 
     let focusWin = handleNiriRequest("""{"Action":{"FocusWindow":{"id":10}}}""", modelForShell())
     check focusWin.messages.len == 1
@@ -257,8 +259,8 @@ suite "Shell compatibility contracts":
     check action.kind == NckRequest
     let forwarded = handleNiriRequest(action.socketPayload, modelForShell())
     check forwarded.messages.len == 1
-    check forwarded.messages[0].kind == CmdFocusTag
-    check forwarded.messages[0].focusTag == 2
+    check forwarded.messages[0].kind == CmdFocusWorkspaceIndex
+    check forwarded.messages[0].workspaceIndex == 2
 
     let validate = buildNiriCliRequest(@["validate"])
     check validate.kind == NckValidate
@@ -396,7 +398,17 @@ Categories=Network;WebBrowser;
   test "text IPC remains Triad-native, not a fake Mango mmsg shell":
     let msg = parseLegacyCommand("focus-workspace 2")
     check msg.isSome
-    check msg.get().kind == CmdFocusTag
-    check msg.get().focusTag == 2
+    check msg.get().kind == CmdFocusWorkspaceIndex
+    check msg.get().workspaceIndex == 2
+
+    let tagMsg = parseLegacyCommand("focus-tag 2")
+    check tagMsg.isSome
+    check tagMsg.get().kind == CmdFocusTag
+    check tagMsg.get().focusTag == 2
+
+    let moveMsg = parseLegacyCommand("move-to-workspace 3")
+    check moveMsg.isSome
+    check moveMsg.get().kind == CmdMoveToWorkspaceIndex
+    check moveMsg.get().workspaceIndex == 3
 
     check parseLegacyCommand("mmsg -g -A").isNone

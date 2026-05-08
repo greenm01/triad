@@ -111,7 +111,17 @@ proc parseLegacyCommand*(line: string): Option[Msg] =
       let tag = parseUInt32Arg(parts[1])
       if tag.isSome: some(Msg(kind: CmdMoveToTag, targetTag: tag.get())) else: none(Msg)
     else: none(Msg)
-  of "focus-workspace", "focus-tag":
+  of "move-to-workspace":
+    if parts.len >= 2:
+      let index = parseUInt32Arg(parts[1])
+      if index.isSome: some(Msg(kind: CmdMoveToWorkspaceIndex, workspaceIndex: index.get())) else: none(Msg)
+    else: none(Msg)
+  of "focus-workspace":
+    if parts.len >= 2:
+      let index = parseUInt32Arg(parts[1])
+      if index.isSome: some(Msg(kind: CmdFocusWorkspaceIndex, workspaceIndex: index.get())) else: none(Msg)
+    else: none(Msg)
+  of "focus-tag":
     if parts.len >= 2:
       let tag = parseUInt32Arg(parts[1])
       if tag.isSome: some(Msg(kind: CmdFocusTag, focusTag: tag.get())) else: none(Msg)

@@ -109,6 +109,8 @@ type
     CmdResizeFloating,
     CmdSelectWindow,
     CmdFocusTag,
+    CmdFocusWorkspaceIndex,
+    CmdMoveToWorkspaceIndex,
     CmdFocusWindowById,
     CmdCloseWindowById,
     CmdSpawn,
@@ -242,6 +244,8 @@ type
       deltaFW*, deltaFH*: int32
     of CmdFocusTag:
       focusTag*: uint32
+    of CmdFocusWorkspaceIndex, CmdMoveToWorkspaceIndex:
+      workspaceIndex*: uint32
     of CmdFocusWindowById:
       focusWindowId*: WindowId
     of CmdCloseWindowById:

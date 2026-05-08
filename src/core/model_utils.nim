@@ -197,11 +197,38 @@ proc ensureDefaultWorkspaces*(model: var Model) =
   if model.activeTag == 0:
     model.activeTag = 1
 
-proc visibleWorkspaceIds*(model: Model): seq[uint32] =
+proc baseVisibleWorkspaceIds(model: Model): seq[uint32] =
+  for tagId in 1'u32 .. model.defaultWorkspaceCount():
+    result.add(tagId)
   for tagId in model.tags.keys:
-    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag or model.tags[tagId].liveWindows(model).len > 0:
+    if tagId > model.defaultWorkspaceCount() and
+        (tagId == model.activeTag or model.tags[tagId].liveWindows(model).len > 0):
       result.add(tagId)
   result.sort()
+  var i = 1
+  while i < result.len:
+    if result[i] == result[i - 1]:
+      result.delete(i)
+    else:
+      inc i
+
+proc trailingWorkspaceId*(model: Model): uint32 =
+  let ids = model.baseVisibleWorkspaceIds()
+  if ids.len == 0:
+    return 0
+  let last = ids[^1]
+  if last == high(uint32):
+    return 0
+  if model.tags.hasKey(last) and model.tags[last].liveWindows(model).len > 0:
+    return last + 1
+  0
+
+proc visibleWorkspaceIds*(model: Model): seq[uint32] =
+  result = model.baseVisibleWorkspaceIds()
+  let trailing = model.trailingWorkspaceId()
+  if trailing != 0 and result.find(trailing) == -1:
+    result.add(trailing)
+    result.sort()
 
 proc compactWorkspaceIndexToTag*(model: Model; index: uint32): uint32 =
   if index == 0:
@@ -212,6 +239,15 @@ proc compactWorkspaceIndexToTag*(model: Model; index: uint32): uint32 =
     return ids[i]
   0
 
+proc workspaceIndexToTag*(model: Model; index: uint32): uint32 =
+  if index == 0:
+    return 0
+  let ids = model.visibleWorkspaceIds()
+  if ids.len == 0:
+    return 0
+  let i = min(int(index) - 1, ids.len - 1)
+  ids[i]
+
 proc nextDynamicWorkspaceId*(model: Model): uint32 =
   result = model.defaultWorkspaceCount() + 1
   for tagId in model.tags.keys:
@@ -220,11 +256,12 @@ proc nextDynamicWorkspaceId*(model: Model): uint32 =
 
 proc pruneDynamicWorkspaces*(model: var Model): bool =
   var ids: seq[uint32] = @[]
+  let trailing = model.trailingWorkspaceId()
   for tagId in model.tags.keys:
     ids.add(tagId)
   ids.sort()
   for tagId in ids:
-    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag:
+    if tagId <= model.defaultWorkspaceCount() or tagId == model.activeTag or tagId == trailing:
       continue
     if model.tags[tagId].liveWindows(model).len > 0:
       continue

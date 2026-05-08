@@ -59,7 +59,7 @@ proc nextTag(model: Model; direction: int): Option[uint32] =
     return some(ids[max(0, idx - 1)])
   if idx < ids.len - 1:
     return some(ids[idx + 1])
-  some(model.nextDynamicWorkspaceId())
+  some(ids[^1])
 
 proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messages: seq[Msg]] =
   if action.kind != JObject:
@@ -73,8 +73,7 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
         if refNode.hasKey("Index"):
           let index = uintFromNode(refNode["Index"])
           if index.isSome:
-            let tag = model.compactWorkspaceIndexToTag(index.get())
-            if tag != 0: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag)])
+            return (true, @[Msg(kind: CmdFocusWorkspaceIndex, workspaceIndex: index.get())])
         elif refNode.hasKey("Id"):
           let tag = uintFromNode(refNode["Id"])
           if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])

@@ -169,8 +169,10 @@ proc shouldBroadcastWindowsChanged(kind: MsgKind): bool =
       CmdFocusColumnLast,
       CmdFocusWindowOrWorkspaceUp,
       CmdFocusWindowOrWorkspaceDown,
+      CmdFocusWorkspaceIndex,
       CmdMoveToTagLeft,
       CmdMoveToTagRight,
+      CmdMoveToWorkspaceIndex,
       CmdMoveWindow,
       CmdMoveWindowLeft,
       CmdMoveWindowRight,
@@ -548,7 +550,7 @@ proc nearestTag(model: Model; direction: int; occupiedOnly: bool): uint32 =
     for tagId in ids:
       if tagId > current and (not occupiedOnly or model.activeVisibleWindows(model.tags[tagId]).len > 0):
         return tagId
-    if not occupiedOnly:
+    if not occupiedOnly and current <= model.defaultWorkspaceCount() and current == ids[^1]:
       return model.nextDynamicWorkspaceId()
   0
 
@@ -1620,6 +1622,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of CmdFocusTag:
     nextModel.focusTag(msg.focusTag, effects)
 
+  of CmdFocusWorkspaceIndex:
+    nextModel.focusTag(nextModel.workspaceIndexToTag(msg.workspaceIndex), effects)
+
   of CmdFocusWindowById:
     nextModel.focusWindow(msg.focusWindowId, effects)
 
@@ -1685,6 +1690,11 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   of CmdMoveToTagRight:
     let target = nextModel.nearestTag(1, false)
+    if target != 0:
+      return update(nextModel, Msg(kind: CmdMoveToTag, targetTag: target))
+
+  of CmdMoveToWorkspaceIndex:
+    let target = nextModel.workspaceIndexToTag(msg.workspaceIndex)
     if target != 0:
       return update(nextModel, Msg(kind: CmdMoveToTag, targetTag: target))
 
@@ -1773,6 +1783,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         CmdMoveToTag,
         CmdMoveWindowUpOrToWorkspaceUp,
         CmdMoveWindowDownOrToWorkspaceDown,
+        CmdMoveToWorkspaceIndex,
         CmdMoveToScratchpad,
         CmdMoveToNamedScratchpad,
         CmdToggleNamedScratchpad}:

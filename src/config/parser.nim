@@ -165,10 +165,10 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "Up", modifiers: 8'u32, command: "focus-up"),
     KeyBindingConfig(key: "Down", modifiers: 8'u32, command: "focus-down"),
     KeyBindingConfig(key: "n", modifiers: 64'u32, command: "switch-layout"),
-    KeyBindingConfig(key: "1", modifiers: 64'u32, command: "focus-tag 1"),
-    KeyBindingConfig(key: "2", modifiers: 64'u32, command: "focus-tag 2"),
-    KeyBindingConfig(key: "3", modifiers: 64'u32, command: "focus-tag 3"),
-    KeyBindingConfig(key: "4", modifiers: 64'u32, command: "focus-tag 4")
+    KeyBindingConfig(key: "1", modifiers: 64'u32, command: "focus-workspace 1"),
+    KeyBindingConfig(key: "2", modifiers: 64'u32, command: "focus-workspace 2"),
+    KeyBindingConfig(key: "3", modifiers: 64'u32, command: "focus-workspace 3"),
+    KeyBindingConfig(key: "4", modifiers: 64'u32, command: "focus-workspace 4")
   ]
 
 proc defaultPointerBindings*(): seq[PointerBindingConfig] =

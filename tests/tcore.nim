@@ -643,6 +643,54 @@ suite "Core TEA Update Logic":
     check not nextModel.tags.hasKey(4)
     check niriWorkspacesJson(nextModel).len == 3
 
+  test "Occupied dynamic workspace exposes one trailing creation workspace":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[4] = initTagState(4, Deck, "chat")
+    model.tags[4].columns.add(Column(windows: @[WindowId(401)]))
+    model.tags[4].focusedWindow = 401
+    model.windows[401] = WindowData(id: 401)
+    model.activeTag = 4
+
+    let workspaces = niriWorkspacesJson(model)
+    check workspaces.len == 5
+    check workspaces[3]["id"].getInt() == 4
+    check workspaces[3]["idx"].getInt() == 4
+    check workspaces[3]["occupied"].getBool()
+    check workspaces[4]["id"].getInt() == 5
+    check workspaces[4]["idx"].getInt() == 5
+    check not workspaces[4]["occupied"].getBool()
+
+    var (nextModel, _) = update(model, Msg(kind: CmdFocusWorkspaceIndex, workspaceIndex: 5))
+    check nextModel.activeTag == 5
+    check nextModel.tags.hasKey(5)
+    check niriWorkspacesJson(nextModel).len == 5
+
+    (nextModel, _) = update(nextModel, Msg(kind: CmdFocusTagRight))
+    check nextModel.activeTag == 5
+    check not nextModel.tags.hasKey(6)
+    check niriWorkspacesJson(nextModel).len == 5
+
+  test "Occupied sparse dynamic tag compacts with trailing creation workspace":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[9] = initTagState(9, Monocle, "media")
+    model.tags[9].columns.add(Column(windows: @[WindowId(901)]))
+    model.tags[9].focusedWindow = 901
+    model.windows[901] = WindowData(id: 901)
+    model.activeTag = 1
+
+    let workspaces = niriWorkspacesJson(model)
+    check workspaces.len == 5
+    check workspaces[3]["id"].getInt() == 9
+    check workspaces[3]["idx"].getInt() == 4
+    check workspaces[4]["id"].getInt() == 10
+    check workspaces[4]["idx"].getInt() == 5
+
   test "Dynamic workspace creation applies lazy tag templates":
     model.workspaces.defaultCount = 3
     model.tagRules = @[
@@ -659,6 +707,7 @@ suite "Core TEA Update Logic":
     check nextModel.tags[4].name == "chat"
     check nextModel.tags[4].layoutMode == Deck
     check nextModel.tags[4].containsWindow(301)
+    check niriWorkspacesJson(nextModel).len == 5
 
   test "Closing last window on dynamic workspace collapses to lower workspace":
     model.workspaces.defaultCount = 3
@@ -713,7 +762,7 @@ suite "Core TEA Update Logic":
     check nextModel.activeTag == 4
     check nextModel.tags.hasKey(4)
     check nextModel.tags[4].containsWindow(402)
-    check niriWorkspacesJson(nextModel).len == 4
+    check niriWorkspacesJson(nextModel).len == 5
 
   test "Stale missing windows do not keep dynamic workspace visible":
     model.workspaces.defaultCount = 3
@@ -750,7 +799,7 @@ suite "Core TEA Update Logic":
     check nextModel.activeTag == 3
     check not nextModel.tags.hasKey(4)
     check nextModel.tags[5].containsWindow(401)
-    check niriWorkspacesJson(nextModel).len == 4
+    check niriWorkspacesJson(nextModel).len == 5
     check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspaceActivated"))
     check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspacesChanged"))
 

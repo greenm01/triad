@@ -89,8 +89,16 @@ proc niriWorkspacesJson*(model: Model): JsonNode =
 
   result = newJArray()
   for idx, tagId in ids:
-    let tag = model.tags[tagId]
-    let windows = tag.liveWindows(model)
+    let tag =
+      if model.tags.hasKey(tagId):
+        model.tags[tagId]
+      else:
+        model.initTagStateForModel(tagId)
+    let windows =
+      if model.tags.hasKey(tagId):
+        tag.liveWindows(model)
+      else:
+        @[]
     let outputName = model.niriWorkspaceOutputName(tagId)
     result.add(%*{
       "id": tagId,
