@@ -5,7 +5,7 @@ author        = "Mason Green"
 description   = "Dynamic window management client for River"
 license       = "MIT"
 srcDir        = "src"
-bin           = @["triad"]
+bin           = @["triad", "triad_niri"]
 
 
 # Dependencies

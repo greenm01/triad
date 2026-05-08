@@ -64,6 +64,13 @@ proc sendIpcMsg*(path: string, msg: string) {.async.} =
   await client.send(msg & "\L")
   client.close()
 
+proc sendIpcRequest*(path: string, msg: string): Future[string] {.async.} =
+  let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+  await client.connectUnix(path)
+  await client.send(msg & "\L")
+  result = await client.recvLine()
+  client.close()
+
 proc broadcastJson*(payload: string) {.async.} =
   var i = 0
   while i < subscribers.len:

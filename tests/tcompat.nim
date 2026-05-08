@@ -3,6 +3,7 @@ import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/ipc/commands
+import ../src/ipc/niri_cli
 import ../src/ipc/niri_compat
 
 proc modelForShell(): Model =
@@ -103,6 +104,26 @@ suite "Shell compatibility contracts":
     check screenshot.handled
     check parseJson(screenshot.reply)["Ok"].hasKey("Handled")
     check screenshot.messages.len == 0
+
+  test "triad_niri shim parses DankMaterialShell shell commands":
+    let outputs = buildNiriCliRequest(@["msg", "-j", "outputs"])
+    check outputs.kind == NckRequest
+    check outputs.socketPayload == "\"Outputs\""
+    check outputs.unwrapKey == "Outputs"
+
+    let action = buildNiriCliRequest(@["msg", "action", "focus-workspace", "2"])
+    check action.kind == NckRequest
+    let forwarded = handleNiriRequest(action.socketPayload, modelForShell())
+    check forwarded.messages.len == 1
+    check forwarded.messages[0].kind == CmdFocusTag
+    check forwarded.messages[0].focusTag == 2
+
+    let validate = buildNiriCliRequest(@["validate"])
+    check validate.kind == NckValidate
+
+    let unwrapped = unwrapNiriReply("""{"Ok":{"Outputs":{"triad-0":{"logical":{"scale":1.0}}}}}""", "Outputs")
+    check unwrapped.ok
+    check parseJson(unwrapped.output).hasKey("triad-0")
 
   test "text IPC remains Triad-native, not a fake Mango mmsg shell":
     let msg = parseLegacyCommand("focus-workspace 2")
