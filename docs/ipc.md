@@ -33,6 +33,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 #### Advanced Movement
 *   `move-column-left`: Swaps the focused column with its neighbor to the left.
 *   `move-column-right`: Swaps the focused column with its neighbor to the right.
+*   `move-window-left`: Transports the focused window to the adjacent column on the left, creating a new column if necessary.
+*   `move-window-right`: Transports the focused window to the adjacent column on the right.
 *   `move-window-up`: Swaps the focused window with the one above it in a stack.
 *   `move-window-down`: Swaps the focused window with the one below it.
 

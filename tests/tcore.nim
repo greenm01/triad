@@ -83,6 +83,29 @@ suite "Core TEA Update Logic":
     
     check nextModel.tags[1].layoutMode == Grid
 
+  test "CmdMoveWindowLeft moves window to adjacent column or creates new":
+    # [101] [102]
+    var tag = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 102)
+    tag.columns.add(Column(windows: @[101], widthProportion: 0.5))
+    tag.columns.add(Column(windows: @[102], widthProportion: 0.5))
+    model.tags[1] = tag
+    model.activeTag = 1
+    
+    # Move 102 left -> [101, 102]
+    var (nextModel, _) = update(model, Msg(kind: CmdMoveWindowLeft))
+    check nextModel.tags[1].columns.len == 1
+    check nextModel.tags[1].columns[0].windows == @[WindowId(101), 102]
+    
+    # Move 101 left -> [101] [102]
+    # We must update the focused window in the model passed to update
+    var tagState = nextModel.tags[1]
+    tagState.focusedWindow = 101
+    nextModel.tags[1] = tagState
+    let (finalModel, _) = update(nextModel, Msg(kind: CmdMoveWindowLeft))
+    check finalModel.tags[1].columns.len == 2
+    check finalModel.tags[1].columns[0].windows == @[WindowId(101)]
+    check finalModel.tags[1].columns[1].windows == @[WindowId(102)]
+
   test "CmdFocusNext in Overview cycles through all tags":
     model.overviewActive = true
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)

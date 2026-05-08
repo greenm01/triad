@@ -77,6 +77,8 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}) {.async.} =
             except: warn "Invalid gap delta", delta=parts[1]
         of "move-column-left": onMsg(Msg(kind: CmdMoveColumnLeft))
         of "move-column-right": onMsg(Msg(kind: CmdMoveColumnRight))
+        of "move-window-left": onMsg(Msg(kind: CmdMoveWindowLeft))
+        of "move-window-right": onMsg(Msg(kind: CmdMoveWindowRight))
         of "move-window-up": onMsg(Msg(kind: CmdMoveWindowUp))
         of "move-window-down": onMsg(Msg(kind: CmdMoveWindowDown))
         of "swap-window-up": onMsg(Msg(kind: CmdSwapWindowUp))

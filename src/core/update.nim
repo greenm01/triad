@@ -291,6 +291,75 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
           nextModel.tags[activeTagId] = tag
           effects.add(Effect(kind: EffManageDirty))
 
+  of CmdMoveWindowLeft:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        var winIdx = -1
+        for i in 0 ..< tag.columns.len:
+          let j = tag.columns[i].windows.find(focused)
+          if j != -1:
+            colIdx = i
+            winIdx = j
+            break
+        
+        if colIdx != -1:
+          # Remove from current column
+          tag.columns[colIdx].windows.delete(winIdx)
+          
+          if colIdx > 0:
+            # Join column to the left
+            tag.columns[colIdx-1].windows.add(focused)
+          else:
+            # Create new column at the far left
+            tag.columns.insert(Column(windows: @[focused], widthProportion: 0.5), 0)
+          
+          # Clean up empty column if any (might have shifted)
+          # We need to find it again because of the insert
+          for i in countdown(tag.columns.len - 1, 0):
+            if tag.columns[i].windows.len == 0:
+              tag.columns.delete(i)
+              
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
+  of CmdMoveWindowRight:
+    let activeTagId = nextModel.activeTag
+    if nextModel.tags.hasKey(activeTagId):
+      var tag = nextModel.tags[activeTagId]
+      let focused = tag.focusedWindow
+      if focused != 0:
+        var colIdx = -1
+        var winIdx = -1
+        for i in 0 ..< tag.columns.len:
+          let j = tag.columns[i].windows.find(focused)
+          if j != -1:
+            colIdx = i
+            winIdx = j
+            break
+        
+        if colIdx != -1:
+          # Remove from current column
+          tag.columns[colIdx].windows.delete(winIdx)
+          
+          if colIdx < tag.columns.len - 1:
+            # Join column to the right
+            tag.columns[colIdx+1].windows.insert(focused, 0)
+          else:
+            # Create new column at the far right
+            tag.columns.add(Column(windows: @[focused], widthProportion: 0.5))
+          
+          # Clean up empty column if any
+          for i in countdown(tag.columns.len - 1, 0):
+            if tag.columns[i].windows.len == 0:
+              tag.columns.delete(i)
+              
+          nextModel.tags[activeTagId] = tag
+          effects.add(Effect(kind: EffManageDirty))
+
   of CmdMoveWindowUp:
     let activeTagId = nextModel.activeTag
     if nextModel.tags.hasKey(activeTagId):

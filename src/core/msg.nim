@@ -24,6 +24,8 @@ type
     CmdAdjustGaps,
     CmdMoveColumnLeft,
     CmdMoveColumnRight,
+    CmdMoveWindowLeft,
+    CmdMoveWindowRight,
     CmdMoveWindowUp,
     CmdMoveWindowDown,
     CmdSwapWindowUp,
