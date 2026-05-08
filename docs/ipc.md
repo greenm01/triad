@@ -68,6 +68,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `eat-next-key`: Requests River XKB handling to eat the next unbound key.
 *   `cancel-eat-next-key`: Cancels the pending River XKB key-eat request.
 *   `toggle-keyboard-shortcuts-inhibit`: Toggles whether the focused window inhibits Triad keyboard shortcuts.
+*   `focus-last`: Useful with `allow-inhibiting=#false` as a VM escape hatch, e.g. `Ctrl+Alt+Escape` in the default config.
 *   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus history, sizing, and window state.
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
 *   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.

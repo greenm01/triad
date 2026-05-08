@@ -116,6 +116,7 @@ bindings {
     bind "Super+r" "reload-config"
     bind "Super+Escape" "lock-session"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
+    bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"
 
     // Focus. Arrow and Page keys are intentionally avoided until Triad's

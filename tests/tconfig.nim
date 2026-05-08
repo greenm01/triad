@@ -421,6 +421,14 @@ bindings {
     check config.windowRules.len == 1
     check config.windowRules[0].appIdMatch == "qemu"
     check config.windowRules[0].keyboardShortcutsInhibit == true
+    block:
+      var foundEscape = false
+      for binding in config.keyBindings:
+        if binding.key == "Escape" and binding.modifiers == 12'u32:
+          foundEscape = true
+          check binding.command == "focus-last"
+          check binding.bypassShortcutsInhibit == true
+      check foundEscape
     check config.layout.borderWidth == DefaultBorderWidth
     check config.layout.centerFocusedColumn == DefaultCenterFocusedColumn
     check config.layout.defaultColumnWidth == defaults.DefaultColumnWidth
@@ -445,6 +453,17 @@ bindings {
 
     check keySymForBinding("t", 5'u32) == uint32(ord('T'))
     check keySymForBinding("t", 65'u32) == uint32(ord('T'))
+
+  test "Default config has QEMU host escape hatch":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+    var found = false
+    for binding in config.keyBindings:
+      if binding.key == "Escape" and binding.modifiers == 12'u32:
+        found = true
+        check binding.command == "focus-last"
+        check binding.bypassShortcutsInhibit == true
+
+    check found
 
   test "Default config app launch bindings match Niri profile":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
