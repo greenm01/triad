@@ -332,6 +332,66 @@ suite "Crash hardening":
     check subscribers.len == 0
     removeDir(dir)
 
+  test "IPC refuses active sockets and non-socket paths":
+    let activeDir = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-active")
+    createDir(activeDir)
+    let activePath = activeDir / "triad.sock"
+    let activeServer = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+    activeServer.bindUnix(activePath)
+    activeServer.listen()
+    waitFor startIpcServer(activePath, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+
+    let activeClient = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+    waitFor activeClient.connectUnix(activePath)
+    activeClient.close()
+    activeServer.close()
+    removeFile(activePath)
+    removeDir(activeDir)
+
+    let fileDir = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-file")
+    createDir(fileDir)
+    let filePath = fileDir / "triad.sock"
+    writeFile(filePath, "not a socket")
+    waitFor startIpcServer(filePath, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    check fileExists(filePath)
+    removeFile(filePath)
+    removeDir(fileDir)
+
+  test "IPC removes stale sockets and rejects oversized request lines":
+    let staleDir = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-stale")
+    createDir(staleDir)
+    let stalePath = staleDir / "triad.sock"
+    block:
+      let staleServer = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+      staleServer.bindUnix(stalePath)
+      staleServer.listen()
+      staleServer.close()
+
+    asyncCheck startIpcServer(stalePath, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    discard waitForIpcReply(stalePath, "\"Outputs\"")
+
+    let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+    waitFor client.connectUnix(stalePath)
+    waitFor client.send(repeat("x", MaxIpcLineBytes + 1) & "\L")
+    let response = waitFor client.recv(16)
+    check response == ""
+    client.close()
+
+  test "IPC event stream subscriber cap is enforced":
+    subscribers = @[]
+    for _ in 0 ..< MaxIpcSubscribers:
+      subscribers.add(newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP))
+
+    let path = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-cap.sock")
+    asyncCheck startIpcServer(path, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    let response = waitForIpcReply(path, "\"EventStream\"")
+    check parseJson(response)["Err"].getStr() == "too many event-stream subscribers"
+
+    for client in subscribers:
+      if client != nil and not client.isClosed:
+        client.close()
+    subscribers = @[]
+
   test "River decoration presentation menu resize and modifier state are modeled":
     var model = baseModel()
     var (nextModel, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "one"))

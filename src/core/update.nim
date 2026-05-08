@@ -26,6 +26,7 @@ type
     EffStopManager,
     EffExitSession,
     EffFocusShellUi,
+    EffScreenshot,
     EffLog
 
   Effect* = object
@@ -65,6 +66,10 @@ type
       windowMenuY*: int32
     of EffPointerWarp:
       warpX*, warpY*: int32
+    of EffScreenshot:
+      screenshotKind*: ScreenshotKind
+      screenshotPath*: string
+      screenshotShowPointer*: bool
     else:
       discard
 
@@ -1265,6 +1270,14 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of CmdFocusShellUi:
     if not nextModel.sessionLocked and not nextModel.layerFocusExclusive:
       effects.add(Effect(kind: EffFocusShellUi))
+
+  of CmdScreenshot:
+    effects.add(Effect(
+      kind: EffScreenshot,
+      screenshotKind: msg.screenshotKind,
+      screenshotPath: msg.screenshotPath,
+      screenshotShowPointer: msg.screenshotShowPointer
+    ))
 
   of CmdReloadConfig, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
 

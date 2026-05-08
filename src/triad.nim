@@ -12,10 +12,11 @@ import layouts/tiling
 import config/parser
 import ipc/commands
 import ipc/socket
+import ipc/quickshell_compat
 import utils/runtime_log
 import utils/session_env
 import utils/wayland_runtime
-import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options, times, json
 
 type
   RiverPhase = enum
@@ -356,15 +357,22 @@ proc spawnStartupCommands(model: Model) =
       except CatchableError as e:
         warn "Failed to spawn startup command", cmd=cmd[0], error=e.msg
 
-proc spawnQuickshell(model: Model) =
+proc spawnQuickshell(model: Model; niriSocketPath: string) =
   if model.quickshell.enabled and model.quickshell.theme != "":
     var args = @["-c", model.quickshell.theme]
     for arg in model.quickshell.args:
       args.add(arg)
     
     try:
-      let p = startProcess("qs", args = args, options = {poUsePath})
-      info "Spawned Quickshell", theme=model.quickshell.theme, pid=p.processID
+      let compat = prepareQuickshellCompatEnv(niriSocketPath)
+      if compat.warning.len > 0:
+        warn "Quickshell compatibility environment is incomplete", warning=compat.warning
+      let p = startProcess("qs", args = args, env = compat.env, options = {poUsePath})
+      info "Spawned Quickshell",
+        theme=model.quickshell.theme,
+        pid=p.processID,
+        niriSocket=compat.niriSocketPath,
+        shimReady=compat.shimReady
     except CatchableError as e:
       warn "Failed to spawn Quickshell", theme=model.quickshell.theme, error=e.msg
 
@@ -1112,6 +1120,60 @@ proc renderDesiredPlacements() =
         shell.node.placeBelow(firstNode)
     protocolSurfaces[ownedShellSurfaceId] = shell
 
+proc shellQuote(value: string): string =
+  "'" & value.replace("'", "'\\''") & "'"
+
+proc screenshotPathOrDefault(path: string): string =
+  if path.len > 0:
+    return path
+  let dir = getHomeDir() / "Pictures" / "Screenshots"
+  dir / ("triad-screenshot-" & $getTime().toUnix() & ".png")
+
+proc geometryArg(rect: Rect): string =
+  $rect.x & "," & $rect.y & " " & $max(1'i32, rect.w) & "x" & $max(1'i32, rect.h)
+
+proc focusedWindowGeometry(): Rect =
+  let focused = currentModel.activeFocus()
+  if focused != 0 and desiredPlacements.hasKey(focused):
+    return desiredPlacements[focused]
+  if focused != 0 and currentModel.windows.hasKey(focused):
+    let win = currentModel.windows[focused]
+    if win.isFloating and win.floatingGeom.w > 0 and win.floatingGeom.h > 0:
+      return win.floatingGeom
+  currentModel.primaryScreen()
+
+proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string; showPointer: bool) {.async.} =
+  let path = screenshotPathOrDefault(requestedPath)
+  let dir = path.splitFile().dir
+  if dir.len > 0:
+    try:
+      createDir(dir)
+    except CatchableError as e:
+      warn "Failed to create screenshot directory", path=dir, error=e.msg
+      return
+
+  let pointerFlag = if showPointer: " -c" else: ""
+  let command =
+    case kind
+    of ShotRegion:
+      "grim" & pointerFlag & " -g \"$(slurp)\" " & shellQuote(path)
+    of ShotScreen:
+      "grim" & pointerFlag & " -g " & shellQuote(geometryArg(currentModel.primaryScreen())) & " " & shellQuote(path)
+    of ShotWindow:
+      "grim" & pointerFlag & " -g " & shellQuote(geometryArg(focusedWindowGeometry())) & " " & shellQuote(path)
+
+  try:
+    let p = startProcess("sh", args = @["-c", command], options = {poUsePath})
+    let code = p.waitForExit()
+    p.close()
+    if code == 0:
+      info "Screenshot captured", path=path
+      asyncCheck broadcastJson($(%*{"ScreenshotCaptured": {"path": path}}))
+    else:
+      warn "Screenshot capture failed", path=path, exitCode=code
+  except CatchableError as e:
+    warn "Screenshot capture failed", path=path, error=e.msg
+
 proc executeEffect(eff: Effect) =
   case eff.kind
   of EffLog:
@@ -1149,6 +1211,8 @@ proc executeEffect(eff: Effect) =
     ensureOwnedShellSurface()
     if ownedShellSurfaceId != 0:
       queueManageEffect(Effect(kind: EffFocusShellSurface, focusShellSurfaceId: ownedShellSurfaceId))
+  of EffScreenshot:
+    asyncCheck runScreenshotCapture(eff.screenshotKind, eff.screenshotPath, eff.screenshotShowPointer)
   of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffFocusShellSurface, EffCloseWindow, EffSetFullscreen, EffSetMaximized, EffInformResizeStart, EffInformResizeEnd:
     queueManageEffect(eff)
   of EffSetPosition:
@@ -1696,20 +1760,17 @@ proc main() =
   info "Starting Triad IPC server", path=triadSocketPath
   asyncCheck startIpcServer(triadSocketPath, queueMsg, snapshotModel)
 
-  let niriSocketPath = getEnv("NIRI_SOCKET", "")
+  let niriSocketPath = chooseNiriCompatSocketPath(triadSocketPath)
   if niriSocketPath.len > 0 and niriSocketPath != triadSocketPath:
-    if fileExists(niriSocketPath):
-      warn "NIRI_SOCKET already exists; not replacing another compositor socket", path=niriSocketPath
-    else:
-      info "Starting Niri-compatible IPC server", path=niriSocketPath
-      asyncCheck startIpcServer(niriSocketPath, queueMsg, snapshotModel)
+    info "Starting Niri-compatible IPC server", path=niriSocketPath
+    asyncCheck startIpcServer(niriSocketPath, queueMsg, snapshotModel)
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()
   
   # Spawn startup commands (e.g. Noctalia shell)
   spawnStartupCommands(currentModel)
-  spawnQuickshell(currentModel)
+  spawnQuickshell(currentModel, niriSocketPath)
   
   var running = true
   while running:

@@ -81,6 +81,22 @@ From another terminal in the same session:
 `triad msg event-stream` writes event data to stdout. Runtime logs stay on
 stderr so they do not corrupt stream output.
 
+## Exercise Quickshell Compatibility
+
+When `quickshell { enabled #true }` is configured, Triad starts Quickshell with
+a private Niri-compatible environment. To include that in live smoke:
+
+```bash
+TRIAD_LIVE_TEST_QUICKSHELL=1 ./tools/live_smoke.sh
+```
+
+The smoke gate verifies that Quickshell was spawned, that
+`$XDG_RUNTIME_DIR/triad-compat-bin/niri` exists, and that the private shim can
+query Triad through the shell-facing `$NIRI_SOCKET`.
+
+DMS screenshot actions require `grim` and `slurp`. `satty` or `swappy` are
+opened by DMS after Triad emits the Niri-compatible `ScreenshotCaptured` event.
+
 ## Exercise Windows
 
 Launch and close a few clients:

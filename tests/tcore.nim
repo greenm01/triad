@@ -280,3 +280,17 @@ suite "Core TEA Update Logic":
     let (nextModel, _) = update(model, Msg(kind: CmdResizeFloating, deltaFW: 50, deltaFH: -20))
     check nextModel.windows[101].floatingGeom.w == 250
     check nextModel.windows[101].floatingGeom.h == 180
+
+  test "CmdScreenshot emits a screenshot effect":
+    let (_, effects) = update(model, Msg(
+      kind: CmdScreenshot,
+      screenshotKind: ShotWindow,
+      screenshotPath: "/tmp/triad-window.png",
+      screenshotShowPointer: true
+    ))
+
+    check effects.len == 1
+    check effects[0].kind == EffScreenshot
+    check effects[0].screenshotKind == ShotWindow
+    check effects[0].screenshotPath == "/tmp/triad-window.png"
+    check effects[0].screenshotShowPointer == true

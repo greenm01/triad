@@ -28,6 +28,9 @@ proc optionValue(args: seq[string]; name: string): Option[string] =
       return some(args[i + 1])
   none(string)
 
+proc hasFlag(args: seq[string]; name: string): bool =
+  args.contains(name)
+
 proc requestName(command: string): Option[string] =
   case command.normalize()
   of "outputs":
@@ -64,8 +67,28 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
     return some(%*{"Action": {"FocusColumnLeft": {}}})
   of "focuscolumnright", "focus-column-right":
     return some(%*{"Action": {"FocusColumnRight": {}}})
+  of "focuswindowup", "focus-window-up":
+    return some(%*{"Action": {"FocusWindowUp": {}}})
+  of "focuswindowdown", "focus-window-down":
+    return some(%*{"Action": {"FocusWindowDown": {}}})
+  of "movecolumnleft", "move-column-left":
+    return some(%*{"Action": {"MoveColumnLeft": {}}})
+  of "movecolumnright", "move-column-right":
+    return some(%*{"Action": {"MoveColumnRight": {}}})
+  of "movewindowup", "move-window-up":
+    return some(%*{"Action": {"MoveWindowUp": {}}})
+  of "movewindowdown", "move-window-down":
+    return some(%*{"Action": {"MoveWindowDown": {}}})
+  of "movewindowleft", "move-window-left":
+    return some(%*{"Action": {"MoveWindowLeft": {}}})
+  of "movewindowright", "move-window-right":
+    return some(%*{"Action": {"MoveWindowRight": {}}})
   of "toggleoverview", "toggle-overview":
     return some(%*{"Action": {"ToggleOverview": {}}})
+  of "fullscreenwindow", "fullscreen-window":
+    return some(%*{"Action": {"FullscreenWindow": {}}})
+  of "togglewindowfloating", "toggle-window-floating":
+    return some(%*{"Action": {"ToggleWindowFloating": {}}})
   of "focuswindow", "focus-window":
     let id = optionValue(args, "--id")
     if id.isSome:
@@ -86,14 +109,30 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
   of "switchlayout", "switch-layout":
     let layout = if args.len >= 2 and args[1].normalize() == "next": "Next" else: "Prev"
     return some(%*{"Action": {"SwitchLayout": {"layout": layout}}})
+  of "setworkspacename", "set-workspace-name":
+    let name = if args.len >= 2: args[1] else: ""
+    return some(%*{"Action": {"SetWorkspaceName": {"name": name, "workspace": newJNull()}}})
+  of "unsetworkspacename", "unset-workspace-name":
+    return some(%*{"Action": {"UnsetWorkspaceName": {"workspace": newJNull()}}})
   of "quit":
     return some(%*{"Action": {"Quit": {"skip_confirmation": args.contains("--skip-confirmation")}}})
   of "screenshot":
-    return some(%*{"Action": {"Screenshot": {"path": optionValue(args, "--path").get("")}}})
+    return some(%*{"Action": {"Screenshot": {
+      "path": optionValue(args, "--path").get(""),
+      "show_pointer": hasFlag(args, "--show-pointer")
+    }}})
   of "screenshotscreen", "screenshot-screen":
-    return some(%*{"Action": {"ScreenshotScreen": {"path": optionValue(args, "--path").get("")}}})
+    return some(%*{"Action": {"ScreenshotScreen": {
+      "path": optionValue(args, "--path").get(""),
+      "show_pointer": hasFlag(args, "--show-pointer"),
+      "write_to_disk": true
+    }}})
   of "screenshotwindow", "screenshot-window":
-    return some(%*{"Action": {"ScreenshotWindow": {"path": optionValue(args, "--path").get("")}}})
+    return some(%*{"Action": {"ScreenshotWindow": {
+      "path": optionValue(args, "--path").get(""),
+      "show_pointer": hasFlag(args, "--show-pointer"),
+      "write_to_disk": true
+    }}})
   else:
     discard
 

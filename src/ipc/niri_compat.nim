@@ -56,6 +56,17 @@ proc windowWorkspaceId(model: Model; winId: WindowId): Option[uint32] =
 proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
   let ws = model.windowWorkspaceId(win.id)
   let isFocused = ws.isSome and model.tags[ws.get()].focusedWindow == win.id
+  let output =
+    if ws.isSome and model.tags.hasKey(ws.get()):
+      block:
+        var outputName = if model.primaryOutput != 0: "river-" & $model.primaryOutput else: "triad-0"
+        for outputId, outputTag in model.outputTags.pairs:
+          if outputTag == ws.get():
+            outputName = "river-" & $outputId
+            break
+        outputName
+    else:
+      ""
   result = %*{
     "id": win.id,
     "title": if win.title == "": newJNull() else: %win.title,
@@ -68,6 +79,7 @@ proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
     "is_minimized": win.isMinimized,
     "is_fullscreen": win.isFullscreen,
     "is_urgent": false,
+    "output": if output == "": newJNull() else: %output,
     "layout": niriLayout(win.id, model),
     "focus_timestamp": newJNull()
   }
@@ -117,10 +129,13 @@ proc niriOutputsJson*(model: Model): JsonNode =
     let h = max(0, int(model.screenHeight))
     result["triad-0"] = %*{
       "name": "triad-0",
+      "connected": true,
       "make": "Triad",
       "model": "River",
       "serial": newJNull(),
-      "physical_size": newJNull(),
+      "physical_size": {"width": 0, "height": 0},
+      "physical_width": 0,
+      "physical_height": 0,
       "modes": [
         {"width": w, "height": h, "refresh_rate": 60000, "is_preferred": true}
       ],
@@ -128,6 +143,13 @@ proc niriOutputsJson*(model: Model): JsonNode =
       "is_custom_mode": false,
       "vrr_supported": false,
       "vrr_enabled": false,
+      "refresh_rate": 60000,
+      "x": 0,
+      "y": 0,
+      "width": w,
+      "height": h,
+      "scale": 1.0,
+      "transform": "Normal",
       "logical": {
         "x": 0,
         "y": 0,
@@ -151,10 +173,13 @@ proc niriOutputsJson*(model: Model): JsonNode =
     let h = max(0, int(output.h))
     result[name] = %*{
       "name": name,
+      "connected": true,
       "make": "Triad",
       "model": "River",
       "serial": newJNull(),
-      "physical_size": newJNull(),
+      "physical_size": {"width": 0, "height": 0},
+      "physical_width": 0,
+      "physical_height": 0,
       "modes": [
         {"width": w, "height": h, "refresh_rate": 60000, "is_preferred": true}
       ],
@@ -162,6 +187,13 @@ proc niriOutputsJson*(model: Model): JsonNode =
       "is_custom_mode": false,
       "vrr_supported": false,
       "vrr_enabled": false,
+      "refresh_rate": 60000,
+      "x": int(output.x),
+      "y": int(output.y),
+      "width": w,
+      "height": h,
+      "scale": 1.0,
+      "transform": "Normal",
       "logical": {
         "x": int(output.x),
         "y": int(output.y),
@@ -195,6 +227,26 @@ proc uintFromNode(node: JsonNode): Option[uint32] =
   except CatchableError:
     discard
   none(uint32)
+
+proc boolFromNode(node: JsonNode; fallback = false): bool =
+  try:
+    if node.kind == JBool:
+      return node.getBool()
+  except CatchableError:
+    discard
+  fallback
+
+proc stringFromField(node: JsonNode; field: string): string =
+  if node.kind == JObject and node.hasKey(field) and node[field].kind == JString:
+    node[field].getStr()
+  else:
+    ""
+
+proc boolFromField(node: JsonNode; field: string; fallback = false): bool =
+  if node.kind == JObject and node.hasKey(field):
+    boolFromNode(node[field], fallback)
+  else:
+    fallback
 
 proc nextTag(model: Model; direction: int): Option[uint32] =
   var ids: seq[uint32] = @[]
@@ -239,10 +291,34 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
     return (true, @[Msg(kind: CmdToggleOverview)])
 
   elif action.hasKey("FocusColumnLeft"):
-    return (true, @[Msg(kind: CmdFocusPrev)])
+    return (true, @[Msg(kind: CmdFocusDirection, direction: DirLeft)])
 
   elif action.hasKey("FocusColumnRight"):
-    return (true, @[Msg(kind: CmdFocusNext)])
+    return (true, @[Msg(kind: CmdFocusDirection, direction: DirRight)])
+
+  elif action.hasKey("FocusWindowUp"):
+    return (true, @[Msg(kind: CmdFocusDirection, direction: DirUp)])
+
+  elif action.hasKey("FocusWindowDown"):
+    return (true, @[Msg(kind: CmdFocusDirection, direction: DirDown)])
+
+  elif action.hasKey("MoveColumnLeft"):
+    return (true, @[Msg(kind: CmdMoveColumnLeft)])
+
+  elif action.hasKey("MoveColumnRight"):
+    return (true, @[Msg(kind: CmdMoveColumnRight)])
+
+  elif action.hasKey("MoveWindowUp"):
+    return (true, @[Msg(kind: CmdMoveWindowUp)])
+
+  elif action.hasKey("MoveWindowDown"):
+    return (true, @[Msg(kind: CmdMoveWindowDown)])
+
+  elif action.hasKey("MoveWindowLeft"):
+    return (true, @[Msg(kind: CmdMoveWindowLeft)])
+
+  elif action.hasKey("MoveWindowRight"):
+    return (true, @[Msg(kind: CmdMoveWindowRight)])
 
   elif action.hasKey("FocusWindow"):
     let payload = action["FocusWindow"]
@@ -257,14 +333,61 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
       if win.isSome: return (true, @[Msg(kind: CmdCloseWindowById, closeWindowId: WindowId(win.get()))])
     return (true, @[Msg(kind: CmdCloseWindow)])
 
+  elif action.hasKey("SwitchLayout"):
+    return (true, @[Msg(kind: CmdSwitchLayout)])
+
+  elif action.hasKey("SetWorkspaceName"):
+    let payload = action["SetWorkspaceName"]
+    return (true, @[Msg(kind: CmdRenameTag, newName: stringFromField(payload, "name"))])
+
+  elif action.hasKey("UnsetWorkspaceName"):
+    return (true, @[Msg(kind: CmdRenameTag, newName: "")])
+
+  elif action.hasKey("FullscreenWindow"):
+    return (true, @[Msg(kind: CmdToggleFullscreen)])
+
+  elif action.hasKey("ToggleWindowFloating"):
+    return (true, @[Msg(kind: CmdToggleFloating)])
+
+  elif action.hasKey("Screenshot"):
+    let payload = action["Screenshot"]
+    return (true, @[Msg(
+      kind: CmdScreenshot,
+      screenshotKind: ShotRegion,
+      screenshotPath: stringFromField(payload, "path"),
+      screenshotShowPointer: boolFromField(payload, "show_pointer", boolFromField(payload, "show-pointer"))
+    )])
+
+  elif action.hasKey("ScreenshotScreen"):
+    let payload = action["ScreenshotScreen"]
+    return (true, @[Msg(
+      kind: CmdScreenshot,
+      screenshotKind: ShotScreen,
+      screenshotPath: stringFromField(payload, "path"),
+      screenshotShowPointer: boolFromField(payload, "show_pointer", boolFromField(payload, "show-pointer"))
+    )])
+
+  elif action.hasKey("ScreenshotWindow"):
+    let payload = action["ScreenshotWindow"]
+    return (true, @[Msg(
+      kind: CmdScreenshot,
+      screenshotKind: ShotWindow,
+      screenshotPath: stringFromField(payload, "path"),
+      screenshotShowPointer: boolFromField(payload, "show_pointer", boolFromField(payload, "show-pointer"))
+    )])
+
   elif action.hasKey("DoScreenTransition") or
       action.hasKey("PowerOffMonitors") or
       action.hasKey("PowerOnMonitors") or
-      action.hasKey("SwitchLayout") or
       action.hasKey("Quit") or
-      action.hasKey("Screenshot") or
-      action.hasKey("ScreenshotScreen") or
-      action.hasKey("ScreenshotWindow"):
+      action.hasKey("MoveWorkspaceToIndex") or
+      action.hasKey("MaximizeColumn") or
+      action.hasKey("CenterColumn") or
+      action.hasKey("CenterVisibleColumns") or
+      action.hasKey("SwitchPresetColumnWidth") or
+      action.hasKey("SwitchPresetWindowHeight") or
+      action.hasKey("ToggleColumnTabbedDisplay") or
+      action.hasKey("ToggleKeyboardShortcutsInhibit"):
     return (true, @[])
 
   (false, @[])

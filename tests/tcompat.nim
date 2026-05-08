@@ -1,10 +1,11 @@
-import unittest, json, options, tables
+import unittest, json, options, os, strtabs, strutils, tables
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/ipc/commands
 import ../src/ipc/niri_cli
 import ../src/ipc/niri_compat
+import ../src/ipc/quickshell_compat
 
 proc modelForShell(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080)
@@ -47,6 +48,11 @@ suite "Shell compatibility contracts":
 
     let outputs = parseJson(handleNiriRequest("\"Outputs\"", model).reply)["Ok"]["Outputs"]
     check outputs.hasKey("triad-0")
+    check outputs["triad-0"]["connected"].getBool() == true
+    check outputs["triad-0"]["width"].getInt() == 1920
+    check outputs["triad-0"]["height"].getInt() == 1080
+    check outputs["triad-0"]["scale"].getFloat() == 1.0
+    check outputs["triad-0"]["refresh_rate"].getInt() == 60000
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
 
@@ -135,12 +141,25 @@ suite "Shell compatibility contracts":
 
     let focusPrevColumn = handleNiriRequest("""{"Action":{"FocusColumnLeft":{}}}""", modelForShell())
     check focusPrevColumn.messages.len == 1
-    check focusPrevColumn.messages[0].kind == CmdFocusPrev
+    check focusPrevColumn.messages[0].kind == CmdFocusDirection
+    check focusPrevColumn.messages[0].direction == DirLeft
 
     let screenshot = handleNiriRequest("""{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""", modelForShell())
     check screenshot.handled
     check parseJson(screenshot.reply)["Ok"].hasKey("Handled")
-    check screenshot.messages.len == 0
+    check screenshot.messages.len == 1
+    check screenshot.messages[0].kind == CmdScreenshot
+    check screenshot.messages[0].screenshotKind == ShotRegion
+    check screenshot.messages[0].screenshotPath == "/tmp/triad-shot.png"
+
+    let switchLayout = handleNiriRequest("""{"Action":{"SwitchLayout":{"layout":"Next"}}}""", modelForShell())
+    check switchLayout.messages.len == 1
+    check switchLayout.messages[0].kind == CmdSwitchLayout
+
+    let rename = handleNiriRequest("""{"Action":{"SetWorkspaceName":{"name":"work","workspace":null}}}""", modelForShell())
+    check rename.messages.len == 1
+    check rename.messages[0].kind == CmdRenameTag
+    check rename.messages[0].newName == "work"
 
   test "triad_niri shim parses DankMaterialShell shell commands":
     let outputs = buildNiriCliRequest(@["msg", "-j", "outputs"])
@@ -158,9 +177,36 @@ suite "Shell compatibility contracts":
     let validate = buildNiriCliRequest(@["validate"])
     check validate.kind == NckValidate
 
+    let screenshotScreen = buildNiriCliRequest(@["msg", "action", "screenshot-screen", "--path", "/tmp/triad-screen.png", "--show-pointer"])
+    check screenshotScreen.kind == NckRequest
+    let screenshotForwarded = handleNiriRequest(screenshotScreen.socketPayload, modelForShell())
+    check screenshotForwarded.messages.len == 1
+    check screenshotForwarded.messages[0].kind == CmdScreenshot
+    check screenshotForwarded.messages[0].screenshotKind == ShotScreen
+    check screenshotForwarded.messages[0].screenshotPath == "/tmp/triad-screen.png"
+    check screenshotForwarded.messages[0].screenshotShowPointer == true
+
     let unwrapped = unwrapNiriReply("""{"Ok":{"Outputs":{"triad-0":{"logical":{"scale":1.0}}}}}""", "Outputs")
     check unwrapped.ok
     check parseJson(unwrapped.output).hasKey("triad-0")
+
+  test "Quickshell compatibility environment is private and points at triad_niri":
+    let tmp = getTempDir() / ("triad-compat-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    let fakeTriadNiri = tmp / "triad_niri"
+    writeFile(fakeTriadNiri, "#!/bin/sh\nexit 0\n")
+    setFilePermissions(fakeTriadNiri, {fpUserRead, fpUserWrite, fpUserExec})
+    let compat = prepareQuickshellCompatEnv(tmp / "triad-niri.sock", tmp, fakeTriadNiri)
+    defer:
+      removeDir(tmp)
+
+    check compat.env["NIRI_SOCKET"] == tmp / "triad-niri.sock"
+    check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
+    check compat.shimReady
+    check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")
+    check fileExists(compat.niriShimPath)
 
   test "text IPC remains Triad-native, not a fake Mango mmsg shell":
     let msg = parseLegacyCommand("focus-workspace 2")

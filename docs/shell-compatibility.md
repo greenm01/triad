@@ -15,18 +15,33 @@ windows, outputs, overview state, keyboard layouts, and dispatches a small set
 of actions through that socket. Triad can supply that contract directly.
 
 DankMaterialShell also reads `$NIRI_SOCKET` directly, but it additionally shells
-out to `niri msg -j outputs` and `niri validate`. Triad ships an opt-in
-`triad_niri` shim for that command-side contract. It is deliberately not
-installed as `niri`, because users may have the real compositor CLI installed.
-Expose it as `niri` only in the shell process environment:
+out to `niri msg -j outputs`, `niri validate`, and selected `niri msg action`
+commands. Triad ships `triad_niri` for that command-side contract. It is
+deliberately not installed as `niri`, because users may have the real compositor
+CLI installed.
 
-```sh
-mkdir -p "$XDG_RUNTIME_DIR/triad-compat-bin"
-ln -sf "$(command -v triad_niri)" "$XDG_RUNTIME_DIR/triad-compat-bin/niri"
-env PATH="$XDG_RUNTIME_DIR/triad-compat-bin:$PATH" qs -c dms
-```
+When Triad starts Quickshell through the `quickshell` config block, it creates a
+private runtime environment for that process:
+
+- `$NIRI_SOCKET` points at a Triad-owned Niri-compatible socket.
+- `$XDG_RUNTIME_DIR/triad-compat-bin/niri` points at `triad_niri`.
+- `PATH` is prefixed only for the spawned Quickshell process.
+- `XDG_CURRENT_DESKTOP=triad`, so shells choose the Niri backend and do not
+  accidentally select Mango/DWL behavior.
 
 That keeps the real `niri` command untouched for the rest of the system.
+
+Screenshot actions are implemented through `grim` and `slurp`:
+
+- `Screenshot` captures an interactively selected region.
+- `ScreenshotScreen` captures the primary output geometry known to Triad.
+- `ScreenshotWindow` captures the focused window geometry known to Triad.
+- On success Triad emits Niri's `ScreenshotCaptured` event with the output path,
+  letting DMS open `satty`, `swappy`, or another configured editor.
+
+Output mutation commands such as `niri msg output DP-1 scale 1.25` are not
+implemented. Triad refuses those rather than pretending to update compositor
+monitor state it does not own.
 
 The compatibility tests in `tests/tcompat.nim` encode this decision:
 

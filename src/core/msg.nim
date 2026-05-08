@@ -1,6 +1,11 @@
 import model
 
 type
+  ScreenshotKind* = enum
+    ShotRegion,
+    ShotScreen,
+    ShotWindow
+
   MsgKind* = enum
     # Wayland Events
     WlWindowCreated,
@@ -105,7 +110,8 @@ type
     CmdFocusShellUi,
     CmdTick,
     CmdReloadConfig,
-    CmdSwitchLayout
+    CmdSwitchLayout,
+    CmdScreenshot
 
   Msg* = object
     case kind*: MsgKind
@@ -227,5 +233,9 @@ type
       closeWindowId*: WindowId
     of CmdWarpPointer:
       warpX*, warpY*: int32
+    of CmdScreenshot:
+      screenshotKind*: ScreenshotKind
+      screenshotPath*: string
+      screenshotShowPointer*: bool
     else:
       discard

@@ -108,6 +108,25 @@ triad_msg reload-config
 ./triad_niri msg -j workspaces >/dev/null
 ./triad_niri msg -j outputs >/dev/null
 
+if [ -n "${NIRI_SOCKET:-}" ] && [ ! -e "$NIRI_SOCKET" ]; then
+  niri_socket="$NIRI_SOCKET"
+else
+  niri_socket="$XDG_RUNTIME_DIR/triad-niri.sock"
+fi
+
+env NIRI_SOCKET="$niri_socket" ./triad_niri msg -j workspaces >/dev/null
+env NIRI_SOCKET="$niri_socket" ./triad_niri msg -j outputs >/dev/null
+
+if [ "${TRIAD_LIVE_TEST_QUICKSHELL:-0}" = "1" ]; then
+  require_log "Spawned Quickshell"
+  compat_bin="$XDG_RUNTIME_DIR/triad-compat-bin"
+  if [ ! -x "$compat_bin/niri" ]; then
+    fail "missing private niri shim at $compat_bin/niri"
+  fi
+  env NIRI_SOCKET="$niri_socket" PATH="$compat_bin:$PATH" niri msg -j workspaces >/dev/null
+  env NIRI_SOCKET="$niri_socket" PATH="$compat_bin:$PATH" niri msg -j outputs >/dev/null
+fi
+
 : >"$events"
 ./triad msg event-stream >"$events" &
 event_stream_pid="$!"
