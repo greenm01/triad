@@ -2,6 +2,7 @@ import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as river_layer
 import protocols/river_xkb_bindings/client as river_xkb
+import wayland/protocols/wayland/client as wl_core
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import core/model
 import core/msg
@@ -85,6 +86,9 @@ var
   windowDecorationAbove: Table[WindowId, uint32]
   windowDecorationBelow: Table[WindowId, uint32]
   outputWlNames: Table[uint32, uint32]
+  outputGlobalOwners: Table[uint32, uint32]
+  outputGlobalNames: Table[uint32, string]
+  wlOutputPointers: Table[uint32, ptr Output]
   seatWlNames: Table[uint32, uint32]
   pointerWindowBySeat: Table[uint32, WindowId]
   pointerPositionBySeat: Table[uint32, Rect]
@@ -1539,13 +1543,60 @@ proc on_output_removed(data: pointer, output: ptr RiverOutputV1) =
     layerOutputPointers.del(id)
     layerOutput.destroy()
   outputPointers.del(id)
-  outputWlNames.del(id)
+  if outputWlNames.hasKey(id):
+    outputGlobalOwners.del(outputWlNames[id])
+    outputWlNames.del(id)
   msgQueue.add(Msg(kind: WlOutputRemoved, removedOutputId: id))
   output.destroy()
 
 proc on_output_wl_output(data: pointer, output: ptr RiverOutputV1, name: uint32) =
-  outputWlNames[output.get_id()] = name
-  trace "Output wl_output received", outputId=output.get_id(), name=name
+  let outputId = output.get_id()
+  outputWlNames[outputId] = name
+  outputGlobalOwners[name] = outputId
+  trace "Output wl_output received", outputId=outputId, name=name
+  if outputGlobalNames.hasKey(name):
+    msgQueue.add(Msg(kind: WlOutputName, nameOutputId: outputId, outputName: outputGlobalNames[name]))
+
+proc on_wl_output_geometry(
+  data: pointer;
+  output: ptr Output;
+  x: int32;
+  y: int32;
+  physicalWidth: int32;
+  physicalHeight: int32;
+  subpixel: int32;
+  make: cstring;
+  model: cstring;
+  transform: int32
+) =
+  discard
+
+proc on_wl_output_mode(
+  data: pointer;
+  output: ptr Output;
+  flags: uint32;
+  width: int32;
+  height: int32;
+  refresh: int32
+) =
+  discard
+
+proc on_wl_output_done(data: pointer; output: ptr Output) =
+  discard
+
+proc on_wl_output_scale(data: pointer; output: ptr Output; factor: int32) =
+  discard
+
+proc on_wl_output_name(data: pointer; output: ptr Output; name: cstring) =
+  let globalName = uint32(cast[uint](data))
+  let outputName = $name
+  outputGlobalNames[globalName] = outputName
+  trace "wl_output name received", globalName=globalName, outputName=outputName
+  if outputGlobalOwners.hasKey(globalName):
+    msgQueue.add(Msg(kind: WlOutputName, nameOutputId: outputGlobalOwners[globalName], outputName: outputName))
+
+proc on_wl_output_description(data: pointer; output: ptr Output; description: cstring) =
+  discard
 
 proc on_output_position(data: pointer, output: ptr RiverOutputV1, x: int32, y: int32) =
   info "Output position changed", outputId=output.get_id(), x=x, y=y
@@ -1555,6 +1606,7 @@ proc on_output_position(data: pointer, output: ptr RiverOutputV1, x: int32, y: i
 var 
   manager_listener: RiverWindowManagerV1Listener
   output_listener: RiverOutputV1Listener
+  wl_output_listener: wl_core.OutputListener
 
 proc on_output(data: pointer, mgr: ptr RiverWindowManagerV1, output: ptr RiverOutputV1) =
   let id = output.get_id()
@@ -1589,6 +1641,11 @@ proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32,
     compositor = cast[ptr Compositor](registry.`bind`(name, wl_compositor_interface.addr, min(version, 6'u32)))
     info "Bound to wl_compositor", name=name, advertisedVersion=version
     ensureOwnedShellSurface()
+  elif interfaceName == "wl_output":
+    let wlOutput = cast[ptr Output](registry.`bind`(name, wl_core.wl_output_interface.addr, min(version, 4'u32)))
+    wlOutputPointers[name] = wlOutput
+    discard wlOutput.addListener(wl_output_listener.addr, cast[pointer](uint(name)))
+    debug "Bound to wl_output", name=name, advertisedVersion=version, boundVersion=min(version, 4'u32)
   elif interfaceName == "river_layer_shell_v1":
     river_layer_shell = cast[ptr river_layer.RiverLayerShellV1](registry.`bind`(name, river_layer.river_layer_shell_v1_interface.addr, min(version, 1'u32)))
     for outputId in outputPointers.keys:
@@ -1608,6 +1665,14 @@ proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32,
 
 proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =
   debug "Wayland global removed", name=name
+  if wlOutputPointers.hasKey(name):
+    wlOutputPointers[name].release()
+    wlOutputPointers.del(name)
+  outputGlobalNames.del(name)
+  if outputGlobalOwners.hasKey(name):
+    let outputId = outputGlobalOwners[name]
+    outputGlobalOwners.del(name)
+    msgQueue.add(Msg(kind: WlOutputName, nameOutputId: outputId, outputName: ""))
 
 var registry_listener = RegistryListener(
   global: registry_handle_global,
@@ -1814,6 +1879,14 @@ if isMainModule:
     output: on_output_wl_output,
     position: on_output_position,
     dimensions: on_output_dimensions
+  )
+  wl_output_listener = wl_core.OutputListener(
+    geometry: on_wl_output_geometry,
+    mode: on_wl_output_mode,
+    done: on_wl_output_done,
+    scale: on_wl_output_scale,
+    name: on_wl_output_name,
+    description: on_wl_output_description
   )
   
   main()

@@ -53,18 +53,29 @@ proc windowWorkspaceId(model: Model; winId: WindowId): Option[uint32] =
       return some(tagId)
   none(uint32)
 
+proc niriOutputName(model: Model; outputId: uint32): string =
+  if outputId != 0 and model.outputs.hasKey(outputId):
+    let output = model.outputs[outputId]
+    if output.name.len > 0:
+      return output.name
+  if outputId != 0:
+    return "river-" & $outputId
+  "triad-0"
+
+proc niriWorkspaceOutputName(model: Model; tagId: uint32): string =
+  var outputId = model.primaryOutput
+  for candidateId, outputTag in model.outputTags.pairs:
+    if outputTag == tagId:
+      outputId = candidateId
+      break
+  model.niriOutputName(outputId)
+
 proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
   let ws = model.windowWorkspaceId(win.id)
   let isFocused = ws.isSome and model.tags[ws.get()].focusedWindow == win.id
   let output =
     if ws.isSome and model.tags.hasKey(ws.get()):
-      block:
-        var outputName = if model.primaryOutput != 0: "river-" & $model.primaryOutput else: "triad-0"
-        for outputId, outputTag in model.outputTags.pairs:
-          if outputTag == ws.get():
-            outputName = "river-" & $outputId
-            break
-        outputName
+      model.niriWorkspaceOutputName(ws.get())
     else:
       ""
   result = %*{
@@ -94,11 +105,7 @@ proc niriWorkspacesJson*(model: Model): JsonNode =
   for tagId in ids:
     let tag = model.tags[tagId]
     let windows = tag.flattenWindows()
-    var outputName = if model.primaryOutput != 0: "river-" & $model.primaryOutput else: "triad-0"
-    for outputId, outputTag in model.outputTags.pairs:
-      if outputTag == tagId:
-        outputName = "river-" & $outputId
-        break
+    let outputName = model.niriWorkspaceOutputName(tagId)
     result.add(%*{
       "id": tagId,
       "idx": tagId,
@@ -168,7 +175,7 @@ proc niriOutputsJson*(model: Model): JsonNode =
 
   for id in ids:
     let output = model.outputs[id]
-    let name = "river-" & $id
+    let name = model.niriOutputName(id)
     let w = max(0, int(output.w))
     let h = max(0, int(output.h))
     result[name] = %*{

@@ -9,6 +9,7 @@ type
   OutputData* = object
     id*: uint32
     wlName*: uint32
+    name*: string
     x*, y*, w*, h*: int32
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool

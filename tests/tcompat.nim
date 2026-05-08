@@ -71,6 +71,21 @@ suite "Shell compatibility contracts":
     check outputs["river-42"]["logical"]["width"].getInt() == 1280
     check outputs["river-42"]["logical"]["height"].getInt() == 720
 
+  test "Niri output and workspace names use wl_output names when known":
+    var model = modelForShell()
+    model.outputs[42] = OutputData(id: 42, name: "Virtual-1", x: 0, y: 0, w: 1280, h: 720)
+    model.primaryOutput = 42
+
+    let workspaces = parseJson(handleNiriRequest("\"Workspaces\"", model).reply)["Ok"]["Workspaces"]
+    check workspaces[0]["output"].getStr() == "Virtual-1"
+
+    let windows = parseJson(handleNiriRequest("\"Windows\"", model).reply)["Ok"]["Windows"]
+    check windows[0]["output"].getStr() == "Virtual-1"
+
+    let outputs = parseJson(handleNiriRequest("\"Outputs\"", model).reply)["Ok"]["Outputs"]
+    check outputs.hasKey("Virtual-1")
+    check outputs["Virtual-1"]["name"].getStr() == "Virtual-1"
+
   test "Niri compatibility reflects actual window dimensions and output tag ownership":
     var model = modelForShell()
     model.outputs[42] = OutputData(id: 42, x: 0, y: 0, w: 1280, h: 720)

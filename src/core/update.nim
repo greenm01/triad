@@ -409,6 +409,12 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       nextModel.syncPrimaryOutput()
       nextModel.syncPrimaryOutputTag()
 
+  of WlOutputName:
+    if msg.nameOutputId != 0:
+      var output = nextModel.outputs.getOrDefault(msg.nameOutputId, OutputData(id: msg.nameOutputId))
+      output.name = msg.outputName.strip()
+      nextModel.outputs[msg.nameOutputId] = output
+
   of WlOutputPosition:
     if msg.positionOutputId != 0:
       var output = nextModel.outputs.getOrDefault(msg.positionOutputId, OutputData(id: msg.positionOutputId))

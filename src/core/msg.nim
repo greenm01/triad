@@ -31,6 +31,7 @@ type
     WlSessionLocked,
     WlSessionUnlocked,
     WlOutputDimensions,
+    WlOutputName,
     WlOutputPosition,
     WlOutputUsable,
     WlOutputRemoved,
@@ -167,6 +168,9 @@ type
       outputId*: uint32
       width*: int32
       height*: int32
+    of WlOutputName:
+      nameOutputId*: uint32
+      outputName*: string
     of WlOutputPosition:
       positionOutputId*: uint32
       outputX*: int32
