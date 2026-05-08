@@ -130,6 +130,7 @@ proc initialNiriEvents*(model: Model): seq[string] =
   @[
     $(%*{"WorkspacesChanged": {"workspaces": niriWorkspacesJson(model)}}),
     $(%*{"WindowsChanged": {"windows": niriWindowsJson(model)}}),
+    $(%*{"OutputsChanged": {"outputs": niriOutputsJson(model)}}),
     $(%*{"OverviewOpenedOrClosed": {"is_open": model.overviewActive}}),
     $(%*{"KeyboardLayoutsChanged": {"keyboard_layouts": niriKeyboardLayoutsJson()}}),
     $(%*{"ConfigLoaded": {"failed": false}})
@@ -143,9 +144,24 @@ proc uintFromNode(node: JsonNode): Option[uint32] =
     discard
   none(uint32)
 
-proc actionMessages(action: JsonNode): seq[Msg] =
+proc nextTag(model: Model; direction: int): Option[uint32] =
+  var ids: seq[uint32] = @[]
+  for tagId in model.tags.keys:
+    ids.add(tagId)
+  ids.sort()
+  if ids.len == 0:
+    return none(uint32)
+
+  let active = model.activeTagOrFallback()
+  var idx = ids.find(active)
+  if idx == -1:
+    idx = 0
+  let nextIdx = (idx + direction + ids.len) mod ids.len
+  some(ids[nextIdx])
+
+proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messages: seq[Msg]] =
   if action.kind != JObject:
-    return @[]
+    return (false, @[])
 
   if action.hasKey("FocusWorkspace"):
     let payload = action["FocusWorkspace"]
@@ -154,25 +170,52 @@ proc actionMessages(action: JsonNode): seq[Msg] =
       if refNode.kind == JObject:
         if refNode.hasKey("Index"):
           let tag = uintFromNode(refNode["Index"])
-          if tag.isSome: return @[Msg(kind: CmdFocusTag, focusTag: tag.get())]
+          if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
         elif refNode.hasKey("Id"):
           let tag = uintFromNode(refNode["Id"])
-          if tag.isSome: return @[Msg(kind: CmdFocusTag, focusTag: tag.get())]
+          if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+
+  elif action.hasKey("FocusWorkspaceDown"):
+    let tag = nextTag(model, 1)
+    if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+
+  elif action.hasKey("FocusWorkspaceUp"):
+    let tag = nextTag(model, -1)
+    if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+
+  elif action.hasKey("ToggleOverview"):
+    return (true, @[Msg(kind: CmdToggleOverview)])
+
+  elif action.hasKey("FocusColumnLeft"):
+    return (true, @[Msg(kind: CmdFocusPrev)])
+
+  elif action.hasKey("FocusColumnRight"):
+    return (true, @[Msg(kind: CmdFocusNext)])
 
   elif action.hasKey("FocusWindow"):
     let payload = action["FocusWindow"]
     if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
       let win = uintFromNode(payload["id"])
-      if win.isSome: return @[Msg(kind: CmdFocusWindowById, focusWindowId: WindowId(win.get()))]
+      if win.isSome: return (true, @[Msg(kind: CmdFocusWindowById, focusWindowId: WindowId(win.get()))])
 
   elif action.hasKey("CloseWindow"):
     let payload = action["CloseWindow"]
     if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
       let win = uintFromNode(payload["id"])
-      if win.isSome: return @[Msg(kind: CmdCloseWindowById, closeWindowId: WindowId(win.get()))]
-    return @[Msg(kind: CmdCloseWindow)]
+      if win.isSome: return (true, @[Msg(kind: CmdCloseWindowById, closeWindowId: WindowId(win.get()))])
+    return (true, @[Msg(kind: CmdCloseWindow)])
 
-  @[]
+  elif action.hasKey("DoScreenTransition") or
+      action.hasKey("PowerOffMonitors") or
+      action.hasKey("PowerOnMonitors") or
+      action.hasKey("SwitchLayout") or
+      action.hasKey("Quit") or
+      action.hasKey("Screenshot") or
+      action.hasKey("ScreenshotScreen") or
+      action.hasKey("ScreenshotWindow"):
+    return (true, @[])
+
+  (false, @[])
 
 proc handleNiriRequest*(line: string; model: Model): NiriIpcResult =
   result.handled = false
@@ -217,8 +260,9 @@ proc handleNiriRequest*(line: string; model: Model): NiriIpcResult =
     return
 
   if request.kind == JObject and request.hasKey("Action"):
-    result.messages = actionMessages(request["Action"])
-    if result.messages.len > 0:
+    let action = actionMessages(request["Action"], model)
+    result.messages = action.messages
+    if action.handled:
       result.reply = okReply(%*{"Handled": {}})
     else:
       result.reply = errReply("unsupported niri action")

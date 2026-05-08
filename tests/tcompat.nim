@@ -51,10 +51,23 @@ suite "Shell compatibility contracts":
     check response.handled
     check response.subscribe
     check parseJson(response.reply)["Ok"].hasKey("Handled")
-    check response.initialEvents.len >= 4
-    check parseJson(response.initialEvents[0]).hasKey("WorkspacesChanged")
-    check parseJson(response.initialEvents[1]).hasKey("WindowsChanged")
-    check parseJson(response.initialEvents[2]).hasKey("OverviewOpenedOrClosed")
+    check response.initialEvents.len >= 5
+
+    var hasWorkspaces = false
+    var hasWindows = false
+    var hasOutputs = false
+    var hasOverview = false
+    for event in response.initialEvents:
+      let parsed = parseJson(event)
+      hasWorkspaces = hasWorkspaces or parsed.hasKey("WorkspacesChanged")
+      hasWindows = hasWindows or parsed.hasKey("WindowsChanged")
+      hasOutputs = hasOutputs or parsed.hasKey("OutputsChanged")
+      hasOverview = hasOverview or parsed.hasKey("OverviewOpenedOrClosed")
+
+    check hasWorkspaces
+    check hasWindows
+    check hasOutputs
+    check hasOverview
 
   test "Niri actions map to Triad messages":
     let focusWs = handleNiriRequest("""{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", modelForShell())
@@ -71,6 +84,25 @@ suite "Shell compatibility contracts":
     check closeWin.messages.len == 1
     check closeWin.messages[0].kind == CmdCloseWindowById
     check closeWin.messages[0].closeWindowId == 10
+
+  test "DankMaterialShell Niri actions are handled":
+    let toggleOverview = handleNiriRequest("""{"Action":{"ToggleOverview":{}}}""", modelForShell())
+    check toggleOverview.messages.len == 1
+    check toggleOverview.messages[0].kind == CmdToggleOverview
+
+    let focusNextWorkspace = handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", modelForShell())
+    check focusNextWorkspace.messages.len == 1
+    check focusNextWorkspace.messages[0].kind == CmdFocusTag
+    check focusNextWorkspace.messages[0].focusTag == 2
+
+    let focusPrevColumn = handleNiriRequest("""{"Action":{"FocusColumnLeft":{}}}""", modelForShell())
+    check focusPrevColumn.messages.len == 1
+    check focusPrevColumn.messages[0].kind == CmdFocusPrev
+
+    let screenshot = handleNiriRequest("""{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""", modelForShell())
+    check screenshot.handled
+    check parseJson(screenshot.reply)["Ok"].hasKey("Handled")
+    check screenshot.messages.len == 0
 
   test "text IPC remains Triad-native, not a fake Mango mmsg shell":
     let msg = parseLegacyCommand("focus-workspace 2")

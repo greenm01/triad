@@ -91,6 +91,14 @@ proc broadcastWindowClosed(winId: WindowId): Effect =
   }
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
 
+proc broadcastOverview(open: bool): Effect =
+  let payload = %*{
+    "OverviewOpenedOrClosed": {
+      "is_open": open
+    }
+  }
+  return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
+
 proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
   var i = 0
   while i < s.len:
@@ -515,7 +523,10 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
             let temp = tag.columns[i].windows[idx]; tag.columns[i].windows[idx] = tag.columns[i].windows[idx+1]; tag.columns[i].windows[idx+1] = temp
             nextModel.tags[activeTagId] = tag; effects.add(Effect(kind: EffManageDirty)); break
 
-  of CmdToggleOverview: nextModel.overviewActive = not nextModel.overviewActive; effects.add(Effect(kind: EffManageDirty))
+  of CmdToggleOverview:
+    nextModel.overviewActive = not nextModel.overviewActive
+    effects.add(Effect(kind: EffManageDirty))
+    effects.add(broadcastOverview(nextModel.overviewActive))
 
   of CmdToggleFloating:
     if nextModel.tags.hasKey(nextModel.activeTag):
