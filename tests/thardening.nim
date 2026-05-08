@@ -3,6 +3,7 @@ from nativesockets import AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
+import ../src/core/restore_state
 import ../src/core/update
 import ../src/layouts/scroller
 import ../src/layouts/tiling
@@ -470,6 +471,36 @@ window-rule {
     check config.tagRules[0].defaultLayout == Scroller
     check config.windowRules[0].defaultTag == 0
     check config.windowRules[0].forcedLayout == 0
+
+  test "live restore snapshot parser keeps active tag and window tags":
+    let parsed = parseLiveRestoreJson("""
+{
+  "workspaces": [
+    {"id": 1, "is_active": false},
+    {"id": 2, "is_active": true}
+  ],
+  "windows": [
+    {"id": 10, "workspace_id": 2},
+    {"id": 11, "workspace_id": null}
+  ]
+}
+""")
+
+    check parsed.isSome
+    let state = parsed.get()
+    check state.activeTag == 2
+    check state.tagByWindow[10] == 2
+    check not state.tagByWindow.hasKey(11)
+    check parseLiveRestoreJson("{bad").isNone
+
+  test "consuming live restore snapshot removes it":
+    let path = getTempDir() / "triad-live-restore-test.json"
+    writeFile(path, """{"workspaces":[{"id":3,"is_active":true}],"windows":[]}""")
+
+    let state = consumeLiveRestoreState(path)
+    check state.isSome
+    check state.get().activeTag == 3
+    check not fileExists(path)
 
   test "layouts never emit negative geometry for tiny screens and huge gaps":
     let screen = Rect(x: 0, y: 0, w: 20, h: 10)

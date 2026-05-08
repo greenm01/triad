@@ -2,6 +2,7 @@ import unittest
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
+import ../src/core/restore_state
 import ../src/core/update
 import tables, sequtils, strutils
 
@@ -112,6 +113,22 @@ suite "Core TEA Update Logic":
     nextModel.windowRules.add(WindowRule(appIdMatch: "pinned", defaultTag: 1))
     let (pinnedModel, _) = update(nextModel, Msg(kind: WlWindowCreated, windowId: 111, appId: "pinned-app", title: "pinned"))
     check pinnedModel.tags[1].containsWindow(111)
+
+  test "live restore places rediscovered windows before rules":
+    model.tags[1] = initTagState(1, Scroller)
+    model.tags[2] = initTagState(2, Grid)
+    model.activeTag = 1
+    model.windowRules.add(WindowRule(appIdMatch: "pinned", defaultTag: 3))
+    var restored = LiveRestoreState(activeTag: 2)
+    restored.tagByWindow[WindowId(112)] = 2
+    model.applyLiveRestore(restored)
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowCreated, windowId: 112, appId: "pinned-app", title: "pinned"))
+    check nextModel.activeTag == 2
+    check nextModel.tags[2].containsWindow(112)
+    check not nextModel.tags[1].containsWindow(112)
+    check not nextModel.tags.hasKey(3) or not nextModel.tags[3].containsWindow(112)
+    check not nextModel.restoreTagByWindow.hasKey(112)
 
   test "Scratchpad management moves window out of tag":
     var tag1 = TagState(tagId: 1, layoutMode: Scroller, focusedWindow: 101)

@@ -1,7 +1,7 @@
 import unittest
 import ../src/config/parser
 import ../src/core/model
-import os
+import os, tables
 
 suite "KDL Configuration Parser":
   test "Parser correctly reads layout settings":
@@ -181,3 +181,15 @@ bindings {
 
     check config.keyBindings.len > 0
     check config.pointerBindings.len > 0
+
+  test "Default config overview up down keys use Niri workspace stack navigation":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+    var commandsByKey = initTable[string, string]()
+    for binding in config.keyBindings:
+      if binding.mode == BindOverview and binding.key in ["Down", "Up", "j", "k"]:
+        commandsByKey[binding.key] = binding.command
+
+    check commandsByKey["Down"] == "focus-window-or-workspace-down"
+    check commandsByKey["j"] == "focus-window-or-workspace-down"
+    check commandsByKey["Up"] == "focus-window-or-workspace-up"
+    check commandsByKey["k"] == "focus-window-or-workspace-up"

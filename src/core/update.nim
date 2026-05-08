@@ -619,13 +619,18 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     discard nextModel.removeWindowFromScratchpad(msg.windowId)
 
     var win = WindowData(id: msg.windowId, appId: msg.appId, title: msg.title, identifier: msg.createdIdentifier, widthProportion: DefaultWindowWidth, heightProportion: DefaultWindowHeight)
+    var hasRestoredTag = false
     var targetTag = if nextModel.activeTag == 0: 1'u32 else: nextModel.activeTag
+    if nextModel.restoreTagByWindow.hasKey(msg.windowId):
+      targetTag = nextModel.restoreTagByWindow[msg.windowId]
+      nextModel.restoreTagByWindow.del(msg.windowId)
+      hasRestoredTag = targetTag != 0
     var forcedLayout = 0
     for rule in nextModel.windowRules:
       let appIdMatches = rule.appIdMatch == "" or msg.appId.contains(rule.appIdMatch)
       let titleMatches = rule.titleMatch == "" or msg.title.contains(rule.titleMatch)
       if appIdMatches and titleMatches:
-        if rule.defaultTag != 0: targetTag = rule.defaultTag
+        if rule.defaultTag != 0 and not hasRestoredTag: targetTag = rule.defaultTag
         if rule.openFloating:
           win.isFloating = true
           win.floatingGeom = Rect(x: nextModel.screenWidth div 4, y: nextModel.screenHeight div 4, w: nextModel.screenWidth div 2, h: nextModel.screenHeight div 2)

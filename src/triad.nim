@@ -8,6 +8,7 @@ import core/model
 import core/msg
 import core/update
 import core/model_utils
+import core/restore_state
 import layouts/scroller
 import layouts/tiling
 import config/parser
@@ -99,6 +100,7 @@ var
   configPath: string
   watcher: Watcher
   shouldExit = false
+  quickshellProcess: Process
 
 # --- Helpers ---
 
@@ -363,6 +365,27 @@ proc spawnStartupCommands(model: Model) =
       except CatchableError as e:
         warn "Failed to spawn startup command", cmd=cmd[0], error=e.msg
 
+proc stopQuickshell(reason: string) =
+  if quickshellProcess == nil:
+    return
+
+  let pid = quickshellProcess.processID
+  try:
+    quickshellProcess.terminate()
+    let code = quickshellProcess.waitForExit(1000)
+    if code == -1:
+      quickshellProcess.kill()
+      discard quickshellProcess.waitForExit(1000)
+    info "Stopped Quickshell", pid=pid, reason=reason
+  except CatchableError as e:
+    warn "Failed to stop Quickshell", pid=pid, reason=reason, error=e.msg
+
+  try:
+    quickshellProcess.close()
+  except CatchableError:
+    discard
+  quickshellProcess = nil
+
 proc spawnQuickshell(model: Model; niriSocketPath: string) =
   if model.quickshell.enabled and model.quickshell.theme != "":
     var args = @["-c", model.quickshell.theme]
@@ -374,6 +397,7 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
       if compat.warning.len > 0:
         warn "Quickshell compatibility environment is incomplete", warning=compat.warning
       let p = startProcess("qs", args = args, env = compat.env, options = {poUsePath})
+      quickshellProcess = p
       info "Spawned Quickshell",
         theme=model.quickshell.theme,
         pid=p.processID,
@@ -381,6 +405,10 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
         shimReady=compat.shimReady
     except CatchableError as e:
       warn "Failed to spawn Quickshell", theme=model.quickshell.theme, error=e.msg
+
+proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
+  stopQuickshell(reason)
+  spawnQuickshell(model, niriSocketPath)
 
 proc spawnScreenLock(command: seq[string]) =
   if command.len == 0:
@@ -1246,6 +1274,7 @@ proc executeEffect(eff: Effect) =
     for xkbSeat in xkbSeatPointers.values:
       xkbSeat.cancelEnsureNextKeyEaten()
   of EffStopManager:
+    stopQuickshell("manager stop")
     if river_manager != nil:
       river_manager.stop()
   of EffExitSession:
@@ -1726,7 +1755,7 @@ proc startAnimationLoop() {.async.} =
       msgQueue.add(Msg(kind: CmdTick))
     await sleepAsync(16) # ~60fps
 
-proc processQueuedMessages(configPath: string) =
+proc processQueuedMessages(configPath, niriSocketPath: string) =
   while msgQueue.len > 0:
     let msg = msgQueue[0]
     msgQueue.delete(0)
@@ -1743,6 +1772,7 @@ proc processQueuedMessages(configPath: string) =
     if msg.kind == CmdReloadConfig:
       let config = loadConfig(configPath)
       currentModel.applyConfig(config)
+      restartQuickshell(currentModel, niriSocketPath, "config reload")
       destroyBindings()
       info "Config reloaded", path=configPath
       requestManage("config reload")
@@ -1848,6 +1878,19 @@ proc main() =
   currentModel.applyConfig(initialConfig)
   info "Initial config loaded", path=configPath
 
+  let restorePath = defaultLiveRestorePath()
+  let hadRestoreSnapshot = fileExists(restorePath)
+  let restoreSnapshot = consumeLiveRestoreState(restorePath)
+  if restoreSnapshot.isSome:
+    let state = restoreSnapshot.get()
+    currentModel.applyLiveRestore(state)
+    info "Live restore snapshot applied",
+      path=restorePath,
+      activeTag=state.activeTag,
+      windows=state.tagByWindow.len
+  elif hadRestoreSnapshot:
+    warn "Live restore snapshot could not be applied", path=restorePath
+
   # Setup Watcher
   watcher = initWatcher()
   proc onConfigChange(events: seq[PathEvent]) {.gcsafe.} =
@@ -1893,7 +1936,7 @@ proc main() =
     asyncdispatch.poll(16)
 
     # Process Message Queue
-    processQueuedMessages(configPath)
+    processQueuedMessages(configPath, niriSocketPath)
     if shouldExit:
       running = false
       continue

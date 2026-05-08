@@ -20,17 +20,70 @@ latest_triad_pid() {
   pgrep -n -x triad 2>/dev/null || true
 }
 
+snapshot_restore_state() {
+  restore_path="$1"
+  workspaces="$("$repo_dir/triad_niri" msg -j workspaces)" ||
+    fail "failed to snapshot workspaces before restart"
+  windows="$("$repo_dir/triad_niri" msg -j windows)" ||
+    fail "failed to snapshot windows before restart"
+
+  restore_dir="$(dirname -- "$restore_path")"
+  mkdir -p "$restore_dir"
+  tmp="$restore_path.tmp.$$"
+  printf '{"workspaces":%s,"windows":%s}\n' "$workspaces" "$windows" > "$tmp"
+  mv -f "$tmp" "$restore_path"
+
+  window_count="$(printf '%s\n' "$windows" | tr ',' '\n' | grep -c '"workspace_id"' || true)"
+  printf '%s\n' "live-reload: snapshotted $window_count window(s) to $restore_path"
+}
+
+stop_quickshell() {
+  pids="$(pgrep -f '(^|/)qs( |$)' 2>/dev/null || true)"
+  [ -n "$pids" ] || return 0
+
+  for pid in $pids; do
+    kill "$pid" 2>/dev/null || true
+  done
+
+  i=0
+  while [ "$i" -lt 20 ]; do
+    remaining=""
+    for pid in $pids; do
+      if kill -0 "$pid" 2>/dev/null; then
+        remaining="$remaining $pid"
+      fi
+    done
+    [ -z "$remaining" ] && break
+    i=$((i + 1))
+    sleep 0.05
+  done
+
+  for pid in $pids; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  done
+
+  printf '%s\n' "live-reload: requested quickshell restart for pid(s): $pids"
+}
+
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 bin_dir="${TRIAD_LIVE_BIN_DIR:-$HOME/.local/bin}"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+restore_path="${TRIAD_LIVE_RESTORE_PATH:-$runtime_dir/triad-live-restore.json}"
 old_pid="$(latest_triad_pid)"
 
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"
 
+snapshot_restore_state "$restore_path"
+
 mkdir -p "$bin_dir"
 
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
+
+stop_quickshell
 
 if "$repo_dir/triad" msg stop-manager; then
   i=0

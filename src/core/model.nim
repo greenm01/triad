@@ -197,5 +197,7 @@ type
     scratchpadWidthRatio*: float32
     scratchpadHeightRatio*: float32
     focusHistory*: seq[WindowId]
+    restoreActiveTag*: uint32
+    restoreTagByWindow*: Table[WindowId, uint32]
     # Grouping counter
     nextGroupId*: uint32
