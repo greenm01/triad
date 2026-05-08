@@ -43,3 +43,6 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
   ]:
     if dirExists(path):
       rmDir(path)
+
+task verify, "Run tests, build, tidy, and binary hygiene checks":
+  exec "sh tools/preflight.sh"

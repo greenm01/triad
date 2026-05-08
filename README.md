@@ -31,6 +31,25 @@ nimble build
 ./triad
 ```
 
+### Development Checks
+
+Use the normal test and build tasks while iterating:
+
+```bash
+nimble test
+nimble build
+nimble tidy
+```
+
+Before publishing changes, run the full local preflight:
+
+```bash
+nimble verify
+```
+
+`verify` requires a clean working tree, runs tests and builds, tidies generated
+artifacts, and fails if executable binaries are tracked or left in the project.
+
 ### IPC & Navigation
 
 Triad exposes a Unix domain socket for external control. You may interact with it using the CLI:
