@@ -13,6 +13,8 @@ suite "KDL Configuration Parser":
     model.tags[1] = initTagState(1, Scroller, "work")
     model.tags[1].focusedWindow = 7
     model.tags[1].columns.add(Column(windows: @[WindowId(7)], widthProportion: 0.85))
+    model.focusHistory = @[WindowId(7)]
+    model.workspaceHistory = @[1'u32]
     model.windows[7] = WindowData(
       id: 7,
       appId: "brave",
@@ -39,6 +41,8 @@ suite "KDL Configuration Parser":
     check model.unfocusedBorderColor == DefaultUnfocusedBorderColor
     check model.activeTag == 1
     check model.tags[1].focusedWindow == 7
+    check model.focusHistory == @[WindowId(7)]
+    check model.workspaceHistory == @[1'u32]
     check model.tags[1].columns[0].widthProportion == 0.85'f32
     check model.windows[7].widthProportion == 0.75'f32
     check model.windows[7].heightProportion == 0.6'f32

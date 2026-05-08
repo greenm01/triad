@@ -300,6 +300,7 @@ suite "Core TEA Update Logic":
 
   test "native live restore preserves workspace layout sizing and focus":
     var source = Model(activeTag: 2, screenWidth: 2560, screenHeight: 1440)
+    source.tags[1] = initTagState(1, Scroller, "term")
     source.tags[2] = initTagState(2, Scroller, "web")
     source.tags[2].focusedWindow = 202
     source.tags[2].targetViewportXOffset = 128.0
@@ -317,12 +318,18 @@ suite "Core TEA Update Logic":
       actualW: 2560,
       actualH: 1410)
     source.outputTags[42] = 2
+    source.focusHistory = @[WindowId(201), 202]
+    source.workspaceHistory = @[1'u32, 2]
 
     let parsed = parseLiveRestoreJson(liveRestoreJson(source))
     check parsed.isSome
+    check parsed.get().focusHistory == @[WindowId(201), 202]
+    check parsed.get().workspaceHistory == @[1'u32, 2]
 
     var restoredModel = Model(activeTag: 1, screenWidth: 2560, screenHeight: 1440)
     restoredModel.applyLiveRestore(parsed.get())
+    check restoredModel.focusHistory == @[WindowId(201), 202]
+    check restoredModel.workspaceHistory == @[1'u32, 2]
 
     var (nextModel, _) = update(restoredModel, Msg(kind: WlWindowCreated, windowId: 201, appId: "foot", title: "foot"))
     check nextModel.activeTag == 2
@@ -471,6 +478,101 @@ suite "Core TEA Update Logic":
     (nextModel, _) = update(nextModel, Msg(kind: CmdFocusLast))
 
     check nextModel.tags[1].focusedWindow == 101
+
+  test "Closing focused window restores most recent surviving window globally":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
+    model.tags[1].focusedWindow = 101
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[2].columns.add(Column(windows: @[WindowId(201)]))
+    model.tags[2].focusedWindow = 201
+    model.windows[101] = WindowData(id: 101)
+    model.windows[201] = WindowData(id: 201)
+    model.activeTag = 2
+    model.focusHistory = @[WindowId(101), 201]
+    model.workspaceHistory = @[1'u32, 2]
+
+    let (nextModel, effects) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 201))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].focusedWindow == 101
+    check nextModel.focusHistory == @[WindowId(101)]
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 101)
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspaceActivated"))
+
+  test "Closing background window does not steal focus":
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[1].columns.add(Column(windows: @[WindowId(101), 102]))
+    model.tags[1].focusedWindow = 101
+    model.windows[101] = WindowData(id: 101)
+    model.windows[102] = WindowData(id: 102)
+    model.activeTag = 1
+    model.focusHistory = @[WindowId(102), 101]
+
+    let (nextModel, effects) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 102))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].focusedWindow == 101
+    check not nextModel.tags[1].containsWindow(102)
+    check not effects.anyIt(it.kind == EffFocusWindow and it.focusId == 101)
+
+  test "Closing focused window ignores invalid MRU candidates":
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
+    model.tags[1].focusedWindow = 101
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[2].columns.add(Column(windows: @[WindowId(201)]))
+    model.tags[2].focusedWindow = 201
+    model.tags[3] = initTagState(3, Scroller, "chat")
+    model.tags[3].columns.add(Column(windows: @[WindowId(301)]))
+    model.tags[3].focusedWindow = 301
+    model.windows[101] = WindowData(id: 101)
+    model.windows[201] = WindowData(id: 201)
+    model.windows[301] = WindowData(id: 301, isMinimized: true)
+    model.activeTag = 2
+    model.focusHistory = @[WindowId(999), 101, 301, 201]
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 201))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].focusedWindow == 101
+    check nextModel.focusHistory == @[WindowId(101)]
+
+  test "Closing focused window falls back to workspace MRU":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[2].columns.add(Column(windows: @[WindowId(201)]))
+    model.tags[2].focusedWindow = 201
+    model.windows[201] = WindowData(id: 201)
+    model.activeTag = 2
+    model.focusHistory = @[WindowId(201)]
+    model.workspaceHistory = @[1'u32, 2]
+
+    let (nextModel, effects) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 201))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].focusedWindow == 0
+    check effects.anyIt(it.kind == EffBroadcastJson and it.jsonPayload.contains("WorkspaceActivated"))
+
+  test "Closing focused window prunes emptied dynamic workspace after MRU restore":
+    model.workspaces.defaultCount = 3
+    model.tags[1] = initTagState(1, Scroller, "term")
+    model.tags[1].columns.add(Column(windows: @[WindowId(101)]))
+    model.tags[1].focusedWindow = 101
+    model.tags[2] = initTagState(2, Scroller, "web")
+    model.tags[3] = initTagState(3, Grid, "files")
+    model.tags[4] = initTagState(4, Deck, "chat")
+    model.tags[4].columns.add(Column(windows: @[WindowId(401)]))
+    model.tags[4].focusedWindow = 401
+    model.windows[101] = WindowData(id: 101)
+    model.windows[401] = WindowData(id: 401)
+    model.activeTag = 4
+    model.focusHistory = @[WindowId(101), 401]
+    model.workspaceHistory = @[1'u32, 4]
+
+    let (nextModel, _) = update(model, Msg(kind: WlWindowDestroyed, destroyedId: 401))
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].focusedWindow == 101
+    check not nextModel.tags.hasKey(4)
+    check niriWorkspacesJson(nextModel).len == 3
 
   test "Relative tag commands focus and move by tag order":
     model.tags[1] = TagState(tagId: 1, focusedWindow: 101)

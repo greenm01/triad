@@ -517,6 +517,11 @@ window-rule {
     check not state.tagByWindow.hasKey(11)
     check parseLiveRestoreJson("{bad").isNone
 
+    let nativeWithoutHistory = parseLiveRestoreJson("""{"schema":"triad-live-restore-v2","active_tag":1,"focused_window":10,"tags":[],"windows":[]}""")
+    check nativeWithoutHistory.isSome
+    check nativeWithoutHistory.get().focusHistory.len == 0
+    check nativeWithoutHistory.get().workspaceHistory.len == 0
+
   test "consuming live restore snapshot removes it":
     let path = getTempDir() / "triad-live-restore-test.json"
     writeFile(path, """{"workspaces":[{"id":3,"is_active":true}],"windows":[]}""")

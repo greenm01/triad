@@ -274,6 +274,7 @@ type
     scratchpadWidthRatio*: float32
     scratchpadHeightRatio*: float32
     focusHistory*: seq[WindowId]
+    workspaceHistory*: seq[uint32]
     restoreActiveTag*: uint32
     restoreTagByWindow*: Table[WindowId, uint32]
     restoreWindows*: Table[WindowId, RestoredWindowState]

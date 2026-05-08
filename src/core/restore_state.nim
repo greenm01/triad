@@ -17,6 +17,8 @@ type
     namedScratchpads*: Table[string, WindowId]
     visibleScratchpad*: WindowId
     isScratchpadVisible*: bool
+    focusHistory*: seq[WindowId]
+    workspaceHistory*: seq[uint32]
 
 proc uint32FromJson(node: JsonNode): Option[uint32] =
   try:
@@ -165,6 +167,16 @@ proc liveRestoreJson*(model: Model): string =
   for name in names:
     namedScratchpads.add(%*{"name": name, "window_id": model.namedScratchpads[name]})
 
+  let focusHistory = newJArray()
+  for winId in model.focusHistory:
+    if model.windows.hasKey(winId):
+      focusHistory.add(%winId)
+
+  let workspaceHistory = newJArray()
+  for tagId in model.workspaceHistory:
+    if tagId != 0 and model.tags.hasKey(tagId):
+      workspaceHistory.add(%tagId)
+
   $(%*{
     "schema": LiveRestoreSchema,
     "active_tag": model.activeTag,
@@ -175,7 +187,9 @@ proc liveRestoreJson*(model: Model): string =
     "scratchpad_windows": scratchpads,
     "named_scratchpads": namedScratchpads,
     "visible_scratchpad": model.visibleScratchpad,
-    "is_scratchpad_visible": model.isScratchpadVisible
+    "is_scratchpad_visible": model.isScratchpadVisible,
+    "focus_history": focusHistory,
+    "workspace_history": workspaceHistory
   })
 
 proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
@@ -291,6 +305,18 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
     if winId.isSome: state.visibleScratchpad = WindowId(winId.get())
   if root.hasKey("is_scratchpad_visible"):
     state.isScratchpadVisible = boolFromJson(root["is_scratchpad_visible"])
+
+  if root.hasKey("focus_history") and root["focus_history"].kind == JArray:
+    for node in root["focus_history"]:
+      let winId = uint32FromJson(node)
+      if winId.isSome:
+        state.focusHistory.add(WindowId(winId.get()))
+
+  if root.hasKey("workspace_history") and root["workspace_history"].kind == JArray:
+    for node in root["workspace_history"]:
+      let tagId = uint32FromJson(node)
+      if tagId.isSome:
+        state.workspaceHistory.add(tagId.get())
 
   if state.activeTag == 0 and state.tagByWindow.len == 0 and state.windows.len == 0 and state.tags.len == 0:
     return none(LiveRestoreState)
@@ -437,6 +463,8 @@ proc applyLiveRestore*(model: var Model; state: LiveRestoreState) =
   model.namedScratchpads = state.namedScratchpads
   model.visibleScratchpad = state.visibleScratchpad
   model.isScratchpadVisible = state.isScratchpadVisible
+  model.focusHistory = state.focusHistory
+  model.workspaceHistory = state.workspaceHistory
   if state.activeTag != 0:
     model.activeTag = state.activeTag
     var activeHasRestoredWindow = false

@@ -82,3 +82,4 @@ To maximize compatibility with existing Quickshell themes like **Noctalia-shell*
 *   **Socket Path:** Triad can be configured to use the `$NIRI_SOCKET` path or a standard fallback.
 *   **Protocol:** Triad implements the `event-stream` command, which provides a continuous, line-delimited JSON stream of compositor events.
 *   **Event Mapping:** Triad maps its internal TEA state changes to Niri-standard JSON payloads such as `WorkspaceActivated`, `WindowFocusChanged`, `WindowOpened`, and `WindowClosed`. Workspace `id` values stay as stable Triad tag IDs, while workspace `idx` values are compacted for Niri-style shell bars.
+*   **Focus MRU:** Window and workspace focus history is kept in the model and included in live restore snapshots so close behavior and hot reloads can return to the last useful focus target.

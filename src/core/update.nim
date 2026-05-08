@@ -285,6 +285,14 @@ proc recordFocus(model: var Model; winId: WindowId) =
   while model.focusHistory.len > 32:
     model.focusHistory.delete(0)
 
+proc recordWorkspace(model: var Model; tagId: uint32) =
+  if tagId == 0:
+    return
+  model.workspaceHistory.keepIf(proc(x: uint32): bool = x != tagId)
+  model.workspaceHistory.add(tagId)
+  while model.workspaceHistory.len > 32:
+    model.workspaceHistory.delete(0)
+
 proc activeVisibleWindows(model: Model; tag: TagState): seq[WindowId] =
   for win in tag.liveWindows(model):
     if not model.windows[win].isMinimized:
@@ -306,6 +314,7 @@ proc focusWindow(model: var Model; winId: WindowId; effects: var seq[Effect]) =
     model.windows[winId] = win
   model.activeTag = tagId
   model.syncPrimaryOutputTag()
+  model.recordWorkspace(tagId)
   var tag = model.tags[tagId]
   tag.focusedWindow = winId
   model.tags[tagId] = tag
@@ -321,6 +330,7 @@ proc focusTag(model: var Model; tagId: uint32; effects: var seq[Effect]) =
   discard model.ensureTag(tagId)
   model.activeTag = tagId
   model.syncPrimaryOutputTag()
+  model.recordWorkspace(tagId)
   var tag = model.tags[tagId]
   tag.recomputeVisibleFocus(model)
   model.tags[tagId] = tag
@@ -349,6 +359,7 @@ proc collapseEmptyActiveDynamicWorkspace(model: var Model; effects: var seq[Effe
   tag.recomputeVisibleFocus(model)
   model.tags[fallback] = tag
   effects.add(broadcastWorkspaceActivated(fallback, tag.name))
+  model.recordWorkspace(fallback)
   if tag.focusedWindow != 0:
     model.recordFocus(tag.focusedWindow)
     effects.add(broadcastWindowFocusChanged(tag.focusedWindow))
@@ -360,6 +371,39 @@ proc nearestTag(model: Model; direction: int; occupiedOnly: bool): uint32
 
 proc isFocusableWindow(model: Model; winId: WindowId): bool =
   model.windows.hasKey(winId) and not model.windows[winId].isMinimized
+
+proc hasFocusableWindow(model: Model; tagId: uint32): bool =
+  model.tags.hasKey(tagId) and model.activeVisibleWindows(model.tags[tagId]).len > 0
+
+proc isRestorableWorkspace(model: Model; tagId: uint32): bool =
+  if tagId == 0 or not model.tags.hasKey(tagId):
+    return false
+  tagId <= model.defaultWorkspaceCount() or model.hasFocusableWindow(tagId)
+
+proc focusMostRecentWindow(model: var Model; effects: var seq[Effect]): bool =
+  var candidates: seq[WindowId] = @[]
+  for candidate in model.focusHistory:
+    if model.isFocusableWindow(candidate) and model.findTagForWindow(candidate) != 0:
+      candidates.add(candidate)
+  model.focusHistory = candidates
+  if candidates.len == 0:
+    return false
+  model.focusWindow(candidates[^1], effects)
+  true
+
+proc focusMostRecentWorkspace(model: var Model; effects: var seq[Effect]): bool =
+  var candidates: seq[uint32] = @[]
+  for candidate in model.workspaceHistory:
+    if model.isRestorableWorkspace(candidate):
+      candidates.add(candidate)
+  model.workspaceHistory = candidates
+  if candidates.len == 0:
+    return false
+  for i in countdown(candidates.len - 1, 0):
+    if candidates[i] != model.activeTag:
+      model.focusTag(candidates[i], effects)
+      return true
+  false
 
 proc visibleWindowNear(model: Model; col: Column; preferredIdx: int): WindowId =
   if col.windows.len == 0:
@@ -640,6 +684,7 @@ proc focusByDirection(model: var Model; direction: Direction; effects: var seq[E
   if target != 0 and (not model.windows.hasKey(target) or not model.windows[target].isMinimized):
     tag.focusedWindow = target
     model.tags[model.activeTag] = tag
+    model.recordWorkspace(model.activeTag)
     model.recordFocus(target)
     effects.add(broadcastWindowFocusChanged(target))
     effects.add(Effect(kind: EffFocusWindow, focusId: target))
@@ -748,6 +793,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of WlManageStart:
     let focused = nextModel.focusedOnActiveTag()
     if focused != 0:
+      nextModel.recordWorkspace(nextModel.activeTag)
       nextModel.recordFocus(focused)
       effects.add(broadcastWindowFocusChanged(focused))
       if not nextModel.sessionLocked and not nextModel.layerFocusExclusive:
@@ -874,6 +920,10 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     let restoresFocusedWindow =
       nextModel.restoreFocusedWindow != 0 and restoredWinId == nextModel.restoreFocusedWindow
     let restoredScratchpad = hasRestoredWindow and restoredWin.tagId == 0 and nextModel.isRestoredScratchpad(msg.windowId)
+    if hasRestoredWindow:
+      for i, winId in nextModel.focusHistory.mpairs:
+        if winId == restoredWinId:
+          winId = msg.windowId
     if not restoredScratchpad:
       if not nextModel.tags.hasKey(targetTag):
         if nextModel.restoreTags.hasKey(targetTag):
@@ -923,11 +973,19 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     effects.add(Effect(kind: EffManageDirty))
 
   of WlWindowDestroyed:
+    let closedWasFocused =
+      nextModel.focusedOnActiveTag() == msg.destroyedId or
+      (nextModel.tags.hasKey(nextModel.activeTag) and
+        nextModel.tags[nextModel.activeTag].focusedWindow == msg.destroyedId)
     nextModel.windows.del(msg.destroyedId)
     discard nextModel.removeWindowFromAllTags(msg.destroyedId)
     discard nextModel.removeWindowFromScratchpad(msg.destroyedId)
+    nextModel.focusHistory.keepIf(proc(winId: WindowId): bool = winId != msg.destroyedId)
     if nextModel.pointerOp.windowId == msg.destroyedId:
       nextModel.pointerOp = PointerOpState(kind: OpNone)
+    if closedWasFocused:
+      if not nextModel.focusMostRecentWindow(effects):
+        discard nextModel.focusMostRecentWorkspace(effects)
     effects.add(broadcastWindowClosed(msg.destroyedId))
     effects.add(Effect(kind: EffManageDirty))
 
@@ -975,6 +1033,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       if msg.newFocusedId == 0 or tag.containsWindow(msg.newFocusedId):
         tag.focusedWindow = msg.newFocusedId
         nextModel.tags[nextModel.activeTag] = tag
+        if msg.newFocusedId != 0:
+          nextModel.recordWorkspace(nextModel.activeTag)
         nextModel.recordFocus(msg.newFocusedId)
         effects.add(broadcastWindowFocusChanged(msg.newFocusedId))
         if msg.newFocusedId != 0:
@@ -1158,7 +1218,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
         targetTag.columns.add(nextModel.defaultColumn(@[focused]))
         targetTag.focusedWindow = focused
         nextModel.tags[targetTagId] = targetTag
-        if nextModel.overviewActive: nextModel.activeTag = targetTagId
+        if nextModel.overviewActive:
+          nextModel.activeTag = targetTagId
+          nextModel.recordWorkspace(targetTagId)
         let broadcastTag = nextModel.activeTagOrFallback()
         if broadcastTag != 0:
           effects.add(broadcastWorkspaceActivated(broadcastTag, nextModel.tags[broadcastTag].name))
@@ -1613,6 +1675,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     let tagId = nextModel.activeTagOrFallback()
     if tagId != 0:
       nextModel.activeTag = tagId
+      nextModel.recordWorkspace(tagId)
       effects.add(broadcastWorkspaceActivated(tagId, nextModel.tags[tagId].name))
     if wasOverviewActive:
       effects.add(broadcastOverview(false))
@@ -1710,6 +1773,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow); let nextIdx = (if idx == -1: 0 else: (idx + 1) mod allWindows.len)
         tag.focusedWindow = allWindows[nextIdx]; nextModel.tags[activeTagId] = tag
+        nextModel.recordWorkspace(activeTagId)
         nextModel.recordFocus(tag.focusedWindow)
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow)); effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
@@ -1725,6 +1789,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       if allWindows.len > 0:
         let idx = allWindows.find(tag.focusedWindow); let prevIdx = (if idx - 1 < 0: allWindows.len - 1 else: idx - 1)
         tag.focusedWindow = allWindows[prevIdx]; nextModel.tags[activeTagId] = tag
+        nextModel.recordWorkspace(activeTagId)
         nextModel.recordFocus(tag.focusedWindow)
         effects.add(broadcastWindowFocusChanged(tag.focusedWindow)); effects.add(Effect(kind: EffFocusWindow, focusId: tag.focusedWindow))
 
