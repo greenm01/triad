@@ -20,6 +20,11 @@ type
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[uint32]
 
+  LiveRestoreWriteResult* = object
+    ok*: bool
+    path*: string
+    error*: string
+
 proc uint32FromJson(node: JsonNode): Option[uint32] =
   try:
     if node.kind == JInt and node.getInt() > 0 and node.getInt() <= int(high(uint32)):
@@ -434,6 +439,26 @@ proc defaultLiveRestorePath*(): string =
   if configured.len > 0:
     return configured
   getEnv("XDG_RUNTIME_DIR", "/tmp") / "triad-live-restore.json"
+
+proc writeLiveRestoreState*(model: Model; path = defaultLiveRestorePath()): LiveRestoreWriteResult =
+  if path.len == 0:
+    return LiveRestoreWriteResult(ok: false, error: "empty live restore path")
+
+  let dir = path.splitFile().dir
+  let tmp = path & ".tmp." & $getCurrentProcessId()
+  try:
+    if dir.len > 0:
+      createDir(dir)
+    writeFile(tmp, liveRestoreJson(model) & "\n")
+    moveFile(tmp, path)
+    LiveRestoreWriteResult(ok: true, path: path)
+  except CatchableError as e:
+    try:
+      if fileExists(tmp):
+        removeFile(tmp)
+    except CatchableError:
+      discard
+    LiveRestoreWriteResult(ok: false, path: path, error: e.msg)
 
 proc loadLiveRestoreState*(path: string): Option[LiveRestoreState] =
   if path.len == 0 or not fileExists(path):

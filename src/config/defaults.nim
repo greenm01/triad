@@ -72,9 +72,9 @@ bindings {
     bind "Super+m" "toggle-maximized"
     bind "Super+i" "minimize"
     bind "Super+n" "switch-layout"
-    bind "Super+r" "reload-config"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
+    bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Super+t" "spawn-terminal"
     bind "Super+Tab" "focus-next"
     bind "Alt+Left" "focus-left"

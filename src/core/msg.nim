@@ -124,7 +124,8 @@ type
     CmdExitSession,
     CmdFocusShellUi,
     CmdTick,
-    CmdReloadConfig,
+    CmdConfigReload,
+    CmdTriadReload,
     CmdSwitchLayout,
     CmdScreenshot
 

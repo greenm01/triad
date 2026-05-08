@@ -31,6 +31,11 @@ Categories=System;TerminalEmulator;
   putEnv("XDG_DATA_DIRS", "")
 
 suite "Core TEA Update Logic":
+  test "Triad reload command emits restart effect":
+    let (_, effects) = update(Model(), Msg(kind: CmdTriadReload))
+    check effects.len == 1
+    check effects[0].kind == EffTriadReload
+
   setup:
     installAppIdentityFixture()
     var model = Model(

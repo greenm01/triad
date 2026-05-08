@@ -41,6 +41,11 @@ type
     smartGaps*: bool
     layoutCycle*: seq[LayoutMode]
 
+  ConfigLoadResult* = object
+    ok*: bool
+    config*: Config
+    error*: string
+
 proc clamp32(value, lo, hi: int32): int32 =
   min(hi, max(lo, value))
 
@@ -157,7 +162,7 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "f", modifiers: 64'u32, command: "toggle-fullscreen"),
     KeyBindingConfig(key: "m", modifiers: 64'u32, command: "toggle-maximized"),
     KeyBindingConfig(key: "i", modifiers: 64'u32, command: "minimize"),
-    KeyBindingConfig(key: "r", modifiers: 64'u32, command: "reload-config"),
+    KeyBindingConfig(key: "r", modifiers: 12'u32, command: "triad-reload", bypassShortcutsInhibit: true),
     KeyBindingConfig(key: "t", modifiers: 64'u32, command: "spawn-terminal"),
     KeyBindingConfig(key: "Tab", modifiers: 64'u32, command: "focus-next"),
     KeyBindingConfig(key: "Left", modifiers: 8'u32, command: "focus-left"),
@@ -509,6 +514,14 @@ proc loadConfig*(path: string): Config =
     result.keyBindings = defaultKeyBindings()
   if result.pointerBindings.len == 0:
     result.pointerBindings = defaultPointerBindings()
+
+proc loadConfigStrict*(path: string): ConfigLoadResult =
+  try:
+    discard parseKdlFile(path)
+  except CatchableError as e:
+    return ConfigLoadResult(ok: false, error: e.msg)
+
+  result = ConfigLoadResult(ok: true, config: loadConfig(path))
 
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = clamp32(config.layout.gaps, 0, 512)

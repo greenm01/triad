@@ -25,6 +25,7 @@ type
     EffEnsureNextKeyEaten,
     EffCancelEnsureNextKeyEaten,
     EffStopManager,
+    EffTriadReload,
     EffExitSession,
     EffFocusShellUi,
     EffScreenshot,
@@ -1932,6 +1933,9 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   of CmdStopManager:
     effects.add(Effect(kind: EffStopManager))
 
+  of CmdTriadReload:
+    effects.add(Effect(kind: EffTriadReload))
+
   of CmdExitSession:
     if nextModel.allowExitSession:
       effects.add(Effect(kind: EffExitSession))
@@ -1950,7 +1954,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
       screenshotShowPointer: msg.screenshotShowPointer
     ))
 
-  of CmdReloadConfig, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
+  of CmdConfigReload, CmdSpawnTerminal: effects.add(Effect(kind: EffManageDirty))
 
   else: discard
 

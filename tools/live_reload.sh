@@ -32,6 +32,22 @@ wait_niri_ready() {
   return 1
 }
 
+wait_restarted() {
+  i=0
+  while [ "$i" -lt 50 ]; do
+    new_pid="$(latest_triad_pid)"
+    if [ -n "$new_pid" ] && [ "$new_pid" != "$old_pid" ]; then
+      wait_niri_ready ||
+        fail "installed binaries and restarted manager pid $old_pid -> $new_pid, but Niri-compatible IPC did not become ready"
+      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $new_pid; Niri-compatible IPC is ready"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 0.1
+  done
+  return 1
+}
+
 snapshot_restore_state() {
   restore_path="$1"
   snapshot=""
@@ -82,21 +98,16 @@ mkdir -p "$bin_dir"
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 
-if "$repo_dir/triad" msg stop-manager; then
-  i=0
-  while [ "$i" -lt 50 ]; do
-    new_pid="$(latest_triad_pid)"
-    if [ -n "$new_pid" ] && [ "$new_pid" != "$old_pid" ]; then
-      wait_niri_ready ||
-        fail "installed binaries and restarted manager pid $old_pid -> $new_pid, but Niri-compatible IPC did not become ready"
-      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $new_pid; Niri-compatible IPC is ready"
-      exit 0
-    fi
-    i=$((i + 1))
-    sleep 0.1
-  done
+if "$repo_dir/triad" msg triad-reload; then
+  if wait_restarted; then
+    exit 0
+  fi
+  printf '%s\n' "live-reload: triad-reload did not restart the current manager; trying stop-manager fallback" >&2
+fi
 
-  fail "installed binaries and requested restart, but no new triad pid appeared"
+if "$repo_dir/triad" msg stop-manager; then
+  wait_restarted ||
+    fail "installed binaries and requested restart, but no new triad pid appeared"
 else
   fail "installed binaries, but stop-manager IPC failed"
 fi

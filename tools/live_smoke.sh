@@ -104,7 +104,7 @@ triad_msg layout-vertical-deck
 triad_msg move-to-named-scratchpad live-smoke
 triad_msg toggle-named-scratchpad live-smoke
 triad_msg restore-scratchpad
-triad_msg reload-config
+triad_msg config-reload
 ./triad_niri msg -j workspaces >/dev/null
 ./triad_niri msg -j outputs >/dev/null
 

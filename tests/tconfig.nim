@@ -2,10 +2,11 @@ import unittest
 import ../src/config/parser
 import ../src/config/defaults
 import ../src/config/keysyms
+import ../src/config/reload_policy
 import ../src/core/model
 import ../src/core/model_utils
 import ../src/utils/terminal
-import os, strutils, tables
+import os, strutils, tables, sequtils
 
 suite "KDL Configuration Parser":
   test "Applying config preserves live workspace and window state":
@@ -51,6 +52,32 @@ suite "KDL Configuration Parser":
     check model.windows[7].isMaximized
     check model.windows[7].fullscreenOutput == 42
     check model.windows[7].floatingGeom == Rect(x: 11, y: 22, w: 333, h: 444)
+
+  test "Default reload binding requests full Triad reload":
+    let reloads = defaultKeyBindings().filterIt(it.command == "triad-reload")
+    check reloads.len == 1
+    check reloads[0].key == "r"
+    check reloads[0].modifiers == 12'u32
+    check reloads[0].bypassShortcutsInhibit
+    check defaultKeyBindings().allIt(it.command != "reload-config")
+
+  test "Strict config load rejects invalid KDL":
+    let path = getCurrentDir() / "test_invalid_reload.kdl"
+    writeFile(path, "layout { gaps ")
+    let loaded = loadConfigStrict(path)
+    removeFile(path)
+
+    check not loaded.ok
+    check loaded.error.len > 0
+
+  test "Config reload debouncer coalesces file watcher events":
+    var debouncer: ConfigReloadDebouncer
+    debouncer.schedule(1000, debounceMs = 200)
+    debouncer.schedule(1050, debounceMs = 200)
+
+    check not debouncer.takeDue(1249)
+    check debouncer.takeDue(1250)
+    check not debouncer.takeDue(1300)
 
   test "Parser correctly reads layout settings":
     let path = getCurrentDir() / "test_layout.kdl"

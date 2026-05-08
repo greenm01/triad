@@ -251,6 +251,9 @@ suite "Crash hardening":
 
     check parseLegacyCommand("eat-next-key").get().kind == CmdEatNextKey
     check parseLegacyCommand("cancel-eat-next-key").get().kind == CmdCancelEatNextKey
+    check parseLegacyCommand("config-reload").get().kind == CmdConfigReload
+    check parseLegacyCommand("triad-reload").get().kind == CmdTriadReload
+    check parseLegacyCommand("reload-config").isNone
     check parseLegacyCommand("stop-manager").get().kind == CmdStopManager
     check parseLegacyCommand("focus-shell-ui").get().kind == CmdFocusShellUi
     check parseLegacyCommand("spawn fuzzel").get().spawnCommand == @["fuzzel"]

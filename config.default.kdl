@@ -113,10 +113,10 @@ bindings {
     bind "Super+Space" "spawn fuzzel"
     bind "Super+b" "spawn brave-origin-nightly"
     bind "Super+e" "spawn env GTK_THEME=Adwaita:dark thunar"
-    bind "Super+r" "reload-config"
     bind "Super+Escape" "lock-session"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
+    bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"
 
     // Focus. Arrow and Page keys are intentionally avoided until Triad's

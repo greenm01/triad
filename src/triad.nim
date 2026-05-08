@@ -9,12 +9,14 @@ import core/msg
 import core/update
 import core/model_utils
 import core/restore_state
+import core/niri_state
 import core/render_visibility
 import layouts/scroller
 import layouts/tiling
 import config/parser
 import config/defaults
 import config/keysyms
+import config/reload_policy
 import ipc/commands
 import ipc/socket
 import ipc/quickshell_compat
@@ -103,6 +105,7 @@ var
   # Config Watcher
   configPath: string
   watcher: Watcher
+  configReloadDebouncer: ConfigReloadDebouncer
   shouldExit = false
   quickshellProcess: Process
   quickshellSpawnPending = false
@@ -373,6 +376,40 @@ proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
   stopQuickshell(model, reason, authoritative = true)
   spawnQuickshell(model, niriSocketPath)
 
+proc requestManage(reason: string)
+proc destroyBindings()
+
+proc sameQuickshellConfig(a, b: QuickshellConfig): bool =
+  a.enabled == b.enabled and
+    a.command == b.command and
+    a.theme == b.theme and
+    a.args == b.args
+
+proc broadcastNiriSnapshot(model: Model) =
+  for event in initialNiriEvents(model):
+    asyncCheck broadcastJson(event)
+
+proc applyConfigReload(configPath, niriSocketPath: string): bool =
+  let loaded = loadConfigStrict(configPath)
+  if not loaded.ok:
+    warn "Config reload rejected; keeping current config", path=configPath, error=loaded.error
+    return false
+
+  let previousModel = currentModel
+  currentModel.applyConfig(loaded.config)
+  quickshellSpawnPending = false
+
+  if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
+    stopQuickshell(previousModel, "config reload", authoritative = true)
+    if currentModel.quickshell.enabled:
+      spawnQuickshell(currentModel, niriSocketPath)
+
+  destroyBindings()
+  info "Config reloaded", path=configPath
+  requestManage("config reload")
+  broadcastNiriSnapshot(currentModel)
+  true
+
 proc scheduleQuickshellSpawn(model: Model) =
   quickshellSpawnPending = model.quickshell.enabled and model.quickshell.theme.strip().len > 0
 
@@ -442,8 +479,6 @@ proc spawnCommand(command: seq[string]) =
     info "Spawned command", cmd=command[0], pid=p.processID
   except CatchableError as e:
     warn "Failed to spawn command", cmd=command[0], error=e.msg
-
-proc requestManage(reason: string)
 
 const
   RiverEdgeTop = 1'u32
@@ -1248,6 +1283,17 @@ proc executeEffect(eff: Effect) =
     stopQuickshell(currentModel, "manager stop", authoritative = true)
     if river_manager != nil:
       river_manager.stop()
+  of EffTriadReload:
+    let restore = writeLiveRestoreState(currentModel)
+    if not restore.ok:
+      warn "Triad reload rejected; live restore snapshot could not be written",
+        path=restore.path,
+        error=restore.error
+      return
+    quickshellSpawnPending = false
+    stopQuickshell(currentModel, "triad reload", authoritative = true)
+    if river_manager != nil:
+      river_manager.stop()
   of EffExitSession:
     if river_manager != nil and currentModel.allowExitSession:
       river_manager.exitSession()
@@ -1740,18 +1786,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       spawnTerminal(currentModel)
       continue
 
-    if msg.kind == CmdReloadConfig:
-      let previousModel = currentModel
-      let config = loadConfig(configPath)
-      currentModel.applyConfig(config)
-      quickshellSpawnPending = false
-      if currentModel.quickshell.enabled:
-        restartQuickshell(currentModel, niriSocketPath, "config reload")
-      else:
-        stopQuickshell(previousModel, "config reload", authoritative = true)
-      destroyBindings()
-      info "Config reloaded", path=configPath
-      requestManage("config reload")
+    if msg.kind == CmdConfigReload:
+      discard applyConfigReload(configPath, niriSocketPath)
       continue
 
     let previousOverview = currentModel.overviewActive
@@ -1882,7 +1918,7 @@ proc main() =
   watcher = initWatcher()
   proc onConfigChange(events: seq[PathEvent]) {.gcsafe.} =
     {.cast(gcsafe).}:
-      msgQueue.add(Msg(kind: CmdReloadConfig))
+      configReloadDebouncer.schedule(int64(epochTime() * 1000.0))
   
   watcher.register(configPath, onConfigChange)
 
@@ -1921,6 +1957,9 @@ proc main() =
     
     # Poll async (IPC)
     asyncdispatch.poll(16)
+
+    if configReloadDebouncer.takeDue(int64(epochTime() * 1000.0)):
+      msgQueue.add(Msg(kind: CmdConfigReload))
 
     # Process Message Queue
     processQueuedMessages(configPath, niriSocketPath)
