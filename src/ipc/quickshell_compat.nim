@@ -1,6 +1,7 @@
 import os, posix, strtabs, strutils
 import shell_overlay
 import socket
+import ../core/xdg
 
 type
   QuickshellCompatEnv* = object
@@ -44,6 +45,79 @@ proc copyCurrentEnv(): StringTableRef =
   result = newStringTable(modeCaseSensitive)
   for key, value in envPairs():
     result[key] = value
+
+proc readIniValue(path, sectionName, keyName: string): string =
+  if not fileExists(path):
+    return ""
+
+  var inSection = sectionName.len == 0
+  for rawLine in lines(path):
+    let line = rawLine.strip()
+    if line.len == 0 or line[0] == '#' or line[0] == ';':
+      continue
+    if line[0] == '[' and line[^1] == ']':
+      inSection = line[1 ..< line.len - 1].strip().cmpIgnoreCase(sectionName) == 0
+      continue
+    if not inSection:
+      continue
+
+    let sep = line.find('=')
+    if sep < 0:
+      continue
+    if line[0 ..< sep].strip().cmpIgnoreCase(keyName) == 0:
+      return line[sep + 1 .. ^1].strip().strip(chars = {'"'})
+
+  ""
+
+proc detectIconTheme(): string =
+  result = readIniValue(getHomeDir() / ".config" / "gtk-3.0" / "settings.ini", "Settings", "gtk-icon-theme-name")
+  if result.len > 0:
+    return
+
+  let gtk2 = getHomeDir() / ".gtkrc-2.0"
+  if fileExists(gtk2):
+    for rawLine in lines(gtk2):
+      let line = rawLine.strip()
+      if line.len == 0 or line[0] == '#':
+        continue
+      let sep = line.find('=')
+      if sep < 0:
+        continue
+      if line[0 ..< sep].strip().cmpIgnoreCase("gtk-icon-theme-name") == 0:
+        result = line[sep + 1 .. ^1].strip().strip(chars = {'"'})
+        return
+
+  result = readIniValue(getHomeDir() / ".config" / "qt6ct" / "qt6ct.conf", "Appearance", "icon_theme")
+  if result.len > 0:
+    return
+  result = readIniValue(getHomeDir() / ".config" / "qt5ct" / "qt5ct.conf", "Appearance", "icon_theme")
+
+proc chooseQtPlatformTheme(current: string): string =
+  let normalized = current.strip().toLowerAscii()
+  if normalized.len > 0 and normalized != "qt5ct":
+    return current
+
+  if findExe("qt6ct").len > 0:
+    return "qt6ct"
+  if fileExists("/usr/lib/qt6/plugins/platformthemes/libqgtk3.so"):
+    return "gtk3"
+  current
+
+proc addUniqueDataDir(dirs: var seq[string]; path: string) =
+  let trimmed = path.strip()
+  if trimmed.len == 0:
+    return
+  for existing in dirs:
+    if normalizedPath(existing) == normalizedPath(trimmed):
+      return
+  dirs.add(trimmed)
+
+proc xdgDataDirsWithOverlay(overlaySharePath: string): string =
+  var dirs: seq[string] = @[]
+  dirs.addUniqueDataDir(overlaySharePath)
+  for dir in xdgDataDirs(includeHome = false):
+    dirs.addUniqueDataDir(dir)
+  dirs.join($PathSep)
 
 proc appendWarning(existing, warning: string): string =
   if warning.len == 0:
@@ -98,6 +172,16 @@ proc prepareQuickshellCompatEnv*(
   result.env["NIRI_SOCKET"] = niriSocketPath
   result.env["XDG_CURRENT_DESKTOP"] = "triad"
 
+  let iconTheme = result.env.getOrDefault("QS_ICON_THEME", "").strip()
+  if iconTheme.len == 0:
+    let detected = detectIconTheme()
+    if detected.len > 0:
+      result.env["QS_ICON_THEME"] = detected
+
+  let platformTheme = chooseQtPlatformTheme(result.env.getOrDefault("QT_QPA_PLATFORMTHEME", ""))
+  if platformTheme.len > 0:
+    result.env["QT_QPA_PLATFORMTHEME"] = platformTheme
+
   let installed = installNiriShim(result.compatBinPath, triadNiriPath)
   result.shimReady = installed.ok
   result.warning = installed.warning
@@ -116,8 +200,4 @@ proc prepareQuickshellCompatEnv*(
       result.env["PATH"] = result.compatBinPath
 
   if result.overlayReady:
-    let currentDataDirs = result.env.getOrDefault("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
-    if currentDataDirs.len > 0:
-      result.env["XDG_DATA_DIRS"] = result.xdgSharePath & PathSep & currentDataDirs
-    else:
-      result.env["XDG_DATA_DIRS"] = result.xdgSharePath
+    result.env["XDG_DATA_DIRS"] = xdgDataDirsWithOverlay(result.xdgSharePath)

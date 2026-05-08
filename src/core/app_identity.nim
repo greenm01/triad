@@ -1,4 +1,5 @@
 import os, options, sequtils, strutils, tables
+import xdg
 
 type
   DesktopEntry* = object
@@ -203,14 +204,7 @@ iterator desktopEntries*(index: AppIdentityIndex): DesktopEntry =
     yield entry
 
 proc xdgApplicationDirs*(): seq[string] =
-  let dataHome = getEnv("XDG_DATA_HOME", getHomeDir() / ".local" / "share")
-  result.add(dataHome / "applications")
-
-  let dataDirs = getEnv("XDG_DATA_DIRS", "/usr/local/share:/usr/share")
-  for dir in dataDirs.split(PathSep):
-    let trimmed = dir.strip()
-    if trimmed.len > 0:
-      result.add(trimmed / "applications")
+  xdgApplicationsDirs()
 
 proc defaultAppIdentityIndex*(): AppIdentityIndex =
   if defaultIndex.isNone:

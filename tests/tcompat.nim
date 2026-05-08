@@ -277,9 +277,15 @@ suite "Shell compatibility contracts":
     writeFile(fakeTriadNiri, "#!/bin/sh\nexit 0\n")
     setFilePermissions(fakeTriadNiri, {fpUserRead, fpUserWrite, fpUserExec})
     let oldDataDirs = getEnv("XDG_DATA_DIRS", "")
+    let oldIconTheme = getEnv("QS_ICON_THEME", "")
+    let oldPlatformTheme = getEnv("QT_QPA_PLATFORMTHEME", "")
     putEnv("XDG_DATA_DIRS", "/custom/share:/usr/share")
+    putEnv("QS_ICON_THEME", "Papirus")
+    putEnv("QT_QPA_PLATFORMTHEME", "qt5ct")
     defer:
       putEnv("XDG_DATA_DIRS", oldDataDirs)
+      putEnv("QS_ICON_THEME", oldIconTheme)
+      putEnv("QT_QPA_PLATFORMTHEME", oldPlatformTheme)
     let compat = prepareQuickshellCompatEnv(tmp / "triad-niri.sock", tmp, fakeTriadNiri)
     defer:
       removeDir(tmp)
@@ -290,7 +296,11 @@ suite "Shell compatibility contracts":
     check compat.overlayReady
     check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")
     check compat.env["XDG_DATA_DIRS"].startsWith(tmp / "triad-shell-compat" / "share")
-    check compat.env["XDG_DATA_DIRS"].endsWith("/custom/share:/usr/share")
+    check compat.env["XDG_DATA_DIRS"].contains("/custom/share")
+    check compat.env["XDG_DATA_DIRS"].contains("/usr/share")
+    check compat.env["QS_ICON_THEME"] == "Papirus"
+    if findExe("qt6ct").len > 0 or fileExists("/usr/lib/qt6/plugins/platformthemes/libqgtk3.so"):
+      check compat.env["QT_QPA_PLATFORMTHEME"] != "qt5ct"
     check fileExists(compat.niriShimPath)
     check dirExists(compat.xdgSharePath / "applications")
 
@@ -325,7 +335,9 @@ Categories=Network;WebBrowser;
 
     let iconRoot = tmp / "iconsrc"
     createDir(iconRoot / "icons" / "hicolor" / "scalable" / "apps")
-    writeFile(iconRoot / "icons" / "hicolor" / "scalable" / "apps" / "demo-term.svg", "<svg/>")
+    createDir(iconRoot / "icons" / "hicolor" / "48x48" / "apps")
+    writeFile(iconRoot / "icons" / "hicolor" / "scalable" / "apps" / "demo-term.svg", """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"/>""")
+    writeFile(iconRoot / "icons" / "hicolor" / "48x48" / "apps" / "browser.png", "png")
 
     let oldDataHome = getEnv("XDG_DATA_HOME", "")
     let oldDataDirs = getEnv("XDG_DATA_DIRS", "")
@@ -344,7 +356,10 @@ Categories=Network;WebBrowser;
     check readFile(generatedApp).contains("Exec=demo-term --new-window")
     check readFile(generatedApp).contains("Icon=triad-demoterm")
     check not fileExists(overlay.sharePath / "applications" / "browser.desktop")
-    check fileExists(overlay.sharePath / "icons" / "hicolor" / "scalable" / "apps" / "triad-demoterm.svg")
+    check fileExists(overlay.sharePath / "icons" / "hicolor" / "48x48" / "apps" / "browser.png")
+    check not symlinkExists(overlay.sharePath / "icons" / "hicolor" / "48x48" / "apps" / "browser.png")
+    check fileExists(overlay.sharePath / "icons" / "hicolor" / "48x48" / "apps" / "triad-demoterm.png") or
+      fileExists(overlay.sharePath / "icons" / "hicolor" / "scalable" / "apps" / "triad-demoterm.svg")
 
   test "text IPC remains Triad-native, not a fake Mango mmsg shell":
     let msg = parseLegacyCommand("focus-workspace 2")
