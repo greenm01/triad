@@ -506,6 +506,17 @@ proc materializeRestoredTag(state: RestoredTagState): TagState =
   for col in state.columns:
     result.columns.add(Column(widthProportion: clamp(col.widthProportion, 0.05'f32, 1.0'f32)))
 
+proc mergeRestoredTagState(tag: var TagState; state: RestoredTagState) =
+  if tag.name.len == 0:
+    tag.name = state.name
+  tag.layoutMode = state.layoutMode
+  tag.targetViewportXOffset = state.targetViewportXOffset
+  tag.currentViewportXOffset = state.currentViewportXOffset
+  tag.targetViewportYOffset = state.targetViewportYOffset
+  tag.currentViewportYOffset = state.currentViewportYOffset
+  tag.masterCount = max(1, state.masterCount)
+  tag.masterSplitRatio = clamp(state.masterSplitRatio, 0.05'f32, 0.95'f32)
+
 proc findRestoredWindowByIdentity(model: Model; appId, title, identifier: string): WindowId =
   if identifier.len > 0:
     for oldWinId, restored in model.restoreWindows.pairs:
@@ -530,6 +541,7 @@ proc placeRestoredWindow(model: var Model; targetTag: uint32; restoredWinId, win
   if model.restoreTags.hasKey(targetTag):
     var tag = model.tags.getOrDefault(targetTag, materializeRestoredTag(model.restoreTags[targetTag]))
     let restoredTag = model.restoreTags[targetTag]
+    tag.mergeRestoredTagState(restoredTag)
     if tag.focusedWindow == restoredWinId:
       tag.focusedWindow = winId
     var inserted = false

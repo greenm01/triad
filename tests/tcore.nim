@@ -332,6 +332,55 @@ suite "Core TEA Update Logic":
     check not nextModel.tags.hasKey(3) or not nextModel.tags[3].containsWindow(112)
     check not nextModel.restoreTagByWindow.hasKey(112)
 
+  test "live restore overlays viewport state onto existing default workspace":
+    model.activeTag = 1
+    model.tags[1] = initTagState(1, Scroller, "configured")
+    model.tags[1].targetViewportXOffset = 0.0
+    model.tags[1].currentViewportXOffset = 0.0
+    model.tags[1].masterCount = 1
+    model.tags[1].masterSplitRatio = 0.55
+
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 120)
+    restored.tags[1] = RestoredTagState(
+      tagId: 1,
+      name: "restored",
+      layoutMode: VerticalScroller,
+      focusedWindow: 120,
+      targetViewportXOffset: 1908.0,
+      currentViewportXOffset: 1908.0,
+      targetViewportYOffset: 42.0,
+      currentViewportYOffset: 40.0,
+      masterCount: 3,
+      masterSplitRatio: 0.65,
+      columns: @[
+        RestoredColumnState(windows: @[WindowId(119)], widthProportion: 0.35),
+        RestoredColumnState(windows: @[WindowId(120)], widthProportion: 0.8)
+      ])
+    restored.windows[120] = RestoredWindowState(
+      tagId: 1,
+      appId: "brave",
+      title: "Brave",
+      widthProportion: 0.8,
+      heightProportion: 1.0)
+    restored.tagByWindow[120] = 1
+    model.applyLiveRestore(restored)
+
+    let (nextModel, effects) = update(model, Msg(kind: WlWindowCreated, windowId: 220, appId: "brave", title: "Brave"))
+
+    check nextModel.tags[1].name == "configured"
+    check nextModel.tags[1].layoutMode == VerticalScroller
+    check nextModel.tags[1].focusedWindow == 220
+    check nextModel.tags[1].columns.len == 2
+    check nextModel.tags[1].columns[1].windows == @[WindowId(220)]
+    check nextModel.tags[1].columns[1].widthProportion == 0.8'f32
+    check nextModel.tags[1].targetViewportXOffset == 1908.0'f32
+    check nextModel.tags[1].currentViewportXOffset == 1908.0'f32
+    check nextModel.tags[1].targetViewportYOffset == 42.0'f32
+    check nextModel.tags[1].currentViewportYOffset == 40.0'f32
+    check nextModel.tags[1].masterCount == 3
+    check nextModel.tags[1].masterSplitRatio == 0.65'f32
+    check effects.anyIt(it.kind == EffFocusWindow and it.focusId == 220)
+
   test "native live restore preserves workspace layout sizing and focus":
     var source = Model(activeTag: 2, screenWidth: 2560, screenHeight: 1440)
     source.tags[1] = initTagState(1, Scroller, "term")
