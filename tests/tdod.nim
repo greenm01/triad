@@ -340,6 +340,77 @@ proc checkTriadIpcParity(source: legacy_model.Model; line: string) =
   check dod.initialEvents == legacy.initialEvents
   check dod.messages.mapIt($it) == legacy.messages.mapIt($it)
 
+proc checkProjectionParity(
+    legacySnapshot, dodSnapshot: ShellSnapshot) =
+  check dodSnapshot == legacySnapshot
+  check initialNiriEvents(dodSnapshot) == initialNiriEvents(legacySnapshot)
+
+  for line in [
+    "\"Workspaces\"",
+    "\"Windows\"",
+    "\"FocusedWindow\"",
+    "\"OverviewState\"",
+    "\"EventStream\"",
+    """{"Action":{"FocusWorkspaceDown":{}}}"""
+  ]:
+    let legacy = handleNiriRequest(line, legacySnapshot)
+    let dod = handleNiriRequest(line, dodSnapshot)
+    check dod.handled == legacy.handled
+    check dod.subscribe == legacy.subscribe
+    check dod.reply == legacy.reply
+    check dod.initialEvents == legacy.initialEvents
+    check dod.messages.mapIt($it) == legacy.messages.mapIt($it)
+
+  for line in [
+    """{"triad":{"version":1,"request":"state"}}""",
+    """{"triad":{"version":1,"request":"layout-state"}}""",
+    """{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}"""
+  ]:
+    let legacy = handleTriadRequest(line, legacySnapshot)
+    let dod = handleTriadRequest(line, dodSnapshot)
+    check dod.handled == legacy.handled
+    check dod.subscribeLayout == legacy.subscribeLayout
+    check dod.subscribeState == legacy.subscribeState
+    check dod.reply == legacy.reply
+    check dod.initialEvents == legacy.initialEvents
+    check dod.messages.mapIt($it) == legacy.messages.mapIt($it)
+
+proc checkShadowReadProjectionTrace(
+    seed: legacy_model.Model; messages: openArray[core_msg.Msg]) =
+  var legacyModel = seed
+  var dod = seed.dodFromLegacy()
+
+  for msg in messages:
+    var legacyEffects: seq[Effect]
+    (legacyModel, legacyEffects) = legacy_update.update(legacyModel, msg)
+    let (nextDod, dodEffects) = dod.dodUpdate(msg)
+    dod = nextDod
+    checkEffectParity(msg, legacyEffects, dodEffects)
+
+  checkShadowStateParity(legacyModel, dod)
+  checkProjectionParity(shellSnapshot(legacyModel), dodShellSnapshot(dod))
+  check parseJson(dodLiveRestoreJson(dod)) == parseJson(liveRestoreJson(legacyModel))
+
+proc checkShadowReadProjectionAfterRestore(
+    seed: legacy_model.Model; restored: LiveRestoreState;
+    messages: openArray[core_msg.Msg]) =
+  var legacyModel = seed
+  legacyModel.applyLiveRestore(restored)
+
+  var dod = seed.dodFromLegacy()
+  dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+  for msg in messages:
+    var legacyEffects: seq[Effect]
+    (legacyModel, legacyEffects) = legacy_update.update(legacyModel, msg)
+    let (nextDod, dodEffects) = dod.dodUpdate(msg)
+    dod = nextDod
+    checkEffectParity(msg, legacyEffects, dodEffects)
+
+  checkShadowStateParity(legacyModel, dod)
+  checkProjectionParity(shellSnapshot(legacyModel), dodShellSnapshot(dod))
+  check parseJson(dodLiveRestoreJson(dod)) == parseJson(liveRestoreJson(legacyModel))
+
 proc checkDodLiveRestoreJsonParity(source: legacy_model.Model) =
   let legacyJson = parseJson(liveRestoreJson(source))
   let dodJson = parseJson(dodLiveRestoreJson(source.dodFromLegacy()))
@@ -2361,6 +2432,68 @@ suite "DOD state primitives":
     checkShadowTraceAfterRestore(
       legacy_model.Model(activeTag: 1, screenWidth: 2000,
         screenHeight: 1000),
+      restored,
+      @[
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 210,
+          appId: "kitty-a",
+          title: "terminal-a"),
+        core_msg.Msg(kind: core_msg.CmdFocusLast)
+      ])
+
+  test "DOD shadow projections match IPC and live restore reads":
+    checkShadowReadProjectionTrace(
+      lifecycleParityModel(),
+      @[
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 30,
+          appId: "kitty",
+          title: "shell"),
+        core_msg.Msg(kind: core_msg.WlFocusChanged, newFocusedId: 30),
+        core_msg.Msg(kind: core_msg.CmdToggleMaximized),
+        core_msg.Msg(
+          kind: core_msg.CmdFocusWorkspaceIndex,
+          workspaceIndex: 4),
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 40,
+          appId: "brave",
+          title: "browser"),
+        core_msg.Msg(
+          kind: core_msg.CmdFocusWorkspaceIndex,
+          workspaceIndex: 1)
+      ])
+
+  test "DOD shadow projections match IPC reads after live restore":
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 10)
+    restored.tags[1] = legacy_model.RestoredTagState(
+      tagId: 1,
+      layoutMode: legacy_model.Scroller,
+      focusedWindow: 10,
+      columns: @[
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(10)],
+          widthProportion: 0.4)
+      ])
+    restored.windows[10] = legacy_model.RestoredWindowState(
+      tagId: 1,
+      appId: "kitty-a",
+      title: "terminal-a",
+      widthProportion: 0.4,
+      heightProportion: 1.0,
+      isMaximized: true)
+
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 2000,
+      screenHeight: 1000)
+    seed.workspaces.defaultCount = 3
+    seed.tags[1] = initTagState(1, legacy_model.Scroller)
+    seed.tags[2] = initTagState(2, legacy_model.Scroller)
+    seed.tags[3] = initTagState(3, legacy_model.Scroller)
+
+    checkShadowReadProjectionAfterRestore(
+      seed,
       restored,
       @[
         core_msg.Msg(

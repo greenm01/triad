@@ -15,6 +15,7 @@ import core/render_visibility
 import config/dod_apply
 import state/dod_adapter
 import state/dod_restore_state
+import state/dod_snapshot
 from types/dod_model import DodModel
 import systems/dod_shadow_runtime
 from systems/dod_window_lifecycle import applyLiveRestore
@@ -71,6 +72,7 @@ var
   currentModel: Model
   shadowModel: DodModel
   shadowInitialized = false
+  shadowReadHealthy = false
   shadowDivergenceCount = 0
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
@@ -141,6 +143,8 @@ proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
   if report.ok:
     return
 
+  let readsWereHealthy = shadowReadHealthy
+  shadowReadHealthy = false
   inc shadowDivergenceCount
   if shadowDivergenceCount <= 10 or shadowDivergenceCount mod 100 == 0:
     let shadowMsgKind = $msg.kind
@@ -150,6 +154,11 @@ proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
       shadowMsgKind=shadowMsgKind,
       shadowDivergences=shadowDivergenceCount,
       shadowErrors=shadowErrors
+  if readsWereHealthy:
+    let shadowMsgKind = $msg.kind
+    warn "DOD projection reads disabled; falling back to legacy projections",
+      shadowContext=context,
+      shadowMsgKind=shadowMsgKind
 
 proc checkShadow(context: string; msg: Msg; effects: seq[Effect] = @[]) =
   if not shadowInitialized:
@@ -164,6 +173,27 @@ proc advanceShadow(context: string; msg: Msg; effects: seq[Effect] = @[]) =
 
   let report = shadowModel.advanceShadow(currentModel, msg, effects)
   logShadowReport(context, msg, report)
+
+proc useDodProjectionReads(): bool =
+  shadowInitialized and shadowReadHealthy
+
+proc readModelSnapshot(): ShellSnapshot =
+  if useDodProjectionReads():
+    dodShellSnapshot(shadowModel)
+  else:
+    shellSnapshot(currentModel)
+
+proc readLiveRestoreJson(): string =
+  if useDodProjectionReads():
+    dodLiveRestoreJson(shadowModel)
+  else:
+    liveRestoreJson(currentModel)
+
+proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
+  if useDodProjectionReads():
+    writeDodLiveRestoreState(shadowModel)
+  else:
+    writeLiveRestoreState(currentModel)
 
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:
@@ -310,8 +340,8 @@ proc sameQuickshellConfig(a, b: QuickshellConfig): bool =
     a.theme == b.theme and
     a.args == b.args
 
-proc broadcastNiriSnapshot(model: Model) =
-  for event in initialNiriEvents(model):
+proc broadcastNiriSnapshot(snapshot: ShellSnapshot) =
+  for event in initialNiriEvents(snapshot):
     asyncCheck broadcastJson(event)
 
 proc applyConfigReload(configPath, niriSocketPath: string): bool =
@@ -335,7 +365,7 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   destroyBindings()
   info "Config reloaded", path=configPath
   requestManage("config reload")
-  broadcastNiriSnapshot(currentModel)
+  broadcastNiriSnapshot(readModelSnapshot())
   true
 
 proc scheduleQuickshellSpawn(model: Model) =
@@ -1215,7 +1245,7 @@ proc executeEffect(eff: Effect) =
     if river_manager != nil:
       river_manager.stop()
   of EffTriadReload:
-    let restore = writeDodLiveRestoreState(currentModel.dodFromLegacy())
+    let restore = writeCurrentLiveRestoreState()
     if not restore.ok:
       warn "Triad reload rejected; live restore snapshot could not be written",
         path=restore.path,
@@ -1835,6 +1865,7 @@ proc main() =
   currentModel.applyConfig(initialConfig)
   shadowModel = currentModel.dodFromLegacy()
   shadowInitialized = true
+  shadowReadHealthy = true
   checkShadow("initial config", Msg(kind: CmdConfigReload))
   info "Initial config loaded", path=configPath
 
@@ -1868,11 +1899,11 @@ proc main() =
 
   proc snapshotModel(): ShellSnapshot {.gcsafe.} =
     {.cast(gcsafe).}:
-      shellSnapshot(currentModel)
+      readModelSnapshot()
 
   proc snapshotLiveRestoreJson(): string {.gcsafe.} =
     {.cast(gcsafe).}:
-      dodLiveRestoreJson(currentModel.dodFromLegacy())
+      readLiveRestoreJson()
 
   let triadSocketPath = getTriadSocketPath()
   info "Starting Triad IPC server", path=triadSocketPath
