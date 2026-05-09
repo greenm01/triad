@@ -11,16 +11,10 @@ import dod_window_state
 import dod_workspaces
 
 proc closeOverview(model: var DodModel): bool =
-  if not model.overviewActive:
-    return false
-  model.overviewActive = false
-  true
+  model.setOverviewActive(false)
 
 proc openOverview(model: var DodModel): bool =
-  if model.overviewActive:
-    return false
-  model.overviewActive = true
-  true
+  model.setOverviewActive(true)
 
 proc recomputeAllTagFocus(model: var DodModel) =
   for tagId, _ in model.tagsWithId():

@@ -12,8 +12,7 @@ proc syncPrimaryOutput*(model: var DodModel) =
 
   let primary = model.output(model.primaryOutput)
   if primary.isSome and primary.get().w > 0 and primary.get().h > 0:
-    model.screenWidth = primary.get().w
-    model.screenHeight = primary.get().h
+    discard model.setScreenSize(primary.get().w, primary.get().h)
 
 proc syncPrimaryOutputTag*(model: var DodModel) =
   if model.primaryOutput != NullOutputId and model.activeTag != NullTagId:
@@ -30,9 +29,7 @@ proc upsertOutputForExternal*(
 proc setOutputDimensionsForExternal*(
     model: var DodModel; externalId: ExternalOutputId; w, h: int32): bool =
   if externalId == NullExternalOutputId:
-    model.screenWidth = max(0'i32, w)
-    model.screenHeight = max(0'i32, h)
-    return true
+    return model.setScreenSize(w, h)
 
   let outputId = model.upsertOutputForExternal(externalId)
   result = model.setOutputDimensions(outputId, w, h)

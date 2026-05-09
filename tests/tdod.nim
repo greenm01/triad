@@ -1022,6 +1022,15 @@ suite "DOD state primitives":
       ".activeSlot = ",
       ".visibleSlots = "
     ]
+    let forbiddenRuntimeMutations = [
+      ".overviewActive = ",
+      ".layerFocusExclusive = ",
+      ".sessionLocked = ",
+      ".activeModifiers = ",
+      ".pointerOp = ",
+      ".screenWidth = ",
+      ".screenHeight = "
+    ]
 
     check checkedFiles.len > 0
     for path in checkedFiles:
@@ -1033,6 +1042,8 @@ suite "DOD state primitives":
       for pattern in forbiddenHistoryMutations:
         check not source.contains(pattern)
       for pattern in forbiddenActiveWorkspaceMutations:
+        check not source.contains(pattern)
+      for pattern in forbiddenRuntimeMutations:
         check not source.contains(pattern)
 
   test "daemon does not apply DOD shadow reports directly":
@@ -1287,6 +1298,65 @@ suite "DOD state primitives":
     check model.replaceVisibleWorkspaceSlots(@[1'u32, 2, 4])
 
     check model.visibleSlots == @[1'u32, 2, 4]
+
+  test "DOD runtime ops toggle overview state":
+    var model = DodModel(defaultWorkspaceCount: 3)
+
+    check model.setOverviewActive(true)
+    check model.overviewActive
+    check not model.setOverviewActive(true)
+    check model.setOverviewActive(false)
+    check not model.overviewActive
+
+  test "DOD runtime ops set layer focus and modifiers":
+    var model = DodModel(defaultWorkspaceCount: 3)
+
+    check model.setLayerFocusExclusiveState(true)
+    check model.layerFocusExclusive
+    check not model.setLayerFocusExclusiveState(true)
+    check model.setActiveModifiersState(5'u32)
+    check model.activeModifiers == 5'u32
+    check not model.setActiveModifiersState(5'u32)
+
+  test "DOD runtime ops session lock clears pointer op":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+    discard model.setPointerOpState(DodPointerOpData(
+      kind: legacy_model.OpMove,
+      windowId: win,
+      initialGeom: legacy_model.Rect(x: 1, y: 2, w: 3, h: 4)))
+
+    check model.setSessionLockedState(true)
+
+    check model.sessionLocked
+    check model.pointerOp.kind == legacy_model.OpNone
+    check not model.setSessionLockedState(true)
+
+  test "DOD runtime ops set and clear pointer op":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+    let op = DodPointerOpData(
+      kind: legacy_model.OpResize,
+      windowId: win,
+      initialGeom: legacy_model.Rect(x: 10, y: 20, w: 300, h: 200),
+      edges: 8)
+
+    check model.setPointerOpState(op)
+    check model.pointerOp.kind == legacy_model.OpResize
+    check model.pointerOp.windowId == win
+    check model.pointerOp.initialGeom == op.initialGeom
+    check model.pointerOp.edges == 8
+    check model.clearPointerOp()
+    check model.pointerOp.kind == legacy_model.OpNone
+    check not model.clearPointerOp()
+
+  test "DOD runtime ops clamp screen size":
+    var model = DodModel(defaultWorkspaceCount: 3)
+
+    check model.setScreenSize(-10, 720)
+    check model.screenWidth == 0
+    check model.screenHeight == 720
+    check not model.setScreenSize(0, 720)
 
   test "DOD history ops record focus MRU":
     var model = DodModel(defaultWorkspaceCount: 3)

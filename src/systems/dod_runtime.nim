@@ -16,24 +16,13 @@ proc keyboardShortcutsInhibited*(model: DodModel): bool =
   win.keyboardShortcutsInhibit and not win.keyboardShortcutsInhibitBypass
 
 proc setLayerFocusExclusive*(model: var DodModel; exclusive: bool): bool =
-  if model.layerFocusExclusive == exclusive:
-    return false
-  model.layerFocusExclusive = exclusive
-  true
+  model.setLayerFocusExclusiveState(exclusive)
 
 proc setSessionLocked*(model: var DodModel; locked: bool): bool =
-  if model.sessionLocked == locked:
-    return false
-  model.sessionLocked = locked
-  if locked:
-    model.pointerOp = DodPointerOpData(kind: OpNone)
-  true
+  model.setSessionLockedState(locked)
 
 proc setActiveModifiers*(model: var DodModel; modifiers: uint32): bool =
-  if model.activeModifiers == modifiers:
-    return false
-  model.activeModifiers = modifiers
-  true
+  model.setActiveModifiersState(modifiers)
 
 proc beginPointerMove*(model: var DodModel; externalId: ExternalWindowId):
     bool =
@@ -41,12 +30,11 @@ proc beginPointerMove*(model: var DodModel; externalId: ExternalWindowId):
   let winOpt = model.windowData(winId)
   if winOpt.isNone or not winOpt.get().isFloating:
     return false
-  model.pointerOp = DodPointerOpData(
+  model.setPointerOpState(DodPointerOpData(
     kind: OpMove,
     windowId: winId,
     initialGeom: winOpt.get().floatingGeom
-  )
-  true
+  ))
 
 proc beginPointerResize*(model: var DodModel; externalId: ExternalWindowId;
     edges: uint32): bool =
@@ -54,13 +42,12 @@ proc beginPointerResize*(model: var DodModel; externalId: ExternalWindowId;
   let winOpt = model.windowData(winId)
   if winOpt.isNone or not winOpt.get().isFloating:
     return false
-  model.pointerOp = DodPointerOpData(
+  model.setPointerOpState(DodPointerOpData(
     kind: OpResize,
     windowId: winId,
     initialGeom: winOpt.get().floatingGeom,
     edges: edges
-  )
-  true
+  ))
 
 proc applyPointerDelta*(model: var DodModel; dx, dy: int32): bool =
   let op = model.pointerOp
@@ -95,7 +82,7 @@ proc finishPointerOp*(model: var DodModel): WindowId =
   result =
     if model.pointerOp.kind == OpResize: model.pointerOp.windowId
     else: NullWindowId
-  model.pointerOp = DodPointerOpData(kind: OpNone)
+  discard model.clearPointerOp()
 
 proc moveFloatingFocused*(model: var DodModel; dx, dy: int32): bool =
   let tagOpt = model.tagData(model.activeTag)
