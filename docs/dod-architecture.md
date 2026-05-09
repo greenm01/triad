@@ -48,6 +48,24 @@ it for tables, sorting, and diagnostics.
 Only this layer may directly access `EntityManager.data` and
 `EntityManager.index`.
 
+#### The State Facade
+
+`state/engine.nim` is the public state API for DOD systems. It mirrors the
+facade pattern used by `~/dev/ec4x/src/engine/state/engine.nim`: systems import
+one module and get typed entity accessors, relation queries, iterators,
+invariant checks, snapshots, ID helpers, and entity operations.
+
+Rules:
+
+- New DOD systems should import `state/engine.nim`.
+- `entity_manager.nim` is internal plumbing for `state` and `entities`.
+- `dod_queries.nim`, `dod_iterators.nim`, and entity op modules stay focused
+  implementation modules behind the facade.
+- Tests may import `entity_manager.nim` directly when testing the generic
+  entity manager itself.
+- Systems must not import `entity_manager.nim` directly or reach into
+  `model.windows.entity(...)`; add a typed query or entity operation instead.
+
 #### The Read Layer: Iterators and Queries
 
 Because DOD data is flattened across multiple tables, we strictly separate the

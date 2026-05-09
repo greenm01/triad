@@ -21,6 +21,9 @@ proc tagData*(model: DodModel; tagId: TagId): Option[TagData] =
 proc windowData*(model: DodModel; winId: WindowId): Option[WindowData] =
   model.windows.entity(winId)
 
+proc columnData*(model: DodModel; columnId: ColumnId): Option[ColumnData] =
+  model.columns.entity(columnId)
+
 proc outputData*(model: DodModel; outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
 

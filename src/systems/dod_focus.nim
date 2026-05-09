@@ -1,10 +1,6 @@
 import options, sequtils
 import dod_workspaces
-import ../entities/dod_ops
-import ../state/dod_iterators
-import ../state/dod_queries
-import ../types/core
-import ../types/dod_model
+import ../state/engine
 from ../types/legacy_model import Direction, DirDown, DirLeft, DirRight, DirUp
 
 proc recordFocus*(model: var DodModel; winId: WindowId) =

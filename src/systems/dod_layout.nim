@@ -1,11 +1,8 @@
 import algorithm, options, tables
 import ../layouts/scroller
 import ../layouts/tiling
-import ../state/dod_iterators
-import ../state/dod_queries
-import ../state/entity_manager
+import ../state/engine
 import ../types/core as dod_core
-import ../types/dod_model
 import ../types/legacy_model as legacy
 
 proc externalWindowId(model: DodModel; winId: dod_core.WindowId):
@@ -184,10 +181,10 @@ proc dodLayoutInstructions*(model: var DodModel):
     model.scrollerPreferCenter,
     model.centerFocusedColumn)
 
-  model.tags.mEntity(model.activeTag).targetViewportXOffset =
-    tagForLayout.targetViewportXOffset
-  model.tags.mEntity(model.activeTag).targetViewportYOffset =
-    tagForLayout.targetViewportYOffset
+  discard model.setTagViewportTarget(
+    model.activeTag,
+    tagForLayout.targetViewportXOffset,
+    tagForLayout.targetViewportYOffset)
 
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if win.isFloating and not win.isMinimized:

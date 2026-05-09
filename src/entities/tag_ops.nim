@@ -66,6 +66,14 @@ proc setTagMasterRatio*(
     clamp(ratio, 0.05'f32, 0.95'f32)
   true
 
+proc setTagViewportTarget*(
+    model: var DodModel; tagId: TagId; xOffset, yOffset: float32): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).targetViewportXOffset = xOffset
+  model.tags.mEntity(tagId).targetViewportYOffset = yOffset
+  true
+
 proc destroyTag*(model: var DodModel; tagId: TagId): bool =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:

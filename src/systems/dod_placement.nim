@@ -2,11 +2,7 @@ import options
 import dod_focus
 import dod_workspaces
 import ../core/defaults
-import ../entities/dod_ops
-import ../state/dod_queries
-import ../state/entity_manager
-import ../types/core
-import ../types/dod_model
+import ../state/engine
 from ../types/legacy_model import Grid, LayoutMode, MasterStack, Monocle,
   Scroller, VerticalScroller
 
@@ -117,7 +113,7 @@ proc resizeWidth*(model: var DodModel; delta: float32): bool =
   let tag = model.tagData(pos.tagId).get()
   case tag.layoutMode
   of Scroller:
-    let column = model.columns.entity(pos.columnId).get()
+    let column = model.column(pos.columnId).get()
     model.setColumnWidth(pos.columnId, column.widthProportion + delta)
   of VerticalScroller:
     let win = model.windowData(pos.winId).get()
@@ -134,7 +130,7 @@ proc resizeHeight*(model: var DodModel; delta: float32): bool =
   let tag = model.tagData(pos.tagId).get()
   case tag.layoutMode
   of VerticalScroller:
-    let column = model.columns.entity(pos.columnId).get()
+    let column = model.column(pos.columnId).get()
     model.setColumnWidth(pos.columnId, column.widthProportion + delta)
   of Scroller:
     let win = model.windowData(pos.winId).get()

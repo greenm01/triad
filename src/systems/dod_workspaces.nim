@@ -1,9 +1,6 @@
 import algorithm, options
 import ../core/defaults
-import ../entities/dod_ops
-import ../state/dod_queries
-import ../types/core
-import ../types/dod_model
+import ../state/engine
 
 proc defaultWorkspaceCount*(model: DodModel): uint32 =
   if model.defaultWorkspaceCount == 0:
