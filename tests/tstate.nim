@@ -1,8 +1,9 @@
-import json, os, sequtils, strutils, tables, unittest
+import json, options, os, sequtils, strutils, tables, unittest
 import ../src/config/parser
 import ../src/core/effects
 import ../src/core/msg
 import ../src/core/restore_state
+import ../src/state/engine except WindowId
 import ../src/state/invariants
 import ../src/state/snapshot
 import ../src/systems/layout_projection
@@ -87,6 +88,16 @@ proc isTopLevelBehavior(line: string): bool =
       return true
   false
 
+proc isIdentChar(ch: char): bool =
+  ch.isAlphaNumeric() or ch == '_'
+
+proc containsFieldRead(line, field: string): bool =
+  let idx = line.find(field)
+  if idx == -1:
+    return false
+  let next = idx + field.len
+  next >= line.len or not line[next].isIdentChar()
+
 suite "Runtime state primitives":
   test "deleted legacy and shadow modules are gone":
     for path in DeletedRuntimeModules:
@@ -158,6 +169,93 @@ suite "Runtime state primitives":
       proc(path, line: string): bool =
         line.len > 80)
     check overlongFailures.len <= MaxKnownOverlongLines
+
+  test "systems read state through facade queries":
+    let blockedStateImports = sourceLineFailures(
+      proc(path, line: string): bool =
+        path.startsWith("src/systems/") and
+          (line.contains("import ../state/") or
+            line.contains("from ../state/")) and
+          not line.contains("../state/engine"))
+    check blockedStateImports.len == 0
+
+    let blockedRelationReads = [
+      "model.scratchpadWindows",
+      "model.namedScratchpads",
+      "model.visibleScratchpad",
+      "model.isScratchpadVisible",
+      "model.focusHistory",
+      "model.workspaceHistory",
+      "model.restoreActiveSlot",
+      "model.restoreFocusedWindow",
+      "model.restoreTagByWindow",
+      "model.restoreWindows",
+      "model.restoreTags",
+      "model.restoreOutputTags",
+      "model.restoreScratchpadWindows",
+      "model.restoreNamedScratchpads",
+      "model.restoreVisibleScratchpad",
+      "model.restoreIsScratchpadVisible",
+      "model.restoreFocusHistory",
+      "model.restoreWorkspaceHistory"
+    ]
+    let directRelationReads = sourceLineFailures(
+      proc(path, line: string): bool =
+        if not path.startsWith("src/systems/"):
+          return false
+        for field in blockedRelationReads:
+          if line.containsFieldRead(field):
+            return true
+        false)
+    check directRelationReads.len == 0
+
+    let allocatingQueryReads = sourceLineFailures(
+      proc(path, line: string): bool =
+        path.startsWith("src/systems/") and
+          (line.contains(".columnsForTag(") or
+            line.contains(".windowsForColumn(") or
+            line.contains(".windowsForTag(")))
+    check allocatingQueryReads.len == 0
+
+  test "state query helpers cover indexed relation reads":
+    var model = Model()
+    let tagId = model.addTag(slot = 1, layoutMode = LayoutMode.Scroller)
+    let columnId = model.addColumn(tagId, 0.6'f32)
+    let winId = model.addWindow(ExternalWindowId(100), appId = "term")
+    discard model.moveWindowToColumn(tagId, winId, columnId, 0)
+
+    check model.columnCountForTag(tagId) == 1
+    check model.columnAt(tagId, 0) == columnId
+    check model.columnAt(tagId, 1) == NullColumnId
+    check model.windowCountForColumn(columnId) == 1
+    check model.windowAt(columnId, 0) == winId
+    check model.windowAt(columnId, 1) == NullWindowId
+    check model.placementForWindowOnTag(tagId, winId).isSome
+
+    discard model.addScratchpadRef(winId)
+    discard model.setNamedScratchpadRef("term", winId)
+    discard model.showScratchpadRef(winId)
+    check model.scratchpadVisible()
+    check model.latestScratchpadWindow() == winId
+    check model.activeScratchpadWindow() == winId
+    check model.namedScratchpadWindow("term") == winId
+
+    discard model.recordFocus(winId)
+    discard model.recordWorkspace(tagId)
+    check toSeq(model.focusHistoryIds()) == @[winId]
+    check toSeq(model.focusHistoryIdsReverse()) == @[winId]
+    check toSeq(model.workspaceHistoryIds()) == @[tagId]
+
+    discard model.loadRestoreState(PendingRestoreState(
+      focusedWindow: ExternalWindowId(100),
+      focusHistory: @[ExternalWindowId(100)],
+      workspaceHistory: @[1'u32],
+      scratchpadWindows: @[ExternalWindowId(100)]))
+    check model.restoreFocusedWindowPending()
+    check model.restoreFocusedWindowId() == ExternalWindowId(100)
+    check model.restoredScratchpadContains(ExternalWindowId(100))
+    check toSeq(model.restoreFocusHistoryIds()) == @[ExternalWindowId(100)]
+    check toSeq(model.restoreWorkspaceHistorySlots()) == @[1'u32]
 
   test "runtime init builds a valid model from config":
     let initialized = initRuntimeStateFromConfig(baseConfig())

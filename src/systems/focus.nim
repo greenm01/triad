@@ -91,7 +91,7 @@ proc focusExternalWindow*(model: var Model; externalId: ExternalWindowId):
 
 proc focusMostRecentWindow*(model: var Model): bool =
   var candidates: seq[WindowId] = @[]
-  for candidate in model.focusHistory:
+  for candidate in model.focusHistoryIds():
     if model.isFocusableWindow(candidate) and
         model.tagForWindow(candidate) != NullTagId:
       candidates.add(candidate)
@@ -109,7 +109,7 @@ proc isRestorableWorkspace(model: Model; tagId: TagId): bool =
 
 proc focusMostRecentWorkspace*(model: var Model): bool =
   var candidates: seq[TagId] = @[]
-  for candidate in model.workspaceHistory:
+  for candidate in model.workspaceHistoryIds():
     if model.isRestorableWorkspace(candidate):
       candidates.add(candidate)
   discard model.replaceWorkspaceHistory(candidates)
@@ -125,8 +125,7 @@ proc focusMostRecentWorkspace*(model: var Model): bool =
 
 proc focusLast*(model: var Model): bool =
   let current = model.focusedOnActiveTag()
-  for i in countdown(model.focusHistory.len - 1, 0):
-    let candidate = model.focusHistory[i]
+  for candidate in model.focusHistoryIdsReverse():
     if candidate != current and model.isFocusableWindow(candidate):
       return model.focusWindow(candidate)
   false
@@ -161,21 +160,24 @@ proc focusCycle*(model: var Model; step: int): bool =
 
 proc visibleWindowNear(
     model: Model; columnId: ColumnId; preferredIdx: int): WindowId =
-  let windows = model.windowsForColumn(columnId)
-  if windows.len == 0:
+  let count = model.windowCountForColumn(columnId)
+  if count == 0:
     return NullWindowId
 
-  let idx = clamp(preferredIdx, 0, windows.len - 1)
-  if model.isFocusableWindow(windows[idx]):
-    return windows[idx]
+  let idx = clamp(preferredIdx, 0, count - 1)
+  let preferred = model.windowAt(columnId, idx)
+  if model.isFocusableWindow(preferred):
+    return preferred
 
-  for distance in 1 ..< windows.len:
+  for distance in 1 ..< count:
     let before = idx - distance
-    if before >= 0 and model.isFocusableWindow(windows[before]):
-      return windows[before]
+    let beforeWin = model.windowAt(columnId, before)
+    if beforeWin != NullWindowId and model.isFocusableWindow(beforeWin):
+      return beforeWin
     let after = idx + distance
-    if after < windows.len and model.isFocusableWindow(windows[after]):
-      return windows[after]
+    let afterWin = model.windowAt(columnId, after)
+    if afterWin != NullWindowId and model.isFocusableWindow(afterWin):
+      return afterWin
   NullWindowId
 
 proc findWindowPosition(model: Model; tagId: TagId; winId: WindowId):
@@ -198,10 +200,11 @@ proc focusColumnByStep*(model: var Model; step: int): bool =
   if not pos.found:
     return false
 
-  let columns = model.columnsForTag(tagId)
+  let columnCount = model.columnCountForTag(tagId)
   var colIdx = pos.colIdx + step
-  while colIdx >= 0 and colIdx < columns.len:
-    let target = model.visibleWindowNear(columns[colIdx], pos.winIdx)
+  while colIdx >= 0 and colIdx < columnCount:
+    let target = model.visibleWindowNear(
+      model.columnAt(tagId, colIdx), pos.winIdx)
     if target != NullWindowId:
       return model.focusWindow(target)
     colIdx += step
@@ -212,16 +215,17 @@ proc focusColumnAtEdge*(model: var Model; first: bool): bool =
   let focused = model.focusedOnActiveTag()
   let pos = model.findWindowPosition(tagId, focused)
   let preferredIdx = if pos.found: pos.winIdx else: 0
-  let columns = model.columnsForTag(tagId)
+  let columnCount = model.columnCountForTag(tagId)
 
   if first:
-    for columnId in columns:
+    for idx in 0 ..< columnCount:
+      let columnId = model.columnAt(tagId, idx)
       let target = model.visibleWindowNear(columnId, preferredIdx)
       if target != NullWindowId:
         return model.focusWindow(target)
   else:
-    for i in countdown(columns.len - 1, 0):
-      let target = model.visibleWindowNear(columns[i], preferredIdx)
+    for i in countdown(columnCount - 1, 0):
+      let target = model.visibleWindowNear(model.columnAt(tagId, i), preferredIdx)
       if target != NullWindowId:
         return model.focusWindow(target)
   false
@@ -234,11 +238,12 @@ proc focusWindowOrWorkspace*(model: var Model; direction: int): bool =
   let focused = model.focusedOnActiveTag()
   let pos = model.findWindowPosition(tagId, focused)
   if pos.found:
-    let windows = model.windowsForColumn(pos.columnId)
+    let count = model.windowCountForColumn(pos.columnId)
     var winIdx = pos.winIdx + direction
-    while winIdx >= 0 and winIdx < windows.len:
-      if model.isFocusableWindow(windows[winIdx]):
-        return model.focusWindow(windows[winIdx])
+    while winIdx >= 0 and winIdx < count:
+      let candidate = model.windowAt(pos.columnId, winIdx)
+      if model.isFocusableWindow(candidate):
+        return model.focusWindow(candidate)
       winIdx += direction
 
   let target = model.nearestWorkspaceSlot(direction, false)
@@ -282,27 +287,26 @@ proc focusByDirection*(model: var Model; direction: Direction): bool =
   if not pos.found:
     return false
 
-  let columns = model.columnsForTag(tagId)
+  let columnCount = model.columnCountForTag(tagId)
   var target = NullWindowId
   case direction
   of Direction.DirLeft:
     var i = pos.colIdx - 1
     while i >= 0 and target == NullWindowId:
-      target = model.visibleWindowNear(columns[i], pos.winIdx)
+      target = model.visibleWindowNear(model.columnAt(tagId, i), pos.winIdx)
       dec i
   of Direction.DirRight:
     var i = pos.colIdx + 1
-    while i < columns.len and target == NullWindowId:
-      target = model.visibleWindowNear(columns[i], pos.winIdx)
+    while i < columnCount and target == NullWindowId:
+      target = model.visibleWindowNear(model.columnAt(tagId, i), pos.winIdx)
       inc i
   of Direction.DirUp:
-    let windows = model.windowsForColumn(pos.columnId)
     if pos.winIdx > 0:
-      target = windows[pos.winIdx - 1]
+      target = model.windowAt(pos.columnId, pos.winIdx - 1)
   of Direction.DirDown:
-    let windows = model.windowsForColumn(pos.columnId)
-    if pos.winIdx >= 0 and pos.winIdx < windows.len - 1:
-      target = windows[pos.winIdx + 1]
+    let count = model.windowCountForColumn(pos.columnId)
+    if pos.winIdx >= 0 and pos.winIdx < count - 1:
+      target = model.windowAt(pos.columnId, pos.winIdx + 1)
 
   if target != NullWindowId and model.isFocusableWindow(target):
     return model.focusWindow(target)

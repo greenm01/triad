@@ -29,11 +29,9 @@ proc primaryScreen*(model: Model): rv.Rect =
   rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
 proc activeFocus*(model: Model): core_types.WindowId =
-  if model.isScratchpadVisible:
-    if model.visibleScratchpad != NullWindowId:
-      return model.visibleScratchpad
-    if model.scratchpadWindows.len > 0:
-      return model.scratchpadWindows[^1]
+  let scratchpad = model.activeScratchpadWindow()
+  if scratchpad != NullWindowId:
+    return scratchpad
   if model.activeTag == NullTagId:
     return NullWindowId
   let tagOpt = model.tagData(model.activeTag)
@@ -199,12 +197,8 @@ proc layoutProjection*(model: Model): LayoutProjection =
         windowId: model.externalWindowId(winId),
         geom: win.floatingGeom))
 
-  if model.isScratchpadVisible and model.scratchpadWindows.len > 0:
-    let winId =
-      if model.visibleScratchpad != NullWindowId:
-        model.visibleScratchpad
-      else:
-        model.scratchpadWindows[^1]
+  let winId = model.activeScratchpadWindow()
+  if winId != NullWindowId:
     if model.windowData(winId).isSome:
       let sw = int32(float32(screen.w) * model.effectiveScratchpadWidthRatio())
       let sh = int32(float32(screen.h) * model.effectiveScratchpadHeightRatio())

@@ -3,7 +3,6 @@ import ../config/parser
 import ../core/effects
 import ../core/msg
 import ../core/restore_state
-import ../state/live_restore
 import ../state/engine
 import ../types/runtime_state
 import ../types/layout_projection

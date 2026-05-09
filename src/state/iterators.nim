@@ -63,3 +63,47 @@ iterator outputTagsWithId*(
     model: Model): tuple[outputId: OutputId, tagId: TagId] =
   for outputId, tagId in model.outputTags.pairs:
     yield (outputId, tagId)
+
+iterator scratchpadWindowIds*(model: Model): WindowId =
+  for winId in model.scratchpadWindows:
+    yield winId
+
+iterator namedScratchpadsWithId*(model: Model):
+    tuple[name: string, winId: WindowId] =
+  for name, winId in model.namedScratchpads.pairs:
+    yield (name, winId)
+
+iterator focusHistoryIds*(model: Model): WindowId =
+  for winId in model.focusHistory:
+    yield winId
+
+iterator focusHistoryIdsReverse*(model: Model): WindowId =
+  for i in countdown(model.focusHistory.len - 1, 0):
+    yield model.focusHistory[i]
+
+iterator workspaceHistoryIds*(model: Model): TagId =
+  for tagId in model.workspaceHistory:
+    yield tagId
+
+iterator restoreFocusHistoryIds*(model: Model): ExternalWindowId =
+  for externalId in model.restoreFocusHistory:
+    yield externalId
+
+iterator restoreWorkspaceHistorySlots*(model: Model): uint32 =
+  for slot in model.restoreWorkspaceHistory:
+    yield slot
+
+iterator restoreOutputTagsWithId*(model: Model):
+    tuple[externalId: ExternalOutputId, slot: uint32] =
+  for externalId, slot in model.restoreOutputTags.pairs:
+    yield (externalId, slot)
+
+iterator restoreNamedScratchpadsWithId*(model: Model):
+    tuple[name: string, externalId: ExternalWindowId] =
+  for name, externalId in model.restoreNamedScratchpads.pairs:
+    yield (name, externalId)
+
+iterator restoreWindowsWithId*(model: Model):
+    tuple[externalId: ExternalWindowId, window: RestoredWindowData] =
+  for externalId, restored in model.restoreWindows.pairs:
+    yield (externalId, restored)

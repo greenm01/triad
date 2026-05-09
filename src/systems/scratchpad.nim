@@ -1,4 +1,4 @@
-import options, strutils, tables
+import options, strutils
 import focus
 import placement
 import workspaces
@@ -39,11 +39,12 @@ proc hideScratchpad*(model: var Model): bool =
 
 proc toggleScratchpad*(model: var Model): bool =
   model.pruneScratchpads()
-  if model.isScratchpadVisible:
+  if model.scratchpadVisible():
     return model.hideScratchpad()
-  if model.scratchpadWindows.len == 0:
+  let latest = model.latestScratchpadWindow()
+  if latest == NullWindowId:
     return false
-  model.showScratchpad(model.scratchpadWindows[^1])
+  model.showScratchpad(latest)
 
 proc toggleNamedScratchpad*(model: var Model; name: string): bool =
   let scratchpadName = name.strip()
@@ -51,9 +52,10 @@ proc toggleNamedScratchpad*(model: var Model; name: string): bool =
     return false
 
   model.pruneScratchpads()
-  if model.namedScratchpads.hasKey(scratchpadName):
-    let winId = model.namedScratchpads[scratchpadName]
-    if model.isScratchpadVisible and model.visibleScratchpad == winId:
+  let named = model.namedScratchpadWindow(scratchpadName)
+  if named != NullWindowId:
+    let winId = named
+    if model.activeScratchpadWindow() == winId:
       return model.hideScratchpad()
     return model.showScratchpad(winId)
 
@@ -68,10 +70,10 @@ proc toggleNamedScratchpad*(model: var Model; name: string): bool =
 proc restoreScratchpad*(model: var Model): bool =
   model.pruneScratchpads()
   let winId =
-    if model.visibleScratchpad != NullWindowId:
-      model.visibleScratchpad
-    elif model.scratchpadWindows.len > 0:
-      model.scratchpadWindows[^1]
+    if model.activeScratchpadWindow() != NullWindowId:
+      model.activeScratchpadWindow()
+    elif model.latestScratchpadWindow() != NullWindowId:
+      model.latestScratchpadWindow()
     else:
       NullWindowId
   if winId == NullWindowId or not model.hasWindow(winId):
@@ -96,13 +98,13 @@ proc recordRestoredScratchpad*(model: var Model;
   if winId == NullWindowId:
     return
 
-  if model.restoreScratchpadWindows.find(restoredExternalId) != -1:
+  if model.restoredScratchpadContains(restoredExternalId):
     discard model.addScratchpadRef(winId)
 
-  for name, externalId in model.restoreNamedScratchpads.pairs:
+  for name, externalId in model.restoreNamedScratchpadsWithId():
     if externalId == restoredExternalId:
       discard model.setNamedScratchpadRef(name, winId)
 
-  if model.restoreVisibleScratchpad == restoredExternalId:
+  if model.restoreVisibleScratchpadId() == restoredExternalId:
     discard model.setVisibleScratchpadRef(
-      winId, model.restoreIsScratchpadVisible)
+      winId, model.restoreScratchpadVisible())

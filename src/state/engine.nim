@@ -5,6 +5,7 @@ import iterators
 import queries
 import invariants
 import snapshot
+import live_restore
 import ../core/defaults
 import ../entities/ops
 import ../types/core
@@ -17,6 +18,7 @@ export iterators
 export queries
 export invariants
 export snapshot
+export live_restore
 export ops
 export core
 export model

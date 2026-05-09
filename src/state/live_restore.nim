@@ -1,11 +1,13 @@
 import algorithm, json, options, os, tables
-import engine
+import iterators
+import queries
+import ../core/defaults
 import ../core/restore_state
 import ../types/core as core_types
-import ../types/model as model_types
+import ../types/model
 import ../types/runtime_values as rv
 
-proc runtimeWindowId(win: model_types.WindowData): rv.WindowId =
+proc runtimeWindowId(win: model.WindowData): rv.WindowId =
   rv.WindowId(uint32(win.externalId))
 
 proc externalWindowId(
@@ -199,25 +201,26 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     if outputExternal != 0 and slot != 0:
       result.outputTags[outputExternal] = slot
 
-  for winId in model.scratchpadWindows:
+  for winId in model.scratchpadWindowIds():
     let external = model.externalWindowId(winId)
     if external != 0:
       result.scratchpadWindows.add(external)
 
-  for name, winId in model.namedScratchpads.pairs:
+  for name, winId in model.namedScratchpadsWithId():
     let external = model.externalWindowId(winId)
     if external != 0:
       result.namedScratchpads[name] = external
 
-  result.visibleScratchpad = model.externalWindowId(model.visibleScratchpad)
-  result.isScratchpadVisible = model.isScratchpadVisible
+  result.visibleScratchpad = model.externalWindowId(
+    model.visibleScratchpadWindow())
+  result.isScratchpadVisible = model.scratchpadVisible()
 
-  for winId in model.focusHistory:
+  for winId in model.focusHistoryIds():
     let external = model.externalWindowId(winId)
     if external != 0:
       result.focusHistory.add(external)
 
-  for tagId in model.workspaceHistory:
+  for tagId in model.workspaceHistoryIds():
     let tagOpt = model.tagData(tagId)
     if tagOpt.isSome and tagOpt.get().slot != 0:
       result.workspaceHistory.add(tagOpt.get().slot)

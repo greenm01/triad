@@ -37,11 +37,9 @@ proc riverIdForOutput*(model: Model; outputId: OutputId): uint32 =
   0
 
 proc activeFocusRiverId*(model: Model): runtime_values.WindowId =
-  if model.isScratchpadVisible:
-    if model.visibleScratchpad != NullWindowId:
-      return model.riverIdForWindow(model.visibleScratchpad)
-    if model.scratchpadWindows.len > 0:
-      return model.riverIdForWindow(model.scratchpadWindows[^1])
+  let scratchpad = model.activeScratchpadWindow()
+  if scratchpad != NullWindowId:
+    return model.riverIdForWindow(scratchpad)
   if model.activeTag == NullTagId:
     return 0'u32
   let tagOpt = model.tagData(model.activeTag)
@@ -53,10 +51,9 @@ proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 
 proc visibleScratchpadRiverId*(model: Model): runtime_values.WindowId =
-  if model.visibleScratchpad != NullWindowId:
-    return model.riverIdForWindow(model.visibleScratchpad)
-  if model.scratchpadWindows.len > 0:
-    return model.riverIdForWindow(model.scratchpadWindows[^1])
+  let scratchpad = model.activeScratchpadWindow()
+  if scratchpad != NullWindowId:
+    return model.riverIdForWindow(scratchpad)
   0'u32
 
 proc windowDataForRiverId*(

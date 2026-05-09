@@ -100,9 +100,41 @@ proc windowsForTag*(model: Model; tagId: TagId): seq[WindowId] =
   for winId, _ in model.windowsOnTagWithId(tagId):
     result.add(winId)
 
+proc columnCountForTag*(model: Model; tagId: TagId): int =
+  if model.columnsByTag.hasKey(tagId):
+    model.columnsByTag[tagId].len
+  else:
+    0
+
+proc windowCountForColumn*(model: Model; columnId: ColumnId): int =
+  if model.windowsByColumn.hasKey(columnId):
+    model.windowsByColumn[columnId].len
+  else:
+    0
+
+proc windowCountForTag*(model: Model; tagId: TagId): int =
+  if model.windowsByTag.hasKey(tagId):
+    model.windowsByTag[tagId].len
+  else:
+    0
+
+proc columnAt*(model: Model; tagId: TagId; idx: int): ColumnId =
+  if idx < 0 or not model.columnsByTag.hasKey(tagId) or
+      idx >= model.columnsByTag[tagId].len:
+    return NullColumnId
+  model.columnsByTag[tagId][idx]
+
+proc windowAt*(model: Model; columnId: ColumnId; idx: int): WindowId =
+  if idx < 0 or not model.windowsByColumn.hasKey(columnId) or
+      idx >= model.windowsByColumn[columnId].len:
+    return NullWindowId
+  model.windowsByColumn[columnId][idx]
+
 proc columnIndexForTag*(
     model: Model; tagId: TagId; columnId: ColumnId): uint32 =
-  for idx, candidate in model.columnsForTag(tagId):
+  if not model.columnsByTag.hasKey(tagId):
+    return 0
+  for idx, candidate in model.columnsByTag[tagId]:
     if candidate == columnId:
       return uint32(idx + 1)
   0
@@ -110,9 +142,93 @@ proc columnIndexForTag*(
 proc placementForWindowOnTag*(
     model: Model; tagId: TagId; winId: WindowId): Option[WindowPlacement] =
   let key = (tagId, winId)
-  if not model.placementByTagWindow.hasKey(key):
+  let placement = model.placementByTagWindow.getOrDefault(
+    key,
+    WindowPlacement(
+      tagId: NullTagId,
+      windowId: NullWindowId,
+      columnId: NullColumnId))
+  if placement.windowId == NullWindowId:
     return none(WindowPlacement)
-  some(model.placementByTagWindow[key])
+  some(placement)
+
+proc latestScratchpadWindow*(model: Model): WindowId =
+  if model.scratchpadWindows.len == 0:
+    return NullWindowId
+  model.scratchpadWindows[^1]
+
+proc scratchpadVisible*(model: Model): bool =
+  model.isScratchpadVisible
+
+proc visibleScratchpadWindow*(model: Model): WindowId =
+  model.visibleScratchpad
+
+proc activeScratchpadWindow*(model: Model): WindowId =
+  if not model.isScratchpadVisible:
+    return NullWindowId
+  if model.visibleScratchpad != NullWindowId:
+    return model.visibleScratchpad
+  model.latestScratchpadWindow()
+
+proc scratchpadWindowCount*(model: Model): int =
+  model.scratchpadWindows.len
+
+proc namedScratchpadWindow*(model: Model; name: string): WindowId =
+  model.namedScratchpads.getOrDefault(name, NullWindowId)
+
+proc restoreFocusedWindowId*(model: Model): ExternalWindowId =
+  model.restoreFocusedWindow
+
+proc restoreFocusedWindowPending*(model: Model): bool =
+  model.restoreFocusedWindow != NullExternalWindowId
+
+proc restoreWindowCount*(model: Model): int =
+  model.restoreWindows.len
+
+proc restoreTag*(model: Model; slot: uint32): Option[RestoredTagData] =
+  if not model.restoreTags.hasKey(slot):
+    return none(RestoredTagData)
+  some(model.restoreTags[slot])
+
+proc restoreWindow*(
+    model: Model; externalId: ExternalWindowId): Option[RestoredWindowData] =
+  if not model.restoreWindows.hasKey(externalId):
+    return none(RestoredWindowData)
+  some(model.restoreWindows[externalId])
+
+proc restoredScratchpadContains*(
+    model: Model; externalId: ExternalWindowId): bool =
+  if model.restoreScratchpadWindows.find(externalId) != -1:
+    return true
+  for _, scratchpadWin in model.restoreNamedScratchpadsWithId():
+    if scratchpadWin == externalId:
+      return true
+  false
+
+proc restoreVisibleScratchpadId*(model: Model): ExternalWindowId =
+  model.restoreVisibleScratchpad
+
+proc restoreScratchpadVisible*(model: Model): bool =
+  model.restoreIsScratchpadVisible
+
+proc findRestoredWindowByIdentity*(
+    model: Model; appId, title, identifier: string): ExternalWindowId =
+  if identifier.len > 0:
+    for externalId, restored in model.restoreWindowsWithId():
+      if restored.identifier.len > 0 and restored.identifier == identifier:
+        return externalId
+
+  var matched = NullExternalWindowId
+  var matches = 0
+  for externalId, restored in model.restoreWindowsWithId():
+    if restored.identifier.len == 0 and restored.appId.len > 0 and
+        restored.title.len > 0 and restored.appId == appId and
+        restored.title == title:
+      matched = externalId
+      inc matches
+  if matches == 1:
+    return matched
+  NullExternalWindowId
 
 proc sortedWindowIdsByExternal*(model: Model): seq[WindowId] =
   var externalByWindow: Table[WindowId, ExternalWindowId]

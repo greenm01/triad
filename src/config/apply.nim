@@ -108,7 +108,7 @@ proc applyConfig*(model: var Model; config: Config) =
     let tagOpt = model.tagData(tagId)
     if tagOpt.isSome and slot <= model.defaultWorkspaceCount and
         tagOpt.get().focusedWindow == NullWindowId and
-        model.columnsForTag(tagId).len == 0 and
+        model.columnCountForTag(tagId) == 0 and
         not model.tagHasLiveWindows(tagId):
       discard model.setTagMasterCount(tagId, model.defaultMasterCount)
       discard model.setTagMasterRatio(tagId, model.defaultMasterRatio)
