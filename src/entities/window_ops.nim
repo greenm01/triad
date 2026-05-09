@@ -1,6 +1,7 @@
 import options, sequtils, tables
 import group_ops
 import placement_ops
+import scratchpad_ops
 import ../state/dod_iterators
 import ../state/entity_manager
 import ../state/id_gen
@@ -93,6 +94,7 @@ proc destroyWindow*(model: var DodModel; winId: WindowId): bool =
   let externalId = winOpt.get().externalId
   if externalId != NullExternalWindowId:
     model.externalWindowIds.del(externalId)
+  discard model.removeScratchpadRef(winId)
   model.windowTags.del(winId)
   model.focusHistory.keepIf(proc(id: WindowId): bool = id != winId)
   for _, tag in model.tagsWithId():

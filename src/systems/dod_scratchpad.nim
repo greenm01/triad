@@ -4,45 +4,8 @@ import dod_placement
 import dod_workspaces
 import ../state/engine
 
-proc addScratchpadWindow(model: var DodModel; winId: WindowId) =
-  if model.scratchpadWindows.find(winId) == -1:
-    model.scratchpadWindows.add(winId)
-
-proc removeScratchpadWindow(model: var DodModel; winId: WindowId) =
-  var i = 0
-  while i < model.scratchpadWindows.len:
-    if model.scratchpadWindows[i] == winId:
-      model.scratchpadWindows.delete(i)
-    else:
-      inc i
-
-proc removeNamedScratchpadRefs(model: var DodModel; winId: WindowId) =
-  var deadNames: seq[string] = @[]
-  for name, namedWin in model.namedScratchpads.pairs:
-    if namedWin == winId:
-      deadNames.add(name)
-  for name in deadNames:
-    model.namedScratchpads.del(name)
-
 proc pruneScratchpads*(model: var DodModel) =
-  var i = 0
-  while i < model.scratchpadWindows.len:
-    if model.hasWindow(model.scratchpadWindows[i]):
-      inc i
-    else:
-      model.scratchpadWindows.delete(i)
-
-  var deadNames: seq[string] = @[]
-  for name, winId in model.namedScratchpads.pairs:
-    if not model.hasWindow(winId):
-      deadNames.add(name)
-  for name in deadNames:
-    model.namedScratchpads.del(name)
-
-  if model.visibleScratchpad != NullWindowId and
-      not model.hasWindow(model.visibleScratchpad):
-    model.visibleScratchpad = NullWindowId
-    model.isScratchpadVisible = false
+  discard model.pruneScratchpadRefs()
 
 proc moveFocusedToScratchpad*(model: var DodModel; name = ""): bool =
   let focused = model.focusedOnActiveTag()
@@ -55,12 +18,11 @@ proc moveFocusedToScratchpad*(model: var DodModel; name = ""): bool =
     return false
 
   discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
-  model.addScratchpadWindow(focused)
+  discard model.addScratchpadRef(focused)
   let scratchpadName = name.strip()
   if scratchpadName.len > 0:
-    model.namedScratchpads[scratchpadName] = focused
-  model.visibleScratchpad = NullWindowId
-  model.isScratchpadVisible = false
+    discard model.setNamedScratchpadRef(scratchpadName, focused)
+  discard model.hideScratchpadRef()
   true
 
 proc showScratchpad*(model: var DodModel; winId: WindowId): bool =
@@ -68,16 +30,12 @@ proc showScratchpad*(model: var DodModel; winId: WindowId): bool =
     return false
   discard model.setWindowMinimized(winId, false)
   discard model.setWindowMaximized(winId, false)
-  model.addScratchpadWindow(winId)
-  model.visibleScratchpad = winId
-  model.isScratchpadVisible = true
+  discard model.showScratchpadRef(winId)
   model.recordFocus(winId)
   true
 
 proc hideScratchpad*(model: var DodModel): bool =
-  model.visibleScratchpad = NullWindowId
-  model.isScratchpadVisible = false
-  true
+  model.hideScratchpadRef()
 
 proc toggleScratchpad*(model: var DodModel): bool =
   model.pruneScratchpads()
@@ -119,10 +77,7 @@ proc restoreScratchpad*(model: var DodModel): bool =
   if winId == NullWindowId or not model.hasWindow(winId):
     return false
 
-  model.removeScratchpadWindow(winId)
-  model.removeNamedScratchpadRefs(winId)
-  model.visibleScratchpad = NullWindowId
-  model.isScratchpadVisible = false
+  discard model.removeScratchpadRef(winId)
 
   let targetSlot =
     if model.activeWorkspaceSlot() == 0: 1'u32
@@ -142,15 +97,12 @@ proc recordRestoredScratchpad*(model: var DodModel;
     return
 
   if model.restoreScratchpadWindows.find(restoredExternalId) != -1:
-    model.addScratchpadWindow(winId)
+    discard model.addScratchpadRef(winId)
 
   for name, externalId in model.restoreNamedScratchpads.pairs:
     if externalId == restoredExternalId:
-      model.namedScratchpads[name] = winId
-      model.addScratchpadWindow(winId)
+      discard model.setNamedScratchpadRef(name, winId)
 
   if model.restoreVisibleScratchpad == restoredExternalId:
-    model.visibleScratchpad = winId
-    model.isScratchpadVisible = model.restoreIsScratchpadVisible
-    if model.isScratchpadVisible:
-      model.addScratchpadWindow(winId)
+    discard model.setVisibleScratchpadRef(
+      winId, model.restoreIsScratchpadVisible)

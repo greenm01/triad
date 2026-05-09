@@ -1144,6 +1144,88 @@ suite "DOD state primitives":
     check model.tagHasLiveWindows(tagTwo) == false
     check model.validateInvariants().ok
 
+  test "DOD scratchpad ops dedupe window refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+
+    check model.addScratchpadRef(win)
+    check not model.addScratchpadRef(win)
+
+    check model.scratchpadWindows == @[win]
+    check model.validateInvariants().ok
+
+  test "DOD scratchpad ops remove named and visible refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+
+    check model.addScratchpadRef(win)
+    check model.setNamedScratchpadRef("terminal", win)
+    check model.showScratchpadRef(win)
+    check model.removeScratchpadRef(win)
+
+    check model.scratchpadWindows.len == 0
+    check not model.namedScratchpads.hasKey("terminal")
+    check model.visibleScratchpad == NullWindowId
+    check not model.isScratchpadVisible
+    check model.validateInvariants().ok
+
+  test "DOD window destroy clears scratchpad refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+
+    discard model.addScratchpadRef(win)
+    discard model.setNamedScratchpadRef("terminal", win)
+    discard model.showScratchpadRef(win)
+    check model.destroyWindow(win)
+
+    check model.scratchpadWindows.len == 0
+    check not model.namedScratchpads.hasKey("terminal")
+    check model.visibleScratchpad == NullWindowId
+    check not model.isScratchpadVisible
+    check model.validateInvariants().ok
+
+  test "DOD scratchpad ops prune destroyed refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+
+    discard model.addScratchpadRef(win)
+    discard model.setNamedScratchpadRef("terminal", win)
+    discard model.showScratchpadRef(win)
+    check model.windows.delete(win)
+
+    check model.pruneScratchpadRefs()
+    check model.scratchpadWindows.len == 0
+    check not model.namedScratchpads.hasKey("terminal")
+    check model.visibleScratchpad == NullWindowId
+    check not model.isScratchpadVisible
+    check model.validateInvariants().ok
+
+  test "DOD scratchpad ops reject missing visible refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let missing = WindowId(999)
+
+    check not model.addScratchpadRef(missing)
+    check not model.setNamedScratchpadRef("terminal", missing)
+    check not model.showScratchpadRef(missing)
+    check not model.setVisibleScratchpadRef(missing, true)
+
+    check model.scratchpadWindows.len == 0
+    check model.namedScratchpads.len == 0
+    check model.visibleScratchpad == NullWindowId
+    check not model.isScratchpadVisible
+    check model.validateInvariants().ok
+
+  test "DOD scratchpad ops preserve hidden visible refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+
+    check model.setVisibleScratchpadRef(win, false)
+
+    check model.scratchpadWindows.len == 0
+    check model.visibleScratchpad == win
+    check not model.isScratchpadVisible
+    check model.validateInvariants().ok
+
   test "DOD iterators skip dangling relationship rows":
     var model = DodModel(defaultWorkspaceCount: 3)
     let tag = model.addTag(1, "one")
