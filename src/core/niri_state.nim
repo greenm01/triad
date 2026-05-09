@@ -2,6 +2,7 @@ import json, options
 import app_identity
 import model
 import shell_state
+import ../types/shell_snapshot
 
 proc niriLayout*(win: ShellWindow; snapshot: ShellSnapshot): JsonNode =
   var tileW = 0.0

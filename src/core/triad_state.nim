@@ -1,8 +1,9 @@
 import json, options
 import model
 import shell_state
+import ../types/shell_snapshot
 
-export TriadIpcVersion, layoutModeId, parseLayoutModeId
+export shell_snapshot
 
 proc nullableString(value: string): JsonNode =
   if value.len == 0: newJNull() else: %value

@@ -1,9 +1,9 @@
 import options
 import dod_iterators
 import dod_queries
-import ../core/shell_state
 import ../types/core except Rect
 import ../types/dod_model
+import ../types/shell_snapshot
 from ../types/legacy_model import nil
 
 proc externalWindowId(model: DodModel; winId: WindowId): legacy_model.WindowId =

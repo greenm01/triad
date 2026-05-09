@@ -1,98 +1,9 @@
 import algorithm, options, tables
 import model
 import model_utils
+import ../types/shell_snapshot
 
-const TriadIpcVersion* = 1
-
-type
-  ShellColumn* = object
-    idx*: uint32
-    widthProportion*: float32
-    windows*: seq[WindowId]
-
-  ShellWorkspace* = object
-    tagId*: uint32
-    workspaceIdx*: uint32
-    name*: string
-    layoutMode*: LayoutMode
-    isActive*: bool
-    focusedWindow*: WindowId
-    occupied*: bool
-    outputName*: string
-    columns*: seq[ShellColumn]
-    masterCount*: int
-    masterSplitRatio*: float32
-    targetViewportXOffset*: float32
-    currentViewportXOffset*: float32
-    targetViewportYOffset*: float32
-    currentViewportYOffset*: float32
-
-  ShellWindow* = object
-    id*: WindowId
-    title*: string
-    appId*: string
-    tagId*: Option[uint32]
-    workspaceIdx*: uint32
-    outputName*: string
-    colIdx*: uint32
-    winIdx*: uint32
-    isFocused*: bool
-    isFloating*: bool
-    isFullscreen*: bool
-    isMaximized*: bool
-    isMinimized*: bool
-    fullscreenOutput*: uint32
-    widthProportion*: float32
-    heightProportion*: float32
-    actualW*: int32
-    actualH*: int32
-    floatingGeom*: Rect
-    keyboardShortcutsInhibit*: bool
-
-  ShellOutput* = object
-    id*: uint32
-    name*: string
-    x*, y*, w*, h*: int32
-    isPrimary*: bool
-
-  ShellSnapshot* = object
-    version*: uint32
-    activeTag*: uint32
-    activeWorkspaceIdx*: uint32
-    overviewActive*: bool
-    layoutCycle*: seq[LayoutMode]
-    workspaces*: seq[ShellWorkspace]
-    windows*: seq[ShellWindow]
-    outputs*: seq[ShellOutput]
-
-proc layoutModeId*(mode: LayoutMode): string =
-  case mode
-  of Scroller: "scroller"
-  of VerticalScroller: "vertical-scroller"
-  of MasterStack: "tile"
-  of Grid: "grid"
-  of Monocle: "monocle"
-  of Deck: "deck"
-  of CenterTile: "center-tile"
-  of RightTile: "right-tile"
-  of VerticalTile: "vertical-tile"
-  of VerticalGrid: "vertical-grid"
-  of VerticalDeck: "vertical-deck"
-
-proc parseLayoutModeId*(value: string): Option[LayoutMode] =
-  case value
-  of "scroller": some(Scroller)
-  of "vertical-scroller": some(VerticalScroller)
-  of "tile": some(MasterStack)
-  of "grid": some(Grid)
-  of "monocle": some(Monocle)
-  of "deck": some(Deck)
-  of "center-tile": some(CenterTile)
-  of "right-tile": some(RightTile)
-  of "vertical-tile": some(VerticalTile)
-  of "vertical-grid": some(VerticalGrid)
-  of "vertical-deck": some(VerticalDeck)
-  else: none(LayoutMode)
+export shell_snapshot
 
 proc shellOutputName*(model: Model; outputId: uint32): string =
   if outputId != 0 and model.outputs.hasKey(outputId):
@@ -118,7 +29,8 @@ proc workspaceIndexForTag*(model: Model; tagId: uint32): uint32 =
       return uint32(idx + 1)
   0
 
-proc windowPosition(model: Model; winId: WindowId): tuple[found: bool, tagId, colIdx, winIdx: uint32] =
+proc windowPosition(model: Model; winId: WindowId):
+    tuple[found: bool, tagId, colIdx, winIdx: uint32] =
   var tagIds: seq[uint32] = @[]
   for tagId in model.tags.keys:
     tagIds.add(tagId)
@@ -191,13 +103,16 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       else:
         ""
     let focused =
-      pos.found and model.tags.hasKey(pos.tagId) and model.tags[pos.tagId].focusedWindow == winId
+      pos.found and model.tags.hasKey(pos.tagId) and
+        model.tags[pos.tagId].focusedWindow == winId
+    let workspaceIdx =
+      if pos.found: model.workspaceIndexForTag(pos.tagId) else: 0'u32
     result.windows.add(ShellWindow(
       id: win.id,
       title: win.title,
       appId: win.appId,
       tagId: tag,
-      workspaceIdx: if pos.found: model.workspaceIndexForTag(pos.tagId) else: 0'u32,
+      workspaceIdx: workspaceIdx,
       outputName: outputName,
       colIdx: pos.colIdx,
       winIdx: pos.winIdx,

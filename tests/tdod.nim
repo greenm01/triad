@@ -21,6 +21,150 @@ type
     id*: WindowId
     value*: string
 
+proc dodFocusHistory(dod: DodModel): seq[legacy_model.WindowId] =
+  for winId in dod.focusHistory:
+    let winOpt = dod.windowData(winId)
+    if winOpt.isSome:
+      result.add(legacy_model.WindowId(uint32(winOpt.get().externalId)))
+
+proc dodWorkspaceHistory(dod: DodModel): seq[uint32] =
+  for tagId in dod.workspaceHistory:
+    let tagOpt = dod.tagData(tagId)
+    if tagOpt.isSome:
+      result.add(tagOpt.get().slot)
+
+proc checkDodParity(source: legacy_model.Model): DodModel =
+  result = source.dodFromLegacy()
+  check result.validateInvariants().ok
+
+  let legacySnapshot = shellSnapshot(source)
+  let dodSnapshot = dodShellSnapshot(result)
+
+  check dodSnapshot == legacySnapshot
+  check triadStateJson(dodSnapshot) == triadStateJson(legacySnapshot)
+  check triadLayoutStateJson(dodSnapshot) ==
+    triadLayoutStateJson(legacySnapshot)
+  check niriWorkspacesJson(dodSnapshot) == niriWorkspacesJson(legacySnapshot)
+  check niriWindowsJson(dodSnapshot) == niriWindowsJson(legacySnapshot)
+  check niriOutputsJson(dodSnapshot) == niriOutputsJson(legacySnapshot)
+  check niriOverviewJson(dodSnapshot) == niriOverviewJson(legacySnapshot)
+  check result.dodFocusHistory() == source.focusHistory
+  check result.dodWorkspaceHistory() == source.workspaceHistory
+
+proc baseParityModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 1,
+    screenWidth: 1920,
+    screenHeight: 1080,
+    overviewActive: true
+  )
+  result.workspaces.defaultCount = 3
+  result.layoutCycle = @[
+    legacy_model.Scroller, legacy_model.Grid, legacy_model.Monocle
+  ]
+  result.tags[1] = initTagState(1, legacy_model.Scroller, "main")
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(10)], widthProportion: 0.5))
+  result.tags[1].focusedWindow = 10
+  result.tags[2] = initTagState(2, legacy_model.Grid, "web")
+  result.tags[2].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(20)], widthProportion: 0.8))
+  result.tags[2].focusedWindow = 20
+  result.windows[10] = legacy_model.WindowData(
+    id: 10,
+    appId: "kitty",
+    title: "Terminal",
+    widthProportion: 0.5,
+    heightProportion: 1.0,
+    actualW: 900,
+    actualH: 1000
+  )
+  result.windows[20] = legacy_model.WindowData(
+    id: 20,
+    appId: "brave",
+    title: "Browser",
+    widthProportion: 0.8,
+    heightProportion: 1.0,
+    isMaximized: true
+  )
+  result.outputs[42] = legacy_model.OutputData(
+    id: 42, name: "DP-1", x: 0, y: 0, w: 1920, h: 1080)
+  result.outputs[43] = legacy_model.OutputData(
+    id: 43, x: 1920, y: 0, w: 1920, h: 1080)
+  result.primaryOutput = 42
+  result.outputTags[43] = 2
+  result.focusHistory = @[legacy_model.WindowId(10), 20]
+  result.workspaceHistory = @[1'u32, 2]
+
+proc dynamicParityModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 9,
+    screenWidth: 2560,
+    screenHeight: 1440
+  )
+  result.workspaces.defaultCount = 3
+  result.layoutCycle = @[
+    legacy_model.Scroller, legacy_model.MasterStack,
+    legacy_model.VerticalGrid
+  ]
+  result.tags[1] = initTagState(1, legacy_model.Scroller, "term")
+  result.tags[2] = initTagState(2, legacy_model.VerticalScroller, "web")
+  result.tags[3] = initTagState(3, legacy_model.Grid, "files")
+  result.tags[9] = initTagState(9, legacy_model.Deck, "media")
+  result.tags[2].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(20)], widthProportion: 0.7))
+  result.tags[2].focusedWindow = 20
+  result.tags[9].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(90)], widthProportion: 0.35))
+  result.tags[9].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(91)], widthProportion: 0.9))
+  result.tags[9].focusedWindow = 91
+  result.tags[9].targetViewportXOffset = 128.0'f32
+  result.tags[9].currentViewportXOffset = 64.0'f32
+  result.tags[9].targetViewportYOffset = 42.0'f32
+  result.tags[9].currentViewportYOffset = 21.0'f32
+  result.tags[9].masterCount = 2
+  result.tags[9].masterSplitRatio = 0.65'f32
+
+  result.windows[20] = legacy_model.WindowData(
+    id: 20,
+    appId: "brave",
+    title: "Docs",
+    widthProportion: 0.7,
+    heightProportion: 1.0,
+    isMinimized: true
+  )
+  result.windows[90] = legacy_model.WindowData(
+    id: 90,
+    appId: "mpv",
+    title: "Video",
+    widthProportion: 0.35,
+    heightProportion: 0.8,
+    isFullscreen: true,
+    fullscreenOutput: 43,
+    actualW: 1280,
+    actualH: 720
+  )
+  result.windows[91] = legacy_model.WindowData(
+    id: 91,
+    appId: "kitty",
+    title: "Mixer",
+    widthProportion: 0.9,
+    heightProportion: 1.0,
+    isFloating: true,
+    isMaximized: true,
+    floatingGeom: legacy_model.Rect(x: 40, y: 50, w: 900, h: 700),
+    keyboardShortcutsInhibit: true
+  )
+  result.outputs[42] = legacy_model.OutputData(
+    id: 42, name: "DP-1", x: 0, y: 0, w: 1280, h: 720)
+  result.outputs[43] = legacy_model.OutputData(
+    id: 43, name: "HDMI-A-1", x: 1280, y: 0, w: 1280, h: 720)
+  result.primaryOutput = 42
+  result.outputTags[43] = 9
+  result.focusHistory = @[legacy_model.WindowId(20), 90, 91]
+  result.workspaceHistory = @[1'u32, 2, 9]
+
 suite "DOD state primitives":
   test "logical IDs are monotonic and reserve zero":
     var counters = IdCounters()
@@ -160,65 +304,24 @@ suite "DOD state primitives":
     check report.errors.anyIt(it.message.contains("missing window"))
 
   test "legacy adapter preserves shell snapshots and existing IPC ids":
-    var source = legacy_model.Model(
-      activeTag: 1,
-      screenWidth: 1920,
-      screenHeight: 1080,
-      overviewActive: true
-    )
-    source.workspaces.defaultCount = 3
-    source.layoutCycle = @[
-      legacy_model.Scroller, legacy_model.Grid, legacy_model.Monocle
-    ]
-    source.tags[1] = initTagState(1, legacy_model.Scroller, "main")
-    source.tags[1].columns.add(legacy_model.Column(
-      windows: @[legacy_model.WindowId(10)], widthProportion: 0.5))
-    source.tags[1].focusedWindow = 10
-    source.tags[2] = initTagState(2, legacy_model.Grid, "web")
-    source.tags[2].columns.add(legacy_model.Column(
-      windows: @[legacy_model.WindowId(20)], widthProportion: 0.8))
-    source.tags[2].focusedWindow = 20
-    source.windows[10] = legacy_model.WindowData(
-      id: 10,
-      appId: "kitty",
-      title: "Terminal",
-      widthProportion: 0.5,
-      heightProportion: 1.0,
-      actualW: 900,
-      actualH: 1000
-    )
-    source.windows[20] = legacy_model.WindowData(
-      id: 20,
-      appId: "brave",
-      title: "Browser",
-      widthProportion: 0.8,
-      heightProportion: 1.0,
-      isMaximized: true
-    )
-    source.outputs[42] = legacy_model.OutputData(
-      id: 42, name: "DP-1", x: 0, y: 0, w: 1920, h: 1080)
-    source.outputs[43] = legacy_model.OutputData(
-      id: 43, x: 1920, y: 0, w: 1920, h: 1080)
-    source.primaryOutput = 42
-    source.outputTags[43] = 2
-    source.focusHistory = @[legacy_model.WindowId(10), 20]
-    source.workspaceHistory = @[1'u32, 2]
-
-    let dod = source.dodFromLegacy()
-    check dod.validateInvariants().ok
+    let dod = checkDodParity(baseParityModel())
     check uint32(dod.windows.entity(WindowId(1)).get().externalId) == 10
     check uint32(dod.windows.entity(WindowId(2)).get().externalId) == 20
 
-    let legacySnapshot = shellSnapshot(source)
     let dodSnapshot = dodShellSnapshot(dod)
-
-    check triadStateJson(dodSnapshot) == triadStateJson(legacySnapshot)
-    check triadLayoutStateJson(dodSnapshot) ==
-      triadLayoutStateJson(legacySnapshot)
-    check niriWorkspacesJson(dodSnapshot) == niriWorkspacesJson(legacySnapshot)
-    check niriWindowsJson(dodSnapshot) == niriWindowsJson(legacySnapshot)
-    check niriOutputsJson(dodSnapshot) == niriOutputsJson(legacySnapshot)
-
     let windows = triadStateJson(dodSnapshot)["windows"]
     check windows[0]["id"].getInt() == 10
     check windows[1]["id"].getInt() == 20
+
+  test "legacy adapter preserves dynamic workspace and output parity":
+    let dod = checkDodParity(dynamicParityModel())
+    let snapshot = dodShellSnapshot(dod)
+    let workspaces = niriWorkspacesJson(snapshot)
+    let windows = niriWindowsJson(snapshot)
+
+    check workspaces.len == 5
+    check workspaces[3]["id"].getInt() == 9
+    check workspaces[4]["id"].getInt() == 10
+    check windows[1]["is_fullscreen"].getBool()
+    check windows[2]["is_floating"].getBool()
+    check windows[2]["is_maximized"].getBool()
