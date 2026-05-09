@@ -203,11 +203,11 @@ the shadow `DodModel` while shadow parity is healthy. On the first divergence,
 the runtime disables DoD projection reads and falls back to legacy projections
 for the rest of the process.
 
-Projection read selection lives behind a read bridge. The daemon owns shadow
-health and asks the bridge for `DodProjectionSource` only while the shadow is
-initialized and healthy; otherwise the bridge reads from the legacy model. The
-same source selection is used for shell snapshots, live-restore JSON reads, and
-live-restore file writes.
+Projection read selection lives behind a read bridge. Shadow health is explicit
+DoD data (`DodShadowHealth`) updated through a small transition system. The
+bridge selects `DodProjectionSource` only while the shadow is initialized and
+healthy; otherwise it reads from the legacy model. The same source selection is
+used for shell snapshots, live-restore JSON reads, and live-restore file writes.
 
 ## Layout Projection
 
@@ -300,3 +300,9 @@ model beside the legacy runtime:
 
 This phase is intentionally observational. It proves the reducer and runtime
 state boundaries under a live session before the final runtime promotion.
+
+Shadow health follows the same data/code split as other DoD state: health fields
+live in `types/dod_shadow_health.nim`, while report application, read fallback,
+and divergence throttle decisions live in `systems/dod_shadow_health.nim`.
+Daemon code handles logging side effects from those decisions but does not own
+the health transition policy.

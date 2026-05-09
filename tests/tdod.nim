@@ -21,6 +21,7 @@ import ../src/state/id_gen
 import ../src/ipc/niri_compat
 import ../src/ipc/triad_native
 import ../src/systems/dod_focus
+import ../src/systems/dod_shadow_health
 import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
@@ -1505,10 +1506,52 @@ suite "DOD state primitives":
     check legacyModel.activeTag == 2
 
   test "DOD projection read bridge selects healthy shadow reads":
-    check projectionReadSource(true, true) == DodProjectionSource
-    check projectionReadSource(true, false) == LegacyProjectionSource
-    check projectionReadSource(false, true) == LegacyProjectionSource
-    check projectionReadSource(false, false) == LegacyProjectionSource
+    check projectionReadSource(DodShadowHealth(
+      initialized: true, readHealthy: true)) == DodProjectionSource
+    check projectionReadSource(DodShadowHealth(
+      initialized: true, readHealthy: false)) == LegacyProjectionSource
+    check projectionReadSource(DodShadowHealth(
+      initialized: false, readHealthy: true)) == LegacyProjectionSource
+    check projectionReadSource(DodShadowHealth(
+      initialized: false, readHealthy: false)) == LegacyProjectionSource
+
+  test "DOD shadow health handles clean and divergent reports":
+    var health = initDodShadowHealth()
+    var decision = health.applyShadowReport(DodShadowReport(ok: true))
+    check decision.reportOk
+    check health.initialized
+    check health.readHealthy
+    check health.divergenceCount == 0
+    check shadowProjectionReadsEnabled(health)
+
+    decision = health.applyShadowReport(DodShadowReport(
+      ok: false,
+      errors: @["shell snapshot mismatch"]))
+    check not decision.reportOk
+    check decision.divergenceRecorded
+    check decision.readsDisabled
+    check decision.shouldLogDivergence
+    check decision.divergenceCount == 1
+    check not health.readHealthy
+    check not shadowProjectionReadsEnabled(health)
+
+    decision = health.applyShadowReport(DodShadowReport(
+      ok: false,
+      errors: @["shell snapshot mismatch"]))
+    check not decision.readsDisabled
+    check decision.divergenceCount == 2
+
+  test "DOD shadow health throttles divergence logs":
+    var health = initDodShadowHealth()
+    for idx in 1..101:
+      let decision = health.applyShadowReport(DodShadowReport(
+        ok: false,
+        errors: @["shell snapshot mismatch"]))
+      if idx <= 10 or idx == 100:
+        check decision.shouldLogDivergence
+      else:
+        check not decision.shouldLogDivergence
+    check health.divergenceCount == 101
 
   test "DOD projection read bridge reads shell snapshots by source":
     let legacyModel = lifecycleParityModel()

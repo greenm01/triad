@@ -4,6 +4,7 @@ import ../core/shell_state
 import ../state/dod_restore_state
 import ../state/dod_snapshot
 import ../types/dod_model
+import ../types/dod_shadow_health
 
 type
   ProjectionReadSource* = enum
@@ -11,8 +12,8 @@ type
     DodProjectionSource
 
 proc projectionReadSource*(
-    shadowInitialized, shadowReadHealthy: bool): ProjectionReadSource =
-  if shadowInitialized and shadowReadHealthy:
+    shadowHealth: DodShadowHealth): ProjectionReadSource =
+  if shadowHealth.initialized and shadowHealth.readHealthy:
     DodProjectionSource
   else:
     LegacyProjectionSource
