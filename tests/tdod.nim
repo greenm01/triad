@@ -1,5 +1,6 @@
 import json, options, sequtils, strutils, tables
 import unittest
+import ../src/core/effects
 import ../src/core/msg as core_msg
 import ../src/core/model_utils
 import ../src/core/niri_state
@@ -20,6 +21,7 @@ import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
 import ../src/systems/dod_scratchpad
+import ../src/systems/dod_update
 import ../src/systems/dod_window_lifecycle
 import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
@@ -123,6 +125,52 @@ proc checkStateParity(
   var legacyLayout = legacyModel
   var dodLayout = dod
   check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
+
+proc checkReducerParity(source: legacy_model.Model; msg: core_msg.Msg):
+    tuple[dod: DodModel, effects: seq[Effect]] =
+  let (legacyModel, _) = legacy_update.update(source, msg)
+  let (dodModel, dodEffects) = source.dodFromLegacy().dodUpdate(msg)
+  var dod = dodModel
+  dod.refreshVisibleWorkspaceSlots()
+
+  check dod.validateInvariants().ok
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  check dod.dodFocusHistory() == legacyModel.focusHistory
+  check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+
+  var legacyLayout = legacyModel
+  var dodLayout = dod
+  check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
+  (dod, dodEffects)
+
+proc containsEffect(effects: seq[Effect]; kind: EffectKind): bool =
+  for effect in effects:
+    if effect.kind == kind:
+      return true
+  false
+
+proc containsFocusEffect(effects: seq[Effect];
+    winId: legacy_model.WindowId): bool =
+  for effect in effects:
+    if effect.kind == EffFocusWindow and effect.focusId == winId:
+      return true
+  false
+
+proc containsCloseEffect(effects: seq[Effect];
+    winId: legacy_model.WindowId): bool =
+  for effect in effects:
+    if effect.kind == EffCloseWindow and effect.closeId == winId:
+      return true
+  false
+
+proc containsFullscreenEffect(effects: seq[Effect];
+    winId: legacy_model.WindowId; fullscreen: bool; outputId = 0'u32): bool =
+  for effect in effects:
+    if effect.kind == EffSetFullscreen and effect.fsWinId == winId and
+        effect.isFullscreen == fullscreen and
+        (not fullscreen or effect.fsOutputId == outputId):
+      return true
+  false
 
 proc checkRestoredStateParity(
     legacyModel: legacy_model.Model; dod: var DodModel) =
@@ -1724,3 +1772,65 @@ suite "DOD state primitives":
       proc(dod: var DodModel) =
         discard dod.destroyWindowForExternal(ExternalWindowId(40))
     )
+
+  test "DOD reducer bridges focus layout movement and workspace effects":
+    var result = checkReducerParity(
+      focusParityModel(),
+      core_msg.Msg(kind: core_msg.CmdFocusNext))
+    check result.effects.containsFocusEffect(11)
+    check result.effects.containsEffect(EffManageDirty)
+    check result.effects.containsEffect(EffBroadcastJson)
+    check result.effects.containsEffect(EffBroadcastTriadJson)
+
+    discard checkReducerParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowRight))
+    discard checkReducerParity(
+      placementParityModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdSetLayout,
+        newLayout: legacy_model.Deck,
+        layoutTargetTag: 2))
+
+  test "DOD reducer bridges output lifecycle and window state effects":
+    var result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlOutputDimensions,
+        outputId: 44,
+        width: 1600,
+        height: 900))
+    check result.effects.containsEffect(EffBroadcastJson)
+    check result.effects.containsEffect(EffBroadcastTriadJson)
+
+    result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowFullscreenRequested,
+        fullscreenRequestId: 10,
+        fullscreenOutputId: 43))
+    check result.effects.containsFullscreenEffect(10, true, 43)
+
+  test "DOD reducer bridges lifecycle scratchpad overview and close effects":
+    var result = checkReducerParity(
+      lifecycleParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 30,
+        appId: "kitty",
+        title: "shell",
+        createdIdentifier: "kitty-30"))
+    check result.effects.containsFocusEffect(30)
+    check result.effects.containsEffect(EffManageDirty)
+
+    discard checkReducerParity(
+      scratchpadParityModel(visible = true, named = true),
+      core_msg.Msg(kind: core_msg.CmdRestoreScratchpad))
+    discard checkReducerParity(
+      overviewLayoutModel(),
+      core_msg.Msg(kind: core_msg.CmdCloseOverview))
+
+    result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdCloseWindowById, closeWindowId: 10))
+    check result.effects.containsCloseEffect(10)
