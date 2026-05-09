@@ -137,6 +137,10 @@ type
     windowsByColumn*: Table[ColumnId, seq[WindowId]]
     placementByTagWindow*: Table[(TagId, WindowId), WindowPlacement]
     outputTags*: Table[OutputId, TagId]
+    scratchpadWindows*: seq[WindowId]
+    namedScratchpads*: Table[string, WindowId]
+    visibleScratchpad*: WindowId
+    isScratchpadVisible*: bool
 
     activeTag*: TagId
     activeSlot*: uint32
@@ -165,6 +169,8 @@ type
     floatingHeightRatio*: float32
     floatingMinWidth*: int32
     floatingMinHeight*: int32
+    scratchpadWidthRatio*: float32
+    scratchpadHeightRatio*: float32
     windowRules*: seq[WindowRuleData]
     tagRules*: seq[TagRuleData]
     restoreActiveSlot*: uint32

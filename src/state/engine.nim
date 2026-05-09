@@ -64,6 +64,18 @@ proc dodFloatingMinHeight*(model: DodModel): int32 =
   else:
     DefaultFloatingMinHeight
 
+proc dodScratchpadWidthRatio*(model: DodModel): float32 =
+  if model.scratchpadWidthRatio > 0:
+    clamp(model.scratchpadWidthRatio, 0.1'f32, 1.0'f32)
+  else:
+    DefaultScratchpadWidthRatio
+
+proc dodScratchpadHeightRatio*(model: DodModel): float32 =
+  if model.scratchpadHeightRatio > 0:
+    clamp(model.scratchpadHeightRatio, 0.1'f32, 1.0'f32)
+  else:
+    DefaultScratchpadHeightRatio
+
 proc dodDefaultFloatingGeom*(model: DodModel): LegacyRect =
   let screenW = max(0'i32, model.screenWidth)
   let screenH = max(0'i32, model.screenHeight)

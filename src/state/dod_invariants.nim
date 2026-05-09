@@ -42,6 +42,22 @@ proc validateInvariants*(model: DodModel): DodInvariantReport =
     if not model.windowTags.hasKey(win.id):
       result.addError("window tag mask is missing: " & $win.id)
 
+  for winId in model.scratchpadWindows:
+    if model.windows.entity(winId).isNone:
+      result.addError("scratchpad references missing window: " & $winId)
+    if model.windowTags.getOrDefault(winId, EmptyTagMask) != EmptyTagMask:
+      result.addError("scratchpad window is still tagged: " & $winId)
+
+  for name, winId in model.namedScratchpads.pairs:
+    if model.windows.entity(winId).isNone:
+      result.addError("named scratchpad references missing window: " & name)
+
+  if model.visibleScratchpad != NullWindowId and
+      model.windows.entity(model.visibleScratchpad).isNone:
+    result.addError(
+      "visible scratchpad references missing window: " &
+      $model.visibleScratchpad)
+
   for tagId, columns in model.columnsByTag.pairs:
     if model.tags.entity(tagId).isNone:
       result.addError("columnsByTag references missing tag: " & $tagId)

@@ -1,4 +1,5 @@
 import algorithm, options, sequtils, strutils, tables
+import dod_scratchpad
 import ../state/engine
 from ../types/legacy_model import Grid, LayoutMode, MasterStack, Monocle,
   Scroller, VerticalScroller
@@ -468,12 +469,13 @@ proc applyPendingRestore(model: var DodModel; externalId,
   model.restoreWindows.del(restoredExternalId)
   model.applyRestoredWindowState(winId, restored)
   model.rewriteRestoredWindowReferences(restoredExternalId, externalId)
+  model.recordRestoredScratchpad(restoredExternalId, winId)
 
   let restoresFocusedWindow =
     model.restoreFocusedWindow != NullExternalWindowId and
     restoredExternalId == model.restoreFocusedWindow
   let restoredScratchpad =
-    restored.slot == 0 and model.isRestoredScratchpad(externalId)
+    restored.slot == 0 and model.isRestoredScratchpad(restoredExternalId)
   if not restoredScratchpad and targetSlot != 0:
     discard model.removeWindowFromAllTags(winId)
     discard model.placeRestoredWindow(
@@ -617,13 +619,14 @@ proc createWindowForExternal*(model: var DodModel;
 
   if hasRestoredWindow:
     model.applyRestoredWindowState(result, restored)
+    model.recordRestoredScratchpad(restoredExternalId, result)
 
   let restoresFocusedWindow =
     model.restoreFocusedWindow != NullExternalWindowId and
     restoredExternalId == model.restoreFocusedWindow
   let restoredScratchpad =
     hasRestoredWindow and restored.slot == 0 and
-    model.isRestoredScratchpad(externalId)
+    model.isRestoredScratchpad(restoredExternalId)
 
   if not restoredScratchpad:
     if hasRestoredTag:
@@ -699,6 +702,7 @@ proc destroyWindowForExternal*(
       model.tag(model.activeTag).get().focusedWindow == winId)
   if not model.destroyWindow(winId):
     return false
+  model.pruneScratchpads()
 
   if closedWasFocused:
     if not model.focusMostRecentWindow():

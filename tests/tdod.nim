@@ -19,6 +19,7 @@ import ../src/systems/dod_focus
 import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
+import ../src/systems/dod_scratchpad
 import ../src/systems/dod_window_lifecycle
 import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
@@ -463,6 +464,20 @@ proc stateParityModel(): legacy_model.Model =
   result.outputTags[42] = 1
   result.outputTags[43] = 2
   result.tags[1].focusedWindow = 10
+
+proc scratchpadParityModel(visible = false; named = false):
+    legacy_model.Model =
+  result = stateParityModel()
+  discard result.tags[1].removeWindow(10)
+  result.tags[1].focusedWindow = 11
+  result.scratchpadWindows = @[legacy_model.WindowId(10)]
+  result.scratchpadWidthRatio = 0.8'f32
+  result.scratchpadHeightRatio = 0.9'f32
+  if named:
+    result.namedScratchpads["terminal"] = 10
+  if visible:
+    result.visibleScratchpad = 10
+    result.isScratchpadVisible = true
 
 proc fullscreenOutputStateModel(): legacy_model.Model =
   result = stateParityModel()
@@ -1253,6 +1268,71 @@ suite "DOD state primitives":
         discard dod.toggleKeyboardShortcutsInhibitFocused()
     )
 
+  test "DOD scratchpad commands match legacy":
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveToScratchpad),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedToScratchpad()
+        discard dod.collapseEmptyActiveDynamicWorkspace()
+        discard dod.pruneDynamicWorkspaces()
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdMoveToNamedScratchpad,
+        scratchpadName: "terminal"),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedToScratchpad("terminal")
+        discard dod.collapseEmptyActiveDynamicWorkspace()
+        discard dod.pruneDynamicWorkspaces()
+    )
+    checkStateParity(
+      scratchpadParityModel(),
+      core_msg.Msg(kind: core_msg.CmdToggleScratchpad),
+      proc(dod: var DodModel) =
+        discard dod.toggleScratchpad()
+    )
+    checkStateParity(
+      scratchpadParityModel(visible = true),
+      core_msg.Msg(kind: core_msg.CmdToggleScratchpad),
+      proc(dod: var DodModel) =
+        discard dod.toggleScratchpad()
+    )
+    checkStateParity(
+      scratchpadParityModel(named = true),
+      core_msg.Msg(
+        kind: core_msg.CmdToggleNamedScratchpad,
+        scratchpadName: "terminal"),
+      proc(dod: var DodModel) =
+        discard dod.toggleNamedScratchpad("terminal")
+    )
+    checkStateParity(
+      scratchpadParityModel(visible = true, named = true),
+      core_msg.Msg(
+        kind: core_msg.CmdToggleNamedScratchpad,
+        scratchpadName: "terminal"),
+      proc(dod: var DodModel) =
+        discard dod.toggleNamedScratchpad("terminal")
+    )
+    checkStateParity(
+      scratchpadParityModel(visible = true, named = true),
+      core_msg.Msg(kind: core_msg.CmdRestoreScratchpad),
+      proc(dod: var DodModel) =
+        discard dod.restoreScratchpad()
+    )
+
+  test "DOD scratchpad refs are pruned from invariants":
+    var dod = stateParityModel().dodFromLegacy()
+    let winId = dod.windowForExternal(ExternalWindowId(10))
+    check winId != NullWindowId
+    discard dod.moveFocusedToScratchpad("terminal")
+    check dod.validateInvariants().ok
+    discard dod.destroyWindowForExternal(ExternalWindowId(10))
+    check dod.scratchpadWindows.len == 0
+    check not dod.namedScratchpads.hasKey("terminal")
+    check dod.validateInvariants().ok
+
   test "DOD window creation parity matches legacy":
     checkStateParity(
       lifecycleParityModel(),
@@ -1567,6 +1647,75 @@ suite "DOD state primitives":
       ExternalWindowId(211), "brave-origin-nightly", "Browser")
 
     checkRestoredStateParity(legacyModel, dod)
+
+  test "DOD restore preserves scratchpad state":
+    var restored = LiveRestoreState(activeTag: 1)
+    restored.scratchpadWindows = @[legacy_model.WindowId(10)]
+    restored.namedScratchpads["terminal"] = 10
+    restored.visibleScratchpad = 10
+    restored.isScratchpadVisible = true
+    restored.windows[10] = legacy_model.RestoredWindowState(
+      tagId: 0,
+      appId: "foot",
+      title: "drop-down",
+      widthProportion: 0.8,
+      heightProportion: 1.0)
+
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 2000,
+      screenHeight: 1000)
+    seed.tags[1] = initTagState(1, legacy_model.Scroller)
+    var legacyModel = seed
+    legacyModel.applyLiveRestore(restored)
+    var dod = seed.dodFromLegacy()
+    dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 10,
+        appId: "foot",
+        title: "drop-down"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(10), "foot", "drop-down")
+
+    check dod.scratchpadWindows.len == 1
+    check dod.visibleScratchpad != NullWindowId
+    check dod.isScratchpadVisible
+    dod.refreshVisibleWorkspaceSlots()
+    check dod.validateInvariants().ok
+    check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+    check dod.dodFocusHistory() == legacyModel.focusHistory
+    check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+    check dod.dodLayoutInstructions().len == 1
+
+  test "DOD restore maps scratchpads by identity":
+    var restored = LiveRestoreState(activeTag: 1)
+    restored.scratchpadWindows = @[legacy_model.WindowId(10)]
+    restored.namedScratchpads["terminal"] = 10
+    restored.visibleScratchpad = 10
+    restored.isScratchpadVisible = true
+    restored.windows[10] = legacy_model.RestoredWindowState(
+      tagId: 0,
+      appId: "foot",
+      title: "drop-down",
+      widthProportion: 0.8,
+      heightProportion: 1.0)
+
+    var dod = legacy_model.Model(
+      activeTag: 1, screenWidth: 2000, screenHeight: 1000).dodFromLegacy()
+    dod.applyLiveRestore(restored.dodFromLiveRestore())
+    let winId = dod.createWindowForExternal(
+      ExternalWindowId(210), "foot", "drop-down")
+
+    check winId != NullWindowId
+    check dod.scratchpadWindows == @[winId]
+    check dod.namedScratchpads["terminal"] == winId
+    check dod.visibleScratchpad == winId
+    check dod.isScratchpadVisible
+    check dod.placementForWindowOnTag(dod.activeTag, winId).isNone
+    check dod.validateInvariants().ok
+
     checkStateParity(
       lifecycleCollapseDestroyModel(),
       core_msg.Msg(

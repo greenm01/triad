@@ -28,6 +28,11 @@ proc primaryScreen*(model: DodModel): legacy.Rect =
   legacy.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
 proc activeFocus*(model: DodModel): dod_core.WindowId =
+  if model.isScratchpadVisible:
+    if model.visibleScratchpad != NullWindowId:
+      return model.visibleScratchpad
+    if model.scratchpadWindows.len > 0:
+      return model.scratchpadWindows[^1]
   if model.activeTag == NullTagId:
     return NullWindowId
   let tagOpt = model.tagData(model.activeTag)
@@ -191,6 +196,23 @@ proc dodLayoutInstructions*(model: var DodModel):
       result.add(legacy.RenderInstruction(
         windowId: model.externalWindowId(winId),
         geom: win.floatingGeom))
+
+  if model.isScratchpadVisible and model.scratchpadWindows.len > 0:
+    let winId =
+      if model.visibleScratchpad != NullWindowId:
+        model.visibleScratchpad
+      else:
+        model.scratchpadWindows[^1]
+    if model.windowData(winId).isSome:
+      let sw = int32(float32(screen.w) * model.dodScratchpadWidthRatio())
+      let sh = int32(float32(screen.h) * model.dodScratchpadHeightRatio())
+      result.add(legacy.RenderInstruction(
+        windowId: model.externalWindowId(winId),
+        geom: legacy.Rect(
+          x: screen.x + (screen.w - sw) div 2,
+          y: screen.y + (screen.h - sh) div 2,
+          w: sw,
+          h: sh)))
 
   let focused = model.activeFocus()
   let focusedOpt = model.windowData(focused)

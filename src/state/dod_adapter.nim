@@ -155,6 +155,8 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.floatingHeightRatio = source.floating.heightRatio
   result.floatingMinWidth = source.floating.minWidth
   result.floatingMinHeight = source.floating.minHeight
+  result.scratchpadWidthRatio = source.scratchpadWidthRatio
+  result.scratchpadHeightRatio = source.scratchpadHeightRatio
   for rule in source.windowRules:
     result.windowRules.add(WindowRuleData(
       appIdMatch: rule.appIdMatch,
@@ -266,3 +268,22 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     let tagId = result.tagForSlot(slot)
     if tagId != NullTagId:
       result.workspaceHistory.add(tagId)
+
+  for externalWinId in source.scratchpadWindows:
+    let winId =
+      result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
+    if winId != NullWindowId:
+      result.scratchpadWindows.add(winId)
+
+  for name, externalWinId in source.namedScratchpads.pairs:
+    let winId =
+      result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
+    if winId != NullWindowId:
+      result.namedScratchpads[name] = winId
+
+  result.visibleScratchpad =
+    result.windowForExternal(ExternalWindowId(uint32(source.visibleScratchpad)))
+  result.isScratchpadVisible =
+    source.isScratchpadVisible and
+    (result.visibleScratchpad != NullWindowId or
+      result.scratchpadWindows.len > 0)
