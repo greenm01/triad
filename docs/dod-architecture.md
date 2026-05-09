@@ -293,11 +293,11 @@ This bridge lets config reload parity be proven before promoting `DodModel` to
 the canonical runtime state.
 
 Runtime config reload uses the state application sync bridge. The bridge applies
-the config to the legacy model, applies the same config to the DoD shadow when
-shadow sync is enabled, and compares the resulting state through the normal DoD
-shadow report path. Shell restarts, binding rebuilds, manage requests, and
-broadcasts stay in the daemon loop because they are side effects of accepting a
-config reload, not state transformation rules.
+the config to the legacy companion model, applies the same config to DoD while
+shadow sync or DoD state authority is enabled, and compares the resulting state
+through the normal DoD shadow report path. Shell restarts, binding rebuilds,
+manage requests, and broadcasts stay in the daemon loop because they are side
+effects of accepting a config reload, not state transformation rules.
 
 Initial daemon startup uses the same bridge boundary. The startup helper builds
 the live legacy model from a fresh seed, builds the DoD shadow from an
@@ -306,9 +306,10 @@ before projection reads are trusted. This keeps startup from treating a
 configured legacy-to-DoD adapter conversion as proof that DoD config application
 works.
 
-Live-restore application uses the same bridge style. The legacy model remains
-authoritative today, while the DoD shadow applies `DodLiveRestoreState` derived
-from the same restore payload and reports parity before manage/render resumes.
+Live-restore application uses the same bridge style. DoD is the preferred state
+application authority while shadow health is good, and the legacy model remains
+the companion fallback. The DoD model applies `DodLiveRestoreState` derived from
+the same restore payload and reports parity before manage/render resumes.
 
 ## Shadow Runtime
 
@@ -319,6 +320,8 @@ shadow model beside the legacy runtime:
 - the shadow receives the same config, live-restore state, and message stream
 - shadow effects are compared for stable signatures and are executed for
   parity-checked messages while shadow health is good
+- config reloads and live restore apply through DoD state authority while
+  shadow health is good
 - shell snapshots, focus history, workspace history, layout instructions, and
   DoD invariants are checked after shadow steps
 - divergences are logged and throttled, never fatal to the live session

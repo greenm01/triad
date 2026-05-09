@@ -1439,6 +1439,7 @@ suite "DOD state primitives":
 
     let report = syncConfigApplication(
       legacyModel, dod, config, syncShadow = true)
+    check report.authority == LegacyStateApplicationAuthority
     check report.shadowChecked
     check report.shadowReport.ok
     check legacyModel.outerGaps == 31
@@ -1462,10 +1463,37 @@ suite "DOD state primitives":
 
     let report = syncConfigApplication(
       legacyModel, dod, config, syncShadow = false)
+    check report.authority == LegacyStateApplicationAuthority
     check not report.shadowChecked
     check report.shadowReport.ok
     check legacyModel.outerGaps == 33
     check dod == originalDod
+
+  test "DOD config application sync can select DOD authority":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 37,
+        borderWidth: 5,
+        defaultColumnWidth: 0.6,
+        defaultWindowWidth: 0.7,
+        defaultWindowHeight: 0.8,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.65))
+    config.workspaces.defaultCount = 3
+
+    let report = syncConfigApplication(
+      legacyModel,
+      dod,
+      config,
+      syncShadow = false,
+      authority = DodStateApplicationAuthority)
+    check report.authority == DodStateApplicationAuthority
+    check not report.shadowChecked
+    check report.shadowReport.ok
+    check legacyModel.outerGaps == 37
+    check dod.outerGaps == 37
 
   test "DOD config application sync reports mismatches":
     var legacyModel = lifecycleParityModel()
@@ -1484,6 +1512,7 @@ suite "DOD state primitives":
 
     let report = syncConfigApplication(
       legacyModel, dod, config, syncShadow = true)
+    check report.authority == LegacyStateApplicationAuthority
     check report.shadowChecked
     check not report.shadowReport.ok
     check report.shadowReport.errors.contains("focus history mismatch")
@@ -1567,6 +1596,8 @@ suite "DOD state primitives":
     check result.state.shadowHealth.divergenceCount == 0
     check result.state.policy.runtimeAuthority == DodRuntimeAuthority
     check result.state.policy.layoutAuthority == DodLayoutAuthority
+    check result.state.policy.stateApplicationAuthority ==
+      DodStateApplicationAuthority
     check readRuntimeSnapshot(result.state) ==
       shellSnapshot(result.state.legacyModel)
 
@@ -1575,7 +1606,8 @@ suite "DOD state primitives":
     var state = TriadRuntimeState(
       legacyModel: seed,
       shadowModel: seed.dodFromLegacy(),
-      shadowHealth: initDodShadowHealth())
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
 
     var observation = state.observeShadowReport(
       checked = true,
@@ -1641,6 +1673,23 @@ suite "DOD state primitives":
     check layoutResult.syncResult.authoritativeProjection.instructions ==
       layoutResult.syncResult.dodProjection.instructions
 
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 25,
+        borderWidth: 3,
+        defaultColumnWidth: 0.5,
+        defaultWindowWidth: 0.5,
+        defaultWindowHeight: 1.0,
+        defaultMasterCount: 1,
+        defaultMasterRatio: 0.55))
+    config.workspaces.defaultCount = 3
+    let configResult = state.applyObservedRuntimeConfig(config)
+    check configResult.syncResult.authority == DodStateApplicationAuthority
+    check configResult.observation.checked
+    check configResult.observation.decision.reportOk
+    check state.legacyModel.outerGaps == 25
+    check state.shadowModel.outerGaps == 25
+
   test "DOD runtime authority keeps parity-exempt messages legacy-authoritative":
     let seed = lifecycleParityModel()
     var state = TriadRuntimeState(
@@ -1692,7 +1741,8 @@ suite "DOD state primitives":
       shadowHealth: initDodShadowHealth(),
       policy: TriadRuntimePolicy(
         runtimeAuthority: DodRuntimeAuthority,
-        layoutAuthority: DodLayoutAuthority))
+        layoutAuthority: DodLayoutAuthority,
+        stateApplicationAuthority: DodStateApplicationAuthority))
 
     let msg = Msg(
       kind: WlWindowCreated,
@@ -1713,6 +1763,23 @@ suite "DOD state primitives":
     check layoutResult.observation.decision.reportOk
     check layoutResult.syncResult.authoritativeProjection.instructions ==
       layoutResult.syncResult.dodProjection.instructions
+
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 27,
+        borderWidth: 3,
+        defaultColumnWidth: 0.5,
+        defaultWindowWidth: 0.5,
+        defaultWindowHeight: 1.0,
+        defaultMasterCount: 1,
+        defaultMasterRatio: 0.55))
+    config.workspaces.defaultCount = 3
+    let configResult = state.applyObservedRuntimeConfig(config)
+    check configResult.syncResult.authority == DodStateApplicationAuthority
+    check configResult.observation.checked
+    check configResult.observation.decision.reportOk
+    check state.legacyModel.outerGaps == 27
+    check state.shadowModel.outerGaps == 27
 
   test "DOD layout authority falls back to legacy on divergence":
     let seed = lifecycleParityModel()
@@ -1762,12 +1829,43 @@ suite "DOD state primitives":
       nextMsg) ==
       nextResult.syncResult.legacyEffects.stableEffectSignatures(nextMsg)
 
+  test "DOD state application authority falls back on divergence":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
+    state.shadowModel.focusHistory = @[]
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 39,
+        borderWidth: 3,
+        defaultColumnWidth: 0.5,
+        defaultWindowWidth: 0.5,
+        defaultWindowHeight: 1.0,
+        defaultMasterCount: 1,
+        defaultMasterRatio: 0.55))
+    config.workspaces.defaultCount = 3
+
+    let result = state.applyObservedRuntimeConfig(config)
+    check result.observation.checked
+    check not result.observation.decision.reportOk
+    check result.observation.decision.readsDisabled
+    check result.syncResult.authority == LegacyStateApplicationAuthority
+    check state.shadowHealth.divergenceCount == 1
+    check not state.shadowHealth.readHealthy
+
+    let nextResult = state.applyObservedRuntimeConfig(config)
+    check nextResult.syncResult.authority == LegacyStateApplicationAuthority
+
   test "DOD runtime state facade routes config and live restore":
     let seed = lifecycleParityModel()
     var state = TriadRuntimeState(
       legacyModel: seed,
       shadowModel: seed.dodFromLegacy(),
-      shadowHealth: initDodShadowHealth())
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
     var config = config_parser.Config(
       layout: config_parser.LayoutConfig(
         gaps: 23,
@@ -1780,6 +1878,7 @@ suite "DOD state primitives":
     config.workspaces.defaultCount = 3
 
     let configResult = state.applyObservedRuntimeConfig(config)
+    check configResult.syncResult.authority == DodStateApplicationAuthority
     check configResult.observation.checked
     check configResult.observation.decision.reportOk
     check configResult.syncResult.shadowChecked
@@ -1792,6 +1891,7 @@ suite "DOD state primitives":
     restored.focusHistory = @[20'u32]
     restored.workspaceHistory = @[2'u32]
     let restoreResult = state.applyObservedRuntimeLiveRestore(restored)
+    check restoreResult.syncResult.authority == DodStateApplicationAuthority
     check restoreResult.observation.checked
     check restoreResult.observation.decision.reportOk
     check restoreResult.syncResult.shadowChecked
@@ -1809,6 +1909,7 @@ suite "DOD state primitives":
 
     let report = syncLiveRestoreApplication(
       legacyModel, dod, restored, syncShadow = true)
+    check report.authority == LegacyStateApplicationAuthority
     check report.shadowChecked
     check report.shadowReport.ok
     check legacyModel.activeTag == 2
@@ -1822,10 +1923,31 @@ suite "DOD state primitives":
 
     let report = syncLiveRestoreApplication(
       legacyModel, dod, restored, syncShadow = false)
+    check report.authority == LegacyStateApplicationAuthority
     check not report.shadowChecked
     check report.shadowReport.ok
     check legacyModel.activeTag == 2
     check dod == originalDod
+
+  test "DOD live restore application sync can select DOD authority":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    var restored = LiveRestoreState(activeTag: 2, focusedWindow: 20)
+    restored.tagByWindow[20] = 2
+    restored.focusHistory = @[20'u32]
+    restored.workspaceHistory = @[2'u32]
+
+    let report = syncLiveRestoreApplication(
+      legacyModel,
+      dod,
+      restored,
+      syncShadow = false,
+      authority = DodStateApplicationAuthority)
+    check report.authority == DodStateApplicationAuthority
+    check not report.shadowChecked
+    check report.shadowReport.ok
+    check legacyModel.activeTag == 2
+    check dod.activeWorkspaceSlot() == 2
 
   test "DOD live restore application sync reports mismatches":
     var legacyModel = lifecycleParityModel()
@@ -1835,6 +1957,7 @@ suite "DOD state primitives":
 
     let report = syncLiveRestoreApplication(
       legacyModel, dod, restored, syncShadow = true)
+    check report.authority == LegacyStateApplicationAuthority
     check report.shadowChecked
     check not report.shadowReport.ok
     check legacyModel.activeTag == 2

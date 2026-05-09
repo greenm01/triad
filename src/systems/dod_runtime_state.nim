@@ -141,13 +141,25 @@ proc applyObservedRuntimeLayoutProjection*(
     result.syncResult.authoritativeProjection =
       result.syncResult.legacyProjection
 
+proc effectiveStateApplicationAuthority(
+    state: TriadRuntimeState): StateApplicationAuthority =
+  if state.policy.stateApplicationAuthority == DodStateApplicationAuthority and
+      state.shadowHealth.shadowProjectionReadsEnabled():
+    DodStateApplicationAuthority
+  else:
+    LegacyStateApplicationAuthority
+
 proc applyRuntimeConfig*(
     state: var TriadRuntimeState; config: Config): StateApplicationSyncResult =
   syncConfigApplication(
     state.legacyModel,
     state.shadowModel,
     config,
-    state.shadowHealth.shadowSyncEnabled())
+    state.shadowHealth.shadowSyncEnabled(),
+    state.effectiveStateApplicationAuthority())
+
+proc fallBackToLegacyStateApplication(result: var StateApplicationSyncResult) =
+  result.authority = LegacyStateApplicationAuthority
 
 proc applyObservedRuntimeConfig*(
     state: var TriadRuntimeState;
@@ -155,6 +167,9 @@ proc applyObservedRuntimeConfig*(
   result.syncResult = state.applyRuntimeConfig(config)
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
+  if result.syncResult.authority == DodStateApplicationAuthority and
+      not result.observation.decision.reportOk:
+    result.syncResult.fallBackToLegacyStateApplication()
 
 proc applyRuntimeLiveRestore*(
     state: var TriadRuntimeState;
@@ -163,7 +178,8 @@ proc applyRuntimeLiveRestore*(
     state.legacyModel,
     state.shadowModel,
     restoreState,
-    state.shadowHealth.shadowSyncEnabled())
+    state.shadowHealth.shadowSyncEnabled(),
+    state.effectiveStateApplicationAuthority())
 
 proc applyObservedRuntimeLiveRestore*(
     state: var TriadRuntimeState;
@@ -171,6 +187,9 @@ proc applyObservedRuntimeLiveRestore*(
   result.syncResult = state.applyRuntimeLiveRestore(restoreState)
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
+  if result.syncResult.authority == DodStateApplicationAuthority and
+      not result.observation.decision.reportOk:
+    result.syncResult.fallBackToLegacyStateApplication()
 
 proc runtimeProjectionReadSource*(
     state: TriadRuntimeState): ProjectionReadSource =

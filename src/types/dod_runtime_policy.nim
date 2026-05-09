@@ -7,11 +7,17 @@ type
     LegacyLayoutAuthority
     DodLayoutAuthority
 
+  StateApplicationAuthority* = enum
+    LegacyStateApplicationAuthority
+    DodStateApplicationAuthority
+
   TriadRuntimePolicy* = object
     runtimeAuthority*: RuntimeAuthority
     layoutAuthority*: LayoutAuthority
+    stateApplicationAuthority*: StateApplicationAuthority
 
 proc defaultTriadRuntimePolicy*(): TriadRuntimePolicy =
   TriadRuntimePolicy(
     runtimeAuthority: DodRuntimeAuthority,
-    layoutAuthority: DodLayoutAuthority)
+    layoutAuthority: DodLayoutAuthority,
+    stateApplicationAuthority: DodStateApplicationAuthority)
