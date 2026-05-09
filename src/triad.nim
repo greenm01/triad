@@ -12,6 +12,8 @@ import core/restore_state
 import core/shell_state
 import core/niri_state
 import core/render_visibility
+import state/dod_adapter
+import state/dod_restore_state
 import systems/layout_state
 import config/parser
 import config/defaults
@@ -1172,7 +1174,7 @@ proc executeEffect(eff: Effect) =
     if river_manager != nil:
       river_manager.stop()
   of EffTriadReload:
-    let restore = writeLiveRestoreState(currentModel)
+    let restore = writeDodLiveRestoreState(currentModel.dodFromLegacy())
     if not restore.ok:
       warn "Triad reload rejected; live restore snapshot could not be written",
         path=restore.path,
@@ -1824,7 +1826,7 @@ proc main() =
 
   proc snapshotLiveRestoreJson(): string {.gcsafe.} =
     {.cast(gcsafe).}:
-      liveRestoreJson(currentModel)
+      dodLiveRestoreJson(currentModel.dodFromLegacy())
 
   let triadSocketPath = getTriadSocketPath()
   info "Starting Triad IPC server", path=triadSocketPath

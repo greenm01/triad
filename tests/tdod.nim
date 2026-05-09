@@ -14,6 +14,7 @@ import ../src/state/entity_manager
 import ../src/state/dod_invariants
 import ../src/state/dod_iterators
 import ../src/state/dod_queries
+import ../src/state/dod_restore_state
 import ../src/state/dod_snapshot
 import ../src/state/id_gen
 import ../src/ipc/niri_compat
@@ -325,6 +326,11 @@ proc checkTriadIpcParity(source: legacy_model.Model; line: string) =
   check dod.reply == legacy.reply
   check dod.initialEvents == legacy.initialEvents
   check dod.messages.mapIt($it) == legacy.messages.mapIt($it)
+
+proc checkDodLiveRestoreJsonParity(source: legacy_model.Model) =
+  let legacyJson = parseJson(liveRestoreJson(source))
+  let dodJson = parseJson(dodLiveRestoreJson(source.dodFromLegacy()))
+  check dodJson == legacyJson
 
 proc checkRestoredStateParity(
     legacyModel: legacy_model.Model; dod: var DodModel) =
@@ -980,6 +986,49 @@ suite "DOD state primitives":
     check windows[1]["is_fullscreen"].getBool()
     check windows[2]["is_floating"].getBool()
     check windows[2]["is_maximized"].getBool()
+
+  test "DOD live restore serializer matches legacy JSON":
+    checkDodLiveRestoreJsonParity(dynamicParityModel())
+    checkDodLiveRestoreJsonParity(stateParityModel())
+    checkDodLiveRestoreJsonParity(scratchpadParityModel(
+      visible = true, named = true))
+
+  test "DOD live restore JSON round trips through restore parser":
+    var source = legacy_model.Model(activeTag: 1, screenWidth: 1200,
+      screenHeight: 800)
+    source.workspaces.defaultCount = 1
+    source.tags[1] = initTagState(1, legacy_model.Scroller, "main")
+    source.tags[1].columns.add(legacy_model.Column(
+      windows: @[legacy_model.WindowId(10)], widthProportion: 0.7))
+    source.tags[1].focusedWindow = 10
+    source.windows[10] = legacy_model.WindowData(
+      id: 10,
+      appId: "kitty",
+      title: "Terminal",
+      widthProportion: 0.7,
+      heightProportion: 1.0,
+      isMaximized: true,
+      actualW: 900,
+      actualH: 700)
+    source.workspaceHistory = @[1'u32]
+
+    let parsed = parseLiveRestoreJson(dodLiveRestoreJson(source.dodFromLegacy()))
+    check parsed.isSome
+
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 1200,
+      screenHeight: 800)
+    seed.workspaces.defaultCount = 1
+
+    checkShadowTraceAfterRestore(
+      seed,
+      parsed.get(),
+      @[
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 10,
+          appId: "kitty",
+          title: "Terminal")
+      ])
 
   test "DOD snapshot drives Niri IPC parity":
     let source = dynamicParityModel()
