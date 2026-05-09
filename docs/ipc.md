@@ -154,3 +154,126 @@ Occurs when a window is destroyed.
   }
 }
 ```
+
+---
+
+## Native Triad JSON IPC
+
+Future shell integrations should prefer Triad's native JSON protocol over the
+Niri compatibility layer. Requests are line-delimited JSON sent to
+`$TRIAD_SOCKET`, which defaults to `$XDG_RUNTIME_DIR/triad.sock`.
+
+Native requests use a reserved top-level `triad` object and a version number:
+
+```json
+{"triad":{"version":1,"request":"layout-state"}}
+```
+
+Replies use a stable success envelope:
+
+```json
+{"ok":true,"triad":{"version":1,"type":"ack"}}
+```
+
+Errors use:
+
+```json
+{"ok":false,"error":"unknown layout: spiral"}
+```
+
+### Layout State
+
+Request:
+
+```json
+{"triad":{"version":1,"request":"layout-state"}}
+```
+
+The reply contains supported layout ids, the configured layout cycle, the active
+tag/workspace index, and layout state for every visible workspace:
+
+```json
+{
+  "ok": true,
+  "triad": {
+    "version": 1,
+    "type": "layout-state",
+    "state": {
+      "version": 1,
+      "layouts": [{"id": "scroller", "ordinal": 0}],
+      "layout_cycle": ["scroller", "tile", "grid"],
+      "active_tag": 1,
+      "active_workspace_idx": 1,
+      "workspaces": [
+        {
+          "tag_id": 1,
+          "workspace_idx": 1,
+          "name": "term",
+          "layout": "scroller",
+          "is_active": true,
+          "focused_window_id": 10,
+          "columns": [{"idx": 1, "width_proportion": 0.5, "windows": [10]}],
+          "master_count": 1,
+          "master_split_ratio": 0.55,
+          "viewport": {
+            "target_x": 0.0,
+            "current_x": 0.0,
+            "target_y": 0.0,
+            "current_y": 0.0
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Canonical layout ids are:
+
+`scroller`, `vertical-scroller`, `tile`, `grid`, `monocle`, `deck`,
+`center-tile`, `right-tile`, `vertical-tile`, `vertical-grid`,
+`vertical-deck`.
+
+### Layout Actions
+
+Set the active tag layout:
+
+```json
+{"triad":{"version":1,"request":"set-layout","layout":"grid"}}
+```
+
+Set a stable tag id without switching focus:
+
+```json
+{"triad":{"version":1,"request":"set-layout","layout":"deck","target":{"tag":4}}}
+```
+
+Set a compact shell workspace index without switching focus:
+
+```json
+{"triad":{"version":1,"request":"set-layout","layout":"monocle","target":{"workspace_idx":2}}}
+```
+
+Advance the active tag through the configured layout cycle:
+
+```json
+{"triad":{"version":1,"request":"switch-layout"}}
+```
+
+### Layout Event Stream
+
+Subscribe to native layout events:
+
+```json
+{"triad":{"version":1,"request":"event-stream","events":["layout"]}}
+```
+
+After the acknowledgement, Triad sends an initial state event and then pushes
+updates when layout-relevant state changes:
+
+```json
+{"triad":{"version":1,"event":"layout-state-changed","state":{}}}
+```
+
+Native Triad subscribers receive only native Triad events. Niri compatibility
+subscribers continue to receive only Niri-shaped events.

@@ -36,6 +36,19 @@ suite "Core TEA Update Logic":
     check effects.len == 1
     check effects[0].kind == EffTriadReload
 
+  test "Targeted layout command updates requested tag without switching focus":
+    var source = Model(activeTag: 1)
+    source.tags[1] = initTagState(1, Scroller)
+    source.tags[2] = initTagState(2, Grid)
+
+    let (nextModel, effects) = update(source, Msg(kind: CmdSetLayout, newLayout: Deck, layoutTargetTag: 2))
+
+    check nextModel.activeTag == 1
+    check nextModel.tags[1].layoutMode == Scroller
+    check nextModel.tags[2].layoutMode == Deck
+    check effects.anyIt(it.kind == EffManageDirty)
+    check effects.anyIt(it.kind == EffBroadcastTriadJson and it.jsonPayload.contains("layout-state-changed"))
+
   setup:
     installAppIdentityFixture()
     var model = Model(

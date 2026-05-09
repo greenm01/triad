@@ -8,6 +8,7 @@ import ../src/ipc/niri_cli
 import ../src/ipc/niri_compat
 import ../src/ipc/quickshell_compat
 import ../src/ipc/shell_overlay
+import ../src/ipc/triad_native
 
 proc installAppIdentityFixture() =
   let apps = getTempDir() / ("triad-compat-apps-" & $getCurrentProcessId()) / "applications"
@@ -177,6 +178,80 @@ suite "Shell compatibility contracts":
     check hasOutputs
     check hasOverview
 
+  test "Triad native layout-state exposes stable layout contract":
+    var model = modelForShell()
+    model.layoutCycle = @[Scroller, Grid, Monocle]
+    model.tags[1].targetViewportXOffset = 100.0
+    model.tags[1].currentViewportXOffset = 80.0
+
+    let response = handleTriadRequest("""{"triad":{"version":1,"request":"layout-state"}}""", model)
+    check response.handled
+    check not response.subscribeLayout
+    let parsed = parseJson(response.reply)
+    check parsed["ok"].getBool()
+    let state = parsed["triad"]["state"]
+    check state["version"].getInt() == 1
+    check state["active_tag"].getInt() == 1
+    check state["active_workspace_idx"].getInt() == 1
+    check state["layout_cycle"][0].getStr() == "scroller"
+    check state["layout_cycle"][1].getStr() == "grid"
+    check state["layout_cycle"][2].getStr() == "monocle"
+    check state["layouts"][0]["id"].getStr() == "scroller"
+    check state["workspaces"][0]["tag_id"].getInt() == 1
+    check state["workspaces"][0]["workspace_idx"].getInt() == 1
+    check state["workspaces"][0]["layout"].getStr() == "scroller"
+    check state["workspaces"][0]["columns"][0]["windows"][0].getInt() == 10
+    check state["workspaces"][0]["viewport"]["target_x"].getFloat() == 100.0
+    check state["workspaces"][0]["viewport"]["current_x"].getFloat() == 80.0
+
+  test "Triad native layout actions map to targeted messages":
+    let active = handleTriadRequest("""{"triad":{"version":1,"request":"set-layout","layout":"grid"}}""", modelForShell())
+    check active.handled
+    check parseJson(active.reply)["ok"].getBool()
+    check active.messages.len == 1
+    check active.messages[0].kind == CmdSetLayout
+    check active.messages[0].newLayout == Grid
+    check active.messages[0].layoutTargetTag == 0
+
+    let byTag = handleTriadRequest("""{"triad":{"version":1,"request":"set-layout","layout":"deck","target":{"tag":4}}}""", modelForShell())
+    check byTag.messages.len == 1
+    check byTag.messages[0].kind == CmdSetLayout
+    check byTag.messages[0].newLayout == Deck
+    check byTag.messages[0].layoutTargetTag == 4
+
+    let byIndex = handleTriadRequest("""{"triad":{"version":1,"request":"set-layout","layout":"monocle","target":{"workspace_idx":2}}}""", modelForShell())
+    check byIndex.messages.len == 1
+    check byIndex.messages[0].kind == CmdSetLayout
+    check byIndex.messages[0].newLayout == Monocle
+    check byIndex.messages[0].layoutTargetTag == 2
+
+    let switchLayout = handleTriadRequest("""{"triad":{"version":1,"request":"switch-layout"}}""", modelForShell())
+    check switchLayout.messages.len == 1
+    check switchLayout.messages[0].kind == CmdSwitchLayout
+
+  test "Triad native layout actions reject invalid requests":
+    let invalidLayout = handleTriadRequest("""{"triad":{"version":1,"request":"set-layout","layout":"spiral"}}""", modelForShell())
+    check invalidLayout.handled
+    check parseJson(invalidLayout.reply)["ok"].getBool() == false
+    check parseJson(invalidLayout.reply)["error"].getStr() == "unknown layout: spiral"
+    check invalidLayout.messages.len == 0
+
+    let invalidTarget = handleTriadRequest("""{"triad":{"version":1,"request":"set-layout","layout":"grid","target":{"workspace_idx":99}}}""", modelForShell())
+    check invalidTarget.handled
+    check parseJson(invalidTarget.reply)["ok"].getBool() == false
+    check invalidTarget.messages.len == 0
+
+  test "Triad native layout event stream starts with layout state":
+    let response = handleTriadRequest("""{"triad":{"version":1,"request":"event-stream","events":["layout"]}}""", modelForShell())
+    check response.handled
+    check response.subscribeLayout
+    check parseJson(response.reply)["ok"].getBool()
+    check response.initialEvents.len == 1
+    let event = parseJson(response.initialEvents[0])
+    check event["triad"]["version"].getInt() == 1
+    check event["triad"]["event"].getStr() == "layout-state-changed"
+    check event["triad"]["state"]["workspaces"][0]["layout"].getStr() == "scroller"
+
   test "Niri actions map to Triad messages":
     let focusWs = handleNiriRequest("""{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", modelForShell())
     check focusWs.messages.len == 1
@@ -322,6 +397,7 @@ suite "Shell compatibility contracts":
       removeDir(tmp)
 
     check compat.env["NIRI_SOCKET"] == tmp / "triad-niri.sock"
+    check compat.env["TRIAD_SOCKET"] == tmp / "triad.sock"
     check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
     check compat.shimReady
     check compat.overlayReady

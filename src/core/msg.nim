@@ -216,6 +216,7 @@ type
       moveDX*, moveDY*: int32
     of CmdSetLayout:
       newLayout*: LayoutMode
+      layoutTargetTag*: uint32
     of CmdFocusDirection:
       direction*: Direction
     of CmdMoveToTag:

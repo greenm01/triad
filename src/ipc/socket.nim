@@ -2,7 +2,7 @@ import asyncnet, asyncdispatch, os, nativesockets, chronicles, options, strutils
 import posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import ../core/msg, ../core/model
 import ../core/restore_state
-import commands, niri_compat
+import commands, niri_compat, triad_native
 
 type
   IpcServer* = object
@@ -13,6 +13,7 @@ const
   MaxIpcSubscribers* = 64
 
 var subscribers*: seq[AsyncSocket] = @[]
+var triadLayoutSubscribers*: seq[AsyncSocket] = @[]
 
 proc getRuntimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
@@ -90,6 +91,19 @@ proc canSubscribe(): bool =
   pruneSubscribers()
   subscribers.len < MaxIpcSubscribers
 
+proc pruneTriadLayoutSubscribers() =
+  var i = 0
+  while i < triadLayoutSubscribers.len:
+    let client = triadLayoutSubscribers[i]
+    if client == nil or client.isClosed:
+      triadLayoutSubscribers.delete(i)
+    else:
+      inc i
+
+proc canSubscribeTriadLayout(): bool =
+  pruneTriadLayoutSubscribers()
+  triadLayoutSubscribers.len < MaxIpcSubscribers
+
 proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: proc(): Model {.gcsafe.} = nil) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
@@ -133,6 +147,22 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: p
           if getModel != nil:
             if line.strip() == "dump-live-restore-state":
               await client.send(liveRestoreJson(getModel()) & "\L")
+              break
+
+            let triad = handleTriadRequest(line, getModel())
+            if triad.handled:
+              if triad.subscribeLayout and not canSubscribeTriadLayout():
+                await client.send("""{"ok":false,"error":"too many event-stream subscribers"}""" & "\L")
+                break
+              if triad.reply.len > 0:
+                await client.send(triad.reply & "\L")
+              for msg in triad.messages:
+                onMsg(msg)
+              for event in triad.initialEvents:
+                await client.send(event & "\L")
+              if triad.subscribeLayout:
+                triadLayoutSubscribers.add(client)
+                keepOpen = true
               break
 
             let niri = handleNiriRequest(line, getModel())
@@ -211,3 +241,18 @@ proc broadcastJson*(payload: string) {.async.} =
         warn "Dropping failed IPC subscriber", error=e.msg
         client.close()
         subscribers.delete(i)
+
+proc broadcastTriadJson*(payload: string) {.async.} =
+  var i = 0
+  while i < triadLayoutSubscribers.len:
+    let client = triadLayoutSubscribers[i]
+    if client == nil or client.isClosed:
+      triadLayoutSubscribers.delete(i)
+    else:
+      try:
+        await client.send(payload & "\L")
+        inc i
+      except CatchableError as e:
+        warn "Dropping failed Triad IPC subscriber", error=e.msg
+        client.close()
+        triadLayoutSubscribers.delete(i)

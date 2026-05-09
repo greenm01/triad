@@ -1,4 +1,4 @@
-import model, msg, model_utils, niri_state, tables, strutils, algorithm, json
+import model, msg, model_utils, niri_state, triad_state, tables, strutils, algorithm, json
 
 type
   EffectKind* = enum
@@ -12,6 +12,7 @@ type
     EffCloseWindow,
     EffManageDirty,
     EffBroadcastJson,
+    EffBroadcastTriadJson,
     EffOpStartPointer,
     EffOpEnd,
     EffSetFullscreen,
@@ -44,7 +45,7 @@ type
       focusShellSurfaceId*: uint32
     of EffCloseWindow:
       closeId*: WindowId
-    of EffBroadcastJson:
+    of EffBroadcastJson, EffBroadcastTriadJson:
       jsonPayload*: string
     of EffOpStartPointer:
       opSeat*: pointer
@@ -144,6 +145,9 @@ proc broadcastOverview(open: bool): Effect =
   }
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
 
+proc broadcastTriadLayoutStateChanged(model: Model): Effect =
+  Effect(kind: EffBroadcastTriadJson, jsonPayload: triadLayoutStateChangedEvent(model))
+
 proc shouldBroadcastWindowsChanged(kind: MsgKind): bool =
   case kind
   of WlWindowCreated,
@@ -215,6 +219,60 @@ proc shouldBroadcastOutputsChanged(kind: MsgKind): bool =
       WlOutputPosition,
       WlOutputUsable,
       WlOutputRemoved:
+    true
+  else:
+    false
+
+proc shouldBroadcastTriadLayoutChanged(kind: MsgKind): bool =
+  case kind
+  of WlWindowCreated,
+      WlWindowDestroyed,
+      WlWindowDimensions,
+      WlWindowFullscreenRequested,
+      WlWindowExitFullscreenRequested,
+      WlWindowMaximizeRequested,
+      WlWindowUnmaximizeRequested,
+      WlWindowMinimizeRequested,
+      CmdSetLayout,
+      CmdSwitchLayout,
+      CmdSetMasterCount,
+      CmdSetMasterRatio,
+      CmdAdjustMasterCount,
+      CmdAdjustMasterRatio,
+      CmdResizeWidth,
+      CmdResizeHeight,
+      CmdSetColumnWidth,
+      CmdFocusTag,
+      CmdFocusWorkspaceIndex,
+      CmdMoveToTag,
+      CmdMoveToWorkspaceIndex,
+      CmdMoveToTagLeft,
+      CmdMoveToTagRight,
+      CmdMoveWindow,
+      CmdMoveWindowLeft,
+      CmdMoveWindowRight,
+      CmdMoveWindowUp,
+      CmdMoveWindowDown,
+      CmdMoveWindowUpOrToWorkspaceUp,
+      CmdMoveWindowDownOrToWorkspaceDown,
+      CmdMoveColumnLeft,
+      CmdMoveColumnRight,
+      CmdMoveColumnToFirst,
+      CmdMoveColumnToLast,
+      CmdSwapWindowUp,
+      CmdSwapWindowDown,
+      CmdConsumeWindow,
+      CmdExpelWindow,
+      CmdMoveToScratchpad,
+      CmdMoveToNamedScratchpad,
+      CmdToggleScratchpad,
+      CmdToggleNamedScratchpad,
+      CmdRestoreScratchpad,
+      CmdToggleFloating,
+      CmdToggleFullscreen,
+      CmdToggleMaximized,
+      CmdMinimize,
+      CmdSelectWindow:
     true
   else:
     false
@@ -1308,10 +1366,11 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     nextModel.pointerOp = PointerOpState(kind: OpNone)
 
   of CmdSetLayout:
-    if nextModel.tags.hasKey(nextModel.activeTag):
-      var tag = nextModel.tags[nextModel.activeTag]
+    let targetTagId = if msg.layoutTargetTag != 0: msg.layoutTargetTag else: nextModel.activeTag
+    if targetTagId != 0:
+      var tag = nextModel.ensureTag(targetTagId)
       tag.layoutMode = msg.newLayout
-      nextModel.tags[nextModel.activeTag] = tag
+      nextModel.tags[targetTagId] = tag
       effects.add(Effect(kind: EffManageDirty))
 
   of CmdSwitchLayout:
@@ -1998,5 +2057,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     effects.add(nextModel.broadcastWindowsChanged())
   elif cleanedStaleWindows or collapsedWorkspace or prunedWorkspaces:
     effects.add(nextModel.broadcastWorkspacesChanged())
+
+  if msg.kind.shouldBroadcastTriadLayoutChanged() or cleanedStaleWindows or collapsedWorkspace or prunedWorkspaces:
+    effects.add(nextModel.broadcastTriadLayoutStateChanged())
 
   return (nextModel, effects)

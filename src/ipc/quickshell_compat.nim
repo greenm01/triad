@@ -174,7 +174,8 @@ proc installNiriShim(compatBinPath, triadNiriPath: string): tuple[ok: bool, warn
 proc prepareQuickshellCompatEnv*(
     niriSocketPath: string;
     runtimeDir = getRuntimeDir();
-    triadNiriPath = findTriadNiri()
+    triadNiriPath = findTriadNiri();
+    triadSocketPath = ""
   ): QuickshellCompatEnv =
   result.env = copyCurrentEnv()
   result.niriSocketPath = niriSocketPath
@@ -183,6 +184,7 @@ proc prepareQuickshellCompatEnv*(
   result.triadNiriPath = triadNiriPath
 
   result.env["NIRI_SOCKET"] = niriSocketPath
+  result.env["TRIAD_SOCKET"] = if triadSocketPath.len > 0: triadSocketPath else: runtimeDir / "triad.sock"
   result.env["XDG_CURRENT_DESKTOP"] = "triad"
 
   let iconTheme = result.env.getOrDefault("QS_ICON_THEME", "").strip()
