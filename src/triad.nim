@@ -136,35 +136,13 @@ proc cstringOrEmpty(value: cstring): string =
   else:
     $value
 
-proc logShadowObservation(
-    context: string; msg: Msg; observation: RuntimeShadowObservation) =
-  if not observation.checked or observation.decision.reportOk:
-    return
-
-  let decision = observation.decision
-  if decision.shouldLogDivergence:
-    let shadowMsgKind = $msg.kind
-    let shadowErrors = observation.report.errors.join("; ")
-    warn "DOD shadow runtime divergence",
-      shadowContext=context,
-      shadowMsgKind=shadowMsgKind,
-      shadowDivergences=decision.divergenceCount,
-      shadowErrors=shadowErrors
-  if decision.readsDisabled:
-    let shadowMsgKind = $msg.kind
-    warn "DOD projection reads disabled; falling back to legacy projections",
-      shadowContext=context,
-      shadowMsgKind=shadowMsgKind
-
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
   let observed = runtimeState.applyObservedRuntimeUpdate(msg)
-  logShadowObservation(context, msg, observed.observation)
   refreshRuntimeReadModel()
   observed.syncResult.authoritativeEffects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
-  let observed = runtimeState.applyObservedRuntimeShadowOnly(msg)
-  logShadowObservation(context, msg, observed.observation)
+  discard runtimeState.applyObservedRuntimeShadowOnly(msg)
   refreshRuntimeReadModel()
 
 proc readModelSnapshot(): ShellSnapshot =
@@ -176,9 +154,9 @@ proc readLiveRestoreJson(): string =
 proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
   runtimeState.writeRuntimeLiveRestoreState()
 
-proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstruction] =
+proc syncRuntimeLayoutProjection(
+    context: string; msg: Msg): seq[RenderInstruction] =
   let observed = runtimeState.applyObservedRuntimeLayoutProjection()
-  logShadowObservation(context, msg, observed.observation)
   refreshRuntimeReadModel()
   observed.syncResult.authoritativeProjection.instructions
 
@@ -188,9 +166,8 @@ proc applyPendingLiveRestore() =
 
   let state = pendingLiveRestore.get()
   let observed = runtimeState.applyObservedRuntimeLiveRestore(state)
+  discard observed
   refreshRuntimeReadModel()
-  logShadowObservation("live restore", Msg(kind: WlManageStart),
-    observed.observation)
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
@@ -338,9 +315,7 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
     return false
 
   let previousModel = currentModel
-  let observed = runtimeState.applyObservedRuntimeConfig(loaded.config)
-  logShadowObservation("config reload", Msg(kind: CmdConfigReload),
-    observed.observation)
+  discard runtimeState.applyObservedRuntimeConfig(loaded.config)
   refreshRuntimeReadModel()
   quickshellSpawnPending = false
 
@@ -1844,8 +1819,6 @@ proc main() =
   let initialConfig = loadConfig(configPath)
   let initialState = initRuntimeStateFromConfig(initialConfig)
   runtimeState = initialState.state
-  logShadowObservation("initial config", Msg(kind: CmdConfigReload),
-    initialState.observation)
   refreshRuntimeReadModel()
   info "Initial config loaded", path=configPath
 
