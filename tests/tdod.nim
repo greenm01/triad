@@ -1005,6 +1005,18 @@ suite "DOD state primitives":
       ".entity(",
       ".mEntity("
     ]
+    let forbiddenHistoryMutations = [
+      ".focusHistory =",
+      ".workspaceHistory =",
+      ".focusHistory.setLen",
+      ".workspaceHistory.setLen",
+      ".focusHistory.add",
+      ".workspaceHistory.add",
+      ".focusHistory.delete",
+      ".workspaceHistory.delete",
+      ".focusHistory.keepIf",
+      ".workspaceHistory.keepIf"
+    ]
 
     check checkedFiles.len > 0
     for path in checkedFiles:
@@ -1012,6 +1024,8 @@ suite "DOD state primitives":
       for pattern in forbiddenImports:
         check not source.contains(pattern)
       for pattern in forbiddenStorage:
+        check not source.contains(pattern)
+      for pattern in forbiddenHistoryMutations:
         check not source.contains(pattern)
 
   test "daemon does not apply DOD shadow reports directly":
@@ -1225,6 +1239,62 @@ suite "DOD state primitives":
     check model.visibleScratchpad == win
     check not model.isScratchpadVisible
     check model.validateInvariants().ok
+
+  test "DOD history ops record focus MRU":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let first = model.addWindow(ExternalWindowId(10), appId = "term")
+    let second = model.addWindow(ExternalWindowId(20), appId = "browser")
+
+    check not model.recordFocus(NullWindowId)
+    check not model.recordFocus(WindowId(999))
+    check model.recordFocus(first)
+    check model.recordFocus(second)
+    check model.recordFocus(first)
+
+    check model.focusHistory == @[second, first]
+
+  test "DOD history ops record workspace MRU":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let first = model.addTag(1, "one")
+    let second = model.addTag(2, "two")
+
+    check not model.recordWorkspace(NullTagId)
+    check not model.recordWorkspace(TagId(999))
+    check model.recordWorkspace(first)
+    check model.recordWorkspace(second)
+    check model.recordWorkspace(first)
+
+    check model.workspaceHistory == @[second, first]
+
+  test "DOD history ops trim to bounded entries":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    var windows: seq[WindowId] = @[]
+    for external in 1'u32 .. 33'u32:
+      windows.add(model.addWindow(ExternalWindowId(external), appId = "app"))
+
+    for winId in windows:
+      discard model.recordFocus(winId)
+
+    check model.focusHistory.len == 32
+    check model.focusHistory[0] == windows[1]
+    check model.focusHistory[^1] == windows[^1]
+
+  test "DOD history ops replace and remove refs":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let winA = model.addWindow(ExternalWindowId(10), appId = "a")
+    let winB = model.addWindow(ExternalWindowId(20), appId = "b")
+    let tagA = model.addTag(1, "a")
+    let tagB = model.addTag(2, "b")
+
+    check model.replaceFocusHistory(@[winA, winB, winA])
+    check model.replaceWorkspaceHistory(@[tagA, tagB, tagA])
+    check model.removeFocusHistoryRef(winA)
+    check model.removeWorkspaceHistoryRef(tagA)
+    check not model.removeFocusHistoryRef(winA)
+    check not model.removeWorkspaceHistoryRef(tagA)
+
+    check model.focusHistory == @[winB]
+    check model.workspaceHistory == @[tagB]
 
   test "DOD restore ops load restore buffers":
     var restore = DodLiveRestoreState(

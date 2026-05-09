@@ -1,5 +1,6 @@
 import column_ops
 import group_ops
+import history_ops
 import output_ops
 import placement_ops
 import restore_ops
@@ -9,6 +10,7 @@ import window_ops
 
 export column_ops
 export group_ops
+export history_ops
 export output_ops
 export placement_ops
 export restore_ops

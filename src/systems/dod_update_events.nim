@@ -2,7 +2,6 @@ import options
 import ../core/effects
 import ../core/msg
 import ../state/engine
-import dod_focus
 import dod_outputs
 import dod_runtime
 import dod_update_effects
@@ -22,8 +21,8 @@ proc setExternalFocus(model: var DodModel;
       model.placementForWindowOnTag(tagId, winId).isNone:
     return false
   discard model.setTagFocus(tagId, winId)
-  model.recordWorkspace(tagId)
-  model.recordFocus(winId)
+  discard model.recordWorkspace(tagId)
+  discard model.recordFocus(winId)
   true
 
 proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
@@ -31,8 +30,8 @@ proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
   of WlManageStart:
     let focused = model.focusedWindow()
     if focused != NullWindowId:
-      model.recordWorkspace(model.activeTag)
-      model.recordFocus(focused)
+      discard model.recordWorkspace(model.activeTag)
+      discard model.recordFocus(focused)
       let externalId = model.legacyWindowId(focused)
       result.effects.add(broadcastWindowFocusChanged(externalId))
       if not model.sessionLocked and not model.layerFocusExclusive:

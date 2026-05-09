@@ -11,18 +11,20 @@ proc restoredWindowId(model: DodModel; externalId: ExternalWindowId):
 
 proc resolveRestoreHistories(model: var DodModel) =
   if model.restoreFocusHistory.len > 0:
-    model.focusHistory.setLen(0)
+    var history: seq[WindowId] = @[]
     for externalId in model.restoreFocusHistory:
       let winId = model.restoredWindowId(externalId)
       if winId != NullWindowId:
-        model.focusHistory.add(winId)
+        history.add(winId)
+    discard model.replaceFocusHistory(history)
 
   if model.restoreWorkspaceHistory.len > 0:
-    model.workspaceHistory.setLen(0)
+    var history: seq[TagId] = @[]
     for slot in model.restoreWorkspaceHistory:
       let tagId = model.tagForSlot(slot)
       if tagId != NullTagId:
-        model.workspaceHistory.add(tagId)
+        history.add(tagId)
+    discard model.replaceWorkspaceHistory(history)
 
 proc syncRestoreOutputTags(model: var DodModel) =
   for outputExt, slot in model.restoreOutputTags.pairs:
@@ -189,7 +191,7 @@ proc applyPendingRestore(model: var DodModel; externalId,
     let tagId = model.tagForSlot(targetSlot)
     if tagId != NullTagId and model.tag(tagId).isSome and
         model.tag(tagId).get().focusedWindow == winId:
-      model.recordFocus(winId)
+      discard model.recordFocus(winId)
       discard model.clearRestoreFocusedWindow(restoredExternalId)
 
   model.resolveRestoreHistories()
@@ -354,7 +356,7 @@ proc createWindowForExternal*(model: var DodModel;
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId and model.tag(targetTag).isSome and
           model.tag(targetTag).get().focusedWindow == result:
-        model.recordFocus(result)
+        discard model.recordFocus(result)
         discard model.clearRestoreFocusedWindow(restoredExternalId)
 
   model.resolveRestoreHistories()

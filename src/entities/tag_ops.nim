@@ -1,4 +1,5 @@
-import options, sequtils, tables
+import options, tables
+import history_ops
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
@@ -135,7 +136,7 @@ proc destroyTag*(model: var DodModel; tagId: TagId): bool =
   for outputId in outputIds:
     model.outputTags.del(outputId)
 
-  model.workspaceHistory.keepIf(proc(id: TagId): bool = id != tagId)
+  discard model.removeWorkspaceHistoryRef(tagId)
   if model.activeTag == tagId:
     model.activeTag = NullTagId
     model.activeSlot = 0

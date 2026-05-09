@@ -142,7 +142,7 @@ proc moveFocusedWindowToSlot*(
   if model.overviewActive:
     model.activeTag = targetTag
     model.activeSlot = targetSlot
-    model.recordWorkspace(targetTag)
+    discard model.recordWorkspace(targetTag)
   model.refreshVisibleWorkspaceSlots()
   true
 

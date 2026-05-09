@@ -31,7 +31,7 @@ proc showScratchpad*(model: var DodModel; winId: WindowId): bool =
   discard model.setWindowMinimized(winId, false)
   discard model.setWindowMaximized(winId, false)
   discard model.showScratchpadRef(winId)
-  model.recordFocus(winId)
+  discard model.recordFocus(winId)
   true
 
 proc hideScratchpad*(model: var DodModel): bool =

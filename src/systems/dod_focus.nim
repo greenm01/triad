@@ -1,23 +1,7 @@
-import options, sequtils
+import options
 import dod_workspaces
 import ../state/engine
 from ../types/legacy_model import Direction, DirDown, DirLeft, DirRight, DirUp
-
-proc recordFocus*(model: var DodModel; winId: WindowId) =
-  if winId == NullWindowId or model.windowData(winId).isNone:
-    return
-  model.focusHistory.keepIf(proc(id: WindowId): bool = id != winId)
-  model.focusHistory.add(winId)
-  while model.focusHistory.len > 32:
-    model.focusHistory.delete(0)
-
-proc recordWorkspace*(model: var DodModel; tagId: TagId) =
-  if tagId == NullTagId or model.tagData(tagId).isNone:
-    return
-  model.workspaceHistory.keepIf(proc(id: TagId): bool = id != tagId)
-  model.workspaceHistory.add(tagId)
-  while model.workspaceHistory.len > 32:
-    model.workspaceHistory.delete(0)
 
 proc windowOnTag(model: DodModel; tagId: TagId; winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
@@ -80,9 +64,9 @@ proc focusWindow*(model: var DodModel; winId: WindowId): bool =
   model.activeTag = tagId
   model.activeSlot = tagOpt.get().slot
   model.refreshVisibleWorkspaceSlots()
-  model.recordWorkspace(tagId)
+  discard model.recordWorkspace(tagId)
   discard model.setTagFocus(tagId, winId)
-  model.recordFocus(winId)
+  discard model.recordFocus(winId)
   true
 
 proc focusWorkspaceSlot*(model: var DodModel; slot: uint32): bool =
@@ -92,10 +76,10 @@ proc focusWorkspaceSlot*(model: var DodModel; slot: uint32): bool =
   model.activeTag = tagId
   model.activeSlot = slot
   model.refreshVisibleWorkspaceSlots()
-  model.recordWorkspace(tagId)
+  discard model.recordWorkspace(tagId)
   let focused = model.recomputeVisibleFocus(tagId)
   if focused != NullWindowId:
-    model.recordFocus(focused)
+    discard model.recordFocus(focused)
   true
 
 proc focusWorkspaceIndex*(model: var DodModel; index: uint32): bool =
@@ -113,7 +97,7 @@ proc focusMostRecentWindow*(model: var DodModel): bool =
     if model.isFocusableWindow(candidate) and
         model.tagForWindow(candidate) != NullTagId:
       candidates.add(candidate)
-  model.focusHistory = candidates
+  discard model.replaceFocusHistory(candidates)
   if candidates.len == 0:
     return false
   model.focusWindow(candidates[^1])
@@ -130,7 +114,7 @@ proc focusMostRecentWorkspace*(model: var DodModel): bool =
   for candidate in model.workspaceHistory:
     if model.isRestorableWorkspace(candidate):
       candidates.add(candidate)
-  model.workspaceHistory = candidates
+  discard model.replaceWorkspaceHistory(candidates)
   if candidates.len == 0:
     return false
 
@@ -173,8 +157,8 @@ proc focusCycle*(model: var DodModel; step: int): bool =
     else: (idx + step + windows.len) mod windows.len
   let target = windows[nextIdx]
   discard model.setTagFocus(tagId, target)
-  model.recordWorkspace(tagId)
-  model.recordFocus(target)
+  discard model.recordWorkspace(tagId)
+  discard model.recordFocus(target)
   true
 
 proc visibleWindowNear(
