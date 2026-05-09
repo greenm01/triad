@@ -1,7 +1,6 @@
 import json, options
-import model
-import shell_state
 import ../types/shell_snapshot
+from ../types/runtime_values import LayoutMode
 
 export shell_snapshot
 
@@ -64,9 +63,6 @@ proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
     "workspaces": workspaces
   }
-
-proc triadLayoutStateJson*(model: Model): JsonNode =
-  triadLayoutStateJson(shellSnapshot(model))
 
 proc triadOutputJson(output: ShellOutput): JsonNode =
   %*{
@@ -131,9 +127,6 @@ proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
     "windows": windows
   }
 
-proc triadStateJson*(model: Model): JsonNode =
-  triadStateJson(shellSnapshot(model))
-
 proc triadLayoutStateChangedEvent*(snapshot: ShellSnapshot): string =
   $(%*{
     "triad": {
@@ -143,9 +136,6 @@ proc triadLayoutStateChangedEvent*(snapshot: ShellSnapshot): string =
     }
   })
 
-proc triadLayoutStateChangedEvent*(model: Model): string =
-  triadLayoutStateChangedEvent(shellSnapshot(model))
-
 proc triadStateChangedEvent*(snapshot: ShellSnapshot): string =
   $(%*{
     "triad": {
@@ -154,6 +144,3 @@ proc triadStateChangedEvent*(snapshot: ShellSnapshot): string =
       "state": triadStateJson(snapshot)
     }
   })
-
-proc triadStateChangedEvent*(model: Model): string =
-  triadStateChangedEvent(shellSnapshot(model))

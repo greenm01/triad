@@ -1,7 +1,5 @@
 import json, options
 import app_identity
-import model
-import shell_state
 import ../types/shell_snapshot
 
 proc niriLayout*(win: ShellWindow; snapshot: ShellSnapshot): JsonNode =
@@ -36,32 +34,6 @@ proc niriLayout*(win: ShellWindow; snapshot: ShellSnapshot): JsonNode =
     "window_offset_in_tile": [0.0, 0.0]
   }
 
-proc niriLayout*(winId: WindowId; model: Model): JsonNode =
-  let snapshot = shellSnapshot(model)
-  for win in snapshot.windows:
-    if win.id == winId:
-      return niriLayout(win, snapshot)
-  %*{
-    "pos_in_scrolling_layout": [0, 0],
-    "tile_size": [0.0, 0.0],
-    "window_size": [0, 0],
-    "tile_pos_in_workspace_view": [0.0, 0.0],
-    "window_offset_in_tile": [0.0, 0.0]
-  }
-
-proc windowWorkspaceId*(model: Model; winId: WindowId): Option[uint32] =
-  let snapshot = shellSnapshot(model)
-  for win in snapshot.windows:
-    if win.id == winId:
-      return win.tagId
-  none(uint32)
-
-proc niriOutputName*(model: Model; outputId: uint32): string =
-  model.shellOutputName(outputId)
-
-proc niriWorkspaceOutputName*(model: Model; tagId: uint32): string =
-  model.shellWorkspaceOutputName(tagId)
-
 proc niriWindowJson*(snapshot: ShellSnapshot; win: ShellWindow): JsonNode =
   let compatId = compatAppId(win.appId)
   result = %*{
@@ -83,29 +55,6 @@ proc niriWindowJson*(snapshot: ShellSnapshot; win: ShellWindow): JsonNode =
   if win.appId.len > 0 and compatId != win.appId:
     result["raw_app_id"] = %win.appId
 
-proc niriWindowJson*(model: Model; win: WindowData): JsonNode =
-  let snapshot = shellSnapshot(model)
-  for shellWin in snapshot.windows:
-    if shellWin.id == win.id:
-      return niriWindowJson(snapshot, shellWin)
-  let compatId = compatAppId(win.appId)
-  %*{
-    "id": win.id,
-    "title": if win.title == "": newJNull() else: %win.title,
-    "app_id": if compatId == "": newJNull() else: %compatId,
-    "pid": newJNull(),
-    "workspace_id": newJNull(),
-    "is_focused": false,
-    "is_floating": win.isFloating,
-    "is_maximized": win.isMaximized,
-    "is_minimized": win.isMinimized,
-    "is_fullscreen": win.isFullscreen,
-    "is_urgent": false,
-    "output": newJNull(),
-    "layout": niriLayout(win.id, model),
-    "focus_timestamp": newJNull()
-  }
-
 proc niriWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for workspace in snapshot.workspaces:
@@ -121,16 +70,10 @@ proc niriWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
       "occupied": workspace.occupied
     })
 
-proc niriWorkspacesJson*(model: Model): JsonNode =
-  niriWorkspacesJson(shellSnapshot(model))
-
 proc niriWindowsJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for win in snapshot.windows:
     result.add(niriWindowJson(snapshot, win))
-
-proc niriWindowsJson*(model: Model): JsonNode =
-  niriWindowsJson(shellSnapshot(model))
 
 proc niriOutputJson(output: ShellOutput): JsonNode =
   let w = max(0, int(output.w))
@@ -173,17 +116,11 @@ proc niriOutputsJson*(snapshot: ShellSnapshot): JsonNode =
   for output in snapshot.outputs:
     result[output.name] = niriOutputJson(output)
 
-proc niriOutputsJson*(model: Model): JsonNode =
-  niriOutputsJson(shellSnapshot(model))
-
 proc niriKeyboardLayoutsJson*(): JsonNode =
   %*{"names": [], "current_idx": 0}
 
 proc niriOverviewJson*(snapshot: ShellSnapshot): JsonNode =
   %*{"is_open": snapshot.overviewActive}
-
-proc niriOverviewJson*(model: Model): JsonNode =
-  niriOverviewJson(shellSnapshot(model))
 
 proc initialNiriEvents*(snapshot: ShellSnapshot): seq[string] =
   @[
@@ -194,6 +131,3 @@ proc initialNiriEvents*(snapshot: ShellSnapshot): seq[string] =
     $(%*{"KeyboardLayoutsChanged": {"keyboard_layouts": niriKeyboardLayoutsJson()}}),
     $(%*{"ConfigLoaded": {"failed": false}})
   ]
-
-proc initialNiriEvents*(model: Model): seq[string] =
-  initialNiriEvents(shellSnapshot(model))

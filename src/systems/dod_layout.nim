@@ -41,7 +41,7 @@ proc activeFocus*(model: DodModel): dod_core.WindowId =
     return tagOpt.get().focusedWindow
   NullWindowId
 
-proc legacyWindowTable(
+proc runtimeWindowTable(
     model: DodModel): Table[rv.WindowId, rv.WindowData] =
   for winId, win in model.windowsWithId():
     result[model.externalWindowId(winId)] = rv.WindowData(
@@ -137,7 +137,7 @@ proc layoutForTag(
 
 proc layoutProjection*(model: DodModel): LayoutProjection =
   let screen = model.primaryScreen()
-  let windows = model.legacyWindowTable()
+  let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
     var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.Grid)

@@ -18,16 +18,16 @@ proc externalWindowId*(id: runtime_values.WindowId): ExternalWindowId =
 proc externalOutputId*(id: uint32): ExternalOutputId =
   ExternalOutputId(id)
 
-proc legacyWindowId*(id: ExternalWindowId): runtime_values.WindowId =
+proc runtimeWindowId*(id: ExternalWindowId): runtime_values.WindowId =
   runtime_values.WindowId(uint32(id))
 
-proc legacyWindowId*(model: DodModel; winId: WindowId):
+proc runtimeWindowId*(model: DodModel; winId: WindowId):
     runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
-    return legacyWindowId(winOpt.get().externalId)
+    return runtimeWindowId(winOpt.get().externalId)
   0'u32
 
 proc focusedWindowId*(snapshot: ShellSnapshot): runtime_values.WindowId =

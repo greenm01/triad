@@ -174,7 +174,7 @@ proc applyDodCommand*(model: var DodModel; msg: Msg): DodUpdateStep =
     if result.dirty:
       let win = model.windowData(focused).get()
       result.effects.addSetFullscreenEffect(
-        model.legacyWindowId(focused), win.isFullscreen,
+        model.runtimeWindowId(focused), win.isFullscreen,
         uint32(win.fullscreenOutput))
   of CmdToggleMaximized:
     let focused = model.focusedWindow()
@@ -182,12 +182,12 @@ proc applyDodCommand*(model: var DodModel; msg: Msg): DodUpdateStep =
     if result.dirty:
       let win = model.windowData(focused).get()
       result.effects.addSetMaximizedEffect(
-        model.legacyWindowId(focused), win.isMaximized)
+        model.runtimeWindowId(focused), win.isMaximized)
   of CmdMinimize:
     let focused = model.focusedWindow()
     result.dirty = model.minimizeFocused()
     if result.dirty:
-      result.effects.addSetMaximizedEffect(model.legacyWindowId(focused), false)
+      result.effects.addSetMaximizedEffect(model.runtimeWindowId(focused), false)
   of CmdToggleKeyboardShortcutsInhibit:
     result.dirty = model.toggleKeyboardShortcutsInhibitFocused()
   of CmdSelectWindow:
@@ -199,7 +199,7 @@ proc applyDodCommand*(model: var DodModel; msg: Msg): DodUpdateStep =
     if focused != NullWindowId:
       result.effects.add(Effect(
         kind: EffCloseWindow,
-        closeId: model.legacyWindowId(focused)))
+        closeId: model.runtimeWindowId(focused)))
   of CmdCloseWindowById:
     if model.windowForExternal(msg.closeWindowId.externalWindowId()) !=
         NullWindowId:

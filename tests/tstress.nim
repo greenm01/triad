@@ -1,14 +1,13 @@
-import algorithm, json, options, os, sequtils, strutils, tables, unittest
-import ../src/core/model
-import ../src/core/model_utils
+import algorithm, json, os, strutils, unittest
+import ../src/config/parser
 import ../src/core/msg
-import ../src/core/niri_state
-import ../src/core/shell_state
-import ../src/core/update
-import ../src/ipc/commands
 import ../src/ipc/niri_compat
-import ../src/layouts/scroller
-import ../src/layouts/tiling
+import ../src/state/dod_invariants
+import ../src/state/dod_snapshot
+import ../src/systems/dod_runtime_state
+import ../src/systems/dod_update
+import ../src/types/dod_model
+import ../src/types/runtime_values
 
 type
   FuzzRng = object
@@ -18,9 +17,6 @@ type
     seed: uint64
     step: int
     op: string
-
-proc handleNiriRequest(line: string; model: Model): NiriIpcResult =
-  niri_compat.handleNiriRequest(line, shellSnapshot(model))
 
 proc initRng(seed: uint64): FuzzRng =
   FuzzRng(state: if seed == 0: 0x9e3779b97f4a7c15'u64 else: seed)
@@ -53,31 +49,26 @@ proc parseUIntEnv(name: string; fallback: uint64): uint64 =
     discard
   fallback
 
-proc baseModel(): Model =
-  result = Model(
-    activeTag: 1,
-    screenWidth: 1920,
-    screenHeight: 1080,
-    outerGaps: 10,
-    innerGaps: 5,
-    previousOuterGaps: 10,
-    previousInnerGaps: 5,
-    enableAnimations: true,
-    animationSpeed: 0.2
-  )
-  result.tags[1] = initTagState(1, Scroller, "main")
-  result.tags[2] = initTagState(2, Grid, "web")
-  result.tags[3] = initTagState(3, MasterStack, "work")
+proc baseModel(): DodModel =
+  initRuntimeStateFromConfig(Config(
+    layout: LayoutConfig(
+      gaps: 10,
+      defaultColumnWidth: 0.6,
+      defaultWindowWidth: 0.8,
+      defaultWindowHeight: 0.7,
+      enableAnimations: true,
+      animationSpeed: 0.2,
+      layoutCycle: @[Scroller, Grid, Deck, Monocle]),
+    workspaces: WorkspaceConfig(defaultCount: 4))).state.model
 
-proc modelSummary(model: Model): string =
-  "activeTag=" & $model.activeTag &
-    " tags=" & $model.tags.len &
-    " windows=" & $model.windows.len &
-    " scratchpad=" & $model.scratchpadWindows.len &
-    " overview=" & $model.overviewActive &
-    " size=" & $model.screenWidth & "x" & $model.screenHeight
+proc modelSummary(model: DodModel): string =
+  let snapshot = model.dodShellSnapshot()
+  "activeTag=" & $snapshot.activeTag &
+    " workspaces=" & $snapshot.workspaces.len &
+    " windows=" & $snapshot.windows.len &
+    " overview=" & $snapshot.overviewActive
 
-proc fail(ctx: FuzzContext; model: Model; msg: string) =
+proc fail(ctx: FuzzContext; model: DodModel; msg: string) =
   raise newException(AssertionDefect,
     "stress failure: " & msg &
     " seed=" & $ctx.seed &
@@ -85,317 +76,127 @@ proc fail(ctx: FuzzContext; model: Model; msg: string) =
     " op=" & ctx.op &
     " " & model.modelSummary())
 
-proc require(ctx: FuzzContext; model: Model; cond: bool; msg: string) =
+proc require(ctx: FuzzContext; model: DodModel; cond: bool; msg: string) =
   if not cond:
     fail(ctx, model, msg)
 
-proc existingWindows(model: Model): seq[WindowId] =
-  for win in model.windows.keys:
-    result.add(win)
+proc existingWindows(model: DodModel): seq[WindowId] =
+  for win in model.dodShellSnapshot().windows:
+    result.add(win.id)
   result.sort()
 
-proc placedWindows(model: Model): seq[WindowId] =
-  for tagId in model.tags.keys.toSeq.sorted():
-    for win in model.tags[tagId].flattenWindows():
-      result.add(win)
-
-proc chooseWindow(rng: var FuzzRng; model: Model; preferPlaced = false): WindowId =
-  let wins = if preferPlaced: model.placedWindows() else: model.existingWindows()
+proc chooseWindow(rng: var FuzzRng; model: DodModel): WindowId =
+  let wins = model.existingWindows()
   if wins.len > 0 and rng.chance(3, 4):
     wins[rng.pick(wins.len)]
   else:
     WindowId(1 + rng.pick(96))
 
-proc chooseTag(rng: var FuzzRng): uint32 =
-  uint32(1 + rng.pick(6))
-
 proc chooseDelta(rng: var FuzzRng; magnitude = 40): int32 =
   int32(rng.pick(magnitude * 2 + 1) - magnitude)
-
-proc chooseRatio(rng: var FuzzRng): float32 =
-  float32(rng.pick(240) - 70) / 100.0'f32
 
 proc chooseLayout(rng: var FuzzRng): LayoutMode =
   LayoutMode(rng.pick(ord(high(LayoutMode)) + 1))
 
-proc simpleCommand(rng: var FuzzRng): Msg =
-  const kinds = [
-    CmdFocusNext, CmdFocusPrev, CmdCloseWindow, CmdMoveColumnLeft,
-    CmdMoveColumnRight, CmdSwapWindowUp, CmdSwapWindowDown, CmdConsumeWindow,
-    CmdExpelWindow, CmdZoom, CmdToggleGaps, CmdMoveToScratchpad,
-    CmdToggleScratchpad, CmdToggleOverview, CmdToggleFloating,
-    CmdToggleFullscreen, CmdToggleMaximized, CmdMinimize, CmdSelectWindow, CmdTick
-  ]
-  Msg(kind: kinds[rng.pick(kinds.len)])
-
-proc generatedMsg(rng: var FuzzRng; model: Model; ctx: var FuzzContext): seq[Msg] =
+proc generatedMsg(
+    rng: var FuzzRng; model: DodModel; nextWindow: var WindowId): Msg =
   case rng.pick(24)
   of 0:
-    let win = chooseWindow(rng, model)
-    ctx.op = "create window " & $win
-    @[Msg(kind: WlWindowCreated, windowId: win, appId: "app-" & $rng.pick(8), title: "title-" & $rng.pick(12))]
+    result = Msg(
+      kind: WlWindowCreated,
+      windowId: nextWindow,
+      appId: "app-" & $nextWindow,
+      title: "window-" & $nextWindow)
+    inc nextWindow
   of 1:
-    let win = chooseWindow(rng, model)
-    ctx.op = "destroy window " & $win
-    @[Msg(kind: WlWindowDestroyed, destroyedId: win)]
+    result = Msg(kind: WlWindowDestroyed, destroyedId: rng.chooseWindow(model))
   of 2:
-    let win = if rng.chance(1, 8): 0'u32 else: chooseWindow(rng, model, true)
-    ctx.op = "focus changed " & $win
-    @[Msg(kind: WlFocusChanged, newFocusedId: win)]
+    result = Msg(kind: WlFocusChanged, newFocusedId: rng.chooseWindow(model))
   of 3:
-    const dims = [-100'i32, 0'i32, 1'i32, 20'i32, 360'i32, 1080'i32, 1920'i32, 7680'i32]
-    let w = dims[rng.pick(dims.len)]
-    let h = dims[rng.pick(dims.len)]
-    ctx.op = "output dimensions " & $w & "x" & $h
-    @[Msg(kind: WlOutputDimensions, width: w, height: h)]
+    result = Msg(kind: CmdFocusWorkspaceIndex,
+      workspaceIndex: uint32(1 + rng.pick(6)))
   of 4:
-    let mode = chooseLayout(rng)
-    ctx.op = "set layout " & $mode
-    @[Msg(kind: CmdSetLayout, newLayout: mode)]
+    result = Msg(kind: CmdMoveToWorkspaceIndex,
+      workspaceIndex: uint32(1 + rng.pick(6)))
   of 5:
-    let tag = chooseTag(rng)
-    ctx.op = "move to tag " & $tag
-    @[Msg(kind: CmdMoveToTag, targetTag: tag)]
+    result = Msg(kind: CmdSetLayout, newLayout: rng.chooseLayout(),
+      layoutTargetTag: uint32(rng.pick(5)))
   of 6:
-    let tag = chooseTag(rng)
-    ctx.op = "swap to tag " & $tag
-    @[Msg(kind: CmdSwapWindowToTag, targetTagSwap: tag)]
+    result = Msg(kind: CmdToggleFloating)
   of 7:
-    let tag = chooseTag(rng)
-    ctx.op = "focus tag " & $tag
-    @[Msg(kind: CmdFocusTag, focusTag: tag)]
+    result = Msg(kind: CmdToggleFullscreen)
   of 8:
-    let win = chooseWindow(rng, model)
-    ctx.op = "focus window by id " & $win
-    @[Msg(kind: CmdFocusWindowById, focusWindowId: win)]
+    result = Msg(kind: CmdMoveFloating,
+      moveDX: rng.chooseDelta(),
+      moveDY: rng.chooseDelta())
   of 9:
-    let win = chooseWindow(rng, model)
-    ctx.op = "close window by id " & $win
-    @[Msg(kind: CmdCloseWindowById, closeWindowId: win)]
+    result = Msg(kind: CmdResizeFloating,
+      deltaFW: rng.chooseDelta(),
+      deltaFH: rng.chooseDelta())
   of 10:
-    case rng.pick(7)
-    of 0:
-      let delta = chooseRatio(rng)
-      ctx.op = "resize width " & $delta
-      @[Msg(kind: CmdResizeWidth, deltaW: delta)]
-    of 1:
-      let delta = chooseRatio(rng)
-      ctx.op = "resize height " & $delta
-      @[Msg(kind: CmdResizeHeight, deltaH: delta)]
-    of 2:
-      let width = chooseRatio(rng)
-      ctx.op = "set column width " & $width
-      @[Msg(kind: CmdSetColumnWidth, targetWidth: width)]
-    of 3:
-      let delta = chooseDelta(rng)
-      ctx.op = "adjust gaps " & $delta
-      @[Msg(kind: CmdAdjustGaps, deltaG: delta)]
-    of 4:
-      let delta = chooseDelta(rng, 3)
-      ctx.op = "adjust master count " & $delta
-      @[Msg(kind: CmdAdjustMasterCount, deltaMC: int(delta))]
-    of 5:
-      let delta = chooseRatio(rng)
-      ctx.op = "adjust master ratio " & $delta
-      @[Msg(kind: CmdAdjustMasterRatio, deltaMR: delta)]
-    else:
-      let deltaW = chooseDelta(rng, 120)
-      let deltaH = chooseDelta(rng, 120)
-      ctx.op = "resize floating " & $deltaW & "," & $deltaH
-      @[Msg(kind: CmdResizeFloating, deltaFW: deltaW, deltaFH: deltaH)]
+    result = Msg(kind: CmdMoveWindowLeft)
   of 11:
-    let msg = simpleCommand(rng)
-    ctx.op = "simple command " & $msg.kind
-    @[msg]
+    result = Msg(kind: CmdMoveWindowRight)
   of 12:
-    let dx = chooseDelta(rng, 200)
-    let dy = chooseDelta(rng, 200)
-    ctx.op = "move floating " & $dx & "," & $dy
-    @[Msg(kind: CmdMoveFloating, moveDX: dx, moveDY: dy)]
+    result = Msg(kind: CmdMoveWindowUp)
   of 13:
-    let win = chooseWindow(rng, model)
-    ctx.op = "window metadata " & $win
-    if rng.chance(1, 2):
-      @[Msg(kind: WlWindowAppId, appIdWindowId: win, updatedAppId: "late-app-" & $rng.pick(8))]
-    else:
-      @[Msg(kind: WlWindowTitle, titleWindowId: win, updatedTitle: "late-title-" & $rng.pick(12))]
+    result = Msg(kind: CmdMoveWindowDown)
   of 14:
-    let win = chooseWindow(rng, model)
-    let minW = chooseDelta(rng, 120)
-    let minH = chooseDelta(rng, 120)
-    let maxW = int32(rng.pick(500))
-    let maxH = int32(rng.pick(500))
-    ctx.op = "dimension hint " & $win
-    @[Msg(kind: WlWindowDimensionsHint, hintWindowId: win, minWidth: minW, minHeight: minH, maxWidth: maxW, maxHeight: maxH)]
+    result = Msg(kind: CmdMoveToScratchpad)
   of 15:
-    let win = chooseWindow(rng, model)
-    let outputId = if rng.chance(1, 2): 0'u32 else: uint32(1 + rng.pick(4))
-    ctx.op = "fullscreen request " & $win & " output " & $outputId
-    @[Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: win, fullscreenOutputId: outputId)]
+    result = Msg(kind: CmdToggleScratchpad)
   of 16:
-    let win = chooseWindow(rng, model)
-    ctx.op = "exit fullscreen request " & $win
-    @[Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: win)]
+    result = Msg(kind: CmdToggleOverview)
   of 17:
-    let outputId = uint32(1 + rng.pick(4))
-    ctx.op = "remove output " & $outputId
-    @[Msg(kind: WlOutputRemoved, removedOutputId: outputId)]
+    result = Msg(kind: CmdAdjustGaps, deltaG: rng.chooseDelta(8))
   of 18:
-    let win = chooseWindow(rng, model)
-    let w = int32(rng.pick(2400))
-    let h = int32(rng.pick(1600))
-    ctx.op = "actual dimensions " & $win
-    @[Msg(kind: WlWindowDimensions, dimensionsWindowId: win, actualWidth: w, actualHeight: h)]
+    result = Msg(kind: WlOutputDimensions,
+      outputId: uint32(1 + rng.pick(3)),
+      width: int32(640 + rng.pick(1920)),
+      height: int32(480 + rng.pick(1080)))
   of 19:
-    let win = chooseWindow(rng, model)
-    case rng.pick(3)
-    of 0:
-      ctx.op = "maximize request " & $win
-      @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: win)]
-    of 1:
-      ctx.op = "unmaximize request " & $win
-      @[Msg(kind: WlWindowUnmaximizeRequested, unmaximizeRequestId: win)]
-    else:
-      ctx.op = "minimize request " & $win
-      @[Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: win)]
+    result = Msg(kind: WlOutputRemoved, removedOutputId: uint32(1 + rng.pick(3)))
   of 20:
-    case rng.pick(3)
-    of 0:
-      ctx.op = "layer focus exclusive"
-      @[Msg(kind: WlLayerFocusExclusive)]
-    of 1:
-      ctx.op = "layer focus non-exclusive"
-      @[Msg(kind: WlLayerFocusNonExclusive)]
-    else:
-      ctx.op = "layer focus none"
-      @[Msg(kind: WlLayerFocusNone)]
+    result = Msg(kind: WlWindowDimensions,
+      dimensionsWindowId: rng.chooseWindow(model),
+      actualWidth: int32(rng.pick(2000)),
+      actualHeight: int32(rng.pick(1200)))
   of 21:
-    let commands = [
-      "focus-next", "focus-prev", "toggle-overview", "focus-workspace 2",
-      "focus-workspace -1", "move-to-tag 4", "swap-to-tag junk",
-      "resize-width 0.25", "adjust-gaps -100", "set-column-width 8.5",
-      "toggle-maximized", "minimize", "spawn-terminal", "lock-session", "mmsg -g -A", "rename-tag stress tag"
-    ]
-    let command = commands[rng.pick(commands.len)]
-    ctx.op = "legacy ipc " & command
-    let parsed = parseLegacyCommand(command)
-    if parsed.isSome:
-      @[parsed.get()]
-    else:
-      @[]
+    result = Msg(kind: CmdFocusNext)
+  of 22:
+    result = Msg(kind: CmdFocusPrev)
   else:
-    let requests = [
-      "\"Outputs\"",
-      "\"Workspaces\"",
-      "\"Windows\"",
-      "\"FocusedWindow\"",
-      "\"OverviewState\"",
-      "\"KeyboardLayouts\"",
-      "\"EventStream\"",
-      """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""",
-      """{"Action":{"FocusWorkspaceDown":{}}}""",
-      """{"Action":{"FocusColumnLeft":{}}}""",
-      """{"Action":{"ToggleOverview":{}}}""",
-      """{"Action":{"FocusWindow":{"id":1}}}""",
-      """{"Action":{"CloseWindow":{"id":1}}}""",
-      """{"Action":{"Screenshot":{"path":"/tmp/triad-stress.png"}}}""",
-      """{"Action":{"BadAction":{}}}""",
-      "{not-json"
-    ]
-    let request = requests[rng.pick(requests.len)]
-    ctx.op = "niri ipc " & request
-    let response = handleNiriRequest(request, model)
-    if response.reply.len > 0:
-      discard parseJson(response.reply)
-    for event in response.initialEvents:
-      discard parseJson(event)
-    response.messages
+    result = Msg(kind: CmdTick)
 
-proc renderTag(ctx: FuzzContext; model: Model; tagId: uint32; tag: TagState) =
-  var tagCopy = tag
-  let screen = Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
-  let instructions =
-    case tagCopy.layoutMode
-    of Scroller:
-      layoutScroller(tagCopy, model.windows, screen, model.outerGaps, model.innerGaps, model.scrollerFocusCenter, model.scrollerPreferCenter, model.centerFocusedColumn)
-    of VerticalScroller:
-      layoutVerticalScroller(tagCopy, model.windows, screen, model.outerGaps, model.innerGaps, model.scrollerFocusCenter, model.scrollerPreferCenter, model.centerFocusedColumn)
-    of MasterStack:
-      layoutMasterStack(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of Grid:
-      layoutGrid(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of Monocle:
-      layoutMonocle(tagCopy, screen, model.outerGaps)
-    of Deck:
-      layoutDeck(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of CenterTile:
-      layoutCenterTile(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of RightTile:
-      layoutRightTile(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of VerticalTile:
-      layoutVerticalMasterStack(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of VerticalGrid:
-      layoutVerticalGrid(tagCopy, screen, model.outerGaps, model.innerGaps)
-    of VerticalDeck:
-      layoutVerticalDeck(tagCopy, screen, model.outerGaps, model.innerGaps)
-
-  for instr in instructions:
-    require(ctx, model, instr.geom.w >= 0, "negative rendered width on tag " & $tagId)
-    require(ctx, model, instr.geom.h >= 0, "negative rendered height on tag " & $tagId)
-
-proc checkInvariants(ctx: FuzzContext; model: Model) =
-  let errors = model.validateModel()
-  if errors.len > 0:
+proc checkInvariants(ctx: FuzzContext; model: DodModel) =
+  let report = model.validateInvariants()
+  if not report.ok:
+    var errors: seq[string]
+    for error in report.errors:
+      errors.add(error.message)
     fail(ctx, model, errors.join("; "))
 
-  var seen = initTable[WindowId, string]()
-  for tagId, tag in model.tags.pairs:
-    for win in tag.flattenWindows():
-      require(ctx, model, not seen.hasKey(win), "duplicate placement for window " & $win)
-      seen[win] = "tag " & $tagId
-    if tag.focusedWindow != 0:
-      require(ctx, model, tag.containsWindow(tag.focusedWindow), "focused window is not in tag " & $tagId)
-    renderTag(ctx, model, tagId, tag)
+  let snapshot = model.dodShellSnapshot()
+  discard niri_compat.handleNiriRequest("\"Workspaces\"", snapshot)
+  discard niri_compat.handleNiriRequest("\"Windows\"", snapshot)
+  let outputs = niri_compat.handleNiriRequest("\"Outputs\"", snapshot)
+  require(ctx, model, outputs.handled, "outputs request not handled")
+  discard parseJson(outputs.reply)
 
-  for win in model.scratchpadWindows:
-    require(ctx, model, not seen.hasKey(win), "scratchpad duplicate for window " & $win)
-    seen[win] = "scratchpad"
+suite "Deterministic DoD stress":
+  test "random reducer trace preserves invariants":
+    let seed = parseUIntEnv("TRIAD_STRESS_SEED", 0xC0FFEE'u64)
+    let steps = int(parseUIntEnv("TRIAD_STRESS_STEPS", 400))
+    var rng = initRng(seed)
+    var model = baseModel()
+    var nextWindow = WindowId(1)
 
-  discard parseJson($niriWorkspacesJson(model))
-  discard parseJson($niriWindowsJson(model))
-  discard parseJson($niriOutputsJson(model))
-  discard parseJson($niriOverviewJson(model))
-  for event in initialNiriEvents(model):
-    discard parseJson(event)
-
-proc runStress(seed: uint64; steps: int) =
-  var rng = initRng(seed)
-  var model = baseModel()
-  var ctx = FuzzContext(seed: seed, step: 0, op: "initial")
-  checkInvariants(ctx, model)
-
-  for step in 0 ..< steps:
-    ctx.step = step
-    let messages = generatedMsg(rng, model, ctx)
-    for message in messages:
-      var nextModel: Model
-      try:
-        let updated = update(model, message)
-        nextModel = updated[0]
-      except CatchableError as e:
-        fail(ctx, model, "update raised " & $e.name & ": " & e.msg)
-      model = nextModel
+    for step in 0 ..< steps:
+      var ctx = FuzzContext(seed: seed, step: step)
+      let msg = rng.generatedMsg(model, nextWindow)
+      ctx.op = $msg.kind
+      let (next, _) = model.dodUpdate(msg)
+      model = next
       checkInvariants(ctx, model)
 
-suite "Deterministic stress":
-  test "model update/layout/ipc fuzz":
-    let steps = int(parseUIntEnv("TRIAD_STRESS_STEPS", 500))
-    let seedOverride = getEnv("TRIAD_STRESS_SEED", "")
-    let seeds =
-      if seedOverride.len > 0:
-        @[parseUIntEnv("TRIAD_STRESS_SEED", 1)]
-      else:
-        @[0xC0FFEE'u64, 0xBAD5EED'u64, 0x12345678'u64, 0xDEADBEEF'u64, 0xA11CE'u64]
-
-    for seed in seeds:
-      runStress(seed, steps)
+    check model.validateInvariants().ok

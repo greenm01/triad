@@ -1,7 +1,7 @@
 import unittest, tables
-import ../src/core/model
 import ../src/layouts/scroller
 import ../src/layouts/tiling
+import ../src/types/runtime_values
 
 suite "Layout Algorithm Math":
   setup:

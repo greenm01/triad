@@ -3,7 +3,6 @@ import ../config/parser
 import ../core/effects
 import ../core/msg
 import ../core/restore_state
-import ../state/dod_adapter
 import ../state/dod_restore_state
 import ../state/engine
 import ../types/dod_runtime_policy
@@ -48,10 +47,6 @@ proc applyObservedRuntimeUpdate*(
   state.model = next
   result.authority = DodRuntimeAuthority
   result.effects = effects
-
-proc applyObservedRuntimeShadowOnly*(
-    state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
-  state.applyObservedRuntimeUpdate(msg)
 
 proc applyObservedRuntimeLayoutProjection*(
     state: var TriadRuntimeState): ObservedLayoutProjectionResult =

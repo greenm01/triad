@@ -2,7 +2,7 @@ import options
 import ../state/engine
 from ../types/runtime_values import nil
 
-proc legacyWindowId*(model: DodModel; winId: WindowId):
+proc runtimeWindowId*(model: DodModel; winId: WindowId):
     runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32
@@ -26,7 +26,7 @@ proc outputForRiverId*(model: DodModel; outputId: uint32): OutputId =
 
 proc riverIdForWindow*(
     model: DodModel; winId: WindowId): runtime_values.WindowId =
-  model.legacyWindowId(winId)
+  model.runtimeWindowId(winId)
 
 proc riverIdForOutput*(model: DodModel; outputId: OutputId): uint32 =
   if outputId == NullOutputId:

@@ -16,7 +16,8 @@ a desktop/workspace hierarchy.
 - Make bitmask tag membership canonical.
 - Store relationships in indexed tables instead of nested object graphs.
 - Generate shell and IPC from canonical snapshots.
-- Migrate adapter-first, then remove legacy storage after parity is proven.
+- Keep production runtime state DoD-native; do not add adapter-backed runtime
+  storage.
 
 ## Module Boundaries
 
@@ -204,8 +205,8 @@ fallback or runtime read bridge.
 
 Window groups are modeled as DoD entities. `GroupData` stores the dense member
 list and active window, while `groupByWindow` keeps one-window-to-one-group
-membership lookups cheap. The legacy adapter projects group IDs and external
-window IDs only for temporary parity tests.
+membership lookups cheap. External River IDs are stored as entity fields and
+resolved through DoD lookup indexes.
 
 ## Layout Projection
 
@@ -214,12 +215,11 @@ Layout computation is split into pure projection and explicit writes:
 - `LayoutProjection.instructions` is the River-facing placement output.
 - `LayoutProjection.viewportTargets` records scroller viewport target updates.
 - projection builders must not mutate their input models.
-- compatibility wrappers apply viewport targets and return instructions.
+- runtime helpers apply viewport targets and return instructions.
 
 Runtime manage/render layout is the first DoD-authoritative surface. The layout
 facade computes `DodModel.layoutProjection()`, applies viewport targets back to
-the DoD model, and sends DoD instructions to River. The legacy layout sync
-bridge remains in the tree as parity scaffolding only.
+the DoD model, and sends DoD instructions to River.
 
 ## Runtime Update Sync
 
@@ -231,13 +231,14 @@ Runtime updates are DoD-native in production:
 - live restore applies through `DodModel.applyLiveRestore(...)`
 - shell snapshots and live-restore reads are serialized from DoD
 
-Legacy/shadow update sync helpers may remain temporarily under tests, but they
-are not imported by the production runtime facade.
+Legacy and shadow update sync helpers are not part of the source tree. Tests
+exercise the DoD reducer, runtime facade, shell snapshots, layout projection,
+and live-restore serialization directly.
 
 ## Config Application
 
-`DodModel` has a native config application path. It uses the same normalized
-runtime defaults as the legacy `Model` path, but writes into flattened DoD data:
+`DodModel` has a native config application path that writes into flattened DoD
+data:
 
 - config-owned runtime fields live directly on `DodModel`
 - default workspaces are materialized through workspace/entity operations
@@ -250,8 +251,7 @@ runtime defaults as the legacy `Model` path, but writes into flattened DoD data:
 Runtime config reload applies the parsed config directly to `DodModel`. Shell
 restarts, binding rebuilds, manage requests, and broadcasts stay in the daemon
 loop because they are side effects of accepting a config reload, not state
-transformation rules. Legacy config application remains in a legacy-only module
-for parity tests.
+transformation rules.
 
 Initial daemon startup creates an empty `DodModel`, applies config through the
 native DoD config path, ensures the active workspace, and stores that model as
@@ -261,8 +261,10 @@ Live-restore application converts the parsed restore payload to
 `DodLiveRestoreState` and applies it directly to the DoD model before
 manage/render resumes.
 
-## Shadow Runtime
+## Removed Runtime Paths
 
-Shadow runtime modules are now non-production parity scaffolding. They compare
-legacy and DoD behavior for tests while the remaining legacy model, adapters,
-and lower-level parity tests are retired in later slices.
+The old nested runtime model, adapter bridge, shadow runtime, and parity sync
+modules have been removed. New production code must not reintroduce
+`Model`-backed daemon state, shadow observations, or bridge-based read
+fallbacks. If a test needs a daemon read surface, build it from
+`DodModel.dodShellSnapshot()` or `DodModel.dodLiveRestoreJson()`.

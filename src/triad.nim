@@ -143,9 +143,6 @@ proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
   let observed = runtimeState.applyObservedRuntimeUpdate(msg)
   observed.effects
 
-proc syncRuntimeShadowOnly(context: string; msg: Msg) =
-  discard runtimeState.applyObservedRuntimeShadowOnly(msg)
-
 proc readModelSnapshot(): ShellSnapshot =
   runtimeState.readRuntimeSnapshot()
 
@@ -1709,7 +1706,6 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     if msg.kind == CmdSpawnTerminal:
       spawnTerminal(currentModel)
-      syncRuntimeShadowOnly("message", msg)
       continue
 
     if msg.kind == CmdConfigReload:

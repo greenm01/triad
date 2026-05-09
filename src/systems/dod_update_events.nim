@@ -32,7 +32,7 @@ proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
     if focused != NullWindowId:
       discard model.recordWorkspace(model.activeTag)
       discard model.recordFocus(focused)
-      let externalId = model.legacyWindowId(focused)
+      let externalId = model.runtimeWindowId(focused)
       result.effects.add(broadcastWindowFocusChanged(externalId))
       if not model.sessionLocked and not model.layerFocusExclusive:
         result.effects.add(Effect(kind: EffFocusWindow, focusId: externalId))
@@ -58,7 +58,7 @@ proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
     for winId in model.removeOutputForExternal(
         msg.removedOutputId.externalOutputId()):
       result.dirty = true
-      result.effects.addSetFullscreenEffect(model.legacyWindowId(winId), false)
+      result.effects.addSetFullscreenEffect(model.runtimeWindowId(winId), false)
 
   of WlWindowCreated:
     let winId = model.createWindowForExternal(
@@ -141,7 +141,7 @@ proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
     result.dirty = model.setSessionLocked(false)
     let focused = model.focusedWindow()
     if focused != NullWindowId:
-      let externalId = model.legacyWindowId(focused)
+      let externalId = model.runtimeWindowId(focused)
       result.effects.add(broadcastWindowFocusChanged(externalId))
       result.effects.add(Effect(kind: EffFocusWindow, focusId: externalId))
   of WlPointerMoveRequested:
@@ -161,7 +161,7 @@ proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
     if resized != NullWindowId:
       result.effects.add(Effect(
         kind: EffInformResizeEnd,
-        resizeLifecycleWinId: model.legacyWindowId(resized)))
+        resizeLifecycleWinId: model.runtimeWindowId(resized)))
 
   of WlFocusChanged:
     result.dirty = model.setExternalFocus(msg.newFocusedId.externalWindowId())
