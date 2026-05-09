@@ -1,4 +1,4 @@
-import algorithm, options, tables
+import options, tables
 import ../layouts/scroller
 import ../layouts/tiling
 import ../state/engine
@@ -139,17 +139,10 @@ proc layoutProjection*(model: Model): LayoutProjection =
 
   if model.overviewActive:
     var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.LayoutMode.Grid)
-    var slots = model.sortedSlots()
-    slots.sort()
-    for slot in slots:
-      let tagId = model.tagForSlot(slot)
-      if tagId == NullTagId:
-        continue
-      for winId, win in model.windowsOnTagWithId(tagId):
-        if not win.isMinimized:
-          overviewTag.columns.add(rv.Column(
-            windows: @[model.externalWindowId(winId)],
-            widthProportion: 1.0))
+    for winId in model.overviewWindowIds():
+      overviewTag.columns.add(rv.Column(
+        windows: @[model.externalWindowId(winId)],
+        widthProportion: 1.0))
     result.instructions = layoutGrid(
       overviewTag,
       screen,

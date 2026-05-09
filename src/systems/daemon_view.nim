@@ -66,18 +66,30 @@ proc windowDataForRiverId*(
 proc hasRiverWindow*(model: Model; winId: runtime_values.WindowId): bool =
   model.windowForRiverId(winId) != NullWindowId
 
-proc boundedDimensions*(win: WindowData; w, h: int32):
-    tuple[w, h: int32] =
+proc proposalDimensions*(win: WindowData; w, h: int32;
+    honorMinimums: bool): tuple[w, h: int32] =
   result.w = max(0'i32, w)
   result.h = max(0'i32, h)
-  if win.minWidth > 0:
+  if honorMinimums and win.minWidth > 0:
     result.w = max(result.w, win.minWidth)
-  if win.minHeight > 0:
+  if honorMinimums and win.minHeight > 0:
     result.h = max(result.h, win.minHeight)
   if win.maxWidth > 0:
     result.w = min(result.w, win.maxWidth)
   if win.maxHeight > 0:
     result.h = min(result.h, win.maxHeight)
+
+proc boundedDimensions*(win: WindowData; w, h: int32):
+    tuple[w, h: int32] =
+  win.proposalDimensions(w, h, honorMinimums = true)
+
+proc needsCellClip*(win: WindowData; cellW, cellH: int32): bool =
+  let safeW = max(0'i32, cellW)
+  let safeH = max(0'i32, cellH)
+  (win.actualW > safeW and safeW > 0) or
+    (win.actualH > safeH and safeH > 0) or
+    (win.minWidth > safeW and safeW > 0) or
+    (win.minHeight > safeH and safeH > 0)
 
 proc boundedDimensionsForRiverId*(
     model: Model; winId: runtime_values.WindowId; w, h: int32):
@@ -85,4 +97,12 @@ proc boundedDimensionsForRiverId*(
   let winOpt = model.windowDataForRiverId(winId)
   if winOpt.isSome:
     return winOpt.get().boundedDimensions(w, h)
+  (w: max(0'i32, w), h: max(0'i32, h))
+
+proc proposalDimensionsForRiverId*(
+    model: Model; winId: runtime_values.WindowId; w, h: int32;
+    honorMinimums: bool): tuple[w, h: int32] =
+  let winOpt = model.windowDataForRiverId(winId)
+  if winOpt.isSome:
+    return winOpt.get().proposalDimensions(w, h, honorMinimums)
   (w: max(0'i32, w), h: max(0'i32, h))

@@ -25,6 +25,16 @@ proc configuredModel(): Model =
       WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true)
     ])).model
 
+proc applyMsg(model: var Model; msg: Msg) =
+  let (nextModel, _) = model.update(msg)
+  model = nextModel
+
+proc focusedWindowId(model: Model): WindowId =
+  for win in model.shellSnapshot().windows:
+    if win.isFocused:
+      return win.id
+  0'u32
+
 suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
     var model = Model()
@@ -84,6 +94,49 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
+
+  test "Overview direction focus follows visual grid":
+    var model = configuredModel()
+    for id in 1'u32 .. 5'u32:
+      model.applyMsg(Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: id,
+        appId: "app",
+        title: "Window " & $id))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+      direction: Direction.DirRight))
+    check model.focusedWindowId() == 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+      direction: Direction.DirLeft))
+    check model.focusedWindowId() == 1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+      direction: Direction.DirDown))
+    check model.focusedWindowId() == 5
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+      direction: Direction.DirUp))
+    check model.focusedWindowId() == 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+      direction: Direction.DirDown))
+    check model.focusedWindowId() == 5
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+      direction: Direction.DirRight))
+    check model.focusedWindowId() == 5
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
+    check model.focusedWindowId() == 1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusPrev))
+    check model.focusedWindowId() == 5
 
   test "Configured defaults place floating windows":
     var model = configuredModel()

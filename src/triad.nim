@@ -1037,23 +1037,50 @@ proc flushPendingManageEffects() =
   for eff in effects:
     executeManageEffect(eff)
 
+proc placementHonorsMinimums(id: WindowId): bool =
+  if currentModel.overviewActive:
+    return false
+  let winOpt = currentModel.windowDataForRiverId(id)
+  if winOpt.isNone:
+    return true
+  let win = winOpt.get()
+  let scratchpad = currentModel.isScratchpadVisible and
+    currentModel.visibleScratchpadRiverId() == id
+  win.isFloating or win.isFullscreen or scratchpad
+
+proc placementNeedsCellClip(id: WindowId; geom: Rect): bool =
+  let winOpt = currentModel.windowDataForRiverId(id)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  if not currentModel.overviewActive:
+    let scratchpad = currentModel.isScratchpadVisible and
+      currentModel.visibleScratchpadRiverId() == id
+    if win.isFloating or win.isFullscreen or scratchpad:
+      return false
+  win.needsCellClip(geom.w, geom.h)
+
 proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
   desiredPlacements.clear()
   for instr in instructions:
     desiredPlacements[instr.windowId] = instr.geom
     if windowPointers.hasKey(instr.windowId):
       var geom = instr.geom
-      let bounded = currentModel.boundedDimensionsForRiverId(
-        instr.windowId, geom.w, geom.h)
-      geom.w = bounded.w
-      geom.h = bounded.h
+      let proposal = currentModel.proposalDimensionsForRiverId(
+        instr.windowId,
+        geom.w,
+        geom.h,
+        placementHonorsMinimums(instr.windowId))
+      geom.w = proposal.w
+      geom.h = proposal.h
       windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(
           0'i32, geom.h))
 
-proc applyVisibility(win: ptr RiverWindowV1; visibility: RenderVisibility) =
+proc applyVisibility(
+    win: ptr RiverWindowV1; visibility: RenderVisibility; forceClip: bool) =
   if visibility.visible:
     win.show()
-    if visibility.clipped:
+    if visibility.clipped or forceClip:
       win.setClipBox(visibility.clipX, visibility.clipY, visibility.clipW,
           visibility.clipH)
       win.setContentClipBox(visibility.clipX, visibility.clipY,
@@ -1092,7 +1119,9 @@ proc renderDesiredPlacements() =
       if windowPointers.hasKey(id):
         let visibility = renderVisibility(geom, screen, max(
             currentModel.borderWidth * 2, 4'i32))
-        windowPointers[id].applyVisibility(visibility)
+        windowPointers[id].applyVisibility(
+          visibility,
+          placementNeedsCellClip(id, geom))
         windowPointers[id].applyBorder(
           id == currentModel.activeFocusRiverId(), visibility.borderEdges)
 

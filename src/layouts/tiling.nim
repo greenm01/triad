@@ -1,4 +1,5 @@
 import math
+import grid_math
 import ../types/runtime_values
 
 proc flattenTag(tag: TagState): seq[WindowId] =
@@ -78,8 +79,9 @@ proc layoutGrid*(tag: TagState, screen: Rect, outerGap, innerGap: int32): seq[
   let n = allWindows.len
   if n == 0: return instructions
 
-  let cols = int32(sqrt(float64(n)).ceil)
-  let rows = int32((float64(n) / float64(cols)).ceil)
+  let dims = gridDimensions(n)
+  let cols = int32(dims.cols)
+  let rows = int32(dims.rows)
 
   let safeOuterGap = max(0'i32, outerGap)
   let safeInnerGap = max(0'i32, innerGap)

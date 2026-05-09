@@ -1,4 +1,5 @@
 import unittest, tables
+import ../src/layouts/grid_math
 import ../src/layouts/scroller
 import ../src/layouts/tiling
 import ../src/types/runtime_values
@@ -92,3 +93,12 @@ suite "Layout Algorithm Math":
     check instructions[0].geom.x == instructions[1].geom.x
     check instructions[1].geom.y > instructions[0].geom.y
     check instructions[2].geom.x > instructions[0].geom.x
+
+  test "overview grid navigation follows row-major cells":
+    check gridDimensions(5) == (cols: 3, rows: 2)
+    check gridIndexByDelta(0, 5, 1, 0) == 1
+    check gridIndexByDelta(1, 5, -1, 0) == 0
+    check gridIndexByDelta(1, 5, 0, 1) == 4
+    check gridIndexByDelta(4, 5, 0, -1) == 1
+    check gridIndexByDelta(2, 5, 0, 1) == 4
+    check gridIndexByDelta(4, 5, 1, 0) == -1

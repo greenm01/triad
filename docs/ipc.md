@@ -12,7 +12,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 #### Navigation
 *   `focus-next`: Shifts keyboard focus to the next window in the sequence.
 *   `focus-prev`: Shifts keyboard focus to the previous window.
-*   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus spatially within the active tag.
+*   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus
+    spatially within the active tag. When overview is open, these move through
+    the visible overview grid.
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.

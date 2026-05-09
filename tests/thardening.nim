@@ -124,6 +124,12 @@ suite "Crash hardening":
     check win.maxHeight == 200
     check win.boundedDimensions(50, 50) == (w: 50'i32, h: 200'i32)
     check win.boundedDimensions(500, 500) == (w: 100'i32, h: 200'i32)
+    check win.proposalDimensions(50, 50, honorMinimums = false) ==
+      (w: 50'i32, h: 50'i32)
+    check win.proposalDimensions(500, 500, honorMinimums = false) ==
+      (w: 100'i32, h: 200'i32)
+    check win.needsCellClip(100, 100)
+    check not win.needsCellClip(100, 220)
 
   test "Niri compatibility rejects malformed IPC without crashing":
     let malformed = niri_compat.handleNiriRequest("{", baseSnapshot())

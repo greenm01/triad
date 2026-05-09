@@ -1,5 +1,6 @@
 import options
 import workspaces
+import ../layouts/grid_math
 import ../state/engine
 from ../types/runtime_values import Direction
 
@@ -249,15 +250,8 @@ proc focusWindowOrWorkspace*(model: var Model; direction: int): bool =
   let target = model.nearestWorkspaceSlot(direction, false)
   target != 0 and model.focusWorkspaceSlot(target)
 
-proc overviewWindows(model: Model): seq[WindowId] =
-  for slot in model.sortedSlots():
-    let tagId = model.tagForSlot(slot)
-    for winId, win in model.windowsOnTagWithId(tagId):
-      if not win.isMinimized:
-        result.add(winId)
-
 proc focusOverviewByStep*(model: var Model; step: int): bool =
-  let windows = model.overviewWindows()
+  let windows = model.overviewWindowIds()
   if windows.len == 0:
     return false
 
@@ -269,17 +263,33 @@ proc focusOverviewByStep*(model: var Model; step: int): bool =
     idx = (idx + step + windows.len) mod windows.len
   model.focusWindow(windows[idx])
 
+proc focusOverviewByDelta(
+    model: var Model; deltaCol, deltaRow: int): bool =
+  let windows = model.overviewWindowIds()
+  if windows.len == 0:
+    return false
+
+  let current = model.focusedOnActiveTag()
+  var idx = windows.find(current)
+  if idx == -1:
+    idx = 0
+
+  let targetIdx = gridIndexByDelta(idx, windows.len, deltaCol, deltaRow)
+  if targetIdx < 0 or targetIdx == idx:
+    return false
+  model.focusWindow(windows[targetIdx])
+
 proc focusByDirection*(model: var Model; direction: Direction): bool =
   if model.overviewActive:
     case direction
     of Direction.DirLeft:
-      return model.focusColumnByStep(-1)
+      return model.focusOverviewByDelta(-1, 0)
     of Direction.DirRight:
-      return model.focusColumnByStep(1)
+      return model.focusOverviewByDelta(1, 0)
     of Direction.DirUp:
-      return model.focusWindowOrWorkspace(-1)
+      return model.focusOverviewByDelta(0, -1)
     of Direction.DirDown:
-      return model.focusWindowOrWorkspace(1)
+      return model.focusOverviewByDelta(0, 1)
 
   let tagId = model.activeTag
   let focused = model.focusedOnActiveTag()

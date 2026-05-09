@@ -100,6 +100,15 @@ proc windowsForTag*(model: Model; tagId: TagId): seq[WindowId] =
   for winId, _ in model.windowsOnTagWithId(tagId):
     result.add(winId)
 
+proc overviewWindowIds*(model: Model): seq[WindowId] =
+  for slot in model.sortedSlots():
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    for winId, win in model.windowsOnTagWithId(tagId):
+      if not win.isMinimized:
+        result.add(winId)
+
 proc columnCountForTag*(model: Model; tagId: TagId): int =
   if model.columnsByTag.hasKey(tagId):
     model.columnsByTag[tagId].len
