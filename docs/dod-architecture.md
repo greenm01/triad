@@ -203,6 +203,12 @@ the shadow `DodModel` while shadow parity is healthy. On the first divergence,
 the runtime disables DoD projection reads and falls back to legacy projections
 for the rest of the process.
 
+Projection read selection lives behind a read bridge. The daemon owns shadow
+health and asks the bridge for `DodProjectionSource` only while the shadow is
+initialized and healthy; otherwise the bridge reads from the legacy model. The
+same source selection is used for shell snapshots, live-restore JSON reads, and
+live-restore file writes.
+
 ## Layout Projection
 
 Layout computation is split into pure projection and explicit writes:

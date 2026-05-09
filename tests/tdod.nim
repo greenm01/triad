@@ -32,6 +32,7 @@ import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
 import ../src/systems/layout_projection_sync
 import ../src/systems/layout_state
+import ../src/systems/projection_read_sync
 import ../src/systems/runtime_update_sync
 import ../src/systems/state_application_sync
 import ../src/types/core
@@ -1447,6 +1448,57 @@ suite "DOD state primitives":
     check report.shadowChecked
     check not report.shadowReport.ok
     check legacyModel.activeTag == 2
+
+  test "DOD projection read bridge selects healthy shadow reads":
+    check projectionReadSource(true, true) == DodProjectionSource
+    check projectionReadSource(true, false) == LegacyProjectionSource
+    check projectionReadSource(false, true) == LegacyProjectionSource
+    check projectionReadSource(false, false) == LegacyProjectionSource
+
+  test "DOD projection read bridge reads shell snapshots by source":
+    let legacyModel = lifecycleParityModel()
+    let dod = legacyModel.dodFromLegacy()
+
+    check readProjectionSnapshot(
+      legacyModel, dod, DodProjectionSource) == dodShellSnapshot(dod)
+    check readProjectionSnapshot(
+      legacyModel, dod, LegacyProjectionSource) == shellSnapshot(legacyModel)
+    check readProjectionSnapshot(
+      legacyModel, dod, DodProjectionSource) ==
+      readProjectionSnapshot(legacyModel, dod, LegacyProjectionSource)
+
+  test "DOD projection read bridge reads live restore JSON by source":
+    let legacyModel = dynamicParityModel()
+    let dod = legacyModel.dodFromLegacy()
+
+    let dodJson = readProjectionLiveRestoreJson(
+      legacyModel, dod, DodProjectionSource)
+    let legacyJson = readProjectionLiveRestoreJson(
+      legacyModel, dod, LegacyProjectionSource)
+    check parseJson(dodJson) == parseJson(dodLiveRestoreJson(dod))
+    check parseJson(legacyJson) == parseJson(liveRestoreJson(legacyModel))
+    check parseJson(dodJson) == parseJson(legacyJson)
+
+  test "DOD projection read bridge writes parseable live restore state":
+    let legacyModel = lifecycleParityModel()
+    let dod = legacyModel.dodFromLegacy()
+    let path = getTempDir() / (
+      "triad-projection-read-" & $getCurrentProcessId() & ".json")
+    try:
+      var result = writeProjectionLiveRestoreState(
+        legacyModel, dod, DodProjectionSource, path)
+      check result.ok
+      check result.path == path
+      check parseLiveRestoreJson(readFile(path)).isSome
+
+      result = writeProjectionLiveRestoreState(
+        legacyModel, dod, LegacyProjectionSource, path)
+      check result.ok
+      check result.path == path
+      check parseLiveRestoreJson(readFile(path)).isSome
+    finally:
+      if fileExists(path):
+        removeFile(path)
 
   test "DOD layout projection matches floating windows":
     checkLayoutParity(floatingLayoutModel())

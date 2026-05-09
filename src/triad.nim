@@ -13,12 +13,11 @@ import core/shell_state
 import core/niri_state
 import core/render_visibility
 import state/dod_adapter
-import state/dod_restore_state
-import state/dod_snapshot
 from types/dod_model import DodModel
 import systems/dod_shadow_runtime
 import systems/layout_projection_sync
 import systems/layout_state
+import systems/projection_read_sync
 import systems/runtime_update_sync
 import systems/state_application_sync
 import config/parser
@@ -181,26 +180,20 @@ proc syncRuntimeShadowOnly(context: string; msg: Msg) =
   if syncResult.shadowChecked:
     logShadowReport(context, msg, syncResult.shadowReport)
 
-proc useDodProjectionReads(): bool =
-  shadowInitialized and shadowReadHealthy
+proc currentProjectionReadSource(): ProjectionReadSource =
+  projectionReadSource(shadowInitialized, shadowReadHealthy)
 
 proc readModelSnapshot(): ShellSnapshot =
-  if useDodProjectionReads():
-    dodShellSnapshot(shadowModel)
-  else:
-    shellSnapshot(currentModel)
+  readProjectionSnapshot(
+    currentModel, shadowModel, currentProjectionReadSource())
 
 proc readLiveRestoreJson(): string =
-  if useDodProjectionReads():
-    dodLiveRestoreJson(shadowModel)
-  else:
-    liveRestoreJson(currentModel)
+  readProjectionLiveRestoreJson(
+    currentModel, shadowModel, currentProjectionReadSource())
 
 proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
-  if useDodProjectionReads():
-    writeDodLiveRestoreState(shadowModel)
-  else:
-    writeLiveRestoreState(currentModel)
+  writeProjectionLiveRestoreState(
+    currentModel, shadowModel, currentProjectionReadSource())
 
 proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstruction] =
   let report = syncLayoutProjection(
