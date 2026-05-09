@@ -1,4 +1,4 @@
-import algorithm, tables
+import algorithm, options, tables
 import entity_manager
 import ../types/core
 import ../types/dod_model
@@ -6,10 +6,12 @@ import ../types/dod_model
 proc tagForSlot*(model: DodModel; slot: uint32): TagId =
   model.tagBySlot.getOrDefault(slot, NullTagId)
 
-proc windowForExternal*(model: DodModel; externalId: ExternalWindowId): WindowId =
+proc windowForExternal*(
+    model: DodModel; externalId: ExternalWindowId): WindowId =
   model.externalWindowIds.getOrDefault(externalId, NullWindowId)
 
-proc outputForExternal*(model: DodModel; externalId: ExternalOutputId): OutputId =
+proc outputForExternal*(
+    model: DodModel; externalId: ExternalOutputId): OutputId =
   model.externalOutputIds.getOrDefault(externalId, NullOutputId)
 
 proc sortedSlots*(model: DodModel): seq[uint32] =
@@ -21,7 +23,7 @@ proc tagHasLiveWindows*(model: DodModel; tagId: TagId): bool =
   if not model.windowsByTag.hasKey(tagId):
     return false
   for winId in model.windowsByTag[tagId]:
-    if model.windows.hasEntity(winId):
+    if model.windows.entity(winId).isSome:
       return true
   false
 
@@ -49,7 +51,8 @@ proc visibleWorkspaceSlots*(model: DodModel): seq[uint32] =
   if result.len > 0:
     let last = result[^1]
     let lastTag = model.tagForSlot(last)
-    if last < MaxTagBits and lastTag != NullTagId and model.tagHasLiveWindows(lastTag):
+    if last < MaxTagBits and lastTag != NullTagId and
+        model.tagHasLiveWindows(lastTag):
       result.add(last + 1)
 
 proc workspaceIndexForSlot*(model: DodModel; slot: uint32): uint32 =
@@ -67,7 +70,8 @@ proc windowsForColumn*(model: DodModel; columnId: ColumnId): seq[WindowId] =
 proc windowsForTag*(model: DodModel; tagId: TagId): seq[WindowId] =
   model.windowsByTag.getOrDefault(tagId, @[])
 
-proc columnIndexForTag*(model: DodModel; tagId: TagId; columnId: ColumnId): uint32 =
+proc columnIndexForTag*(
+    model: DodModel; tagId: TagId; columnId: ColumnId): uint32 =
   let columns = model.columnsForTag(tagId)
   for idx, candidate in columns:
     if candidate == columnId:
@@ -75,8 +79,11 @@ proc columnIndexForTag*(model: DodModel; tagId: TagId; columnId: ColumnId): uint
   0
 
 proc shellOutputName*(model: DodModel; outputId: OutputId): string =
-  if outputId != NullOutputId and model.outputs.hasEntity(outputId):
-    let output = model.outputs.getEntity(outputId)
+  if outputId != NullOutputId:
+    let outputOpt = model.outputs.entity(outputId)
+    if outputOpt.isNone:
+      return "triad-0"
+    let output = outputOpt.get()
     if output.name.len > 0:
       return output.name
     if output.externalId != NullExternalOutputId:

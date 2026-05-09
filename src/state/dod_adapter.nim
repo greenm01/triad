@@ -30,7 +30,8 @@ proc sortedOutputIds(model: legacy.Model): seq[uint32] =
     result.add(outputId)
   result.sort()
 
-proc ensureDodTag(target: var DodModel; source: legacy.Model; slot: uint32): TagId =
+proc ensureDodTag(
+    target: var DodModel; source: legacy.Model; slot: uint32): TagId =
   if target.tagBySlot.hasKey(slot):
     return target.tagBySlot[slot]
 
@@ -83,7 +84,8 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     )
 
   if source.primaryOutput != 0:
-    result.primaryOutput = result.outputForExternal(ExternalOutputId(source.primaryOutput))
+    result.primaryOutput =
+      result.outputForExternal(ExternalOutputId(source.primaryOutput))
 
   for outputExt, slot in source.outputTags.pairs:
     let outputId = result.outputForExternal(ExternalOutputId(outputExt))
@@ -129,7 +131,8 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     for col in tag.columns:
       let columnId = result.addColumn(tagId, col.widthProportion)
       for externalWinId in col.windows:
-        let winId = result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
+        let winId =
+          result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
         if winId != NullWindowId:
           result.placeWindow(tagId, columnId, winId)
 
@@ -140,12 +143,13 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     let focused = source.tags[slot].focusedWindow
     let focusedId = result.windowForExternal(ExternalWindowId(uint32(focused)))
     if focusedId != NullWindowId:
-      result.tags.getEntity(tagId).focusedWindow = focusedId
+      result.tags.mEntity(tagId).focusedWindow = focusedId
 
   result.activeTag = result.tagForSlot(source.activeTag)
 
   for externalWinId in source.focusHistory:
-    let winId = result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
+    let winId =
+      result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
     if winId != NullWindowId:
       result.focusHistory.add(winId)
 

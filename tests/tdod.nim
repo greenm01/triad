@@ -1,4 +1,4 @@
-import json, sequtils, strutils, tables
+import json, options, sequtils, strutils, tables
 import unittest
 import ../src/core/model_utils
 import ../src/core/niri_state
@@ -36,31 +36,29 @@ suite "DOD state primitives":
   test "entity manager adds, updates, and deletes densely":
     var manager: EntityManager[WindowId, TestEntity]
 
-    manager.addEntity(TestEntity(id: WindowId(1), value: "one"))
-    manager.addEntity(TestEntity(id: WindowId(2), value: "two"))
-    manager.addEntity(TestEntity(id: WindowId(3), value: "three"))
+    manager.insert(TestEntity(id: WindowId(1), value: "one"))
+    manager.insert(TestEntity(id: WindowId(2), value: "two"))
+    manager.insert(TestEntity(id: WindowId(3), value: "three"))
 
     check manager.len == 3
-    check manager.hasEntity(WindowId(2))
-    manager.getEntity(WindowId(2)).value = "updated"
-    check manager.getEntity(WindowId(2)).value == "updated"
+    check manager.contains(WindowId(2))
+    manager.mEntity(WindowId(2)).value = "updated"
+    check manager.entity(WindowId(2)).get().value == "updated"
 
-    check manager.delEntity(WindowId(2))
+    check manager.delete(WindowId(2))
     check manager.len == 2
-    check not manager.hasEntity(WindowId(2))
-    check manager.hasEntity(WindowId(3))
-    check manager.getEntity(WindowId(3)).value == "three"
-    check manager.index[WindowId(3)] >= 0
-    check manager.index[WindowId(3)] < manager.data.len
-    check manager.data[manager.index[WindowId(3)]].id == WindowId(3)
+    check not manager.contains(WindowId(2))
+    check manager.contains(WindowId(3))
+    check manager.entity(WindowId(3)).get().value == "three"
+    check manager.hasDenseIndex()
 
   test "entity manager rejects duplicate IDs":
     var manager: EntityManager[WindowId, TestEntity]
 
-    manager.addEntity(TestEntity(id: WindowId(1), value: "one"))
+    manager.insert(TestEntity(id: WindowId(1), value: "one"))
 
     expect ValueError:
-      manager.addEntity(TestEntity(id: WindowId(1), value: "dupe"))
+      manager.insert(TestEntity(id: WindowId(1), value: "dupe"))
 
   test "tag masks are bounded and composable":
     var mask = EmptyTagMask
@@ -88,7 +86,8 @@ suite "DOD state primitives":
     let tagTwo = model.addTag(2, "two")
     let colOne = model.addColumn(tagOne, 0.5)
     let colTwo = model.addColumn(tagTwo, 0.75)
-    let win = model.addWindow(ExternalWindowId(10), appId = "term", title = "Terminal")
+    let win = model.addWindow(
+      ExternalWindowId(10), appId = "term", title = "Terminal")
 
     model.placeWindow(tagOne, colOne, win)
     model.placeWindow(tagTwo, colTwo, win)
@@ -102,7 +101,7 @@ suite "DOD state primitives":
     check model.validateInvariants().ok
 
     check model.destroyWindow(win)
-    check not model.windows.hasEntity(win)
+    check not model.windows.contains(win)
     check not model.externalWindowIds.hasKey(ExternalWindowId(10))
     check model.windowsByTag[tagOne].len == 0
     check model.windowsByTag[tagTwo].len == 0
@@ -128,12 +127,16 @@ suite "DOD state primitives":
       overviewActive: true
     )
     source.workspaces.defaultCount = 3
-    source.layoutCycle = @[legacy_model.Scroller, legacy_model.Grid, legacy_model.Monocle]
+    source.layoutCycle = @[
+      legacy_model.Scroller, legacy_model.Grid, legacy_model.Monocle
+    ]
     source.tags[1] = initTagState(1, legacy_model.Scroller, "main")
-    source.tags[1].columns.add(legacy_model.Column(windows: @[legacy_model.WindowId(10)], widthProportion: 0.5))
+    source.tags[1].columns.add(legacy_model.Column(
+      windows: @[legacy_model.WindowId(10)], widthProportion: 0.5))
     source.tags[1].focusedWindow = 10
     source.tags[2] = initTagState(2, legacy_model.Grid, "web")
-    source.tags[2].columns.add(legacy_model.Column(windows: @[legacy_model.WindowId(20)], widthProportion: 0.8))
+    source.tags[2].columns.add(legacy_model.Column(
+      windows: @[legacy_model.WindowId(20)], widthProportion: 0.8))
     source.tags[2].focusedWindow = 20
     source.windows[10] = legacy_model.WindowData(
       id: 10,
@@ -152,8 +155,10 @@ suite "DOD state primitives":
       heightProportion: 1.0,
       isMaximized: true
     )
-    source.outputs[42] = legacy_model.OutputData(id: 42, name: "DP-1", x: 0, y: 0, w: 1920, h: 1080)
-    source.outputs[43] = legacy_model.OutputData(id: 43, x: 1920, y: 0, w: 1920, h: 1080)
+    source.outputs[42] = legacy_model.OutputData(
+      id: 42, name: "DP-1", x: 0, y: 0, w: 1920, h: 1080)
+    source.outputs[43] = legacy_model.OutputData(
+      id: 43, x: 1920, y: 0, w: 1920, h: 1080)
     source.primaryOutput = 42
     source.outputTags[43] = 2
     source.focusHistory = @[legacy_model.WindowId(10), 20]
@@ -161,14 +166,15 @@ suite "DOD state primitives":
 
     let dod = source.dodFromLegacy()
     check dod.validateInvariants().ok
-    check uint32(dod.windows.getEntity(WindowId(1)).externalId) == 10
-    check uint32(dod.windows.getEntity(WindowId(2)).externalId) == 20
+    check uint32(dod.windows.entity(WindowId(1)).get().externalId) == 10
+    check uint32(dod.windows.entity(WindowId(2)).get().externalId) == 20
 
     let legacySnapshot = shellSnapshot(source)
     let dodSnapshot = dodShellSnapshot(dod)
 
     check triadStateJson(dodSnapshot) == triadStateJson(legacySnapshot)
-    check triadLayoutStateJson(dodSnapshot) == triadLayoutStateJson(legacySnapshot)
+    check triadLayoutStateJson(dodSnapshot) ==
+      triadLayoutStateJson(legacySnapshot)
     check niriWorkspacesJson(dodSnapshot) == niriWorkspacesJson(legacySnapshot)
     check niriWindowsJson(dodSnapshot) == niriWindowsJson(legacySnapshot)
     check niriOutputsJson(dodSnapshot) == niriOutputsJson(legacySnapshot)

@@ -15,7 +15,7 @@ a desktop/workspace hierarchy.
 - Make Triad-owned logical IDs the canonical IDs for runtime entities.
 - Make bitmask tag membership canonical.
 - Store relationships in indexed tables instead of nested object graphs.
-- Generate shell and compatibility IPC from canonical snapshots.
+- Generate shell and IPC from canonical snapshots.
 - Migrate adapter-first, then remove legacy storage after parity is proven.
 
 ## Module Boundaries
@@ -48,6 +48,15 @@ it for tables, sorting, and diagnostics.
 Only this layer may directly access `EntityManager.data` and
 `EntityManager.index`.
 
+#### The Read Layer: Iterators and Queries
+
+Because DOD data is flattened across multiple tables, we strictly separate the mechanics of traversing data from the business logic that asks questions about it.
+
+1.  **Iterators (`dod_iterators.nim`):** Handle the raw hash-table lookups and sequence traversals. They yield strongly-typed entities (e.g., `iterator windowsOnTag*(model: Model, tagId: TagId): WindowData`).
+2.  **Queries (`dod_queries.nim`):** Consume iterators to answer business questions without exposing the underlying data structures (e.g., `proc hasFullscreenWindow*(model: Model, tagId: TagId): bool`).
+
+Systems (like layout algorithms) consume Queries and Iterators. They never manually loop over `model.windows.data`.
+
 ### `entities`
 
 `entities` modules are the only index-aware mutation layer:
@@ -59,6 +68,14 @@ Only this layer may directly access `EntityManager.data` and
 
 Entity helpers do not decide policy. They apply validated mutations and keep
 indexes correct.
+
+#### The Write Layer: Operations (Ops)
+
+Directly mutating state arrays or relation tables within business logic is strictly forbidden. Because a single logical action (like closing a window) requires updating the entity array, the tag relationships, and the focus state, manual mutations lead to desync bugs.
+
+All mutations must go through the **Operations Layer** (e.g., `window_ops.nim`, `tag_ops.nim`).
+
+An Operation acts as an atomic transaction for the DOD state. For example, `model.destroyWindow(winId)` handles removing the window from `windowTags`, cleaning up `windowColumns`, reassigning focus, and finally calling `delEntity` to swap-and-pop the data array.
 
 ### `systems`
 
@@ -147,64 +164,3 @@ Rules:
 ## Snapshots and IPC
 
 Shell integrations must serialize snapshots, not internal storage.
-
-- Native Triad IPC reads a canonical Triad snapshot.
-- Niri compatibility IPC is a projection of the same snapshot.
-- Noctalia, quickshell, and future shells should be able to consume native
-  Triad IPC without depending on nested layout internals.
-
-Snapshot generation belongs in `state` or a thin projection layer over `state`.
-IPC modules should not independently infer focus, workspace lists, placement,
-or app identity.
-
-## Migration Order
-
-The migration is adapter-first.
-
-1. Introduce DOD primitives and tests without changing runtime behavior.
-2. Define the final DOD model shape and invariant checks.
-3. Add adapters from the current nested model into the DOD model.
-4. Prove parity for shell snapshots, Niri IPC, Triad IPC, restore data, and
-   layout inputs.
-5. Move read paths to DOD queries.
-6. Move mutation paths to entity helpers and systems.
-7. Remove the legacy nested storage after parity is stable.
-
-The later big-bang cleanup pass is tracked in `docs/todo.md`; it is not the
-first migration step.
-
-## Required Invariants
-
-- No live focus ID points at a missing window.
-- No workspace history entry points at a missing or invalid tag.
-- No column points at a missing tag.
-- No placement row points at a missing window or column.
-- No window appears twice on the same tag.
-- No window appears in a column for a tag it does not belong to.
-- No empty dynamic workspace is advertised unless it is within the configured
-  minimum workspace count or is the active trailing workspace.
-- IPC snapshots must be derivable from canonical state without consulting
-  compositor callbacks.
-
-## Verification
-
-Every DOD migration step must include tests appropriate to its blast radius.
-
-Baseline suites:
-
-- `nimble testDod`
-- `nimble testUnit`
-- `nimble testCompat`
-- `nimble testStress`
-- `nimble testHardening`
-- `nimble buildAll`
-
-Coverage expectations:
-
-- ID generation reserves zero and is monotonic.
-- Entity deletion preserves dense storage and updates indexes.
-- Tag masks reject out-of-range slots and compose correctly.
-- Adapter projections match the current nested model before read paths move.
-- Randomized window/tag/focus sequences preserve DOD invariants.
-- Reload paths preserve focus, workspace state, maximized/floating state, and
-  placement.
