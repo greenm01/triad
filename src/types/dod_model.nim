@@ -1,7 +1,7 @@
 import tables
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
-from legacy_model import CursorConfig, KeyBindingConfig, LayoutMode,
+from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,
   PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
   QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig
 

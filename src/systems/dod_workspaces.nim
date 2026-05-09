@@ -1,6 +1,6 @@
 import algorithm, options
 import ../state/engine
-from ../types/legacy_model import Scroller
+from ../types/runtime_values import Scroller
 
 proc activeWorkspaceSlot*(model: DodModel): uint32 =
   let tagOpt = model.tagData(model.activeTag)

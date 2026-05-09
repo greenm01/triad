@@ -8,7 +8,7 @@ import ../state/entity_manager
 import ../state/id_gen
 import ../types/core except Rect
 import ../types/dod_model
-from ../types/legacy_model import Rect
+from ../types/runtime_values import Rect
 
 proc addWindow*(model: var DodModel; externalId: ExternalWindowId; title = "";
     appId = ""; widthProportion = 1.0'f32; heightProportion = 1.0'f32;

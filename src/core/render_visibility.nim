@@ -1,4 +1,4 @@
-import model
+import ../types/runtime_values
 
 const
   RenderEdgeTop* = 1'u32

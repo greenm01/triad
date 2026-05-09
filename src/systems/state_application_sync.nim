@@ -1,4 +1,5 @@
 import ../config/dod_apply
+import ../config/legacy_apply
 import ../config/parser
 import ../core/model
 import ../core/msg

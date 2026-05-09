@@ -5,24 +5,24 @@ import ../core/niri_state
 import ../core/triad_state
 import ../state/engine
 import ../types/shell_snapshot
-from ../types/legacy_model import nil
+from ../types/runtime_values import nil
 
 type
   DodUpdateStep* = object
     dirty*: bool
     effects*: seq[Effect]
 
-proc externalWindowId*(id: legacy_model.WindowId): ExternalWindowId =
+proc externalWindowId*(id: runtime_values.WindowId): ExternalWindowId =
   ExternalWindowId(uint32(id))
 
 proc externalOutputId*(id: uint32): ExternalOutputId =
   ExternalOutputId(id)
 
-proc legacyWindowId*(id: ExternalWindowId): legacy_model.WindowId =
-  legacy_model.WindowId(uint32(id))
+proc legacyWindowId*(id: ExternalWindowId): runtime_values.WindowId =
+  runtime_values.WindowId(uint32(id))
 
 proc legacyWindowId*(model: DodModel; winId: WindowId):
-    legacy_model.WindowId =
+    runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
@@ -30,7 +30,7 @@ proc legacyWindowId*(model: DodModel; winId: WindowId):
     return legacyWindowId(winOpt.get().externalId)
   0'u32
 
-proc focusedWindowId*(snapshot: ShellSnapshot): legacy_model.WindowId =
+proc focusedWindowId*(snapshot: ShellSnapshot): runtime_values.WindowId =
   for workspace in snapshot.workspaces:
     if workspace.isActive:
       return workspace.focusedWindow
@@ -60,7 +60,7 @@ proc broadcastWorkspaceActivated*(snapshot: ShellSnapshot): Effect =
     }
   }))
 
-proc broadcastWindowFocusChanged*(winId: legacy_model.WindowId): Effect =
+proc broadcastWindowFocusChanged*(winId: runtime_values.WindowId): Effect =
   Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
     "WindowFocusChanged": {
       "id": winId
@@ -68,7 +68,7 @@ proc broadcastWindowFocusChanged*(winId: legacy_model.WindowId): Effect =
   }))
 
 proc broadcastWindowOpened*(snapshot: ShellSnapshot;
-    winId: legacy_model.WindowId): Effect =
+    winId: runtime_values.WindowId): Effect =
   for win in snapshot.windows:
     if win.id == winId:
       return Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
@@ -78,7 +78,7 @@ proc broadcastWindowOpened*(snapshot: ShellSnapshot;
       }))
   Effect(kind: EffNone)
 
-proc broadcastWindowClosed*(winId: legacy_model.WindowId): Effect =
+proc broadcastWindowClosed*(winId: runtime_values.WindowId): Effect =
   Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
     "WindowClosed": {
       "id": winId
@@ -314,7 +314,7 @@ proc shouldCollapseAfterUpdate*(kind: MsgKind): bool =
     CmdToggleNamedScratchpad}
 
 proc addSetFullscreenEffect*(effects: var seq[Effect];
-    winId: legacy_model.WindowId; fullscreen: bool; outputId = 0'u32) =
+    winId: runtime_values.WindowId; fullscreen: bool; outputId = 0'u32) =
   effects.add(Effect(
     kind: EffSetFullscreen,
     fsWinId: winId,
@@ -322,7 +322,7 @@ proc addSetFullscreenEffect*(effects: var seq[Effect];
     fsOutputId: outputId))
 
 proc addSetMaximizedEffect*(effects: var seq[Effect];
-    winId: legacy_model.WindowId; maximized: bool) =
+    winId: runtime_values.WindowId; maximized: bool) =
   effects.add(Effect(
     kind: EffSetMaximized,
     maxWinId: winId,

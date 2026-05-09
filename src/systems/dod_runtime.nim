@@ -1,6 +1,6 @@
 import math, options
 import ../state/engine
-from ../types/legacy_model import OpMove, OpNone, OpResize, PointerOpKind
+from ../types/runtime_values import OpMove, OpNone, OpResize, PointerOpKind
 
 proc keyboardShortcutsInhibited*(model: DodModel): bool =
   if model.sessionLocked or model.layerFocusExclusive:

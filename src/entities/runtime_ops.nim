@@ -1,5 +1,5 @@
 import ../types/dod_model
-from ../types/legacy_model import OpNone
+from ../types/runtime_values import OpNone
 
 proc setOverviewActive*(model: var DodModel; active: bool): bool =
   if model.overviewActive == active:

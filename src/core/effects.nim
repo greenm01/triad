@@ -1,4 +1,5 @@
-import model, msg
+import msg
+import ../types/runtime_values
 
 type
   EffectKind* = enum

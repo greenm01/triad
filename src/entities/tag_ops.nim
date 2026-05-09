@@ -5,8 +5,7 @@ import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
 import ../types/dod_model
-from ../types/legacy_model import Scroller
-from ../types/legacy_model import LayoutMode
+from ../types/runtime_values import LayoutMode, Scroller
 
 proc addTag*(
     model: var DodModel; slot: uint32; name = ""; layoutMode = Scroller;

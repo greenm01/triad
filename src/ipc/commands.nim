@@ -1,6 +1,6 @@
 import options, strutils
-import ../core/model
 import ../core/msg
+import ../types/runtime_values
 
 proc parseInt32Arg(s: string): Option[int32] =
   try:

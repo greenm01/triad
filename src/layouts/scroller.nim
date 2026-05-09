@@ -1,4 +1,8 @@
-import ../core/model, ../core/model_utils, tables
+import tables
+import ../types/runtime_values
+
+proc clampProportion(value: float32; lo = 0.05'f32; hi = 1.0'f32): float32 =
+  clamp(value, lo, hi)
 
 proc layoutScroller*(tag: var TagState, windows: Table[WindowId, WindowData], screen: Rect, outerGap, innerGap: int32, 
                     focusCenter: bool, preferCenter: bool, centerMode: string): seq[RenderInstruction] =

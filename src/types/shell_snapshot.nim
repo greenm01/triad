@@ -1,5 +1,5 @@
 import options
-from legacy_model import CenterTile, Deck, Grid, LayoutMode, MasterStack,
+from runtime_values import CenterTile, Deck, Grid, LayoutMode, MasterStack,
   Monocle, Rect, RightTile, Scroller, VerticalDeck, VerticalGrid,
   VerticalScroller, VerticalTile, WindowId
 

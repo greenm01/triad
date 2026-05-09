@@ -1,7 +1,7 @@
 import options
 import dod_workspaces
 import ../state/engine
-from ../types/legacy_model import Direction, DirDown, DirLeft, DirRight, DirUp
+from ../types/runtime_values import Direction, DirDown, DirLeft, DirRight, DirUp
 
 proc windowOnTag(model: DodModel; tagId: TagId; winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome

@@ -197,37 +197,15 @@ Rules:
 
 Shell integrations must serialize snapshots, not internal storage.
 
-Triad currently runs DoD as the preferred read projection while legacy remains
-the companion state and divergence fallback. IPC, live-restore reads, and
-daemon host-side read decisions use the shadow `DodModel` while shadow parity is
-healthy. On the first divergence, the runtime disables DoD projection reads and
-falls back to legacy projections for the rest of the process.
-
-Projection read selection lives behind a read bridge. Shadow health is explicit
-DoD data (`DodShadowHealth`) updated through a small transition system. The
-bridge selects `DodProjectionSource` only while the shadow is initialized and
-healthy; otherwise it reads from the legacy model. The same source selection is
-used for shell snapshots, live-restore JSON reads, and live-restore file writes.
-
-The daemon stores the live legacy model, shadow DoD model, and shadow health as
-one `TriadRuntimeState`. Runtime-state facade helpers route updates, config
-application, live restore, layout projection, and projection reads through that
-single object. This keeps fallback policy explicit while giving the final DoD
-promotion one aggregate state boundary to change.
-Observed runtime-state helpers also apply shadow reports to `DodShadowHealth`
-and return `RuntimeShadowObservation` values. The daemon consumes those
-observations for warning emission, but no longer mutates shadow health directly.
-
-Daemon read-only host decisions use `readRuntimeModelView`, which returns a
-legacy-shaped view backed by DoD while projection reads are healthy and the real
-legacy model after divergence. The adapter keeps existing host helpers usable
-while DoD becomes the read source.
+Production runtime state is DoD-native. `TriadRuntimeState` stores one
+`DodModel`, and daemon reads use DoD snapshots, live-restore JSON, layout
+projection, and daemon-view helpers directly. There is no production shadow
+fallback or runtime read bridge.
 
 Window groups are modeled as DoD entities. `GroupData` stores the dense member
 list and active window, while `groupByWindow` keeps one-window-to-one-group
 membership lookups cheap. The legacy adapter projects group IDs and external
-window IDs at the boundary; daemon views must not preserve groups from fallback
-state.
+window IDs only for temporary parity tests.
 
 ## Layout Projection
 
@@ -239,42 +217,22 @@ Layout computation is split into pure projection and explicit writes:
 - compatibility wrappers apply viewport targets and return instructions.
 
 Runtime manage/render layout is the first DoD-authoritative surface. The layout
-sync bridge still computes both legacy and DoD projections, applies each model's
-own viewport targets, and reports projection mismatches through the shadow
-divergence path. While shadow health is good, River placement instructions come
-from DoD.
-
-Layout authority is runtime data on `TriadRuntimePolicy`. The daemon initializes
-`DodLayoutAuthority` today, so `authoritativeProjection` is the DoD projection.
-If a DoD layout divergence is observed, the runtime facade disables DoD
-projection reads and returns the legacy projection for that pass and subsequent
-passes.
+facade computes `DodModel.layoutProjection()`, applies viewport targets back to
+the DoD model, and sends DoD instructions to River. The legacy layout sync
+bridge remains in the tree as parity scaffolding only.
 
 ## Runtime Update Sync
 
-Runtime updates are also bridged explicitly during the shadow phase:
+Runtime updates are DoD-native in production:
 
-- legacy `update` still mutates the live `Model`
-- DoD effects are executed against River and the host for parity-checked
-  messages while shadow health is good
-- legacy effects remain the same-pass and subsequent fallback after a shadow
-  divergence
-- the DoD shadow receives the same message stream through `dodUpdate`
-- shadow state, effect signatures, snapshots, histories, and layout projections
-  are compared after each bridged update
-- parity-exempt or runtime-owned messages, such as config reload, terminal
-  spawning, and render starts, remain legacy-authoritative for now
+- daemon update helpers call `DodModel.dodUpdate(msg)` directly
+- returned effects are DoD effects
+- config reload applies through `DodModel.applyConfig(config)`
+- live restore applies through `DodModel.applyLiveRestore(...)`
+- shell snapshots and live-restore reads are serialized from DoD
 
-This keeps update policy out of the daemon loop and gives the final DoD runtime
-promotion one aggregate seam to change when the live model becomes DoD-native.
-
-That seam is represented by `TriadRuntimePolicy`, stored on `TriadRuntimeState`.
-The daemon initializes `DodRuntimeAuthority` today, but the runtime-state facade
-only exposes DoD effects while shadow health is good and the message participates
-in effect parity checks. If an observed DoD runtime divergence is reported, the
-facade returns legacy effects for that pass and all later unhealthy passes.
-Config and IPC do not expose this policy yet; it is an internal promotion
-control.
+Legacy/shadow update sync helpers may remain temporarily under tests, but they
+are not imported by the production runtime facade.
 
 ## Config Application
 
@@ -289,49 +247,22 @@ runtime defaults as the legacy `Model` path, but writes into flattened DoD data:
 - live entities, placements, focus history, workspace history, restore buffers,
   and scratchpad state must be preserved
 
-This bridge lets config reload parity be proven before promoting `DodModel` to
-the canonical runtime state.
+Runtime config reload applies the parsed config directly to `DodModel`. Shell
+restarts, binding rebuilds, manage requests, and broadcasts stay in the daemon
+loop because they are side effects of accepting a config reload, not state
+transformation rules. Legacy config application remains in a legacy-only module
+for parity tests.
 
-Runtime config reload uses the state application sync bridge. The bridge applies
-the config to the legacy companion model, applies the same config to DoD while
-shadow sync or DoD state authority is enabled, and compares the resulting state
-through the normal DoD shadow report path. Shell restarts, binding rebuilds,
-manage requests, and broadcasts stay in the daemon loop because they are side
-effects of accepting a config reload, not state transformation rules.
+Initial daemon startup creates an empty `DodModel`, applies config through the
+native DoD config path, ensures the active workspace, and stores that model as
+production runtime state.
 
-Initial daemon startup uses the same bridge boundary. The startup helper builds
-the live legacy model from a fresh seed, builds the DoD shadow from an
-unconfigured seed, applies config through both native paths, and reports parity
-before projection reads are trusted. This keeps startup from treating a
-configured legacy-to-DoD adapter conversion as proof that DoD config application
-works.
-
-Live-restore application uses the same bridge style. DoD is the preferred state
-application authority while shadow health is good, and the legacy model remains
-the companion fallback. The DoD model applies `DodLiveRestoreState` derived from
-the same restore payload and reports parity before manage/render resumes.
+Live-restore application converts the parsed restore payload to
+`DodLiveRestoreState` and applies it directly to the DoD model before
+manage/render resumes.
 
 ## Shadow Runtime
 
-Before `DodModel` becomes the only physical runtime model, Triad keeps a DoD
-shadow model beside the legacy runtime:
-
-- legacy `Model` remains the fallback companion state
-- the shadow receives the same config, live-restore state, and message stream
-- shadow effects are compared for stable signatures and are executed for
-  parity-checked messages while shadow health is good
-- config reloads and live restore apply through DoD state authority while
-  shadow health is good
-- shell snapshots, focus history, workspace history, layout instructions, and
-  DoD invariants are checked after shadow steps
-- divergences are logged and throttled, never fatal to the live session
-
-This phase is intentionally incremental. It proves the reducer and runtime state
-boundaries under a live session before legacy storage is removed.
-
-Shadow health follows the same data/code split as other DoD state: health fields
-live in `types/dod_shadow_health.nim`, while report application, read fallback,
-and divergence throttle decisions live in `systems/dod_shadow_health.nim`.
-Runtime-state facade helpers own when those transitions are applied. Daemon code
-handles logging side effects from observation decisions but does not own the
-health transition policy.
+Shadow runtime modules are now non-production parity scaffolding. They compare
+legacy and DoD behavior for tests while the remaining legacy model, adapters,
+and lower-level parity tests are retired in later slices.

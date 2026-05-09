@@ -1,4 +1,4 @@
-from legacy_model import RenderInstruction
+from runtime_values import RenderInstruction
 
 type
   LayoutViewportTarget* = object

@@ -3,30 +3,30 @@ import ../layouts/scroller
 import ../layouts/tiling
 import ../state/engine
 import ../types/core as dod_core
-import ../types/legacy_model as legacy
 import ../types/layout_projection
+import ../types/runtime_values as rv
 
 proc externalWindowId(model: DodModel; winId: dod_core.WindowId):
-    legacy.WindowId =
+    rv.WindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
-    return legacy.WindowId(uint32(winOpt.get().externalId))
+    return rv.WindowId(uint32(winOpt.get().externalId))
   0'u32
 
-proc primaryScreen*(model: DodModel): legacy.Rect =
+proc primaryScreen*(model: DodModel): rv.Rect =
   if model.primaryOutput != NullOutputId:
     let outputOpt = model.outputData(model.primaryOutput)
     if outputOpt.isSome:
       let output = outputOpt.get()
       if output.hasUsable and output.usableW > 0 and output.usableH > 0:
-        return legacy.Rect(
+        return rv.Rect(
           x: output.usableX,
           y: output.usableY,
           w: output.usableW,
           h: output.usableH)
-      return legacy.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+      return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
 
-  legacy.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
+  rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
 proc activeFocus*(model: DodModel): dod_core.WindowId =
   if model.isScratchpadVisible:
@@ -42,9 +42,9 @@ proc activeFocus*(model: DodModel): dod_core.WindowId =
   NullWindowId
 
 proc legacyWindowTable(
-    model: DodModel): Table[legacy.WindowId, legacy.WindowData] =
+    model: DodModel): Table[rv.WindowId, rv.WindowData] =
   for winId, win in model.windowsWithId():
-    result[model.externalWindowId(winId)] = legacy.WindowData(
+    result[model.externalWindowId(winId)] = rv.WindowData(
       id: model.externalWindowId(winId),
       title: win.title,
       appId: win.appId,
@@ -55,7 +55,7 @@ proc legacyWindowTable(
       isMaximized: win.isMaximized,
       isMinimized: win.isMinimized,
       fullscreenOutput: uint32(win.fullscreenOutput),
-      parentId: legacy.WindowId(uint32(win.parentExternalId)),
+      parentId: rv.WindowId(uint32(win.parentExternalId)),
       identifier: win.identifier,
       actualW: win.actualW,
       actualH: win.actualH,
@@ -72,14 +72,14 @@ proc legacyWindowTable(
       keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass)
 
 proc projectedTag(model: DodModel; tagId: dod_core.TagId):
-    tuple[found: bool, tag: legacy.TagState] =
+    tuple[found: bool, tag: rv.TagState] =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
-    return (false, legacy.TagState())
+    return (false, rv.TagState())
 
   let tag = tagOpt.get()
   result.found = true
-  result.tag = legacy.TagState(
+  result.tag = rv.TagState(
     tagId: tag.slot,
     name: tag.name,
     layoutMode: tag.layoutMode,
@@ -92,47 +92,47 @@ proc projectedTag(model: DodModel; tagId: dod_core.TagId):
     masterSplitRatio: tag.masterSplitRatio)
 
   for _, column in model.columnsOnTagWithId(tagId):
-    var windows: seq[legacy.WindowId] = @[]
+    var windows: seq[rv.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(column.id):
       if not win.isFloating and not win.isMinimized and
           not model.windowHiddenByGroup(winId):
         windows.add(model.externalWindowId(winId))
     if windows.len > 0:
-      result.tag.columns.add(legacy.Column(
+      result.tag.columns.add(rv.Column(
         windows: windows,
         widthProportion: column.widthProportion))
 
 proc layoutForTag(
-    tag: var legacy.TagState;
-    windows: Table[legacy.WindowId, legacy.WindowData]; screen: legacy.Rect;
+    tag: var rv.TagState;
+    windows: Table[rv.WindowId, rv.WindowData]; screen: rv.Rect;
     outerGap, innerGap: int32; focusCenter, preferCenter: bool;
-    centerMode: string): seq[legacy.RenderInstruction] =
+    centerMode: string): seq[rv.RenderInstruction] =
   case tag.layoutMode
-  of legacy.Scroller:
+  of rv.Scroller:
     layoutScroller(
       tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter,
       centerMode)
-  of legacy.VerticalScroller:
+  of rv.VerticalScroller:
     layoutVerticalScroller(
       tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter,
       centerMode)
-  of legacy.MasterStack:
+  of rv.MasterStack:
     layoutMasterStack(tag, screen, outerGap, innerGap)
-  of legacy.Grid:
+  of rv.Grid:
     layoutGrid(tag, screen, outerGap, innerGap)
-  of legacy.Monocle:
+  of rv.Monocle:
     layoutMonocle(tag, screen, outerGap)
-  of legacy.Deck:
+  of rv.Deck:
     layoutDeck(tag, screen, outerGap, innerGap)
-  of legacy.CenterTile:
+  of rv.CenterTile:
     layoutCenterTile(tag, screen, outerGap, innerGap)
-  of legacy.RightTile:
+  of rv.RightTile:
     layoutRightTile(tag, screen, outerGap, innerGap)
-  of legacy.VerticalTile:
+  of rv.VerticalTile:
     layoutVerticalMasterStack(tag, screen, outerGap, innerGap)
-  of legacy.VerticalGrid:
+  of rv.VerticalGrid:
     layoutVerticalGrid(tag, screen, outerGap, innerGap)
-  of legacy.VerticalDeck:
+  of rv.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
 
 proc layoutProjection*(model: DodModel): LayoutProjection =
@@ -140,7 +140,7 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
   let windows = model.legacyWindowTable()
 
   if model.overviewActive:
-    var overviewTag = legacy.TagState(tagId: 0, layoutMode: legacy.Grid)
+    var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.Grid)
     var slots = model.sortedSlots()
     slots.sort()
     for slot in slots:
@@ -149,7 +149,7 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
         continue
       for winId, win in model.windowsOnTagWithId(tagId):
         if not win.isMinimized:
-          overviewTag.columns.add(legacy.Column(
+          overviewTag.columns.add(rv.Column(
             windows: @[model.externalWindowId(winId)],
             widthProportion: 1.0))
     result.instructions = layoutGrid(
@@ -195,7 +195,7 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
 
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if win.isFloating and not win.isMinimized:
-      result.instructions.add(legacy.RenderInstruction(
+      result.instructions.add(rv.RenderInstruction(
         windowId: model.externalWindowId(winId),
         geom: win.floatingGeom))
 
@@ -208,9 +208,9 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
     if model.windowData(winId).isSome:
       let sw = int32(float32(screen.w) * model.dodScratchpadWidthRatio())
       let sh = int32(float32(screen.h) * model.dodScratchpadHeightRatio())
-      result.instructions.add(legacy.RenderInstruction(
+      result.instructions.add(rv.RenderInstruction(
         windowId: model.externalWindowId(winId),
-        geom: legacy.Rect(
+        geom: rv.Rect(
           x: screen.x + (screen.w - sw) div 2,
           y: screen.y + (screen.h - sh) div 2,
           w: sw,
@@ -221,7 +221,7 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
   if focusedOpt.isSome:
     let win = focusedOpt.get()
     if win.isFullscreen or win.isMaximized:
-      result.instructions = @[legacy.RenderInstruction(
+      result.instructions = @[rv.RenderInstruction(
         windowId: model.externalWindowId(focused),
         geom: screen)]
 
@@ -232,7 +232,7 @@ proc applyLayoutProjection*(model: var DodModel; projection: LayoutProjection) =
       discard model.setTagViewportTarget(tagId, target.targetX, target.targetY)
 
 proc dodLayoutInstructions*(model: var DodModel):
-    seq[legacy.RenderInstruction] =
+    seq[rv.RenderInstruction] =
   let projection = model.layoutProjection()
   model.applyLayoutProjection(projection)
   projection.instructions

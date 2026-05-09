@@ -2,24 +2,25 @@ import options
 import dod_iterators
 import dod_queries
 import ../core/defaults
-import ../types/core except Rect
+import ../types/core
 import ../types/dod_model
 import ../types/shell_snapshot
-from ../types/legacy_model import nil
+from ../types/runtime_values import nil
 
-proc externalWindowId(model: DodModel; winId: WindowId): legacy_model.WindowId =
+proc externalWindowId(model: DodModel; winId: WindowId):
+    runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
-    return legacy_model.WindowId(uint32(winOpt.get().externalId))
+    return runtime_values.WindowId(uint32(winOpt.get().externalId))
   0'u32
 
 proc shellColumns(model: DodModel; tagId: TagId): seq[ShellColumn] =
   var idx = 0'u32
   for columnId, column in model.columnsOnTagWithId(tagId):
     inc idx
-    var windows: seq[legacy_model.WindowId] = @[]
+    var windows: seq[runtime_values.WindowId] = @[]
     for winId, _ in model.windowsOnColumnWithId(columnId):
       windows.add(model.externalWindowId(winId))
     result.add(ShellColumn(
@@ -50,8 +51,9 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
       model.layoutCycle
     else:
       @[
-        legacy_model.Scroller, legacy_model.MasterStack, legacy_model.Grid,
-        legacy_model.Monocle, legacy_model.VerticalScroller
+        runtime_values.Scroller, runtime_values.MasterStack,
+        runtime_values.Grid, runtime_values.Monocle,
+        runtime_values.VerticalScroller
       ]
 
   for idx, slot in model.visibleWorkspaceSlots():
@@ -60,7 +62,7 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
       if tagId != NullTagId: model.tagData(tagId) else: none(TagData)
     let tag =
       if tagOpt.isSome: tagOpt.get()
-      else: TagData(slot: slot, layoutMode: legacy_model.Scroller,
+      else: TagData(slot: slot, layoutMode: runtime_values.Scroller,
         masterCount: model.snapshotDefaultMasterCount(),
         masterSplitRatio: model.snapshotDefaultMasterRatio())
 
@@ -92,7 +94,7 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
     let focused =
       tagOpt.isSome and tagOpt.get().focusedWindow == winId
     result.windows.add(ShellWindow(
-      id: legacy_model.WindowId(uint32(win.externalId)),
+      id: runtime_values.WindowId(uint32(win.externalId)),
       title: win.title,
       appId: win.appId,
       tagId: if pos.found: some(pos.slot) else: none(uint32),

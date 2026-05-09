@@ -2,7 +2,7 @@ import options
 import dod_focus
 import dod_workspaces
 import ../state/engine
-from ../types/legacy_model import LayoutMode, MasterStack, Scroller,
+from ../types/runtime_values import LayoutMode, MasterStack, Scroller,
   VerticalScroller
 
 proc focusedPosition(model: var DodModel):

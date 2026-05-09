@@ -3,7 +3,7 @@ import engine
 import ../core/restore_state
 import ../types/core as dod_core
 import ../types/dod_model as dod_model
-import ../types/legacy_model as legacy
+import ../types/runtime_values as legacy
 
 proc legacyWindowId(win: dod_model.WindowData): legacy.WindowId =
   legacy.WindowId(uint32(win.externalId))

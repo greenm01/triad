@@ -3,6 +3,7 @@ import ../src/config/dod_apply
 import ../src/config/parser
 import ../src/config/defaults
 import ../src/config/keysyms
+import ../src/config/legacy_apply
 import ../src/config/reload_policy
 import ../src/core/model
 import ../src/core/model_utils

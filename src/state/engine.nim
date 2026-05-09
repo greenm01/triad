@@ -10,7 +10,7 @@ import ../entities/dod_ops
 import ../types/core
 import ../types/dod_model
 import ../types/shell_snapshot
-from ../types/legacy_model import Grid, LayoutMode, MasterStack, Monocle,
+from ../types/runtime_values import Grid, LayoutMode, MasterStack, Monocle,
   Scroller, VerticalScroller
 
 export defaults

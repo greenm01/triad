@@ -1,8 +1,8 @@
 import os, posix, strtabs, strutils
 import shell_overlay
 import socket
-import ../core/model
 import ../core/xdg
+import ../types/runtime_values
 
 type
   QuickshellCompatEnv* = object

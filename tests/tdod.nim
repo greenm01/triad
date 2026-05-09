@@ -1072,6 +1072,31 @@ suite "DOD state primitives":
     check not source.contains("dod_shadow_health")
     check not source.contains("dod_shadow_runtime")
 
+  test "production DOD value users avoid legacy model imports":
+    let files = [
+      "src/types/dod_model.nim",
+      "src/types/layout_projection.nim",
+      "src/types/shell_snapshot.nim",
+      "src/config/parser.nim",
+      "src/config/dod_apply.nim",
+      "src/core/msg.nim",
+      "src/core/effects.nim",
+      "src/core/render_visibility.nim",
+      "src/ipc/commands.nim",
+      "src/ipc/quickshell_compat.nim",
+      "src/layouts/scroller.nim",
+      "src/layouts/tiling.nim",
+      "src/systems/dod_daemon_view.nim",
+      "src/systems/dod_layout.nim",
+      "src/systems/dod_update_effects.nim",
+      "src/triad.nim"
+    ]
+    for path in files:
+      let source = readFile(path)
+      check not source.contains("types/legacy_model")
+      check not source.contains("../core/model")
+      check not source.contains("import model")
+
   test "DOD update orchestrates domain reducers only":
     let source = readFile("src/systems/dod_update.nim")
     let forbiddenImports = [

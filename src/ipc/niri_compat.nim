@@ -2,7 +2,7 @@ import json, options, strutils
 import ../core/msg
 import ../core/niri_state
 import ../types/shell_snapshot
-from ../types/legacy_model import DirDown, DirLeft, DirRight, DirUp, WindowId
+from ../types/runtime_values import DirDown, DirLeft, DirRight, DirUp, WindowId
 
 type
   NiriIpcResult* = object

@@ -3,9 +3,9 @@ import parser
 import defaults
 import ../state/engine
 import ../systems/dod_workspaces
-import ../types/legacy_model as legacy
+import ../types/runtime_values as rv
 
-proc dodWindowRule(rule: legacy.WindowRule): WindowRuleData =
+proc dodWindowRule(rule: rv.WindowRule): WindowRuleData =
   WindowRuleData(
     appIdMatch: rule.appIdMatch,
     titleMatch: rule.titleMatch,
@@ -15,7 +15,7 @@ proc dodWindowRule(rule: legacy.WindowRule): WindowRuleData =
     forcedLayout: rule.forcedLayout
   )
 
-proc dodTagRule(rule: legacy.TagRule): TagRuleData =
+proc dodTagRule(rule: rv.TagRule): TagRuleData =
   TagRuleData(
     slot: rule.tagId,
     name: rule.name,

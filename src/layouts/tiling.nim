@@ -1,4 +1,5 @@
-import ../core/model, math
+import math
+import ../types/runtime_values
 
 proc flattenTag(tag: TagState): seq[WindowId] =
   for col in tag.columns:

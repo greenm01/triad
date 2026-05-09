@@ -26,8 +26,8 @@ import utils/terminal
 import utils/runtime_log
 import utils/session_env
 import utils/wayland_runtime
-from types/legacy_model import nil
-from types/legacy_model import BindAlways, BindNormal, BindOverview,
+from types/runtime_values import nil
+from types/runtime_values import BindAlways, BindNormal, BindOverview,
   BindingMode, KeyBindingConfig, OpNone, PointerBindingConfig, PointerOpKind,
   PresentationAsync, PresentationDefault, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
@@ -1242,7 +1242,7 @@ proc executeEffect(eff: Effect) =
     discard
 
 # Mapping from logical IDs to window metadata for late creation
-var pendingWindows: Table[WindowId, legacy_model.WindowData]
+var pendingWindows: Table[WindowId, runtime_values.WindowData]
 
 # --- RiverWindowV1 Callbacks ---
 
@@ -1538,7 +1538,7 @@ proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindo
   windowPointers[id] = win
   windowNodes[id] = win.getNode()
   # Start tracking as pending until we get metadata or manage starts
-  pendingWindows[id] = legacy_model.WindowData(
+  pendingWindows[id] = runtime_values.WindowData(
     id: id, appId: "unknown", title: "unknown")
   discard win.addListener(window_listener.addr, nil)
 
