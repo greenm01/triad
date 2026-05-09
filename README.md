@@ -7,8 +7,8 @@ Triad is a dynamic window management client for the River 0.4+ compositor. It is
 Triad draws its architectural harmony from three distinct inspirations—each contributing a vital note to form a complete chord:
 
 *   **The Root (The River Protocol):** A lean, principled Wayland compositor that provides the rock-solid foundation for Triad's tag-based workspace model.
-*   **The Major Third (Mango):** Triad adopts Mango's per-workspace hybrid tiling algorithms, giving the window manager its distinct, flexible shape.
-*   **The Perfect Fifth (Niri & Quickshell):** Triad natively speaks Niri's JSON IPC language, enabling seamless integration with the rich, Qt-based Quickshell ecosystem (like Noctalia or Dank Material Shell) without the need for custom forks.
+*   **The Major Third (Mango WM):** Triad adopts Mango's hybrid layout model and window tagging methodology. DWM is the grandaddy.
+*   **The Perfect Fifth (Quickshell):** Triad natively speaks Niri WM's JSON IPC language, enabling seamless integration with the rich, Qt-based Quickshell ecosystem (like Noctalia or Dank Material Shell) without the need for custom forks.
 
 Three distinct philosophies, orchestrated by one independent manager to hold them perfectly in tune.
 
