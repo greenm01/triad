@@ -29,6 +29,7 @@ import ../src/systems/dod_update
 import ../src/systems/dod_window_lifecycle
 import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
+import ../src/systems/layout_projection_sync
 import ../src/systems/layout_state
 import ../src/types/core
 import ../src/types/dod_model
@@ -136,6 +137,23 @@ proc checkLayoutProjectionParity(source: legacy_model.Model) =
   legacyApplied.applyLayoutProjection(legacyProjection)
   dodApplied.applyLayoutProjection(dodProjection)
   check dodShellSnapshot(dodApplied) == shellSnapshot(legacyApplied)
+
+proc checkLayoutProjectionSync(source: legacy_model.Model) =
+  var legacyModel = source
+  var dod = source.dodFromLegacy()
+
+  var expectedLegacy = source
+  let expectedInstructions = expectedLegacy.layoutInstructions()
+
+  let report = syncLayoutProjection(legacyModel, dod, syncShadow = true)
+  check report.ok
+  check report.shadowChecked
+  check report.legacyProjection.instructions == expectedInstructions
+  check report.dodProjection.instructions == report.legacyProjection.instructions
+  check report.dodProjection.viewportTargets ==
+    report.legacyProjection.viewportTargets
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  check shellSnapshot(legacyModel) == shellSnapshot(expectedLegacy)
 
 proc checkFocusParity(
     source: legacy_model.Model; msg: core_msg.Msg;
@@ -1183,6 +1201,34 @@ suite "DOD state primitives":
 
   test "DOD explicit vertical scroller projection matches viewport writes":
     checkLayoutProjectionParity(dynamicParityModel())
+
+  test "DOD runtime layout projection sync updates legacy and shadow":
+    checkLayoutProjectionSync(scrollerLayoutModel())
+    checkLayoutProjectionSync(dynamicParityModel())
+
+  test "DOD runtime layout projection sync can skip shadow mutation":
+    var legacyModel = scrollerLayoutModel()
+    var dod = legacyModel.dodFromLegacy()
+    let originalDod = dod
+
+    let report = syncLayoutProjection(legacyModel, dod, syncShadow = false)
+    check report.ok
+    check not report.shadowChecked
+    check dod == originalDod
+    check report.legacyProjection.viewportTargets.len == 1
+    check legacyModel.tags[1].targetViewportXOffset ==
+      report.legacyProjection.viewportTargets[0].targetX
+
+  test "DOD runtime layout projection sync reports mismatches":
+    var legacyModel = scrollerLayoutModel()
+    var dod = legacyModel.dodFromLegacy()
+    dod.outerGaps = legacyModel.outerGaps + 17
+
+    let report = syncLayoutProjection(legacyModel, dod, syncShadow = true)
+    check not report.ok
+    check report.shadowChecked
+    check report.errors.contains("layout instructions mismatch")
+    check report.legacyProjection.instructions == legacyModel.layoutProjection().instructions
 
   test "DOD layout projection matches floating windows":
     checkLayoutParity(floatingLayoutModel())

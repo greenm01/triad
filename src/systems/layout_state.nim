@@ -144,10 +144,11 @@ proc layoutProjection*(model: Model): LayoutProjection =
       model.scrollerFocusCenter,
       model.scrollerPreferCenter,
       model.centerFocusedColumn)
-    result.viewportTargets.add(LayoutViewportTarget(
-      tagSlot: model.activeTag,
-      targetX: tagForLayout.targetViewportXOffset,
-      targetY: tagForLayout.targetViewportYOffset))
+    if tagForLayout.columns.len > 0:
+      result.viewportTargets.add(LayoutViewportTarget(
+        tagSlot: model.activeTag,
+        targetX: tagForLayout.targetViewportXOffset,
+        targetY: tagForLayout.targetViewportYOffset))
 
     for col in tag.columns:
       for winId in col.windows:

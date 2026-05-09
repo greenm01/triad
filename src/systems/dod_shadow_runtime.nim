@@ -128,11 +128,14 @@ proc compareShadowState*(
     result.errors.add("workspace history mismatch")
 
   if msg.kind.shouldCheckLayoutParity(legacyEffects):
-    var legacyLayout = legacyModel
-    var shadowLayout = shadow
-    if legacyLayout.layoutInstructions() != shadowLayout.dodLayoutInstructions():
+    let legacyProjection = legacyModel.layoutProjection()
+    let shadowProjection = shadow.layoutProjection()
+    if legacyProjection.instructions != shadowProjection.instructions:
       result.ok = false
       result.errors.add("layout instructions mismatch")
+    if legacyProjection.viewportTargets != shadowProjection.viewportTargets:
+      result.ok = false
+      result.errors.add("layout viewport targets mismatch")
 
   result.effectParityChecked = msg.kind.shouldCheckEffectParity()
   if result.effectParityChecked:

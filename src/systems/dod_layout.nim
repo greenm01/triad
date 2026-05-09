@@ -186,10 +186,11 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
     model.scrollerFocusCenter,
     model.scrollerPreferCenter,
     model.centerFocusedColumn)
-  result.viewportTargets.add(LayoutViewportTarget(
-    tagSlot: projected.tag.tagId,
-    targetX: tagForLayout.targetViewportXOffset,
-    targetY: tagForLayout.targetViewportYOffset))
+  if tagForLayout.columns.len > 0:
+    result.viewportTargets.add(LayoutViewportTarget(
+      tagSlot: projected.tag.tagId,
+      targetX: tagForLayout.targetViewportXOffset,
+      targetY: tagForLayout.targetViewportYOffset))
 
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if win.isFloating and not win.isMinimized:

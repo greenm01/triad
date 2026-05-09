@@ -19,6 +19,7 @@ import state/dod_snapshot
 from types/dod_model import DodModel
 import systems/dod_shadow_runtime
 from systems/dod_window_lifecycle import applyLiveRestore
+import systems/layout_projection_sync
 import systems/layout_state
 import config/parser
 import config/defaults
@@ -194,6 +195,15 @@ proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
     writeDodLiveRestoreState(shadowModel)
   else:
     writeLiveRestoreState(currentModel)
+
+proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstruction] =
+  let report = syncLayoutProjection(
+    currentModel, shadowModel, shadowInitialized)
+  if shadowInitialized and not report.ok:
+    logShadowReport(context, msg, DodShadowReport(
+      ok: false,
+      errors: report.errors))
+  report.legacyProjection.instructions
 
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:
@@ -1765,7 +1775,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     if msg.kind == WlManageStart:
       riverPhase = RiverManage
-      let instructions = currentModel.layoutInstructions()
+      let instructions = syncRuntimeLayoutProjection("manage layout", msg)
       proposeDesiredDimensions(instructions)
       applyManageState()
       flushPendingManageEffects()
@@ -1780,7 +1790,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
     if msg.kind == WlRenderStart:
       riverPhase = RiverRender
       if desiredPlacements.len == 0:
-        let instructions = currentModel.layoutInstructions()
+        let instructions = syncRuntimeLayoutProjection("render layout", msg)
         for instr in instructions:
           desiredPlacements[instr.windowId] = instr.geom
       renderDesiredPlacements()

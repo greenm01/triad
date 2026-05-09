@@ -195,6 +195,27 @@ Rules:
 
 Shell integrations must serialize snapshots, not internal storage.
 
+Triad currently runs DoD as the preferred read projection while legacy remains
+the live reducer and River placement authority. IPC and live-restore reads use
+the shadow `DodModel` while shadow parity is healthy. On the first divergence,
+the runtime disables DoD projection reads and falls back to legacy projections
+for the rest of the process.
+
+## Layout Projection
+
+Layout computation is split into pure projection and explicit writes:
+
+- `LayoutProjection.instructions` is the River-facing placement output.
+- `LayoutProjection.viewportTargets` records scroller viewport target updates.
+- projection builders must not mutate their input models.
+- compatibility wrappers apply viewport targets and return instructions.
+
+During the shadow phase, runtime manage/render layout still returns legacy
+instructions to River. The layout sync bridge computes both legacy and DoD
+projections, applies each model's own viewport targets, and reports projection
+mismatches through the shadow divergence path. This keeps DoD snapshots current
+without making DoD placement authoritative yet.
+
 ## Config Application
 
 `DodModel` has a native config application path. It uses the same normalized
