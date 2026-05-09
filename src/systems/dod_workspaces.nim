@@ -22,7 +22,10 @@ proc ensureWorkspaceSlot*(model: var DodModel; slot: uint32): TagId =
   result = model.tagForSlot(slot)
   if result != NullTagId:
     return result
-  result = model.addTag(slot)
+  result = model.addTag(
+    slot = slot,
+    masterCount = model.dodDefaultMasterCount(),
+    masterSplitRatio = model.dodDefaultMasterRatio())
 
 proc computedVisibleWorkspaceSlots*(model: DodModel): seq[uint32] =
   let defaultCount = model.defaultWorkspaceCount()

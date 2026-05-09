@@ -701,9 +701,16 @@ proc destroyWindowForExternal*(
     model.focusedOnActiveTag() == winId or
     (model.tag(model.activeTag).isSome and
       model.tag(model.activeTag).get().focusedWindow == winId)
+  var affectedTags: seq[TagId] = @[]
+  for tagId, placementWinId, _ in model.placementsWithId():
+    if placementWinId == winId and affectedTags.find(tagId) == -1:
+      affectedTags.add(tagId)
   if not model.destroyWindow(winId):
     return false
   model.pruneScratchpads()
+  for tagId in affectedTags:
+    if not closedWasFocused or tagId != model.activeTag:
+      discard model.recomputeVisibleFocus(tagId)
 
   if closedWasFocused:
     if not model.focusMostRecentWindow():

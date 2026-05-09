@@ -1,4 +1,4 @@
-import json, options, sequtils, strutils, tables
+import algorithm, json, options, sequtils, strutils, tables
 import unittest
 import ../src/core/effects
 import ../src/core/msg as core_msg
@@ -201,6 +201,107 @@ proc containsFullscreenEffect(effects: seq[Effect];
         (not fullscreen or effect.fsOutputId == outputId):
       return true
   false
+
+proc effectSignature(effect: Effect; msg: core_msg.Msg): string =
+  case effect.kind
+  of EffBroadcastJson, EffBroadcastTriadJson, EffManageDirty, EffLog, EffNone:
+    ""
+  of EffFocusWindow:
+    ""
+  of EffSetPosition:
+    $effect.kind & ":" & $effect.windowId & ":" & $effect.x & ":" &
+      $effect.y & ":" & $effect.w & ":" & $effect.h
+  of EffFocusShellSurface:
+    $effect.kind & ":" & $effect.focusShellSurfaceId
+  of EffCloseWindow:
+    $effect.kind & ":" & $effect.closeId
+  of EffOpStartPointer:
+    $effect.kind
+  of EffOpEnd:
+    $effect.kind
+  of EffSetFullscreen:
+    $effect.kind & ":" & $effect.fsWinId & ":" & $effect.isFullscreen &
+      ":" & $effect.fsOutputId
+  of EffSetMaximized:
+    $effect.kind & ":" & $effect.maxWinId & ":" & $effect.isMaximized
+  of EffInformResizeStart, EffInformResizeEnd:
+    $effect.kind & ":" & $effect.resizeLifecycleWinId
+  of EffSpawnScreenLock:
+    $effect.kind & ":" & effect.screenLockCommand.join("\0")
+  of EffSpawnWindowMenu:
+    $effect.kind & ":" & effect.windowMenuCommand.join("\0") & ":" &
+      $effect.windowMenuId & ":" & $effect.windowMenuX & ":" &
+      $effect.windowMenuY
+  of EffSpawn:
+    $effect.kind & ":" & effect.spawnCommand.join("\0")
+  of EffPointerWarp:
+    $effect.kind & ":" & $effect.warpX & ":" & $effect.warpY
+  of EffScreenshot:
+    $effect.kind & ":" & $effect.screenshotKind & ":" &
+      effect.screenshotPath & ":" & $effect.screenshotShowPointer
+  else:
+    $effect.kind
+
+proc stableEffectSignatures(
+    effects: seq[Effect]; msg: core_msg.Msg): seq[string] =
+  for effect in effects:
+    let signature = effect.effectSignature(msg)
+    if signature.len > 0:
+      result.add(signature)
+  result.sort()
+
+proc checkEffectParity(
+    msg: core_msg.Msg; legacyEffects, dodEffects: seq[Effect]) =
+  check dodEffects.stableEffectSignatures(msg) ==
+    legacyEffects.stableEffectSignatures(msg)
+
+proc checkShadowStateParity(legacyModel: legacy_model.Model; dod: DodModel) =
+  var checkedDod = dod
+  checkedDod.refreshVisibleWorkspaceSlots()
+
+  check checkedDod.validateInvariants().ok
+  check dodShellSnapshot(checkedDod) == shellSnapshot(legacyModel)
+  check checkedDod.dodFocusHistory() == legacyModel.focusHistory
+  check checkedDod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+  checkRuntimeParity(legacyModel, checkedDod)
+
+  var legacyLayout = legacyModel
+  var dodLayout = checkedDod
+  check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
+
+proc checkShadowTrace(
+    seed: legacy_model.Model; messages: openArray[core_msg.Msg]) =
+  var legacyModel = seed
+  var dod = seed.dodFromLegacy()
+
+  checkShadowStateParity(legacyModel, dod)
+  for msg in messages:
+    var legacyEffects: seq[Effect]
+    (legacyModel, legacyEffects) = legacy_update.update(legacyModel, msg)
+    let (nextDod, dodEffects) = dod.dodUpdate(msg)
+    dod = nextDod
+
+    checkShadowStateParity(legacyModel, dod)
+    checkEffectParity(msg, legacyEffects, dodEffects)
+
+proc checkShadowTraceAfterRestore(
+    seed: legacy_model.Model; restored: LiveRestoreState;
+    messages: openArray[core_msg.Msg]) =
+  var legacyModel = seed
+  legacyModel.applyLiveRestore(restored)
+
+  var dod = seed.dodFromLegacy()
+  dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+  checkShadowStateParity(legacyModel, dod)
+  for msg in messages:
+    var legacyEffects: seq[Effect]
+    (legacyModel, legacyEffects) = legacy_update.update(legacyModel, msg)
+    let (nextDod, dodEffects) = dod.dodUpdate(msg)
+    dod = nextDod
+
+    checkShadowStateParity(legacyModel, dod)
+    checkEffectParity(msg, legacyEffects, dodEffects)
 
 proc checkRestoredStateParity(
     legacyModel: legacy_model.Model; dod: var DodModel) =
@@ -2017,3 +2118,134 @@ suite "DOD state primitives":
         screenshotKind: core_msg.ShotScreen, screenshotPath: "/tmp/shot.png",
         screenshotShowPointer: true))
     check result.effects.containsEffect(EffScreenshot)
+
+  test "DOD shadow trace follows lifecycle and focus history":
+    checkShadowTrace(
+      lifecycleParityModel(),
+      @[
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 30,
+          appId: "kitty",
+          title: "shell",
+          createdIdentifier: "kitty-30"),
+        core_msg.Msg(kind: core_msg.WlFocusChanged, newFocusedId: 20),
+        core_msg.Msg(kind: core_msg.CmdFocusLast),
+        core_msg.Msg(
+          kind: core_msg.WlWindowTitle,
+          titleWindowId: 30,
+          updatedTitle: "shell - tests"),
+        core_msg.Msg(
+          kind: core_msg.WlWindowDimensions,
+          dimensionsWindowId: 30,
+          actualWidth: 1000,
+          actualHeight: 720),
+        core_msg.Msg(kind: core_msg.CmdToggleMaximized),
+        core_msg.Msg(kind: core_msg.WlWindowDestroyed, destroyedId: 30),
+        core_msg.Msg(kind: core_msg.CmdFocusLast)
+      ])
+
+  test "DOD shadow trace follows dynamic workspace growth":
+    checkShadowTrace(
+      lifecycleParityModel(),
+      @[
+        core_msg.Msg(
+          kind: core_msg.CmdFocusWorkspaceIndex,
+          workspaceIndex: 4),
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 40,
+          appId: "alacritty",
+          title: "workspace four"),
+        core_msg.Msg(
+          kind: core_msg.CmdFocusWorkspaceIndex,
+          workspaceIndex: 5),
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 50,
+          appId: "brave",
+          title: "workspace five"),
+        core_msg.Msg(
+          kind: core_msg.CmdFocusWorkspaceIndex,
+          workspaceIndex: 4),
+        core_msg.Msg(
+          kind: core_msg.CmdFocusWorkspaceIndex,
+          workspaceIndex: 1)
+      ])
+
+  test "DOD shadow trace follows movement and state toggles":
+    checkShadowTrace(
+      placementParityModel(),
+      @[
+        core_msg.Msg(kind: core_msg.CmdFocusNext),
+        core_msg.Msg(kind: core_msg.CmdMoveWindowRight),
+        core_msg.Msg(kind: core_msg.CmdFocusLast),
+        core_msg.Msg(kind: core_msg.CmdToggleKeyboardShortcutsInhibit)
+      ])
+
+  test "DOD shadow trace follows outputs pointer and effect commands":
+    checkShadowTrace(
+      effectRuntimeModel(),
+      @[
+        core_msg.Msg(
+          kind: core_msg.WlOutputDimensions,
+          outputId: 44,
+          width: 1600,
+          height: 900),
+        core_msg.Msg(
+          kind: core_msg.WlOutputName,
+          nameOutputId: 44,
+          outputName: "HDMI-A-2"),
+        core_msg.Msg(
+          kind: core_msg.WlOutputPosition,
+          positionOutputId: 44,
+          outputX: 1200,
+          outputY: 0),
+        core_msg.Msg(
+          kind: core_msg.WlPointerMoveRequested,
+          moveWinId: 10,
+          moveSeat: nil),
+        core_msg.Msg(kind: core_msg.WlPointerDelta, dx: 24, dy: -12),
+        core_msg.Msg(kind: core_msg.WlPointerRelease),
+        core_msg.Msg(kind: core_msg.CmdConfigReload),
+        core_msg.Msg(kind: core_msg.CmdTriadReload),
+        core_msg.Msg(kind: core_msg.CmdSpawn, spawnCommand: @["foot"]),
+        core_msg.Msg(kind: core_msg.CmdLockSession),
+        core_msg.Msg(kind: core_msg.CmdWarpPointer, warpX: 10, warpY: 20),
+        core_msg.Msg(kind: core_msg.CmdScreenshot,
+          screenshotKind: core_msg.ShotScreen,
+          screenshotPath: "/tmp/shot.png",
+          screenshotShowPointer: true)
+      ])
+
+  test "DOD shadow trace follows restored windows by identity":
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 10)
+    restored.tags[1] = legacy_model.RestoredTagState(
+      tagId: 1,
+      layoutMode: legacy_model.Scroller,
+      focusedWindow: 10,
+      columns: @[
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(10)],
+          widthProportion: 0.35)
+      ])
+    restored.windows[10] = legacy_model.RestoredWindowState(
+      tagId: 1,
+      appId: "kitty-a",
+      title: "terminal-a",
+      widthProportion: 0.35,
+      heightProportion: 1.0,
+      isMaximized: true)
+
+    checkShadowTraceAfterRestore(
+      legacy_model.Model(activeTag: 1, screenWidth: 2000,
+        screenHeight: 1000),
+      restored,
+      @[
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 210,
+          appId: "kitty-a",
+          title: "terminal-a"),
+        core_msg.Msg(kind: core_msg.CmdFocusLast)
+      ])
