@@ -233,6 +233,13 @@ Runtime updates are also bridged explicitly during the shadow phase:
 This keeps update policy out of the daemon loop and gives the final DoD runtime
 promotion a single seam to change when DoD effects become authoritative.
 
+That seam is represented by an explicit runtime authority policy. The daemon
+uses `LegacyRuntimeAuthority` today, so `authoritativeEffects` are the legacy
+effects and live behavior is unchanged. Tests can select `DodRuntimeAuthority`
+to prove that the same bridge can return DoD effects as authoritative while
+still advancing legacy state for parity checks. Config and IPC do not expose
+this policy yet; it is an internal promotion control.
+
 ## Config Application
 
 `DodModel` has a native config application path. It uses the same normalized

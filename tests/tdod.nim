@@ -318,7 +318,12 @@ proc checkRuntimeUpdateSync(source: legacy_model.Model; msg: core_msg.Msg) =
     legacyModel, shadow, msg, syncShadow = true)
   check result.shadowChecked
   check result.shadowReport.ok
+  check result.authority == LegacyRuntimeAuthority
   check result.legacyEffects.stableEffectSignatures(msg) ==
+    expectedEffects.stableEffectSignatures(msg)
+  check result.authoritativeEffects.stableEffectSignatures(msg) ==
+    expectedEffects.stableEffectSignatures(msg)
+  check result.dodEffects.stableEffectSignatures(msg) ==
     expectedEffects.stableEffectSignatures(msg)
   check result.shadowReport.dodEffects.stableEffectSignatures(msg) ==
     expectedEffects.stableEffectSignatures(msg)
@@ -2464,6 +2469,31 @@ suite "DOD state primitives":
       stateParityModel(),
       core_msg.Msg(kind: core_msg.WlSessionLocked))
 
+  test "DOD runtime update sync can select DOD effects as authoritative":
+    var legacyModel = lifecycleParityModel()
+    var shadow = legacyModel.dodFromLegacy()
+    let msg = core_msg.Msg(
+      kind: core_msg.WlWindowCreated,
+      windowId: 30,
+      appId: "kitty",
+      title: "shell",
+      createdIdentifier: "kitty-30")
+
+    let result = syncRuntimeUpdate(
+      legacyModel,
+      shadow,
+      msg,
+      syncShadow = true,
+      authority = DodRuntimeAuthority)
+    check result.authority == DodRuntimeAuthority
+    check result.shadowChecked
+    check result.shadowReport.ok
+    check result.authoritativeEffects.stableEffectSignatures(msg) ==
+      result.dodEffects.stableEffectSignatures(msg)
+    check result.dodEffects.stableEffectSignatures(msg) ==
+      result.legacyEffects.stableEffectSignatures(msg)
+    check dodShellSnapshot(shadow) == shellSnapshot(legacyModel)
+
   test "DOD runtime update sync can skip shadow mutation":
     var legacyModel = lifecycleParityModel()
     var shadow = legacyModel.dodFromLegacy()
@@ -2481,6 +2511,8 @@ suite "DOD state primitives":
     check shadow == originalShadow
     check legacyModel.windows.hasKey(30)
     check result.legacyEffects.containsEffect(EffManageDirty)
+    check result.authoritativeEffects.containsEffect(EffManageDirty)
+    check result.dodEffects.len == 0
 
   test "DOD runtime update sync reports mismatches without changing effects":
     var legacyModel = lifecycleParityModel()
@@ -2494,6 +2526,8 @@ suite "DOD state primitives":
     check result.shadowChecked
     check not result.shadowReport.ok
     check result.legacyEffects.stableEffectSignatures(msg) ==
+      expectedEffects.stableEffectSignatures(msg)
+    check result.authoritativeEffects.stableEffectSignatures(msg) ==
       expectedEffects.stableEffectSignatures(msg)
 
   test "DOD runtime update sync handles shadow-only messages":
@@ -2509,6 +2543,26 @@ suite "DOD state primitives":
     check result.shadowChecked
     check result.shadowReport.ok
     check legacyModel == originalLegacy
+    check result.legacyEffects.len == 0
+    check result.authoritativeEffects.len == 0
+    check result.dodEffects.len > 0
+
+  test "DOD runtime shadow-only sync can expose DOD authoritative effects":
+    var legacyModel = effectRuntimeModel()
+    var shadow = legacyModel.dodFromLegacy()
+    let msg = core_msg.Msg(kind: core_msg.CmdSpawnTerminal)
+
+    let result = syncShadowOnlyMessage(
+      legacyModel,
+      shadow,
+      msg,
+      syncShadow = true,
+      authority = DodRuntimeAuthority)
+    check result.authority == DodRuntimeAuthority
+    check result.shadowChecked
+    check result.shadowReport.ok
+    check result.authoritativeEffects.stableEffectSignatures(msg) ==
+      result.dodEffects.stableEffectSignatures(msg)
 
   test "DOD shadow trace follows lifecycle and focus history":
     checkShadowTrace(

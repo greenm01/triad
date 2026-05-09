@@ -174,7 +174,7 @@ proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
     currentModel, shadowModel, msg, shadowInitialized)
   if syncResult.shadowChecked:
     logShadowReport(context, msg, syncResult.shadowReport)
-  syncResult.legacyEffects
+  syncResult.authoritativeEffects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
   let syncResult = syncShadowOnlyMessage(

@@ -3,34 +3,83 @@ import ../core/model
 import ../core/msg
 import ../core/update as legacy_update
 import ../types/dod_model
+import dod_update
 import dod_shadow_runtime
 
 type
+  RuntimeAuthority* = enum
+    LegacyRuntimeAuthority
+    DodRuntimeAuthority
+
   RuntimeUpdateSyncResult* = object
+    authority*: RuntimeAuthority
     legacyEffects*: seq[Effect]
+    dodEffects*: seq[Effect]
+    authoritativeEffects*: seq[Effect]
     shadowChecked*: bool
     shadowReport*: DodShadowReport
 
+proc okShadowReport(): DodShadowReport =
+  DodShadowReport(ok: true)
+
 proc syncRuntimeUpdate*(
     legacyModel: var Model; shadow: var DodModel; msg: Msg;
-    syncShadow: bool): RuntimeUpdateSyncResult =
+    syncShadow: bool;
+    authority = LegacyRuntimeAuthority): RuntimeUpdateSyncResult =
+  result.authority = authority
   let (nextLegacy, legacyEffects) = legacy_update.update(legacyModel, msg)
   legacyModel = nextLegacy
   result.legacyEffects = legacyEffects
 
+  if syncShadow or authority == DodRuntimeAuthority:
+    let (nextShadow, dodEffects) = shadow.dodUpdate(msg)
+    shadow = nextShadow
+    result.dodEffects = dodEffects
+    result.shadowReport.dodEffects = dodEffects
+
+  case authority
+  of LegacyRuntimeAuthority:
+    result.authoritativeEffects = legacyEffects
+  of DodRuntimeAuthority:
+    result.authoritativeEffects = result.dodEffects
+
   if not syncShadow:
-    result.shadowReport = DodShadowReport(ok: true)
+    result.shadowReport = okShadowReport()
+    result.shadowReport.dodEffects = result.dodEffects
     return
 
   result.shadowChecked = true
-  result.shadowReport = shadow.advanceShadow(legacyModel, msg, legacyEffects)
+  result.shadowReport = compareShadowState(legacyModel, shadow, msg,
+    legacyEffects, result.dodEffects)
+  result.shadowReport.dodEffects = result.dodEffects
 
 proc syncShadowOnlyMessage*(
     legacyModel: Model; shadow: var DodModel; msg: Msg;
-    syncShadow: bool): RuntimeUpdateSyncResult =
+    syncShadow: bool;
+    authority = LegacyRuntimeAuthority): RuntimeUpdateSyncResult =
+  result.authority = authority
+  let runDod = syncShadow or authority == DodRuntimeAuthority
+  if not runDod:
+    result.shadowReport = okShadowReport()
+    return
+
+  let (nextShadow, dodEffects) = shadow.dodUpdate(msg)
+  shadow = nextShadow
+  result.dodEffects = dodEffects
+  result.shadowReport.dodEffects = dodEffects
+
+  case authority
+  of LegacyRuntimeAuthority:
+    result.authoritativeEffects = @[]
+  of DodRuntimeAuthority:
+    result.authoritativeEffects = dodEffects
+
   if not syncShadow:
-    result.shadowReport = DodShadowReport(ok: true)
+    result.shadowReport = okShadowReport()
+    result.shadowReport.dodEffects = result.dodEffects
     return
 
   result.shadowChecked = true
-  result.shadowReport = shadow.advanceShadow(legacyModel, msg, @[])
+  result.shadowReport = compareShadowState(legacyModel, shadow, msg, @[],
+    dodEffects)
+  result.shadowReport.dodEffects = dodEffects
