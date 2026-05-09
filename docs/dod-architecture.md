@@ -262,6 +262,17 @@ runtime defaults as the legacy `Model` path, but writes into flattened DoD data:
 This bridge lets config reload parity be proven before promoting `DodModel` to
 the canonical runtime state.
 
+Runtime config reload uses the state application sync bridge. The bridge applies
+the config to the legacy model, applies the same config to the DoD shadow when
+shadow sync is enabled, and compares the resulting state through the normal DoD
+shadow report path. Shell restarts, binding rebuilds, manage requests, and
+broadcasts stay in the daemon loop because they are side effects of accepting a
+config reload, not state transformation rules.
+
+Live-restore application uses the same bridge style. The legacy model remains
+authoritative today, while the DoD shadow applies `DodLiveRestoreState` derived
+from the same restore payload and reports parity before manage/render resumes.
+
 ## Shadow Runtime
 
 Before `DodModel` becomes authoritative, Triad runs a diagnostic DoD shadow

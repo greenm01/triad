@@ -12,16 +12,15 @@ import core/restore_state
 import core/shell_state
 import core/niri_state
 import core/render_visibility
-import config/dod_apply
 import state/dod_adapter
 import state/dod_restore_state
 import state/dod_snapshot
 from types/dod_model import DodModel
 import systems/dod_shadow_runtime
-from systems/dod_window_lifecycle import applyLiveRestore
 import systems/layout_projection_sync
 import systems/layout_state
 import systems/runtime_update_sync
+import systems/state_application_sync
 import config/parser
 import config/defaults
 import config/keysyms
@@ -217,10 +216,11 @@ proc applyPendingLiveRestore() =
     return
 
   let state = pendingLiveRestore.get()
-  currentModel.applyLiveRestore(state)
-  if shadowInitialized:
-    shadowModel.applyLiveRestore(state.dodFromLiveRestore())
-    checkShadow("live restore", Msg(kind: WlManageStart))
+  let syncResult = syncLiveRestoreApplication(
+    currentModel, shadowModel, state, shadowInitialized)
+  if syncResult.shadowChecked:
+    logShadowReport("live restore", Msg(kind: WlManageStart),
+      syncResult.shadowReport)
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
@@ -368,10 +368,11 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
     return false
 
   let previousModel = currentModel
-  currentModel.applyConfig(loaded.config)
-  if shadowInitialized:
-    shadowModel.applyConfig(loaded.config)
-    checkShadow("config reload", Msg(kind: CmdConfigReload))
+  let syncResult = syncConfigApplication(
+    currentModel, shadowModel, loaded.config, shadowInitialized)
+  if syncResult.shadowChecked:
+    logShadowReport("config reload", Msg(kind: CmdConfigReload),
+      syncResult.shadowReport)
   quickshellSpawnPending = false
 
   if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):

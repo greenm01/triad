@@ -1,5 +1,6 @@
 import algorithm, json, options, os, sequtils, strutils, tables
 import unittest
+import ../src/config/parser as config_parser
 import ../src/core/effects
 import ../src/core/msg as core_msg
 import ../src/core/model_utils
@@ -32,6 +33,7 @@ import ../src/systems/dod_workspaces
 import ../src/systems/layout_projection_sync
 import ../src/systems/layout_state
 import ../src/systems/runtime_update_sync
+import ../src/systems/state_application_sync
 import ../src/types/core
 import ../src/types/dod_model
 from ../src/types/legacy_model import nil
@@ -1339,6 +1341,112 @@ suite "DOD state primitives":
     check report.legacyProjection.instructions == legacyModel.layoutProjection().instructions
     check report.authoritativeProjection.instructions ==
       report.legacyProjection.instructions
+
+  test "DOD config application sync updates legacy and shadow":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 31,
+        borderWidth: 4,
+        defaultColumnWidth: 0.6,
+        defaultWindowWidth: 0.7,
+        defaultWindowHeight: 0.8,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.65))
+    config.workspaces.defaultCount = 3
+
+    let report = syncConfigApplication(
+      legacyModel, dod, config, syncShadow = true)
+    check report.shadowChecked
+    check report.shadowReport.ok
+    check legacyModel.outerGaps == 31
+    check dod.outerGaps == 31
+    check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+
+  test "DOD config application sync can skip shadow mutation":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    let originalDod = dod
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 33,
+        borderWidth: 5,
+        defaultColumnWidth: 0.6,
+        defaultWindowWidth: 0.7,
+        defaultWindowHeight: 0.8,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.65))
+    config.workspaces.defaultCount = 3
+
+    let report = syncConfigApplication(
+      legacyModel, dod, config, syncShadow = false)
+    check not report.shadowChecked
+    check report.shadowReport.ok
+    check legacyModel.outerGaps == 33
+    check dod == originalDod
+
+  test "DOD config application sync reports mismatches":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    dod.focusHistory = @[]
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 35,
+        borderWidth: 6,
+        defaultColumnWidth: 0.6,
+        defaultWindowWidth: 0.7,
+        defaultWindowHeight: 0.8,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.65))
+    config.workspaces.defaultCount = 3
+
+    let report = syncConfigApplication(
+      legacyModel, dod, config, syncShadow = true)
+    check report.shadowChecked
+    check not report.shadowReport.ok
+    check report.shadowReport.errors.contains("focus history mismatch")
+    check legacyModel.outerGaps == 35
+
+  test "DOD live restore application sync updates legacy and shadow":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    var restored = LiveRestoreState(activeTag: 2, focusedWindow: 20)
+    restored.tagByWindow[20] = 2
+    restored.focusHistory = @[20'u32]
+    restored.workspaceHistory = @[2'u32]
+
+    let report = syncLiveRestoreApplication(
+      legacyModel, dod, restored, syncShadow = true)
+    check report.shadowChecked
+    check report.shadowReport.ok
+    check legacyModel.activeTag == 2
+    check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+
+  test "DOD live restore application sync can skip shadow mutation":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    let originalDod = dod
+    let restored = LiveRestoreState(activeTag: 2, focusedWindow: 20)
+
+    let report = syncLiveRestoreApplication(
+      legacyModel, dod, restored, syncShadow = false)
+    check not report.shadowChecked
+    check report.shadowReport.ok
+    check legacyModel.activeTag == 2
+    check dod == originalDod
+
+  test "DOD live restore application sync reports mismatches":
+    var legacyModel = lifecycleParityModel()
+    var dod = legacyModel.dodFromLegacy()
+    dod.outerGaps = legacyModel.outerGaps + 17
+    let restored = LiveRestoreState(activeTag: 2, focusedWindow: 20)
+
+    let report = syncLiveRestoreApplication(
+      legacyModel, dod, restored, syncShadow = true)
+    check report.shadowChecked
+    check not report.shadowReport.ok
+    check legacyModel.activeTag == 2
 
   test "DOD layout projection matches floating windows":
     checkLayoutParity(floatingLayoutModel())
