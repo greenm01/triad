@@ -160,6 +160,22 @@ proc setWindowDimensions*(
   model.windows.mEntity(winId).actualH = max(0'i32, actualH)
   true
 
+proc setWindowRestoredState*(
+    model: var DodModel; winId: WindowId; restored: RestoredWindowData): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).widthProportion = restored.widthProportion
+  model.windows.mEntity(winId).heightProportion = restored.heightProportion
+  model.windows.mEntity(winId).isFloating = restored.isFloating
+  model.windows.mEntity(winId).isFullscreen = restored.isFullscreen
+  model.windows.mEntity(winId).isMaximized = restored.isMaximized
+  model.windows.mEntity(winId).isMinimized = restored.isMinimized
+  model.windows.mEntity(winId).fullscreenOutput = restored.fullscreenOutput
+  model.windows.mEntity(winId).floatingGeom = restored.floatingGeom
+  model.windows.mEntity(winId).actualW = restored.actualW
+  model.windows.mEntity(winId).actualH = restored.actualH
+  true
+
 proc setWindowDimensionsHint*(model: var DodModel; winId: WindowId;
     minWidth, minHeight, maxWidth, maxHeight: int32): bool =
   if model.windows.entity(winId).isNone:

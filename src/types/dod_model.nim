@@ -75,6 +75,52 @@ type
     name*: string
     defaultLayout*: LayoutMode
 
+  RestoredWindowData* = object
+    slot*: uint32
+    appId*: string
+    title*: string
+    identifier*: string
+    widthProportion*: float32
+    heightProportion*: float32
+    isFloating*: bool
+    isFullscreen*: bool
+    isMaximized*: bool
+    isMinimized*: bool
+    fullscreenOutput*: ExternalOutputId
+    floatingGeom*: Rect
+    actualW*, actualH*: int32
+
+  RestoredColumnData* = object
+    windows*: seq[ExternalWindowId]
+    widthProportion*: float32
+
+  RestoredTagData* = object
+    slot*: uint32
+    name*: string
+    layoutMode*: LayoutMode
+    columns*: seq[RestoredColumnData]
+    focusedWindow*: ExternalWindowId
+    targetViewportXOffset*: float32
+    currentViewportXOffset*: float32
+    targetViewportYOffset*: float32
+    currentViewportYOffset*: float32
+    masterCount*: int
+    masterSplitRatio*: float32
+
+  DodLiveRestoreState* = object
+    activeSlot*: uint32
+    focusedWindow*: ExternalWindowId
+    tagByWindow*: Table[ExternalWindowId, uint32]
+    windows*: Table[ExternalWindowId, RestoredWindowData]
+    tags*: Table[uint32, RestoredTagData]
+    outputTags*: Table[ExternalOutputId, uint32]
+    scratchpadWindows*: seq[ExternalWindowId]
+    namedScratchpads*: Table[string, ExternalWindowId]
+    visibleScratchpad*: ExternalWindowId
+    isScratchpadVisible*: bool
+    focusHistory*: seq[ExternalWindowId]
+    workspaceHistory*: seq[uint32]
+
   DodModel* = object
     counters*: IdCounters
     windows*: EntityManager[WindowId, WindowData]
@@ -121,6 +167,18 @@ type
     floatingMinHeight*: int32
     windowRules*: seq[WindowRuleData]
     tagRules*: seq[TagRuleData]
+    restoreActiveSlot*: uint32
+    restoreFocusedWindow*: ExternalWindowId
+    restoreTagByWindow*: Table[ExternalWindowId, uint32]
+    restoreWindows*: Table[ExternalWindowId, RestoredWindowData]
+    restoreTags*: Table[uint32, RestoredTagData]
+    restoreOutputTags*: Table[ExternalOutputId, uint32]
+    restoreScratchpadWindows*: seq[ExternalWindowId]
+    restoreNamedScratchpads*: Table[string, ExternalWindowId]
+    restoreVisibleScratchpad*: ExternalWindowId
+    restoreIsScratchpadVisible*: bool
+    restoreFocusHistory*: seq[ExternalWindowId]
+    restoreWorkspaceHistory*: seq[uint32]
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]

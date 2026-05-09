@@ -3,6 +3,7 @@ import unittest
 import ../src/core/msg as core_msg
 import ../src/core/model_utils
 import ../src/core/niri_state
+import ../src/core/restore_state
 import ../src/core/shell_state
 import ../src/core/triad_state
 import ../src/core/update as legacy_update
@@ -111,6 +112,19 @@ proc checkStateParity(
   var dod = source.dodFromLegacy()
 
   action(dod)
+  dod.refreshVisibleWorkspaceSlots()
+
+  check dod.validateInvariants().ok
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  check dod.dodFocusHistory() == legacyModel.focusHistory
+  check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+
+  var legacyLayout = legacyModel
+  var dodLayout = dod
+  check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
+
+proc checkRestoredStateParity(
+    legacyModel: legacy_model.Model; dod: var DodModel) =
   dod.refreshVisibleWorkspaceSlots()
 
   check dod.validateInvariants().ok
@@ -1326,6 +1340,233 @@ suite "DOD state primitives":
       proc(dod: var DodModel) =
         discard dod.destroyWindowForExternal(ExternalWindowId(40))
     )
+
+  test "DOD restore placement beats window rules like legacy":
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 1200,
+      screenHeight: 800)
+    seed.tags[1] = initTagState(1, legacy_model.Scroller)
+    seed.tags[2] = initTagState(2, legacy_model.Grid)
+    seed.windowRules.add(legacy_model.WindowRule(
+      appIdMatch: "pinned", defaultTag: 3))
+    var restored = LiveRestoreState(activeTag: 2)
+    restored.tagByWindow[legacy_model.WindowId(112)] = 2
+
+    var legacyModel = seed
+    legacyModel.applyLiveRestore(restored)
+    var dod = seed.dodFromLegacy()
+    dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 112,
+        appId: "pinned-app",
+        title: "pinned"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(112), "pinned-app", "pinned")
+
+    checkRestoredStateParity(legacyModel, dod)
+
+  test "DOD restore overlays existing workspace state":
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 2000,
+      screenHeight: 1000)
+    seed.tags[1] = initTagState(1, legacy_model.Scroller, "configured")
+
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 120)
+    restored.tags[1] = legacy_model.RestoredTagState(
+      tagId: 1,
+      name: "restored",
+      layoutMode: legacy_model.VerticalScroller,
+      focusedWindow: 120,
+      targetViewportXOffset: 1908.0,
+      currentViewportXOffset: 1908.0,
+      targetViewportYOffset: 42.0,
+      currentViewportYOffset: 40.0,
+      masterCount: 3,
+      masterSplitRatio: 0.65,
+      columns: @[
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(119)],
+          widthProportion: 0.35),
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(120)],
+          widthProportion: 0.8)
+      ])
+    restored.windows[120] = legacy_model.RestoredWindowState(
+      tagId: 1,
+      appId: "brave",
+      title: "Brave",
+      widthProportion: 0.8,
+      heightProportion: 1.0)
+    restored.tagByWindow[120] = 1
+
+    var legacyModel = seed
+    legacyModel.applyLiveRestore(restored)
+    var dod = seed.dodFromLegacy()
+    dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 220,
+        appId: "brave",
+        title: "Brave"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(220), "brave", "Brave")
+
+    checkRestoredStateParity(legacyModel, dod)
+
+  test "DOD restore waits for identifiers like legacy":
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 11)
+    restored.tags[1] = legacy_model.RestoredTagState(
+      tagId: 1,
+      layoutMode: legacy_model.Scroller,
+      masterCount: 1,
+      masterSplitRatio: 0.55,
+      focusedWindow: 11,
+      columns: @[
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(10)],
+          widthProportion: 0.35),
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(11)],
+          widthProportion: 0.8)
+      ])
+    restored.windows[10] = legacy_model.RestoredWindowState(
+      tagId: 1,
+      appId: "kitty",
+      title: "~ - fish",
+      identifier: "terminal-a",
+      widthProportion: 0.35,
+      heightProportion: 1.0)
+    restored.windows[11] = legacy_model.RestoredWindowState(
+      tagId: 1,
+      appId: "kitty",
+      title: "~ - fish",
+      identifier: "terminal-b",
+      widthProportion: 0.8,
+      heightProportion: 1.0,
+      isMaximized: true)
+
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 2000,
+      screenHeight: 1000)
+    var legacyModel = seed
+    legacyModel.applyLiveRestore(restored)
+    var dod = seed.dodFromLegacy()
+    dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 210,
+        appId: "kitty",
+        title: "~ - fish"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(210), "kitty", "~ - fish")
+    check dod.restoreWindows.len == legacyModel.restoreWindows.len
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 211,
+        appId: "kitty",
+        title: "~ - fish"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(211), "kitty", "~ - fish")
+    check dod.restoreWindows.len == legacyModel.restoreWindows.len
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowIdentifier,
+        identifierWindowId: 210,
+        identifier: "terminal-a"))
+    discard dod.updateWindowIdentifierAndRestoreForExternal(
+      ExternalWindowId(210), "terminal-a")
+    checkRestoredStateParity(legacyModel, dod)
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowIdentifier,
+        identifierWindowId: 211,
+        identifier: "terminal-b"))
+    discard dod.updateWindowIdentifierAndRestoreForExternal(
+      ExternalWindowId(211), "terminal-b")
+    checkRestoredStateParity(legacyModel, dod)
+
+  test "DOD restore maps legacy Niri state by identity":
+    let parsed = parseLiveRestoreJson("""
+{
+  "workspaces": [
+    {"id": 1, "name": "term", "is_active": false},
+    {"id": 2, "name": "web", "is_active": true}
+  ],
+  "windows": [
+    {
+      "id": 10,
+      "title": "term",
+      "app_id": "triad-foot",
+      "raw_app_id": "foot",
+      "workspace_id": 2,
+      "is_focused": false,
+      "layout": {
+        "pos_in_scrolling_layout": [2, 1],
+        "tile_size": [2000.0, 1000.0],
+        "window_size": [800, 900]
+      }
+    },
+    {
+      "id": 11,
+      "title": "Browser",
+      "app_id": "brave-origin-nightly.desktop",
+      "raw_app_id": "brave-origin-nightly",
+      "workspace_id": 2,
+      "is_focused": true,
+      "is_maximized": true,
+      "layout": {
+        "pos_in_scrolling_layout": [1, 1],
+        "tile_size": [2000.0, 1000.0],
+        "window_size": [1000, 900]
+      }
+    }
+  ]
+}
+""")
+    check parsed.isSome
+
+    var seed = legacy_model.Model(activeTag: 1, screenWidth: 2000,
+      screenHeight: 1000)
+    var legacyModel = seed
+    legacyModel.applyLiveRestore(parsed.get())
+    var dod = seed.dodFromLegacy()
+    dod.applyLiveRestore(parsed.get().dodFromLiveRestore())
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 210,
+        appId: "foot",
+        title: "term"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(210), "foot", "term")
+
+    (legacyModel, _) = legacy_update.update(
+      legacyModel,
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 211,
+        appId: "brave-origin-nightly",
+        title: "Browser"))
+    discard dod.createWindowForExternal(
+      ExternalWindowId(211), "brave-origin-nightly", "Browser")
+
+    checkRestoredStateParity(legacyModel, dod)
     checkStateParity(
       lifecycleCollapseDestroyModel(),
       core_msg.Msg(

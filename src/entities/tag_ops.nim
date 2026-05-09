@@ -74,6 +74,25 @@ proc setTagViewportTarget*(
   model.tags.mEntity(tagId).targetViewportYOffset = yOffset
   true
 
+proc setTagRestoredState*(model: var DodModel; tagId: TagId;
+    name: string; layoutMode: LayoutMode;
+    targetViewportXOffset, currentViewportXOffset, targetViewportYOffset,
+    currentViewportYOffset: float32; masterCount: int;
+    masterSplitRatio: float32): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  if name.len > 0 and model.tags.mEntity(tagId).name.len == 0:
+    model.tags.mEntity(tagId).name = name
+  model.tags.mEntity(tagId).layoutMode = layoutMode
+  model.tags.mEntity(tagId).targetViewportXOffset = targetViewportXOffset
+  model.tags.mEntity(tagId).currentViewportXOffset = currentViewportXOffset
+  model.tags.mEntity(tagId).targetViewportYOffset = targetViewportYOffset
+  model.tags.mEntity(tagId).currentViewportYOffset = currentViewportYOffset
+  model.tags.mEntity(tagId).masterCount = max(1, masterCount)
+  model.tags.mEntity(tagId).masterSplitRatio =
+    clamp(masterSplitRatio, 0.05'f32, 0.95'f32)
+  true
+
 proc destroyTag*(model: var DodModel; tagId: TagId): bool =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:

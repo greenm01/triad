@@ -1,5 +1,6 @@
 import algorithm, tables
 import ../core/model_utils
+import ../core/restore_state
 import ../entities/dod_ops
 import entity_manager
 import dod_queries
@@ -29,6 +30,80 @@ proc sortedOutputIds(model: legacy.Model): seq[uint32] =
   for outputId in model.outputs.keys:
     result.add(outputId)
   result.sort()
+
+proc dodRestoredWindow*(source: legacy.RestoredWindowState):
+    RestoredWindowData =
+  RestoredWindowData(
+    slot: source.tagId,
+    appId: source.appId,
+    title: source.title,
+    identifier: source.identifier,
+    widthProportion: source.widthProportion,
+    heightProportion: source.heightProportion,
+    isFloating: source.isFloating,
+    isFullscreen: source.isFullscreen,
+    isMaximized: source.isMaximized,
+    isMinimized: source.isMinimized,
+    fullscreenOutput: ExternalOutputId(source.fullscreenOutput),
+    floatingGeom: source.floatingGeom,
+    actualW: source.actualW,
+    actualH: source.actualH
+  )
+
+proc dodRestoredTag*(source: legacy.RestoredTagState): RestoredTagData =
+  result = RestoredTagData(
+    slot: source.tagId,
+    name: source.name,
+    layoutMode: source.layoutMode,
+    focusedWindow: ExternalWindowId(uint32(source.focusedWindow)),
+    targetViewportXOffset: source.targetViewportXOffset,
+    currentViewportXOffset: source.currentViewportXOffset,
+    targetViewportYOffset: source.targetViewportYOffset,
+    currentViewportYOffset: source.currentViewportYOffset,
+    masterCount: source.masterCount,
+    masterSplitRatio: source.masterSplitRatio
+  )
+  for col in source.columns:
+    var restoredCol = RestoredColumnData(widthProportion: col.widthProportion)
+    for winId in col.windows:
+      restoredCol.windows.add(ExternalWindowId(uint32(winId)))
+    result.columns.add(restoredCol)
+
+proc dodFromLiveRestore*(source: LiveRestoreState): DodLiveRestoreState =
+  result.activeSlot = source.activeTag
+  result.focusedWindow = ExternalWindowId(uint32(source.focusedWindow))
+  for winId, slot in source.tagByWindow.pairs:
+    result.tagByWindow[ExternalWindowId(uint32(winId))] = slot
+  for winId, win in source.windows.pairs:
+    result.windows[ExternalWindowId(uint32(winId))] = win.dodRestoredWindow()
+  for slot, tag in source.tags.pairs:
+    result.tags[slot] = tag.dodRestoredTag()
+  for outputId, slot in source.outputTags.pairs:
+    result.outputTags[ExternalOutputId(outputId)] = slot
+  for winId in source.scratchpadWindows:
+    result.scratchpadWindows.add(ExternalWindowId(uint32(winId)))
+  for name, winId in source.namedScratchpads.pairs:
+    result.namedScratchpads[name] = ExternalWindowId(uint32(winId))
+  result.visibleScratchpad = ExternalWindowId(uint32(source.visibleScratchpad))
+  result.isScratchpadVisible = source.isScratchpadVisible
+  for winId in source.focusHistory:
+    result.focusHistory.add(ExternalWindowId(uint32(winId)))
+  for slot in source.workspaceHistory:
+    result.workspaceHistory.add(slot)
+
+proc setPendingRestore*(model: var DodModel; state: DodLiveRestoreState) =
+  model.restoreActiveSlot = state.activeSlot
+  model.restoreFocusedWindow = state.focusedWindow
+  model.restoreTagByWindow = state.tagByWindow
+  model.restoreWindows = state.windows
+  model.restoreTags = state.tags
+  model.restoreOutputTags = state.outputTags
+  model.restoreScratchpadWindows = state.scratchpadWindows
+  model.restoreNamedScratchpads = state.namedScratchpads
+  model.restoreVisibleScratchpad = state.visibleScratchpad
+  model.restoreIsScratchpadVisible = state.isScratchpadVisible
+  model.restoreFocusHistory = state.focusHistory
+  model.restoreWorkspaceHistory = state.workspaceHistory
 
 proc ensureDodTag(
     target: var DodModel; source: legacy.Model; slot: uint32): TagId =
