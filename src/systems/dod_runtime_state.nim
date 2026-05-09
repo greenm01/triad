@@ -1,7 +1,9 @@
 import ../config/parser
+import ../core/model
 import ../core/msg
 import ../core/restore_state
 import ../core/shell_state
+import ../state/dod_adapter
 import ../types/dod_runtime_state
 import dod_shadow_health
 import dod_shadow_runtime
@@ -179,6 +181,13 @@ proc readRuntimeSnapshot*(state: TriadRuntimeState): ShellSnapshot =
     state.legacyModel,
     state.shadowModel,
     state.runtimeProjectionReadSource())
+
+proc readRuntimeModelView*(state: TriadRuntimeState): Model =
+  case state.runtimeProjectionReadSource()
+  of LegacyProjectionSource:
+    state.legacyModel
+  of DodProjectionSource:
+    legacyViewFromDod(state.shadowModel, state.legacyModel)
 
 proc readRuntimeLiveRestoreJson*(state: TriadRuntimeState): string =
   readProjectionLiveRestoreJson(

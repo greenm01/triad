@@ -64,6 +64,7 @@ var
   
   # TEA State
   runtimeState: TriadRuntimeState
+  currentModelView: Model
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
   desiredPlacements: Table[WindowId, Rect]
@@ -114,8 +115,11 @@ var
   pendingLiveRestore: Option[LiveRestoreState]
   liveRestoreCommitPending = false
 
+proc refreshRuntimeReadModel() =
+  currentModelView = runtimeState.readRuntimeModelView()
+
 template currentModel: untyped =
-  runtimeState.legacyModel
+  currentModelView
 
 # --- Helpers ---
 
@@ -155,11 +159,13 @@ proc logShadowObservation(
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
   let observed = runtimeState.applyObservedRuntimeUpdate(msg)
   logShadowObservation(context, msg, observed.observation)
+  refreshRuntimeReadModel()
   observed.syncResult.authoritativeEffects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
   let observed = runtimeState.applyObservedRuntimeShadowOnly(msg)
   logShadowObservation(context, msg, observed.observation)
+  refreshRuntimeReadModel()
 
 proc readModelSnapshot(): ShellSnapshot =
   runtimeState.readRuntimeSnapshot()
@@ -173,6 +179,7 @@ proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
 proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstruction] =
   let observed = runtimeState.applyObservedRuntimeLayoutProjection()
   logShadowObservation(context, msg, observed.observation)
+  refreshRuntimeReadModel()
   observed.syncResult.authoritativeProjection.instructions
 
 proc applyPendingLiveRestore() =
@@ -181,6 +188,7 @@ proc applyPendingLiveRestore() =
 
   let state = pendingLiveRestore.get()
   let observed = runtimeState.applyObservedRuntimeLiveRestore(state)
+  refreshRuntimeReadModel()
   logShadowObservation("live restore", Msg(kind: WlManageStart),
     observed.observation)
   pendingLiveRestore = none(LiveRestoreState)
@@ -333,6 +341,7 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   let observed = runtimeState.applyObservedRuntimeConfig(loaded.config)
   logShadowObservation("config reload", Msg(kind: CmdConfigReload),
     observed.observation)
+  refreshRuntimeReadModel()
   quickshellSpawnPending = false
 
   if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
@@ -1837,6 +1846,7 @@ proc main() =
   runtimeState = initialState.state
   logShadowObservation("initial config", Msg(kind: CmdConfigReload),
     initialState.observation)
+  refreshRuntimeReadModel()
   info "Initial config loaded", path=configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()

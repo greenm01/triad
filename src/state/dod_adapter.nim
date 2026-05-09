@@ -1,8 +1,9 @@
-import algorithm, tables
+import algorithm, options, tables
 import ../core/model_utils
 import ../core/restore_state
 import ../entities/dod_ops
 import entity_manager
+import dod_iterators
 import dod_queries
 import ../types/core
 import ../types/dod_model
@@ -318,3 +319,261 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     initialGeom: source.pointerOp.initialGeom,
     edges: source.pointerOp.edges
   )
+
+proc legacyWindowId(model: DodModel; winId: core.WindowId): legacy.WindowId =
+  if winId == core.NullWindowId:
+    return 0'u32
+  let winOpt = model.windowData(winId)
+  if winOpt.isSome:
+    return legacy.WindowId(uint32(winOpt.get().externalId))
+  0'u32
+
+proc legacyOutputId(model: DodModel; outputId: core.OutputId): uint32 =
+  if outputId == core.NullOutputId:
+    return 0'u32
+  let outputOpt = model.outputData(outputId)
+  if outputOpt.isSome:
+    return uint32(outputOpt.get().externalId)
+  0'u32
+
+proc legacyRestoredWindow(source: RestoredWindowData):
+    legacy.RestoredWindowState =
+  legacy.RestoredWindowState(
+    tagId: source.slot,
+    appId: source.appId,
+    title: source.title,
+    identifier: source.identifier,
+    widthProportion: source.widthProportion,
+    heightProportion: source.heightProportion,
+    isFloating: source.isFloating,
+    isFullscreen: source.isFullscreen,
+    isMaximized: source.isMaximized,
+    isMinimized: source.isMinimized,
+    fullscreenOutput: uint32(source.fullscreenOutput),
+    floatingGeom: source.floatingGeom,
+    actualW: source.actualW,
+    actualH: source.actualH
+  )
+
+proc legacyRestoredTag(source: RestoredTagData):
+    legacy.RestoredTagState =
+  result = legacy.RestoredTagState(
+    tagId: source.slot,
+    name: source.name,
+    layoutMode: source.layoutMode,
+    focusedWindow: legacy.WindowId(uint32(source.focusedWindow)),
+    targetViewportXOffset: source.targetViewportXOffset,
+    currentViewportXOffset: source.currentViewportXOffset,
+    targetViewportYOffset: source.targetViewportYOffset,
+    currentViewportYOffset: source.currentViewportYOffset,
+    masterCount: source.masterCount,
+    masterSplitRatio: source.masterSplitRatio
+  )
+  for column in source.columns:
+    var legacyColumn = legacy.RestoredColumnState(
+      widthProportion: column.widthProportion)
+    for externalWinId in column.windows:
+      legacyColumn.windows.add(legacy.WindowId(uint32(externalWinId)))
+    result.columns.add(legacyColumn)
+
+proc legacyViewFromDod*(source: DodModel;
+    fallback: legacy.Model): legacy.Model =
+  result = legacy.Model(
+    groups: fallback.groups,
+    workspaces: legacy.WorkspaceConfig(
+      defaultCount: source.defaultWorkspaceCount),
+    tagRules: @[],
+    windowRules: @[],
+    startupCommands: source.startupCommands,
+    quickshell: source.quickshell,
+    terminal: source.terminal,
+    screenshot: source.screenshot,
+    overview: legacy.OverviewConfig(
+      outerGap: source.overviewOuterGap,
+      innerGapMultiplier: source.overviewInnerGapMultiplier),
+    floating: legacy.FloatingConfig(
+      xRatio: source.floatingXRatio,
+      yRatio: source.floatingYRatio,
+      widthRatio: source.floatingWidthRatio,
+      heightRatio: source.floatingHeightRatio,
+      minWidth: source.floatingMinWidth,
+      minHeight: source.floatingMinHeight),
+    screenLock: legacy.ScreenLockConfig(
+      command: source.screenLockCommand),
+    windowMenu: legacy.WindowMenuConfig(
+      command: source.windowMenuCommand),
+    scratchpad: legacy.ScratchpadConfig(
+      widthRatio: source.scratchpadWidthRatio,
+      heightRatio: source.scratchpadHeightRatio),
+    cursor: source.cursor,
+    presentationMode: source.presentationMode,
+    allowExitSession: source.allowExitSession,
+    protocolSurfaces: source.protocolSurfaces,
+    keyBindings: source.keyBindings,
+    pointerBindings: source.pointerBindings,
+    activeTag: source.activeSlot,
+    overviewActive: source.overviewActive,
+    layerFocusExclusive: source.layerFocusExclusive,
+    sessionLocked: source.sessionLocked,
+    activeModifiers: source.activeModifiers,
+    screenWidth: source.screenWidth,
+    screenHeight: source.screenHeight,
+    outerGaps: source.outerGaps,
+    innerGaps: source.innerGaps,
+    previousOuterGaps: source.previousOuterGaps,
+    previousInnerGaps: source.previousInnerGaps,
+    smartGaps: source.smartGaps,
+    borderWidth: source.borderWidth,
+    focusedBorderColor: source.focusedBorderColor,
+    unfocusedBorderColor: source.unfocusedBorderColor,
+    scrollerFocusCenter: source.scrollerFocusCenter,
+    scrollerPreferCenter: source.scrollerPreferCenter,
+    centerFocusedColumn: source.centerFocusedColumn,
+    defaultColumnWidth: source.defaultColumnWidth,
+    defaultWindowWidth: source.defaultWindowWidth,
+    defaultWindowHeight: source.defaultWindowHeight,
+    defaultMasterCount: source.defaultMasterCount,
+    defaultMasterRatio: source.defaultMasterRatio,
+    enableAnimations: source.enableAnimations,
+    animationSpeed: source.animationSpeed,
+    layoutCycle: source.layoutCycle,
+    scratchpadWidthRatio: source.scratchpadWidthRatio,
+    scratchpadHeightRatio: source.scratchpadHeightRatio,
+    restoreActiveTag: source.restoreActiveSlot,
+    restoreFocusedWindow: legacy.WindowId(uint32(source.restoreFocusedWindow)),
+    nextGroupId: source.nextGroupId
+  )
+
+  for rule in source.tagRules:
+    result.tagRules.add(legacy.TagRule(
+      tagId: rule.slot,
+      name: rule.name,
+      defaultLayout: rule.defaultLayout))
+
+  for rule in source.windowRules:
+    result.windowRules.add(legacy.WindowRule(
+      appIdMatch: rule.appIdMatch,
+      titleMatch: rule.titleMatch,
+      defaultTag: rule.defaultSlot,
+      openFloating: rule.openFloating,
+      keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
+      forcedLayout: rule.forcedLayout))
+
+  for outputId in source.sortedOutputIdsByExternal():
+    let output = source.outputData(outputId).get()
+    let externalId = uint32(output.externalId)
+    result.outputs[externalId] = legacy.OutputData(
+      id: externalId,
+      wlName: output.wlName,
+      name: output.name,
+      x: output.x,
+      y: output.y,
+      w: output.w,
+      h: output.h,
+      usableX: output.usableX,
+      usableY: output.usableY,
+      usableW: output.usableW,
+      usableH: output.usableH,
+      hasUsable: output.hasUsable)
+
+  result.primaryOutput = source.legacyOutputId(source.primaryOutput)
+  for outputId, tagId in source.outputTagsWithId():
+    let outputExternal = source.legacyOutputId(outputId)
+    let tagOpt = source.tagData(tagId)
+    if outputExternal != 0 and tagOpt.isSome:
+      result.outputTags[outputExternal] = tagOpt.get().slot
+
+  for winId in source.sortedWindowIdsByExternal():
+    let win = source.windowData(winId).get()
+    let externalId = legacy.WindowId(uint32(win.externalId))
+    result.windows[externalId] = legacy.WindowData(
+      id: externalId,
+      title: win.title,
+      appId: win.appId,
+      widthProportion: win.widthProportion,
+      heightProportion: win.heightProportion,
+      isFloating: win.isFloating,
+      isFullscreen: win.isFullscreen,
+      isMaximized: win.isMaximized,
+      isMinimized: win.isMinimized,
+      fullscreenOutput: uint32(win.fullscreenOutput),
+      parentId: legacy.WindowId(uint32(win.parentExternalId)),
+      identifier: win.identifier,
+      actualW: win.actualW,
+      actualH: win.actualH,
+      minWidth: win.minWidth,
+      minHeight: win.minHeight,
+      maxWidth: win.maxWidth,
+      maxHeight: win.maxHeight,
+      hasDecorationHint: win.hasDecorationHint,
+      decorationHint: win.decorationHint,
+      hasPresentationHint: win.hasPresentationHint,
+      presentationHint: win.presentationHint,
+      floatingGeom: win.floatingGeom,
+      keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
+      keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass)
+
+  for slot in source.sortedSlots():
+    let tagId = source.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    let tag = source.tagData(tagId).get()
+    var legacyTag = legacy.TagState(
+      tagId: slot,
+      name: tag.name,
+      layoutMode: tag.layoutMode,
+      focusedWindow: source.legacyWindowId(tag.focusedWindow),
+      targetViewportXOffset: tag.targetViewportXOffset,
+      currentViewportXOffset: tag.currentViewportXOffset,
+      targetViewportYOffset: tag.targetViewportYOffset,
+      currentViewportYOffset: tag.currentViewportYOffset,
+      masterCount: tag.masterCount,
+      masterSplitRatio: tag.masterSplitRatio)
+    for columnId, column in source.columnsOnTagWithId(tagId):
+      var legacyColumn = legacy.Column(
+        widthProportion: column.widthProportion)
+      for colWinId, _ in source.windowsOnColumnWithId(columnId):
+        let externalId = source.legacyWindowId(colWinId)
+        if externalId != 0:
+          legacyColumn.windows.add(externalId)
+      legacyTag.columns.add(legacyColumn)
+    result.tags[slot] = legacyTag
+
+  if result.activeTag == 0 and source.activeTag != NullTagId:
+    let tagOpt = source.tagData(source.activeTag)
+    if tagOpt.isSome:
+      result.activeTag = tagOpt.get().slot
+
+  for winId in source.scratchpadWindows:
+    let externalId = source.legacyWindowId(winId)
+    if externalId != 0:
+      result.scratchpadWindows.add(externalId)
+  for name, winId in source.namedScratchpads.pairs:
+    let externalId = source.legacyWindowId(winId)
+    if externalId != 0:
+      result.namedScratchpads[name] = externalId
+  result.visibleScratchpad = source.legacyWindowId(source.visibleScratchpad)
+  result.isScratchpadVisible = source.isScratchpadVisible
+
+  result.pointerOp = legacy.PointerOpState(
+    kind: source.pointerOp.kind,
+    windowId: source.legacyWindowId(source.pointerOp.windowId),
+    initialGeom: source.pointerOp.initialGeom,
+    edges: source.pointerOp.edges)
+
+  for winId in source.focusHistory:
+    let externalId = source.legacyWindowId(winId)
+    if externalId != 0:
+      result.focusHistory.add(externalId)
+  for tagId in source.workspaceHistory:
+    let tagOpt = source.tagData(tagId)
+    if tagOpt.isSome:
+      result.workspaceHistory.add(tagOpt.get().slot)
+
+  for externalWinId, slot in source.restoreTagByWindow.pairs:
+    result.restoreTagByWindow[legacy.WindowId(uint32(externalWinId))] = slot
+  for externalWinId, restored in source.restoreWindows.pairs:
+    result.restoreWindows[legacy.WindowId(uint32(externalWinId))] =
+      restored.legacyRestoredWindow()
+  for slot, restored in source.restoreTags.pairs:
+    result.restoreTags[slot] = restored.legacyRestoredTag()

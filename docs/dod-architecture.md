@@ -198,10 +198,10 @@ Rules:
 Shell integrations must serialize snapshots, not internal storage.
 
 Triad currently runs DoD as the preferred read projection while legacy remains
-the live reducer and River placement authority. IPC and live-restore reads use
-the shadow `DodModel` while shadow parity is healthy. On the first divergence,
-the runtime disables DoD projection reads and falls back to legacy projections
-for the rest of the process.
+the companion state and divergence fallback. IPC, live-restore reads, and
+daemon host-side read decisions use the shadow `DodModel` while shadow parity is
+healthy. On the first divergence, the runtime disables DoD projection reads and
+falls back to legacy projections for the rest of the process.
 
 Projection read selection lives behind a read bridge. Shadow health is explicit
 DoD data (`DodShadowHealth`) updated through a small transition system. The
@@ -212,11 +212,17 @@ used for shell snapshots, live-restore JSON reads, and live-restore file writes.
 The daemon stores the live legacy model, shadow DoD model, and shadow health as
 one `TriadRuntimeState`. Runtime-state facade helpers route updates, config
 application, live restore, layout projection, and projection reads through that
-single object. This keeps the current legacy authority policy intact while
-giving the final DoD promotion one aggregate state boundary to change.
+single object. This keeps fallback policy explicit while giving the final DoD
+promotion one aggregate state boundary to change.
 Observed runtime-state helpers also apply shadow reports to `DodShadowHealth`
 and return `RuntimeShadowObservation` values. The daemon consumes those
 observations for warning emission, but no longer mutates shadow health directly.
+
+Daemon read-only host decisions use `readRuntimeModelView`, which returns a
+legacy-shaped view backed by DoD while projection reads are healthy and the real
+legacy model after divergence. The adapter keeps existing host helpers usable
+while DoD becomes the read source. Legacy-only group data is preserved from the
+fallback model until group entities are fully modeled in DoD.
 
 ## Layout Projection
 
@@ -301,18 +307,19 @@ from the same restore payload and reports parity before manage/render resumes.
 
 ## Shadow Runtime
 
-Before `DodModel` becomes authoritative, Triad runs a diagnostic DoD shadow
-model beside the legacy runtime:
+Before `DodModel` becomes the only physical runtime model, Triad keeps a DoD
+shadow model beside the legacy runtime:
 
-- legacy `Model` remains the only source of live River effects
+- legacy `Model` remains the fallback companion state
 - the shadow receives the same config, live-restore state, and message stream
-- shadow effects are compared for stable signatures but never executed
+- shadow effects are compared for stable signatures and are executed for
+  parity-checked messages while shadow health is good
 - shell snapshots, focus history, workspace history, layout instructions, and
   DoD invariants are checked after shadow steps
 - divergences are logged and throttled, never fatal to the live session
 
-This phase is intentionally observational. It proves the reducer and runtime
-state boundaries under a live session before the final runtime promotion.
+This phase is intentionally incremental. It proves the reducer and runtime state
+boundaries under a live session before legacy storage is removed.
 
 Shadow health follows the same data/code split as other DoD state: health fields
 live in `types/dod_shadow_health.nim`, while report application, read fallback,

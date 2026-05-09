@@ -1009,6 +1009,11 @@ suite "DOD state primitives":
     let source = readFile("src/triad.nim")
     check not source.contains("applyShadowReport(")
 
+  test "daemon reads through runtime state facade":
+    let source = readFile("src/triad.nim")
+    check not source.contains("runtimeState.legacyModel")
+    check source.contains("readRuntimeModelView")
+
   test "DOD update orchestrates domain reducers only":
     let source = readFile("src/systems/dod_update.nim")
     let forbiddenImports = [
@@ -1174,6 +1179,30 @@ suite "DOD state primitives":
     let windows = triadStateJson(dodSnapshot)["windows"]
     check windows[0]["id"].getInt() == 10
     check windows[1]["id"].getInt() == 20
+
+  test "legacy view from DOD preserves daemon read shape":
+    var source = stateParityModel()
+    source.groups[7] = legacy_model.GroupState(
+      id: 7,
+      windows: @[legacy_model.WindowId(10), legacy_model.WindowId(11)],
+      activeWindow: 10)
+    let dod = source.dodFromLegacy()
+    let view = legacyViewFromDod(dod, source)
+
+    check shellSnapshot(view) == dodShellSnapshot(dod)
+    checkRuntimeParity(view, dod)
+    check view.groups == source.groups
+    check view.terminal == source.terminal
+    check view.quickshell == source.quickshell
+    check view.keyBindings == source.keyBindings
+    check view.pointerBindings == source.pointerBindings
+    check view.screenshot == source.screenshot
+    check view.cursor == source.cursor
+    check view.presentationMode == source.presentationMode
+    check view.protocolSurfaces == source.protocolSurfaces
+    check view.screenLock.command == source.screenLock.command
+    check view.windowMenu.command == source.windowMenu.command
+    check view.allowExitSession == source.allowExitSession
 
   test "legacy adapter preserves dynamic workspace and output parity":
     let dod = checkDodParity(dynamicParityModel())
@@ -1592,6 +1621,23 @@ suite "DOD state primitives":
     check spawnTerminal.observation.decision.reportOk
     check spawnTerminal.syncResult.authoritativeEffects.len == 0
     check spawnTerminal.syncResult.dodEffects.len > 0
+
+  test "DOD runtime model read view falls back after divergence":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
+    state.legacyModel.outerGaps = 11
+    state.shadowModel.outerGaps = 29
+
+    check state.readRuntimeModelView().outerGaps == 29
+
+    discard state.observeShadowReport(
+      checked = true,
+      report = DodShadowReport(ok: false, errors: @["forced divergence"]))
+    check state.readRuntimeModelView().outerGaps == 11
 
   test "DOD runtime state policy can select DOD authorities":
     let seed = lifecycleParityModel()
