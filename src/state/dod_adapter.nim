@@ -134,10 +134,15 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.visibleSlots = source.visibleWorkspaceIds()
   result.activeSlot = source.activeTag
   result.overviewActive = source.overviewActive
+  result.layerFocusExclusive = source.layerFocusExclusive
+  result.sessionLocked = source.sessionLocked
+  result.activeModifiers = source.activeModifiers
   result.screenWidth = source.screenWidth
   result.screenHeight = source.screenHeight
   result.outerGaps = source.outerGaps
   result.innerGaps = source.innerGaps
+  result.previousOuterGaps = source.previousOuterGaps
+  result.previousInnerGaps = source.previousInnerGaps
   result.smartGaps = source.smartGaps
   result.overviewOuterGap = source.overview.outerGap
   result.overviewInnerGapMultiplier = source.overview.innerGapMultiplier
@@ -149,6 +154,8 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.defaultWindowHeight = source.defaultWindowHeight
   result.defaultMasterCount = source.defaultMasterCount
   result.defaultMasterRatio = source.defaultMasterRatio
+  result.enableAnimations = source.enableAnimations
+  result.animationSpeed = source.animationSpeed
   result.floatingXRatio = source.floating.xRatio
   result.floatingYRatio = source.floating.yRatio
   result.floatingWidthRatio = source.floating.widthRatio
@@ -157,6 +164,10 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.floatingMinHeight = source.floating.minHeight
   result.scratchpadWidthRatio = source.scratchpadWidthRatio
   result.scratchpadHeightRatio = source.scratchpadHeightRatio
+  result.screenLockCommand = source.screenLock.command
+  result.windowMenuCommand = source.windowMenu.command
+  result.allowExitSession = source.allowExitSession
+  result.nextGroupId = source.nextGroupId
   for rule in source.windowRules:
     result.windowRules.add(WindowRuleData(
       appIdMatch: rule.appIdMatch,
@@ -287,3 +298,11 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     source.isScratchpadVisible and
     (result.visibleScratchpad != NullWindowId or
       result.scratchpadWindows.len > 0)
+
+  result.pointerOp = DodPointerOpData(
+    kind: source.pointerOp.kind,
+    windowId: result.windowForExternal(
+      ExternalWindowId(uint32(source.pointerOp.windowId))),
+    initialGeom: source.pointerOp.initialGeom,
+    edges: source.pointerOp.edges
+  )

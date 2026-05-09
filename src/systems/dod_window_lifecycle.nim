@@ -641,7 +641,7 @@ proc createWindowForExternal*(model: var DodModel;
           targetTag, safeLayoutMode(
             forcedLayout, model.tag(targetTag).get().layoutMode))
       discard model.addWindowColumn(targetTag, result)
-      if not restoreFocusPending:
+      if not model.sessionLocked and not restoreFocusPending:
         discard model.setTagFocus(targetTag, result)
 
     if restoresFocusedWindow:
@@ -652,7 +652,8 @@ proc createWindowForExternal*(model: var DodModel;
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId:
         discard model.recomputeVisibleFocus(targetTag)
-    if not hasRestoredTag and not restoreFocusPending:
+    if not model.sessionLocked and not hasRestoredTag and
+        not restoreFocusPending:
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId:
         discard model.setTagFocus(targetTag, result)

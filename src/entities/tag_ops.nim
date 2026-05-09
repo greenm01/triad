@@ -51,6 +51,12 @@ proc setTagLayout*(model: var DodModel; tagId: TagId; mode: LayoutMode): bool =
   model.tags.mEntity(tagId).layoutMode = mode
   true
 
+proc setTagName*(model: var DodModel; tagId: TagId; name: string): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).name = name
+  true
+
 proc setTagMasterCount*(
     model: var DodModel; tagId: TagId; count: int): bool =
   if model.tags.entity(tagId).isNone:
@@ -72,6 +78,14 @@ proc setTagViewportTarget*(
     return false
   model.tags.mEntity(tagId).targetViewportXOffset = xOffset
   model.tags.mEntity(tagId).targetViewportYOffset = yOffset
+  true
+
+proc setTagViewportCurrent*(
+    model: var DodModel; tagId: TagId; xOffset, yOffset: float32): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).currentViewportXOffset = xOffset
+  model.tags.mEntity(tagId).currentViewportYOffset = yOffset
   true
 
 proc setTagRestoredState*(model: var DodModel; tagId: TagId;

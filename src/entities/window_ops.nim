@@ -221,6 +221,13 @@ proc setWindowFloating*(model: var DodModel; winId: WindowId;
     model.windows.mEntity(winId).floatingGeom = floatingGeom
   true
 
+proc setWindowFloatingGeom*(
+    model: var DodModel; winId: WindowId; floatingGeom: Rect): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).floatingGeom = floatingGeom
+  true
+
 proc setWindowFullscreen*(model: var DodModel; winId: WindowId;
     fullscreen: bool; outputId = NullExternalOutputId): bool =
   if model.windows.entity(winId).isNone:

@@ -47,6 +47,31 @@ proc dodWorkspaceHistory(dod: DodModel): seq[uint32] =
     if tagOpt.isSome:
       result.add(tagOpt.get().slot)
 
+proc dodPointerWindow(dod: DodModel): legacy_model.WindowId =
+  let winOpt = dod.windowData(dod.pointerOp.windowId)
+  if winOpt.isSome:
+    return legacy_model.WindowId(uint32(winOpt.get().externalId))
+  0'u32
+
+proc checkRuntimeParity(source: legacy_model.Model; dod: DodModel) =
+  check dod.layerFocusExclusive == source.layerFocusExclusive
+  check dod.sessionLocked == source.sessionLocked
+  check dod.activeModifiers == source.activeModifiers
+  check dod.outerGaps == source.outerGaps
+  check dod.innerGaps == source.innerGaps
+  check dod.previousOuterGaps == source.previousOuterGaps
+  check dod.previousInnerGaps == source.previousInnerGaps
+  check dod.enableAnimations == source.enableAnimations
+  check dod.animationSpeed == source.animationSpeed
+  check dod.screenLockCommand == source.screenLock.command
+  check dod.windowMenuCommand == source.windowMenu.command
+  check dod.allowExitSession == source.allowExitSession
+  check dod.nextGroupId == source.nextGroupId
+  check dod.pointerOp.kind == source.pointerOp.kind
+  check dod.dodPointerWindow() == source.pointerOp.windowId
+  check dod.pointerOp.initialGeom == source.pointerOp.initialGeom
+  check dod.pointerOp.edges == source.pointerOp.edges
+
 proc checkDodParity(source: legacy_model.Model): DodModel =
   result = source.dodFromLegacy()
   check result.validateInvariants().ok
@@ -64,6 +89,7 @@ proc checkDodParity(source: legacy_model.Model): DodModel =
   check niriOverviewJson(dodSnapshot) == niriOverviewJson(legacySnapshot)
   check result.dodFocusHistory() == source.focusHistory
   check result.dodWorkspaceHistory() == source.workspaceHistory
+  checkRuntimeParity(source, result)
 
 proc checkLayoutParity(source: legacy_model.Model) =
   var legacyModel = source
@@ -89,6 +115,7 @@ proc checkFocusParity(
   check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
   check dod.dodFocusHistory() == legacyModel.focusHistory
   check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+  checkRuntimeParity(legacyModel, dod)
 
 proc checkPlacementParity(
     source: legacy_model.Model; msg: core_msg.Msg;
@@ -103,6 +130,7 @@ proc checkPlacementParity(
   check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
   check dod.dodFocusHistory() == legacyModel.focusHistory
   check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+  checkRuntimeParity(legacyModel, dod)
 
   var legacyLayout = legacyModel
   var dodLayout = dod
@@ -121,6 +149,7 @@ proc checkStateParity(
   check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
   check dod.dodFocusHistory() == legacyModel.focusHistory
   check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+  checkRuntimeParity(legacyModel, dod)
 
   var legacyLayout = legacyModel
   var dodLayout = dod
@@ -137,6 +166,7 @@ proc checkReducerParity(source: legacy_model.Model; msg: core_msg.Msg):
   check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
   check dod.dodFocusHistory() == legacyModel.focusHistory
   check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+  checkRuntimeParity(legacyModel, dod)
 
   var legacyLayout = legacyModel
   var dodLayout = dod
@@ -512,6 +542,39 @@ proc stateParityModel(): legacy_model.Model =
   result.outputTags[42] = 1
   result.outputTags[43] = 2
   result.tags[1].focusedWindow = 10
+
+proc floatingRuntimeModel(): legacy_model.Model =
+  result = stateParityModel()
+  result.windows[10].isFloating = true
+  result.windows[10].floatingGeom =
+    legacy_model.Rect(x: 100, y: 120, w: 500, h: 360)
+  result.floating.minWidth = 80
+  result.floating.minHeight = 90
+
+proc pointerRuntimeModel(kind: legacy_model.PointerOpKind):
+    legacy_model.Model =
+  result = floatingRuntimeModel()
+  result.pointerOp = legacy_model.PointerOpState(
+    kind: kind,
+    windowId: 10,
+    initialGeom: result.windows[10].floatingGeom,
+    edges: 8
+  )
+
+proc animationRuntimeModel(): legacy_model.Model =
+  result = stateParityModel()
+  result.enableAnimations = true
+  result.animationSpeed = 0.2'f32
+  result.tags[1].targetViewportXOffset = 100.0'f32
+  result.tags[1].currentViewportXOffset = 0.0'f32
+  result.tags[1].targetViewportYOffset = 50.0'f32
+  result.tags[1].currentViewportYOffset = 0.0'f32
+
+proc effectRuntimeModel(): legacy_model.Model =
+  result = stateParityModel()
+  result.screenLock.command = @["lockme", "--dev-mode"]
+  result.windowMenu.command = @["menu-tool", "--quiet"]
+  result.allowExitSession = true
 
 proc scratchpadParityModel(visible = false; named = false):
     legacy_model.Model =
@@ -1834,3 +1897,123 @@ suite "DOD state primitives":
       stateParityModel(),
       core_msg.Msg(kind: core_msg.CmdCloseWindowById, closeWindowId: 10))
     check result.effects.containsCloseEffect(10)
+
+  test "DOD reducer bridges session layer manage and modifier runtime":
+    var result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.WlManageStart))
+    check result.effects.containsFocusEffect(10)
+    check result.effects.containsEffect(EffManageDirty)
+
+    var locked = focusParityModel()
+    locked.sessionLocked = true
+    result = checkReducerParity(
+      locked,
+      core_msg.Msg(kind: core_msg.CmdFocusNext))
+    check not result.effects.containsFocusEffect(11)
+
+    result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.WlSessionLocked))
+    check result.dod.sessionLocked
+    check result.effects.containsEffect(EffManageDirty)
+
+    result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.WlLayerFocusExclusive))
+    check result.dod.layerFocusExclusive
+
+    discard checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.WlModifiersChanged, newModifiers: 64))
+
+  test "DOD reducer bridges pointer and floating runtime":
+    var result = checkReducerParity(
+      floatingRuntimeModel(),
+      core_msg.Msg(
+        kind: core_msg.WlPointerMoveRequested,
+        moveWinId: 10,
+        moveSeat: nil))
+    check result.effects.containsEffect(EffOpStartPointer)
+
+    result = checkReducerParity(
+      floatingRuntimeModel(),
+      core_msg.Msg(
+        kind: core_msg.WlPointerResizeRequested,
+        resizeWinId: 10,
+        resizeSeat: nil,
+        resizeEdges: 8))
+    check result.effects.containsEffect(EffInformResizeStart)
+
+    discard checkReducerParity(
+      pointerRuntimeModel(legacy_model.OpMove),
+      core_msg.Msg(kind: core_msg.WlPointerDelta, dx: 20, dy: -10))
+    result = checkReducerParity(
+      pointerRuntimeModel(legacy_model.OpResize),
+      core_msg.Msg(kind: core_msg.WlPointerRelease))
+    check result.effects.containsEffect(EffInformResizeEnd)
+
+    discard checkReducerParity(
+      floatingRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveFloating, moveDX: 7, moveDY: -3))
+    discard checkReducerParity(
+      floatingRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdResizeFloating, deltaFW: 50,
+        deltaFH: -20))
+
+  test "DOD reducer bridges gaps animation groups and effect-only commands":
+    discard checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdAdjustGaps, deltaG: 6))
+    discard checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdToggleGaps))
+    discard checkReducerParity(
+      animationRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdTick))
+
+    var result = checkReducerParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdGroupWindows))
+    check result.effects.containsEffect(EffManageDirty)
+
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.WlWindowMenuRequested, menuWindowId: 10,
+        menuX: 12, menuY: 34))
+    check result.effects.containsEffect(EffSpawnWindowMenu)
+
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdSpawn, spawnCommand: @["foot"]))
+    check result.effects.containsEffect(EffSpawn)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdLockSession))
+    check result.effects.containsEffect(EffSpawnScreenLock)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdWarpPointer, warpX: 10, warpY: 20))
+    check result.effects.containsEffect(EffPointerWarp)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdEatNextKey))
+    check result.effects.containsEffect(EffEnsureNextKeyEaten)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdCancelEatNextKey))
+    check result.effects.containsEffect(EffCancelEnsureNextKeyEaten)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdTriadReload))
+    check result.effects.containsEffect(EffTriadReload)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdExitSession))
+    check result.effects.containsEffect(EffExitSession)
+    result = checkReducerParity(
+      effectRuntimeModel(),
+      core_msg.Msg(kind: core_msg.CmdScreenshot,
+        screenshotKind: core_msg.ShotScreen, screenshotPath: "/tmp/shot.png",
+        screenshotShowPointer: true))
+    check result.effects.containsEffect(EffScreenshot)

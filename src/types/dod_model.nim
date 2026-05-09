@@ -1,7 +1,7 @@
 import tables
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, IdCounters, OutputId, TagId, TagMask, WindowId
-from legacy_model import LayoutMode, Rect
+from legacy_model import LayoutMode, PointerOpKind, Rect
 
 type
   WindowData* = object
@@ -107,6 +107,12 @@ type
     masterCount*: int
     masterSplitRatio*: float32
 
+  DodPointerOpData* = object
+    kind*: PointerOpKind
+    windowId*: WindowId
+    initialGeom*: Rect
+    edges*: uint32
+
   DodLiveRestoreState* = object
     activeSlot*: uint32
     focusedWindow*: ExternalWindowId
@@ -148,10 +154,15 @@ type
     defaultWorkspaceCount*: uint32
     visibleSlots*: seq[uint32]
     overviewActive*: bool
+    layerFocusExclusive*: bool
+    sessionLocked*: bool
+    activeModifiers*: uint32
     screenWidth*: int32
     screenHeight*: int32
     outerGaps*: int32
     innerGaps*: int32
+    previousOuterGaps*: int32
+    previousInnerGaps*: int32
     smartGaps*: bool
     overviewOuterGap*: int32
     overviewInnerGapMultiplier*: float32
@@ -163,6 +174,8 @@ type
     defaultWindowHeight*: float32
     defaultMasterCount*: int
     defaultMasterRatio*: float32
+    enableAnimations*: bool
+    animationSpeed*: float32
     floatingXRatio*: float32
     floatingYRatio*: float32
     floatingWidthRatio*: float32
@@ -171,6 +184,10 @@ type
     floatingMinHeight*: int32
     scratchpadWidthRatio*: float32
     scratchpadHeightRatio*: float32
+    pointerOp*: DodPointerOpData
+    screenLockCommand*: seq[string]
+    windowMenuCommand*: seq[string]
+    allowExitSession*: bool
     windowRules*: seq[WindowRuleData]
     tagRules*: seq[TagRuleData]
     restoreActiveSlot*: uint32
@@ -188,3 +205,4 @@ type
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]
+    nextGroupId*: uint32

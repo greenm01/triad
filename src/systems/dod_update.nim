@@ -9,6 +9,7 @@ from ../types/legacy_model import nil
 import dod_focus
 import dod_outputs
 import dod_placement
+import dod_runtime
 import dod_scratchpad
 import dod_window_lifecycle
 import dod_window_state
@@ -279,6 +280,30 @@ proc shouldBroadcastTriadStateChanged(kind: MsgKind): bool =
     kind.shouldBroadcastOutputsChanged() or
     kind in {CmdToggleOverview, CmdOpenOverview, CmdCloseOverview}
 
+proc isFocusChangingCommand(kind: MsgKind): bool =
+  kind in {
+    WlFocusChanged,
+    CmdFocusNext,
+    CmdFocusPrev,
+    CmdFocusDirection,
+    CmdFocusLast,
+    CmdFocusTagLeft,
+    CmdFocusTagRight,
+    CmdFocusOccupiedTagLeft,
+    CmdFocusOccupiedTagRight,
+    CmdFocusColumnFirst,
+    CmdFocusColumnLast,
+    CmdFocusWindowOrWorkspaceUp,
+    CmdFocusWindowOrWorkspaceDown,
+    CmdFocusTag,
+    CmdFocusWindowById,
+    CmdSelectWindow,
+    CmdToggleScratchpad,
+    CmdToggleNamedScratchpad,
+    CmdRestoreScratchpad,
+    WlShellSurfaceInteraction
+  }
+
 proc closeOverview(model: var DodModel): bool =
   if not model.overviewActive:
     return false
@@ -330,11 +355,25 @@ proc addSetMaximizedEffect(effects: var seq[Effect];
 proc dodUpdate*(model: DodModel; msg: Msg): (DodModel, seq[Effect]) =
   var next = model
   var effects: seq[Effect] = @[]
+  if model.sessionLocked and msg.kind.isFocusChangingCommand():
+    return (next, effects)
+
   let before = dodShellSnapshot(model)
   let beforeFocus = before.focusedWindowId()
   var dirty = false
 
   case msg.kind
+  of WlManageStart:
+    let focused = next.focusedWindow()
+    if focused != NullWindowId:
+      next.recordWorkspace(next.activeTag)
+      next.recordFocus(focused)
+      let externalId = next.legacyWindowId(focused)
+      effects.add(broadcastWindowFocusChanged(externalId))
+      if not next.sessionLocked and not next.layerFocusExclusive:
+        effects.add(Effect(kind: EffFocusWindow, focusId: externalId))
+    dirty = true
+
   of WlOutputDimensions:
     dirty = next.setOutputDimensionsForExternal(
       msg.outputId.externalOutputId(), msg.width, msg.height)
@@ -408,6 +447,56 @@ proc dodUpdate*(model: DodModel; msg: Msg): (DodModel, seq[Effect]) =
       msg.maxWidth,
       msg.maxHeight)
 
+  of WlWindowMenuRequested:
+    if next.windowMenuCommand.len > 0 and
+        next.windowForExternal(msg.menuWindowId.externalWindowId()) !=
+        NullWindowId:
+      effects.add(Effect(
+        kind: EffSpawnWindowMenu,
+        windowMenuCommand: next.windowMenuCommand,
+        windowMenuId: msg.menuWindowId,
+        windowMenuX: msg.menuX,
+        windowMenuY: msg.menuY))
+  of WlShellSurfaceInteraction:
+    if msg.shellSurfaceId != 0 and not next.sessionLocked and
+        not next.layerFocusExclusive:
+      effects.add(Effect(
+        kind: EffFocusShellSurface,
+        focusShellSurfaceId: msg.shellSurfaceId))
+  of WlModifiersChanged:
+    discard next.setActiveModifiers(msg.newModifiers)
+  of WlLayerFocusExclusive:
+    dirty = next.setLayerFocusExclusive(true)
+  of WlLayerFocusNonExclusive, WlLayerFocusNone:
+    dirty = next.setLayerFocusExclusive(false)
+  of WlSessionLocked:
+    dirty = next.setSessionLocked(true)
+  of WlSessionUnlocked:
+    dirty = next.setSessionLocked(false)
+    let focused = next.focusedWindow()
+    if focused != NullWindowId:
+      let externalId = next.legacyWindowId(focused)
+      effects.add(broadcastWindowFocusChanged(externalId))
+      effects.add(Effect(kind: EffFocusWindow, focusId: externalId))
+  of WlPointerMoveRequested:
+    if next.beginPointerMove(msg.moveWinId.externalWindowId()):
+      effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.moveSeat))
+  of WlPointerResizeRequested:
+    if next.beginPointerResize(
+        msg.resizeWinId.externalWindowId(), msg.resizeEdges):
+      effects.add(Effect(
+        kind: EffInformResizeStart,
+        resizeLifecycleWinId: msg.resizeWinId))
+      effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.resizeSeat))
+  of WlPointerDelta:
+    dirty = next.applyPointerDelta(msg.dx, msg.dy)
+  of WlPointerRelease:
+    let resized = next.finishPointerOp()
+    if resized != NullWindowId:
+      effects.add(Effect(
+        kind: EffInformResizeEnd,
+        resizeLifecycleWinId: next.legacyWindowId(resized)))
+
   of WlFocusChanged:
     dirty = next.setExternalFocus(msg.newFocusedId.externalWindowId())
   of WlWindowFullscreenRequested:
@@ -458,6 +547,15 @@ proc dodUpdate*(model: DodModel; msg: Msg): (DodModel, seq[Effect]) =
     dirty = next.resizeHeight(msg.deltaH)
   of CmdSetColumnWidth:
     dirty = next.setFocusedColumnWidth(msg.targetWidth)
+
+  of CmdRenameTag:
+    dirty = next.renameActiveWorkspace(msg.newName)
+    if dirty:
+      effects.add(broadcastWorkspaceActivated(dodShellSnapshot(next)))
+  of CmdGroupWindows:
+    dirty = next.groupFocusedWindow()
+  of CmdUngroupWindow, CmdFocusNextInGroup:
+    dirty = true
 
   of CmdFocusNext:
     dirty = next.focusCycle(1)
@@ -569,6 +667,14 @@ proc dodUpdate*(model: DodModel; msg: Msg): (DodModel, seq[Effect]) =
 
   of CmdToggleFloating:
     dirty = next.toggleFloatingFocused()
+  of CmdMoveFloating:
+    dirty = next.moveFloatingFocused(msg.moveDX, msg.moveDY)
+  of CmdResizeFloating:
+    dirty = next.resizeFloatingFocused(msg.deltaFW, msg.deltaFH)
+  of CmdAdjustGaps:
+    dirty = next.adjustGaps(msg.deltaG)
+  of CmdToggleGaps:
+    dirty = next.toggleGaps()
   of CmdToggleFullscreen:
     let focused = next.focusedWindow()
     dirty = next.toggleFullscreenFocused()
@@ -605,6 +711,51 @@ proc dodUpdate*(model: DodModel; msg: Msg): (DodModel, seq[Effect]) =
     if next.windowForExternal(msg.closeWindowId.externalWindowId()) !=
         NullWindowId:
       effects.add(Effect(kind: EffCloseWindow, closeId: msg.closeWindowId))
+  of CmdSpawn:
+    if msg.spawnCommand.len > 0:
+      effects.add(Effect(kind: EffSpawn, spawnCommand: msg.spawnCommand))
+  of CmdTick:
+    dirty = next.tickAnimations()
+  of CmdLockSession:
+    if next.screenLockCommand.len > 0:
+      effects.add(Effect(
+        kind: EffSpawnScreenLock,
+        screenLockCommand: next.screenLockCommand))
+    else:
+      effects.add(Effect(
+        kind: EffLog,
+        msg: "screen lock command is not configured"))
+  of CmdWarpPointer:
+    effects.add(Effect(
+      kind: EffPointerWarp,
+      warpX: msg.warpX,
+      warpY: msg.warpY))
+  of CmdEatNextKey:
+    effects.add(Effect(kind: EffEnsureNextKeyEaten))
+  of CmdCancelEatNextKey:
+    effects.add(Effect(kind: EffCancelEnsureNextKeyEaten))
+  of CmdStopManager:
+    effects.add(Effect(kind: EffStopManager))
+  of CmdTriadReload:
+    effects.add(Effect(kind: EffTriadReload))
+  of CmdExitSession:
+    if next.allowExitSession:
+      effects.add(Effect(kind: EffExitSession))
+    else:
+      effects.add(Effect(
+        kind: EffLog,
+        msg: "exit-session is disabled by config"))
+  of CmdFocusShellUi:
+    if not next.sessionLocked and not next.layerFocusExclusive:
+      effects.add(Effect(kind: EffFocusShellUi))
+  of CmdScreenshot:
+    effects.add(Effect(
+      kind: EffScreenshot,
+      screenshotKind: msg.screenshotKind,
+      screenshotPath: msg.screenshotPath,
+      screenshotShowPointer: msg.screenshotShowPointer))
+  of CmdConfigReload, CmdSpawnTerminal:
+    dirty = true
 
   else:
     discard
