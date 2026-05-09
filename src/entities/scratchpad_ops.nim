@@ -1,9 +1,9 @@
 import options, tables
 import ../state/entity_manager
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
-proc addScratchpadRef*(model: var DodModel; winId: WindowId): bool =
+proc addScratchpadRef*(model: var Model; winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
   if model.scratchpadWindows.find(winId) == -1:
@@ -11,7 +11,7 @@ proc addScratchpadRef*(model: var DodModel; winId: WindowId): bool =
     return true
   false
 
-proc removeNamedScratchpadRefs*(model: var DodModel; winId: WindowId): bool =
+proc removeNamedScratchpadRefs*(model: var Model; winId: WindowId): bool =
   var deadNames: seq[string] = @[]
   for name, namedWin in model.namedScratchpads.pairs:
     if namedWin == winId:
@@ -20,7 +20,7 @@ proc removeNamedScratchpadRefs*(model: var DodModel; winId: WindowId): bool =
     model.namedScratchpads.del(name)
     result = true
 
-proc removeScratchpadRef*(model: var DodModel; winId: WindowId): bool =
+proc removeScratchpadRef*(model: var Model; winId: WindowId): bool =
   var i = 0
   while i < model.scratchpadWindows.len:
     if model.scratchpadWindows[i] == winId:
@@ -38,7 +38,7 @@ proc removeScratchpadRef*(model: var DodModel; winId: WindowId): bool =
     result = true
 
 proc setNamedScratchpadRef*(
-    model: var DodModel; name: string; winId: WindowId): bool =
+    model: var Model; name: string; winId: WindowId): bool =
   if name.len == 0 or winId == NullWindowId or
       model.windows.entity(winId).isNone:
     return false
@@ -48,7 +48,7 @@ proc setNamedScratchpadRef*(
     model.namedScratchpads[name] = winId
     return true
 
-proc showScratchpadRef*(model: var DodModel; winId: WindowId): bool =
+proc showScratchpadRef*(model: var Model; winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
   discard model.addScratchpadRef(winId)
@@ -56,7 +56,7 @@ proc showScratchpadRef*(model: var DodModel; winId: WindowId): bool =
   model.isScratchpadVisible = true
   true
 
-proc hideScratchpadRef*(model: var DodModel): bool =
+proc hideScratchpadRef*(model: var Model): bool =
   let changed =
     model.visibleScratchpad != NullWindowId or model.isScratchpadVisible
   model.visibleScratchpad = NullWindowId
@@ -64,7 +64,7 @@ proc hideScratchpadRef*(model: var DodModel): bool =
   changed
 
 proc setVisibleScratchpadRef*(
-    model: var DodModel; winId: WindowId; visible: bool): bool =
+    model: var Model; winId: WindowId; visible: bool): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
   if visible:
@@ -73,7 +73,7 @@ proc setVisibleScratchpadRef*(
   model.isScratchpadVisible = visible
   true
 
-proc pruneScratchpadRefs*(model: var DodModel): bool =
+proc pruneScratchpadRefs*(model: var Model): bool =
   var i = 0
   while i < model.scratchpadWindows.len:
     if model.windows.entity(model.scratchpadWindows[i]).isSome:

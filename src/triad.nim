@@ -9,11 +9,11 @@ import core/msg
 import core/restore_state
 import core/niri_state
 import core/render_visibility
-import systems/dod_daemon_view
-import systems/dod_layout
-import systems/dod_runtime
-import systems/dod_runtime_state
-import types/dod_model
+import systems/daemon_view
+import systems/layout_projection
+import systems/runtime
+import systems/runtime_facade
+import types/model
 import types/shell_snapshot
 import config/parser
 import config/defaults
@@ -69,7 +69,7 @@ var
   riverPhase = RiverIdle
   bindingsConfigured = false
   
-  # TEA State
+  # Runtime State
   runtimeState: TriadRuntimeState
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
@@ -140,8 +140,7 @@ proc cstringOrEmpty(value: cstring): string =
     $value
 
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
-  let observed = runtimeState.applyObservedRuntimeUpdate(msg)
-  observed.effects
+  runtimeState.applyRuntimeUpdate(msg)
 
 proc readModelSnapshot(): ShellSnapshot =
   runtimeState.readRuntimeSnapshot()
@@ -154,16 +153,14 @@ proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
 
 proc syncRuntimeLayoutProjection(
     context: string; msg: Msg): seq[RenderInstruction] =
-  let observed = runtimeState.applyObservedRuntimeLayoutProjection()
-  observed.projection.instructions
+  runtimeState.applyRuntimeLayoutProjection().instructions
 
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:
     return
 
   let state = pendingLiveRestore.get()
-  let observed = runtimeState.applyObservedRuntimeLiveRestore(state)
-  discard observed
+  discard runtimeState.applyRuntimeLiveRestore(state)
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
@@ -191,7 +188,7 @@ proc setupConfig() =
     writeFile(configPath, FallbackConfigContent)
     info "Created default config", path=configPath
 
-proc spawnStartupCommands(model: DodModel) =
+proc spawnStartupCommands(model: Model) =
   for cmd in model.startupCommands:
     if cmd.len > 0:
       try:
@@ -221,7 +218,7 @@ proc stopTrackedQuickshell(reason: string) =
     discard
   quickshellProcess = nil
 
-proc stopConfiguredQuickshell(model: DodModel; reason: string) =
+proc stopConfiguredQuickshell(model: Model; reason: string) =
   let args = quickshellKillArgs(model.quickshell)
   if args.len == 0 or model.quickshell.command.strip().len == 0:
     return
@@ -255,12 +252,12 @@ proc stopConfiguredQuickshell(model: DodModel; reason: string) =
       reason=reason,
       error=e.msg
 
-proc stopQuickshell(model: DodModel; reason: string; authoritative = false) =
+proc stopQuickshell(model: Model; reason: string; authoritative = false) =
   stopTrackedQuickshell(reason)
   if authoritative:
     stopConfiguredQuickshell(model, reason)
 
-proc spawnQuickshell(model: DodModel; niriSocketPath: string) =
+proc spawnQuickshell(model: Model; niriSocketPath: string) =
   if model.quickshell.enabled and model.quickshell.theme != "":
     let args = quickshellLaunchArgs(model.quickshell)
     
@@ -281,7 +278,7 @@ proc spawnQuickshell(model: DodModel; niriSocketPath: string) =
     except CatchableError as e:
       warn "Failed to spawn Quickshell", command=model.quickshell.command, theme=model.quickshell.theme, error=e.msg
 
-proc restartQuickshell(model: DodModel; niriSocketPath, reason: string) =
+proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
   stopQuickshell(model, reason, authoritative = true)
   spawnQuickshell(model, niriSocketPath)
 
@@ -305,7 +302,7 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
     return false
 
   let previousModel = currentModel
-  discard runtimeState.applyObservedRuntimeConfig(loaded.config)
+  discard runtimeState.applyRuntimeConfig(loaded.config)
   quickshellSpawnPending = false
 
   if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
@@ -319,11 +316,11 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   broadcastNiriSnapshot(readModelSnapshot())
   true
 
-proc scheduleQuickshellSpawn(model: DodModel) =
+proc scheduleQuickshellSpawn(model: Model) =
   quickshellSpawnPending = model.quickshell.enabled and model.quickshell.theme.strip().len > 0
 
 proc spawnPendingQuickshell(
-    model: DodModel; niriSocketPath, reason: string) =
+    model: Model; niriSocketPath, reason: string) =
   if not quickshellSpawnPending:
     return
   quickshellSpawnPending = false
@@ -359,7 +356,7 @@ proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
   except CatchableError as e:
     warn "Failed to spawn window menu", cmd=command[0], windowId=windowId, error=e.msg
 
-proc spawnTerminal(model: DodModel) =
+proc spawnTerminal(model: Model) =
   for command in terminalCandidates(model.terminal.command):
     if command.len == 0 or not commandExists(command[0]):
       continue
@@ -574,17 +571,17 @@ proc applyBorder(win: ptr RiverWindowV1; focused: bool; edges: uint32) =
   let color = premulColor(if focused: currentModel.focusedBorderColor else: currentModel.unfocusedBorderColor)
   win.setBorders(edges, currentModel.borderWidth, color.r, color.g, color.b, color.a)
 
-proc supportedCapabilities(model: DodModel): uint32 =
+proc supportedCapabilities(model: Model): uint32 =
   result = RiverBaseCapabilities
   if model.windowMenuCommand.len > 0:
     result = result or RiverCapabilityWindowMenu
 
-proc configuredPresentationMode(model: DodModel): uint32 =
+proc configuredPresentationMode(model: Model): uint32 =
   case model.presentationMode
   of PresentationAsync: RiverPresentationAsync
   else: RiverPresentationVsync
 
-proc hasPresentationPreference(model: DodModel): bool =
+proc hasPresentationPreference(model: Model): bool =
   model.presentationMode != PresentationDefault
 
 proc outputIdForPointer(output: ptr RiverOutputV1): uint32 =
@@ -694,7 +691,7 @@ proc setupDefaultBindings() =
     for binding in currentModel.keyBindings:
       if not keyBindingActive(binding):
         continue
-      let parsed = parseLegacyCommand(binding.command)
+      let parsed = parseTextCommand(binding.command)
       let sym = keySymForBinding(binding.key, binding.modifiers)
       if parsed.isSome and sym != 0:
         addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
@@ -1814,8 +1811,7 @@ proc main() =
   # Setup and Load Config
   setupConfig()
   let initialConfig = loadConfig(configPath)
-  let initialState = initRuntimeStateFromConfig(initialConfig)
-  runtimeState = initialState.state
+  runtimeState = initRuntimeStateFromConfig(initialConfig)
   info "Initial config loaded", path=configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()

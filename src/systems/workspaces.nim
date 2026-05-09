@@ -2,7 +2,7 @@ import algorithm, options
 import ../state/engine
 from ../types/runtime_values import Scroller
 
-proc activeWorkspaceSlot*(model: DodModel): uint32 =
+proc activeWorkspaceSlot*(model: Model): uint32 =
   let tagOpt = model.tagData(model.activeTag)
   if tagOpt.isSome:
     return tagOpt.get().slot
@@ -11,19 +11,19 @@ proc activeWorkspaceSlot*(model: DodModel): uint32 =
   0
 
 proc ensureWorkspaceSlot*(
-    model: var DodModel; slot: uint32; forcedLayout = 0): TagId =
+    model: var Model; slot: uint32; forcedLayout = 0): TagId =
   if slot == 0 or slot > MaxTagBits:
     return NullTagId
   result = model.tagForSlot(slot)
   if result != NullTagId:
     if forcedLayout != 0:
       discard model.setTagLayout(
-        result, dodSafeLayoutMode(forcedLayout, model.tag(result).get().layoutMode))
+        result, safeLayoutMode(forcedLayout, model.tag(result).get().layoutMode))
     return result
   let tagRule = model.tagRuleForSlot(slot)
   let layoutMode =
     if forcedLayout != 0:
-      dodSafeLayoutMode(forcedLayout)
+      safeLayoutMode(forcedLayout)
     elif tagRule.found:
       tagRule.rule.defaultLayout
     else:
@@ -35,11 +35,11 @@ proc ensureWorkspaceSlot*(
     slot = slot,
     name = name,
     layoutMode = layoutMode,
-    masterCount = model.dodDefaultMasterCount(),
-    masterSplitRatio = model.dodDefaultMasterRatio())
+    masterCount = model.defaultMasterCount(),
+    masterSplitRatio = model.defaultMasterRatio())
 
-proc computedVisibleWorkspaceSlots*(model: DodModel): seq[uint32] =
-  let defaultCount = model.dodDefaultWorkspaceCount()
+proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
+  let defaultCount = model.defaultWorkspaceCount()
   for slot in 1'u32 .. defaultCount:
     result.add(slot)
 
@@ -58,7 +58,7 @@ proc computedVisibleWorkspaceSlots*(model: DodModel): seq[uint32] =
     else:
       inc i
 
-proc trailingWorkspaceSlot*(model: DodModel): uint32 =
+proc trailingWorkspaceSlot*(model: Model): uint32 =
   let slots = model.computedVisibleWorkspaceSlots()
   if slots.len == 0:
     return 0
@@ -69,17 +69,17 @@ proc trailingWorkspaceSlot*(model: DodModel): uint32 =
     return last + 1
   0
 
-proc visibleWorkspaceSlots(model: DodModel): seq[uint32] =
+proc visibleWorkspaceSlots(model: Model): seq[uint32] =
   result = model.computedVisibleWorkspaceSlots()
   let trailing = model.trailingWorkspaceSlot()
   if trailing != 0 and result.find(trailing) == -1:
     result.add(trailing)
     result.sort()
 
-proc refreshVisibleWorkspaceSlots*(model: var DodModel) =
+proc refreshVisibleWorkspaceSlots*(model: var Model) =
   discard model.replaceVisibleWorkspaceSlots(model.visibleWorkspaceSlots())
 
-proc ensureActiveWorkspace*(model: var DodModel): TagId =
+proc ensureActiveWorkspace*(model: var Model): TagId =
   let activeOpt = model.tagData(model.activeTag)
   if activeOpt.isSome:
     let slot = activeOpt.get().slot
@@ -96,7 +96,7 @@ proc ensureActiveWorkspace*(model: var DodModel): TagId =
     discard model.setActiveWorkspace(result)
     model.refreshVisibleWorkspaceSlots()
 
-proc workspaceSlotForIndex*(model: DodModel; index: uint32): uint32 =
+proc workspaceSlotForIndex*(model: Model; index: uint32): uint32 =
   if index == 0:
     return 0
   let slots = model.visibleWorkspaceSlots()
@@ -105,7 +105,7 @@ proc workspaceSlotForIndex*(model: DodModel; index: uint32): uint32 =
     return slots[i]
   0
 
-proc workspaceSlotForClampedIndex*(model: DodModel; index: uint32): uint32 =
+proc workspaceSlotForClampedIndex*(model: Model; index: uint32): uint32 =
   if index == 0:
     return 0
   let slots = model.visibleWorkspaceSlots()
@@ -114,15 +114,15 @@ proc workspaceSlotForClampedIndex*(model: DodModel; index: uint32): uint32 =
   let i = min(int(index) - 1, slots.len - 1)
   slots[i]
 
-proc nextDynamicWorkspaceSlot*(model: DodModel): uint32 =
-  result = model.dodDefaultWorkspaceCount() + 1
+proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
+  result = model.defaultWorkspaceCount() + 1
   for slot in model.sortedSlots():
     if slot >= result:
       result = slot + 1
   if result > MaxTagBits:
     result = 0
 
-proc tagHasFocusableWindow*(model: DodModel; tagId: TagId): bool =
+proc tagHasFocusableWindow*(model: Model; tagId: TagId): bool =
   for winId in model.windowsForTag(tagId):
     let winOpt = model.windowData(winId)
     if winOpt.isSome and not winOpt.get().isMinimized:
@@ -130,7 +130,7 @@ proc tagHasFocusableWindow*(model: DodModel; tagId: TagId): bool =
   false
 
 proc nearestWorkspaceSlot*(
-    model: DodModel; direction: int; occupiedOnly: bool): uint32 =
+    model: Model; direction: int; occupiedOnly: bool): uint32 =
   let active = model.activeWorkspaceSlot()
   let slots =
     if occupiedOnly: model.sortedSlots()
@@ -151,24 +151,24 @@ proc nearestWorkspaceSlot*(
       if slot > active and
           (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
         return slot
-    if not occupiedOnly and active <= model.dodDefaultWorkspaceCount() and
+    if not occupiedOnly and active <= model.defaultWorkspaceCount() and
         active == slots[^1]:
       return model.nextDynamicWorkspaceSlot()
   0
 
-proc lowerWorkspaceFallback*(model: DodModel; fromSlot: uint32): uint32 =
+proc lowerWorkspaceFallback*(model: Model; fromSlot: uint32): uint32 =
   let slots = model.visibleWorkspaceSlots()
   for i in countdown(slots.len - 1, 0):
     let slot = slots[i]
     if slot < fromSlot and slot != fromSlot:
       return slot
-  if model.dodDefaultWorkspaceCount() > 0:
+  if model.defaultWorkspaceCount() > 0:
     let below = if fromSlot > 1: fromSlot - 1 else: 1'u32
-    return min(model.dodDefaultWorkspaceCount(), max(1'u32, below))
+    return min(model.defaultWorkspaceCount(), max(1'u32, below))
   1'u32
 
-proc pruneDynamicWorkspaces*(model: var DodModel): bool =
-  let defaultCount = model.dodDefaultWorkspaceCount()
+proc pruneDynamicWorkspaces*(model: var Model): bool =
+  let defaultCount = model.defaultWorkspaceCount()
   let activeSlot = model.activeWorkspaceSlot()
   let trailing = model.trailingWorkspaceSlot()
   let slots = model.sortedSlots()

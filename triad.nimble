@@ -25,7 +25,7 @@ proc runUnitSuites() =
     "tests/tcompat.nim",
     "tests/tconfig.nim",
     "tests/tcore.nim",
-    "tests/tdod.nim",
+    "tests/tstate.nim",
     "tests/thardening.nim",
     "tests/tlayouts.nim",
     "tests/tlogging.nim",
@@ -44,7 +44,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tcompat",
     "tests/tconfig",
     "tests/tcore",
-    "tests/tdod",
+    "tests/tstate",
     "tests/thardening",
     "tests/tlayouts",
     "tests/tlogging",
@@ -86,8 +86,8 @@ task testConfig, "Run configuration parser tests":
 task testCore, "Run core model/update tests":
   runTestSuite("tests/tcore.nim")
 
-task testDod, "Run data-oriented design primitive tests":
-  runTestSuite("tests/tdod.nim")
+task testState, "Run runtime state tests":
+  runTestSuite("tests/tstate.nim")
 
 task testHardening, "Run crash hardening tests":
   runTestSuite("tests/thardening.nim")

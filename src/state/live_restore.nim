@@ -1,15 +1,15 @@
 import algorithm, json, options, os, tables
 import engine
 import ../core/restore_state
-import ../types/core as dod_core
-import ../types/dod_model as dod_model
+import ../types/core as core_types
+import ../types/model as model_types
 import ../types/runtime_values as rv
 
-proc runtimeWindowId(win: dod_model.WindowData): rv.WindowId =
+proc runtimeWindowId(win: model_types.WindowData): rv.WindowId =
   rv.WindowId(uint32(win.externalId))
 
 proc externalWindowId(
-    model: DodModel; winId: dod_core.WindowId): rv.WindowId =
+    model: Model; winId: core_types.WindowId): rv.WindowId =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
@@ -17,7 +17,7 @@ proc externalWindowId(
     return 0'u32
   winOpt.get().runtimeWindowId()
 
-proc focusedOnActiveTag(model: DodModel): rv.WindowId =
+proc focusedOnActiveTag(model: Model): rv.WindowId =
   if model.activeTag == NullTagId:
     return 0'u32
   let tagOpt = model.tagData(model.activeTag)
@@ -33,7 +33,7 @@ proc focusedOnActiveTag(model: DodModel): rv.WindowId =
     return 0'u32
   winOpt.get().runtimeWindowId()
 
-proc dodRestoredWindow*(source: rv.RestoredWindowState):
+proc restoredWindowData*(source: rv.RestoredWindowState):
     RestoredWindowData =
   RestoredWindowData(
     slot: source.tagId,
@@ -52,7 +52,7 @@ proc dodRestoredWindow*(source: rv.RestoredWindowState):
     actualH: source.actualH
   )
 
-proc dodRestoredTag*(source: rv.RestoredTagState): RestoredTagData =
+proc restoredTagData*(source: rv.RestoredTagState): RestoredTagData =
   result = RestoredTagData(
     slot: source.tagId,
     name: source.name,
@@ -71,15 +71,15 @@ proc dodRestoredTag*(source: rv.RestoredTagState): RestoredTagData =
       restoredCol.windows.add(ExternalWindowId(uint32(winId)))
     result.columns.add(restoredCol)
 
-proc dodFromLiveRestore*(source: LiveRestoreState): DodLiveRestoreState =
+proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
   result.activeSlot = source.activeTag
   result.focusedWindow = ExternalWindowId(uint32(source.focusedWindow))
   for winId, slot in source.tagByWindow.pairs:
     result.tagByWindow[ExternalWindowId(uint32(winId))] = slot
   for winId, win in source.windows.pairs:
-    result.windows[ExternalWindowId(uint32(winId))] = win.dodRestoredWindow()
+    result.windows[ExternalWindowId(uint32(winId))] = win.restoredWindowData()
   for slot, tag in source.tags.pairs:
-    result.tags[slot] = tag.dodRestoredTag()
+    result.tags[slot] = tag.restoredTagData()
   for outputId, slot in source.outputTags.pairs:
     result.outputTags[ExternalOutputId(outputId)] = slot
   for winId in source.scratchpadWindows:
@@ -93,13 +93,13 @@ proc dodFromLiveRestore*(source: LiveRestoreState): DodLiveRestoreState =
   for slot in source.workspaceHistory:
     result.workspaceHistory.add(slot)
 
-proc hasOutputTag(model: DodModel; tagId: TagId): bool =
+proc hasOutputTag(model: Model; tagId: TagId): bool =
   for _, outputTagId in model.outputTags.pairs:
     if outputTagId == tagId:
       return true
   false
 
-proc shouldPersistTag(model: DodModel; tag: TagData): bool =
+proc shouldPersistTag(model: Model; tag: TagData): bool =
   if tag.slot <= model.defaultWorkspaceCount:
     return true
   if tag.id == model.activeTag or model.tagHasLiveWindows(tag.id) or
@@ -115,7 +115,7 @@ proc shouldPersistTag(model: DodModel; tag: TagData): bool =
   tag.masterCount != DefaultMasterCount or
     tag.masterSplitRatio != DefaultMasterRatio
 
-proc dodLiveRestoreState*(model: DodModel): LiveRestoreState =
+proc liveRestoreState*(model: Model): LiveRestoreState =
   result.activeTag = model.activeSlot
   result.focusedWindow = model.focusedOnActiveTag()
 
@@ -336,11 +336,11 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
     "workspace_history": workspaceHistory
   })
 
-proc dodLiveRestoreJson*(model: DodModel): string =
-  model.dodLiveRestoreState().liveRestoreStateJson()
+proc liveRestoreJson*(model: Model): string =
+  model.liveRestoreState().liveRestoreStateJson()
 
-proc writeDodLiveRestoreState*(
-    model: DodModel; path = defaultLiveRestorePath()): LiveRestoreWriteResult =
+proc writeLiveRestoreState*(
+    model: Model; path = defaultLiveRestorePath()): LiveRestoreWriteResult =
   if path.len == 0:
     return LiveRestoreWriteResult(ok: false, error: "empty live restore path")
 
@@ -349,7 +349,7 @@ proc writeDodLiveRestoreState*(
   try:
     if dir.len > 0:
       createDir(dir)
-    writeFile(tmp, model.dodLiveRestoreJson() & "\n")
+    writeFile(tmp, model.liveRestoreJson() & "\n")
     moveFile(tmp, path)
     LiveRestoreWriteResult(ok: true, path: path)
   except CatchableError as e:

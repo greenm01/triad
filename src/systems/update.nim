@@ -1,33 +1,33 @@
 import ../core/effects
 import ../core/msg
 import ../state/engine
-import dod_update_commands
-import dod_update_effects
-import dod_update_events
-import dod_update_maintenance
+import update_commands
+import update_effects
+import update_events
+import update_maintenance
 
-proc dodUpdate*(model: DodModel; msg: Msg): (DodModel, seq[Effect]) =
+proc update*(model: Model; msg: Msg): (Model, seq[Effect]) =
   var next = model
   var effects: seq[Effect] = @[]
   if model.sessionLocked and msg.kind.isFocusChangingCommand():
     return (next, effects)
 
-  let before = dodShellSnapshot(model)
+  let before = shellSnapshot(model)
   let step =
     case msg.kind
     of WlWindowCreated .. WlModifiersChanged:
-      next.applyDodEvent(msg)
+      next.applyEvent(msg)
     of CmdSetLayout .. CmdScreenshot:
-      next.applyDodCommand(msg)
+      next.applyCommand(msg)
   for effect in step.effects:
     effects.add(effect)
   var dirty = step.dirty
 
-  let maintenance = next.applyDodUpdateMaintenance(msg.kind)
+  let maintenance = next.applyUpdateMaintenance(msg.kind)
   if maintenance.collapsed or maintenance.pruned:
     dirty = true
 
-  let after = dodShellSnapshot(next)
+  let after = shellSnapshot(next)
   effects.addPostUpdateEffects(
     msg, before, after, dirty, maintenance.collapsed, maintenance.pruned)
 

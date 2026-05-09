@@ -1,11 +1,8 @@
 import options
 import ../state/engine
 
-proc defaultFloatingGeom*(model: DodModel): LegacyRect =
-  model.dodDefaultFloatingGeom()
-
 proc chooseFullscreenOutput*(
-    model: DodModel; requested: ExternalOutputId): ExternalOutputId =
+    model: Model; requested: ExternalOutputId): ExternalOutputId =
   if requested != NullExternalOutputId and
       model.outputForExternal(requested) != NullOutputId:
     return requested
@@ -19,33 +16,33 @@ proc chooseFullscreenOutput*(
   NullExternalOutputId
 
 proc updateWindowDimensionsForExternal*(
-    model: var DodModel; externalId: ExternalWindowId; w, h: int32): bool =
+    model: var Model; externalId: ExternalWindowId; w, h: int32): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowDimensions(winId, w, h)
 
 proc updateWindowDecorationHintForExternal*(
-    model: var DodModel; externalId: ExternalWindowId; hint: uint32): bool =
+    model: var Model; externalId: ExternalWindowId; hint: uint32): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowDecorationHint(winId, hint)
 
 proc updateWindowPresentationHintForExternal*(
-    model: var DodModel; externalId: ExternalWindowId; hint: uint32): bool =
+    model: var Model; externalId: ExternalWindowId; hint: uint32): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowPresentationHint(winId, hint)
 
-proc updateWindowParentForExternal*(model: var DodModel;
+proc updateWindowParentForExternal*(model: var Model;
     externalId: ExternalWindowId; parentExternalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowParent(winId, parentExternalId)
 
 proc updateWindowIdentifierForExternal*(
-    model: var DodModel; externalId: ExternalWindowId; identifier: string):
+    model: var Model; externalId: ExternalWindowId; identifier: string):
     bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowIdentifier(winId, identifier)
 
 proc updateWindowAppIdForExternal*(
-    model: var DodModel; externalId: ExternalWindowId; appId: string): bool =
+    model: var Model; externalId: ExternalWindowId; appId: string): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -54,7 +51,7 @@ proc updateWindowAppIdForExternal*(
   true
 
 proc updateWindowTitleForExternal*(
-    model: var DodModel; externalId: ExternalWindowId; title: string): bool =
+    model: var Model; externalId: ExternalWindowId; title: string): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -62,14 +59,14 @@ proc updateWindowTitleForExternal*(
   discard model.setWindowKeyboardShortcutsInhibit(winId, false, false)
   true
 
-proc updateWindowDimensionsHintForExternal*(model: var DodModel;
+proc updateWindowDimensionsHintForExternal*(model: var Model;
     externalId: ExternalWindowId; minWidth, minHeight, maxWidth,
     maxHeight: int32): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowDimensionsHint(
     winId, minWidth, minHeight, maxWidth, maxHeight)
 
-proc requestFullscreenForExternal*(model: var DodModel;
+proc requestFullscreenForExternal*(model: var Model;
     externalId: ExternalWindowId; requestedOutput: ExternalOutputId): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
@@ -78,22 +75,22 @@ proc requestFullscreenForExternal*(model: var DodModel;
     winId, true, model.chooseFullscreenOutput(requestedOutput))
 
 proc exitFullscreenForExternal*(
-    model: var DodModel; externalId: ExternalWindowId): bool =
+    model: var Model; externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowFullscreen(winId, false)
 
 proc requestMaximizeForExternal*(
-    model: var DodModel; externalId: ExternalWindowId): bool =
+    model: var Model; externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowMaximized(winId, true)
 
 proc requestUnmaximizeForExternal*(
-    model: var DodModel; externalId: ExternalWindowId): bool =
+    model: var Model; externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowMaximized(winId, false)
 
 proc requestMinimizeForExternal*(
-    model: var DodModel; externalId: ExternalWindowId): bool =
+    model: var Model; externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId or not model.setWindowMinimized(winId, true):
     return false
@@ -108,13 +105,13 @@ proc requestMinimizeForExternal*(
       discard model.setTagFocus(tagId, focused)
   true
 
-proc focusedWindow*(model: DodModel): WindowId =
+proc focusedWindow*(model: Model): WindowId =
   let tagOpt = model.tag(model.activeTag)
   if tagOpt.isNone:
     return NullWindowId
   tagOpt.get().focusedWindow
 
-proc toggleFloatingFocused*(model: var DodModel): bool =
+proc toggleFloatingFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   let win = model.window(winId)
   if win.isNone:
@@ -122,9 +119,9 @@ proc toggleFloatingFocused*(model: var DodModel): bool =
   let nextFloating = not win.get().isFloating
   model.setWindowFloating(
     winId, nextFloating,
-    if nextFloating: model.defaultFloatingGeom() else: LegacyRect())
+    if nextFloating: model.defaultFloatingGeom() else: GeometryRect())
 
-proc toggleFullscreenFocused*(model: var DodModel): bool =
+proc toggleFullscreenFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   let win = model.window(winId)
   if win.isNone:
@@ -135,14 +132,14 @@ proc toggleFullscreenFocused*(model: var DodModel): bool =
     if nextFullscreen: model.chooseFullscreenOutput(NullExternalOutputId)
     else: NullExternalOutputId)
 
-proc toggleMaximizedFocused*(model: var DodModel): bool =
+proc toggleMaximizedFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   let win = model.window(winId)
   if win.isNone:
     return false
   model.setWindowMaximized(winId, not win.get().isMaximized)
 
-proc minimizeFocused*(model: var DodModel): bool =
+proc minimizeFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   if winId == NullWindowId:
     return false
@@ -151,6 +148,6 @@ proc minimizeFocused*(model: var DodModel): bool =
     return false
   model.requestMinimizeForExternal(win.get().externalId)
 
-proc toggleKeyboardShortcutsInhibitFocused*(model: var DodModel): bool =
+proc toggleKeyboardShortcutsInhibitFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   winId != NullWindowId and model.toggleWindowKeyboardShortcutsInhibit(winId)

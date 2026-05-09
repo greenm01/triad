@@ -114,13 +114,13 @@ type
     masterCount*: int
     masterSplitRatio*: float32
 
-  DodPointerOpData* = object
+  PointerOpData* = object
     kind*: PointerOpKind
     windowId*: WindowId
     initialGeom*: Rect
     edges*: uint32
 
-  DodLiveRestoreState* = object
+  PendingRestoreState* = object
     activeSlot*: uint32
     focusedWindow*: ExternalWindowId
     tagByWindow*: Table[ExternalWindowId, uint32]
@@ -134,7 +134,7 @@ type
     focusHistory*: seq[ExternalWindowId]
     workspaceHistory*: seq[uint32]
 
-  DodModel* = object
+  Model* = object
     counters*: IdCounters
     windows*: EntityManager[WindowId, WindowData]
     tags*: EntityManager[TagId, TagData]
@@ -205,7 +205,7 @@ type
     protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
-    pointerOp*: DodPointerOpData
+    pointerOp*: PointerOpData
     screenLockCommand*: seq[string]
     windowMenuCommand*: seq[string]
     allowExitSession*: bool

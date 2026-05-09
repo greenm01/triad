@@ -204,7 +204,7 @@ proc startIpcServer*(
             subscribers.add(client)
             keepOpen = true
             break
-          let parsed = parseLegacyCommand(line)
+          let parsed = parseTextCommand(line)
           if parsed.isSome:
             onMsg(parsed.get())
           else:

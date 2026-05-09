@@ -2,18 +2,18 @@ import algorithm, options, tables
 import ../layouts/scroller
 import ../layouts/tiling
 import ../state/engine
-import ../types/core as dod_core
+import ../types/core as core_types
 import ../types/layout_projection
 import ../types/runtime_values as rv
 
-proc externalWindowId(model: DodModel; winId: dod_core.WindowId):
+proc externalWindowId(model: Model; winId: core_types.WindowId):
     rv.WindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     return rv.WindowId(uint32(winOpt.get().externalId))
   0'u32
 
-proc primaryScreen*(model: DodModel): rv.Rect =
+proc primaryScreen*(model: Model): rv.Rect =
   if model.primaryOutput != NullOutputId:
     let outputOpt = model.outputData(model.primaryOutput)
     if outputOpt.isSome:
@@ -28,7 +28,7 @@ proc primaryScreen*(model: DodModel): rv.Rect =
 
   rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
-proc activeFocus*(model: DodModel): dod_core.WindowId =
+proc activeFocus*(model: Model): core_types.WindowId =
   if model.isScratchpadVisible:
     if model.visibleScratchpad != NullWindowId:
       return model.visibleScratchpad
@@ -42,7 +42,7 @@ proc activeFocus*(model: DodModel): dod_core.WindowId =
   NullWindowId
 
 proc runtimeWindowTable(
-    model: DodModel): Table[rv.WindowId, rv.WindowData] =
+    model: Model): Table[rv.WindowId, rv.WindowData] =
   for winId, win in model.windowsWithId():
     result[model.externalWindowId(winId)] = rv.WindowData(
       id: model.externalWindowId(winId),
@@ -71,7 +71,7 @@ proc runtimeWindowTable(
       keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
       keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass)
 
-proc projectedTag(model: DodModel; tagId: dod_core.TagId):
+proc projectedTag(model: Model; tagId: core_types.TagId):
     tuple[found: bool, tag: rv.TagState] =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
@@ -135,7 +135,7 @@ proc layoutForTag(
   of rv.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
 
-proc layoutProjection*(model: DodModel): LayoutProjection =
+proc layoutProjection*(model: Model): LayoutProjection =
   let screen = model.primaryScreen()
   let windows = model.runtimeWindowTable()
 
@@ -206,8 +206,8 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
       else:
         model.scratchpadWindows[^1]
     if model.windowData(winId).isSome:
-      let sw = int32(float32(screen.w) * model.dodScratchpadWidthRatio())
-      let sh = int32(float32(screen.h) * model.dodScratchpadHeightRatio())
+      let sw = int32(float32(screen.w) * model.effectiveScratchpadWidthRatio())
+      let sh = int32(float32(screen.h) * model.effectiveScratchpadHeightRatio())
       result.instructions.add(rv.RenderInstruction(
         windowId: model.externalWindowId(winId),
         geom: rv.Rect(
@@ -225,13 +225,13 @@ proc layoutProjection*(model: DodModel): LayoutProjection =
         windowId: model.externalWindowId(focused),
         geom: screen)]
 
-proc applyLayoutProjection*(model: var DodModel; projection: LayoutProjection) =
+proc applyLayoutProjection*(model: var Model; projection: LayoutProjection) =
   for target in projection.viewportTargets:
     let tagId = model.tagForSlot(target.tagSlot)
     if tagId != NullTagId:
       discard model.setTagViewportTarget(tagId, target.targetX, target.targetY)
 
-proc dodLayoutInstructions*(model: var DodModel):
+proc layoutInstructions*(model: var Model):
     seq[rv.RenderInstruction] =
   let projection = model.layoutProjection()
   model.applyLayoutProjection(projection)

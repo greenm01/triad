@@ -2,17 +2,17 @@ import options, tables
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
 proc refreshWindowIndexes(
-    model: var DodModel; tagId: TagId; columnId: ColumnId) =
+    model: var Model; tagId: TagId; columnId: ColumnId) =
   if model.windowsByColumn.hasKey(columnId):
     for idx, winId in model.windowsByColumn[columnId]:
       if model.placementByTagWindow.hasKey((tagId, winId)):
         model.placementByTagWindow[(tagId, winId)].windowIdx = uint32(idx + 1)
 
 proc deleteColumnIfEmpty(
-    model: var DodModel; tagId: TagId; columnId: ColumnId) =
+    model: var Model; tagId: TagId; columnId: ColumnId) =
   if model.windowsByColumn.getOrDefault(columnId, @[]).len > 0:
     return
   if model.columnsByTag.hasKey(tagId):
@@ -23,7 +23,7 @@ proc deleteColumnIfEmpty(
   discard model.columns.delete(columnId)
 
 proc placeWindow*(
-    model: var DodModel; tagId: TagId; columnId: ColumnId;
+    model: var Model; tagId: TagId; columnId: ColumnId;
     winId: WindowId) =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
@@ -66,7 +66,7 @@ proc placeWindow*(
   model.windowTags[winId] = mask
 
 proc removeWindowFromTag*(
-    model: var DodModel; tagId: TagId; winId: WindowId): bool =
+    model: var Model; tagId: TagId; winId: WindowId): bool =
   let key = (tagId, winId)
   if not model.placementByTagWindow.hasKey(key):
     return false
@@ -93,7 +93,7 @@ proc removeWindowFromTag*(
   true
 
 proc moveWindowToColumn*(
-    model: var DodModel; tagId: TagId; winId: WindowId;
+    model: var Model; tagId: TagId; winId: WindowId;
     targetColumnId: ColumnId; targetIdx: int): bool =
   if model.columns.entity(targetColumnId).isNone:
     return false
@@ -140,7 +140,7 @@ proc moveWindowToColumn*(
   true
 
 proc swapPlacedWindows*(
-    model: var DodModel; firstTagId: TagId; firstWinId: WindowId;
+    model: var Model; firstTagId: TagId; firstWinId: WindowId;
     secondTagId: TagId; secondWinId: WindowId): bool =
   let firstKey = (firstTagId, firstWinId)
   let secondKey = (secondTagId, secondWinId)

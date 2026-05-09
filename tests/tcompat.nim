@@ -297,8 +297,8 @@ Categories=System;TerminalEmulator;
     check readFile(generatedApp).contains("Exec=demo-term --new-window")
 
   test "text IPC remains Triad-native":
-    let msg = parseLegacyCommand("focus-workspace 2")
+    let msg = parseTextCommand("focus-workspace 2")
     check msg.isSome
     check msg.get().kind == CmdFocusWorkspaceIndex
     check msg.get().workspaceIndex == 2
-    check parseLegacyCommand("mmsg -g -A").isNone
+    check parseTextCommand("mmsg -g -A").isNone

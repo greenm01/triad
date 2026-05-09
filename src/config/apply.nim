@@ -2,10 +2,10 @@ import options, strutils
 import parser
 import defaults
 import ../state/engine
-import ../systems/dod_workspaces
+import ../systems/workspaces
 import ../types/runtime_values as rv
 
-proc dodWindowRule(rule: rv.WindowRule): WindowRuleData =
+proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
   WindowRuleData(
     appIdMatch: rule.appIdMatch,
     titleMatch: rule.titleMatch,
@@ -15,14 +15,14 @@ proc dodWindowRule(rule: rv.WindowRule): WindowRuleData =
     forcedLayout: rule.forcedLayout
   )
 
-proc dodTagRule(rule: rv.TagRule): TagRuleData =
+proc tagRuleData(rule: rv.TagRule): TagRuleData =
   TagRuleData(
     slot: rule.tagId,
     name: rule.name,
     defaultLayout: rule.defaultLayout
   )
 
-proc applyConfig*(model: var DodModel; config: Config) =
+proc applyConfig*(model: var Model; config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
   model.focusedBorderColor = config.layout.focusedBorderColor
@@ -50,10 +50,10 @@ proc applyConfig*(model: var DodModel; config: Config) =
 
   model.tagRules = @[]
   for rule in config.tagRules:
-    model.tagRules.add(rule.dodTagRule())
+    model.tagRules.add(rule.tagRuleData())
   model.windowRules = @[]
   for rule in config.windowRules:
-    model.windowRules.add(rule.dodWindowRule())
+    model.windowRules.add(rule.windowRuleData())
 
   for winId, win in model.windowsWithId():
     let inhibited =

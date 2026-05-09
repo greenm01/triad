@@ -3,14 +3,14 @@ import group_ops
 import history_ops
 import placement_ops
 import scratchpad_ops
-import ../state/dod_iterators
+import ../state/iterators
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core except Rect
-import ../types/dod_model
+import ../types/model
 from ../types/runtime_values import Rect
 
-proc addWindow*(model: var DodModel; externalId: ExternalWindowId; title = "";
+proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
     appId = ""; widthProportion = 1.0'f32; heightProportion = 1.0'f32;
     isFloating = false; isFullscreen = false; isMaximized = false;
     isMinimized = false; fullscreenOutput = NullExternalOutputId;
@@ -58,7 +58,7 @@ proc addWindow*(model: var DodModel; externalId: ExternalWindowId; title = "";
   model.windowTags[id] = EmptyTagMask
   id
 
-proc setWindowCreatedState*(model: var DodModel; winId: WindowId;
+proc setWindowCreatedState*(model: var Model; winId: WindowId;
     title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
     heightProportion = 1.0'f32; isFloating = false;
     floatingGeom = Rect(); keyboardShortcutsInhibit = false): bool =
@@ -79,7 +79,7 @@ proc setWindowCreatedState*(model: var DodModel; winId: WindowId;
   )
   true
 
-proc destroyWindow*(model: var DodModel; winId: WindowId): bool =
+proc destroyWindow*(model: var Model; winId: WindowId): bool =
   let winOpt = model.windows.entity(winId)
   if winOpt.isNone:
     return false
@@ -104,7 +104,7 @@ proc destroyWindow*(model: var DodModel; winId: WindowId): bool =
   model.windows.delete(winId)
 
 proc setWindowMinimized*(
-    model: var DodModel; winId: WindowId; minimized: bool): bool =
+    model: var Model; winId: WindowId; minimized: bool): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).isMinimized = minimized
@@ -113,7 +113,7 @@ proc setWindowMinimized*(
   true
 
 proc setWindowWidthProportion*(
-    model: var DodModel; winId: WindowId; widthProportion: float32): bool =
+    model: var Model; winId: WindowId; widthProportion: float32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).widthProportion =
@@ -121,21 +121,21 @@ proc setWindowWidthProportion*(
   true
 
 proc setWindowHeightProportion*(
-    model: var DodModel; winId: WindowId; heightProportion: float32): bool =
+    model: var Model; winId: WindowId; heightProportion: float32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).heightProportion =
     clamp(heightProportion, 0.05'f32, 1.0'f32)
   true
 
-proc setWindowTitle*(model: var DodModel; winId: WindowId; title: string):
+proc setWindowTitle*(model: var Model; winId: WindowId; title: string):
     bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).title = title
   true
 
-proc setWindowAppId*(model: var DodModel; winId: WindowId; appId: string):
+proc setWindowAppId*(model: var Model; winId: WindowId; appId: string):
     bool =
   if model.windows.entity(winId).isNone:
     return false
@@ -143,14 +143,14 @@ proc setWindowAppId*(model: var DodModel; winId: WindowId; appId: string):
   true
 
 proc setWindowIdentifier*(
-    model: var DodModel; winId: WindowId; identifier: string): bool =
+    model: var Model; winId: WindowId; identifier: string): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).identifier = identifier
   true
 
 proc setWindowParent*(
-    model: var DodModel; winId: WindowId; parentExternalId: ExternalWindowId):
+    model: var Model; winId: WindowId; parentExternalId: ExternalWindowId):
     bool =
   if model.windows.entity(winId).isNone:
     return false
@@ -158,7 +158,7 @@ proc setWindowParent*(
   true
 
 proc setWindowDimensions*(
-    model: var DodModel; winId: WindowId; actualW, actualH: int32): bool =
+    model: var Model; winId: WindowId; actualW, actualH: int32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).actualW = max(0'i32, actualW)
@@ -166,7 +166,7 @@ proc setWindowDimensions*(
   true
 
 proc setWindowRestoredState*(
-    model: var DodModel; winId: WindowId; restored: RestoredWindowData): bool =
+    model: var Model; winId: WindowId; restored: RestoredWindowData): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).widthProportion = restored.widthProportion
@@ -181,7 +181,7 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).actualH = restored.actualH
   true
 
-proc setWindowDimensionsHint*(model: var DodModel; winId: WindowId;
+proc setWindowDimensionsHint*(model: var Model; winId: WindowId;
     minWidth, minHeight, maxWidth, maxHeight: int32): bool =
   if model.windows.entity(winId).isNone:
     return false
@@ -202,7 +202,7 @@ proc setWindowDimensionsHint*(model: var DodModel; winId: WindowId;
   true
 
 proc setWindowDecorationHint*(
-    model: var DodModel; winId: WindowId; hint: uint32): bool =
+    model: var Model; winId: WindowId; hint: uint32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).hasDecorationHint = true
@@ -210,14 +210,14 @@ proc setWindowDecorationHint*(
   true
 
 proc setWindowPresentationHint*(
-    model: var DodModel; winId: WindowId; hint: uint32): bool =
+    model: var Model; winId: WindowId; hint: uint32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).hasPresentationHint = true
   model.windows.mEntity(winId).presentationHint = hint
   true
 
-proc setWindowFloating*(model: var DodModel; winId: WindowId;
+proc setWindowFloating*(model: var Model; winId: WindowId;
     floating: bool; floatingGeom = Rect()): bool =
   if model.windows.entity(winId).isNone:
     return false
@@ -227,13 +227,13 @@ proc setWindowFloating*(model: var DodModel; winId: WindowId;
   true
 
 proc setWindowFloatingGeom*(
-    model: var DodModel; winId: WindowId; floatingGeom: Rect): bool =
+    model: var Model; winId: WindowId; floatingGeom: Rect): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).floatingGeom = floatingGeom
   true
 
-proc setWindowFullscreen*(model: var DodModel; winId: WindowId;
+proc setWindowFullscreen*(model: var Model; winId: WindowId;
     fullscreen: bool; outputId = NullExternalOutputId): bool =
   if model.windows.entity(winId).isNone:
     return false
@@ -243,7 +243,7 @@ proc setWindowFullscreen*(model: var DodModel; winId: WindowId;
   true
 
 proc setWindowMaximized*(
-    model: var DodModel; winId: WindowId; maximized: bool): bool =
+    model: var Model; winId: WindowId; maximized: bool): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).isMaximized = maximized
@@ -251,7 +251,7 @@ proc setWindowMaximized*(
     model.windows.mEntity(winId).isMinimized = false
   true
 
-proc setWindowKeyboardShortcutsInhibit*(model: var DodModel;
+proc setWindowKeyboardShortcutsInhibit*(model: var Model;
     winId: WindowId; inhibited: bool; bypass: bool): bool =
   if model.windows.entity(winId).isNone:
     return false
@@ -261,7 +261,7 @@ proc setWindowKeyboardShortcutsInhibit*(model: var DodModel;
   true
 
 proc toggleWindowKeyboardShortcutsInhibit*(
-    model: var DodModel; winId: WindowId): bool =
+    model: var Model; winId: WindowId): bool =
   let winOpt = model.windows.entity(winId)
   if winOpt.isNone:
     return false

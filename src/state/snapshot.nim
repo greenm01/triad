@@ -1,13 +1,13 @@
 import options
-import dod_iterators
-import dod_queries
+import iterators
+import queries
 import ../core/defaults
 import ../types/core
-import ../types/dod_model
+import ../types/model
 import ../types/shell_snapshot
 from ../types/runtime_values import nil
 
-proc externalWindowId(model: DodModel; winId: WindowId):
+proc externalWindowId(model: Model; winId: WindowId):
     runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32
@@ -16,7 +16,7 @@ proc externalWindowId(model: DodModel; winId: WindowId):
     return runtime_values.WindowId(uint32(winOpt.get().externalId))
   0'u32
 
-proc shellColumns(model: DodModel; tagId: TagId): seq[ShellColumn] =
+proc shellColumns(model: Model; tagId: TagId): seq[ShellColumn] =
   var idx = 0'u32
   for columnId, column in model.columnsOnTagWithId(tagId):
     inc idx
@@ -29,19 +29,19 @@ proc shellColumns(model: DodModel; tagId: TagId): seq[ShellColumn] =
       windows: windows
     ))
 
-proc snapshotDefaultMasterCount(model: DodModel): int =
+proc snapshotDefaultMasterCount(model: Model): int =
   if model.defaultMasterCount > 0:
     max(1, model.defaultMasterCount)
   else:
     DefaultMasterCount
 
-proc snapshotDefaultMasterRatio(model: DodModel): float32 =
+proc snapshotDefaultMasterRatio(model: Model): float32 =
   if model.defaultMasterRatio > 0:
     clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
   else:
     DefaultMasterRatio
 
-proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
+proc shellSnapshot*(model: Model): ShellSnapshot =
   result.version = TriadIpcVersion
   result.activeTag = model.activeSlot
   result.activeWorkspaceIdx = model.workspaceIndexForSlot(model.activeSlot)

@@ -1,13 +1,13 @@
 import options, strutils, tables
-import dod_focus
-import dod_placement
-import dod_workspaces
+import focus
+import placement
+import workspaces
 import ../state/engine
 
-proc pruneScratchpads*(model: var DodModel) =
+proc pruneScratchpads*(model: var Model) =
   discard model.pruneScratchpadRefs()
 
-proc moveFocusedToScratchpad*(model: var DodModel; name = ""): bool =
+proc moveFocusedToScratchpad*(model: var Model; name = ""): bool =
   let focused = model.focusedOnActiveTag()
   if focused == NullWindowId:
     return false
@@ -25,7 +25,7 @@ proc moveFocusedToScratchpad*(model: var DodModel; name = ""): bool =
   discard model.hideScratchpadRef()
   true
 
-proc showScratchpad*(model: var DodModel; winId: WindowId): bool =
+proc showScratchpad*(model: var Model; winId: WindowId): bool =
   if winId == NullWindowId or not model.hasWindow(winId):
     return false
   discard model.setWindowMinimized(winId, false)
@@ -34,10 +34,10 @@ proc showScratchpad*(model: var DodModel; winId: WindowId): bool =
   discard model.recordFocus(winId)
   true
 
-proc hideScratchpad*(model: var DodModel): bool =
+proc hideScratchpad*(model: var Model): bool =
   model.hideScratchpadRef()
 
-proc toggleScratchpad*(model: var DodModel): bool =
+proc toggleScratchpad*(model: var Model): bool =
   model.pruneScratchpads()
   if model.isScratchpadVisible:
     return model.hideScratchpad()
@@ -45,7 +45,7 @@ proc toggleScratchpad*(model: var DodModel): bool =
     return false
   model.showScratchpad(model.scratchpadWindows[^1])
 
-proc toggleNamedScratchpad*(model: var DodModel; name: string): bool =
+proc toggleNamedScratchpad*(model: var Model; name: string): bool =
   let scratchpadName = name.strip()
   if scratchpadName.len == 0:
     return false
@@ -65,7 +65,7 @@ proc toggleNamedScratchpad*(model: var DodModel; name: string): bool =
     return false
   model.showScratchpad(focused)
 
-proc restoreScratchpad*(model: var DodModel): bool =
+proc restoreScratchpad*(model: var Model): bool =
   model.pruneScratchpads()
   let winId =
     if model.visibleScratchpad != NullWindowId:
@@ -91,7 +91,7 @@ proc restoreScratchpad*(model: var DodModel): bool =
   discard model.setTagFocus(tagId, winId)
   model.focusWindow(winId)
 
-proc recordRestoredScratchpad*(model: var DodModel;
+proc recordRestoredScratchpad*(model: var Model;
     restoredExternalId: ExternalWindowId; winId: WindowId) =
   if winId == NullWindowId:
     return

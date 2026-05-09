@@ -1,26 +1,26 @@
-import ../types/dod_model
+import ../types/model
 from ../types/runtime_values import OpNone
 
-proc setOverviewActive*(model: var DodModel; active: bool): bool =
+proc setOverviewActive*(model: var Model; active: bool): bool =
   if model.overviewActive == active:
     return false
   model.overviewActive = active
   true
 
 proc setLayerFocusExclusiveState*(
-    model: var DodModel; exclusive: bool): bool =
+    model: var Model; exclusive: bool): bool =
   if model.layerFocusExclusive == exclusive:
     return false
   model.layerFocusExclusive = exclusive
   true
 
-proc clearPointerOp*(model: var DodModel): bool =
+proc clearPointerOp*(model: var Model): bool =
   if model.pointerOp.kind == OpNone:
     return false
-  model.pointerOp = DodPointerOpData(kind: OpNone)
+  model.pointerOp = PointerOpData(kind: OpNone)
   true
 
-proc setSessionLockedState*(model: var DodModel; locked: bool): bool =
+proc setSessionLockedState*(model: var Model; locked: bool): bool =
   if model.sessionLocked == locked:
     return false
   model.sessionLocked = locked
@@ -28,19 +28,19 @@ proc setSessionLockedState*(model: var DodModel; locked: bool): bool =
     discard model.clearPointerOp()
   true
 
-proc setActiveModifiersState*(model: var DodModel; modifiers: uint32):
+proc setActiveModifiersState*(model: var Model; modifiers: uint32):
     bool =
   if model.activeModifiers == modifiers:
     return false
   model.activeModifiers = modifiers
   true
 
-proc setPointerOpState*(model: var DodModel; pointerOp: DodPointerOpData):
+proc setPointerOpState*(model: var Model; pointerOp: PointerOpData):
     bool =
   model.pointerOp = pointerOp
   true
 
-proc setScreenSize*(model: var DodModel; w, h: int32): bool =
+proc setScreenSize*(model: var Model; w, h: int32): bool =
   let nextW = max(0'i32, w)
   let nextH = max(0'i32, h)
   if model.screenWidth == nextW and model.screenHeight == nextH:

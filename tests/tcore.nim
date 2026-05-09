@@ -4,13 +4,13 @@ import ../src/core/effects
 import ../src/core/msg
 import ../src/core/render_visibility
 import ../src/core/restore_state
-import ../src/state/dod_snapshot
-import ../src/systems/dod_runtime_state
-import ../src/systems/dod_update
-import ../src/types/dod_model
+import ../src/state/snapshot
+import ../src/systems/runtime_facade
+import ../src/systems/update
+import ../src/types/model
 import ../src/types/runtime_values
 
-proc configuredModel(): DodModel =
+proc configuredModel(): Model =
   initRuntimeStateFromConfig(Config(
     layout: LayoutConfig(
       gaps: 10,
@@ -23,20 +23,20 @@ proc configuredModel(): DodModel =
     windowRules: @[
       WindowRule(appIdMatch: "float-me", openFloating: true),
       WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true)
-    ])).state.model
+    ])).model
 
-suite "Core DoD Runtime Logic":
+suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
-    let (_, effects) = dodUpdate(DodModel(), Msg(kind: CmdTriadReload))
+    let (_, effects) = update(Model(), Msg(kind: CmdTriadReload))
     check effects.len == 1
     check effects[0].kind == EffTriadReload
 
   test "Targeted layout command updates requested slot only":
     var model = configuredModel()
     let (nextModel, effects) =
-      dodUpdate(model, Msg(kind: CmdSetLayout, newLayout: Deck,
+      update(model, Msg(kind: CmdSetLayout, newLayout: Deck,
         layoutTargetTag: 2))
-    let snapshot = nextModel.dodShellSnapshot()
+    let snapshot = nextModel.shellSnapshot()
 
     check snapshot.activeTag == 1
     check snapshot.workspaces[0].layoutMode == Scroller
@@ -66,14 +66,14 @@ suite "Core DoD Runtime Logic":
     check not sliver.visible
     check sliver.borderEdges == 0
 
-  test "Window lifecycle mutates DOD state and emits shell updates":
+  test "Window lifecycle mutates state and emits shell updates":
     var model = configuredModel()
-    let (nextModel, effects) = dodUpdate(model, Msg(
+    let (nextModel, effects) = update(model, Msg(
       kind: WlWindowCreated,
       windowId: 100,
       appId: "firefox",
       title: "Mozilla Firefox"))
-    let snapshot = nextModel.dodShellSnapshot()
+    let snapshot = nextModel.shellSnapshot()
 
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 100
@@ -86,12 +86,12 @@ suite "Core DoD Runtime Logic":
 
   test "Configured defaults place floating windows":
     var model = configuredModel()
-    let (nextModel, _) = dodUpdate(model, Msg(
+    let (nextModel, _) = update(model, Msg(
       kind: WlWindowCreated,
       windowId: 130,
       appId: "float-me",
       title: "Tool"))
-    let snapshot = nextModel.dodShellSnapshot()
+    let snapshot = nextModel.shellSnapshot()
 
     check snapshot.windows.len == 1
     check snapshot.windows[0].widthProportion == 0.8'f32
@@ -103,12 +103,12 @@ suite "Core DoD Runtime Logic":
 
   test "Window rule marks matching windows as shortcut-inhibiting":
     var model = configuredModel()
-    let (nextModel, _) = dodUpdate(model, Msg(
+    let (nextModel, _) = update(model, Msg(
       kind: WlWindowCreated,
       windowId: 140,
       appId: "qemu-system-x86_64",
       title: "Void"))
-    let snapshot = nextModel.dodShellSnapshot()
+    let snapshot = nextModel.shellSnapshot()
 
     check snapshot.windows.len == 1
     check snapshot.windows[0].keyboardShortcutsInhibit
@@ -132,12 +132,12 @@ suite "Core DoD Runtime Logic":
     check native.get().tags[2].layoutMode == Deck
     check native.get().windows[10].appId == "term"
 
-    let legacy = parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""")
-    check legacy.isNone
+    let invalid = parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""")
+    check invalid.isNone
 
   test "Niri window event includes focused workspace state":
     var model = configuredModel()
-    let (_, effects) = dodUpdate(model, Msg(
+    let (_, effects) = update(model, Msg(
       kind: WlWindowCreated,
       windowId: 120,
       appId: "alacritty",

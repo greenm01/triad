@@ -1,20 +1,22 @@
 # Triad Window Manager Architecture
 
 ## Overview
-Triad is a dynamic window management client built for **River 0.4+**, leveraging the `river-window-management-v1` Wayland protocol. It is written in **Nim** for performance and safety, configured via **KDL**, and architected using **The Elm Architecture (TEA)** to ensure frame-perfect, race-condition-free state management. 
+Triad is a dynamic window management client built for **River 0.4+**, leveraging the `river-window-management-v1` Wayland protocol. It is written in **Nim** for performance and safety, configured via **KDL**, and built around one canonical data model with explicit runtime transformations.
 
-Triad combines the infinite scrolling workflow of **Niri** with the flexible, per-workspace hybrid layouts of **Mango**, while remaining extensible enough to power a full desktop environment using tools like **Quickshell**.
+Triad combines the infinite scrolling workflow of **Niri** with the flexible,
+per-workspace hybrid layouts of **Mango**, while remaining extensible enough
+to power a full desktop environment using tools like **Quickshell**.
 
 ## Core Technologies
 *   **Compositor:** River 0.4+
 *   **Language:** Nim (using `nayland` or `wayland-nim` for `libwayland-client` bindings)
 *   **Protocol:** `river-window-management-v1`
 *   **Configuration:** KDL 2.0 (`nimkdl`)
-*   **State Management:** The Elm Architecture (TEA)
+*   **State Management:** Data-oriented model transformations
 
 ## Implementation Principles
 
-### 1. Data-Oriented Design (DOD)
+### 1. Data-Oriented Design
 Following the principles of Yehonathan Sharvit, Triad prioritizes the shape and flow of data over object-oriented hierarchies. 
 *   **State as Data:** The `Model` is a pure data structure (predominantly value types and flat collections).
 *   **Logic as Transformations:** Submodules provide functions that transform data from one state to another without maintaining hidden internal state.
@@ -26,7 +28,11 @@ Common patterns, especially in Wayland protocol handling and coordinate math, ar
 Source files are kept small and focused. The project is organized into clear domain boundaries:
 
 *   `src/triad.nim`: Entry point and main event loop orchestration.
-*   `src/core/`: The TEA engine (Model, Msg, Update, View).
+*   `src/types/`: Pure runtime, IPC, restore, config, and layout data.
+*   `src/state/`: Entity storage, queries, iterators, invariants, snapshots,
+    and restore serialization.
+*   `src/entities/`: Index-aware mutation operations.
+*   `src/systems/`: Behavior systems that transform the runtime model.
 *   `src/layouts/`: Pure mathematical layout algorithms.
 *   `src/protocols/`: Generated Wayland protocol bindings.
 *   `src/config/`: KDL parsing and configuration management.
@@ -36,15 +42,15 @@ Source files are kept small and focused. The project is organized into clear dom
 ## Architectural Design
 ...
 
-### 1. The Elm Architecture (TEA) Event Loop
+### 1. Runtime Event Loop
 Wayland is inherently asynchronous. To prevent tearing and race conditions, Triad uses a strict unidirectional data flow.
 
-*   **Model:** A single, immutable source of truth representing the entire window manager state (Outputs, Tags, Windows, current Layout Modes, and Scroller offsets).
-*   **Update:** A pure function that takes the current `Model` and an incoming `Msg` (Wayland event, KDL hot-reload, IPC command), and returns a *new* `Model` alongside any side-effects (e.g., commands to send to River).
-*   **View (Render Phase):** A pure function that takes the finalized `Model` and executes the math for the active layout (Scroller, Master-Stack, etc.), translating abstract logical coordinates into physical Wayland screen coordinates.
+*   **Model:** A single source of truth representing the entire window manager state (Outputs, Tags, Windows, current Layout Modes, and Scroller offsets).
+*   **Update:** A function that takes the current `Model` and an incoming `Msg` (Wayland event or IPC command), and returns a new `Model` alongside side effects (e.g., commands to send to River).
+*   **Projection (Render Phase):** A layout projection takes the finalized `Model` and executes the math for the active layout (Scroller, Master-Stack, etc.), translating abstract logical coordinates into physical Wayland screen coordinates.
 
 ### 2. Double-Buffered Sequence Mapping
-River's `window-management-v1` requires a double-buffered sequence. TEA maps perfectly to this:
+River's `window-management-v1` requires a double-buffered sequence. The runtime model maps directly to this:
 
 1.  **Manage Sequence (`manage_start` -> `manage_finish`):** 
     *   This is where the **Update** loop processes all accumulated `Msg` types (new windows, focus shifts). The `Model` is updated.
@@ -70,17 +76,19 @@ Triad uses KDL for robust, hot-reloadable configuration.
 ### 5. Shell IPC and Quickshell Integration
 Triad is designed to act as the backend window manager for a full desktop environment powered by Quickshell or other shell deployers.
 
-The architecture intentionally separates native IPC from compatibility IPC:
+The architecture separates Triad-native IPC from shell projection IPC:
 
-*   **Canonical Shell Snapshot:** Triad derives shell-facing state from one internal snapshot of the TEA `Model`. This snapshot contains Triad concepts directly: stable tag IDs, compact workspace indices, windows, outputs, focus, overview state, and per-tag layout modes.
+*   **Canonical Shell Snapshot:** Triad derives shell-facing state from one internal snapshot of the `Model`. This snapshot contains Triad concepts directly: stable tag IDs, compact workspace indices, windows, outputs, focus, overview state, and per-tag layout modes.
 *   **Native Triad IPC (`$TRIAD_SOCKET`):** This is the long-term protocol for deployers and shells that want to integrate with Triad directly. It exposes versioned JSON requests and events such as full shell state, layout state, layout changes, and native state updates.
-*   **Niri Compatibility IPC (`$NIRI_SOCKET`):** This is a projection of the same snapshot into Niri-shaped JSON so existing Niri-aware shells work now. It is intentionally constrained to Niri semantics and does not receive Triad-only fields.
+*   **Niri Projection IPC (`$NIRI_SOCKET`):** This is a projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics and does not receive Triad-only fields.
 *   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
-This lets Noctalia-shell and DankMaterialShell run immediately through their Niri integrations while giving future Quickshell modules a clean path to adopt Triad's richer tagged model without depending on the compatibility facade.
+This lets Quickshell modules choose either Niri-shaped projection events or
+Triad's richer tagged model.
 
-### Niri IPC Compatibility
-To maximize compatibility with existing Quickshell themes without requiring forks, Triad implements a Niri-compatible JSON IPC stream.
+### Niri Projection IPC
+Triad implements a Niri-shaped JSON IPC stream for shells that consume that
+schema.
 
 *   **Socket Path:** `$NIRI_SOCKET` points at a Triad-owned compatibility socket when Triad launches Quickshell.
 *   **Protocol:** Triad implements the Niri request and event shapes used by shell code, including workspaces, windows, outputs, overview state, keyboard layouts, and event streams.

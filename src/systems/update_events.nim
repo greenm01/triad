@@ -2,13 +2,13 @@ import options
 import ../core/effects
 import ../core/msg
 import ../state/engine
-import dod_outputs
-import dod_runtime
-import dod_update_effects
-import dod_window_lifecycle
-import dod_window_state
+import outputs
+import runtime
+import update_effects
+import window_lifecycle
+import window_state
 
-proc setExternalFocus(model: var DodModel;
+proc setExternalFocus(model: var Model;
     externalId: ExternalWindowId): bool =
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
@@ -25,7 +25,7 @@ proc setExternalFocus(model: var DodModel;
   discard model.recordFocus(winId)
   true
 
-proc applyDodEvent*(model: var DodModel; msg: Msg): DodUpdateStep =
+proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind
   of WlManageStart:
     let focused = model.focusedWindow()

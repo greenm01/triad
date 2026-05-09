@@ -8,7 +8,7 @@ import ../types/shell_snapshot
 from ../types/runtime_values import nil
 
 type
-  DodUpdateStep* = object
+  UpdateStep* = object
     dirty*: bool
     effects*: seq[Effect]
 
@@ -21,7 +21,7 @@ proc externalOutputId*(id: uint32): ExternalOutputId =
 proc runtimeWindowId*(id: ExternalWindowId): runtime_values.WindowId =
   runtime_values.WindowId(uint32(id))
 
-proc runtimeWindowId*(model: DodModel; winId: WindowId):
+proc runtimeWindowId*(model: Model; winId: WindowId):
     runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32

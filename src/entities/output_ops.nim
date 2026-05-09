@@ -2,10 +2,10 @@ import options, tables
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
 proc addOutput*(
-    model: var DodModel; externalId: ExternalOutputId; wlName = 0'u32;
+    model: var Model; externalId: ExternalOutputId; wlName = 0'u32;
     name = ""; x = 0'i32; y = 0'i32; w = 0'i32; h = 0'i32;
     usableX = 0'i32; usableY = 0'i32; usableW = 0'i32; usableH = 0'i32;
     hasUsable = false): OutputId =
@@ -34,14 +34,14 @@ proc addOutput*(
   id
 
 proc setOutputDimensions*(
-    model: var DodModel; outputId: OutputId; w, h: int32): bool =
+    model: var Model; outputId: OutputId; w, h: int32): bool =
   if model.outputs.entity(outputId).isNone:
     return false
   model.outputs.mEntity(outputId).w = max(0'i32, w)
   model.outputs.mEntity(outputId).h = max(0'i32, h)
   true
 
-proc setOutputName*(model: var DodModel; outputId: OutputId; name: string):
+proc setOutputName*(model: var Model; outputId: OutputId; name: string):
     bool =
   if model.outputs.entity(outputId).isNone:
     return false
@@ -49,14 +49,14 @@ proc setOutputName*(model: var DodModel; outputId: OutputId; name: string):
   true
 
 proc setOutputPosition*(
-    model: var DodModel; outputId: OutputId; x, y: int32): bool =
+    model: var Model; outputId: OutputId; x, y: int32): bool =
   if model.outputs.entity(outputId).isNone:
     return false
   model.outputs.mEntity(outputId).x = x
   model.outputs.mEntity(outputId).y = y
   true
 
-proc setOutputUsable*(model: var DodModel; outputId: OutputId;
+proc setOutputUsable*(model: var Model; outputId: OutputId;
     x, y, w, h: int32): bool =
   if model.outputs.entity(outputId).isNone:
     return false
@@ -68,13 +68,13 @@ proc setOutputUsable*(model: var DodModel; outputId: OutputId;
   true
 
 proc setOutputTag*(
-    model: var DodModel; outputId: OutputId; tagId: TagId): bool =
+    model: var Model; outputId: OutputId; tagId: TagId): bool =
   if model.outputs.entity(outputId).isNone or model.tags.entity(tagId).isNone:
     return false
   model.outputTags[outputId] = tagId
   true
 
-proc destroyOutput*(model: var DodModel; outputId: OutputId): bool =
+proc destroyOutput*(model: var Model; outputId: OutputId): bool =
   let outputOpt = model.outputs.entity(outputId)
   if outputOpt.isNone:
     return false

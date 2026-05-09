@@ -1,12 +1,12 @@
 import options
-import dod_workspaces
+import workspaces
 import ../state/engine
 from ../types/runtime_values import Direction, DirDown, DirLeft, DirRight, DirUp
 
-proc windowOnTag(model: DodModel; tagId: TagId; winId: WindowId): bool =
+proc windowOnTag(model: Model; tagId: TagId; winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
 
-proc focusedOnActiveTag*(model: DodModel): WindowId =
+proc focusedOnActiveTag*(model: Model): WindowId =
   let tagOpt = model.tagData(model.activeTag)
   if tagOpt.isNone:
     return NullWindowId
@@ -18,13 +18,13 @@ proc focusedOnActiveTag*(model: DodModel): WindowId =
     return focused
   NullWindowId
 
-proc firstFocusableWindow(model: DodModel; tagId: TagId): WindowId =
+proc firstFocusableWindow(model: Model; tagId: TagId): WindowId =
   for winId, win in model.windowsOnTagWithId(tagId):
     if not win.isMinimized:
       return winId
   NullWindowId
 
-proc recomputeVisibleFocus*(model: var DodModel; tagId: TagId): WindowId =
+proc recomputeVisibleFocus*(model: var Model; tagId: TagId): WindowId =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return NullWindowId
@@ -37,7 +37,7 @@ proc recomputeVisibleFocus*(model: var DodModel; tagId: TagId): WindowId =
   result = model.firstFocusableWindow(tagId)
   discard model.setTagFocus(tagId, result)
 
-proc tagForWindow*(model: DodModel; winId: WindowId): TagId =
+proc tagForWindow*(model: Model; winId: WindowId): TagId =
   if model.activeTag != NullTagId and model.windowOnTag(model.activeTag, winId):
     return model.activeTag
 
@@ -46,11 +46,11 @@ proc tagForWindow*(model: DodModel; winId: WindowId): TagId =
     return position.tagId
   NullTagId
 
-proc isFocusableWindow*(model: DodModel; winId: WindowId): bool =
+proc isFocusableWindow*(model: Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   winOpt.isSome and not winOpt.get().isMinimized
 
-proc focusWindow*(model: var DodModel; winId: WindowId): bool =
+proc focusWindow*(model: var Model; winId: WindowId): bool =
   if model.windowData(winId).isNone:
     return false
   let tagId = model.tagForWindow(winId)
@@ -68,7 +68,7 @@ proc focusWindow*(model: var DodModel; winId: WindowId): bool =
   discard model.recordFocus(winId)
   true
 
-proc focusWorkspaceSlot*(model: var DodModel; slot: uint32): bool =
+proc focusWorkspaceSlot*(model: var Model; slot: uint32): bool =
   let tagId = model.ensureWorkspaceSlot(slot)
   if tagId == NullTagId:
     return false
@@ -80,16 +80,16 @@ proc focusWorkspaceSlot*(model: var DodModel; slot: uint32): bool =
     discard model.recordFocus(focused)
   true
 
-proc focusWorkspaceIndex*(model: var DodModel; index: uint32): bool =
+proc focusWorkspaceIndex*(model: var Model; index: uint32): bool =
   let slot = model.workspaceSlotForClampedIndex(index)
   slot != 0 and model.focusWorkspaceSlot(slot)
 
-proc focusExternalWindow*(model: var DodModel; externalId: ExternalWindowId):
+proc focusExternalWindow*(model: var Model; externalId: ExternalWindowId):
     bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.focusWindow(winId)
 
-proc focusMostRecentWindow*(model: var DodModel): bool =
+proc focusMostRecentWindow*(model: var Model): bool =
   var candidates: seq[WindowId] = @[]
   for candidate in model.focusHistory:
     if model.isFocusableWindow(candidate) and
@@ -100,14 +100,14 @@ proc focusMostRecentWindow*(model: var DodModel): bool =
     return false
   model.focusWindow(candidates[^1])
 
-proc isRestorableWorkspace(model: DodModel; tagId: TagId): bool =
+proc isRestorableWorkspace(model: Model; tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
-  tagOpt.get().slot <= model.dodDefaultWorkspaceCount() or
+  tagOpt.get().slot <= model.defaultWorkspaceCount() or
     model.tagHasFocusableWindow(tagId)
 
-proc focusMostRecentWorkspace*(model: var DodModel): bool =
+proc focusMostRecentWorkspace*(model: var Model): bool =
   var candidates: seq[TagId] = @[]
   for candidate in model.workspaceHistory:
     if model.isRestorableWorkspace(candidate):
@@ -123,7 +123,7 @@ proc focusMostRecentWorkspace*(model: var DodModel): bool =
         return model.focusWorkspaceSlot(tagOpt.get().slot)
   false
 
-proc focusLast*(model: var DodModel): bool =
+proc focusLast*(model: var Model): bool =
   let current = model.focusedOnActiveTag()
   for i in countdown(model.focusHistory.len - 1, 0):
     let candidate = model.focusHistory[i]
@@ -131,14 +131,14 @@ proc focusLast*(model: var DodModel): bool =
       return model.focusWindow(candidate)
   false
 
-proc focusableWindowsOnTag(model: DodModel; tagId: TagId): seq[WindowId] =
+proc focusableWindowsOnTag(model: Model; tagId: TagId): seq[WindowId] =
   for winId, win in model.windowsOnTagWithId(tagId):
     if not win.isMinimized:
       result.add(winId)
 
-proc focusOverviewByStep*(model: var DodModel; step: int): bool
+proc focusOverviewByStep*(model: var Model; step: int): bool
 
-proc focusCycle*(model: var DodModel; step: int): bool =
+proc focusCycle*(model: var Model; step: int): bool =
   if model.overviewActive:
     return model.focusOverviewByStep(step)
   let tagId = model.activeTag
@@ -160,7 +160,7 @@ proc focusCycle*(model: var DodModel; step: int): bool =
   true
 
 proc visibleWindowNear(
-    model: DodModel; columnId: ColumnId; preferredIdx: int): WindowId =
+    model: Model; columnId: ColumnId; preferredIdx: int): WindowId =
   let windows = model.windowsForColumn(columnId)
   if windows.len == 0:
     return NullWindowId
@@ -178,7 +178,7 @@ proc visibleWindowNear(
       return windows[after]
   NullWindowId
 
-proc findWindowPosition(model: DodModel; tagId: TagId; winId: WindowId):
+proc findWindowPosition(model: Model; tagId: TagId; winId: WindowId):
     tuple[found: bool, colIdx, winIdx: int, columnId: ColumnId] =
   let placementOpt = model.placementForWindowOnTag(tagId, winId)
   if placementOpt.isNone:
@@ -189,7 +189,7 @@ proc findWindowPosition(model: DodModel; tagId: TagId; winId: WindowId):
     return (false, -1, -1, NullColumnId)
   (true, colIdx, int(placement.windowIdx) - 1, placement.columnId)
 
-proc focusColumnByStep*(model: var DodModel; step: int): bool =
+proc focusColumnByStep*(model: var Model; step: int): bool =
   if step == 0:
     return false
   let tagId = model.activeTag
@@ -207,7 +207,7 @@ proc focusColumnByStep*(model: var DodModel; step: int): bool =
     colIdx += step
   false
 
-proc focusColumnAtEdge*(model: var DodModel; first: bool): bool =
+proc focusColumnAtEdge*(model: var Model; first: bool): bool =
   let tagId = model.activeTag
   let focused = model.focusedOnActiveTag()
   let pos = model.findWindowPosition(tagId, focused)
@@ -226,7 +226,7 @@ proc focusColumnAtEdge*(model: var DodModel; first: bool): bool =
         return model.focusWindow(target)
   false
 
-proc focusWindowOrWorkspace*(model: var DodModel; direction: int): bool =
+proc focusWindowOrWorkspace*(model: var Model; direction: int): bool =
   if direction == 0:
     return false
 
@@ -244,14 +244,14 @@ proc focusWindowOrWorkspace*(model: var DodModel; direction: int): bool =
   let target = model.nearestWorkspaceSlot(direction, false)
   target != 0 and model.focusWorkspaceSlot(target)
 
-proc overviewWindows(model: DodModel): seq[WindowId] =
+proc overviewWindows(model: Model): seq[WindowId] =
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
     for winId, win in model.windowsOnTagWithId(tagId):
       if not win.isMinimized:
         result.add(winId)
 
-proc focusOverviewByStep*(model: var DodModel; step: int): bool =
+proc focusOverviewByStep*(model: var Model; step: int): bool =
   let windows = model.overviewWindows()
   if windows.len == 0:
     return false
@@ -264,7 +264,7 @@ proc focusOverviewByStep*(model: var DodModel; step: int): bool =
     idx = (idx + step + windows.len) mod windows.len
   model.focusWindow(windows[idx])
 
-proc focusByDirection*(model: var DodModel; direction: Direction): bool =
+proc focusByDirection*(model: var Model; direction: Direction): bool =
   if model.overviewActive:
     case direction
     of DirLeft:
@@ -308,9 +308,9 @@ proc focusByDirection*(model: var DodModel; direction: Direction): bool =
     return model.focusWindow(target)
   false
 
-proc collapseEmptyActiveDynamicWorkspace*(model: var DodModel): bool =
+proc collapseEmptyActiveDynamicWorkspace*(model: var Model): bool =
   let oldSlot = model.activeWorkspaceSlot()
-  if oldSlot == 0 or oldSlot <= model.dodDefaultWorkspaceCount():
+  if oldSlot == 0 or oldSlot <= model.defaultWorkspaceCount():
     return false
   let oldTag = model.activeTag
   if oldTag == NullTagId or model.tagData(oldTag).isNone:

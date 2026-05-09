@@ -2,25 +2,25 @@ import options
 import ../core/effects
 import ../core/msg
 import ../state/engine
-import dod_focus
-import dod_placement
-import dod_runtime
-import dod_scratchpad
-import dod_update_effects
-import dod_window_state
-import dod_workspaces
+import focus
+import placement
+import runtime
+import scratchpad
+import update_effects
+import window_state
+import workspaces
 
-proc closeOverview(model: var DodModel): bool =
+proc closeOverview(model: var Model): bool =
   model.setOverviewActive(false)
 
-proc openOverview(model: var DodModel): bool =
+proc openOverview(model: var Model): bool =
   model.setOverviewActive(true)
 
-proc recomputeAllTagFocus(model: var DodModel) =
+proc recomputeAllTagFocus(model: var Model) =
   for tagId, _ in model.tagsWithId():
     discard model.recomputeVisibleFocus(tagId)
 
-proc applyDodCommand*(model: var DodModel; msg: Msg): DodUpdateStep =
+proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind
   of CmdSetLayout:
     result.dirty = model.setLayoutForSlot(msg.layoutTargetTag, msg.newLayout)
@@ -44,7 +44,7 @@ proc applyDodCommand*(model: var DodModel; msg: Msg): DodUpdateStep =
   of CmdRenameTag:
     result.dirty = model.renameActiveWorkspace(msg.newName)
     if result.dirty:
-      result.effects.add(broadcastWorkspaceActivated(dodShellSnapshot(model)))
+      result.effects.add(broadcastWorkspaceActivated(shellSnapshot(model)))
   of CmdGroupWindows:
     result.dirty = model.groupFocusedWindow()
   of CmdUngroupWindow, CmdFocusNextInGroup:

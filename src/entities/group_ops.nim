@@ -2,14 +2,14 @@ import options, tables
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
-proc syncGroupCounter(model: var DodModel; groupId: GroupId) =
+proc syncGroupCounter(model: var Model; groupId: GroupId) =
   let rawId = uint32(groupId)
   model.nextGroupId = max(model.nextGroupId, rawId)
   model.counters.nextGroupId = max(model.counters.nextGroupId, rawId)
 
-proc allocateGroupId(model: var DodModel): GroupId =
+proc allocateGroupId(model: var Model): GroupId =
   model.counters.nextGroupId = max(
     model.counters.nextGroupId,
     model.nextGroupId)
@@ -17,7 +17,7 @@ proc allocateGroupId(model: var DodModel): GroupId =
   model.syncGroupCounter(result)
 
 proc normalizedGroupMembers(
-    model: DodModel; windows: openArray[WindowId]): seq[WindowId] =
+    model: Model; windows: openArray[WindowId]): seq[WindowId] =
   for winId in windows:
     if winId == NullWindowId or model.windows.entity(winId).isNone:
       continue
@@ -25,7 +25,7 @@ proc normalizedGroupMembers(
       result.add(winId)
 
 proc removeWindowFromGroup*(
-    model: var DodModel; groupId: GroupId; winId: WindowId): bool =
+    model: var Model; groupId: GroupId; winId: WindowId): bool =
   let groupOpt = model.groups.entity(groupId)
   if groupOpt.isNone:
     return false
@@ -53,7 +53,7 @@ proc removeWindowFromGroup*(
     group.activeWindow = group.windows[0]
   model.groups.mEntity(groupId) = group
 
-proc removeWindowFromGroups*(model: var DodModel; winId: WindowId): bool =
+proc removeWindowFromGroups*(model: var Model; winId: WindowId): bool =
   let indexedGroup = model.groupByWindow.getOrDefault(winId, NullGroupId)
   if indexedGroup != NullGroupId:
     result = model.removeWindowFromGroup(indexedGroup, winId)
@@ -66,7 +66,7 @@ proc removeWindowFromGroups*(model: var DodModel; winId: WindowId): bool =
     if model.removeWindowFromGroup(groupId, winId):
       result = true
 
-proc addGroupWithId*(model: var DodModel; groupId: GroupId;
+proc addGroupWithId*(model: var Model; groupId: GroupId;
     windows: openArray[WindowId]; activeWindow = NullWindowId): GroupId =
   let members = model.normalizedGroupMembers(windows)
   if members.len == 0:
@@ -105,6 +105,6 @@ proc addGroupWithId*(model: var DodModel; groupId: GroupId;
 
   model.syncGroupCounter(result)
 
-proc addGroup*(model: var DodModel; windows: openArray[WindowId];
+proc addGroup*(model: var Model; windows: openArray[WindowId];
     activeWindow = NullWindowId): GroupId =
   model.addGroupWithId(NullGroupId, windows, activeWindow)

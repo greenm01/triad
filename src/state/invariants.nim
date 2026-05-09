@@ -1,23 +1,23 @@
 import options, sets, tables
-import dod_iterators
+import iterators
 import entity_manager
 import id_gen
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
 type
-  DodInvariantError* = object
+  InvariantError* = object
     message*: string
 
-  DodInvariantReport* = object
+  InvariantReport* = object
     ok*: bool
-    errors*: seq[DodInvariantError]
+    errors*: seq[InvariantError]
 
-proc addError(report: var DodInvariantReport; message: string) =
+proc addError(report: var InvariantReport; message: string) =
   report.ok = false
-  report.errors.add(DodInvariantError(message: message))
+  report.errors.add(InvariantError(message: message))
 
-proc validateInvariants*(model: DodModel): DodInvariantReport =
+proc validateInvariants*(model: Model): InvariantReport =
   result.ok = true
 
   for _, tag in model.tagsWithId():

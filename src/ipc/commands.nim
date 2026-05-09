@@ -22,7 +22,7 @@ proc parseFloat32Arg(s: string): Option[float32] =
   except CatchableError:
     none(float32)
 
-proc parseLegacyCommand*(line: string): Option[Msg] =
+proc parseTextCommand*(line: string): Option[Msg] =
   let parts = line.strip().splitWhitespace()
   if parts.len == 0:
     return none(Msg)

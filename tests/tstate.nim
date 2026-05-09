@@ -3,12 +3,12 @@ import ../src/config/parser
 import ../src/core/effects
 import ../src/core/msg
 import ../src/core/restore_state
-import ../src/state/dod_invariants
-import ../src/state/dod_snapshot
-import ../src/systems/dod_layout
-import ../src/systems/dod_runtime_state
-import ../src/systems/dod_update
-import ../src/types/dod_model
+import ../src/state/invariants
+import ../src/state/snapshot
+import ../src/systems/layout_projection
+import ../src/systems/runtime_facade
+import ../src/systems/update
+import ../src/types/model
 import ../src/types/runtime_values
 
 const DeletedRuntimeModules = [
@@ -51,7 +51,7 @@ proc sourceFiles(): seq[string] =
     if path.endsWith(".nim"):
       result.add(path)
 
-suite "DoD runtime primitives":
+suite "Runtime state primitives":
   test "deleted legacy and shadow modules are gone":
     for path in DeletedRuntimeModules:
       check not fileExists(path)
@@ -83,31 +83,30 @@ suite "DoD runtime primitives":
       check not source.contains("logShadowObservation")
       check not source.contains("applyObservedRuntimeShadowOnly")
 
-  test "runtime init builds a valid DoD model from config":
+  test "runtime init builds a valid model from config":
     let initialized = initRuntimeStateFromConfig(baseConfig())
-    let snapshot = initialized.state.readRuntimeSnapshot()
+    let snapshot = initialized.readRuntimeSnapshot()
 
-    check initialized.state.model.validateInvariants().ok
-    check initialized.state.model.defaultWorkspaceCount == 3
-    check initialized.state.model.outerGaps == 12
-    check initialized.state.model.layoutCycle == @[Scroller, Deck, Grid]
+    check initialized.model.validateInvariants().ok
+    check initialized.model.defaultWorkspaceCount == 3
+    check initialized.model.outerGaps == 12
+    check initialized.model.layoutCycle == @[Scroller, Deck, Grid]
     check snapshot.activeTag == 1
     check snapshot.workspaces.len == 3
     check snapshot.workspaces[0].name == "main"
     check snapshot.workspaces[1].layoutMode == Grid
 
-  test "runtime update mutates DoD model and returns DoD effects":
-    var state = initRuntimeStateFromConfig(baseConfig()).state
-    let observed = state.applyObservedRuntimeUpdate(Msg(
+  test "runtime update mutates model and returns effects":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    let effects = state.applyRuntimeUpdate(Msg(
       kind: WlWindowCreated,
       windowId: 42,
       appId: "term",
       title: "Terminal"))
     let snapshot = state.readRuntimeSnapshot()
 
-    check observed.authority == DodRuntimeAuthority
-    check observed.effects.anyIt(it.kind == EffManageDirty)
-    check observed.effects.anyIt(
+    check effects.anyIt(it.kind == EffManageDirty)
+    check effects.anyIt(
       it.kind == EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
     check state.model.validateInvariants().ok
@@ -115,9 +114,9 @@ suite "DoD runtime primitives":
     check snapshot.windows[0].id == 42
     check snapshot.workspaces[0].focusedWindow == 42
 
-  test "runtime config reload preserves live DoD state":
-    var state = initRuntimeStateFromConfig(baseConfig()).state
-    discard state.applyObservedRuntimeUpdate(Msg(
+  test "runtime config reload preserves live state":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    discard state.applyRuntimeUpdate(Msg(
       kind: WlWindowCreated,
       windowId: 42,
       appId: "term",
@@ -129,7 +128,7 @@ suite "DoD runtime primitives":
       tagRules: @[
         TagRule(tagId: 1, name: "renamed", defaultLayout: Monocle)
       ])
-    check state.applyObservedRuntimeConfig(reloaded).ok
+    check state.applyRuntimeConfig(reloaded)
 
     let snapshot = state.readRuntimeSnapshot()
     check state.model.validateInvariants().ok
@@ -139,8 +138,8 @@ suite "DoD runtime primitives":
     check snapshot.workspaces[0].name == "renamed"
     check snapshot.workspaces[0].layoutMode == Monocle
 
-  test "runtime live restore applies to DoD model":
-    var state = initRuntimeStateFromConfig(baseConfig()).state
+  test "runtime live restore applies to model":
+    var state = initRuntimeStateFromConfig(baseConfig())
     var restore = LiveRestoreState(activeTag: 2, focusedWindow: 50)
     restore.tags[2] = RestoredTagState(
       tagId: 2,
@@ -162,8 +161,8 @@ suite "DoD runtime primitives":
       heightProportion: 0.8)
     restore.tagByWindow[50] = 2
 
-    check state.applyObservedRuntimeLiveRestore(restore).ok
-    discard state.applyObservedRuntimeUpdate(Msg(
+    check state.applyRuntimeLiveRestore(restore)
+    discard state.applyRuntimeUpdate(Msg(
       kind: WlWindowCreated,
       windowId: 50,
       appId: "browser",
@@ -176,24 +175,22 @@ suite "DoD runtime primitives":
     check snapshot.windows[0].workspaceIdx == 2
     check snapshot.workspaces[1].layoutMode == Deck
 
-  test "layout projection reads and applies directly from DoD":
-    var state = initRuntimeStateFromConfig(baseConfig()).state
-    discard state.applyObservedRuntimeUpdate(Msg(
+  test "layout projection reads and applies directly from state":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    discard state.applyRuntimeUpdate(Msg(
       kind: WlWindowCreated,
       windowId: 10,
       appId: "term",
       title: "Terminal"))
-    let observed = state.applyObservedRuntimeLayoutProjection()
+    let projection = state.applyRuntimeLayoutProjection()
 
-    check observed.authority == DodLayoutAuthority
-    check observed.ok
-    check observed.projection.instructions.len == 1
-    check observed.projection.instructions[0].windowId == 10
-    check state.model.dodLayoutInstructions().len == 1
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 10
+    check state.model.layoutInstructions().len == 1
 
-  test "snapshot and live restore reads come from DoD":
-    var state = initRuntimeStateFromConfig(baseConfig()).state
-    discard state.applyObservedRuntimeUpdate(Msg(
+  test "snapshot and live restore reads come from state":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    discard state.applyRuntimeUpdate(Msg(
       kind: WlWindowCreated,
       windowId: 10,
       appId: "term",
@@ -205,8 +202,8 @@ suite "DoD runtime primitives":
     check restoreJson["schema"].getStr() == LiveRestoreSchema
     check restoreJson["windows"][0]["id"].getInt() == 10
 
-  test "direct DoD reducer keeps invariants over a short lifecycle":
-    var model = initRuntimeStateFromConfig(baseConfig()).state.model
+  test "direct reducer keeps invariants over a short lifecycle":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
     for msg in [
       Msg(kind: WlWindowCreated, windowId: 1, appId: "a", title: "A"),
       Msg(kind: WlWindowCreated, windowId: 2, appId: "b", title: "B"),
@@ -216,10 +213,10 @@ suite "DoD runtime primitives":
       Msg(kind: CmdToggleFloating),
       Msg(kind: WlWindowDestroyed, destroyedId: 1)
     ]:
-      let (next, _) = model.dodUpdate(msg)
+      let (next, _) = model.update(msg)
       model = next
       check model.validateInvariants().ok
 
-    let snapshot = model.dodShellSnapshot()
+    let snapshot = model.shellSnapshot()
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 2

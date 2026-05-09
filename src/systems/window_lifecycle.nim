@@ -1,15 +1,15 @@
 import options, tables
-import dod_focus
-import dod_placement
-import dod_scratchpad
-import dod_workspaces
+import focus
+import placement
+import scratchpad
+import workspaces
 import ../state/engine
 
-proc restoredWindowId(model: DodModel; externalId: ExternalWindowId):
+proc restoredWindowId(model: Model; externalId: ExternalWindowId):
     WindowId =
   model.windowForExternal(externalId)
 
-proc resolveRestoreHistories(model: var DodModel) =
+proc resolveRestoreHistories(model: var Model) =
   if model.restoreFocusHistory.len > 0:
     var history: seq[WindowId] = @[]
     for externalId in model.restoreFocusHistory:
@@ -26,7 +26,7 @@ proc resolveRestoreHistories(model: var DodModel) =
         history.add(tagId)
     discard model.replaceWorkspaceHistory(history)
 
-proc syncRestoreOutputTags(model: var DodModel) =
+proc syncRestoreOutputTags(model: var Model) =
   for outputExt, slot in model.restoreOutputTags.pairs:
     let outputId = model.outputForExternal(outputExt)
     let tagId = model.tagForSlot(slot)
@@ -34,7 +34,7 @@ proc syncRestoreOutputTags(model: var DodModel) =
       discard model.setOutputTag(outputId, tagId)
 
 proc isRestoredScratchpad(
-    model: DodModel; externalId: ExternalWindowId): bool =
+    model: Model; externalId: ExternalWindowId): bool =
   if model.restoreScratchpadWindows.find(externalId) != -1:
     return true
   for scratchpadWin in model.restoreNamedScratchpads.values:
@@ -42,7 +42,7 @@ proc isRestoredScratchpad(
       return true
   false
 
-proc findRestoredWindowByIdentity(model: DodModel; appId, title,
+proc findRestoredWindowByIdentity(model: Model; appId, title,
     identifier: string): ExternalWindowId =
   if identifier.len > 0:
     for externalId, restored in model.restoreWindows.pairs:
@@ -61,7 +61,7 @@ proc findRestoredWindowByIdentity(model: DodModel; appId, title,
     return matched
   NullExternalWindowId
 
-proc materializeRestoredTarget(model: var DodModel; slot: uint32): TagId =
+proc materializeRestoredTarget(model: var Model; slot: uint32): TagId =
   if slot == 0:
     return NullTagId
 
@@ -102,7 +102,7 @@ proc materializeRestoredTarget(model: var DodModel; slot: uint32): TagId =
       restored.masterSplitRatio
     )
 
-proc ensureRestoredColumn(model: var DodModel; tagId: TagId;
+proc ensureRestoredColumn(model: var Model; tagId: TagId;
     restoredTag: RestoredTagData; colIdx: int): ColumnId =
   var columns = model.columnsForTag(tagId)
   while columns.len <= colIdx:
@@ -110,7 +110,7 @@ proc ensureRestoredColumn(model: var DodModel; tagId: TagId;
       if columns.len < restoredTag.columns.len:
         restoredTag.columns[columns.len].widthProportion
       else:
-        model.dodDefaultColumnWidth()
+        model.defaultColumnWidth()
     discard model.addColumn(tagId, width)
     columns = model.columnsForTag(tagId)
   result = columns[colIdx]
@@ -118,7 +118,7 @@ proc ensureRestoredColumn(model: var DodModel; tagId: TagId;
     discard model.setColumnWidth(
       result, restoredTag.columns[colIdx].widthProportion)
 
-proc placeRestoredWindow(model: var DodModel; targetSlot: uint32;
+proc placeRestoredWindow(model: var Model; targetSlot: uint32;
     restoredExternalId, externalId: ExternalWindowId; winId: WindowId): bool =
   let tagId = model.materializeRestoredTarget(targetSlot)
   if tagId == NullTagId:
@@ -150,11 +150,11 @@ proc placeRestoredWindow(model: var DodModel; targetSlot: uint32;
     discard model.addPlacedWindowColumn(tagId, winId)
   true
 
-proc applyRestoredWindowState(model: var DodModel; winId: WindowId;
+proc applyRestoredWindowState(model: var Model; winId: WindowId;
     restored: RestoredWindowData) =
   discard model.setWindowRestoredState(winId, restored)
 
-proc applyPendingRestore(model: var DodModel; externalId,
+proc applyPendingRestore(model: var Model; externalId,
     restoredExternalId: ExternalWindowId; restored: RestoredWindowData): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId or restoredExternalId == NullExternalWindowId:
@@ -198,7 +198,7 @@ proc applyPendingRestore(model: var DodModel; externalId,
   model.syncRestoreOutputTags()
   true
 
-proc applyLiveRestore*(model: var DodModel; state: DodLiveRestoreState) =
+proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
   discard model.loadRestoreState(state)
   var targetSlot = state.activeSlot
   if targetSlot != 0:
@@ -208,7 +208,7 @@ proc applyLiveRestore*(model: var DodModel; state: DodLiveRestoreState) =
         activeHasRestoredWindow = true
         break
     if not activeHasRestoredWindow and
-        targetSlot > model.dodDefaultWorkspaceCount():
+        targetSlot > model.defaultWorkspaceCount():
       let fallback = model.lowerWorkspaceFallback(targetSlot)
       if fallback != 0 and fallback != targetSlot:
         targetSlot = fallback
@@ -221,7 +221,7 @@ proc applyLiveRestore*(model: var DodModel; state: DodLiveRestoreState) =
   model.syncRestoreOutputTags()
   discard model.pruneDynamicWorkspaces()
 
-proc createWindowForExternal*(model: var DodModel;
+proc createWindowForExternal*(model: var Model;
     externalId: ExternalWindowId; appId, title: string; identifier = ""):
     WindowId =
   if externalId == NullExternalWindowId:
@@ -279,12 +279,12 @@ proc createWindowForExternal*(model: var DodModel;
     else: 0
 
   var isFloating = false
-  var floatingGeom = LegacyRect()
+  var floatingGeom = GeometryRect()
   var shortcutInhibit = false
   if ruleMatch.found:
     isFloating = ruleMatch.rule.openFloating
     if isFloating:
-      floatingGeom = model.dodDefaultFloatingGeom()
+      floatingGeom = model.defaultFloatingGeom()
     shortcutInhibit = ruleMatch.rule.keyboardShortcutsInhibit
   if hasRestoredWindow:
     isFloating = restored.isFloating
@@ -301,8 +301,8 @@ proc createWindowForExternal*(model: var DodModel;
     title = title,
     appId = appId,
     identifier = identifier,
-    widthProportion = model.dodDefaultWindowWidth(),
-    heightProportion = model.dodDefaultWindowHeight(),
+    widthProportion = model.defaultWindowWidth(),
+    heightProportion = model.defaultWindowHeight(),
     isFloating = isFloating,
     floatingGeom = floatingGeom,
     keyboardShortcutsInhibit = shortcutInhibit
@@ -329,7 +329,7 @@ proc createWindowForExternal*(model: var DodModel;
         return NullWindowId
       if forcedLayout != 0:
         discard model.setTagLayout(
-          targetTag, dodSafeLayoutMode(
+          targetTag, safeLayoutMode(
             forcedLayout, model.tag(targetTag).get().layoutMode))
       discard model.addPlacedWindowColumn(targetTag, result)
       if not model.sessionLocked and not restoreFocusPending:
@@ -362,7 +362,7 @@ proc createWindowForExternal*(model: var DodModel;
   model.syncRestoreOutputTags()
   discard model.pruneDynamicWorkspaces()
 
-proc updateWindowIdentifierAndRestoreForExternal*(model: var DodModel;
+proc updateWindowIdentifierAndRestoreForExternal*(model: var Model;
     externalId: ExternalWindowId; identifier: string): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
@@ -383,7 +383,7 @@ proc updateWindowIdentifierAndRestoreForExternal*(model: var DodModel;
   true
 
 proc destroyWindowForExternal*(
-    model: var DodModel; externalId: ExternalWindowId): bool =
+    model: var Model; externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false

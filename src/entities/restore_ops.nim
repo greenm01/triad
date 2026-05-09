@@ -1,8 +1,8 @@
 import options, tables
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
-proc loadRestoreState*(model: var DodModel; state: DodLiveRestoreState):
+proc loadRestoreState*(model: var Model; state: PendingRestoreState):
     bool =
   model.restoreActiveSlot = state.activeSlot
   model.restoreFocusedWindow = state.focusedWindow
@@ -19,14 +19,14 @@ proc loadRestoreState*(model: var DodModel; state: DodLiveRestoreState):
   true
 
 proc consumeRestoreWindow*(
-    model: var DodModel; externalId: ExternalWindowId):
+    model: var Model; externalId: ExternalWindowId):
     Option[RestoredWindowData] =
   if not model.restoreWindows.hasKey(externalId):
     return none(RestoredWindowData)
   result = some(model.restoreWindows[externalId])
   model.restoreWindows.del(externalId)
 
-proc consumeRestoreTagSlot*(model: var DodModel; externalId: ExternalWindowId):
+proc consumeRestoreTagSlot*(model: var Model; externalId: ExternalWindowId):
     tuple[found: bool, slot: uint32] =
   if not model.restoreTagByWindow.hasKey(externalId):
     return (false, 0'u32)
@@ -34,7 +34,7 @@ proc consumeRestoreTagSlot*(model: var DodModel; externalId: ExternalWindowId):
   model.restoreTagByWindow.del(externalId)
 
 proc rewriteRestoreFocusRefs*(
-    model: var DodModel; restoredExternalId, externalId: ExternalWindowId):
+    model: var Model; restoredExternalId, externalId: ExternalWindowId):
     bool =
   if restoredExternalId == externalId:
     return false
@@ -44,7 +44,7 @@ proc rewriteRestoreFocusRefs*(
       result = true
 
 proc clearRestoreFocusedWindow*(
-    model: var DodModel; restoredExternalId: ExternalWindowId): bool =
+    model: var Model; restoredExternalId: ExternalWindowId): bool =
   if restoredExternalId == NullExternalWindowId or
       model.restoreFocusedWindow != restoredExternalId:
     return false

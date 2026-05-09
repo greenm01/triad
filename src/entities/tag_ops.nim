@@ -4,11 +4,11 @@ import history_ops
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
-import ../types/dod_model
+import ../types/model
 from ../types/runtime_values import LayoutMode, Scroller
 
 proc addTag*(
-    model: var DodModel; slot: uint32; name = ""; layoutMode = Scroller;
+    model: var Model; slot: uint32; name = ""; layoutMode = Scroller;
     focusedWindow = NullWindowId; targetViewportXOffset = 0.0'f32;
     currentViewportXOffset = 0.0'f32; targetViewportYOffset = 0.0'f32;
     currentViewportYOffset = 0.0'f32; masterCount = 1;
@@ -38,7 +38,7 @@ proc addTag*(
   id
 
 proc setTagFocus*(
-    model: var DodModel; tagId: TagId; winId: WindowId): bool =
+    model: var Model; tagId: TagId; winId: WindowId): bool =
   if model.tags.entity(tagId).isNone:
     return false
   if winId != NullWindowId and model.windows.entity(winId).isNone:
@@ -46,27 +46,27 @@ proc setTagFocus*(
   model.tags.mEntity(tagId).focusedWindow = winId
   true
 
-proc setTagLayout*(model: var DodModel; tagId: TagId; mode: LayoutMode): bool =
+proc setTagLayout*(model: var Model; tagId: TagId; mode: LayoutMode): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).layoutMode = mode
   true
 
-proc setTagName*(model: var DodModel; tagId: TagId; name: string): bool =
+proc setTagName*(model: var Model; tagId: TagId; name: string): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).name = name
   true
 
 proc setTagMasterCount*(
-    model: var DodModel; tagId: TagId; count: int): bool =
+    model: var Model; tagId: TagId; count: int): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).masterCount = max(1, count)
   true
 
 proc setTagMasterRatio*(
-    model: var DodModel; tagId: TagId; ratio: float32): bool =
+    model: var Model; tagId: TagId; ratio: float32): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).masterSplitRatio =
@@ -74,7 +74,7 @@ proc setTagMasterRatio*(
   true
 
 proc setTagViewportTarget*(
-    model: var DodModel; tagId: TagId; xOffset, yOffset: float32): bool =
+    model: var Model; tagId: TagId; xOffset, yOffset: float32): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).targetViewportXOffset = xOffset
@@ -82,14 +82,14 @@ proc setTagViewportTarget*(
   true
 
 proc setTagViewportCurrent*(
-    model: var DodModel; tagId: TagId; xOffset, yOffset: float32): bool =
+    model: var Model; tagId: TagId; xOffset, yOffset: float32): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).currentViewportXOffset = xOffset
   model.tags.mEntity(tagId).currentViewportYOffset = yOffset
   true
 
-proc setTagRestoredState*(model: var DodModel; tagId: TagId;
+proc setTagRestoredState*(model: var Model; tagId: TagId;
     name: string; layoutMode: LayoutMode;
     targetViewportXOffset, currentViewportXOffset, targetViewportYOffset,
     currentViewportYOffset: float32; masterCount: int;
@@ -108,7 +108,7 @@ proc setTagRestoredState*(model: var DodModel; tagId: TagId;
     clamp(masterSplitRatio, 0.05'f32, 0.95'f32)
   true
 
-proc destroyTag*(model: var DodModel; tagId: TagId): bool =
+proc destroyTag*(model: var Model; tagId: TagId): bool =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
     return false

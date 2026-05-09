@@ -2,10 +2,10 @@ import options, tables
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
 proc addColumn*(
-    model: var DodModel; tagId: TagId; widthProportion = 1.0'f32): ColumnId =
+    model: var Model; tagId: TagId; widthProportion = 1.0'f32): ColumnId =
   if model.tags.entity(tagId).isNone:
     raise newException(ValueError, "column tag does not exist: " & $tagId)
 
@@ -20,7 +20,7 @@ proc addColumn*(
   id
 
 proc insertColumn*(
-    model: var DodModel; tagId: TagId; index: int;
+    model: var Model; tagId: TagId; index: int;
     widthProportion = 1.0'f32): ColumnId =
   result = model.addColumn(tagId, widthProportion)
   let lastIdx = model.columnsByTag[tagId].len - 1
@@ -30,7 +30,7 @@ proc insertColumn*(
     model.columnsByTag[tagId].insert(result, targetIdx)
 
 proc setColumnWidth*(
-    model: var DodModel; columnId: ColumnId; widthProportion: float32): bool =
+    model: var Model; columnId: ColumnId; widthProportion: float32): bool =
   if model.columns.entity(columnId).isNone:
     return false
   model.columns.mEntity(columnId).widthProportion =
@@ -38,7 +38,7 @@ proc setColumnWidth*(
   true
 
 proc moveColumn*(
-    model: var DodModel; tagId: TagId; fromIdx, toIdx: int): bool =
+    model: var Model; tagId: TagId; fromIdx, toIdx: int): bool =
   if not model.columnsByTag.hasKey(tagId):
     return false
   let count = model.columnsByTag[tagId].len

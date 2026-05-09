@@ -2,7 +2,7 @@ import options
 import ../state/engine
 from ../types/runtime_values import nil
 
-proc runtimeWindowId*(model: DodModel; winId: WindowId):
+proc runtimeWindowId*(model: Model; winId: WindowId):
     runtime_values.WindowId =
   if winId == NullWindowId:
     return 0'u32
@@ -18,17 +18,17 @@ proc externalOutputId*(outputId: uint32): ExternalOutputId =
   ExternalOutputId(outputId)
 
 proc windowForRiverId*(
-    model: DodModel; winId: runtime_values.WindowId): WindowId =
+    model: Model; winId: runtime_values.WindowId): WindowId =
   model.windowForExternal(winId.externalWindowId())
 
-proc outputForRiverId*(model: DodModel; outputId: uint32): OutputId =
+proc outputForRiverId*(model: Model; outputId: uint32): OutputId =
   model.outputForExternal(outputId.externalOutputId())
 
 proc riverIdForWindow*(
-    model: DodModel; winId: WindowId): runtime_values.WindowId =
+    model: Model; winId: WindowId): runtime_values.WindowId =
   model.runtimeWindowId(winId)
 
-proc riverIdForOutput*(model: DodModel; outputId: OutputId): uint32 =
+proc riverIdForOutput*(model: Model; outputId: OutputId): uint32 =
   if outputId == NullOutputId:
     return 0
   let outputOpt = model.outputData(outputId)
@@ -36,7 +36,7 @@ proc riverIdForOutput*(model: DodModel; outputId: OutputId): uint32 =
     return uint32(outputOpt.get().externalId)
   0
 
-proc activeFocusRiverId*(model: DodModel): runtime_values.WindowId =
+proc activeFocusRiverId*(model: Model): runtime_values.WindowId =
   if model.isScratchpadVisible:
     if model.visibleScratchpad != NullWindowId:
       return model.riverIdForWindow(model.visibleScratchpad)
@@ -49,10 +49,10 @@ proc activeFocusRiverId*(model: DodModel): runtime_values.WindowId =
     return model.riverIdForWindow(tagOpt.get().focusedWindow)
   0'u32
 
-proc primaryOutputRiverId*(model: DodModel): uint32 =
+proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 
-proc visibleScratchpadRiverId*(model: DodModel): runtime_values.WindowId =
+proc visibleScratchpadRiverId*(model: Model): runtime_values.WindowId =
   if model.visibleScratchpad != NullWindowId:
     return model.riverIdForWindow(model.visibleScratchpad)
   if model.scratchpadWindows.len > 0:
@@ -60,13 +60,13 @@ proc visibleScratchpadRiverId*(model: DodModel): runtime_values.WindowId =
   0'u32
 
 proc windowDataForRiverId*(
-    model: DodModel; winId: runtime_values.WindowId): Option[WindowData] =
+    model: Model; winId: runtime_values.WindowId): Option[WindowData] =
   let logicalId = model.windowForRiverId(winId)
   if logicalId == NullWindowId:
     return none(WindowData)
   model.windowData(logicalId)
 
-proc hasRiverWindow*(model: DodModel; winId: runtime_values.WindowId): bool =
+proc hasRiverWindow*(model: Model; winId: runtime_values.WindowId): bool =
   model.windowForRiverId(winId) != NullWindowId
 
 proc boundedDimensions*(win: WindowData; w, h: int32):
@@ -83,7 +83,7 @@ proc boundedDimensions*(win: WindowData; w, h: int32):
     result.h = min(result.h, win.maxHeight)
 
 proc boundedDimensionsForRiverId*(
-    model: DodModel; winId: runtime_values.WindowId; w, h: int32):
+    model: Model; winId: runtime_values.WindowId; w, h: int32):
     tuple[w, h: int32] =
   let winOpt = model.windowDataForRiverId(winId)
   if winOpt.isSome:

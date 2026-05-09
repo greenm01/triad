@@ -1,7 +1,7 @@
 import options, strutils
 import ../state/engine
 
-proc syncPrimaryOutput*(model: var DodModel) =
+proc syncPrimaryOutput*(model: var Model) =
   if model.outputsCount() == 0:
     model.primaryOutput = NullOutputId
     return
@@ -14,12 +14,12 @@ proc syncPrimaryOutput*(model: var DodModel) =
   if primary.isSome and primary.get().w > 0 and primary.get().h > 0:
     discard model.setScreenSize(primary.get().w, primary.get().h)
 
-proc syncPrimaryOutputTag*(model: var DodModel) =
+proc syncPrimaryOutputTag*(model: var Model) =
   if model.primaryOutput != NullOutputId and model.activeTag != NullTagId:
     discard model.setOutputTag(model.primaryOutput, model.activeTag)
 
 proc upsertOutputForExternal*(
-    model: var DodModel; externalId: ExternalOutputId): OutputId =
+    model: var Model; externalId: ExternalOutputId): OutputId =
   if externalId == NullExternalOutputId:
     return NullOutputId
   result = model.outputForExternal(externalId)
@@ -27,7 +27,7 @@ proc upsertOutputForExternal*(
     result = model.addOutput(externalId)
 
 proc setOutputDimensionsForExternal*(
-    model: var DodModel; externalId: ExternalOutputId; w, h: int32): bool =
+    model: var Model; externalId: ExternalOutputId; w, h: int32): bool =
   if externalId == NullExternalOutputId:
     return model.setScreenSize(w, h)
 
@@ -37,7 +37,7 @@ proc setOutputDimensionsForExternal*(
   model.syncPrimaryOutputTag()
 
 proc setOutputNameForExternal*(
-    model: var DodModel; externalId: ExternalOutputId; name: string): bool =
+    model: var Model; externalId: ExternalOutputId; name: string): bool =
   if externalId == NullExternalOutputId:
     return false
 
@@ -47,7 +47,7 @@ proc setOutputNameForExternal*(
   model.syncPrimaryOutputTag()
 
 proc setOutputPositionForExternal*(
-    model: var DodModel; externalId: ExternalOutputId; x, y: int32): bool =
+    model: var Model; externalId: ExternalOutputId; x, y: int32): bool =
   if externalId == NullExternalOutputId:
     return false
 
@@ -56,7 +56,7 @@ proc setOutputPositionForExternal*(
   model.syncPrimaryOutput()
   model.syncPrimaryOutputTag()
 
-proc setOutputUsableForExternal*(model: var DodModel;
+proc setOutputUsableForExternal*(model: var Model;
     externalId: ExternalOutputId; x, y, w, h: int32): bool =
   if externalId == NullExternalOutputId:
     return false
@@ -67,7 +67,7 @@ proc setOutputUsableForExternal*(model: var DodModel;
   model.syncPrimaryOutputTag()
 
 proc removeOutputForExternal*(
-    model: var DodModel; externalId: ExternalOutputId): seq[WindowId] =
+    model: var Model; externalId: ExternalOutputId): seq[WindowId] =
   if externalId == NullExternalOutputId:
     return
   let outputId = model.outputForExternal(externalId)

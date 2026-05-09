@@ -1,13 +1,13 @@
 # Triad Data-Oriented Design Architecture
 
-This document is the hard spec for Triad's Data-Oriented Design migration.
+This document is the hard spec for Triad's Data-Oriented Design runtime.
 It follows the same architectural split used in `~/dev/ec4x/src/engine`: pure
 types, indexed state access, index-aware entity mutations, and behavior systems
 layered above the data.
 
-Triad's user-facing model remains DWM/River-style tagged window management.
-DOD changes the storage and transformation model; it does not replace tags with
-a desktop/workspace hierarchy.
+Triad's user-facing model is DWM/River-style tagged window management. The
+storage and transformation model is data-oriented; tags remain the canonical
+user workflow instead of a desktop/workspace hierarchy.
 
 ## Goals
 
@@ -16,12 +16,11 @@ a desktop/workspace hierarchy.
 - Make bitmask tag membership canonical.
 - Store relationships in indexed tables instead of nested object graphs.
 - Generate shell and IPC from canonical snapshots.
-- Keep production runtime state DoD-native; do not add adapter-backed runtime
-  storage.
+- Keep production runtime state data-oriented.
 
 ## Module Boundaries
 
-The migration target uses four primary layers.
+The runtime uses four primary layers.
 
 ### `types`
 
@@ -51,33 +50,33 @@ Only this layer may directly access `EntityManager.data` and
 
 #### The State Facade
 
-`state/engine.nim` is the public state API for DOD systems. It mirrors the
+`state/engine.nim` is the public state API for runtime systems. It mirrors the
 facade pattern used by `~/dev/ec4x/src/engine/state/engine.nim`: systems import
 one module and get typed entity accessors, relation queries, iterators,
 invariant checks, snapshots, ID helpers, and entity operations.
 
 Rules:
 
-- New DOD systems should import `state/engine.nim`.
+- New systems should import `state/engine.nim`.
 - `entity_manager.nim` is internal plumbing for `state` and `entities`.
-- `dod_queries.nim`, `dod_iterators.nim`, and entity op modules stay focused
+- `queries.nim`, `iterators.nim`, and entity op modules stay focused
   implementation modules behind the facade.
 - Tests may import `entity_manager.nim` directly when testing the generic
   entity manager itself.
 - Systems must not import `entity_manager.nim` directly or reach into
   `model.windows.entity(...)`; add a typed query or entity operation instead.
-- DOD system source is checked by tests for facade-only state imports and no
+- System source is checked by tests for facade-only state imports and no
   direct entity manager storage access.
 
 #### The Read Layer: Iterators and Queries
 
-Because DOD data is flattened across multiple tables, we strictly separate the
+Because runtime data is flattened across multiple tables, we strictly separate the
 mechanics of traversing data from the business logic that asks questions about
 it.
 
-1.  **Iterators (`dod_iterators.nim`):** Handle the raw hash-table lookups and
+1.  **Iterators (`iterators.nim`):** Handle the raw hash-table lookups and
     sequence traversals. They yield strongly-typed entities.
-2.  **Queries (`dod_queries.nim`):** Consume iterators to answer business
+2.  **Queries (`queries.nim`):** Consume iterators to answer business
     questions without exposing the underlying data structures.
 
 Systems consume Queries and Iterators. They never manually loop over
@@ -105,7 +104,7 @@ manual mutations lead to desync bugs.
 All mutations must go through the **Operations Layer**, such as
 `window_ops.nim` and `tag_ops.nim`.
 
-An Operation acts as an atomic transaction for the DOD state. For example,
+An Operation acts as an atomic transaction for runtime state. For example,
 `model.destroyWindow(winId)` handles removing the window from `windowTags`,
 cleaning up `windowColumns`, reassigning focus, and finally calling `delete`
 to swap-and-pop the data array.
@@ -198,15 +197,14 @@ Rules:
 
 Shell integrations must serialize snapshots, not internal storage.
 
-Production runtime state is DoD-native. `TriadRuntimeState` stores one
-`DodModel`, and daemon reads use DoD snapshots, live-restore JSON, layout
-projection, and daemon-view helpers directly. There is no production shadow
-fallback or runtime read bridge.
+Production runtime state is data-oriented. `TriadRuntimeState` stores one
+`Model`, and daemon reads use snapshots, live-restore JSON, layout projection,
+and daemon-view helpers directly.
 
-Window groups are modeled as DoD entities. `GroupData` stores the dense member
+Window groups are modeled as entities. `GroupData` stores the dense member
 list and active window, while `groupByWindow` keeps one-window-to-one-group
 membership lookups cheap. External River IDs are stored as entity fields and
-resolved through DoD lookup indexes.
+resolved through lookup indexes.
 
 ## Layout Projection
 
@@ -217,30 +215,28 @@ Layout computation is split into pure projection and explicit writes:
 - projection builders must not mutate their input models.
 - runtime helpers apply viewport targets and return instructions.
 
-Runtime manage/render layout is the first DoD-authoritative surface. The layout
-facade computes `DodModel.layoutProjection()`, applies viewport targets back to
-the DoD model, and sends DoD instructions to River.
+Runtime manage/render layout is state-authoritative. The layout
+facade computes `Model.layoutProjection()`, applies viewport targets back to
+the model, and sends layout instructions to River.
 
-## Runtime Update Sync
+## Runtime Updates
 
-Runtime updates are DoD-native in production:
+Runtime updates are direct model transformations:
 
-- daemon update helpers call `DodModel.dodUpdate(msg)` directly
-- returned effects are DoD effects
-- config reload applies through `DodModel.applyConfig(config)`
-- live restore applies through `DodModel.applyLiveRestore(...)`
-- shell snapshots and live-restore reads are serialized from DoD
+- daemon update helpers call `Model.update(msg)` directly
+- returned effects are production effects
+- config reload applies through `Model.applyConfig(config)`
+- live restore applies through `Model.applyLiveRestore(...)`
+- shell snapshots and live-restore reads are serialized from the model
 
-Legacy and shadow update sync helpers are not part of the source tree. Tests
-exercise the DoD reducer, runtime facade, shell snapshots, layout projection,
+Tests exercise the reducer, runtime facade, shell snapshots, layout projection,
 and live-restore serialization directly.
 
 ## Config Application
 
-`DodModel` has a native config application path that writes into flattened DoD
-data:
+`Model` has a native config application path that writes into flattened data:
 
-- config-owned runtime fields live directly on `DodModel`
+- config-owned runtime fields live directly on `Model`
 - default workspaces are materialized through workspace/entity operations
 - non-default tag rules remain lazy unless the tag already exists
 - existing windows re-evaluate keyboard-shortcuts inhibition after window rules
@@ -248,23 +244,22 @@ data:
 - live entities, placements, focus history, workspace history, restore buffers,
   and scratchpad state must be preserved
 
-Runtime config reload applies the parsed config directly to `DodModel`. Shell
+Runtime config reload applies the parsed config directly to `Model`. Shell
 restarts, binding rebuilds, manage requests, and broadcasts stay in the daemon
 loop because they are side effects of accepting a config reload, not state
 transformation rules.
 
-Initial daemon startup creates an empty `DodModel`, applies config through the
-native DoD config path, ensures the active workspace, and stores that model as
+Initial daemon startup creates an empty `Model`, applies config through the
+native config path, ensures the active workspace, and stores that model as
 production runtime state.
 
 Live-restore application converts the parsed restore payload to
-`DodLiveRestoreState` and applies it directly to the DoD model before
+`PendingRestoreState` and applies it directly to the model before
 manage/render resumes.
 
-## Removed Runtime Paths
+## Runtime Boundaries
 
-The old nested runtime model, adapter bridge, shadow runtime, and parity sync
-modules have been removed. New production code must not reintroduce
-`Model`-backed daemon state, shadow observations, or bridge-based read
-fallbacks. If a test needs a daemon read surface, build it from
-`DodModel.dodShellSnapshot()` or `DodModel.dodLiveRestoreJson()`.
+Production code must keep one daemon state: `TriadRuntimeState.model`.
+Runtime reads are snapshots or live-restore JSON derived from that model. If a
+test needs a daemon read surface, build it from `Model.shellSnapshot()` or
+`Model.liveRestoreJson()`.

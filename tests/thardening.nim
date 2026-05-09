@@ -7,11 +7,11 @@ import ../src/ipc/commands
 import ../src/ipc/niri_compat
 import ../src/layouts/scroller
 import ../src/layouts/tiling
-import ../src/state/dod_invariants
-import ../src/state/dod_snapshot
-import ../src/systems/dod_daemon_view
-import ../src/systems/dod_runtime_state
-import ../src/systems/dod_update
+import ../src/state/invariants
+import ../src/state/snapshot
+import ../src/systems/daemon_view
+import ../src/systems/runtime_facade
+import ../src/systems/update
 import ../src/types/runtime_values
 import ../src/types/shell_snapshot
 import ../src/utils/session_env
@@ -42,18 +42,18 @@ suite "Crash hardening":
       "WAYLAND_DISPLAY is not set"
     check waylandSessionProblem("/run/user/1000", "wayland-1") == ""
 
-  test "DOD duplicate window create keeps a single shell window":
+  test "duplicate window create keeps a single shell window":
     var model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).state.model
+      workspaces: WorkspaceConfig(defaultCount: 3))).model
     for title in ["old", "new"]:
-      let (next, _) = model.dodUpdate(Msg(
+      let (next, _) = model.update(Msg(
         kind: WlWindowCreated,
         windowId: 10,
         appId: "app",
         title: title))
       model = next
 
-    let snapshot = model.dodShellSnapshot()
+    let snapshot = model.shellSnapshot()
     check model.validateInvariants().ok
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 10
@@ -61,7 +61,7 @@ suite "Crash hardening":
 
   test "stale focus command paths are no-ops, not crashes":
     var model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).state.model
+      workspaces: WorkspaceConfig(defaultCount: 3))).model
 
     for msg in [
       Msg(kind: CmdMoveToScratchpad),
@@ -73,25 +73,25 @@ suite "Crash hardening":
       Msg(kind: CmdToggleFloating),
       Msg(kind: CmdToggleFullscreen)
     ]:
-      let (next, _) = model.dodUpdate(msg)
+      let (next, _) = model.update(msg)
       model = next
       check model.validateInvariants().ok
-      check model.dodShellSnapshot().windows.len == 0
+      check model.shellSnapshot().windows.len == 0
 
   test "river output and fullscreen events tolerate removal":
     var model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).state.model
+      workspaces: WorkspaceConfig(defaultCount: 3))).model
     for msg in [
       Msg(kind: WlOutputDimensions, outputId: 42, width: 1280, height: 720),
       Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title"),
       Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: 7,
         fullscreenOutputId: 0)
     ]:
-      let (next, _) = model.dodUpdate(msg)
+      let (next, _) = model.update(msg)
       model = next
 
     var effects: seq[Effect]
-    (model, effects) = model.dodUpdate(Msg(
+    (model, effects) = model.update(Msg(
       kind: WlOutputRemoved,
       removedOutputId: 42))
     check model.validateInvariants().ok
@@ -100,14 +100,14 @@ suite "Crash hardening":
       not it.isFullscreen)
 
   test "dimension hints are normalized for daemon bounds":
-    var model = initRuntimeStateFromConfig(Config()).state.model
-    let (next, _) = model.dodUpdate(Msg(
+    var model = initRuntimeStateFromConfig(Config()).model
+    let (next, _) = model.update(Msg(
       kind: WlWindowCreated,
       windowId: 7,
       appId: "app",
       title: "title"))
     model = next
-    let (hinted, _) = model.dodUpdate(Msg(
+    let (hinted, _) = model.update(Msg(
       kind: WlWindowDimensionsHint,
       hintWindowId: 7,
       minWidth: -10,
@@ -135,9 +135,9 @@ suite "Crash hardening":
     check parseJson(unknown.reply)["Err"].getStr().len > 0
 
   test "text command parser tolerates malformed commands":
-    check parseLegacyCommand("").isNone
-    check parseLegacyCommand("focus-workspace nope").isNone
-    check parseLegacyCommand("focus-workspace 2").get().kind ==
+    check parseTextCommand("").isNone
+    check parseTextCommand("focus-workspace nope").isNone
+    check parseTextCommand("focus-workspace 2").get().kind ==
       CmdFocusWorkspaceIndex
 
   test "native live restore parser rejects invalid or old payloads":

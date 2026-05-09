@@ -1,17 +1,17 @@
 import os, sequtils, unittest
 import ../src/config/defaults
-import ../src/config/dod_apply
+import ../src/config/apply
 import ../src/config/parser
 import ../src/config/reload_policy
 import ../src/core/msg
-import ../src/state/dod_invariants
-import ../src/state/dod_snapshot
-import ../src/systems/dod_runtime_state
-import ../src/types/dod_model
+import ../src/state/invariants
+import ../src/state/snapshot
+import ../src/systems/runtime_facade
+import ../src/types/model
 import ../src/types/runtime_values
 
 suite "KDL Configuration Parser":
-  test "DOD config application preserves live window state":
+  test "config application preserves live window state":
     let initial = initRuntimeStateFromConfig(Config(
       layout: LayoutConfig(
         gaps: 8,
@@ -19,13 +19,13 @@ suite "KDL Configuration Parser":
         focusedBorderColor: DefaultFocusedBorderColor,
         unfocusedBorderColor: DefaultUnfocusedBorderColor),
       workspaces: WorkspaceConfig(defaultCount: 3)))
-    var state = initial.state
-    discard state.applyObservedRuntimeUpdate(Msg(
+    var state = initial
+    discard state.applyRuntimeUpdate(Msg(
       kind: WlWindowCreated,
       windowId: 7,
       appId: "brave",
       title: "Brave"))
-    discard state.applyObservedRuntimeUpdate(Msg(
+    discard state.applyRuntimeUpdate(Msg(
       kind: WlWindowDimensions,
       dimensionsWindowId: 7,
       actualWidth: 1200,
@@ -87,7 +87,7 @@ suite "KDL Configuration Parser":
         PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32, op: OpMove)
       ])
 
-    check state.applyObservedRuntimeConfig(config).ok
+    check state.applyRuntimeConfig(config)
     check state.model.validateInvariants().ok
     check state.model.outerGaps == 24
     check state.model.innerGaps == 12
@@ -97,7 +97,7 @@ suite "KDL Configuration Parser":
     check state.model.terminal.command == @["kitty"]
     check state.model.keyBindings.len == 1
 
-    let snapshot = state.model.dodShellSnapshot()
+    let snapshot = state.model.shellSnapshot()
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 7
     check snapshot.windows[0].appId == "brave"
@@ -219,8 +219,8 @@ bindings {
     check config.keyBindings.len > 0
     check config.pointerBindings.len > 0
 
-  test "DOD config defaults clamp invalid runtime values":
-    var model = DodModel()
+  test "config defaults clamp invalid runtime values":
+    var model = Model()
     model.applyConfig(Config(
       layout: LayoutConfig(
         gaps: -9,

@@ -1,60 +1,60 @@
 import algorithm, options, tables
-import dod_iterators
+import iterators
 import entity_manager
 import ../types/core
-import ../types/dod_model
+import ../types/model
 
-proc tagForSlot*(model: DodModel; slot: uint32): TagId =
+proc tagForSlot*(model: Model; slot: uint32): TagId =
   model.tagBySlot.getOrDefault(slot, NullTagId)
 
 proc windowForExternal*(
-    model: DodModel; externalId: ExternalWindowId): WindowId =
+    model: Model; externalId: ExternalWindowId): WindowId =
   model.externalWindowIds.getOrDefault(externalId, NullWindowId)
 
 proc outputForExternal*(
-    model: DodModel; externalId: ExternalOutputId): OutputId =
+    model: Model; externalId: ExternalOutputId): OutputId =
   model.externalOutputIds.getOrDefault(externalId, NullOutputId)
 
-proc tagData*(model: DodModel; tagId: TagId): Option[TagData] =
+proc tagData*(model: Model; tagId: TagId): Option[TagData] =
   model.tags.entity(tagId)
 
-proc windowData*(model: DodModel; winId: WindowId): Option[WindowData] =
+proc windowData*(model: Model; winId: WindowId): Option[WindowData] =
   model.windows.entity(winId)
 
-proc columnData*(model: DodModel; columnId: ColumnId): Option[ColumnData] =
+proc columnData*(model: Model; columnId: ColumnId): Option[ColumnData] =
   model.columns.entity(columnId)
 
-proc outputData*(model: DodModel; outputId: OutputId): Option[OutputData] =
+proc outputData*(model: Model; outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
 
-proc groupData*(model: DodModel; groupId: GroupId): Option[GroupData] =
+proc groupData*(model: Model; groupId: GroupId): Option[GroupData] =
   model.groups.entity(groupId)
 
-proc groupForWindow*(model: DodModel; winId: WindowId): GroupId =
+proc groupForWindow*(model: Model; winId: WindowId): GroupId =
   model.groupByWindow.getOrDefault(winId, NullGroupId)
 
-proc windowHiddenByGroup*(model: DodModel; winId: WindowId): bool =
+proc windowHiddenByGroup*(model: Model; winId: WindowId): bool =
   let groupId = model.groupForWindow(winId)
   if groupId == NullGroupId:
     return false
   let groupOpt = model.groupData(groupId)
   groupOpt.isSome and groupOpt.get().activeWindow != winId
 
-proc outputCount*(model: DodModel): int =
+proc outputCount*(model: Model): int =
   for _ in model.outputsWithId():
     inc result
 
-proc sortedSlots*(model: DodModel): seq[uint32] =
+proc sortedSlots*(model: Model): seq[uint32] =
   for slot in model.tagSlots():
     result.add(slot)
   result.sort()
 
-proc tagHasLiveWindows*(model: DodModel; tagId: TagId): bool =
+proc tagHasLiveWindows*(model: Model; tagId: TagId): bool =
   for _ in model.windowsOnTagWithId(tagId):
     return true
   false
 
-proc visibleWorkspaceSlots*(model: DodModel): seq[uint32] =
+proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if model.visibleSlots.len > 0:
     return model.visibleSlots
 
@@ -82,39 +82,39 @@ proc visibleWorkspaceSlots*(model: DodModel): seq[uint32] =
         model.tagHasLiveWindows(lastTag):
       result.add(last + 1)
 
-proc workspaceIndexForSlot*(model: DodModel; slot: uint32): uint32 =
+proc workspaceIndexForSlot*(model: Model; slot: uint32): uint32 =
   for idx, candidate in model.visibleWorkspaceSlots():
     if candidate == slot:
       return uint32(idx + 1)
   0
 
-proc columnsForTag*(model: DodModel; tagId: TagId): seq[ColumnId] =
+proc columnsForTag*(model: Model; tagId: TagId): seq[ColumnId] =
   for columnId, _ in model.columnsOnTagWithId(tagId):
     result.add(columnId)
 
-proc windowsForColumn*(model: DodModel; columnId: ColumnId): seq[WindowId] =
+proc windowsForColumn*(model: Model; columnId: ColumnId): seq[WindowId] =
   for winId, _ in model.windowsOnColumnWithId(columnId):
     result.add(winId)
 
-proc windowsForTag*(model: DodModel; tagId: TagId): seq[WindowId] =
+proc windowsForTag*(model: Model; tagId: TagId): seq[WindowId] =
   for winId, _ in model.windowsOnTagWithId(tagId):
     result.add(winId)
 
 proc columnIndexForTag*(
-    model: DodModel; tagId: TagId; columnId: ColumnId): uint32 =
+    model: Model; tagId: TagId; columnId: ColumnId): uint32 =
   for idx, candidate in model.columnsForTag(tagId):
     if candidate == columnId:
       return uint32(idx + 1)
   0
 
 proc placementForWindowOnTag*(
-    model: DodModel; tagId: TagId; winId: WindowId): Option[WindowPlacement] =
+    model: Model; tagId: TagId; winId: WindowId): Option[WindowPlacement] =
   let key = (tagId, winId)
   if not model.placementByTagWindow.hasKey(key):
     return none(WindowPlacement)
   some(model.placementByTagWindow[key])
 
-proc sortedWindowIdsByExternal*(model: DodModel): seq[WindowId] =
+proc sortedWindowIdsByExternal*(model: Model): seq[WindowId] =
   var externalByWindow: Table[WindowId, ExternalWindowId]
   for winId, win in model.windowsWithId():
     result.add(winId)
@@ -122,7 +122,7 @@ proc sortedWindowIdsByExternal*(model: DodModel): seq[WindowId] =
   result.sort(proc(a, b: WindowId): int =
     cmp(uint32(externalByWindow[a]), uint32(externalByWindow[b])))
 
-proc sortedOutputIdsByExternal*(model: DodModel): seq[OutputId] =
+proc sortedOutputIdsByExternal*(model: Model): seq[OutputId] =
   var externalByOutput: Table[OutputId, ExternalOutputId]
   for outputId, output in model.outputsWithId():
     result.add(outputId)
@@ -130,7 +130,7 @@ proc sortedOutputIdsByExternal*(model: DodModel): seq[OutputId] =
   result.sort(proc(a, b: OutputId): int =
     cmp(uint32(externalByOutput[a]), uint32(externalByOutput[b])))
 
-proc shellOutputName*(model: DodModel; outputId: OutputId): string =
+proc shellOutputName*(model: Model; outputId: OutputId): string =
   if outputId != NullOutputId:
     let outputOpt = model.outputData(outputId)
     if outputOpt.isNone:
@@ -142,16 +142,16 @@ proc shellOutputName*(model: DodModel; outputId: OutputId): string =
       return "river-" & $uint32(output.externalId)
   "triad-0"
 
-proc workspaceOutput*(model: DodModel; tagId: TagId): OutputId =
+proc workspaceOutput*(model: Model; tagId: TagId): OutputId =
   result = model.primaryOutput
   for outputId, outputTag in model.outputTagsWithId():
     if outputTag == tagId:
       return outputId
 
-proc shellWorkspaceOutputName*(model: DodModel; tagId: TagId): string =
+proc shellWorkspaceOutputName*(model: Model; tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))
 
-proc firstWindowPosition*(model: DodModel; winId: WindowId):
+proc firstWindowPosition*(model: Model; winId: WindowId):
     tuple[found: bool, tagId: TagId, slot, colIdx, winIdx: uint32] =
   for slot in model.visibleWorkspaceSlots():
     let tagId = model.tagForSlot(slot)

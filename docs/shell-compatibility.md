@@ -5,7 +5,7 @@ Triad should not pretend to be Mango for Noctalia-shell by setting
 
 Noctalia's Mango backend uses Quickshell's DWL integration as its primary data
 source: `DwlIpc.outputs`, per-output tags, layout symbols, and foreign-toplevel
-handles. `mmsg` is only a fallback/control path for a few actions. Triad is a
+handles. `mmsg` is an alternate control path for a few actions. Triad is a
 River layout client, not the compositor, so it cannot expose those DWL Wayland
 globals without work outside this repository.
 

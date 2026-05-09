@@ -32,7 +32,7 @@ However, in `triad` (following the exact conventions established in `ec4x`), we 
 Therefore, **we strictly use Nim's UFCS (dot syntax) for system logic.**
 
 ### The Convention:
-1.  **First Parameter:** Systems and helper procs that operate on state must define the primary state struct (e.g., `Model`, `DodModel`, `EntityManager`) as their **first parameter**.
+1.  **First Parameter:** Systems and helper procs that operate on state must define the primary state struct (e.g., `Model`, `EntityManager`) as their **first parameter**.
 2.  **Dot Syntax:** Always invoke these procs using the dot (`.`) syntax.
 
 ### Examples:

@@ -2,11 +2,11 @@ import algorithm, json, os, strutils, unittest
 import ../src/config/parser
 import ../src/core/msg
 import ../src/ipc/niri_compat
-import ../src/state/dod_invariants
-import ../src/state/dod_snapshot
-import ../src/systems/dod_runtime_state
-import ../src/systems/dod_update
-import ../src/types/dod_model
+import ../src/state/invariants
+import ../src/state/snapshot
+import ../src/systems/runtime_facade
+import ../src/systems/update
+import ../src/types/model
 import ../src/types/runtime_values
 
 type
@@ -49,7 +49,7 @@ proc parseUIntEnv(name: string; fallback: uint64): uint64 =
     discard
   fallback
 
-proc baseModel(): DodModel =
+proc baseModel(): Model =
   initRuntimeStateFromConfig(Config(
     layout: LayoutConfig(
       gaps: 10,
@@ -59,16 +59,16 @@ proc baseModel(): DodModel =
       enableAnimations: true,
       animationSpeed: 0.2,
       layoutCycle: @[Scroller, Grid, Deck, Monocle]),
-    workspaces: WorkspaceConfig(defaultCount: 4))).state.model
+    workspaces: WorkspaceConfig(defaultCount: 4))).model
 
-proc modelSummary(model: DodModel): string =
-  let snapshot = model.dodShellSnapshot()
+proc modelSummary(model: Model): string =
+  let snapshot = model.shellSnapshot()
   "activeTag=" & $snapshot.activeTag &
     " workspaces=" & $snapshot.workspaces.len &
     " windows=" & $snapshot.windows.len &
     " overview=" & $snapshot.overviewActive
 
-proc fail(ctx: FuzzContext; model: DodModel; msg: string) =
+proc fail(ctx: FuzzContext; model: Model; msg: string) =
   raise newException(AssertionDefect,
     "stress failure: " & msg &
     " seed=" & $ctx.seed &
@@ -76,16 +76,16 @@ proc fail(ctx: FuzzContext; model: DodModel; msg: string) =
     " op=" & ctx.op &
     " " & model.modelSummary())
 
-proc require(ctx: FuzzContext; model: DodModel; cond: bool; msg: string) =
+proc require(ctx: FuzzContext; model: Model; cond: bool; msg: string) =
   if not cond:
     fail(ctx, model, msg)
 
-proc existingWindows(model: DodModel): seq[WindowId] =
-  for win in model.dodShellSnapshot().windows:
+proc existingWindows(model: Model): seq[WindowId] =
+  for win in model.shellSnapshot().windows:
     result.add(win.id)
   result.sort()
 
-proc chooseWindow(rng: var FuzzRng; model: DodModel): WindowId =
+proc chooseWindow(rng: var FuzzRng; model: Model): WindowId =
   let wins = model.existingWindows()
   if wins.len > 0 and rng.chance(3, 4):
     wins[rng.pick(wins.len)]
@@ -99,7 +99,7 @@ proc chooseLayout(rng: var FuzzRng): LayoutMode =
   LayoutMode(rng.pick(ord(high(LayoutMode)) + 1))
 
 proc generatedMsg(
-    rng: var FuzzRng; model: DodModel; nextWindow: var WindowId): Msg =
+    rng: var FuzzRng; model: Model; nextWindow: var WindowId): Msg =
   case rng.pick(24)
   of 0:
     result = Msg(
@@ -168,7 +168,7 @@ proc generatedMsg(
   else:
     result = Msg(kind: CmdTick)
 
-proc checkInvariants(ctx: FuzzContext; model: DodModel) =
+proc checkInvariants(ctx: FuzzContext; model: Model) =
   let report = model.validateInvariants()
   if not report.ok:
     var errors: seq[string]
@@ -176,14 +176,14 @@ proc checkInvariants(ctx: FuzzContext; model: DodModel) =
       errors.add(error.message)
     fail(ctx, model, errors.join("; "))
 
-  let snapshot = model.dodShellSnapshot()
+  let snapshot = model.shellSnapshot()
   discard niri_compat.handleNiriRequest("\"Workspaces\"", snapshot)
   discard niri_compat.handleNiriRequest("\"Windows\"", snapshot)
   let outputs = niri_compat.handleNiriRequest("\"Outputs\"", snapshot)
   require(ctx, model, outputs.handled, "outputs request not handled")
   discard parseJson(outputs.reply)
 
-suite "Deterministic DoD stress":
+suite "Deterministic runtime stress":
   test "random reducer trace preserves invariants":
     let seed = parseUIntEnv("TRIAD_STRESS_SEED", 0xC0FFEE'u64)
     let steps = int(parseUIntEnv("TRIAD_STRESS_STEPS", 400))
@@ -195,7 +195,7 @@ suite "Deterministic DoD stress":
       var ctx = FuzzContext(seed: seed, step: step)
       let msg = rng.generatedMsg(model, nextWindow)
       ctx.op = $msg.kind
-      let (next, _) = model.dodUpdate(msg)
+      let (next, _) = model.update(msg)
       model = next
       checkInvariants(ctx, model)
 
