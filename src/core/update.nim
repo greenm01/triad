@@ -47,6 +47,7 @@ type
       closeId*: WindowId
     of EffBroadcastJson, EffBroadcastTriadJson:
       jsonPayload*: string
+      triadEventName*: string
     of EffOpStartPointer:
       opSeat*: pointer
     of EffOpEnd:
@@ -146,7 +147,10 @@ proc broadcastOverview(open: bool): Effect =
   return Effect(kind: EffBroadcastJson, jsonPayload: $payload)
 
 proc broadcastTriadLayoutStateChanged(model: Model): Effect =
-  Effect(kind: EffBroadcastTriadJson, jsonPayload: triadLayoutStateChangedEvent(model))
+  Effect(kind: EffBroadcastTriadJson, jsonPayload: triadLayoutStateChangedEvent(model), triadEventName: "layout")
+
+proc broadcastTriadStateChanged(model: Model): Effect =
+  Effect(kind: EffBroadcastTriadJson, jsonPayload: triadStateChangedEvent(model), triadEventName: "state")
 
 proc shouldBroadcastWindowsChanged(kind: MsgKind): bool =
   case kind
@@ -276,6 +280,12 @@ proc shouldBroadcastTriadLayoutChanged(kind: MsgKind): bool =
     true
   else:
     false
+
+proc shouldBroadcastTriadStateChanged(kind: MsgKind): bool =
+  kind.shouldBroadcastTriadLayoutChanged() or
+    kind.shouldBroadcastWindowsChanged() or
+    kind.shouldBroadcastOutputsChanged() or
+    kind in {CmdToggleOverview, CmdOpenOverview, CmdCloseOverview}
 
 proc keepIf[T](s: var seq[T], pred: proc(x: T): bool) =
   var i = 0
@@ -2060,5 +2070,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
 
   if msg.kind.shouldBroadcastTriadLayoutChanged() or cleanedStaleWindows or collapsedWorkspace or prunedWorkspaces:
     effects.add(nextModel.broadcastTriadLayoutStateChanged())
+  if msg.kind.shouldBroadcastTriadStateChanged() or cleanedStaleWindows or collapsedWorkspace or prunedWorkspaces:
+    effects.add(nextModel.broadcastTriadStateChanged())
 
   return (nextModel, effects)

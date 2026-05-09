@@ -1291,7 +1291,7 @@ proc executeEffect(eff: Effect) =
   of EffBroadcastJson:
     asyncCheck broadcastJson(eff.jsonPayload)
   of EffBroadcastTriadJson:
-    asyncCheck broadcastTriadJson(eff.jsonPayload)
+    asyncCheck broadcastTriadJson(eff.jsonPayload, eff.triadEventName)
   of EffSpawnScreenLock:
     spawnScreenLock(eff.screenLockCommand)
   of EffSpawnWindowMenu:

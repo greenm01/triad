@@ -8,6 +8,7 @@ type
   TriadIpcResult* = object
     handled*: bool
     subscribeLayout*: bool
+    subscribeState*: bool
     reply*: string
     initialEvents*: seq[string]
     messages*: seq[Msg]
@@ -45,6 +46,19 @@ proc hasEvent(node: JsonNode; eventName: string): bool =
     return false
   for event in events:
     if event.kind == JString and event.getStr() == eventName:
+      return true
+  false
+
+proc hasUnsupportedEvent(node: JsonNode): bool =
+  if node.kind != JObject or not node.hasKey("events"):
+    return false
+  let events = node["events"]
+  if events.kind != JArray:
+    return true
+  for event in events:
+    if event.kind != JString:
+      return true
+    if event.getStr() notin ["layout", "state"]:
       return true
   false
 
@@ -96,6 +110,13 @@ proc handleTriadRequest*(line: string; model: Model): TriadIpcResult =
 
   let request = stringFromField(payload, "request")
   case request
+  of "state":
+    result.reply = okReply(%*{
+      "version": TriadIpcVersion,
+      "type": "state",
+      "state": triadStateJson(model)
+    })
+
   of "layout-state":
     result.reply = okReply(%*{
       "version": TriadIpcVersion,
@@ -123,12 +144,16 @@ proc handleTriadRequest*(line: string; model: Model): TriadIpcResult =
     result.reply = ackReply()
 
   of "event-stream":
-    if not payload.hasEvent("layout"):
+    if payload.hasUnsupportedEvent() or (not payload.hasEvent("layout") and not payload.hasEvent("state")):
       result.reply = errReply("unsupported event stream")
       return
-    result.subscribeLayout = true
+    result.subscribeLayout = payload.hasEvent("layout")
+    result.subscribeState = payload.hasEvent("state")
     result.reply = ackReply()
-    result.initialEvents.add(triadLayoutStateChangedEvent(model))
+    if result.subscribeLayout:
+      result.initialEvents.add(triadLayoutStateChangedEvent(model))
+    if result.subscribeState:
+      result.initialEvents.add(triadStateChangedEvent(model))
 
   else:
     result.reply = errReply("unsupported triad request: " & request)

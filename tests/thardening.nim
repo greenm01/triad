@@ -34,6 +34,13 @@ proc waitForSubscribers(count: int): bool =
     waitFor sleepAsync(20)
   false
 
+proc waitForTriadSubscribers(count: int): bool =
+  for _ in 0 ..< 50:
+    if triadSubscribers.len >= count:
+      return true
+    waitFor sleepAsync(20)
+  false
+
 suite "Crash hardening":
   test "daemon startup rejects missing Wayland session environment":
     check waylandSessionProblem("", "wayland-1") == "XDG_RUNTIME_DIR is not set"
@@ -346,6 +353,55 @@ suite "Crash hardening":
     subscribers.add(AsyncSocket(nil))
     waitFor broadcastJson("""{"OverviewOpenedOrClosed":{"is_open":false}}""")
     check subscribers.len == 0
+    removeDir(dir)
+
+  test "Native Triad event subscribers are filtered by event kind":
+    let dir = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-triad-stream")
+    createDir(dir)
+    let path = dir / "triad.sock"
+    var model = baseModel()
+
+    proc onMsg(msg: Msg) {.gcsafe.} =
+      discard msg
+
+    proc getModel(): Model {.gcsafe.} =
+      {.cast(gcsafe).}:
+        model
+
+    triadSubscribers.setLen(0)
+    asyncCheck startIpcServer(path, onMsg, getModel)
+    discard waitForIpcReply(path, "\"Outputs\"")
+
+    let stateClient = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+    waitFor stateClient.connectUnix(path)
+    waitFor stateClient.send("""{"triad":{"version":1,"request":"event-stream","events":["state"]}}""" & "\L")
+    discard waitFor stateClient.recvLine()
+    check (waitFor stateClient.recvLine()).contains("state-changed")
+
+    let layoutClient = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+    waitFor layoutClient.connectUnix(path)
+    waitFor layoutClient.send("""{"triad":{"version":1,"request":"event-stream","events":["layout"]}}""" & "\L")
+    discard waitFor layoutClient.recvLine()
+    check (waitFor layoutClient.recvLine()).contains("layout-state-changed")
+    check waitForTriadSubscribers(2)
+    check triadSubscribers.countIt(it.state and not it.layout) == 1
+    check triadSubscribers.countIt(it.layout and not it.state) == 1
+
+    waitFor broadcastTriadJson("""{"triad":{"version":1,"event":"state-changed","state":{}}}""", "state")
+    let stateEvent = stateClient.recvLine()
+    check waitFor withTimeout(stateEvent, 1000)
+    check stateEvent.read().contains("state-changed")
+
+    waitFor broadcastTriadJson("""{"triad":{"version":1,"event":"layout-state-changed","state":{}}}""", "layout")
+    let layoutEvent = layoutClient.recvLine()
+    check waitFor withTimeout(layoutEvent, 1000)
+    check layoutEvent.read().contains("layout-state-changed")
+
+    if not stateClient.isClosed:
+      stateClient.close()
+    if not layoutClient.isClosed:
+      layoutClient.close()
+    triadSubscribers.setLen(0)
     removeDir(dir)
 
   test "IPC refuses active sockets and non-socket paths":

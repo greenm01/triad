@@ -1,110 +1,137 @@
-import json, options, tables
+import json, options
 import model
-import model_utils
+import shell_state
 
-const TriadIpcVersion* = 1
+export TriadIpcVersion, layoutModeId, parseLayoutModeId
 
-proc layoutModeId*(mode: LayoutMode): string =
-  case mode
-  of Scroller: "scroller"
-  of VerticalScroller: "vertical-scroller"
-  of MasterStack: "tile"
-  of Grid: "grid"
-  of Monocle: "monocle"
-  of Deck: "deck"
-  of CenterTile: "center-tile"
-  of RightTile: "right-tile"
-  of VerticalTile: "vertical-tile"
-  of VerticalGrid: "vertical-grid"
-  of VerticalDeck: "vertical-deck"
-
-proc parseLayoutModeId*(value: string): Option[LayoutMode] =
-  case value
-  of "scroller": some(Scroller)
-  of "vertical-scroller": some(VerticalScroller)
-  of "tile": some(MasterStack)
-  of "grid": some(Grid)
-  of "monocle": some(Monocle)
-  of "deck": some(Deck)
-  of "center-tile": some(CenterTile)
-  of "right-tile": some(RightTile)
-  of "vertical-tile": some(VerticalTile)
-  of "vertical-grid": some(VerticalGrid)
-  of "vertical-deck": some(VerticalDeck)
-  else: none(LayoutMode)
+proc nullableString(value: string): JsonNode =
+  if value.len == 0: newJNull() else: %value
 
 proc triadSupportedLayoutsJson*(): JsonNode =
   result = newJArray()
   for mode in LayoutMode:
     result.add(%*{"id": layoutModeId(mode), "ordinal": ord(mode)})
 
-proc triadLayoutCycleJson*(model: Model): JsonNode =
+proc triadLayoutCycleJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
-  let cycle = if model.layoutCycle.len > 0:
-    model.layoutCycle
-  else:
-    @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
-  for mode in cycle:
+  for mode in snapshot.layoutCycle:
     result.add(%layoutModeId(mode))
 
-proc workspaceIndexForTag(model: Model; tagId: uint32): uint32 =
-  let ids = model.visibleWorkspaceIds()
-  for idx, id in ids:
-    if id == tagId:
-      return uint32(idx + 1)
-  0
+proc triadColumnJson(col: ShellColumn): JsonNode =
+  let windows = newJArray()
+  for winId in col.windows:
+    windows.add(%winId)
+  %*{
+    "idx": col.idx,
+    "width_proportion": col.widthProportion,
+    "windows": windows
+  }
 
-proc tagColumnsJson(tag: TagState): JsonNode =
-  result = newJArray()
-  for idx, col in tag.columns:
-    let windows = newJArray()
-    for winId in col.windows:
-      windows.add(%winId)
-    result.add(%*{
-      "idx": idx + 1,
-      "width_proportion": col.widthProportion,
-      "windows": windows
-    })
-
-proc triadWorkspaceLayoutJson*(model: Model; tagId: uint32; workspaceIdx: uint32): JsonNode =
-  let tag =
-    if model.tags.hasKey(tagId):
-      model.tags[tagId]
-    else:
-      model.initTagStateForModel(tagId)
+proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
+  let columns = newJArray()
+  for col in workspace.columns:
+    columns.add(triadColumnJson(col))
 
   %*{
-    "tag_id": tagId,
-    "workspace_idx": workspaceIdx,
-    "name": if tag.name.len == 0: newJNull() else: %tag.name,
-    "layout": layoutModeId(tag.layoutMode),
-    "is_active": tagId == model.activeTag,
-    "focused_window_id": if tag.focusedWindow == 0: newJNull() else: %tag.focusedWindow,
-    "columns": tagColumnsJson(tag),
-    "master_count": tag.masterCount,
-    "master_split_ratio": tag.masterSplitRatio,
+    "tag_id": workspace.tagId,
+    "workspace_idx": workspace.workspaceIdx,
+    "name": nullableString(workspace.name),
+    "layout": layoutModeId(workspace.layoutMode),
+    "is_active": workspace.isActive,
+    "focused_window_id": if workspace.focusedWindow == 0: newJNull() else: %workspace.focusedWindow,
+    "columns": columns,
+    "master_count": workspace.masterCount,
+    "master_split_ratio": workspace.masterSplitRatio,
     "viewport": {
-      "target_x": tag.targetViewportXOffset,
-      "current_x": tag.currentViewportXOffset,
-      "target_y": tag.targetViewportYOffset,
-      "current_y": tag.currentViewportYOffset
+      "target_x": workspace.targetViewportXOffset,
+      "current_x": workspace.currentViewportXOffset,
+      "target_y": workspace.targetViewportYOffset,
+      "current_y": workspace.currentViewportYOffset
     }
   }
 
-proc triadLayoutStateJson*(model: Model): JsonNode =
-  let ids = model.visibleWorkspaceIds()
+proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
   let workspaces = newJArray()
-  for idx, tagId in ids:
-    workspaces.add(triadWorkspaceLayoutJson(model, tagId, uint32(idx + 1)))
+  for workspace in snapshot.workspaces:
+    workspaces.add(triadWorkspaceLayoutJson(workspace))
 
   %*{
-    "version": TriadIpcVersion,
+    "version": snapshot.version,
     "layouts": triadSupportedLayoutsJson(),
-    "layout_cycle": triadLayoutCycleJson(model),
-    "active_tag": model.activeTag,
-    "active_workspace_idx": model.workspaceIndexForTag(model.activeTag),
+    "layout_cycle": triadLayoutCycleJson(snapshot),
+    "active_tag": snapshot.activeTag,
+    "active_workspace_idx": snapshot.activeWorkspaceIdx,
     "workspaces": workspaces
   }
+
+proc triadLayoutStateJson*(model: Model): JsonNode =
+  triadLayoutStateJson(shellSnapshot(model))
+
+proc triadOutputJson(output: ShellOutput): JsonNode =
+  %*{
+    "id": output.id,
+    "name": output.name,
+    "is_primary": output.isPrimary,
+    "geometry": {
+      "x": output.x,
+      "y": output.y,
+      "width": output.w,
+      "height": output.h
+    }
+  }
+
+proc triadWindowJson(win: ShellWindow): JsonNode =
+  %*{
+    "id": win.id,
+    "title": nullableString(win.title),
+    "app_id": nullableString(win.appId),
+    "tag_id": if win.tagId.isSome: %win.tagId.get() else: newJNull(),
+    "workspace_idx": if win.workspaceIdx == 0: newJNull() else: %win.workspaceIdx,
+    "output": nullableString(win.outputName),
+    "position": {
+      "column_idx": if win.colIdx == 0: newJNull() else: %win.colIdx,
+      "window_idx": if win.winIdx == 0: newJNull() else: %win.winIdx
+    },
+    "is_focused": win.isFocused,
+    "is_floating": win.isFloating,
+    "is_maximized": win.isMaximized,
+    "is_minimized": win.isMinimized,
+    "is_fullscreen": win.isFullscreen,
+    "fullscreen_output": if win.fullscreenOutput == 0: newJNull() else: %win.fullscreenOutput,
+    "width_proportion": win.widthProportion,
+    "height_proportion": win.heightProportion,
+    "actual_size": {
+      "width": win.actualW,
+      "height": win.actualH
+    },
+    "floating_geometry": {
+      "x": win.floatingGeom.x,
+      "y": win.floatingGeom.y,
+      "width": win.floatingGeom.w,
+      "height": win.floatingGeom.h
+    },
+    "keyboard_shortcuts_inhibit": win.keyboardShortcutsInhibit
+  }
+
+proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
+  let outputs = newJArray()
+  for output in snapshot.outputs:
+    outputs.add(triadOutputJson(output))
+
+  let windows = newJArray()
+  for win in snapshot.windows:
+    windows.add(triadWindowJson(win))
+
+  %*{
+    "version": snapshot.version,
+    "overview": {"is_open": snapshot.overviewActive},
+    "layout": triadLayoutStateJson(snapshot),
+    "outputs": outputs,
+    "windows": windows
+  }
+
+proc triadStateJson*(model: Model): JsonNode =
+  triadStateJson(shellSnapshot(model))
 
 proc triadLayoutStateChangedEvent*(model: Model): string =
   $(%*{
@@ -112,5 +139,14 @@ proc triadLayoutStateChangedEvent*(model: Model): string =
       "version": TriadIpcVersion,
       "event": "layout-state-changed",
       "state": triadLayoutStateJson(model)
+    }
+  })
+
+proc triadStateChangedEvent*(model: Model): string =
+  $(%*{
+    "triad": {
+      "version": TriadIpcVersion,
+      "event": "state-changed",
+      "state": triadStateJson(model)
     }
   })

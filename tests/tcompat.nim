@@ -245,12 +245,56 @@ suite "Shell compatibility contracts":
     let response = handleTriadRequest("""{"triad":{"version":1,"request":"event-stream","events":["layout"]}}""", modelForShell())
     check response.handled
     check response.subscribeLayout
+    check not response.subscribeState
     check parseJson(response.reply)["ok"].getBool()
     check response.initialEvents.len == 1
     let event = parseJson(response.initialEvents[0])
     check event["triad"]["version"].getInt() == 1
     check event["triad"]["event"].getStr() == "layout-state-changed"
     check event["triad"]["state"]["workspaces"][0]["layout"].getStr() == "scroller"
+
+  test "Triad native state exposes canonical shell snapshot":
+    var model = modelForShell()
+    model.outputs[42] = OutputData(id: 42, name: "Virtual-1", x: 10, y: 20, w: 1280, h: 720)
+    model.primaryOutput = 42
+    model.overviewActive = true
+    model.windows[10].isFloating = true
+
+    let response = handleTriadRequest("""{"triad":{"version":1,"request":"state"}}""", model)
+    check response.handled
+    let parsed = parseJson(response.reply)
+    check parsed["ok"].getBool()
+    let state = parsed["triad"]["state"]
+    check state["version"].getInt() == 1
+    check state["overview"]["is_open"].getBool()
+    check state["layout"]["active_tag"].getInt() == 1
+    check state["layout"]["workspaces"][0]["tag_id"].getInt() == 1
+    check state["outputs"][0]["name"].getStr() == "Virtual-1"
+    check state["outputs"][0]["geometry"]["width"].getInt() == 1280
+    check state["windows"][0]["id"].getInt() == 10
+    check state["windows"][0]["app_id"].getStr() == "Alacritty"
+    check state["windows"][0]["tag_id"].getInt() == 1
+    check state["windows"][0]["workspace_idx"].getInt() == 1
+    check state["windows"][0]["output"].getStr() == "Virtual-1"
+    check state["windows"][0]["is_floating"].getBool()
+
+  test "Triad native state event stream is filtered from layout stream":
+    let stateOnly = handleTriadRequest("""{"triad":{"version":1,"request":"event-stream","events":["state"]}}""", modelForShell())
+    check stateOnly.handled
+    check not stateOnly.subscribeLayout
+    check stateOnly.subscribeState
+    check parseJson(stateOnly.reply)["ok"].getBool()
+    check stateOnly.initialEvents.len == 1
+    check parseJson(stateOnly.initialEvents[0])["triad"]["event"].getStr() == "state-changed"
+
+    let both = handleTriadRequest("""{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}""", modelForShell())
+    check both.subscribeLayout
+    check both.subscribeState
+    check both.initialEvents.len == 2
+
+    let unsupported = handleTriadRequest("""{"triad":{"version":1,"request":"event-stream","events":["niri"]}}""", modelForShell())
+    check unsupported.handled
+    check parseJson(unsupported.reply)["ok"].getBool() == false
 
   test "Niri actions map to Triad messages":
     let focusWs = handleNiriRequest("""{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", modelForShell())

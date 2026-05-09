@@ -181,6 +181,48 @@ Errors use:
 {"ok":false,"error":"unknown layout: spiral"}
 ```
 
+Native Triad state is generated from Triad's internal shell snapshot. The Niri
+compatibility socket is a separate projection of that same snapshot; Triad-only
+fields are not added to the Niri protocol.
+
+### Shell State
+
+Request:
+
+```json
+{"triad":{"version":1,"request":"state"}}
+```
+
+The reply contains the full native shell-facing state:
+
+```json
+{
+  "ok": true,
+  "triad": {
+    "version": 1,
+    "type": "state",
+    "state": {
+      "version": 1,
+      "overview": {"is_open": false},
+      "layout": {},
+      "outputs": [
+        {"id": 42, "name": "Virtual-1", "is_primary": true}
+      ],
+      "windows": [
+        {
+          "id": 10,
+          "app_id": "Alacritty",
+          "tag_id": 1,
+          "workspace_idx": 1,
+          "output": "Virtual-1",
+          "is_focused": true
+        }
+      ]
+    }
+  }
+}
+```
+
 ### Layout State
 
 Request:
@@ -260,7 +302,7 @@ Advance the active tag through the configured layout cycle:
 {"triad":{"version":1,"request":"switch-layout"}}
 ```
 
-### Layout Event Stream
+### Event Stream
 
 Subscribe to native layout events:
 
@@ -268,11 +310,18 @@ Subscribe to native layout events:
 {"triad":{"version":1,"request":"event-stream","events":["layout"]}}
 ```
 
-After the acknowledgement, Triad sends an initial state event and then pushes
-updates when layout-relevant state changes:
+Subscribe to native full-state events:
+
+```json
+{"triad":{"version":1,"request":"event-stream","events":["state"]}}
+```
+
+After the acknowledgement, Triad sends an initial event for every requested
+event kind and then pushes updates when relevant state changes:
 
 ```json
 {"triad":{"version":1,"event":"layout-state-changed","state":{}}}
+{"triad":{"version":1,"event":"state-changed","state":{}}}
 ```
 
 Native Triad subscribers receive only native Triad events. Niri compatibility
