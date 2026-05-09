@@ -1,5 +1,6 @@
 import ../config/dod_apply
 import ../config/parser
+import ../core/effects
 import ../core/msg
 import ../core/restore_state
 import ../state/dod_adapter
@@ -7,14 +8,12 @@ import ../state/dod_restore_state
 import ../state/engine
 import ../types/dod_runtime_policy
 import ../types/dod_runtime_state
+import ../types/layout_projection
 import ../types/shell_snapshot
 import dod_layout
 import dod_update
 import dod_window_lifecycle
 import dod_workspaces
-import layout_projection_sync
-import runtime_update_sync
-import state_application_sync
 
 export dod_runtime_state
 export dod_runtime_policy
@@ -24,13 +23,17 @@ type
     state*: TriadRuntimeState
 
   ObservedRuntimeUpdateResult* = object
-    syncResult*: RuntimeUpdateSyncResult
+    authority*: RuntimeAuthority
+    effects*: seq[Effect]
 
   ObservedLayoutProjectionResult* = object
-    syncResult*: LayoutProjectionSyncReport
+    authority*: LayoutAuthority
+    ok*: bool
+    projection*: LayoutProjection
 
   ObservedStateApplicationResult* = object
-    syncResult*: StateApplicationSyncResult
+    authority*: StateApplicationAuthority
+    ok*: bool
 
 proc initRuntimeStateFromConfig*(
     config: Config; activeTag: uint32 = 1): RuntimeStateInitResult =
@@ -43,10 +46,8 @@ proc applyObservedRuntimeUpdate*(
     state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
   let (next, effects) = state.model.dodUpdate(msg)
   state.model = next
-  result.syncResult = RuntimeUpdateSyncResult(
-    authority: DodRuntimeAuthority,
-    dodEffects: effects,
-    authoritativeEffects: effects)
+  result.authority = DodRuntimeAuthority
+  result.effects = effects
 
 proc applyObservedRuntimeShadowOnly*(
     state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
@@ -56,25 +57,23 @@ proc applyObservedRuntimeLayoutProjection*(
     state: var TriadRuntimeState): ObservedLayoutProjectionResult =
   let projection = state.model.layoutProjection()
   state.model.applyLayoutProjection(projection)
-  result.syncResult = LayoutProjectionSyncReport(
-    authority: DodLayoutAuthority,
-    ok: true,
-    dodProjection: projection,
-    authoritativeProjection: projection)
+  result.authority = DodLayoutAuthority
+  result.ok = true
+  result.projection = projection
 
 proc applyObservedRuntimeConfig*(
     state: var TriadRuntimeState;
     config: Config): ObservedStateApplicationResult =
   state.model.applyConfig(config)
-  result.syncResult = StateApplicationSyncResult(
-    authority: DodStateApplicationAuthority)
+  result.authority = DodStateApplicationAuthority
+  result.ok = true
 
 proc applyObservedRuntimeLiveRestore*(
     state: var TriadRuntimeState;
     restoreState: LiveRestoreState): ObservedStateApplicationResult =
   state.model.applyLiveRestore(restoreState.dodFromLiveRestore())
-  result.syncResult = StateApplicationSyncResult(
-    authority: DodStateApplicationAuthority)
+  result.authority = DodStateApplicationAuthority
+  result.ok = true
 
 proc readRuntimeSnapshot*(state: TriadRuntimeState): ShellSnapshot =
   state.model.dodShellSnapshot()

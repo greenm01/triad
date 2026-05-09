@@ -141,7 +141,7 @@ proc cstringOrEmpty(value: cstring): string =
 
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
   let observed = runtimeState.applyObservedRuntimeUpdate(msg)
-  observed.syncResult.authoritativeEffects
+  observed.effects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
   discard runtimeState.applyObservedRuntimeShadowOnly(msg)
@@ -158,7 +158,7 @@ proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
 proc syncRuntimeLayoutProjection(
     context: string; msg: Msg): seq[RenderInstruction] =
   let observed = runtimeState.applyObservedRuntimeLayoutProjection()
-  observed.syncResult.authoritativeProjection.instructions
+  observed.projection.instructions
 
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:

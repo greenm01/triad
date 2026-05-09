@@ -1063,6 +1063,15 @@ suite "DOD state primitives":
     check not source.contains("import core/shell_state")
     check not source.contains("import systems/layout_state")
 
+  test "DOD runtime facade does not import shadow sync bridges":
+    let source = readFile("src/systems/dod_runtime_state.nim")
+    check not source.contains("runtime_update_sync")
+    check not source.contains("layout_projection_sync")
+    check not source.contains("state_application_sync")
+    check not source.contains("projection_read_sync")
+    check not source.contains("dod_shadow_health")
+    check not source.contains("dod_shadow_runtime")
+
   test "DOD update orchestrates domain reducers only":
     let source = readFile("src/systems/dod_update.nim")
     let forbiddenImports = [
@@ -1971,16 +1980,16 @@ suite "DOD state primitives":
     check snapshot.activeWorkspaceIdx == 2
 
   test "DOD runtime state updates the native model directly":
-    var state = TriadRuntimeState(model: lifecycleParityModel().dodFromLegacy())
+    let source = lifecycleParityModel().dodFromLegacy()
+    var state = TriadRuntimeState(model: source)
     let msg = Msg(kind: CmdAdjustGaps, deltaG: 3)
     let previousGaps = state.model.outerGaps
+    let (_, expectedEffects) = source.dodUpdate(msg)
 
     let updateResult = state.applyObservedRuntimeUpdate(msg)
-    check updateResult.syncResult.authority == DodRuntimeAuthority
-    check updateResult.syncResult.authoritativeEffects.stableEffectSignatures(
-      msg) ==
-      updateResult.syncResult.dodEffects.stableEffectSignatures(
-        msg)
+    check updateResult.authority == DodRuntimeAuthority
+    check updateResult.effects.stableEffectSignatures(msg) ==
+      expectedEffects.stableEffectSignatures(msg)
     check state.model.outerGaps == previousGaps + 3
 
   test "DOD daemon view exposes external host ids":
@@ -2008,10 +2017,9 @@ suite "DOD state primitives":
   test "DOD runtime state projects layout from the native model":
     var state = TriadRuntimeState(model: lifecycleParityModel().dodFromLegacy())
     let layoutResult = state.applyObservedRuntimeLayoutProjection()
-    check layoutResult.syncResult.authority == DodLayoutAuthority
-    check layoutResult.syncResult.ok
-    check layoutResult.syncResult.authoritativeProjection.instructions ==
-      layoutResult.syncResult.dodProjection.instructions
+    check layoutResult.authority == DodLayoutAuthority
+    check layoutResult.ok
+    check layoutResult.projection.instructions.len > 0
 
   test "DOD runtime config reload preserves live native state":
     var state = TriadRuntimeState(model: lifecycleParityModel().dodFromLegacy())
@@ -2028,7 +2036,8 @@ suite "DOD state primitives":
     config.workspaces.defaultCount = 3
 
     let configResult = state.applyObservedRuntimeConfig(config)
-    check configResult.syncResult.authority == DodStateApplicationAuthority
+    check configResult.authority == DodStateApplicationAuthority
+    check configResult.ok
     check state.model.outerGaps == 25
     check state.model.windows.data.len == windowCount
     check state.readRuntimeSnapshot().windows.anyIt(
@@ -2041,7 +2050,8 @@ suite "DOD state primitives":
     restored.focusHistory = @[20'u32]
     restored.workspaceHistory = @[2'u32]
     let restoreResult = state.applyObservedRuntimeLiveRestore(restored)
-    check restoreResult.syncResult.authority == DodStateApplicationAuthority
+    check restoreResult.authority == DodStateApplicationAuthority
+    check restoreResult.ok
     check state.model.activeWorkspaceSlot() == 2
     check state.readRuntimeSnapshot().activeTag == 2
 
