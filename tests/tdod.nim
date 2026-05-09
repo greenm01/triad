@@ -1005,6 +1005,10 @@ suite "DOD state primitives":
       for pattern in forbiddenStorage:
         check not source.contains(pattern)
 
+  test "daemon does not apply DOD shadow reports directly":
+    let source = readFile("src/triad.nim")
+    check not source.contains("applyShadowReport(")
+
   test "DOD update orchestrates domain reducers only":
     let source = readFile("src/systems/dod_update.nim")
     let forbiddenImports = [
@@ -1481,11 +1485,49 @@ suite "DOD state primitives":
     let result = initRuntimeStateFromConfig(config, activeTag = 2)
     check result.shadowChecked
     check result.shadowReport.ok
+    check result.observation.checked
+    check result.observation.decision.reportOk
     check result.state.legacyModel.activeTag == 2
     check result.state.shadowHealth.initialized
     check result.state.shadowHealth.readHealthy
+    check result.state.shadowHealth.divergenceCount == 0
     check readRuntimeSnapshot(result.state) ==
       shellSnapshot(result.state.legacyModel)
+
+  test "DOD runtime state observes shadow report health":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth())
+
+    var observation = state.observeShadowReport(
+      checked = true,
+      report = DodShadowReport(ok: true))
+    check observation.checked
+    check observation.decision.reportOk
+    check state.shadowHealth.readHealthy
+    check state.shadowHealth.divergenceCount == 0
+
+    observation = state.observeShadowReport(
+      checked = true,
+      report = DodShadowReport(
+        ok: false,
+        errors: @["shell snapshot mismatch"]))
+    check not observation.decision.reportOk
+    check observation.decision.divergenceRecorded
+    check observation.decision.readsDisabled
+    check observation.decision.divergenceCount == 1
+    check not state.shadowHealth.readHealthy
+    check state.shadowHealth.divergenceCount == 1
+
+    observation = state.observeShadowReport(
+      checked = true,
+      report = DodShadowReport(
+        ok: false,
+        errors: @["shell snapshot mismatch"]))
+    check not observation.decision.readsDisabled
+    check observation.decision.divergenceCount == 2
 
   test "DOD runtime state facade routes updates and projections":
     let seed = lifecycleParityModel()
@@ -1494,16 +1536,43 @@ suite "DOD state primitives":
       shadowModel: seed.dodFromLegacy(),
       shadowHealth: initDodShadowHealth())
 
-    let updateResult = state.applyRuntimeUpdate(Msg(kind: CmdFocusNext))
-    check updateResult.shadowChecked
-    check updateResult.shadowReport.ok
+    let updateResult = state.applyObservedRuntimeUpdate(Msg(kind: CmdFocusNext))
+    check updateResult.observation.checked
+    check updateResult.observation.decision.reportOk
+    check updateResult.syncResult.shadowChecked
+    check updateResult.syncResult.shadowReport.ok
     check state.readRuntimeSnapshot() == shellSnapshot(state.legacyModel)
 
-    let layoutResult = state.applyRuntimeLayoutProjection()
-    check layoutResult.shadowChecked
-    check layoutResult.ok
-    check layoutResult.authoritativeProjection.instructions ==
+    let shadowOnlyResult = state.applyObservedRuntimeShadowOnly(
+      core_msg.Msg(kind: core_msg.CmdSpawnTerminal))
+    check shadowOnlyResult.observation.checked
+    check shadowOnlyResult.observation.decision.reportOk
+    check shadowOnlyResult.syncResult.dodEffects.len > 0
+
+    let layoutResult = state.applyObservedRuntimeLayoutProjection()
+    check layoutResult.observation.checked
+    check layoutResult.observation.decision.reportOk
+    check layoutResult.syncResult.shadowChecked
+    check layoutResult.syncResult.ok
+    check layoutResult.syncResult.authoritativeProjection.instructions ==
       state.legacyModel.layoutProjection().instructions
+
+  test "DOD observed runtime facade disables reads on divergence":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth())
+    state.shadowModel.outerGaps = state.legacyModel.outerGaps + 9
+
+    let updateResult = state.applyObservedRuntimeUpdate(Msg(
+      kind: CmdAdjustGaps,
+      deltaG: 3))
+    check updateResult.observation.checked
+    check not updateResult.observation.decision.reportOk
+    check updateResult.observation.decision.readsDisabled
+    check state.shadowHealth.divergenceCount == 1
+    check not state.shadowHealth.readHealthy
 
   test "DOD runtime state facade routes config and live restore":
     let seed = lifecycleParityModel()
@@ -1522,9 +1591,11 @@ suite "DOD state primitives":
         defaultMasterRatio: 0.55))
     config.workspaces.defaultCount = 3
 
-    let configResult = state.applyRuntimeConfig(config)
-    check configResult.shadowChecked
-    check configResult.shadowReport.ok
+    let configResult = state.applyObservedRuntimeConfig(config)
+    check configResult.observation.checked
+    check configResult.observation.decision.reportOk
+    check configResult.syncResult.shadowChecked
+    check configResult.syncResult.shadowReport.ok
     check state.legacyModel.outerGaps == 23
     check state.shadowModel.outerGaps == 23
 
@@ -1532,9 +1603,11 @@ suite "DOD state primitives":
     restored.tagByWindow[20] = 2
     restored.focusHistory = @[20'u32]
     restored.workspaceHistory = @[2'u32]
-    let restoreResult = state.applyRuntimeLiveRestore(restored)
-    check restoreResult.shadowChecked
-    check restoreResult.shadowReport.ok
+    let restoreResult = state.applyObservedRuntimeLiveRestore(restored)
+    check restoreResult.observation.checked
+    check restoreResult.observation.decision.reportOk
+    check restoreResult.syncResult.shadowChecked
+    check restoreResult.syncResult.shadowReport.ok
     check state.legacyModel.activeTag == 2
     check state.readRuntimeSnapshot() == shellSnapshot(state.legacyModel)
 

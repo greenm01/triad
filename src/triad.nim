@@ -13,8 +13,6 @@ import core/shell_state
 import core/niri_state
 import core/render_visibility
 import systems/dod_runtime_state
-import systems/dod_shadow_health
-import systems/dod_shadow_runtime
 import systems/layout_state
 import config/parser
 import config/defaults
@@ -134,14 +132,15 @@ proc cstringOrEmpty(value: cstring): string =
   else:
     $value
 
-proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
-  let decision = runtimeState.shadowHealth.applyShadowReport(report)
-  if decision.reportOk:
+proc logShadowObservation(
+    context: string; msg: Msg; observation: RuntimeShadowObservation) =
+  if not observation.checked or observation.decision.reportOk:
     return
 
+  let decision = observation.decision
   if decision.shouldLogDivergence:
     let shadowMsgKind = $msg.kind
-    let shadowErrors = report.errors.join("; ")
+    let shadowErrors = observation.report.errors.join("; ")
     warn "DOD shadow runtime divergence",
       shadowContext=context,
       shadowMsgKind=shadowMsgKind,
@@ -154,15 +153,13 @@ proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
       shadowMsgKind=shadowMsgKind
 
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
-  let syncResult = runtimeState.applyRuntimeUpdate(msg)
-  if syncResult.shadowChecked:
-    logShadowReport(context, msg, syncResult.shadowReport)
-  syncResult.authoritativeEffects
+  let observed = runtimeState.applyObservedRuntimeUpdate(msg)
+  logShadowObservation(context, msg, observed.observation)
+  observed.syncResult.authoritativeEffects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
-  let syncResult = runtimeState.applyRuntimeShadowOnly(msg)
-  if syncResult.shadowChecked:
-    logShadowReport(context, msg, syncResult.shadowReport)
+  let observed = runtimeState.applyObservedRuntimeShadowOnly(msg)
+  logShadowObservation(context, msg, observed.observation)
 
 proc readModelSnapshot(): ShellSnapshot =
   runtimeState.readRuntimeSnapshot()
@@ -174,22 +171,18 @@ proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
   runtimeState.writeRuntimeLiveRestoreState()
 
 proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstruction] =
-  let report = runtimeState.applyRuntimeLayoutProjection()
-  if runtimeState.shadowHealth.shadowSyncEnabled() and not report.ok:
-    logShadowReport(context, msg, DodShadowReport(
-      ok: false,
-      errors: report.errors))
-  report.authoritativeProjection.instructions
+  let observed = runtimeState.applyObservedRuntimeLayoutProjection()
+  logShadowObservation(context, msg, observed.observation)
+  observed.syncResult.authoritativeProjection.instructions
 
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:
     return
 
   let state = pendingLiveRestore.get()
-  let syncResult = runtimeState.applyRuntimeLiveRestore(state)
-  if syncResult.shadowChecked:
-    logShadowReport("live restore", Msg(kind: WlManageStart),
-      syncResult.shadowReport)
+  let observed = runtimeState.applyObservedRuntimeLiveRestore(state)
+  logShadowObservation("live restore", Msg(kind: WlManageStart),
+    observed.observation)
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
@@ -337,10 +330,9 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
     return false
 
   let previousModel = currentModel
-  let syncResult = runtimeState.applyRuntimeConfig(loaded.config)
-  if syncResult.shadowChecked:
-    logShadowReport("config reload", Msg(kind: CmdConfigReload),
-      syncResult.shadowReport)
+  let observed = runtimeState.applyObservedRuntimeConfig(loaded.config)
+  logShadowObservation("config reload", Msg(kind: CmdConfigReload),
+    observed.observation)
   quickshellSpawnPending = false
 
   if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
@@ -1843,9 +1835,8 @@ proc main() =
   let initialConfig = loadConfig(configPath)
   let initialState = initRuntimeStateFromConfig(initialConfig)
   runtimeState = initialState.state
-  if initialState.shadowChecked:
-    logShadowReport("initial config", Msg(kind: CmdConfigReload),
-      initialState.shadowReport)
+  logShadowObservation("initial config", Msg(kind: CmdConfigReload),
+    initialState.observation)
   info "Initial config loaded", path=configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()

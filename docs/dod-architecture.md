@@ -214,6 +214,9 @@ one `TriadRuntimeState`. Runtime-state facade helpers route updates, config
 application, live restore, layout projection, and projection reads through that
 single object. This keeps the current legacy authority policy intact while
 giving the final DoD promotion one aggregate state boundary to change.
+Observed runtime-state helpers also apply shadow reports to `DodShadowHealth`
+and return `RuntimeShadowObservation` values. The daemon consumes those
+observations for warning emission, but no longer mutates shadow health directly.
 
 ## Layout Projection
 
@@ -310,5 +313,6 @@ state boundaries under a live session before the final runtime promotion.
 Shadow health follows the same data/code split as other DoD state: health fields
 live in `types/dod_shadow_health.nim`, while report application, read fallback,
 and divergence throttle decisions live in `systems/dod_shadow_health.nim`.
-Daemon code handles logging side effects from those decisions but does not own
-the health transition policy.
+Runtime-state facade helpers own when those transitions are applied. Daemon code
+handles logging side effects from observation decisions but does not own the
+health transition policy.
