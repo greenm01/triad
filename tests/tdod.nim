@@ -31,6 +31,7 @@ import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
 import ../src/systems/layout_projection_sync
 import ../src/systems/layout_state
+import ../src/systems/runtime_update_sync
 import ../src/types/core
 import ../src/types/dod_model
 from ../src/types/legacy_model import nil
@@ -307,6 +308,21 @@ proc checkEffectParity(
     msg: core_msg.Msg; legacyEffects, dodEffects: seq[Effect]) =
   check dodEffects.stableEffectSignatures(msg) ==
     legacyEffects.stableEffectSignatures(msg)
+
+proc checkRuntimeUpdateSync(source: legacy_model.Model; msg: core_msg.Msg) =
+  var legacyModel = source
+  var shadow = source.dodFromLegacy()
+  let (_, expectedEffects) = legacy_update.update(source, msg)
+
+  let result = syncRuntimeUpdate(
+    legacyModel, shadow, msg, syncShadow = true)
+  check result.shadowChecked
+  check result.shadowReport.ok
+  check result.legacyEffects.stableEffectSignatures(msg) ==
+    expectedEffects.stableEffectSignatures(msg)
+  check result.shadowReport.dodEffects.stableEffectSignatures(msg) ==
+    expectedEffects.stableEffectSignatures(msg)
+  check dodShellSnapshot(shadow) == shellSnapshot(legacyModel)
 
 proc checkShadowStateParity(legacyModel: legacy_model.Model; dod: DodModel) =
   var checkedDod = dod
@@ -2384,6 +2400,68 @@ suite "DOD state primitives":
         screenshotKind: core_msg.ShotScreen, screenshotPath: "/tmp/shot.png",
         screenshotShowPointer: true))
     check result.effects.containsEffect(EffScreenshot)
+
+  test "DOD runtime update sync returns legacy effects and advances shadow":
+    checkRuntimeUpdateSync(
+      lifecycleParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 30,
+        appId: "kitty",
+        title: "shell",
+        createdIdentifier: "kitty-30"))
+    checkRuntimeUpdateSync(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowRight))
+    checkRuntimeUpdateSync(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.WlSessionLocked))
+
+  test "DOD runtime update sync can skip shadow mutation":
+    var legacyModel = lifecycleParityModel()
+    var shadow = legacyModel.dodFromLegacy()
+    let originalShadow = shadow
+    let msg = core_msg.Msg(
+      kind: core_msg.WlWindowCreated,
+      windowId: 30,
+      appId: "kitty",
+      title: "shell")
+
+    let result = syncRuntimeUpdate(
+      legacyModel, shadow, msg, syncShadow = false)
+    check not result.shadowChecked
+    check result.shadowReport.ok
+    check shadow == originalShadow
+    check legacyModel.windows.hasKey(30)
+    check result.legacyEffects.containsEffect(EffManageDirty)
+
+  test "DOD runtime update sync reports mismatches without changing effects":
+    var legacyModel = lifecycleParityModel()
+    var shadow = lifecycleParityModel().dodFromLegacy()
+    shadow.outerGaps = legacyModel.outerGaps + 9
+    let msg = core_msg.Msg(kind: core_msg.CmdAdjustGaps, deltaG: 3)
+    let (_, expectedEffects) = legacy_update.update(legacyModel, msg)
+
+    let result = syncRuntimeUpdate(
+      legacyModel, shadow, msg, syncShadow = true)
+    check result.shadowChecked
+    check not result.shadowReport.ok
+    check result.legacyEffects.stableEffectSignatures(msg) ==
+      expectedEffects.stableEffectSignatures(msg)
+
+  test "DOD runtime update sync handles shadow-only messages":
+    var legacyModel = effectRuntimeModel()
+    var shadow = legacyModel.dodFromLegacy()
+    let originalLegacy = legacyModel
+
+    let result = syncShadowOnlyMessage(
+      legacyModel,
+      shadow,
+      core_msg.Msg(kind: core_msg.CmdSpawnTerminal),
+      syncShadow = true)
+    check result.shadowChecked
+    check result.shadowReport.ok
+    check legacyModel == originalLegacy
 
   test "DOD shadow trace follows lifecycle and focus history":
     checkShadowTrace(

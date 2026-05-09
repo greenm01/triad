@@ -4,9 +4,9 @@ import protocols/river_layer_shell/client as river_layer
 import protocols/river_xkb_bindings/client as river_xkb
 import wayland/protocols/wayland/client as wl_core
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
+import core/effects
 import core/model
 import core/msg
-import core/update
 import core/model_utils
 import core/restore_state
 import core/shell_state
@@ -21,6 +21,7 @@ import systems/dod_shadow_runtime
 from systems/dod_window_lifecycle import applyLiveRestore
 import systems/layout_projection_sync
 import systems/layout_state
+import systems/runtime_update_sync
 import config/parser
 import config/defaults
 import config/keysyms
@@ -168,12 +169,18 @@ proc checkShadow(context: string; msg: Msg; effects: seq[Effect] = @[]) =
   let report = compareShadowState(currentModel, shadowModel, msg, effects, @[])
   logShadowReport(context, msg, report)
 
-proc advanceShadow(context: string; msg: Msg; effects: seq[Effect] = @[]) =
-  if not shadowInitialized:
-    return
+proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
+  let syncResult = runtime_update_sync.syncRuntimeUpdate(
+    currentModel, shadowModel, msg, shadowInitialized)
+  if syncResult.shadowChecked:
+    logShadowReport(context, msg, syncResult.shadowReport)
+  syncResult.legacyEffects
 
-  let report = shadowModel.advanceShadow(currentModel, msg, effects)
-  logShadowReport(context, msg, report)
+proc syncRuntimeShadowOnly(context: string; msg: Msg) =
+  let syncResult = syncShadowOnlyMessage(
+    currentModel, shadowModel, msg, shadowInitialized)
+  if syncResult.shadowChecked:
+    logShadowReport(context, msg, syncResult.shadowReport)
 
 proc useDodProjectionReads(): bool =
   shadowInitialized and shadowReadHealthy
@@ -1756,7 +1763,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     if msg.kind == CmdSpawnTerminal:
       spawnTerminal(currentModel)
-      advanceShadow("message", msg)
+      syncRuntimeShadowOnly("message", msg)
       continue
 
     if msg.kind == CmdConfigReload:
@@ -1765,9 +1772,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     let previousOverview = currentModel.overviewActive
     let previousShortcutsInhibited = currentModel.keyboardShortcutsInhibited()
-    let (nextModel, effects) = update(currentModel, msg)
-    currentModel = nextModel
-    advanceShadow("message", msg, effects)
+    let effects = syncRuntimeUpdate("message", msg)
     if previousOverview != currentModel.overviewActive or
         previousShortcutsInhibited != currentModel.keyboardShortcutsInhibited():
       destroyBindings()

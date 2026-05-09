@@ -216,6 +216,21 @@ projections, applies each model's own viewport targets, and reports projection
 mismatches through the shadow divergence path. This keeps DoD snapshots current
 without making DoD placement authoritative yet.
 
+## Runtime Update Sync
+
+Runtime updates are also bridged explicitly during the shadow phase:
+
+- legacy `update` still mutates the live `Model`
+- legacy effects are the only effects executed against River and the host
+- the DoD shadow receives the same message stream through `dodUpdate`
+- shadow state, effect signatures, snapshots, histories, and layout projections
+  are compared after each bridged update
+- runtime-owned messages that do not pass through legacy `update`, such as
+  terminal spawning, use a shadow-only bridge step
+
+This keeps update policy out of the daemon loop and gives the final DoD runtime
+promotion a single seam to change when DoD effects become authoritative.
+
 ## Config Application
 
 `DodModel` has a native config application path. It uses the same normalized
