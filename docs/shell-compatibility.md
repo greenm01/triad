@@ -9,10 +9,18 @@ handles. `mmsg` is only a fallback/control path for a few actions. Triad is a
 River layout client, not the compositor, so it cannot expose those DWL Wayland
 globals without work outside this repository.
 
-For a Triad-only compatibility layer, the viable path is a small Niri-compatible
-JSON IPC facade on `$NIRI_SOCKET`. Noctalia's Niri backend reads workspaces,
-windows, outputs, overview state, keyboard layouts, and dispatches a small set
-of actions through that socket. Triad can supply that contract directly.
+For compatibility today, the viable path is a small Niri-compatible JSON IPC
+facade on `$NIRI_SOCKET`. Noctalia's Niri backend reads workspaces, windows,
+outputs, overview state, keyboard layouts, and dispatches a small set of actions
+through that socket. Triad can supply that contract directly.
+
+This is deliberately a compatibility layer, not Triad's native shell protocol.
+Triad also exposes `$TRIAD_SOCKET`, a versioned native JSON IPC surface backed by
+Triad's internal shell snapshot. Future deployers and Quickshell themes can hook
+into that socket when they want Triad-native concepts such as stable tags,
+compact workspace projection, per-tag layout modes, and native state events.
+The Niri projection remains in place so existing shells work now while native
+integrations can evolve without being constrained by Niri's model.
 
 Triad advertises workspaces dynamically through this facade. The configured
 `workspaces.default-count` creates the initial empty floor, and extra tags appear
@@ -32,6 +40,7 @@ CLI installed.
 When Triad starts Quickshell through the `quickshell` config block, it creates a
 private runtime environment for that process:
 
+- `$TRIAD_SOCKET` points at Triad's native shell IPC socket.
 - `$NIRI_SOCKET` points at a Triad-owned Niri-compatible socket.
 - `$XDG_RUNTIME_DIR/triad-compat-bin/niri` points at `triad_niri`.
 - `$XDG_RUNTIME_DIR/triad-shell-compat/share` is prepended to `XDG_DATA_DIRS`

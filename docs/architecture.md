@@ -67,19 +67,22 @@ Triad uses KDL for robust, hot-reloadable configuration.
 *   **Tag Rules:** Provides lazy name/layout templates for tags when they are created (e.g., `tag 1 default-layout="scroller"`).
 *   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific tag assignments.
 
-### 5. Future Extensibility: Quickshell Integration
-Triad is designed to act as the "backend" window manager for a full desktop environment powered by Quickshell (a QtQuick/QML-based shell).
+### 5. Shell IPC and Quickshell Integration
+Triad is designed to act as the backend window manager for a full desktop environment powered by Quickshell or other shell deployers.
 
-To facilitate this, the architecture will support:
-*   **Standard Wayland Protocols:** While Triad handles the `river-window-management-v1` protocol for layout, it will rely on River (or implement custom logic) to support standard protocols like `wlr-foreign-toplevel-management-unstable-v1` so that Quickshell can accurately render window lists and taskbars.
-*   **Custom IPC Socket:** Triad will expose a Unix domain socket (JSON or text-based) for two-way communication.
-    *   **Quickshell -> Triad:** Quickshell components can send commands to switch layouts, focus windows, or move workspaces.
-    *   **Triad -> Quickshell:** Triad can emit state changes (e.g., current layout mode, active tag) to update Quickshell UI widgets in real-time.
+The architecture intentionally separates native IPC from compatibility IPC:
 
-### Niri IPC Emulation
-To maximize compatibility with existing Quickshell themes like **Noctalia-shell** without requiring forks, Triad implements a **Niri-compatible JSON IPC stream**.
+*   **Canonical Shell Snapshot:** Triad derives shell-facing state from one internal snapshot of the TEA `Model`. This snapshot contains Triad concepts directly: stable tag IDs, compact workspace indices, windows, outputs, focus, overview state, and per-tag layout modes.
+*   **Native Triad IPC (`$TRIAD_SOCKET`):** This is the long-term protocol for deployers and shells that want to integrate with Triad directly. It exposes versioned JSON requests and events such as full shell state, layout state, layout changes, and native state updates.
+*   **Niri Compatibility IPC (`$NIRI_SOCKET`):** This is a projection of the same snapshot into Niri-shaped JSON so existing Niri-aware shells work now. It is intentionally constrained to Niri semantics and does not receive Triad-only fields.
+*   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
-*   **Socket Path:** Triad can be configured to use the `$NIRI_SOCKET` path or a standard fallback.
-*   **Protocol:** Triad implements the `event-stream` command, which provides a continuous, line-delimited JSON stream of compositor events.
-*   **Event Mapping:** Triad maps its internal TEA state changes to Niri-standard JSON payloads such as `WorkspaceActivated`, `WindowFocusChanged`, `WindowOpened`, and `WindowClosed`. Workspace `id` values stay as stable Triad tag IDs, while workspace `idx` values are compacted for Niri-style shell bars.
+This lets Noctalia-shell and DankMaterialShell run immediately through their Niri integrations while giving future Quickshell modules a clean path to adopt Triad's richer tagged model without depending on the compatibility facade.
+
+### Niri IPC Compatibility
+To maximize compatibility with existing Quickshell themes without requiring forks, Triad implements a Niri-compatible JSON IPC stream.
+
+*   **Socket Path:** `$NIRI_SOCKET` points at a Triad-owned compatibility socket when Triad launches Quickshell.
+*   **Protocol:** Triad implements the Niri request and event shapes used by shell code, including workspaces, windows, outputs, overview state, keyboard layouts, and event streams.
+*   **Event Mapping:** Triad maps its internal shell snapshot to Niri-standard JSON payloads. Workspace `id` values stay as stable Triad tag IDs, while workspace `idx` values are compacted for Niri-style shell bars.
 *   **Focus MRU:** Window and workspace focus history is kept in the model and included in live restore snapshots so close behavior and hot reloads can return to the last useful focus target.

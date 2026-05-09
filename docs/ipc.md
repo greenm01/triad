@@ -159,9 +159,23 @@ Occurs when a window is destroyed.
 
 ## Native Triad JSON IPC
 
-Future shell integrations should prefer Triad's native JSON protocol over the
-Niri compatibility layer. Requests are line-delimited JSON sent to
-`$TRIAD_SOCKET`, which defaults to `$XDG_RUNTIME_DIR/triad.sock`.
+Triad has two shell-facing IPC surfaces with different purposes:
+
+- `$TRIAD_SOCKET` is Triad's native protocol. It is the long-term integration
+  surface for shell deployers and Quickshell themes that want to understand
+  Triad directly.
+- `$NIRI_SOCKET` is a compatibility projection. It lets existing Niri-aware
+  shells, including Noctalia-shell and DankMaterialShell, work today without
+  forks.
+
+Future shell integrations should prefer the native Triad protocol. It exposes
+Triad's tag-first model directly: stable tag IDs, compact shell workspace
+indices, per-tag layout modes, layout cycles, overview state, outputs, and
+windows. The Niri protocol remains valuable, but it is intentionally a lossy
+facade because Niri does not model Triad's per-tag hybrid layouts.
+
+Native requests are line-delimited JSON sent to `$TRIAD_SOCKET`, which defaults
+to `$XDG_RUNTIME_DIR/triad.sock`.
 
 Native requests use a reserved top-level `triad` object and a version number:
 
@@ -183,7 +197,9 @@ Errors use:
 
 Native Triad state is generated from Triad's internal shell snapshot. The Niri
 compatibility socket is a separate projection of that same snapshot; Triad-only
-fields are not added to the Niri protocol.
+fields are not added to the Niri protocol. This keeps the compatibility layer
+predictable while giving new shells a richer protocol they can adopt when they
+are ready.
 
 ### Shell State
 
