@@ -50,12 +50,17 @@ Only this layer may directly access `EntityManager.data` and
 
 #### The Read Layer: Iterators and Queries
 
-Because DOD data is flattened across multiple tables, we strictly separate the mechanics of traversing data from the business logic that asks questions about it.
+Because DOD data is flattened across multiple tables, we strictly separate the
+mechanics of traversing data from the business logic that asks questions about
+it.
 
-1.  **Iterators (`dod_iterators.nim`):** Handle the raw hash-table lookups and sequence traversals. They yield strongly-typed entities (e.g., `iterator windowsOnTag*(model: Model, tagId: TagId): WindowData`).
-2.  **Queries (`dod_queries.nim`):** Consume iterators to answer business questions without exposing the underlying data structures (e.g., `proc hasFullscreenWindow*(model: Model, tagId: TagId): bool`).
+1.  **Iterators (`dod_iterators.nim`):** Handle the raw hash-table lookups and
+    sequence traversals. They yield strongly-typed entities.
+2.  **Queries (`dod_queries.nim`):** Consume iterators to answer business
+    questions without exposing the underlying data structures.
 
-Systems (like layout algorithms) consume Queries and Iterators. They never manually loop over `model.windows.data`.
+Systems consume Queries and Iterators. They never manually loop over
+`model.windows.data`.
 
 ### `entities`
 
@@ -71,11 +76,18 @@ indexes correct.
 
 #### The Write Layer: Operations (Ops)
 
-Directly mutating state arrays or relation tables within business logic is strictly forbidden. Because a single logical action (like closing a window) requires updating the entity array, the tag relationships, and the focus state, manual mutations lead to desync bugs.
+Directly mutating state arrays or relation tables within business logic is
+strictly forbidden. Because a single logical action like closing a window
+requires updating the entity array, the tag relationships, and the focus state,
+manual mutations lead to desync bugs.
 
-All mutations must go through the **Operations Layer** (e.g., `window_ops.nim`, `tag_ops.nim`).
+All mutations must go through the **Operations Layer**, such as
+`window_ops.nim` and `tag_ops.nim`.
 
-An Operation acts as an atomic transaction for the DOD state. For example, `model.destroyWindow(winId)` handles removing the window from `windowTags`, cleaning up `windowColumns`, reassigning focus, and finally calling `delEntity` to swap-and-pop the data array.
+An Operation acts as an atomic transaction for the DOD state. For example,
+`model.destroyWindow(winId)` handles removing the window from `windowTags`,
+cleaning up `windowColumns`, reassigning focus, and finally calling `delete`
+to swap-and-pop the data array.
 
 ### `systems`
 

@@ -1,4 +1,5 @@
 import algorithm, options, tables
+import dod_iterators
 import entity_manager
 import ../types/core
 import ../types/dod_model
@@ -14,17 +15,27 @@ proc outputForExternal*(
     model: DodModel; externalId: ExternalOutputId): OutputId =
   model.externalOutputIds.getOrDefault(externalId, NullOutputId)
 
+proc tagData*(model: DodModel; tagId: TagId): Option[TagData] =
+  model.tags.entity(tagId)
+
+proc windowData*(model: DodModel; winId: WindowId): Option[WindowData] =
+  model.windows.entity(winId)
+
+proc outputData*(model: DodModel; outputId: OutputId): Option[OutputData] =
+  model.outputs.entity(outputId)
+
+proc outputCount*(model: DodModel): int =
+  for _ in model.outputsWithId():
+    inc result
+
 proc sortedSlots*(model: DodModel): seq[uint32] =
-  for slot in model.tagBySlot.keys:
+  for slot in model.tagSlots():
     result.add(slot)
   result.sort()
 
 proc tagHasLiveWindows*(model: DodModel; tagId: TagId): bool =
-  if not model.windowsByTag.hasKey(tagId):
-    return false
-  for winId in model.windowsByTag[tagId]:
-    if model.windows.entity(winId).isSome:
-      return true
+  for _ in model.windowsOnTagWithId(tagId):
+    return true
   false
 
 proc visibleWorkspaceSlots*(model: DodModel): seq[uint32] =
@@ -62,25 +73,50 @@ proc workspaceIndexForSlot*(model: DodModel; slot: uint32): uint32 =
   0
 
 proc columnsForTag*(model: DodModel; tagId: TagId): seq[ColumnId] =
-  model.columnsByTag.getOrDefault(tagId, @[])
+  for columnId, _ in model.columnsOnTagWithId(tagId):
+    result.add(columnId)
 
 proc windowsForColumn*(model: DodModel; columnId: ColumnId): seq[WindowId] =
-  model.windowsByColumn.getOrDefault(columnId, @[])
+  for winId, _ in model.windowsOnColumnWithId(columnId):
+    result.add(winId)
 
 proc windowsForTag*(model: DodModel; tagId: TagId): seq[WindowId] =
-  model.windowsByTag.getOrDefault(tagId, @[])
+  for winId, _ in model.windowsOnTagWithId(tagId):
+    result.add(winId)
 
 proc columnIndexForTag*(
     model: DodModel; tagId: TagId; columnId: ColumnId): uint32 =
-  let columns = model.columnsForTag(tagId)
-  for idx, candidate in columns:
+  for idx, candidate in model.columnsForTag(tagId):
     if candidate == columnId:
       return uint32(idx + 1)
   0
 
+proc placementForWindowOnTag*(
+    model: DodModel; tagId: TagId; winId: WindowId): Option[WindowPlacement] =
+  let key = (tagId, winId)
+  if not model.placementByTagWindow.hasKey(key):
+    return none(WindowPlacement)
+  some(model.placementByTagWindow[key])
+
+proc sortedWindowIdsByExternal*(model: DodModel): seq[WindowId] =
+  var externalByWindow: Table[WindowId, ExternalWindowId]
+  for winId, win in model.windowsWithId():
+    result.add(winId)
+    externalByWindow[winId] = win.externalId
+  result.sort(proc(a, b: WindowId): int =
+    cmp(uint32(externalByWindow[a]), uint32(externalByWindow[b])))
+
+proc sortedOutputIdsByExternal*(model: DodModel): seq[OutputId] =
+  var externalByOutput: Table[OutputId, ExternalOutputId]
+  for outputId, output in model.outputsWithId():
+    result.add(outputId)
+    externalByOutput[outputId] = output.externalId
+  result.sort(proc(a, b: OutputId): int =
+    cmp(uint32(externalByOutput[a]), uint32(externalByOutput[b])))
+
 proc shellOutputName*(model: DodModel; outputId: OutputId): string =
   if outputId != NullOutputId:
-    let outputOpt = model.outputs.entity(outputId)
+    let outputOpt = model.outputData(outputId)
     if outputOpt.isNone:
       return "triad-0"
     let output = outputOpt.get()
@@ -92,9 +128,30 @@ proc shellOutputName*(model: DodModel; outputId: OutputId): string =
 
 proc workspaceOutput*(model: DodModel; tagId: TagId): OutputId =
   result = model.primaryOutput
-  for outputId, outputTag in model.outputTags.pairs:
+  for outputId, outputTag in model.outputTagsWithId():
     if outputTag == tagId:
       return outputId
 
 proc shellWorkspaceOutputName*(model: DodModel; tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))
+
+proc firstWindowPosition*(model: DodModel; winId: WindowId):
+    tuple[found: bool, tagId: TagId, slot, colIdx, winIdx: uint32] =
+  for slot in model.visibleWorkspaceSlots():
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    let placementOpt = model.placementForWindowOnTag(tagId, winId)
+    if placementOpt.isNone:
+      continue
+    let placement = placementOpt.get()
+    if placement.columnId == NullColumnId:
+      continue
+    return (
+      true,
+      tagId,
+      slot,
+      model.columnIndexForTag(tagId, placement.columnId),
+      placement.windowIdx
+    )
+  (false, NullTagId, 0'u32, 0'u32, 0'u32)

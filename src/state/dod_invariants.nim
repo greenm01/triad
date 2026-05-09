@@ -1,4 +1,5 @@
 import options, sets, tables
+import dod_iterators
 import entity_manager
 import id_gen
 import ../types/core
@@ -19,7 +20,7 @@ proc addError(report: var DodInvariantReport; message: string) =
 proc validateInvariants*(model: DodModel): DodInvariantReport =
   result.ok = true
 
-  for tag in model.tags.entities:
+  for _, tag in model.tagsWithId():
     if tag.slot == 0:
       result.addError("tag has zero slot: " & $tag.id)
     if not model.tagBySlot.hasKey(tag.slot) or
@@ -29,11 +30,11 @@ proc validateInvariants*(model: DodModel): DodInvariantReport =
         model.windows.entity(tag.focusedWindow).isNone:
       result.addError("tag focused window is missing: " & $tag.id)
 
-  for column in model.columns.entities:
+  for _, column in model.columnsWithId():
     if model.tags.entity(column.tagId).isNone:
       result.addError("column tag is missing: " & $column.id)
 
-  for win in model.windows.entities:
+  for _, win in model.windowsWithId():
     if win.externalId != NullExternalWindowId:
       if not model.externalWindowIds.hasKey(win.externalId) or
           model.externalWindowIds[win.externalId] != win.id:
@@ -91,9 +92,7 @@ proc validateInvariants*(model: DodModel): DodInvariantReport =
         if placement.windowIdx != uint32(idx + 1):
           result.addError("placement row has stale window index: " & $winId)
 
-  for key, placement in model.placementByTagWindow.pairs:
-    let tagId = key[0]
-    let winId = key[1]
+  for tagId, winId, placement in model.placementsWithId():
     if placement.tagId != tagId or placement.windowId != winId:
       result.addError("placement key and payload mismatch")
     if model.tags.entity(tagId).isNone:

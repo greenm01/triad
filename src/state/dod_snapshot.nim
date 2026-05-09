@@ -1,6 +1,6 @@
-import algorithm, options, tables
+import options
+import dod_iterators
 import dod_queries
-import entity_manager
 import ../core/shell_state
 import ../types/core except Rect
 import ../types/dod_model
@@ -9,45 +9,23 @@ from ../types/legacy_model import nil
 proc externalWindowId(model: DodModel; winId: WindowId): legacy_model.WindowId =
   if winId == NullWindowId:
     return 0'u32
-  let winOpt = model.windows.entity(winId)
+  let winOpt = model.windowData(winId)
   if winOpt.isSome:
     return legacy_model.WindowId(uint32(winOpt.get().externalId))
   0'u32
 
 proc shellColumns(model: DodModel; tagId: TagId): seq[ShellColumn] =
-  for idx, columnId in model.columnsForTag(tagId):
-    let columnOpt = model.columns.entity(columnId)
-    if columnOpt.isNone:
-      continue
+  var idx = 0'u32
+  for columnId, column in model.columnsOnTagWithId(tagId):
+    inc idx
     var windows: seq[legacy_model.WindowId] = @[]
-    for winId in model.windowsForColumn(columnId):
+    for winId, _ in model.windowsOnColumnWithId(columnId):
       windows.add(model.externalWindowId(winId))
     result.add(ShellColumn(
-      idx: uint32(idx + 1),
-      widthProportion: columnOpt.get().widthProportion,
+      idx: idx,
+      widthProportion: column.widthProportion,
       windows: windows
     ))
-
-proc firstWindowPosition(model: DodModel; winId: WindowId):
-    tuple[found: bool, tagId: TagId, slot, colIdx, winIdx: uint32] =
-  for slot in model.visibleWorkspaceSlots():
-    let tagId = model.tagForSlot(slot)
-    if tagId == NullTagId:
-      continue
-    if model.windowsForTag(tagId).find(winId) == -1:
-      continue
-    let placement =
-      model.placementByTagWindow.getOrDefault((tagId, winId), WindowPlacement())
-    if placement.columnId == NullColumnId:
-      continue
-    return (
-      true,
-      tagId,
-      slot,
-      model.columnIndexForTag(tagId, placement.columnId),
-      placement.windowIdx
-    )
-  (false, NullTagId, 0'u32, 0'u32, 0'u32)
 
 proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
   result.version = TriadIpcVersion
@@ -66,7 +44,7 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
   for idx, slot in model.visibleWorkspaceSlots():
     let tagId = model.tagForSlot(slot)
     let tagOpt =
-      if tagId != NullTagId: model.tags.entity(tagId) else: none(TagData)
+      if tagId != NullTagId: model.tagData(tagId) else: none(TagData)
     let tag =
       if tagOpt.isSome: tagOpt.get()
       else: TagData(slot: slot, layoutMode: legacy_model.Scroller,
@@ -92,18 +70,11 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
       currentViewportYOffset: tag.currentViewportYOffset
     ))
 
-  var winIds: seq[WindowId] = @[]
-  for win in model.windows.entities:
-    winIds.add(win.id)
-  winIds.sort(proc(a, b: WindowId): int =
-    cmp(uint32(model.windows.entity(a).get().externalId),
-      uint32(model.windows.entity(b).get().externalId)))
-
-  for winId in winIds:
-    let win = model.windows.entity(winId).get()
+  for winId in model.sortedWindowIdsByExternal():
+    let win = model.windowData(winId).get()
     let pos = model.firstWindowPosition(winId)
     let tagOpt =
-      if pos.found: model.tags.entity(pos.tagId) else: none(TagData)
+      if pos.found: model.tagData(pos.tagId) else: none(TagData)
     let focused =
       tagOpt.isSome and tagOpt.get().focusedWindow == winId
     result.windows.add(ShellWindow(
@@ -131,7 +102,7 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
       keyboardShortcutsInhibit: win.keyboardShortcutsInhibit
     ))
 
-  if model.outputs.len == 0:
+  if model.outputCount() == 0:
     result.outputs.add(ShellOutput(
       id: 0,
       name: "triad-0",
@@ -142,15 +113,8 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
       isPrimary: true
     ))
   else:
-    var outputIds: seq[OutputId] = @[]
-    for output in model.outputs.entities:
-      outputIds.add(output.id)
-    outputIds.sort(proc(a, b: OutputId): int =
-      cmp(uint32(model.outputs.entity(a).get().externalId),
-        uint32(model.outputs.entity(b).get().externalId)))
-
-    for outputId in outputIds:
-      let output = model.outputs.entity(outputId).get()
+    for outputId in model.sortedOutputIdsByExternal():
+      let output = model.outputData(outputId).get()
       result.outputs.add(ShellOutput(
         id: uint32(output.externalId),
         name: model.shellOutputName(outputId),

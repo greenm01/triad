@@ -8,6 +8,8 @@ import ../src/entities/dod_ops
 import ../src/state/dod_adapter
 import ../src/state/entity_manager
 import ../src/state/dod_invariants
+import ../src/state/dod_iterators
+import ../src/state/dod_queries
 import ../src/state/dod_snapshot
 import ../src/state/id_gen
 import ../src/types/core
@@ -92,22 +94,60 @@ suite "DOD state primitives":
     model.placeWindow(tagOne, colOne, win)
     model.placeWindow(tagTwo, colTwo, win)
 
+    var tagOneWindows: seq[WindowId] = @[]
+    for winId, _ in model.windowsOnTagWithId(tagOne):
+      tagOneWindows.add(winId)
+    var tagTwoWindows: seq[WindowId] = @[]
+    for winId, _ in model.windowsOnTagWithId(tagTwo):
+      tagTwoWindows.add(winId)
+    var colOneWindows: seq[WindowId] = @[]
+    for winId, _ in model.windowsOnColumnWithId(colOne):
+      colOneWindows.add(winId)
+    var colTwoWindows: seq[WindowId] = @[]
+    for winId, _ in model.windowsOnColumnWithId(colTwo):
+      colTwoWindows.add(winId)
+
     check model.windowTags[win].contains(tagBit(1))
     check model.windowTags[win].contains(tagBit(2))
-    check model.windowsByTag[tagOne] == @[win]
-    check model.windowsByTag[tagTwo] == @[win]
-    check model.windowsByColumn[colOne] == @[win]
-    check model.windowsByColumn[colTwo] == @[win]
+    check tagOneWindows == @[win]
+    check tagTwoWindows == @[win]
+    check colOneWindows == @[win]
+    check colTwoWindows == @[win]
+    check model.placementForWindowOnTag(tagOne, win).get().windowIdx == 1
+    check model.firstWindowPosition(win).slot == 1
     check model.validateInvariants().ok
 
     check model.destroyWindow(win)
     check not model.windows.contains(win)
     check not model.externalWindowIds.hasKey(ExternalWindowId(10))
-    check model.windowsByTag[tagOne].len == 0
-    check model.windowsByTag[tagTwo].len == 0
-    check model.windowsByColumn[colOne].len == 0
-    check model.windowsByColumn[colTwo].len == 0
+    check model.tagHasLiveWindows(tagOne) == false
+    check model.tagHasLiveWindows(tagTwo) == false
     check model.validateInvariants().ok
+
+  test "DOD iterators skip dangling relationship rows":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let tag = model.addTag(1, "one")
+    let column = model.addColumn(tag, 0.5)
+    let win = model.addWindow(ExternalWindowId(10), appId = "term")
+
+    model.placeWindow(tag, column, win)
+    check model.windows.delete(win)
+
+    var yieldedWindows: seq[WindowId] = @[]
+    for winId, _ in model.windowsOnTagWithId(tag):
+      yieldedWindows.add(winId)
+
+    check yieldedWindows.len == 0
+
+  test "DOD queries sort shell-facing ids by external id":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let left = model.addOutput(ExternalOutputId(20), name = "left")
+    let right = model.addOutput(ExternalOutputId(10), name = "right")
+    let second = model.addWindow(ExternalWindowId(20), appId = "term")
+    let first = model.addWindow(ExternalWindowId(10), appId = "browser")
+
+    check model.sortedOutputIdsByExternal() == @[right, left]
+    check model.sortedWindowIdsByExternal() == @[first, second]
 
   test "DOD invariants report broken relationship indexes":
     var model = DodModel(defaultWorkspaceCount: 3)
