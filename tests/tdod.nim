@@ -2232,6 +2232,81 @@ suite "DOD state primitives":
         discard dod.adjustMasterRatio(0.1'f32)
     )
 
+  test "DOD switch layout repairs stale active slot":
+    var dod = placementParityModel().dodFromLegacy()
+    let activeTag = dod.tagForSlot(1)
+    dod.activeTag = activeTag
+    dod.activeSlot = 2
+
+    let (nextDod, effects) = dod.dodUpdate(
+      core_msg.Msg(kind: core_msg.CmdSwitchLayout))
+
+    check nextDod.validateInvariants().ok
+    check nextDod.activeTag == activeTag
+    check nextDod.activeSlot == 1
+    check nextDod.tagData(activeTag).get().layoutMode ==
+      legacy_model.MasterStack
+    check effects.anyIt(it.kind == EffManageDirty)
+
+  test "DOD switch layout materializes valid active slot":
+    var dod = placementParityModel().dodFromLegacy()
+    dod.activeTag = NullTagId
+    dod.activeSlot = 4
+
+    let (nextDod, effects) = dod.dodUpdate(
+      core_msg.Msg(kind: core_msg.CmdSwitchLayout))
+    let tagId = nextDod.tagForSlot(4)
+
+    check nextDod.validateInvariants().ok
+    check tagId != NullTagId
+    check nextDod.activeTag == tagId
+    check nextDod.activeSlot == 4
+    check nextDod.tagData(tagId).get().layoutMode ==
+      legacy_model.MasterStack
+    check effects.anyIt(it.kind == EffManageDirty)
+
+  test "DOD switch layout no-ops without active workspace":
+    let dod = DodModel()
+
+    let (nextDod, effects) = dod.dodUpdate(
+      core_msg.Msg(kind: core_msg.CmdSwitchLayout))
+
+    check nextDod.validateInvariants().ok
+    check nextDod.activeTag == NullTagId
+    check nextDod.activeSlot == 0
+    check not effects.anyIt(it.kind == EffManageDirty)
+
+  test "DOD layout commands survive dynamic workspace slot":
+    var dod = trailingWorkspaceFocusModel().dodFromLegacy()
+    check dod.focusWorkspaceSlot(4)
+
+    let (nextDod, effects) = dod.dodUpdate(
+      core_msg.Msg(kind: core_msg.CmdSwitchLayout))
+    let tagId = nextDod.tagForSlot(4)
+
+    check nextDod.validateInvariants().ok
+    check nextDod.activeTag == tagId
+    check nextDod.activeSlot == 4
+    check nextDod.tagData(tagId).get().layoutMode ==
+      legacy_model.MasterStack
+    check effects.anyIt(it.kind == EffManageDirty)
+
+  test "DOD switch layout targets restored active workspace":
+    var dod = placementParityModel().dodFromLegacy()
+    var restored = LiveRestoreState(activeTag: 2)
+    dod.applyLiveRestore(restored.dodFromLiveRestore())
+
+    let (nextDod, effects) = dod.dodUpdate(
+      core_msg.Msg(kind: core_msg.CmdSwitchLayout))
+    let tagId = nextDod.tagForSlot(2)
+
+    check nextDod.validateInvariants().ok
+    check nextDod.activeTag == tagId
+    check nextDod.activeSlot == 2
+    check nextDod.tagData(tagId).get().layoutMode ==
+      legacy_model.MasterStack
+    check effects.anyIt(it.kind == EffManageDirty)
+
   test "DOD resize command parity matches legacy":
     checkPlacementParity(
       placementParityModel(),

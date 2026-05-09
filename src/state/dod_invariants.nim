@@ -30,6 +30,15 @@ proc validateInvariants*(model: DodModel): DodInvariantReport =
         model.windows.entity(tag.focusedWindow).isNone:
       result.addError("tag focused window is missing: " & $tag.id)
 
+  if model.activeTag != NullTagId:
+    let activeOpt = model.tags.entity(model.activeTag)
+    if activeOpt.isNone:
+      result.addError("active tag is missing: " & $model.activeTag)
+    elif model.activeSlot != 0 and model.activeSlot != activeOpt.get().slot:
+      result.addError("active slot does not match active tag")
+  elif model.activeSlot != 0 and not model.tagBySlot.hasKey(model.activeSlot):
+    result.addError("active slot has no tag: " & $model.activeSlot)
+
   for _, column in model.columnsWithId():
     if model.tags.entity(column.tagId).isNone:
       result.addError("column tag is missing: " & $column.id)

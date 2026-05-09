@@ -3,11 +3,11 @@ import ../state/engine
 from ../types/legacy_model import Scroller
 
 proc activeWorkspaceSlot*(model: DodModel): uint32 =
-  if model.activeSlot != 0:
-    return model.activeSlot
   let tagOpt = model.tagData(model.activeTag)
   if tagOpt.isSome:
     return tagOpt.get().slot
+  if model.activeSlot != 0:
+    return model.activeSlot
   0
 
 proc ensureWorkspaceSlot*(
@@ -78,6 +78,23 @@ proc visibleWorkspaceSlots(model: DodModel): seq[uint32] =
 
 proc refreshVisibleWorkspaceSlots*(model: var DodModel) =
   model.visibleSlots = model.visibleWorkspaceSlots()
+
+proc ensureActiveWorkspace*(model: var DodModel): TagId =
+  let activeOpt = model.tagData(model.activeTag)
+  if activeOpt.isSome:
+    let slot = activeOpt.get().slot
+    if model.activeSlot != slot:
+      model.activeSlot = slot
+      model.refreshVisibleWorkspaceSlots()
+    return model.activeTag
+
+  if model.activeSlot == 0:
+    return NullTagId
+
+  result = model.ensureWorkspaceSlot(model.activeSlot)
+  if result != NullTagId:
+    model.activeTag = result
+    model.refreshVisibleWorkspaceSlots()
 
 proc workspaceSlotForIndex*(model: DodModel; index: uint32): uint32 =
   if index == 0:

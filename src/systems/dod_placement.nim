@@ -5,10 +5,10 @@ import ../state/engine
 from ../types/legacy_model import LayoutMode, MasterStack, Scroller,
   VerticalScroller
 
-proc focusedPosition(model: DodModel):
+proc focusedPosition(model: var DodModel):
     tuple[found: bool, tagId: TagId, winId: WindowId, columnId: ColumnId,
       colIdx, winIdx: int] =
-  let tagId = model.activeTag
+  let tagId = model.ensureActiveWorkspace()
   let winId = model.focusedOnActiveTag()
   let placementOpt = model.placementForWindowOnTag(tagId, winId)
   if placementOpt.isNone:
@@ -43,14 +43,13 @@ proc addPlacedWindowColumn*(
 
 proc setLayoutForSlot*(
     model: var DodModel; slot: uint32; mode: LayoutMode): bool =
-  let targetSlot =
-    if slot != 0: slot
-    else: model.activeWorkspaceSlot()
-  let tagId = model.ensureWorkspaceSlot(targetSlot)
+  let tagId =
+    if slot != 0: model.ensureWorkspaceSlot(slot)
+    else: model.ensureActiveWorkspace()
   tagId != NullTagId and model.setTagLayout(tagId, mode)
 
 proc switchLayout*(model: var DodModel): bool =
-  let tagId = model.activeTag
+  let tagId = model.ensureActiveWorkspace()
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
@@ -62,23 +61,27 @@ proc switchLayout*(model: var DodModel): bool =
   model.setTagLayout(tagId, cycle[nextIdx])
 
 proc setMasterCount*(model: var DodModel; count: int): bool =
-  model.setTagMasterCount(model.activeTag, count)
+  let tagId = model.ensureActiveWorkspace()
+  tagId != NullTagId and model.setTagMasterCount(tagId, count)
 
 proc adjustMasterCount*(model: var DodModel; delta: int): bool =
-  let tagOpt = model.tagData(model.activeTag)
+  let tagId = model.ensureActiveWorkspace()
+  let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
-  model.setTagMasterCount(model.activeTag, tagOpt.get().masterCount + delta)
+  model.setTagMasterCount(tagId, tagOpt.get().masterCount + delta)
 
 proc setMasterRatio*(model: var DodModel; ratio: float32): bool =
-  model.setTagMasterRatio(model.activeTag, ratio)
+  let tagId = model.ensureActiveWorkspace()
+  tagId != NullTagId and model.setTagMasterRatio(tagId, ratio)
 
 proc adjustMasterRatio*(model: var DodModel; delta: float32): bool =
-  let tagOpt = model.tagData(model.activeTag)
+  let tagId = model.ensureActiveWorkspace()
+  let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
   model.setTagMasterRatio(
-    model.activeTag, tagOpt.get().masterSplitRatio + delta)
+    tagId, tagOpt.get().masterSplitRatio + delta)
 
 proc resizeWidth*(model: var DodModel; delta: float32): bool =
   let pos = model.focusedPosition()
