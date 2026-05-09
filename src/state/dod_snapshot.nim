@@ -1,6 +1,7 @@
 import options
 import dod_iterators
 import dod_queries
+import ../core/defaults
 import ../types/core except Rect
 import ../types/dod_model
 import ../types/shell_snapshot
@@ -27,6 +28,18 @@ proc shellColumns(model: DodModel; tagId: TagId): seq[ShellColumn] =
       windows: windows
     ))
 
+proc snapshotDefaultMasterCount(model: DodModel): int =
+  if model.defaultMasterCount > 0:
+    max(1, model.defaultMasterCount)
+  else:
+    DefaultMasterCount
+
+proc snapshotDefaultMasterRatio(model: DodModel): float32 =
+  if model.defaultMasterRatio > 0:
+    clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
+  else:
+    DefaultMasterRatio
+
 proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
   result.version = TriadIpcVersion
   result.activeTag = model.activeSlot
@@ -48,7 +61,8 @@ proc dodShellSnapshot*(model: DodModel): ShellSnapshot =
     let tag =
       if tagOpt.isSome: tagOpt.get()
       else: TagData(slot: slot, layoutMode: legacy_model.Scroller,
-        masterCount: 1, masterSplitRatio: 0.55'f32)
+        masterCount: model.snapshotDefaultMasterCount(),
+        masterSplitRatio: model.snapshotDefaultMasterRatio())
 
     result.workspaces.add(ShellWorkspace(
       tagId: slot,

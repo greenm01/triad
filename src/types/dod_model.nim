@@ -62,6 +62,19 @@ type
     columnId*: ColumnId
     windowIdx*: uint32
 
+  WindowRuleData* = object
+    appIdMatch*: string
+    titleMatch*: string
+    defaultSlot*: uint32
+    openFloating*: bool
+    keyboardShortcutsInhibit*: bool
+    forcedLayout*: int
+
+  TagRuleData* = object
+    slot*: uint32
+    name*: string
+    defaultLayout*: LayoutMode
+
   DodModel* = object
     counters*: IdCounters
     windows*: EntityManager[WindowId, WindowData]
@@ -96,12 +109,18 @@ type
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
     defaultColumnWidth*: float32
+    defaultWindowWidth*: float32
+    defaultWindowHeight*: float32
+    defaultMasterCount*: int
+    defaultMasterRatio*: float32
     floatingXRatio*: float32
     floatingYRatio*: float32
     floatingWidthRatio*: float32
     floatingHeightRatio*: float32
     floatingMinWidth*: int32
     floatingMinHeight*: int32
+    windowRules*: seq[WindowRuleData]
+    tagRules*: seq[TagRuleData]
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]

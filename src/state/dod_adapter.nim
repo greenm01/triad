@@ -70,12 +70,31 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.scrollerPreferCenter = source.scrollerPreferCenter
   result.centerFocusedColumn = source.centerFocusedColumn
   result.defaultColumnWidth = source.defaultColumnWidth()
+  result.defaultWindowWidth = source.defaultWindowWidth
+  result.defaultWindowHeight = source.defaultWindowHeight
+  result.defaultMasterCount = source.defaultMasterCount
+  result.defaultMasterRatio = source.defaultMasterRatio
   result.floatingXRatio = source.floating.xRatio
   result.floatingYRatio = source.floating.yRatio
   result.floatingWidthRatio = source.floating.widthRatio
   result.floatingHeightRatio = source.floating.heightRatio
   result.floatingMinWidth = source.floating.minWidth
   result.floatingMinHeight = source.floating.minHeight
+  for rule in source.windowRules:
+    result.windowRules.add(WindowRuleData(
+      appIdMatch: rule.appIdMatch,
+      titleMatch: rule.titleMatch,
+      defaultSlot: rule.defaultTag,
+      openFloating: rule.openFloating,
+      keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
+      forcedLayout: rule.forcedLayout
+    ))
+  for rule in source.tagRules:
+    result.tagRules.add(TagRuleData(
+      slot: rule.tagId,
+      name: rule.name,
+      defaultLayout: rule.defaultLayout
+    ))
   result.layoutCycle = source.layoutCycle
 
   for slot in source.sortedTagSlots():

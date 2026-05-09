@@ -55,6 +55,27 @@ proc addWindow*(model: var DodModel; externalId: ExternalWindowId; title = "";
   model.windowTags[id] = EmptyTagMask
   id
 
+proc setWindowCreatedState*(model: var DodModel; winId: WindowId;
+    title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
+    heightProportion = 1.0'f32; isFloating = false;
+    floatingGeom = Rect(); keyboardShortcutsInhibit = false): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  let externalId = model.windows.mEntity(winId).externalId
+  model.windows.mEntity(winId) = WindowData(
+    id: winId,
+    externalId: externalId,
+    title: title,
+    appId: appId,
+    identifier: identifier,
+    widthProportion: widthProportion,
+    heightProportion: heightProportion,
+    isFloating: isFloating,
+    floatingGeom: floatingGeom,
+    keyboardShortcutsInhibit: keyboardShortcutsInhibit
+  )
+  true
+
 proc destroyWindow*(model: var DodModel; winId: WindowId): bool =
   let winOpt = model.windows.entity(winId)
   if winOpt.isNone:

@@ -18,6 +18,7 @@ import ../src/systems/dod_focus
 import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
+import ../src/systems/dod_window_lifecycle
 import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
 import ../src/systems/layout_state
@@ -453,6 +454,107 @@ proc fullscreenOutputStateModel(): legacy_model.Model =
   result = stateParityModel()
   result.windows[10].isFullscreen = true
   result.windows[10].fullscreenOutput = 43
+
+proc lifecycleParityModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 1,
+    screenWidth: 1200,
+    screenHeight: 800
+  )
+  result.workspaces.defaultCount = 3
+  result.defaultColumnWidth = 0.6'f32
+  result.defaultWindowWidth = 0.7'f32
+  result.defaultWindowHeight = 0.8'f32
+  result.defaultMasterCount = 2
+  result.defaultMasterRatio = 0.65'f32
+  result.tags[1] = initTagState(1, legacy_model.Scroller, "main")
+  result.tags[1].masterCount = 2
+  result.tags[1].masterSplitRatio = 0.65'f32
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(10)], widthProportion: 0.6))
+  result.tags[1].focusedWindow = 10
+  result.tags[2] = initTagState(2, legacy_model.Scroller, "web")
+  result.tags[2].masterCount = 2
+  result.tags[2].masterSplitRatio = 0.65'f32
+  result.tags[2].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(20)], widthProportion: 0.6))
+  result.tags[2].focusedWindow = 20
+  result.windows[10] = legacy_model.WindowData(
+    id: 10, appId: "foot", title: "one")
+  result.windows[20] = legacy_model.WindowData(
+    id: 20, appId: "brave", title: "web")
+  result.focusHistory = @[legacy_model.WindowId(10), 20]
+  result.workspaceHistory = @[1'u32, 2]
+
+proc lifecycleFallbackModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 0,
+    screenWidth: 1200,
+    screenHeight: 800
+  )
+  result.workspaces.defaultCount = 3
+
+proc lifecycleRuleModel(): legacy_model.Model =
+  result = lifecycleParityModel()
+  result.floating.xRatio = 0.1'f32
+  result.floating.yRatio = 0.2'f32
+  result.floating.widthRatio = 0.4'f32
+  result.floating.heightRatio = 0.3'f32
+  result.tagRules.add(legacy_model.TagRule(
+    tagId: 4,
+    name: "chat",
+    defaultLayout: legacy_model.MasterStack
+  ))
+  result.windowRules.add(legacy_model.WindowRule(
+    appIdMatch: "discord",
+    defaultTag: 4,
+    openFloating: true,
+    keyboardShortcutsInhibit: true,
+    forcedLayout: ord(legacy_model.Grid) + 1
+  ))
+
+proc lifecycleTagRuleModel(): legacy_model.Model =
+  result = lifecycleParityModel()
+  result.tagRules.add(legacy_model.TagRule(
+    tagId: 5,
+    name: "media",
+    defaultLayout: legacy_model.Deck
+  ))
+  result.windowRules.add(legacy_model.WindowRule(
+    appIdMatch: "mpv",
+    defaultTag: 5
+  ))
+
+proc lifecycleDuplicateModel(): legacy_model.Model =
+  result = lifecycleParityModel()
+  result.activeTag = 1
+  result.tags[2].columns[0].windows.add(legacy_model.WindowId(10))
+  result.tags[2].focusedWindow = 10
+
+proc lifecycleDynamicDestroyModel(): legacy_model.Model =
+  result = lifecycleParityModel()
+  result.activeTag = 4
+  result.tags[4] = initTagState(4, legacy_model.Scroller, "temp")
+  result.tags[4].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(40)], widthProportion: 0.6))
+  result.tags[4].focusedWindow = 40
+  result.windows[40] = legacy_model.WindowData(
+    id: 40, appId: "scratch", title: "temp")
+  result.focusHistory = @[legacy_model.WindowId(10), 40]
+
+proc lifecycleCollapseDestroyModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 4,
+    screenWidth: 1200,
+    screenHeight: 800
+  )
+  result.workspaces.defaultCount = 3
+  result.tags[4] = initTagState(4, legacy_model.Scroller, "temp")
+  result.tags[4].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(40)], widthProportion: 0.5))
+  result.tags[4].focusedWindow = 40
+  result.windows[40] = legacy_model.WindowData(
+    id: 40, appId: "scratch", title: "temp")
 
 suite "DOD state primitives":
   test "logical IDs are monotonic and reserve zero":
@@ -1135,4 +1237,100 @@ suite "DOD state primitives":
       core_msg.Msg(kind: core_msg.CmdToggleKeyboardShortcutsInhibit),
       proc(dod: var DodModel) =
         discard dod.toggleKeyboardShortcutsInhibitFocused()
+    )
+
+  test "DOD window creation parity matches legacy":
+    checkStateParity(
+      lifecycleParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 30,
+        appId: "kitty",
+        title: "shell",
+        createdIdentifier: "kitty-30"),
+      proc(dod: var DodModel) =
+        discard dod.createWindowForExternal(
+          ExternalWindowId(30), "kitty", "shell", "kitty-30")
+    )
+    checkStateParity(
+      lifecycleFallbackModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 30,
+        appId: "kitty",
+        title: "shell"),
+      proc(dod: var DodModel) =
+        discard dod.createWindowForExternal(
+          ExternalWindowId(30), "kitty", "shell")
+    )
+
+  test "DOD window creation applies rules like legacy":
+    checkStateParity(
+      lifecycleRuleModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 30,
+        appId: "discord",
+        title: "Discord"),
+      proc(dod: var DodModel) =
+        discard dod.createWindowForExternal(
+          ExternalWindowId(30), "discord", "Discord")
+    )
+    checkStateParity(
+      lifecycleTagRuleModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 30,
+        appId: "mpv",
+        title: "movie"),
+      proc(dod: var DodModel) =
+        discard dod.createWindowForExternal(
+          ExternalWindowId(30), "mpv", "movie")
+    )
+
+  test "DOD duplicate window creation clears stale placement":
+    checkStateParity(
+      lifecycleDuplicateModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowCreated,
+        windowId: 10,
+        appId: "kitty",
+        title: "replacement"),
+      proc(dod: var DodModel) =
+        discard dod.createWindowForExternal(
+          ExternalWindowId(10), "kitty", "replacement")
+    )
+
+  test "DOD window destruction parity matches legacy":
+    checkStateParity(
+      lifecycleParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDestroyed,
+        destroyedId: 20),
+      proc(dod: var DodModel) =
+        discard dod.destroyWindowForExternal(ExternalWindowId(20))
+    )
+    checkStateParity(
+      closedFocusedWindowModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDestroyed,
+        destroyedId: 20),
+      proc(dod: var DodModel) =
+        discard dod.destroyWindowForExternal(ExternalWindowId(20))
+    )
+    checkStateParity(
+      lifecycleDynamicDestroyModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDestroyed,
+        destroyedId: 40),
+      proc(dod: var DodModel) =
+        discard dod.destroyWindowForExternal(ExternalWindowId(40))
+    )
+    checkStateParity(
+      lifecycleCollapseDestroyModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDestroyed,
+        destroyedId: 40),
+      proc(dod: var DodModel) =
+        discard dod.destroyWindowForExternal(ExternalWindowId(40))
     )
