@@ -227,18 +227,17 @@ Layout computation is split into pure projection and explicit writes:
 - projection builders must not mutate their input models.
 - compatibility wrappers apply viewport targets and return instructions.
 
-During the shadow phase, runtime manage/render layout still returns legacy
-instructions to River. The layout sync bridge computes both legacy and DoD
-projections, applies each model's own viewport targets, and reports projection
-mismatches through the shadow divergence path. This keeps DoD snapshots current
-without making DoD placement authoritative yet.
+Runtime manage/render layout is the first DoD-authoritative surface. The layout
+sync bridge still computes both legacy and DoD projections, applies each model's
+own viewport targets, and reports projection mismatches through the shadow
+divergence path. While shadow health is good, River placement instructions come
+from DoD.
 
 Layout authority is runtime data on `TriadRuntimePolicy`. The daemon initializes
-`LegacyLayoutAuthority` today, so `authoritativeProjection` is the legacy
-projection and River placement remains unchanged. Tests can set
-`DodLayoutAuthority` on `TriadRuntimeState.policy` to prove that the runtime
-facade can return DoD instructions as authoritative while still computing
-legacy projection for parity checks.
+`DodLayoutAuthority` today, so `authoritativeProjection` is the DoD projection.
+If a DoD layout divergence is observed, the runtime facade disables DoD
+projection reads and returns the legacy projection for that pass and subsequent
+passes. Runtime effects remain legacy-authoritative.
 
 ## Runtime Update Sync
 

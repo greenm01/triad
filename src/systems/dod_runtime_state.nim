@@ -91,13 +91,20 @@ proc applyObservedRuntimeShadowOnly*(
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
 
+proc effectiveLayoutAuthority(state: TriadRuntimeState): LayoutAuthority =
+  if state.policy.layoutAuthority == DodLayoutAuthority and
+      state.shadowHealth.shadowProjectionReadsEnabled():
+    DodLayoutAuthority
+  else:
+    LegacyLayoutAuthority
+
 proc applyRuntimeLayoutProjection*(
     state: var TriadRuntimeState): LayoutProjectionSyncReport =
   syncLayoutProjection(
     state.legacyModel,
     state.shadowModel,
     state.shadowHealth.shadowSyncEnabled(),
-    state.policy.layoutAuthority)
+    state.effectiveLayoutAuthority())
 
 proc applyObservedRuntimeLayoutProjection*(
     state: var TriadRuntimeState): ObservedLayoutProjectionResult =
@@ -107,6 +114,11 @@ proc applyObservedRuntimeLayoutProjection*(
     DodShadowReport(
       ok: result.syncResult.ok,
       errors: result.syncResult.errors))
+  if result.syncResult.authority == DodLayoutAuthority and
+      not result.observation.decision.reportOk:
+    result.syncResult.authority = LegacyLayoutAuthority
+    result.syncResult.authoritativeProjection =
+      result.syncResult.legacyProjection
 
 proc applyRuntimeConfig*(
     state: var TriadRuntimeState; config: Config): StateApplicationSyncResult =

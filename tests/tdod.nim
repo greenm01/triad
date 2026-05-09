@@ -1492,7 +1492,7 @@ suite "DOD state primitives":
     check result.state.shadowHealth.readHealthy
     check result.state.shadowHealth.divergenceCount == 0
     check result.state.policy.runtimeAuthority == LegacyRuntimeAuthority
-    check result.state.policy.layoutAuthority == LegacyLayoutAuthority
+    check result.state.policy.layoutAuthority == DodLayoutAuthority
     check readRuntimeSnapshot(result.state) ==
       shellSnapshot(result.state.legacyModel)
 
@@ -1536,9 +1536,11 @@ suite "DOD state primitives":
     var state = TriadRuntimeState(
       legacyModel: seed,
       shadowModel: seed.dodFromLegacy(),
-      shadowHealth: initDodShadowHealth())
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
 
     let updateResult = state.applyObservedRuntimeUpdate(Msg(kind: CmdFocusNext))
+    check updateResult.syncResult.authority == LegacyRuntimeAuthority
     check updateResult.observation.checked
     check updateResult.observation.decision.reportOk
     check updateResult.syncResult.shadowChecked
@@ -1552,12 +1554,13 @@ suite "DOD state primitives":
     check shadowOnlyResult.syncResult.dodEffects.len > 0
 
     let layoutResult = state.applyObservedRuntimeLayoutProjection()
+    check layoutResult.syncResult.authority == DodLayoutAuthority
     check layoutResult.observation.checked
     check layoutResult.observation.decision.reportOk
     check layoutResult.syncResult.shadowChecked
     check layoutResult.syncResult.ok
     check layoutResult.syncResult.authoritativeProjection.instructions ==
-      state.legacyModel.layoutProjection().instructions
+      layoutResult.syncResult.dodProjection.instructions
 
   test "DOD runtime state policy can select DOD authorities":
     let seed = lifecycleParityModel()
@@ -1588,6 +1591,25 @@ suite "DOD state primitives":
     check layoutResult.observation.decision.reportOk
     check layoutResult.syncResult.authoritativeProjection.instructions ==
       layoutResult.syncResult.dodProjection.instructions
+
+  test "DOD layout authority falls back to legacy on divergence":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
+    state.shadowModel.outerGaps = state.legacyModel.outerGaps + 9
+
+    let layoutResult = state.applyObservedRuntimeLayoutProjection()
+    check layoutResult.observation.checked
+    check not layoutResult.observation.decision.reportOk
+    check layoutResult.observation.decision.readsDisabled
+    check layoutResult.syncResult.authority == LegacyLayoutAuthority
+    check layoutResult.syncResult.authoritativeProjection.instructions ==
+      layoutResult.syncResult.legacyProjection.instructions
+    check state.shadowHealth.divergenceCount == 1
+    check not state.shadowHealth.readHealthy
 
   test "DOD observed runtime facade disables reads on divergence":
     let seed = lifecycleParityModel()
