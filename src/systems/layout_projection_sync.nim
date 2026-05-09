@@ -5,26 +5,42 @@ import dod_layout
 import layout_state
 
 type
+  LayoutAuthority* = enum
+    LegacyLayoutAuthority
+    DodLayoutAuthority
+
   LayoutProjectionSyncReport* = object
+    authority*: LayoutAuthority
     ok*: bool
     shadowChecked*: bool
     legacyProjection*: LayoutProjection
     dodProjection*: LayoutProjection
+    authoritativeProjection*: LayoutProjection
     errors*: seq[string]
 
 proc syncLayoutProjection*(
     legacyModel: var Model; shadow: var DodModel;
-    syncShadow: bool): LayoutProjectionSyncReport =
+    syncShadow: bool;
+    authority = LegacyLayoutAuthority): LayoutProjectionSyncReport =
+  result.authority = authority
   result.ok = true
   result.legacyProjection = legacyModel.layoutProjection()
   legacyModel.applyLayoutProjection(result.legacyProjection)
+
+  if syncShadow or authority == DodLayoutAuthority:
+    result.dodProjection = shadow.layoutProjection()
+    shadow.applyLayoutProjection(result.dodProjection)
+
+  case authority
+  of LegacyLayoutAuthority:
+    result.authoritativeProjection = result.legacyProjection
+  of DodLayoutAuthority:
+    result.authoritativeProjection = result.dodProjection
 
   if not syncShadow:
     return
 
   result.shadowChecked = true
-  result.dodProjection = shadow.layoutProjection()
-  shadow.applyLayoutProjection(result.dodProjection)
 
   if result.dodProjection.instructions != result.legacyProjection.instructions:
     result.ok = false

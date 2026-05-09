@@ -149,7 +149,10 @@ proc checkLayoutProjectionSync(source: legacy_model.Model) =
   let report = syncLayoutProjection(legacyModel, dod, syncShadow = true)
   check report.ok
   check report.shadowChecked
+  check report.authority == LegacyLayoutAuthority
   check report.legacyProjection.instructions == expectedInstructions
+  check report.authoritativeProjection.instructions ==
+    report.legacyProjection.instructions
   check report.dodProjection.instructions == report.legacyProjection.instructions
   check report.dodProjection.viewportTargets ==
     report.legacyProjection.viewportTargets
@@ -1274,6 +1277,24 @@ suite "DOD state primitives":
     checkLayoutProjectionSync(scrollerLayoutModel())
     checkLayoutProjectionSync(dynamicParityModel())
 
+  test "DOD runtime layout projection sync can select DOD projection":
+    var legacyModel = scrollerLayoutModel()
+    var dod = legacyModel.dodFromLegacy()
+
+    let report = syncLayoutProjection(
+      legacyModel,
+      dod,
+      syncShadow = true,
+      authority = DodLayoutAuthority)
+    check report.ok
+    check report.shadowChecked
+    check report.authority == DodLayoutAuthority
+    check report.authoritativeProjection.instructions ==
+      report.dodProjection.instructions
+    check report.dodProjection.instructions ==
+      report.legacyProjection.instructions
+    check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+
   test "DOD runtime layout projection sync can skip shadow mutation":
     var legacyModel = scrollerLayoutModel()
     var dod = legacyModel.dodFromLegacy()
@@ -1286,6 +1307,25 @@ suite "DOD state primitives":
     check report.legacyProjection.viewportTargets.len == 1
     check legacyModel.tags[1].targetViewportXOffset ==
       report.legacyProjection.viewportTargets[0].targetX
+    check report.authoritativeProjection.instructions ==
+      report.legacyProjection.instructions
+    check report.dodProjection.instructions.len == 0
+
+  test "DOD runtime layout projection authority runs without shadow checks":
+    var legacyModel = scrollerLayoutModel()
+    var dod = legacyModel.dodFromLegacy()
+
+    let report = syncLayoutProjection(
+      legacyModel,
+      dod,
+      syncShadow = false,
+      authority = DodLayoutAuthority)
+    check report.ok
+    check not report.shadowChecked
+    check report.authority == DodLayoutAuthority
+    check report.dodProjection.instructions.len > 0
+    check report.authoritativeProjection.instructions ==
+      report.dodProjection.instructions
 
   test "DOD runtime layout projection sync reports mismatches":
     var legacyModel = scrollerLayoutModel()
@@ -1297,6 +1337,8 @@ suite "DOD state primitives":
     check report.shadowChecked
     check report.errors.contains("layout instructions mismatch")
     check report.legacyProjection.instructions == legacyModel.layoutProjection().instructions
+    check report.authoritativeProjection.instructions ==
+      report.legacyProjection.instructions
 
   test "DOD layout projection matches floating windows":
     checkLayoutParity(floatingLayoutModel())

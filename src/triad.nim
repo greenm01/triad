@@ -210,7 +210,7 @@ proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstructi
     logShadowReport(context, msg, DodShadowReport(
       ok: false,
       errors: report.errors))
-  report.legacyProjection.instructions
+  report.authoritativeProjection.instructions
 
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:

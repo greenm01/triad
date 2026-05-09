@@ -218,6 +218,12 @@ projections, applies each model's own viewport targets, and reports projection
 mismatches through the shadow divergence path. This keeps DoD snapshots current
 without making DoD placement authoritative yet.
 
+The layout bridge also has an explicit authority policy. The daemon uses
+`LegacyLayoutAuthority` today, so `authoritativeProjection` is the legacy
+projection and River placement remains unchanged. Tests can select
+`DodLayoutAuthority` to prove that the bridge can return DoD instructions as
+authoritative while still computing legacy projection for parity checks.
+
 ## Runtime Update Sync
 
 Runtime updates are also bridged explicitly during the shadow phase:
