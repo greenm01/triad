@@ -27,6 +27,7 @@ import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
 import ../src/systems/dod_scratchpad
+import ../src/systems/dod_daemon_view
 import ../src/systems/dod_shadow_runtime as shadow_runtime
 import ../src/systems/dod_update
 import ../src/systems/dod_window_lifecycle
@@ -1055,7 +1056,12 @@ suite "DOD state primitives":
     check not source.contains("runtimeState.legacyModel")
     check not source.contains("runtimeState.shadowModel")
     check not source.contains("logShadowObservation")
-    check source.contains("readRuntimeModelView")
+    check not source.contains("currentModelView")
+    check not source.contains("readRuntimeModelView")
+    check not source.contains("import core/model")
+    check not source.contains("import core/model_utils")
+    check not source.contains("import core/shell_state")
+    check not source.contains("import systems/layout_state")
 
   test "DOD update orchestrates domain reducers only":
     let source = readFile("src/systems/dod_update.nim")
@@ -1976,7 +1982,28 @@ suite "DOD state primitives":
       updateResult.syncResult.dodEffects.stableEffectSignatures(
         msg)
     check state.model.outerGaps == previousGaps + 3
-    check state.readRuntimeModelView().outerGaps == state.model.outerGaps
+
+  test "DOD daemon view exposes external host ids":
+    var source = baseParityModel()
+    var win = source.windows[10]
+    win.minWidth = 50
+    win.maxWidth = 100
+    win.minHeight = 60
+    win.maxHeight = 120
+    source.windows[10] = win
+    let dod = source.dodFromLegacy()
+
+    check dod.activeFocusRiverId() == legacy_model.WindowId(10)
+    check dod.primaryOutputRiverId() == 42
+    check dod.hasRiverWindow(legacy_model.WindowId(10))
+    check not dod.hasRiverWindow(legacy_model.WindowId(99))
+    let winOpt = dod.windowDataForRiverId(legacy_model.WindowId(10))
+    check winOpt.isSome
+    check winOpt.get().appId == "kitty"
+    check dod.boundedDimensionsForRiverId(
+      legacy_model.WindowId(10), 5, 500).w == 50
+    check dod.boundedDimensionsForRiverId(
+      legacy_model.WindowId(10), 500, 500).h == 120
 
   test "DOD runtime state projects layout from the native model":
     var state = TriadRuntimeState(model: lifecycleParityModel().dodFromLegacy())

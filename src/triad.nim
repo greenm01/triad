@@ -5,15 +5,16 @@ import protocols/river_xkb_bindings/client as river_xkb
 import wayland/protocols/wayland/client as wl_core
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import core/effects
-import core/model
 import core/msg
-import core/model_utils
 import core/restore_state
-import core/shell_state
 import core/niri_state
 import core/render_visibility
+import systems/dod_daemon_view
+import systems/dod_layout
+import systems/dod_runtime
 import systems/dod_runtime_state
-import systems/layout_state
+import types/dod_model
+import types/shell_snapshot
 import config/parser
 import config/defaults
 import config/keysyms
@@ -25,6 +26,12 @@ import utils/terminal
 import utils/runtime_log
 import utils/session_env
 import utils/wayland_runtime
+from types/legacy_model import nil
+from types/legacy_model import BindAlways, BindNormal, BindOverview,
+  BindingMode, KeyBindingConfig, OpNone, PointerBindingConfig, PointerOpKind,
+  PresentationAsync, PresentationDefault, PresentationMode,
+  ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
+  ScreenshotConfig, TerminalConfig, WindowId
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options, times, json
 
 type
@@ -64,7 +71,6 @@ var
   
   # TEA State
   runtimeState: TriadRuntimeState
-  currentModelView: Model
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
   desiredPlacements: Table[WindowId, Rect]
@@ -115,11 +121,8 @@ var
   pendingLiveRestore: Option[LiveRestoreState]
   liveRestoreCommitPending = false
 
-proc refreshRuntimeReadModel() =
-  currentModelView = runtimeState.readRuntimeModelView()
-
 template currentModel: untyped =
-  currentModelView
+  runtimeState.model
 
 # --- Helpers ---
 
@@ -138,12 +141,10 @@ proc cstringOrEmpty(value: cstring): string =
 
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
   let observed = runtimeState.applyObservedRuntimeUpdate(msg)
-  refreshRuntimeReadModel()
   observed.syncResult.authoritativeEffects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
   discard runtimeState.applyObservedRuntimeShadowOnly(msg)
-  refreshRuntimeReadModel()
 
 proc readModelSnapshot(): ShellSnapshot =
   runtimeState.readRuntimeSnapshot()
@@ -157,7 +158,6 @@ proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
 proc syncRuntimeLayoutProjection(
     context: string; msg: Msg): seq[RenderInstruction] =
   let observed = runtimeState.applyObservedRuntimeLayoutProjection()
-  refreshRuntimeReadModel()
   observed.syncResult.authoritativeProjection.instructions
 
 proc applyPendingLiveRestore() =
@@ -167,7 +167,6 @@ proc applyPendingLiveRestore() =
   let state = pendingLiveRestore.get()
   let observed = runtimeState.applyObservedRuntimeLiveRestore(state)
   discard observed
-  refreshRuntimeReadModel()
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
@@ -185,12 +184,6 @@ proc commitPendingLiveRestore() =
   else:
     warn "Live restore snapshot could not be committed", path=pendingLiveRestorePath
 
-proc outputName(model: Model; outputId: uint32): string =
-  if outputId == 0:
-    "triad-0"
-  else:
-    "river-" & $outputId
-
 proc setupConfig() =
   configPath = getConfigPath()
   let configDir = configPath.splitFile().dir
@@ -201,7 +194,7 @@ proc setupConfig() =
     writeFile(configPath, FallbackConfigContent)
     info "Created default config", path=configPath
 
-proc spawnStartupCommands(model: Model) =
+proc spawnStartupCommands(model: DodModel) =
   for cmd in model.startupCommands:
     if cmd.len > 0:
       try:
@@ -231,7 +224,7 @@ proc stopTrackedQuickshell(reason: string) =
     discard
   quickshellProcess = nil
 
-proc stopConfiguredQuickshell(model: Model; reason: string) =
+proc stopConfiguredQuickshell(model: DodModel; reason: string) =
   let args = quickshellKillArgs(model.quickshell)
   if args.len == 0 or model.quickshell.command.strip().len == 0:
     return
@@ -265,12 +258,12 @@ proc stopConfiguredQuickshell(model: Model; reason: string) =
       reason=reason,
       error=e.msg
 
-proc stopQuickshell(model: Model; reason: string; authoritative = false) =
+proc stopQuickshell(model: DodModel; reason: string; authoritative = false) =
   stopTrackedQuickshell(reason)
   if authoritative:
     stopConfiguredQuickshell(model, reason)
 
-proc spawnQuickshell(model: Model; niriSocketPath: string) =
+proc spawnQuickshell(model: DodModel; niriSocketPath: string) =
   if model.quickshell.enabled and model.quickshell.theme != "":
     let args = quickshellLaunchArgs(model.quickshell)
     
@@ -291,7 +284,7 @@ proc spawnQuickshell(model: Model; niriSocketPath: string) =
     except CatchableError as e:
       warn "Failed to spawn Quickshell", command=model.quickshell.command, theme=model.quickshell.theme, error=e.msg
 
-proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
+proc restartQuickshell(model: DodModel; niriSocketPath, reason: string) =
   stopQuickshell(model, reason, authoritative = true)
   spawnQuickshell(model, niriSocketPath)
 
@@ -316,7 +309,6 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
 
   let previousModel = currentModel
   discard runtimeState.applyObservedRuntimeConfig(loaded.config)
-  refreshRuntimeReadModel()
   quickshellSpawnPending = false
 
   if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
@@ -330,10 +322,11 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   broadcastNiriSnapshot(readModelSnapshot())
   true
 
-proc scheduleQuickshellSpawn(model: Model) =
+proc scheduleQuickshellSpawn(model: DodModel) =
   quickshellSpawnPending = model.quickshell.enabled and model.quickshell.theme.strip().len > 0
 
-proc spawnPendingQuickshell(model: Model; niriSocketPath, reason: string) =
+proc spawnPendingQuickshell(
+    model: DodModel; niriSocketPath, reason: string) =
   if not quickshellSpawnPending:
     return
   quickshellSpawnPending = false
@@ -369,7 +362,7 @@ proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
   except CatchableError as e:
     warn "Failed to spawn window menu", cmd=command[0], windowId=windowId, error=e.msg
 
-proc spawnTerminal(model: Model) =
+proc spawnTerminal(model: DodModel) =
   for command in terminalCandidates(model.terminal.command):
     if command.len == 0 or not commandExists(command[0]):
       continue
@@ -584,17 +577,17 @@ proc applyBorder(win: ptr RiverWindowV1; focused: bool; edges: uint32) =
   let color = premulColor(if focused: currentModel.focusedBorderColor else: currentModel.unfocusedBorderColor)
   win.setBorders(edges, currentModel.borderWidth, color.r, color.g, color.b, color.a)
 
-proc supportedCapabilities(model: Model): uint32 =
+proc supportedCapabilities(model: DodModel): uint32 =
   result = RiverBaseCapabilities
-  if model.windowMenu.command.len > 0:
+  if model.windowMenuCommand.len > 0:
     result = result or RiverCapabilityWindowMenu
 
-proc configuredPresentationMode(model: Model): uint32 =
+proc configuredPresentationMode(model: DodModel): uint32 =
   case model.presentationMode
   of PresentationAsync: RiverPresentationAsync
   else: RiverPresentationVsync
 
-proc hasPresentationPreference(model: Model): bool =
+proc hasPresentationPreference(model: DodModel): bool =
   model.presentationMode != PresentationDefault
 
 proc outputIdForPointer(output: ptr RiverOutputV1): uint32 =
@@ -724,8 +717,9 @@ proc applyManageState() =
   for id, win in windowPointers.pairs:
     win.setCapabilities(currentModel.supportedCapabilities())
     var edges = RiverAllEdges
-    if currentModel.windows.hasKey(id):
-      let data = currentModel.windows[id]
+    let dataOpt = currentModel.windowDataForRiverId(id)
+    if dataOpt.isSome:
+      let data = dataOpt.get()
       if data.hasDecorationHint and data.decorationHint == RiverDecorationOnlySupportsCsd:
         win.useCsd()
       else:
@@ -739,7 +733,7 @@ proc applyManageState() =
       win.useSsd()
     win.setTiled(edges)
 
-  let focused = currentModel.activeFocus()
+  let focused = currentModel.activeFocusRiverId()
   for seat in seatPointers:
     if currentModel.cursor.theme.len > 0:
       let cursorSize = if currentModel.cursor.size == 0: 24'u32 else: currentModel.cursor.size
@@ -751,8 +745,9 @@ proc applyManageState() =
     else:
       seat.clearFocus()
 
-  if currentModel.primaryOutput != 0 and layerOutputPointers.hasKey(currentModel.primaryOutput):
-    layerOutputPointers[currentModel.primaryOutput].setDefault()
+  let primaryOutput = currentModel.primaryOutputRiverId()
+  if primaryOutput != 0 and layerOutputPointers.hasKey(primaryOutput):
+    layerOutputPointers[primaryOutput].setDefault()
 
 # --- RiverSeatV1 Callbacks ---
 
@@ -868,7 +863,7 @@ xkb_seat_listener = river_xkb.RiverXkbBindingsSeatV1Listener(
 proc on_pointer_binding_pressed(data: pointer, binding: ptr RiverPointerBindingV1) =
   let id = binding.get_id()
   pointerBindingPressed[id] = true
-  let focused = currentModel.activeFocus()
+  let focused = currentModel.activeFocusRiverId()
   if focused == 0 or not pointerBindingSeats.hasKey(id):
     return
   let seat = pointerBindingSeats[id]
@@ -973,9 +968,11 @@ proc executeManageEffect(eff: Effect) =
         var output: ptr RiverOutputV1 = nil
         if eff.fsOutputId != 0 and outputPointers.hasKey(eff.fsOutputId):
           output = outputPointers[eff.fsOutputId]
-        elif currentModel.primaryOutput != 0 and outputPointers.hasKey(currentModel.primaryOutput):
-          output = outputPointers[currentModel.primaryOutput]
-        elif outputPointers.len > 0:
+        else:
+          let primaryOutput = currentModel.primaryOutputRiverId()
+          if primaryOutput != 0 and outputPointers.hasKey(primaryOutput):
+            output = outputPointers[primaryOutput]
+        if output == nil and outputPointers.len > 0:
           for p in outputPointers.values:
             output = p
             break
@@ -1015,10 +1012,10 @@ proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
     desiredPlacements[instr.windowId] = instr.geom
     if windowPointers.hasKey(instr.windowId):
       var geom = instr.geom
-      if currentModel.windows.hasKey(instr.windowId):
-        let bounded = currentModel.windows[instr.windowId].boundedDimensions(geom.w, geom.h)
-        geom.w = bounded.w
-        geom.h = bounded.h
+      let bounded = currentModel.boundedDimensionsForRiverId(
+        instr.windowId, geom.w, geom.h)
+      geom.w = bounded.w
+      geom.h = bounded.h
       windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(0'i32, geom.h))
 
 proc applyVisibility(win: ptr RiverWindowV1; visibility: RenderVisibility) =
@@ -1061,7 +1058,8 @@ proc renderDesiredPlacements() =
       if windowPointers.hasKey(id):
         let visibility = renderVisibility(geom, screen, max(currentModel.borderWidth * 2, 4'i32))
         windowPointers[id].applyVisibility(visibility)
-        windowPointers[id].applyBorder(id == currentModel.activeFocus(), visibility.borderEdges)
+        windowPointers[id].applyBorder(
+          id == currentModel.activeFocusRiverId(), visibility.borderEdges)
 
   for id, win in windowPointers.pairs:
     if not visible.hasKey(id):
@@ -1069,14 +1067,14 @@ proc renderDesiredPlacements() =
 
   for id in ids:
     if windowNodes.hasKey(id):
-      let visibleScratchpad =
-        if currentModel.visibleScratchpad != 0: currentModel.visibleScratchpad
-        elif currentModel.scratchpadWindows.len > 0: currentModel.scratchpadWindows[^1]
-        else: 0'u32
+      let visibleScratchpad = currentModel.visibleScratchpadRiverId()
       let isScratchpad = currentModel.isScratchpadVisible and
         visibleScratchpad == id
-      let isFullscreen = currentModel.windows.hasKey(id) and currentModel.windows[id].isFullscreen
-      if (currentModel.windows.hasKey(id) and currentModel.windows[id].isFloating) or isScratchpad or isFullscreen or id == currentModel.activeFocus():
+      let winOpt = currentModel.windowDataForRiverId(id)
+      let isFloating = winOpt.isSome and winOpt.get().isFloating
+      let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
+      if isFloating or isScratchpad or isFullscreen or
+          id == currentModel.activeFocusRiverId():
         windowNodes[id].placeTop()
 
   if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
@@ -1117,11 +1115,12 @@ proc geometryArg(rect: Rect): string =
   $rect.x & "," & $rect.y & " " & $max(1'i32, rect.w) & "x" & $max(1'i32, rect.h)
 
 proc focusedWindowGeometry(): Rect =
-  let focused = currentModel.activeFocus()
+  let focused = currentModel.activeFocusRiverId()
   if focused != 0 and desiredPlacements.hasKey(focused):
     return desiredPlacements[focused]
-  if focused != 0 and currentModel.windows.hasKey(focused):
-    let win = currentModel.windows[focused]
+  let winOpt = currentModel.windowDataForRiverId(focused)
+  if focused != 0 and winOpt.isSome:
+    let win = winOpt.get()
     if win.isFloating and win.floatingGeom.w > 0 and win.floatingGeom.h > 0:
       return win.floatingGeom
   currentModel.primaryScreen()
@@ -1233,7 +1232,8 @@ proc executeEffect(eff: Effect) =
       let node = windowNodes[eff.windowId]
       node.setPosition(eff.x, eff.y)
 
-      if currentModel.windows.hasKey(eff.windowId) and currentModel.windows[eff.windowId].isFloating:
+      let winOpt = currentModel.windowDataForRiverId(eff.windowId)
+      if winOpt.isSome and winOpt.get().isFloating:
         node.placeTop()
     else:
       desiredPlacements[eff.windowId] = Rect(x: eff.x, y: eff.y, w: eff.w, h: eff.h)
@@ -1242,7 +1242,7 @@ proc executeEffect(eff: Effect) =
     discard
 
 # Mapping from logical IDs to window metadata for late creation
-var pendingWindows: Table[WindowId, WindowData]
+var pendingWindows: Table[WindowId, legacy_model.WindowData]
 
 # --- RiverWindowV1 Callbacks ---
 
@@ -1266,7 +1266,7 @@ proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
   debug "Window app-id received", windowId=id, appId=appIdText
   if pendingWindows.hasKey(id):
     pendingWindows[id].appId = appIdText
-  elif currentModel.windows.hasKey(id):
+  elif currentModel.hasRiverWindow(id):
     msgQueue.add(Msg(kind: WlWindowAppId, appIdWindowId: id, updatedAppId: appIdText))
 
 proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
@@ -1275,7 +1275,7 @@ proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
   debug "Window title received", windowId=id, title=titleText
   if pendingWindows.hasKey(id):
     pendingWindows[id].title = titleText
-  elif currentModel.windows.hasKey(id):
+  elif currentModel.hasRiverWindow(id):
     msgQueue.add(Msg(kind: WlWindowTitle, titleWindowId: id, updatedTitle: titleText))
 
 proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
@@ -1302,7 +1302,7 @@ proc on_window_dimensions_hint(
     pendingWindows[win.get_id()].minHeight = max(0'i32, minHeight)
     pendingWindows[win.get_id()].maxWidth = max(0'i32, maxWidth)
     pendingWindows[win.get_id()].maxHeight = max(0'i32, maxHeight)
-  elif currentModel.windows.hasKey(win.get_id()):
+  elif currentModel.hasRiverWindow(win.get_id()):
     msgQueue.add(Msg(
       kind: WlWindowDimensionsHint,
       hintWindowId: win.get_id(),
@@ -1538,7 +1538,8 @@ proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindo
   windowPointers[id] = win
   windowNodes[id] = win.getNode()
   # Start tracking as pending until we get metadata or manage starts
-  pendingWindows[id] = WindowData(id: id, appId: "unknown", title: "unknown")
+  pendingWindows[id] = legacy_model.WindowData(
+    id: id, appId: "unknown", title: "unknown")
   discard win.addListener(window_listener.addr, nil)
 
 proc on_output_dimensions(data: pointer, output: ptr RiverOutputV1, width: int32, height: int32) =
@@ -1819,7 +1820,6 @@ proc main() =
   let initialConfig = loadConfig(configPath)
   let initialState = initRuntimeStateFromConfig(initialConfig)
   runtimeState = initialState.state
-  refreshRuntimeReadModel()
   info "Initial config loaded", path=configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()

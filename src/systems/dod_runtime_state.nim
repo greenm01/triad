@@ -1,14 +1,13 @@
 import ../config/dod_apply
 import ../config/parser
-import ../core/model
 import ../core/msg
 import ../core/restore_state
-import ../core/shell_state
 import ../state/dod_adapter
 import ../state/dod_restore_state
 import ../state/engine
 import ../types/dod_runtime_policy
 import ../types/dod_runtime_state
+import ../types/shell_snapshot
 import dod_layout
 import dod_update
 import dod_window_lifecycle
@@ -79,10 +78,6 @@ proc applyObservedRuntimeLiveRestore*(
 
 proc readRuntimeSnapshot*(state: TriadRuntimeState): ShellSnapshot =
   state.model.dodShellSnapshot()
-
-proc readRuntimeModelView*(state: TriadRuntimeState): Model =
-  # Transitional read view for daemon helpers that still consume legacy shapes.
-  legacyViewFromDod(state.model, Model())
 
 proc readRuntimeLiveRestoreJson*(state: TriadRuntimeState): string =
   state.model.dodLiveRestoreJson()
