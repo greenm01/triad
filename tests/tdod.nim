@@ -992,6 +992,25 @@ suite "DOD state primitives":
       for pattern in forbiddenStorage:
         check not source.contains(pattern)
 
+  test "DOD update orchestrates domain reducers only":
+    let source = readFile("src/systems/dod_update.nim")
+    let forbiddenImports = [
+      "import dod_focus",
+      "import dod_outputs",
+      "import dod_placement",
+      "import dod_runtime",
+      "import dod_scratchpad",
+      "import dod_window_lifecycle",
+      "import dod_window_state",
+      "import dod_workspaces"
+    ]
+
+    for pattern in forbiddenImports:
+      check not source.contains(pattern)
+    check source.contains("import dod_update_commands")
+    check source.contains("import dod_update_events")
+    check source.contains("import dod_update_effects")
+
   test "logical IDs are monotonic and reserve zero":
     var counters = IdCounters()
 
