@@ -1,4 +1,5 @@
 import json, options, strutils
+import ../core/layout_mode_codec
 import ../core/msg
 import ../core/triad_state
 import ../types/shell_snapshot

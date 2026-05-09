@@ -51,6 +51,24 @@ proc sourceFiles(): seq[string] =
     if path.endsWith(".nim"):
       result.add(path)
 
+proc typeFiles(): seq[string] =
+  for path in walkDirRec("src/types"):
+    if path.endsWith(".nim"):
+      result.add(path)
+
+proc isAllowedTypeInterop(path, line: string): bool =
+  if path != "src/types/core.nim":
+    return false
+  line.contains("{.borrow.}") or line.startsWith("proc hash*(")
+
+proc isTopLevelBehavior(line: string): bool =
+  for prefix in [
+    "proc ", "func ", "iterator ", "template ", "macro ", "converter "
+  ]:
+    if line.startsWith(prefix):
+      return true
+  false
+
 suite "Runtime state primitives":
   test "deleted legacy and shadow modules are gone":
     for path in DeletedRuntimeModules:
@@ -82,6 +100,16 @@ suite "Runtime state primitives":
       check not source.contains("runtimeState.shadowModel")
       check not source.contains("logShadowObservation")
       check not source.contains("applyObservedRuntimeShadowOnly")
+
+  test "types modules stay data-only":
+    for path in typeFiles():
+      let lines = readFile(path).splitLines()
+      for lineNo in 0 ..< lines.len:
+        let line = lines[lineNo]
+        if line.isTopLevelBehavior():
+          if not path.isAllowedTypeInterop(line):
+            checkpoint path & ":" & $(lineNo + 1) & ": " & line
+          check path.isAllowedTypeInterop(line)
 
   test "runtime init builds a valid model from config":
     let initialized = initRuntimeStateFromConfig(baseConfig())
