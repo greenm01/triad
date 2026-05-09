@@ -19,3 +19,22 @@ this file adds the operational details an agent needs to act safely.
 7. **Lean & Mean Source Files**: Keep files small and focused. If a file grows too large, split it by domain.
 8. **Manageable Submodules**: Organize code into submodules by domain (e.g., `core`, `layouts`, `config`) to maintain a clean architecture.
 9. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md` and `docs/dod-architecture.md`. These are foundational mandates. To maintain perfect consistency, you must re-read these documents upon every context compaction or session initialization.
+
+## DOD runtime direction
+
+The runtime model is the source of truth. Production code should not rebuild
+compositor-shaped object graphs or bypass the state/query layer.
+
+When changing runtime, state, or systems code:
+
+1. Prefer indexed queries and iterators over allocation-returning helpers in hot
+   production paths.
+2. Keep mutation centralized in `src/state` and `src/entities`; systems should
+   use the `src/state/engine.nim` facade instead of reaching into entity tables
+   or relationship indexes directly.
+3. Keep daemon and protocol code as thin adapters: translate compositor events
+   into model messages, and translate effects or projections back to compositor
+   actions.
+4. Treat `Model.update(msg)` as the reducer boundary. If profiling shows event
+   copying is expensive, prefer an in-place reducer design over adding side
+   mutation paths.
