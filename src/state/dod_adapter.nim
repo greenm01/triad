@@ -61,6 +61,14 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.overviewActive = source.overviewActive
   result.screenWidth = source.screenWidth
   result.screenHeight = source.screenHeight
+  result.outerGaps = source.outerGaps
+  result.innerGaps = source.innerGaps
+  result.smartGaps = source.smartGaps
+  result.overviewOuterGap = source.overview.outerGap
+  result.overviewInnerGapMultiplier = source.overview.innerGapMultiplier
+  result.scrollerFocusCenter = source.scrollerFocusCenter
+  result.scrollerPreferCenter = source.scrollerPreferCenter
+  result.centerFocusedColumn = source.centerFocusedColumn
   result.layoutCycle = source.layoutCycle
 
   for slot in source.sortedTagSlots():

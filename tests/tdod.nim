@@ -12,6 +12,8 @@ import ../src/state/dod_iterators
 import ../src/state/dod_queries
 import ../src/state/dod_snapshot
 import ../src/state/id_gen
+import ../src/systems/dod_layout
+import ../src/systems/layout_state
 import ../src/types/core
 import ../src/types/dod_model
 from ../src/types/legacy_model import nil
@@ -50,6 +52,17 @@ proc checkDodParity(source: legacy_model.Model): DodModel =
   check niriOverviewJson(dodSnapshot) == niriOverviewJson(legacySnapshot)
   check result.dodFocusHistory() == source.focusHistory
   check result.dodWorkspaceHistory() == source.workspaceHistory
+
+proc checkLayoutParity(source: legacy_model.Model) =
+  var legacyModel = source
+  var dod = source.dodFromLegacy()
+
+  check dod.validateInvariants().ok
+  check legacyModel.layoutInstructions() == dod.dodLayoutInstructions()
+
+  let legacySnapshot = shellSnapshot(legacyModel)
+  let dodSnapshot = dodShellSnapshot(dod)
+  check dodSnapshot == legacySnapshot
 
 proc baseParityModel(): legacy_model.Model =
   result = legacy_model.Model(
@@ -164,6 +177,102 @@ proc dynamicParityModel(): legacy_model.Model =
   result.outputTags[43] = 9
   result.focusHistory = @[legacy_model.WindowId(20), 90, 91]
   result.workspaceHistory = @[1'u32, 2, 9]
+
+proc tiledLayoutModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 1,
+    screenWidth: 1200,
+    screenHeight: 800,
+    outerGaps: 20,
+    innerGaps: 10
+  )
+  result.tags[1] = initTagState(1, legacy_model.MasterStack, "main")
+  result.tags[1].masterCount = 1
+  result.tags[1].masterSplitRatio = 0.6'f32
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(10)], widthProportion: 0.5))
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(20)], widthProportion: 0.5))
+  result.tags[1].focusedWindow = 10
+  result.windows[10] = legacy_model.WindowData(
+    id: 10, appId: "term", title: "term")
+  result.windows[20] = legacy_model.WindowData(
+    id: 20, appId: "web", title: "web")
+
+proc scrollerLayoutModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 1,
+    screenWidth: 1000,
+    screenHeight: 700,
+    outerGaps: 10,
+    innerGaps: 8,
+    scrollerFocusCenter: true,
+    centerFocusedColumn: "always"
+  )
+  result.tags[1] = initTagState(1, legacy_model.Scroller, "main")
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(10)], widthProportion: 0.5))
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(20)], widthProportion: 0.5))
+  result.tags[1].focusedWindow = 20
+  result.windows[10] = legacy_model.WindowData(
+    id: 10, heightProportion: 1.0)
+  result.windows[20] = legacy_model.WindowData(
+    id: 20, heightProportion: 1.0)
+
+proc floatingLayoutModel(): legacy_model.Model =
+  result = tiledLayoutModel()
+  result.windows[20].isFloating = true
+  result.windows[20].floatingGeom =
+    legacy_model.Rect(x: 100, y: 120, w: 500, h: 360)
+
+proc maximizedLayoutModel(): legacy_model.Model =
+  result = floatingLayoutModel()
+  result.tags[1].focusedWindow = 20
+  result.windows[20].isMaximized = true
+
+proc overviewLayoutModel(): legacy_model.Model =
+  result = tiledLayoutModel()
+  result.overviewActive = true
+  result.overview.outerGap = 18
+  result.overview.innerGapMultiplier = 2.0'f32
+  result.tags[2] = initTagState(2, legacy_model.Grid, "web")
+  result.tags[2].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(30)], widthProportion: 1.0))
+  result.windows[30] = legacy_model.WindowData(
+    id: 30, appId: "chat", title: "chat")
+
+proc smartGapLayoutModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 1,
+    screenWidth: 1000,
+    screenHeight: 700,
+    outerGaps: 30,
+    innerGaps: 20,
+    smartGaps: true
+  )
+  result.tags[1] = initTagState(1, legacy_model.Grid, "single")
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(10)], widthProportion: 1.0))
+  result.tags[1].focusedWindow = 10
+  result.windows[10] = legacy_model.WindowData(id: 10)
+
+proc usableOutputLayoutModel(): legacy_model.Model =
+  result = tiledLayoutModel()
+  result.screenWidth = 3000
+  result.screenHeight = 2000
+  result.outputs[42] = legacy_model.OutputData(
+    id: 42,
+    x: 0,
+    y: 0,
+    w: 2560,
+    h: 1440,
+    usableX: 10,
+    usableY: 20,
+    usableW: 1200,
+    usableH: 700,
+    hasUsable: true)
+  result.primaryOutput = 42
 
 suite "DOD state primitives":
   test "logical IDs are monotonic and reserve zero":
@@ -325,3 +434,24 @@ suite "DOD state primitives":
     check windows[1]["is_fullscreen"].getBool()
     check windows[2]["is_floating"].getBool()
     check windows[2]["is_maximized"].getBool()
+
+  test "DOD layout projection matches tiled legacy layout":
+    checkLayoutParity(tiledLayoutModel())
+
+  test "DOD layout projection matches scroller viewport updates":
+    checkLayoutParity(scrollerLayoutModel())
+
+  test "DOD layout projection matches floating windows":
+    checkLayoutParity(floatingLayoutModel())
+
+  test "DOD layout projection matches fullscreen and maximized override":
+    checkLayoutParity(maximizedLayoutModel())
+
+  test "DOD layout projection matches overview grid":
+    checkLayoutParity(overviewLayoutModel())
+
+  test "DOD layout projection matches smart gaps":
+    checkLayoutParity(smartGapLayoutModel())
+
+  test "DOD layout projection matches usable output geometry":
+    checkLayoutParity(usableOutputLayoutModel())

@@ -87,6 +87,14 @@ type
     overviewActive*: bool
     screenWidth*: int32
     screenHeight*: int32
+    outerGaps*: int32
+    innerGaps*: int32
+    smartGaps*: bool
+    overviewOuterGap*: int32
+    overviewInnerGapMultiplier*: float32
+    scrollerFocusCenter*: bool
+    scrollerPreferCenter*: bool
+    centerFocusedColumn*: string
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]
