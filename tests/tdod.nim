@@ -21,6 +21,7 @@ import ../src/state/id_gen
 import ../src/ipc/niri_compat
 import ../src/ipc/triad_native
 import ../src/systems/dod_focus
+import ../src/systems/dod_runtime_state
 import ../src/systems/dod_shadow_health
 import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
@@ -1464,6 +1465,78 @@ suite "DOD state primitives":
     check dodSnapshot.activeTag == 3
     check legacySnapshot.workspaces.len == 5
     check legacySnapshot.activeWorkspaceIdx == 3
+
+  test "DOD runtime state initializes from config":
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 21,
+        borderWidth: 3,
+        defaultColumnWidth: 0.5,
+        defaultWindowWidth: 0.6,
+        defaultWindowHeight: 0.9,
+        defaultMasterCount: 1,
+        defaultMasterRatio: 0.55))
+    config.workspaces.defaultCount = 4
+
+    let result = initRuntimeStateFromConfig(config, activeTag = 2)
+    check result.shadowChecked
+    check result.shadowReport.ok
+    check result.state.legacyModel.activeTag == 2
+    check result.state.shadowHealth.initialized
+    check result.state.shadowHealth.readHealthy
+    check readRuntimeSnapshot(result.state) ==
+      shellSnapshot(result.state.legacyModel)
+
+  test "DOD runtime state facade routes updates and projections":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth())
+
+    let updateResult = state.applyRuntimeUpdate(Msg(kind: CmdFocusNext))
+    check updateResult.shadowChecked
+    check updateResult.shadowReport.ok
+    check state.readRuntimeSnapshot() == shellSnapshot(state.legacyModel)
+
+    let layoutResult = state.applyRuntimeLayoutProjection()
+    check layoutResult.shadowChecked
+    check layoutResult.ok
+    check layoutResult.authoritativeProjection.instructions ==
+      state.legacyModel.layoutProjection().instructions
+
+  test "DOD runtime state facade routes config and live restore":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth())
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 23,
+        borderWidth: 2,
+        defaultColumnWidth: 0.5,
+        defaultWindowWidth: 0.5,
+        defaultWindowHeight: 1.0,
+        defaultMasterCount: 1,
+        defaultMasterRatio: 0.55))
+    config.workspaces.defaultCount = 3
+
+    let configResult = state.applyRuntimeConfig(config)
+    check configResult.shadowChecked
+    check configResult.shadowReport.ok
+    check state.legacyModel.outerGaps == 23
+    check state.shadowModel.outerGaps == 23
+
+    var restored = LiveRestoreState(activeTag: 2, focusedWindow: 20)
+    restored.tagByWindow[20] = 2
+    restored.focusHistory = @[20'u32]
+    restored.workspaceHistory = @[2'u32]
+    let restoreResult = state.applyRuntimeLiveRestore(restored)
+    check restoreResult.shadowChecked
+    check restoreResult.shadowReport.ok
+    check state.legacyModel.activeTag == 2
+    check state.readRuntimeSnapshot() == shellSnapshot(state.legacyModel)
 
   test "DOD live restore application sync updates legacy and shadow":
     var legacyModel = lifecycleParityModel()

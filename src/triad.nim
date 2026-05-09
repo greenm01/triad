@@ -12,14 +12,10 @@ import core/restore_state
 import core/shell_state
 import core/niri_state
 import core/render_visibility
-from types/dod_model import DodModel
+import systems/dod_runtime_state
 import systems/dod_shadow_health
 import systems/dod_shadow_runtime
-import systems/layout_projection_sync
 import systems/layout_state
-import systems/projection_read_sync
-import systems/runtime_update_sync
-import systems/state_application_sync
 import config/parser
 import config/defaults
 import config/keysyms
@@ -69,9 +65,7 @@ var
   bindingsConfigured = false
   
   # TEA State
-  currentModel: Model
-  shadowModel: DodModel
-  shadowHealth: DodShadowHealth
+  runtimeState: TriadRuntimeState
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
   desiredPlacements: Table[WindowId, Rect]
@@ -122,6 +116,9 @@ var
   pendingLiveRestore: Option[LiveRestoreState]
   liveRestoreCommitPending = false
 
+template currentModel: untyped =
+  runtimeState.legacyModel
+
 # --- Helpers ---
 
 proc get_id(p: pointer): uint32 =
@@ -138,7 +135,7 @@ proc cstringOrEmpty(value: cstring): string =
     $value
 
 proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
-  let decision = shadowHealth.applyShadowReport(report)
+  let decision = runtimeState.shadowHealth.applyShadowReport(report)
   if decision.reportOk:
     return
 
@@ -157,37 +154,28 @@ proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
       shadowMsgKind=shadowMsgKind
 
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
-  let syncResult = runtime_update_sync.syncRuntimeUpdate(
-    currentModel, shadowModel, msg, shadowHealth.shadowSyncEnabled())
+  let syncResult = runtimeState.applyRuntimeUpdate(msg)
   if syncResult.shadowChecked:
     logShadowReport(context, msg, syncResult.shadowReport)
   syncResult.authoritativeEffects
 
 proc syncRuntimeShadowOnly(context: string; msg: Msg) =
-  let syncResult = syncShadowOnlyMessage(
-    currentModel, shadowModel, msg, shadowHealth.shadowSyncEnabled())
+  let syncResult = runtimeState.applyRuntimeShadowOnly(msg)
   if syncResult.shadowChecked:
     logShadowReport(context, msg, syncResult.shadowReport)
 
-proc currentProjectionReadSource(): ProjectionReadSource =
-  projectionReadSource(shadowHealth)
-
 proc readModelSnapshot(): ShellSnapshot =
-  readProjectionSnapshot(
-    currentModel, shadowModel, currentProjectionReadSource())
+  runtimeState.readRuntimeSnapshot()
 
 proc readLiveRestoreJson(): string =
-  readProjectionLiveRestoreJson(
-    currentModel, shadowModel, currentProjectionReadSource())
+  runtimeState.readRuntimeLiveRestoreJson()
 
 proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
-  writeProjectionLiveRestoreState(
-    currentModel, shadowModel, currentProjectionReadSource())
+  runtimeState.writeRuntimeLiveRestoreState()
 
 proc syncRuntimeLayoutProjection(context: string; msg: Msg): seq[RenderInstruction] =
-  let report = syncLayoutProjection(
-    currentModel, shadowModel, shadowHealth.shadowSyncEnabled())
-  if shadowHealth.shadowSyncEnabled() and not report.ok:
+  let report = runtimeState.applyRuntimeLayoutProjection()
+  if runtimeState.shadowHealth.shadowSyncEnabled() and not report.ok:
     logShadowReport(context, msg, DodShadowReport(
       ok: false,
       errors: report.errors))
@@ -198,8 +186,7 @@ proc applyPendingLiveRestore() =
     return
 
   let state = pendingLiveRestore.get()
-  let syncResult = syncLiveRestoreApplication(
-    currentModel, shadowModel, state, shadowHealth.shadowSyncEnabled())
+  let syncResult = runtimeState.applyRuntimeLiveRestore(state)
   if syncResult.shadowChecked:
     logShadowReport("live restore", Msg(kind: WlManageStart),
       syncResult.shadowReport)
@@ -350,8 +337,7 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
     return false
 
   let previousModel = currentModel
-  let syncResult = syncConfigApplication(
-    currentModel, shadowModel, loaded.config, shadowHealth.shadowSyncEnabled())
+  let syncResult = runtimeState.applyRuntimeConfig(loaded.config)
   if syncResult.shadowChecked:
     logShadowReport("config reload", Msg(kind: CmdConfigReload),
       syncResult.shadowReport)
@@ -1855,10 +1841,8 @@ proc main() =
   # Setup and Load Config
   setupConfig()
   let initialConfig = loadConfig(configPath)
-  let initialState = syncInitialConfigApplication(initialConfig)
-  currentModel = initialState.legacyModel
-  shadowModel = initialState.shadowModel
-  shadowHealth = initDodShadowHealth()
+  let initialState = initRuntimeStateFromConfig(initialConfig)
+  runtimeState = initialState.state
   if initialState.shadowChecked:
     logShadowReport("initial config", Msg(kind: CmdConfigReload),
       initialState.shadowReport)

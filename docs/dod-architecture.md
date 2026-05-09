@@ -209,6 +209,12 @@ bridge selects `DodProjectionSource` only while the shadow is initialized and
 healthy; otherwise it reads from the legacy model. The same source selection is
 used for shell snapshots, live-restore JSON reads, and live-restore file writes.
 
+The daemon stores the live legacy model, shadow DoD model, and shadow health as
+one `TriadRuntimeState`. Runtime-state facade helpers route updates, config
+application, live restore, layout projection, and projection reads through that
+single object. This keeps the current legacy authority policy intact while
+giving the final DoD promotion one aggregate state boundary to change.
+
 ## Layout Projection
 
 Layout computation is split into pure projection and explicit writes:
