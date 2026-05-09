@@ -1491,7 +1491,7 @@ suite "DOD state primitives":
     check result.state.shadowHealth.initialized
     check result.state.shadowHealth.readHealthy
     check result.state.shadowHealth.divergenceCount == 0
-    check result.state.policy.runtimeAuthority == LegacyRuntimeAuthority
+    check result.state.policy.runtimeAuthority == DodRuntimeAuthority
     check result.state.policy.layoutAuthority == DodLayoutAuthority
     check readRuntimeSnapshot(result.state) ==
       shellSnapshot(result.state.legacyModel)
@@ -1540,15 +1540,20 @@ suite "DOD state primitives":
       policy: defaultTriadRuntimePolicy())
 
     let updateResult = state.applyObservedRuntimeUpdate(Msg(kind: CmdFocusNext))
-    check updateResult.syncResult.authority == LegacyRuntimeAuthority
+    check updateResult.syncResult.authority == DodRuntimeAuthority
     check updateResult.observation.checked
     check updateResult.observation.decision.reportOk
     check updateResult.syncResult.shadowChecked
     check updateResult.syncResult.shadowReport.ok
+    check updateResult.syncResult.authoritativeEffects.stableEffectSignatures(
+      Msg(kind: CmdFocusNext)) ==
+      updateResult.syncResult.dodEffects.stableEffectSignatures(
+        Msg(kind: CmdFocusNext))
     check state.readRuntimeSnapshot() == shellSnapshot(state.legacyModel)
 
     let shadowOnlyResult = state.applyObservedRuntimeShadowOnly(
       core_msg.Msg(kind: core_msg.CmdSpawnTerminal))
+    check shadowOnlyResult.syncResult.authority == LegacyRuntimeAuthority
     check shadowOnlyResult.observation.checked
     check shadowOnlyResult.observation.decision.reportOk
     check shadowOnlyResult.syncResult.dodEffects.len > 0
@@ -1561,6 +1566,32 @@ suite "DOD state primitives":
     check layoutResult.syncResult.ok
     check layoutResult.syncResult.authoritativeProjection.instructions ==
       layoutResult.syncResult.dodProjection.instructions
+
+  test "DOD runtime authority keeps parity-exempt messages legacy-authoritative":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
+
+    let configReload = state.applyObservedRuntimeUpdate(
+      Msg(kind: CmdConfigReload))
+    check configReload.syncResult.authority == LegacyRuntimeAuthority
+    check configReload.observation.checked
+    check configReload.observation.decision.reportOk
+    check configReload.syncResult.authoritativeEffects.stableEffectSignatures(
+      Msg(kind: CmdConfigReload)) ==
+      configReload.syncResult.legacyEffects.stableEffectSignatures(
+        Msg(kind: CmdConfigReload))
+
+    let spawnTerminal = state.applyObservedRuntimeShadowOnly(
+      Msg(kind: CmdSpawnTerminal))
+    check spawnTerminal.syncResult.authority == LegacyRuntimeAuthority
+    check spawnTerminal.observation.checked
+    check spawnTerminal.observation.decision.reportOk
+    check spawnTerminal.syncResult.authoritativeEffects.len == 0
+    check spawnTerminal.syncResult.dodEffects.len > 0
 
   test "DOD runtime state policy can select DOD authorities":
     let seed = lifecycleParityModel()
@@ -1616,17 +1647,29 @@ suite "DOD state primitives":
     var state = TriadRuntimeState(
       legacyModel: seed,
       shadowModel: seed.dodFromLegacy(),
-      shadowHealth: initDodShadowHealth())
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
     state.shadowModel.outerGaps = state.legacyModel.outerGaps + 9
 
-    let updateResult = state.applyObservedRuntimeUpdate(Msg(
+    let msg = Msg(
       kind: CmdAdjustGaps,
-      deltaG: 3))
+      deltaG: 3)
+    let updateResult = state.applyObservedRuntimeUpdate(msg)
     check updateResult.observation.checked
     check not updateResult.observation.decision.reportOk
     check updateResult.observation.decision.readsDisabled
+    check updateResult.syncResult.authority == LegacyRuntimeAuthority
+    check updateResult.syncResult.authoritativeEffects.stableEffectSignatures(msg) ==
+      updateResult.syncResult.legacyEffects.stableEffectSignatures(msg)
     check state.shadowHealth.divergenceCount == 1
     check not state.shadowHealth.readHealthy
+
+    let nextMsg = Msg(kind: CmdFocusNext)
+    let nextResult = state.applyObservedRuntimeUpdate(nextMsg)
+    check nextResult.syncResult.authority == LegacyRuntimeAuthority
+    check nextResult.syncResult.authoritativeEffects.stableEffectSignatures(
+      nextMsg) ==
+      nextResult.syncResult.legacyEffects.stableEffectSignatures(nextMsg)
 
   test "DOD runtime state facade routes config and live restore":
     let seed = lifecycleParityModel()

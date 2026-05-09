@@ -61,6 +61,15 @@ proc initRuntimeStateFromConfig*(
   result.observation = result.state.observeShadowReport(
     syncResult.shadowChecked, syncResult.shadowReport)
 
+proc effectiveRuntimeAuthority(
+    state: TriadRuntimeState; msg: Msg): RuntimeAuthority =
+  if state.policy.runtimeAuthority == DodRuntimeAuthority and
+      state.shadowHealth.shadowProjectionReadsEnabled() and
+      msg.kind.shouldCheckEffectParity():
+    DodRuntimeAuthority
+  else:
+    LegacyRuntimeAuthority
+
 proc applyRuntimeUpdate*(
     state: var TriadRuntimeState; msg: Msg): RuntimeUpdateSyncResult =
   runtime_update_sync.syncRuntimeUpdate(
@@ -68,7 +77,7 @@ proc applyRuntimeUpdate*(
     state.shadowModel,
     msg,
     state.shadowHealth.shadowSyncEnabled(),
-    state.policy.runtimeAuthority)
+    state.effectiveRuntimeAuthority(msg))
 
 proc applyRuntimeShadowOnly*(
     state: var TriadRuntimeState; msg: Msg): RuntimeUpdateSyncResult =
@@ -77,19 +86,29 @@ proc applyRuntimeShadowOnly*(
     state.shadowModel,
     msg,
     state.shadowHealth.shadowSyncEnabled(),
-    state.policy.runtimeAuthority)
+    state.effectiveRuntimeAuthority(msg))
+
+proc fallBackToLegacyEffects(result: var RuntimeUpdateSyncResult) =
+  result.authority = LegacyRuntimeAuthority
+  result.authoritativeEffects = result.legacyEffects
 
 proc applyObservedRuntimeUpdate*(
     state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
   result.syncResult = state.applyRuntimeUpdate(msg)
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
+  if result.syncResult.authority == DodRuntimeAuthority and
+      not result.observation.decision.reportOk:
+    result.syncResult.fallBackToLegacyEffects()
 
 proc applyObservedRuntimeShadowOnly*(
     state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
   result.syncResult = state.applyRuntimeShadowOnly(msg)
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
+  if result.syncResult.authority == DodRuntimeAuthority and
+      not result.observation.decision.reportOk:
+    result.syncResult.fallBackToLegacyEffects()
 
 proc effectiveLayoutAuthority(state: TriadRuntimeState): LayoutAuthority =
   if state.policy.layoutAuthority == DodLayoutAuthority and

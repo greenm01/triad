@@ -13,5 +13,5 @@ type
 
 proc defaultTriadRuntimePolicy*(): TriadRuntimePolicy =
   TriadRuntimePolicy(
-    runtimeAuthority: LegacyRuntimeAuthority,
+    runtimeAuthority: DodRuntimeAuthority,
     layoutAuthority: DodLayoutAuthority)

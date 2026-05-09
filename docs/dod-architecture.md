@@ -237,30 +237,33 @@ Layout authority is runtime data on `TriadRuntimePolicy`. The daemon initializes
 `DodLayoutAuthority` today, so `authoritativeProjection` is the DoD projection.
 If a DoD layout divergence is observed, the runtime facade disables DoD
 projection reads and returns the legacy projection for that pass and subsequent
-passes. Runtime effects remain legacy-authoritative.
+passes.
 
 ## Runtime Update Sync
 
 Runtime updates are also bridged explicitly during the shadow phase:
 
 - legacy `update` still mutates the live `Model`
-- legacy effects are the only effects executed against River and the host
+- DoD effects are executed against River and the host for parity-checked
+  messages while shadow health is good
+- legacy effects remain the same-pass and subsequent fallback after a shadow
+  divergence
 - the DoD shadow receives the same message stream through `dodUpdate`
 - shadow state, effect signatures, snapshots, histories, and layout projections
   are compared after each bridged update
-- runtime-owned messages that do not pass through legacy `update`, such as
-  terminal spawning, use a shadow-only bridge step
+- parity-exempt or runtime-owned messages, such as config reload, terminal
+  spawning, render starts, and ticks, remain legacy-authoritative for now
 
 This keeps update policy out of the daemon loop and gives the final DoD runtime
-promotion a single seam to change when DoD effects become authoritative.
+promotion one aggregate seam to change when the live model becomes DoD-native.
 
 That seam is represented by `TriadRuntimePolicy`, stored on `TriadRuntimeState`.
-The daemon initializes `LegacyRuntimeAuthority` today, so
-`authoritativeEffects` are the legacy effects and live behavior is unchanged.
-Tests can set `DodRuntimeAuthority` to prove that the runtime facade can return
-DoD effects as authoritative while still advancing legacy state for parity
-checks. Config and IPC do not expose this policy yet; it is an internal
-promotion control.
+The daemon initializes `DodRuntimeAuthority` today, but the runtime-state facade
+only exposes DoD effects while shadow health is good and the message participates
+in effect parity checks. If an observed DoD runtime divergence is reported, the
+facade returns legacy effects for that pass and all later unhealthy passes.
+Config and IPC do not expose this policy yet; it is an internal promotion
+control.
 
 ## Config Application
 
