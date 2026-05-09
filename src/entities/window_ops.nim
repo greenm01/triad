@@ -101,3 +101,125 @@ proc setWindowHeightProportion*(
   model.windows.mEntity(winId).heightProportion =
     clamp(heightProportion, 0.05'f32, 1.0'f32)
   true
+
+proc setWindowTitle*(model: var DodModel; winId: WindowId; title: string):
+    bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).title = title
+  true
+
+proc setWindowAppId*(model: var DodModel; winId: WindowId; appId: string):
+    bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).appId = appId
+  true
+
+proc setWindowIdentifier*(
+    model: var DodModel; winId: WindowId; identifier: string): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).identifier = identifier
+  true
+
+proc setWindowParent*(
+    model: var DodModel; winId: WindowId; parentExternalId: ExternalWindowId):
+    bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).parentExternalId = parentExternalId
+  true
+
+proc setWindowDimensions*(
+    model: var DodModel; winId: WindowId; actualW, actualH: int32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).actualW = max(0'i32, actualW)
+  model.windows.mEntity(winId).actualH = max(0'i32, actualH)
+  true
+
+proc setWindowDimensionsHint*(model: var DodModel; winId: WindowId;
+    minWidth, minHeight, maxWidth, maxHeight: int32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+
+  var maxW = max(0'i32, maxWidth)
+  var maxH = max(0'i32, maxHeight)
+  let minW = max(0'i32, minWidth)
+  let minH = max(0'i32, minHeight)
+  if maxW > 0 and maxW < minW:
+    maxW = minW
+  if maxH > 0 and maxH < minH:
+    maxH = minH
+
+  model.windows.mEntity(winId).minWidth = minW
+  model.windows.mEntity(winId).minHeight = minH
+  model.windows.mEntity(winId).maxWidth = maxW
+  model.windows.mEntity(winId).maxHeight = maxH
+  true
+
+proc setWindowDecorationHint*(
+    model: var DodModel; winId: WindowId; hint: uint32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).hasDecorationHint = true
+  model.windows.mEntity(winId).decorationHint = hint
+  true
+
+proc setWindowPresentationHint*(
+    model: var DodModel; winId: WindowId; hint: uint32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).hasPresentationHint = true
+  model.windows.mEntity(winId).presentationHint = hint
+  true
+
+proc setWindowFloating*(model: var DodModel; winId: WindowId;
+    floating: bool; floatingGeom = Rect()): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).isFloating = floating
+  if floating:
+    model.windows.mEntity(winId).floatingGeom = floatingGeom
+  true
+
+proc setWindowFullscreen*(model: var DodModel; winId: WindowId;
+    fullscreen: bool; outputId = NullExternalOutputId): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).isFullscreen = fullscreen
+  model.windows.mEntity(winId).fullscreenOutput =
+    if fullscreen: outputId else: NullExternalOutputId
+  true
+
+proc setWindowMaximized*(
+    model: var DodModel; winId: WindowId; maximized: bool): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).isMaximized = maximized
+  if maximized:
+    model.windows.mEntity(winId).isMinimized = false
+  true
+
+proc setWindowKeyboardShortcutsInhibit*(model: var DodModel;
+    winId: WindowId; inhibited: bool; bypass: bool): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).keyboardShortcutsInhibit = inhibited
+  model.windows.mEntity(winId).keyboardShortcutsInhibitBypass =
+    inhibited and bypass
+  true
+
+proc toggleWindowKeyboardShortcutsInhibit*(
+    model: var DodModel; winId: WindowId): bool =
+  let winOpt = model.windows.entity(winId)
+  if winOpt.isNone:
+    return false
+  if winOpt.get().keyboardShortcutsInhibit:
+    model.windows.mEntity(winId).keyboardShortcutsInhibitBypass =
+      not winOpt.get().keyboardShortcutsInhibitBypass
+  else:
+    model.windows.mEntity(winId).keyboardShortcutsInhibit = true
+    model.windows.mEntity(winId).keyboardShortcutsInhibitBypass = false
+  true

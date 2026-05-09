@@ -5,11 +5,13 @@ import dod_iterators
 import dod_queries
 import dod_invariants
 import dod_snapshot
+import ../core/defaults
 import ../entities/dod_ops
 import ../types/core
 import ../types/dod_model
 import ../types/shell_snapshot
 
+export defaults
 export dod_iterators
 export dod_queries
 export dod_invariants
@@ -19,6 +21,8 @@ export core
 export dod_model
 export shell_snapshot
 export id_gen
+
+type LegacyRect* = typeof(WindowData().floatingGeom)
 
 proc window*(model: DodModel; winId: WindowId): Option[WindowData] =
   model.windowData(winId)

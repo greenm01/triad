@@ -70,6 +70,12 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.scrollerPreferCenter = source.scrollerPreferCenter
   result.centerFocusedColumn = source.centerFocusedColumn
   result.defaultColumnWidth = source.defaultColumnWidth()
+  result.floatingXRatio = source.floating.xRatio
+  result.floatingYRatio = source.floating.yRatio
+  result.floatingWidthRatio = source.floating.widthRatio
+  result.floatingHeightRatio = source.floating.heightRatio
+  result.floatingMinWidth = source.floating.minWidth
+  result.floatingMinHeight = source.floating.minHeight
   result.layoutCycle = source.layoutCycle
 
   for slot in source.sortedTagSlots():

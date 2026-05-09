@@ -16,7 +16,9 @@ import ../src/state/dod_snapshot
 import ../src/state/id_gen
 import ../src/systems/dod_focus
 import ../src/systems/dod_layout
+import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
+import ../src/systems/dod_window_state
 import ../src/systems/dod_workspaces
 import ../src/systems/layout_state
 import ../src/types/core
@@ -84,6 +86,24 @@ proc checkFocusParity(
   check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
 
 proc checkPlacementParity(
+    source: legacy_model.Model; msg: core_msg.Msg;
+    action: proc(dod: var DodModel)) =
+  let (legacyModel, _) = legacy_update.update(source, msg)
+  var dod = source.dodFromLegacy()
+
+  action(dod)
+  dod.refreshVisibleWorkspaceSlots()
+
+  check dod.validateInvariants().ok
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  check dod.dodFocusHistory() == legacyModel.focusHistory
+  check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+
+  var legacyLayout = legacyModel
+  var dodLayout = dod
+  check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
+
+proc checkStateParity(
     source: legacy_model.Model; msg: core_msg.Msg;
     action: proc(dod: var DodModel)) =
   let (legacyModel, _) = legacy_update.update(source, msg)
@@ -409,6 +429,30 @@ proc verticalPlacementModel(): legacy_model.Model =
   result = placementParityModel()
   result.tags[1].layoutMode = legacy_model.VerticalScroller
   result.windows[10].widthProportion = 0.5'f32
+
+proc stateParityModel(): legacy_model.Model =
+  result = placementParityModel()
+  result.screenWidth = 1200
+  result.screenHeight = 800
+  result.floating.xRatio = 0.1'f32
+  result.floating.yRatio = 0.2'f32
+  result.floating.widthRatio = 0.4'f32
+  result.floating.heightRatio = 0.3'f32
+  result.floating.minWidth = 80
+  result.floating.minHeight = 90
+  result.outputs[42] = legacy_model.OutputData(
+    id: 42, name: "DP-1", x: 0, y: 0, w: 1200, h: 800)
+  result.outputs[43] = legacy_model.OutputData(
+    id: 43, name: "HDMI-A-1", x: 1200, y: 0, w: 1000, h: 700)
+  result.primaryOutput = 42
+  result.outputTags[42] = 1
+  result.outputTags[43] = 2
+  result.tags[1].focusedWindow = 10
+
+proc fullscreenOutputStateModel(): legacy_model.Model =
+  result = stateParityModel()
+  result.windows[10].isFullscreen = true
+  result.windows[10].fullscreenOutput = 43
 
 suite "DOD state primitives":
   test "logical IDs are monotonic and reserve zero":
@@ -865,4 +909,230 @@ suite "DOD state primitives":
       core_msg.Msg(kind: core_msg.CmdSwapWindowToTag, targetTagSwap: 2),
       proc(dod: var DodModel) =
         discard dod.swapFocusedWindowToSlot(2)
+    )
+
+  test "DOD output lifecycle parity matches legacy":
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlOutputDimensions,
+        outputId: 0,
+        width: -10,
+        height: 900),
+      proc(dod: var DodModel) =
+        discard dod.setOutputDimensionsForExternal(
+          NullExternalOutputId, -10, 900)
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlOutputDimensions,
+        outputId: 44,
+        width: 1600,
+        height: 900),
+      proc(dod: var DodModel) =
+        discard dod.setOutputDimensionsForExternal(
+          ExternalOutputId(44), 1600, 900)
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlOutputName,
+        nameOutputId: 42,
+        outputName: " DP-1-fixed "),
+      proc(dod: var DodModel) =
+        discard dod.setOutputNameForExternal(
+          ExternalOutputId(42), " DP-1-fixed ")
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlOutputPosition,
+        positionOutputId: 42,
+        outputX: 10,
+        outputY: 20),
+      proc(dod: var DodModel) =
+        discard dod.setOutputPositionForExternal(
+          ExternalOutputId(42), 10, 20)
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlOutputUsable,
+        usableOutputId: 42,
+        usableX: 4,
+        usableY: 8,
+        usableW: -1,
+        usableH: 700),
+      proc(dod: var DodModel) =
+        discard dod.setOutputUsableForExternal(
+          ExternalOutputId(42), 4, 8, -1, 700)
+    )
+    checkStateParity(
+      fullscreenOutputStateModel(),
+      core_msg.Msg(kind: core_msg.WlOutputRemoved, removedOutputId: 43),
+      proc(dod: var DodModel) =
+        discard dod.removeOutputForExternal(ExternalOutputId(43))
+    )
+
+  test "DOD window metadata parity matches legacy":
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDimensions,
+        dimensionsWindowId: 10,
+        actualWidth: -100,
+        actualHeight: 540),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowDimensionsForExternal(
+          ExternalWindowId(10), -100, 540)
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDecorationHint,
+        decorationWindowId: 10,
+        decorationHint: 1),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowDecorationHintForExternal(
+          ExternalWindowId(10), 1)
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowPresentationHint,
+        presentationWindowId: 10,
+        presentationHint: 2),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowPresentationHintForExternal(
+          ExternalWindowId(10), 2)
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowParent,
+        childWindowId: 10,
+        parentWindowId: 20),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowParentForExternal(
+          ExternalWindowId(10), ExternalWindowId(20))
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowIdentifier,
+        identifierWindowId: 10,
+        identifier: "kitty-window-10"),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowIdentifierForExternal(
+          ExternalWindowId(10), "kitty-window-10")
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowAppId,
+        appIdWindowId: 10,
+        updatedAppId: "org.wezfurlong.wezterm"),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowAppIdForExternal(
+          ExternalWindowId(10), "org.wezfurlong.wezterm")
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowTitle,
+        titleWindowId: 10,
+        updatedTitle: "shell"),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowTitleForExternal(
+          ExternalWindowId(10), "shell")
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDimensionsHint,
+        hintWindowId: 10,
+        minWidth: 200,
+        minHeight: 100,
+        maxWidth: 50,
+        maxHeight: 80),
+      proc(dod: var DodModel) =
+        discard dod.updateWindowDimensionsHintForExternal(
+          ExternalWindowId(10), 200, 100, 50, 80)
+    )
+
+  test "DOD window state request parity matches legacy":
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowFullscreenRequested,
+        fullscreenRequestId: 10,
+        fullscreenOutputId: 43),
+      proc(dod: var DodModel) =
+        discard dod.requestFullscreenForExternal(
+          ExternalWindowId(10), ExternalOutputId(43))
+    )
+    checkStateParity(
+      fullscreenOutputStateModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowExitFullscreenRequested,
+        exitFullscreenRequestId: 10),
+      proc(dod: var DodModel) =
+        discard dod.exitFullscreenForExternal(ExternalWindowId(10))
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowMaximizeRequested,
+        maximizeRequestId: 10),
+      proc(dod: var DodModel) =
+        discard dod.requestMaximizeForExternal(ExternalWindowId(10))
+    )
+    checkStateParity(
+      maximizedLayoutModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowUnmaximizeRequested,
+        unmaximizeRequestId: 20),
+      proc(dod: var DodModel) =
+        discard dod.requestUnmaximizeForExternal(ExternalWindowId(20))
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowMinimizeRequested,
+        minimizeRequestId: 10),
+      proc(dod: var DodModel) =
+        discard dod.requestMinimizeForExternal(ExternalWindowId(10))
+    )
+
+  test "DOD focused window toggles match legacy":
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdToggleFloating),
+      proc(dod: var DodModel) =
+        discard dod.toggleFloatingFocused()
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdToggleFullscreen),
+      proc(dod: var DodModel) =
+        discard dod.toggleFullscreenFocused()
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdToggleMaximized),
+      proc(dod: var DodModel) =
+        discard dod.toggleMaximizedFocused()
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMinimize),
+      proc(dod: var DodModel) =
+        discard dod.minimizeFocused()
+    )
+    checkStateParity(
+      stateParityModel(),
+      core_msg.Msg(kind: core_msg.CmdToggleKeyboardShortcutsInhibit),
+      proc(dod: var DodModel) =
+        discard dod.toggleKeyboardShortcutsInhibitFocused()
     )

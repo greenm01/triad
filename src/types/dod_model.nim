@@ -96,6 +96,12 @@ type
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
     defaultColumnWidth*: float32
+    floatingXRatio*: float32
+    floatingYRatio*: float32
+    floatingWidthRatio*: float32
+    floatingHeightRatio*: float32
+    floatingMinWidth*: int32
+    floatingMinHeight*: int32
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]
