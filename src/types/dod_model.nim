@@ -1,6 +1,6 @@
 import tables
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
-  ExternalWindowId, IdCounters, OutputId, TagId, TagMask, WindowId
+  ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
 from legacy_model import CursorConfig, KeyBindingConfig, LayoutMode,
   PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
   QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig
@@ -57,6 +57,11 @@ type
     x*, y*, w*, h*: int32
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
+
+  GroupData* = object
+    id*: GroupId
+    windows*: seq[WindowId]
+    activeWindow*: WindowId
 
   WindowPlacement* = object
     tagId*: TagId
@@ -135,6 +140,7 @@ type
     tags*: EntityManager[TagId, TagData]
     columns*: EntityManager[ColumnId, ColumnData]
     outputs*: EntityManager[OutputId, OutputData]
+    groups*: EntityManager[GroupId, GroupData]
 
     windowTags*: Table[WindowId, TagMask]
     externalWindowIds*: Table[ExternalWindowId, WindowId]
@@ -145,6 +151,7 @@ type
     windowsByColumn*: Table[ColumnId, seq[WindowId]]
     placementByTagWindow*: Table[(TagId, WindowId), WindowPlacement]
     outputTags*: Table[OutputId, TagId]
+    groupByWindow*: Table[WindowId, GroupId]
     scratchpadWindows*: seq[WindowId]
     namedScratchpads*: Table[string, WindowId]
     visibleScratchpad*: WindowId

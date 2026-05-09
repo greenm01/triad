@@ -27,6 +27,19 @@ proc columnData*(model: DodModel; columnId: ColumnId): Option[ColumnData] =
 proc outputData*(model: DodModel; outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
 
+proc groupData*(model: DodModel; groupId: GroupId): Option[GroupData] =
+  model.groups.entity(groupId)
+
+proc groupForWindow*(model: DodModel; winId: WindowId): GroupId =
+  model.groupByWindow.getOrDefault(winId, NullGroupId)
+
+proc windowHiddenByGroup*(model: DodModel; winId: WindowId): bool =
+  let groupId = model.groupForWindow(winId)
+  if groupId == NullGroupId:
+    return false
+  let groupOpt = model.groupData(groupId)
+  groupOpt.isSome and groupOpt.get().activeWindow != winId
+
 proc outputCount*(model: DodModel): int =
   for _ in model.outputsWithId():
     inc result

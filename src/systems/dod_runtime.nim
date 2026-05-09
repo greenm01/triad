@@ -151,8 +151,7 @@ proc groupFocusedWindow*(model: var DodModel): bool =
   if focused == NullWindowId or
       model.placementForWindowOnTag(model.activeTag, focused).isNone:
     return false
-  inc model.nextGroupId
-  true
+  model.addGroup(@[focused], focused) != NullGroupId
 
 proc tickAnimations*(model: var DodModel): bool =
   if not model.enableAnimations:

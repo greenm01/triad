@@ -186,3 +186,6 @@ proc columnsCount*(model: DodModel): int =
 
 proc outputsCount*(model: DodModel): int =
   model.outputs.len
+
+proc groupsCount*(model: DodModel): int =
+  model.groups.len

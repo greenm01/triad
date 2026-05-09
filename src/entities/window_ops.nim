@@ -1,4 +1,5 @@
 import options, sequtils, tables
+import group_ops
 import placement_ops
 import ../state/dod_iterators
 import ../state/entity_manager
@@ -87,6 +88,7 @@ proc destroyWindow*(model: var DodModel; winId: WindowId): bool =
       tagIds.add(tagId)
   for tagId in tagIds:
     discard model.removeWindowFromTag(tagId, winId)
+  discard model.removeWindowFromGroups(winId)
 
   let externalId = winOpt.get().externalId
   if externalId != NullExternalWindowId:

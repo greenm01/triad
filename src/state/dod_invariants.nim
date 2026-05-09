@@ -42,6 +42,34 @@ proc validateInvariants*(model: DodModel): DodInvariantReport =
     if not model.windowTags.hasKey(win.id):
       result.addError("window tag mask is missing: " & $win.id)
 
+  for groupId, group in model.groupsWithId():
+    if group.windows.len == 0:
+      result.addError("group has no members: " & $groupId)
+    if group.id != groupId:
+      result.addError("group id index mismatch: " & $groupId)
+    if group.activeWindow == NullWindowId or
+        group.windows.find(group.activeWindow) == -1:
+      result.addError("group active window is not a member: " & $groupId)
+
+    var seen = initHashSet[WindowId]()
+    for winId in group.windows:
+      if seen.contains(winId):
+        result.addError("duplicate window in group: " & $winId)
+      seen.incl(winId)
+      if model.windows.entity(winId).isNone:
+        result.addError("group references missing window: " & $winId)
+      if model.groupByWindow.getOrDefault(winId, NullGroupId) != groupId:
+        result.addError("group window index mismatch: " & $winId)
+
+  for winId, groupId in model.groupByWindow.pairs:
+    let groupOpt = model.groups.entity(groupId)
+    if groupOpt.isNone:
+      result.addError("groupByWindow references missing group: " & $winId)
+    elif groupOpt.get().windows.find(winId) == -1:
+      result.addError("groupByWindow missing group member: " & $winId)
+    if model.windows.entity(winId).isNone:
+      result.addError("groupByWindow references missing window: " & $winId)
+
   for winId in model.scratchpadWindows:
     if model.windows.entity(winId).isNone:
       result.addError("scratchpad references missing window: " & $winId)

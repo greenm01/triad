@@ -94,7 +94,8 @@ proc projectedTag(model: DodModel; tagId: dod_core.TagId):
   for _, column in model.columnsOnTagWithId(tagId):
     var windows: seq[legacy.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(column.id):
-      if not win.isFloating and not win.isMinimized:
+      if not win.isFloating and not win.isMinimized and
+          not model.windowHiddenByGroup(winId):
         windows.add(model.externalWindowId(winId))
     if windows.len > 0:
       result.tag.columns.add(legacy.Column(

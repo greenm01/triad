@@ -32,6 +32,11 @@ proc sortedOutputIds(model: legacy.Model): seq[uint32] =
     result.add(outputId)
   result.sort()
 
+proc sortedGroupIds(model: legacy.Model): seq[uint32] =
+  for groupId in model.groups.keys:
+    result.add(groupId)
+  result.sort()
+
 proc dodRestoredWindow*(source: legacy.RestoredWindowState):
     RestoredWindowData =
   RestoredWindowData(
@@ -320,6 +325,22 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
     edges: source.pointerOp.edges
   )
 
+  for groupId in source.sortedGroupIds():
+    let group = source.groups[groupId]
+    var members: seq[core.WindowId]
+    for externalWinId in group.windows:
+      let winId =
+        result.windowForExternal(ExternalWindowId(uint32(externalWinId)))
+      if winId != NullWindowId:
+        members.add(winId)
+    let active =
+      result.windowForExternal(ExternalWindowId(uint32(group.activeWindow)))
+    discard result.addGroupWithId(core.GroupId(groupId), members, active)
+
+  result.nextGroupId = max(result.nextGroupId, source.nextGroupId)
+  result.counters.nextGroupId =
+    max(result.counters.nextGroupId, result.nextGroupId)
+
 proc legacyWindowId(model: DodModel; winId: core.WindowId): legacy.WindowId =
   if winId == core.NullWindowId:
     return 0'u32
@@ -379,7 +400,6 @@ proc legacyRestoredTag(source: RestoredTagData):
 proc legacyViewFromDod*(source: DodModel;
     fallback: legacy.Model): legacy.Model =
   result = legacy.Model(
-    groups: fallback.groups,
     workspaces: legacy.WorkspaceConfig(
       defaultCount: source.defaultWorkspaceCount),
     tagRules: @[],
@@ -512,6 +532,20 @@ proc legacyViewFromDod*(source: DodModel;
       floatingGeom: win.floatingGeom,
       keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
       keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass)
+
+  for groupId, group in source.groupsWithId():
+    var legacyGroup = legacy.GroupState(
+      id: uint32(groupId),
+      activeWindow: source.legacyWindowId(group.activeWindow))
+    for winId in group.windows:
+      let externalId = source.legacyWindowId(winId)
+      if externalId != 0:
+        legacyGroup.windows.add(externalId)
+    if legacyGroup.windows.len > 0:
+      if legacyGroup.activeWindow == 0 or
+          legacyGroup.windows.find(legacyGroup.activeWindow) == -1:
+        legacyGroup.activeWindow = legacyGroup.windows[0]
+      result.groups[uint32(groupId)] = legacyGroup
 
   for slot in source.sortedSlots():
     let tagId = source.tagForSlot(slot)

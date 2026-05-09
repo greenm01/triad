@@ -90,6 +90,7 @@ proc checkRuntimeParity(source: legacy_model.Model; dod: DodModel) =
   check dod.windowMenuCommand == source.windowMenu.command
   check dod.allowExitSession == source.allowExitSession
   check dod.nextGroupId == source.nextGroupId
+  check legacyViewFromDod(dod, legacy_model.Model()).groups == source.groups
   check dod.pointerOp.kind == source.pointerOp.kind
   check dod.dodPointerWindow() == source.pointerOp.windowId
   check dod.pointerOp.initialGeom == source.pointerOp.initialGeom
@@ -651,6 +652,14 @@ proc scrollerLayoutModel(): legacy_model.Model =
   result.windows[20] = legacy_model.WindowData(
     id: 20, heightProportion: 1.0)
 
+proc groupedLayoutModel(): legacy_model.Model =
+  result = tiledLayoutModel()
+  result.groups[1] = legacy_model.GroupState(
+    id: 1,
+    windows: @[legacy_model.WindowId(10), legacy_model.WindowId(20)],
+    activeWindow: 10)
+  result.nextGroupId = 1
+
 proc floatingLayoutModel(): legacy_model.Model =
   result = tiledLayoutModel()
   result.windows[20].isFloating = true
@@ -1170,6 +1179,34 @@ suite "DOD state primitives":
     check not report.ok
     check report.errors.anyIt(it.message.contains("missing window"))
 
+  test "DOD group ops create dedupe reassign and prune":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let first = model.addWindow(ExternalWindowId(10))
+    let second = model.addWindow(ExternalWindowId(20))
+    let third = model.addWindow(ExternalWindowId(30))
+
+    let firstGroup = model.addGroup(@[first, first, second], second)
+    check firstGroup != NullGroupId
+    check model.groupData(firstGroup).get().windows == @[first, second]
+    check model.groupData(firstGroup).get().activeWindow == second
+    check model.groupForWindow(first) == firstGroup
+    check model.groupForWindow(second) == firstGroup
+    check model.validateInvariants().ok
+
+    let secondGroup = model.addGroup(@[first], third)
+    check secondGroup != NullGroupId
+    check model.groupData(secondGroup).get().windows == @[first]
+    check model.groupData(secondGroup).get().activeWindow == first
+    check model.groupData(firstGroup).get().windows == @[second]
+    check model.groupForWindow(first) == secondGroup
+    check model.groupForWindow(second) == firstGroup
+    check model.validateInvariants().ok
+
+    check model.destroyWindow(first)
+    check model.groupForWindow(first) == NullGroupId
+    check model.groupData(secondGroup).isNone
+    check model.validateInvariants().ok
+
   test "legacy adapter preserves shell snapshots and existing IPC ids":
     let dod = checkDodParity(baseParityModel())
     check uint32(dod.windows.entity(WindowId(1)).get().externalId) == 10
@@ -1187,7 +1224,10 @@ suite "DOD state primitives":
       windows: @[legacy_model.WindowId(10), legacy_model.WindowId(11)],
       activeWindow: 10)
     let dod = source.dodFromLegacy()
-    let view = legacyViewFromDod(dod, source)
+    check dod.nextGroupId == 7
+    var fallback = source
+    fallback.groups.clear()
+    let view = legacyViewFromDod(dod, fallback)
 
     check shellSnapshot(view) == dodShellSnapshot(dod)
     checkRuntimeParity(view, dod)
@@ -1203,6 +1243,8 @@ suite "DOD state primitives":
     check view.screenLock.command == source.screenLock.command
     check view.windowMenu.command == source.windowMenu.command
     check view.allowExitSession == source.allowExitSession
+    check not readFile("src/state/dod_adapter.nim").contains(
+      "groups: fallback.groups")
 
   test "legacy adapter preserves dynamic workspace and output parity":
     let dod = checkDodParity(dynamicParityModel())
@@ -1301,6 +1343,9 @@ suite "DOD state primitives":
 
   test "DOD layout projection matches scroller viewport updates":
     checkLayoutParity(scrollerLayoutModel())
+
+  test "DOD layout projection hides inactive grouped tiled windows":
+    checkLayoutParity(groupedLayoutModel())
 
   test "DOD explicit layout projection is pure and matches legacy":
     checkLayoutProjectionParity(tiledLayoutModel())
@@ -3000,6 +3045,8 @@ suite "DOD state primitives":
       stateParityModel(),
       core_msg.Msg(kind: core_msg.CmdGroupWindows))
     check result.effects.containsEffect(EffManageDirty)
+    check result.dod.groups.len == 1
+    check result.dod.groupData(GroupId(1)).isSome
 
     result = checkReducerParity(
       effectRuntimeModel(),

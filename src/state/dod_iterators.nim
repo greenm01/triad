@@ -22,6 +22,11 @@ iterator outputsWithId*(
   for output in model.outputs.entities:
     yield (output.id, output)
 
+iterator groupsWithId*(
+    model: DodModel): tuple[id: GroupId, group: GroupData] =
+  for group in model.groups.entities:
+    yield (group.id, group)
+
 iterator columnsWithId*(
     model: DodModel): tuple[id: ColumnId, column: ColumnData] =
   for column in model.columns.entities:

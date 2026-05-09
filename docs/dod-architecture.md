@@ -221,8 +221,13 @@ observations for warning emission, but no longer mutates shadow health directly.
 Daemon read-only host decisions use `readRuntimeModelView`, which returns a
 legacy-shaped view backed by DoD while projection reads are healthy and the real
 legacy model after divergence. The adapter keeps existing host helpers usable
-while DoD becomes the read source. Legacy-only group data is preserved from the
-fallback model until group entities are fully modeled in DoD.
+while DoD becomes the read source.
+
+Window groups are modeled as DoD entities. `GroupData` stores the dense member
+list and active window, while `groupByWindow` keeps one-window-to-one-group
+membership lookups cheap. The legacy adapter projects group IDs and external
+window IDs at the boundary; daemon views must not preserve groups from fallback
+state.
 
 ## Layout Projection
 
