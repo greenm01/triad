@@ -1,12 +1,78 @@
 import unittest
+import ../src/config/dod_apply
 import ../src/config/parser
 import ../src/config/defaults
 import ../src/config/keysyms
 import ../src/config/reload_policy
 import ../src/core/model
 import ../src/core/model_utils
+import ../src/core/shell_state
+import ../src/state/dod_adapter
+import ../src/state/dod_invariants
+import ../src/state/dod_snapshot
+import ../src/systems/dod_layout
+import ../src/systems/layout_state
+from ../src/types/dod_model import DodModel
 import ../src/utils/terminal
 import os, strutils, tables, sequtils
+
+proc checkDodConfigRuntimeParity(legacyModel: Model; dod: DodModel) =
+  check dod.outerGaps == legacyModel.outerGaps
+  check dod.innerGaps == legacyModel.innerGaps
+  check dod.borderWidth == legacyModel.borderWidth
+  check dod.focusedBorderColor == legacyModel.focusedBorderColor
+  check dod.unfocusedBorderColor == legacyModel.unfocusedBorderColor
+  check dod.scrollerFocusCenter == legacyModel.scrollerFocusCenter
+  check dod.scrollerPreferCenter == legacyModel.scrollerPreferCenter
+  check dod.centerFocusedColumn == legacyModel.centerFocusedColumn
+  check dod.defaultColumnWidth == legacyModel.defaultColumnWidth
+  check dod.defaultWindowWidth == legacyModel.defaultWindowWidth
+  check dod.defaultWindowHeight == legacyModel.defaultWindowHeight
+  check dod.defaultMasterCount == legacyModel.defaultMasterCount
+  check dod.defaultMasterRatio == legacyModel.defaultMasterRatio
+  check dod.enableAnimations == legacyModel.enableAnimations
+  check dod.animationSpeed == legacyModel.animationSpeed
+  check dod.smartGaps == legacyModel.smartGaps
+  check dod.defaultWorkspaceCount == legacyModel.workspaces.defaultCount
+  check dod.startupCommands == legacyModel.startupCommands
+  check dod.quickshell == legacyModel.quickshell
+  check dod.terminal == legacyModel.terminal
+  check dod.screenshot == legacyModel.screenshot
+  check dod.overviewOuterGap == legacyModel.overview.outerGap
+  check dod.overviewInnerGapMultiplier ==
+    legacyModel.overview.innerGapMultiplier
+  check dod.floatingXRatio == legacyModel.floating.xRatio
+  check dod.floatingYRatio == legacyModel.floating.yRatio
+  check dod.floatingWidthRatio == legacyModel.floating.widthRatio
+  check dod.floatingHeightRatio == legacyModel.floating.heightRatio
+  check dod.floatingMinWidth == legacyModel.floating.minWidth
+  check dod.floatingMinHeight == legacyModel.floating.minHeight
+  check dod.screenLockCommand == legacyModel.screenLock.command
+  check dod.windowMenuCommand == legacyModel.windowMenu.command
+  check dod.scratchpadWidthRatio == legacyModel.scratchpadWidthRatio
+  check dod.scratchpadHeightRatio == legacyModel.scratchpadHeightRatio
+  check dod.cursor == legacyModel.cursor
+  check dod.presentationMode == legacyModel.presentationMode
+  check dod.allowExitSession == legacyModel.allowExitSession
+  check dod.protocolSurfaces == legacyModel.protocolSurfaces
+  check dod.keyBindings == legacyModel.keyBindings
+  check dod.pointerBindings == legacyModel.pointerBindings
+  check dod.layoutCycle == legacyModel.layoutCycle
+
+proc checkDodConfigParity(source: Model; config: Config) =
+  var legacyModel = source
+  legacyModel.applyConfig(config)
+
+  var dod = source.dodFromLegacy()
+  dod.applyConfig(config)
+
+  check dod.validateInvariants().ok
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  checkDodConfigRuntimeParity(legacyModel, dod)
+
+  var legacyLayout = legacyModel
+  var dodLayout = dod
+  check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
 
 suite "KDL Configuration Parser":
   test "Applying config preserves live workspace and window state":
@@ -52,6 +118,92 @@ suite "KDL Configuration Parser":
     check model.windows[7].isMaximized
     check model.windows[7].fullscreenOutput == 42
     check model.windows[7].floatingGeom == Rect(x: 11, y: 22, w: 333, h: 444)
+
+  test "DOD config application matches legacy and preserves live state":
+    var source = Model(activeTag: 1, screenWidth: 1600, screenHeight: 900)
+    source.tags[1] = initTagState(1, Scroller, "work")
+    source.tags[1].focusedWindow = 7
+    source.tags[1].columns.add(Column(
+      windows: @[WindowId(7)],
+      widthProportion: 0.85))
+    source.focusHistory = @[WindowId(7)]
+    source.workspaceHistory = @[1'u32]
+    source.windows[7] = WindowData(
+      id: 7,
+      appId: "qemu-system-x86_64",
+      title: "VM",
+      widthProportion: 0.75,
+      heightProportion: 0.6,
+      isFloating: true,
+      isFullscreen: true,
+      isMaximized: true,
+      fullscreenOutput: 42,
+      floatingGeom: Rect(x: 11, y: 22, w: 333, h: 444))
+
+    let config = Config(
+      layout: LayoutConfig(
+        gaps: 24,
+        centerFocusedColumn: "on-overflow",
+        defaultColumnWidth: 0.66,
+        defaultWindowWidth: 0.77,
+        defaultWindowHeight: 0.88,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.6,
+        borderWidth: 4,
+        focusedBorderColor: 0x112233ff'u32,
+        unfocusedBorderColor: 0x445566ff'u32,
+        scrollerFocusCenter: true,
+        scrollerPreferCenter: true,
+        enableAnimations: false,
+        animationSpeed: 0.5,
+        smartGaps: true,
+        layoutCycle: @[Scroller, Deck, VerticalGrid]),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      tagRules: @[
+        TagRule(tagId: 1, name: "term", defaultLayout: Scroller),
+        TagRule(tagId: 2, name: "web", defaultLayout: Grid),
+        TagRule(tagId: 4, name: "chat", defaultLayout: Deck)
+      ],
+      windowRules: @[
+        WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true)
+      ],
+      startupCommands: @[@["notify-send", "triad"]],
+      quickshell: QuickshellConfig(
+        enabled: true,
+        command: "",
+        theme: "noctalia",
+        args: @["--reload"]),
+      terminal: TerminalConfig(command: @["kitty"]),
+      screenshot: ScreenshotConfig(
+        directory: "",
+        filenamePrefix: "",
+        captureCommand: "",
+        regionSelectorCommand: "",
+        showPointer: true),
+      overview: OverviewConfig(outerGap: -1, innerGapMultiplier: 1.5),
+      floating: FloatingConfig(
+        xRatio: 0.2,
+        yRatio: 0.3,
+        widthRatio: 0.4,
+        heightRatio: 0.5,
+        minWidth: 80,
+        minHeight: 90),
+      screenLock: ScreenLockConfig(command: @["swaylock"]),
+      windowMenu: WindowMenuConfig(command: @["bemenu"]),
+      scratchpad: ScratchpadConfig(widthRatio: 0.7, heightRatio: 0.6),
+      cursor: CursorConfig(theme: "Bibata", size: 32),
+      presentationMode: PresentationAsync,
+      allowExitSession: true,
+      protocolSurfaces: ProtocolSurfacesConfig(enabled: true),
+      keyBindings: @[
+        KeyBindingConfig(key: "r", modifiers: 12'u32,
+          command: "triad-reload", bypassShortcutsInhibit: true)
+      ],
+      pointerBindings: @[
+        PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32, op: OpMove)
+      ])
+
+    checkDodConfigParity(source, config)
 
   test "Default reload binding requests full Triad reload":
     let reloads = defaultKeyBindings().filterIt(it.command == "triad-reload")
@@ -233,7 +385,7 @@ workspaces {
 
   test "Applying config treats tag rules as lazy workspace templates":
     var model = Model(activeTag: 1)
-    model.applyConfig(Config(
+    let config = Config(
       workspaces: WorkspaceConfig(defaultCount: 3),
       layout: LayoutConfig(
         borderWidth: DefaultBorderWidth,
@@ -244,7 +396,8 @@ workspaces {
         TagRule(tagId: 2, name: "web", defaultLayout: Grid),
         TagRule(tagId: 4, name: "chat", defaultLayout: Deck),
         TagRule(tagId: 9, name: "spare", defaultLayout: Monocle)
-      ]))
+      ])
+    model.applyConfig(config)
 
     check model.tags.hasKey(1)
     check model.tags.hasKey(2)
@@ -253,6 +406,7 @@ workspaces {
     check not model.tags.hasKey(9)
     check model.tags[1].name == "term"
     check model.tags[2].layoutMode == Grid
+    checkDodConfigParity(Model(activeTag: 1), config)
 
   test "Parser correctly reads window rules":
     let path = getCurrentDir() / "test_window.kdl"

@@ -194,3 +194,19 @@ Rules:
 ## Snapshots and IPC
 
 Shell integrations must serialize snapshots, not internal storage.
+
+## Config Application
+
+`DodModel` has a native config application path. It uses the same normalized
+runtime defaults as the legacy `Model` path, but writes into flattened DoD data:
+
+- config-owned runtime fields live directly on `DodModel`
+- default workspaces are materialized through workspace/entity operations
+- non-default tag rules remain lazy unless the tag already exists
+- existing windows re-evaluate keyboard-shortcuts inhibition after window rules
+  change
+- live entities, placements, focus history, workspace history, restore buffers,
+  and scratchpad state must be preserved
+
+This bridge lets config reload parity be proven before promoting `DodModel` to
+the canonical runtime state.

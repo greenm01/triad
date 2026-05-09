@@ -64,8 +64,20 @@ proc checkRuntimeParity(source: legacy_model.Model; dod: DodModel) =
   check dod.innerGaps == source.innerGaps
   check dod.previousOuterGaps == source.previousOuterGaps
   check dod.previousInnerGaps == source.previousInnerGaps
+  check dod.borderWidth == source.borderWidth
+  check dod.focusedBorderColor == source.focusedBorderColor
+  check dod.unfocusedBorderColor == source.unfocusedBorderColor
   check dod.enableAnimations == source.enableAnimations
   check dod.animationSpeed == source.animationSpeed
+  check dod.startupCommands == source.startupCommands
+  check dod.quickshell == source.quickshell
+  check dod.terminal == source.terminal
+  check dod.screenshot == source.screenshot
+  check dod.cursor == source.cursor
+  check dod.presentationMode == source.presentationMode
+  check dod.protocolSurfaces == source.protocolSurfaces
+  check dod.keyBindings == source.keyBindings
+  check dod.pointerBindings == source.pointerBindings
   check dod.screenLockCommand == source.screenLock.command
   check dod.windowMenuCommand == source.windowMenu.command
   check dod.allowExitSession == source.allowExitSession

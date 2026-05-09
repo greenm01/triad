@@ -1,7 +1,9 @@
 import tables
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, IdCounters, OutputId, TagId, TagMask, WindowId
-from legacy_model import LayoutMode, PointerOpKind, Rect
+from legacy_model import CursorConfig, KeyBindingConfig, LayoutMode,
+  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
+  QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig
 
 type
   WindowData* = object
@@ -164,6 +166,9 @@ type
     previousOuterGaps*: int32
     previousInnerGaps*: int32
     smartGaps*: bool
+    borderWidth*: int32
+    focusedBorderColor*: uint32
+    unfocusedBorderColor*: uint32
     overviewOuterGap*: int32
     overviewInnerGapMultiplier*: float32
     scrollerFocusCenter*: bool
@@ -184,6 +189,15 @@ type
     floatingMinHeight*: int32
     scratchpadWidthRatio*: float32
     scratchpadHeightRatio*: float32
+    startupCommands*: seq[seq[string]]
+    quickshell*: QuickshellConfig
+    terminal*: TerminalConfig
+    screenshot*: ScreenshotConfig
+    cursor*: CursorConfig
+    presentationMode*: PresentationMode
+    protocolSurfaces*: ProtocolSurfacesConfig
+    keyBindings*: seq[KeyBindingConfig]
+    pointerBindings*: seq[PointerBindingConfig]
     pointerOp*: DodPointerOpData
     screenLockCommand*: seq[string]
     windowMenuCommand*: seq[string]

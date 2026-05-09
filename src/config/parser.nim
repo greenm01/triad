@@ -52,6 +52,27 @@ proc clamp32(value, lo, hi: int32): int32 =
 proc clampF32(value, lo, hi: float32): float32 =
   min(hi, max(lo, value))
 
+proc configClamp32*(value, lo, hi: int32): int32 =
+  clamp32(value, lo, hi)
+
+proc configClampF32*(value, lo, hi: float32): float32 =
+  clampF32(value, lo, hi)
+
+proc runtimeWorkspaceCount*(count: uint32): uint32 =
+  normalizeWorkspaceCount(count)
+
+proc runtimeCenterFocusedColumn*(value: string): string =
+  if value in ["never", "always", "on-overflow"]:
+    value
+  else:
+    "never"
+
+proc runtimeLayoutCycle*(cycle: seq[LayoutMode]): seq[LayoutMode] =
+  if cycle.len > 0:
+    cycle
+  else:
+    @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+
 proc normalizeWorkspaceCountFromConfig(count: int): uint32 =
   if count <= 0:
     DefaultWorkspaceCount
@@ -524,24 +545,24 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
   result = ConfigLoadResult(ok: true, config: loadConfig(path))
 
 proc applyConfig*(model: var Model, config: Config) =
-  model.outerGaps = clamp32(config.layout.gaps, 0, 512)
-  model.borderWidth = clamp32(config.layout.borderWidth, 0, 64)
+  model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
+  model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
   model.focusedBorderColor = config.layout.focusedBorderColor
   model.unfocusedBorderColor = config.layout.unfocusedBorderColor
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.innerGaps = model.outerGaps div 2
-  model.centerFocusedColumn = if config.layout.centerFocusedColumn in ["never", "always", "on-overflow"]: config.layout.centerFocusedColumn else: "never"
-  model.defaultColumnWidth = clampF32(config.layout.defaultColumnWidth, 0.05, 1.0)
-  model.defaultWindowWidth = clampF32(config.layout.defaultWindowWidth, 0.05, 1.0)
-  model.defaultWindowHeight = clampF32(config.layout.defaultWindowHeight, 0.05, 1.0)
+  model.centerFocusedColumn = runtimeCenterFocusedColumn(config.layout.centerFocusedColumn)
+  model.defaultColumnWidth = configClampF32(config.layout.defaultColumnWidth, 0.05, 1.0)
+  model.defaultWindowWidth = configClampF32(config.layout.defaultWindowWidth, 0.05, 1.0)
+  model.defaultWindowHeight = configClampF32(config.layout.defaultWindowHeight, 0.05, 1.0)
   model.defaultMasterCount = max(1, config.layout.defaultMasterCount)
-  model.defaultMasterRatio = clampF32(config.layout.defaultMasterRatio, 0.05, 0.95)
+  model.defaultMasterRatio = configClampF32(config.layout.defaultMasterRatio, 0.05, 0.95)
   model.enableAnimations = config.layout.enableAnimations
-  model.animationSpeed = clampF32(config.layout.animationSpeed, 0.0, 1.0)
+  model.animationSpeed = configClampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.smartGaps = config.layout.smartGaps
   model.workspaces = config.workspaces
-  model.workspaces.defaultCount = normalizeWorkspaceCount(model.workspaces.defaultCount)
+  model.workspaces.defaultCount = runtimeWorkspaceCount(model.workspaces.defaultCount)
   model.tagRules = config.tagRules
   model.windowRules = config.windowRules
   for _, win in model.windows.mpairs:
@@ -575,9 +596,9 @@ proc applyConfig*(model: var Model, config: Config) =
   model.protocolSurfaces = config.protocolSurfaces
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
-  model.layoutCycle = if config.layout.layoutCycle.len > 0: config.layout.layoutCycle else: @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
-  model.scratchpadWidthRatio = clampF32(config.scratchpad.widthRatio, 0.1, 1.0)
-  model.scratchpadHeightRatio = clampF32(config.scratchpad.heightRatio, 0.1, 1.0)
+  model.layoutCycle = runtimeLayoutCycle(config.layout.layoutCycle)
+  model.scratchpadWidthRatio = configClampF32(config.scratchpad.widthRatio, 0.1, 1.0)
+  model.scratchpadHeightRatio = configClampF32(config.scratchpad.heightRatio, 0.1, 1.0)
   
   model.ensureDefaultWorkspaces()
 
