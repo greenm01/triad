@@ -69,6 +69,7 @@ lessons and keeps its own center.
 | Method | Core Idea | Advantage |
 | :--- | :--- | :--- |
 | [Triad][river] | River client with a DOD model. | Isolation, dynamic tags, indexed state. |
+| [Mango][mango] | dwl-based compositor with tags. | Rich per-tag layout vocabulary. |
 | [niri][niri] | Scrollable tiling on an infinite strip. | New windows do not resize old ones. |
 | [Hyprland][hyprland] | Dynamic tiling, IPC, and plugins. | Custom, polished desktop. |
 | [Sway/i3][sway] | Tree-shaped containers and i3-style control. | Predictable keyboard workflow. |
@@ -76,6 +77,7 @@ lessons and keeps its own center.
 | [bspwm][bspwm] | Binary-space-partitioned window tree. | Precise split control over a socket. |
 
 [river]: https://www.mankier.com/1/river
+[mango]: https://mangowm.github.io/docs/
 [niri]: https://github.com/niri-wm/niri
 [hyprland]: https://hypr.land/
 [sway]: https://swaywm.org/
