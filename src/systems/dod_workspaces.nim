@@ -77,14 +77,14 @@ proc visibleWorkspaceSlots(model: DodModel): seq[uint32] =
     result.sort()
 
 proc refreshVisibleWorkspaceSlots*(model: var DodModel) =
-  model.visibleSlots = model.visibleWorkspaceSlots()
+  discard model.replaceVisibleWorkspaceSlots(model.visibleWorkspaceSlots())
 
 proc ensureActiveWorkspace*(model: var DodModel): TagId =
   let activeOpt = model.tagData(model.activeTag)
   if activeOpt.isSome:
     let slot = activeOpt.get().slot
     if model.activeSlot != slot:
-      model.activeSlot = slot
+      discard model.setActiveWorkspace(model.activeTag)
       model.refreshVisibleWorkspaceSlots()
     return model.activeTag
 
@@ -93,7 +93,7 @@ proc ensureActiveWorkspace*(model: var DodModel): TagId =
 
   result = model.ensureWorkspaceSlot(model.activeSlot)
   if result != NullTagId:
-    model.activeTag = result
+    discard model.setActiveWorkspace(result)
     model.refreshVisibleWorkspaceSlots()
 
 proc workspaceSlotForIndex*(model: DodModel; index: uint32): uint32 =

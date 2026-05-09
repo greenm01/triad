@@ -61,8 +61,7 @@ proc focusWindow*(model: var DodModel; winId: WindowId): bool =
     return false
 
   discard model.setWindowMinimized(winId, false)
-  model.activeTag = tagId
-  model.activeSlot = tagOpt.get().slot
+  discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()
   discard model.recordWorkspace(tagId)
   discard model.setTagFocus(tagId, winId)
@@ -73,8 +72,7 @@ proc focusWorkspaceSlot*(model: var DodModel; slot: uint32): bool =
   let tagId = model.ensureWorkspaceSlot(slot)
   if tagId == NullTagId:
     return false
-  model.activeTag = tagId
-  model.activeSlot = slot
+  discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()
   discard model.recordWorkspace(tagId)
   let focused = model.recomputeVisibleFocus(tagId)

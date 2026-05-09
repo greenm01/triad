@@ -214,8 +214,7 @@ proc applyLiveRestore*(model: var DodModel; state: DodLiveRestoreState) =
         targetSlot = fallback
     let tagId = model.ensureWorkspaceSlot(targetSlot)
     if tagId != NullTagId:
-      model.activeTag = tagId
-      model.activeSlot = targetSlot
+      discard model.setActiveWorkspace(tagId)
       if model.primaryOutput != NullOutputId:
         discard model.setOutputTag(model.primaryOutput, tagId)
   model.resolveRestoreHistories()

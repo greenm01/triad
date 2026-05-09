@@ -1017,6 +1017,11 @@ suite "DOD state primitives":
       ".focusHistory.keepIf",
       ".workspaceHistory.keepIf"
     ]
+    let forbiddenActiveWorkspaceMutations = [
+      ".activeTag = ",
+      ".activeSlot = ",
+      ".visibleSlots = "
+    ]
 
     check checkedFiles.len > 0
     for path in checkedFiles:
@@ -1026,6 +1031,8 @@ suite "DOD state primitives":
       for pattern in forbiddenStorage:
         check not source.contains(pattern)
       for pattern in forbiddenHistoryMutations:
+        check not source.contains(pattern)
+      for pattern in forbiddenActiveWorkspaceMutations:
         check not source.contains(pattern)
 
   test "daemon does not apply DOD shadow reports directly":
@@ -1239,6 +1246,47 @@ suite "DOD state primitives":
     check model.visibleScratchpad == win
     check not model.isScratchpadVisible
     check model.validateInvariants().ok
+
+  test "DOD active workspace ops set active tag and slot":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let tag = model.addTag(2, "two")
+
+    check model.setActiveWorkspace(tag)
+
+    check model.activeTag == tag
+    check model.activeSlot == 2
+
+  test "DOD active workspace ops reject missing tags":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let tag = model.addTag(1, "one")
+    discard model.setActiveWorkspace(tag)
+
+    check not model.setActiveWorkspace(NullTagId)
+    check not model.setActiveWorkspace(TagId(999))
+
+    check model.activeTag == tag
+    check model.activeSlot == 1
+
+  test "DOD active workspace ops clear only matching active tag":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    let first = model.addTag(1, "one")
+    let second = model.addTag(2, "two")
+    discard model.setActiveWorkspace(first)
+
+    check not model.clearActiveWorkspaceIfTag(second)
+    check model.activeTag == first
+    check model.activeSlot == 1
+
+    check model.clearActiveWorkspaceIfTag(first)
+    check model.activeTag == NullTagId
+    check model.activeSlot == 0
+
+  test "DOD active workspace ops replace visible slots":
+    var model = DodModel(defaultWorkspaceCount: 3)
+
+    check model.replaceVisibleWorkspaceSlots(@[1'u32, 2, 4])
+
+    check model.visibleSlots == @[1'u32, 2, 4]
 
   test "DOD history ops record focus MRU":
     var model = DodModel(defaultWorkspaceCount: 3)
