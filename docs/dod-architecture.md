@@ -275,6 +275,13 @@ shadow report path. Shell restarts, binding rebuilds, manage requests, and
 broadcasts stay in the daemon loop because they are side effects of accepting a
 config reload, not state transformation rules.
 
+Initial daemon startup uses the same bridge boundary. The startup helper builds
+the live legacy model from a fresh seed, builds the DoD shadow from an
+unconfigured seed, applies config through both native paths, and reports parity
+before projection reads are trusted. This keeps startup from treating a
+configured legacy-to-DoD adapter conversion as proof that DoD config application
+works.
+
 Live-restore application uses the same bridge style. The legacy model remains
 authoritative today, while the DoD shadow applies `DodLiveRestoreState` derived
 from the same restore payload and reports parity before manage/render resumes.

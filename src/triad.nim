@@ -12,7 +12,6 @@ import core/restore_state
 import core/shell_state
 import core/niri_state
 import core/render_visibility
-import state/dod_adapter
 from types/dod_model import DodModel
 import systems/dod_shadow_runtime
 import systems/layout_projection_sync
@@ -1863,19 +1862,17 @@ proc main() =
 
   info "Triad connected to River", outputs=outputPointers.len, seats=seatPointers.len
 
-  # Initialize Model
-  currentModel = Model(
-    activeTag: 1
-  )
-
   # Setup and Load Config
   setupConfig()
   let initialConfig = loadConfig(configPath)
-  currentModel.applyConfig(initialConfig)
-  shadowModel = currentModel.dodFromLegacy()
+  let initialState = syncInitialConfigApplication(initialConfig)
+  currentModel = initialState.legacyModel
+  shadowModel = initialState.shadowModel
   shadowInitialized = true
   shadowReadHealthy = true
-  checkShadow("initial config", Msg(kind: CmdConfigReload))
+  if initialState.shadowChecked:
+    logShadowReport("initial config", Msg(kind: CmdConfigReload),
+      initialState.shadowReport)
   info "Initial config loaded", path=configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()

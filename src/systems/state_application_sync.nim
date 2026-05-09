@@ -9,12 +9,30 @@ import dod_shadow_runtime
 import dod_window_lifecycle
 
 type
+  InitialStateSyncResult* = object
+    legacyModel*: Model
+    shadowModel*: DodModel
+    shadowChecked*: bool
+    shadowReport*: DodShadowReport
+
   StateApplicationSyncResult* = object
     shadowChecked*: bool
     shadowReport*: DodShadowReport
 
 proc okShadowReport(): DodShadowReport =
   DodShadowReport(ok: true)
+
+proc syncInitialConfigApplication*(
+    config: Config; activeTag: uint32 = 1): InitialStateSyncResult =
+  result.legacyModel = Model(activeTag: activeTag)
+  result.legacyModel.applyConfig(config)
+
+  var shadowSeed = Model(activeTag: activeTag)
+  result.shadowModel = shadowSeed.dodFromLegacy()
+  result.shadowModel.applyConfig(config)
+  result.shadowChecked = true
+  result.shadowReport = compareShadowState(
+    result.legacyModel, result.shadowModel, Msg(kind: CmdConfigReload), @[], @[])
 
 proc syncConfigApplication*(
     legacyModel: var Model; shadow: var DodModel; config: Config;

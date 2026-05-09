@@ -1409,6 +1409,61 @@ suite "DOD state primitives":
     check report.shadowReport.errors.contains("focus history mismatch")
     check legacyModel.outerGaps == 35
 
+  test "DOD initial config sync builds matching startup state":
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 29,
+        borderWidth: 4,
+        focusedBorderColor: 0x112233ff'u32,
+        unfocusedBorderColor: 0x445566ff'u32,
+        defaultColumnWidth: 0.55,
+        defaultWindowWidth: 0.65,
+        defaultWindowHeight: 0.75,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.6,
+        scrollerFocusCenter: true,
+        scrollerPreferCenter: true,
+        enableAnimations: false,
+        animationSpeed: 0.25))
+    config.workspaces.defaultCount = 4
+    config.terminal.command = @["alacritty"]
+
+    let report = syncInitialConfigApplication(config)
+    check report.shadowChecked
+    check report.shadowReport.ok
+    check report.legacyModel.outerGaps == 29
+    check report.shadowModel.outerGaps == 29
+    check report.legacyModel.terminal.command == @["alacritty"]
+    check report.shadowModel.terminal.command == @["alacritty"]
+    check shellSnapshot(report.legacyModel) == dodShellSnapshot(report.shadowModel)
+    check liveRestoreJson(report.legacyModel) ==
+      dodLiveRestoreJson(report.shadowModel)
+
+  test "DOD initial config sync preserves startup active tag":
+    var config = config_parser.Config(
+      layout: config_parser.LayoutConfig(
+        gaps: 17,
+        borderWidth: 2,
+        defaultColumnWidth: 0.5,
+        defaultWindowWidth: 0.5,
+        defaultWindowHeight: 1.0,
+        defaultMasterCount: 1,
+        defaultMasterRatio: 0.55))
+    config.workspaces.defaultCount = 5
+
+    let report = syncInitialConfigApplication(config, activeTag = 3)
+    let legacySnapshot = shellSnapshot(report.legacyModel)
+    let dodSnapshot = dodShellSnapshot(report.shadowModel)
+
+    check report.shadowChecked
+    check report.shadowReport.ok
+    check report.legacyModel.activeTag == 3
+    check legacySnapshot == dodSnapshot
+    check legacySnapshot.activeTag == 3
+    check dodSnapshot.activeTag == 3
+    check legacySnapshot.workspaces.len == 5
+    check legacySnapshot.activeWorkspaceIdx == 3
+
   test "DOD live restore application sync updates legacy and shadow":
     var legacyModel = lifecycleParityModel()
     var dod = legacyModel.dodFromLegacy()
