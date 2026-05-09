@@ -12,8 +12,12 @@ import core/restore_state
 import core/shell_state
 import core/niri_state
 import core/render_visibility
+import config/dod_apply
 import state/dod_adapter
 import state/dod_restore_state
+from types/dod_model import DodModel
+import systems/dod_shadow_runtime
+from systems/dod_window_lifecycle import applyLiveRestore
 import systems/layout_state
 import config/parser
 import config/defaults
@@ -65,6 +69,9 @@ var
   
   # TEA State
   currentModel: Model
+  shadowModel: DodModel
+  shadowInitialized = false
+  shadowDivergenceCount = 0
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
   desiredPlacements: Table[WindowId, Rect]
@@ -130,12 +137,43 @@ proc cstringOrEmpty(value: cstring): string =
   else:
     $value
 
+proc logShadowReport(context: string; msg: Msg; report: DodShadowReport) =
+  if report.ok:
+    return
+
+  inc shadowDivergenceCount
+  if shadowDivergenceCount <= 10 or shadowDivergenceCount mod 100 == 0:
+    let shadowMsgKind = $msg.kind
+    let shadowErrors = report.errors.join("; ")
+    warn "DOD shadow runtime divergence",
+      shadowContext=context,
+      shadowMsgKind=shadowMsgKind,
+      shadowDivergences=shadowDivergenceCount,
+      shadowErrors=shadowErrors
+
+proc checkShadow(context: string; msg: Msg; effects: seq[Effect] = @[]) =
+  if not shadowInitialized:
+    return
+
+  let report = compareShadowState(currentModel, shadowModel, msg, effects, @[])
+  logShadowReport(context, msg, report)
+
+proc advanceShadow(context: string; msg: Msg; effects: seq[Effect] = @[]) =
+  if not shadowInitialized:
+    return
+
+  let report = shadowModel.advanceShadow(currentModel, msg, effects)
+  logShadowReport(context, msg, report)
+
 proc applyPendingLiveRestore() =
   if pendingLiveRestore.isNone:
     return
 
   let state = pendingLiveRestore.get()
   currentModel.applyLiveRestore(state)
+  if shadowInitialized:
+    shadowModel.applyLiveRestore(state.dodFromLiveRestore())
+    checkShadow("live restore", Msg(kind: WlManageStart))
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
@@ -284,6 +322,9 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
 
   let previousModel = currentModel
   currentModel.applyConfig(loaded.config)
+  if shadowInitialized:
+    shadowModel.applyConfig(loaded.config)
+    checkShadow("config reload", Msg(kind: CmdConfigReload))
   quickshellSpawnPending = false
 
   if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
@@ -1675,6 +1716,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     if msg.kind == CmdSpawnTerminal:
       spawnTerminal(currentModel)
+      advanceShadow("message", msg)
       continue
 
     if msg.kind == CmdConfigReload:
@@ -1685,6 +1727,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
     let previousShortcutsInhibited = currentModel.keyboardShortcutsInhibited()
     let (nextModel, effects) = update(currentModel, msg)
     currentModel = nextModel
+    advanceShadow("message", msg, effects)
     if previousOverview != currentModel.overviewActive or
         previousShortcutsInhibited != currentModel.keyboardShortcutsInhibited():
       destroyBindings()
@@ -1790,6 +1833,9 @@ proc main() =
   setupConfig()
   let initialConfig = loadConfig(configPath)
   currentModel.applyConfig(initialConfig)
+  shadowModel = currentModel.dodFromLegacy()
+  shadowInitialized = true
+  checkShadow("initial config", Msg(kind: CmdConfigReload))
   info "Initial config loaded", path=configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()

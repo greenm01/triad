@@ -210,3 +210,18 @@ runtime defaults as the legacy `Model` path, but writes into flattened DoD data:
 
 This bridge lets config reload parity be proven before promoting `DodModel` to
 the canonical runtime state.
+
+## Shadow Runtime
+
+Before `DodModel` becomes authoritative, Triad runs a diagnostic DoD shadow
+model beside the legacy runtime:
+
+- legacy `Model` remains the only source of live River effects
+- the shadow receives the same config, live-restore state, and message stream
+- shadow effects are compared for stable signatures but never executed
+- shell snapshots, focus history, workspace history, layout instructions, and
+  DoD invariants are checked after shadow steps
+- divergences are logged and throttled, never fatal to the live session
+
+This phase is intentionally observational. It proves the reducer and runtime
+state boundaries under a live session before the final runtime promotion.

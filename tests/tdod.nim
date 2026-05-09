@@ -24,6 +24,7 @@ import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
 import ../src/systems/dod_placement
 import ../src/systems/dod_scratchpad
+import ../src/systems/dod_shadow_runtime as shadow_runtime
 import ../src/systems/dod_update
 import ../src/systems/dod_window_lifecycle
 import ../src/systems/dod_window_state
@@ -2369,3 +2370,67 @@ suite "DOD state primitives":
           title: "terminal-a"),
         core_msg.Msg(kind: core_msg.CmdFocusLast)
       ])
+
+  test "DOD shadow runtime helper reports clean lifecycle trace":
+    let reports = shadow_runtime.checkShadowTrace(
+      lifecycleParityModel(),
+      @[
+        core_msg.Msg(kind: core_msg.WlManageStart),
+        core_msg.Msg(
+          kind: core_msg.WlWindowCreated,
+          windowId: 30,
+          appId: "kitty",
+          title: "shell"),
+        core_msg.Msg(kind: core_msg.WlFocusChanged, newFocusedId: 30),
+        core_msg.Msg(kind: core_msg.CmdToggleMaximized),
+        core_msg.Msg(kind: core_msg.WlWindowDestroyed, destroyedId: 30)
+      ])
+    check reports.allIt(it.ok)
+
+  test "DOD shadow runtime helper handles live restore before windows":
+    var restored = LiveRestoreState(activeTag: 1, focusedWindow: 10)
+    restored.tags[1] = legacy_model.RestoredTagState(
+      tagId: 1,
+      layoutMode: legacy_model.Scroller,
+      focusedWindow: 10,
+      masterCount: 1,
+      masterSplitRatio: 0.55,
+      columns: @[
+        legacy_model.RestoredColumnState(
+          windows: @[legacy_model.WindowId(10)],
+          widthProportion: 0.5)
+      ])
+    restored.windows[10] = legacy_model.RestoredWindowState(
+      tagId: 1,
+      appId: "kitty",
+      title: "restored",
+      widthProportion: 0.5,
+      heightProportion: 1.0)
+
+    var legacyState = legacy_model.Model(activeTag: 1, screenWidth: 1200,
+      screenHeight: 800)
+    legacyState.applyLiveRestore(restored)
+    var shadow = legacy_model.Model(activeTag: 1, screenWidth: 1200,
+      screenHeight: 800).dodFromLegacy()
+    shadow.applyLiveRestore(restored.dodFromLiveRestore())
+
+    let report = shadow_runtime.compareShadowState(
+      legacyState,
+      shadow,
+      core_msg.Msg(kind: core_msg.WlManageStart),
+      @[],
+      @[])
+    check report.ok
+
+  test "DOD shadow runtime skips effect parity for runtime-owned messages":
+    let model = lifecycleParityModel()
+    var shadow = model.dodFromLegacy()
+    let report = shadow_runtime.compareShadowState(
+      model,
+      shadow,
+      core_msg.Msg(kind: core_msg.CmdSpawnTerminal),
+      @[Effect(kind: EffManageDirty)],
+      @[])
+
+    check report.ok
+    check not report.effectParityChecked
