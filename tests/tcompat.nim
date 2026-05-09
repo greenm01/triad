@@ -3,6 +3,7 @@ import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/app_identity
+import ../src/core/shell_state
 import ../src/ipc/commands
 import ../src/ipc/niri_cli
 import ../src/ipc/niri_compat
@@ -32,6 +33,12 @@ proc modelForShell(): Model =
   result.tags[1].focusedWindow = 10
   result.tags[2] = initTagState(2, Grid, "web")
   result.windows[10] = WindowData(id: 10, appId: "Alacritty", title: "Terminal")
+
+proc handleNiriRequest(line: string; model: Model): NiriIpcResult =
+  niri_compat.handleNiriRequest(line, shellSnapshot(model))
+
+proc handleTriadRequest(line: string; model: Model): TriadIpcResult =
+  triad_native.handleTriadRequest(line, shellSnapshot(model))
 
 suite "Shell compatibility contracts":
   setup:

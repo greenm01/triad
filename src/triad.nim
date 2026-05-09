@@ -9,6 +9,7 @@ import core/msg
 import core/update
 import core/model_utils
 import core/restore_state
+import core/shell_state
 import core/niri_state
 import core/render_visibility
 import systems/layout_state
@@ -1817,18 +1818,24 @@ proc main() =
     {.cast(gcsafe).}:
       msgQueue.add(msg)
 
-  proc snapshotModel(): Model {.gcsafe.} =
+  proc snapshotModel(): ShellSnapshot {.gcsafe.} =
     {.cast(gcsafe).}:
-      currentModel
+      shellSnapshot(currentModel)
+
+  proc snapshotLiveRestoreJson(): string {.gcsafe.} =
+    {.cast(gcsafe).}:
+      liveRestoreJson(currentModel)
 
   let triadSocketPath = getTriadSocketPath()
   info "Starting Triad IPC server", path=triadSocketPath
-  asyncCheck startIpcServer(triadSocketPath, queueMsg, snapshotModel)
+  asyncCheck startIpcServer(
+    triadSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
   let niriSocketPath = chooseNiriCompatSocketPath(triadSocketPath)
   if niriSocketPath.len > 0 and niriSocketPath != triadSocketPath:
     info "Starting Niri-compatible IPC server", path=niriSocketPath
-    asyncCheck startIpcServer(niriSocketPath, queueMsg, snapshotModel)
+    asyncCheck startIpcServer(
+      niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()

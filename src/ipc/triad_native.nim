@@ -1,8 +1,7 @@
 import json, options, strutils
-import ../core/model
-import ../core/model_utils
 import ../core/msg
 import ../core/triad_state
+import ../types/shell_snapshot
 
 type
   TriadIpcResult* = object
@@ -62,7 +61,13 @@ proc hasUnsupportedEvent(node: JsonNode): bool =
       return true
   false
 
-proc targetTagFromPayload(payload: JsonNode; model: Model): tuple[ok: bool, tag: uint32, error: string] =
+proc tagForWorkspaceIndex(snapshot: ShellSnapshot; workspaceIdx: uint32): uint32 =
+  for workspace in snapshot.workspaces:
+    if workspace.workspaceIdx == workspaceIdx:
+      return workspace.tagId
+  0
+
+proc targetTagFromPayload(payload: JsonNode; snapshot: ShellSnapshot): tuple[ok: bool, tag: uint32, error: string] =
   if payload.kind != JObject or not payload.hasKey("target"):
     return (true, 0'u32, "")
   let target = payload["target"]
@@ -75,14 +80,14 @@ proc targetTagFromPayload(payload: JsonNode; model: Model): tuple[ok: bool, tag:
 
   let idx = uintFromField(target, "workspace_idx")
   if idx.isSome:
-    let mapped = model.compactWorkspaceIndexToTag(idx.get())
+    let mapped = snapshot.tagForWorkspaceIndex(idx.get())
     if mapped != 0:
       return (true, mapped, "")
     return (false, 0'u32, "unknown workspace_idx: " & $idx.get())
 
   (false, 0'u32, "target must contain tag or workspace_idx")
 
-proc handleTriadRequest*(line: string; model: Model): TriadIpcResult =
+proc handleTriadRequest*(line: string; snapshot: ShellSnapshot): TriadIpcResult =
   result.handled = false
   let stripped = line.strip()
   if stripped.len == 0 or stripped[0] != '{':
@@ -114,14 +119,14 @@ proc handleTriadRequest*(line: string; model: Model): TriadIpcResult =
     result.reply = okReply(%*{
       "version": TriadIpcVersion,
       "type": "state",
-      "state": triadStateJson(model)
+      "state": triadStateJson(snapshot)
     })
 
   of "layout-state":
     result.reply = okReply(%*{
       "version": TriadIpcVersion,
       "type": "layout-state",
-      "state": triadLayoutStateJson(model)
+      "state": triadLayoutStateJson(snapshot)
     })
 
   of "set-layout":
@@ -131,7 +136,7 @@ proc handleTriadRequest*(line: string; model: Model): TriadIpcResult =
       result.reply = errReply("unknown layout: " & layoutId)
       return
 
-    let target = targetTagFromPayload(payload, model)
+    let target = targetTagFromPayload(payload, snapshot)
     if not target.ok:
       result.reply = errReply(target.error)
       return
@@ -151,9 +156,9 @@ proc handleTriadRequest*(line: string; model: Model): TriadIpcResult =
     result.subscribeState = payload.hasEvent("state")
     result.reply = ackReply()
     if result.subscribeLayout:
-      result.initialEvents.add(triadLayoutStateChangedEvent(model))
+      result.initialEvents.add(triadLayoutStateChangedEvent(snapshot))
     if result.subscribeState:
-      result.initialEvents.add(triadStateChangedEvent(model))
+      result.initialEvents.add(triadStateChangedEvent(snapshot))
 
   else:
     result.reply = errReply("unsupported triad request: " & request)

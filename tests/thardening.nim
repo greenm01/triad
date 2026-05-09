@@ -5,6 +5,7 @@ import ../src/core/defaults
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/restore_state
+import ../src/core/shell_state
 import ../src/core/update
 import ../src/layouts/scroller
 import ../src/layouts/tiling
@@ -16,6 +17,9 @@ import ../src/utils/session_env
 proc baseModel(): Model =
   result = Model(activeTag: 1, screenWidth: 1920, screenHeight: 1080, outerGaps: 10, innerGaps: 5)
   result.tags[1] = initTagState(1)
+
+proc baseSnapshot(): ShellSnapshot {.gcsafe.} =
+  shellSnapshot(baseModel())
 
 proc waitForIpcReply(path, payload: string): string =
   var lastError = ""
@@ -301,11 +305,11 @@ suite "Crash hardening":
       {.cast(gcsafe).}:
         messages.add(msg)
 
-    proc getModel(): Model {.gcsafe.} =
+    proc getSnapshot(): ShellSnapshot {.gcsafe.} =
       {.cast(gcsafe).}:
-        model
+        shellSnapshot(model)
 
-    asyncCheck startIpcServer(path, onMsg, getModel)
+    asyncCheck startIpcServer(path, onMsg, getSnapshot)
 
     let reply = parseJson(waitForIpcReply(path, "\"Outputs\""))
     check reply["Ok"].hasKey("Outputs")
@@ -329,12 +333,12 @@ suite "Crash hardening":
     proc onMsg(msg: Msg) {.gcsafe.} =
       discard msg
 
-    proc getModel(): Model {.gcsafe.} =
+    proc getSnapshot(): ShellSnapshot {.gcsafe.} =
       {.cast(gcsafe).}:
-        model
+        shellSnapshot(model)
 
     subscribers.setLen(0)
-    asyncCheck startIpcServer(path, onMsg, getModel)
+    asyncCheck startIpcServer(path, onMsg, getSnapshot)
     discard waitForIpcReply(path, "\"Outputs\"")
 
     let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
@@ -364,12 +368,12 @@ suite "Crash hardening":
     proc onMsg(msg: Msg) {.gcsafe.} =
       discard msg
 
-    proc getModel(): Model {.gcsafe.} =
+    proc getSnapshot(): ShellSnapshot {.gcsafe.} =
       {.cast(gcsafe).}:
-        model
+        shellSnapshot(model)
 
     triadSubscribers.setLen(0)
-    asyncCheck startIpcServer(path, onMsg, getModel)
+    asyncCheck startIpcServer(path, onMsg, getSnapshot)
     discard waitForIpcReply(path, "\"Outputs\"")
 
     let stateClient = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
@@ -411,7 +415,7 @@ suite "Crash hardening":
     let activeServer = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
     activeServer.bindUnix(activePath)
     activeServer.listen()
-    waitFor startIpcServer(activePath, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    waitFor startIpcServer(activePath, proc(msg: Msg) {.gcsafe.} = discard, baseSnapshot)
 
     let activeClient = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
     waitFor activeClient.connectUnix(activePath)
@@ -424,7 +428,7 @@ suite "Crash hardening":
     createDir(fileDir)
     let filePath = fileDir / "triad.sock"
     writeFile(filePath, "not a socket")
-    waitFor startIpcServer(filePath, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    waitFor startIpcServer(filePath, proc(msg: Msg) {.gcsafe.} = discard, baseSnapshot)
     check fileExists(filePath)
     removeFile(filePath)
     removeDir(fileDir)
@@ -439,7 +443,7 @@ suite "Crash hardening":
       staleServer.listen()
       staleServer.close()
 
-    asyncCheck startIpcServer(stalePath, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    asyncCheck startIpcServer(stalePath, proc(msg: Msg) {.gcsafe.} = discard, baseSnapshot)
     discard waitForIpcReply(stalePath, "\"Outputs\"")
 
     let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
@@ -455,7 +459,7 @@ suite "Crash hardening":
       subscribers.add(newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP))
 
     let path = getTempDir() / ("triad-ipc-" & $getCurrentProcessId() & "-cap.sock")
-    asyncCheck startIpcServer(path, proc(msg: Msg) {.gcsafe.} = discard, baseModel)
+    asyncCheck startIpcServer(path, proc(msg: Msg) {.gcsafe.} = discard, baseSnapshot)
     let response = waitForIpcReply(path, "\"EventStream\"")
     check parseJson(response)["Err"].getStr() == "too many event-stream subscribers"
 

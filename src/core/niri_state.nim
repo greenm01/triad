@@ -185,8 +185,7 @@ proc niriOverviewJson*(snapshot: ShellSnapshot): JsonNode =
 proc niriOverviewJson*(model: Model): JsonNode =
   niriOverviewJson(shellSnapshot(model))
 
-proc initialNiriEvents*(model: Model): seq[string] =
-  let snapshot = shellSnapshot(model)
+proc initialNiriEvents*(snapshot: ShellSnapshot): seq[string] =
   @[
     $(%*{"WorkspacesChanged": {"workspaces": niriWorkspacesJson(snapshot)}}),
     $(%*{"WindowsChanged": {"windows": niriWindowsJson(snapshot)}}),
@@ -195,3 +194,6 @@ proc initialNiriEvents*(model: Model): seq[string] =
     $(%*{"KeyboardLayoutsChanged": {"keyboard_layouts": niriKeyboardLayoutsJson()}}),
     $(%*{"ConfigLoaded": {"failed": false}})
   ]
+
+proc initialNiriEvents*(model: Model): seq[string] =
+  initialNiriEvents(shellSnapshot(model))

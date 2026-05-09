@@ -1,7 +1,7 @@
 import asyncnet, asyncdispatch, os, nativesockets, chronicles, options, strutils
 import posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
-import ../core/msg, ../core/model
-import ../core/restore_state
+import ../core/msg
+import ../types/shell_snapshot
 import commands, niri_compat, triad_native
 
 type
@@ -108,7 +108,11 @@ proc canSubscribeTriad(): bool =
   pruneTriadSubscribers()
   triadSubscribers.len < MaxIpcSubscribers
 
-proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: proc(): Model {.gcsafe.} = nil) {.async.} =
+proc startIpcServer*(
+    path: string;
+    onMsg: proc(msg: Msg) {.gcsafe.};
+    getSnapshot: proc(): ShellSnapshot {.gcsafe.} = nil;
+    getLiveRestoreJson: proc(): string {.gcsafe.} = nil) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     if not await prepareUnixSocketPath(path):
@@ -148,12 +152,16 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: p
           let line = await recvLineLimited(client)
           if line == "": break
 
-          if getModel != nil:
+          if getSnapshot != nil:
             if line.strip() == "dump-live-restore-state":
-              await client.send(liveRestoreJson(getModel()) & "\L")
+              if getLiveRestoreJson != nil:
+                await client.send(getLiveRestoreJson() & "\L")
+              else:
+                await client.send("""{"error":"live restore unavailable"}""" & "\L")
               break
 
-            let triad = handleTriadRequest(line, getModel())
+            let snapshot = getSnapshot()
+            let triad = handleTriadRequest(line, snapshot)
             if triad.handled:
               if (triad.subscribeLayout or triad.subscribeState) and not canSubscribeTriad():
                 await client.send("""{"ok":false,"error":"too many event-stream subscribers"}""" & "\L")
@@ -173,7 +181,7 @@ proc startIpcServer*(path: string, onMsg: proc(msg: Msg) {.gcsafe.}, getModel: p
                 keepOpen = true
               break
 
-            let niri = handleNiriRequest(line, getModel())
+            let niri = handleNiriRequest(line, snapshot)
             if niri.handled:
               if niri.subscribe and not canSubscribe():
                 await client.send("""{"Err":"too many event-stream subscribers"}""" & "\L")

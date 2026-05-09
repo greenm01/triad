@@ -16,6 +16,8 @@ import ../src/state/dod_iterators
 import ../src/state/dod_queries
 import ../src/state/dod_snapshot
 import ../src/state/id_gen
+import ../src/ipc/niri_compat
+import ../src/ipc/triad_native
 import ../src/systems/dod_focus
 import ../src/systems/dod_layout
 import ../src/systems/dod_outputs
@@ -302,6 +304,27 @@ proc checkShadowTraceAfterRestore(
 
     checkShadowStateParity(legacyModel, dod)
     checkEffectParity(msg, legacyEffects, dodEffects)
+
+proc checkNiriIpcParity(source: legacy_model.Model; line: string) =
+  let legacy = handleNiriRequest(line, shellSnapshot(source))
+  let dod = handleNiriRequest(line, dodShellSnapshot(source.dodFromLegacy()))
+
+  check dod.handled == legacy.handled
+  check dod.subscribe == legacy.subscribe
+  check dod.reply == legacy.reply
+  check dod.initialEvents == legacy.initialEvents
+  check dod.messages.mapIt($it) == legacy.messages.mapIt($it)
+
+proc checkTriadIpcParity(source: legacy_model.Model; line: string) =
+  let legacy = handleTriadRequest(line, shellSnapshot(source))
+  let dod = handleTriadRequest(line, dodShellSnapshot(source.dodFromLegacy()))
+
+  check dod.handled == legacy.handled
+  check dod.subscribeLayout == legacy.subscribeLayout
+  check dod.subscribeState == legacy.subscribeState
+  check dod.reply == legacy.reply
+  check dod.initialEvents == legacy.initialEvents
+  check dod.messages.mapIt($it) == legacy.messages.mapIt($it)
 
 proc checkRestoredStateParity(
     legacyModel: legacy_model.Model; dod: var DodModel) =
@@ -957,6 +980,42 @@ suite "DOD state primitives":
     check windows[1]["is_fullscreen"].getBool()
     check windows[2]["is_floating"].getBool()
     check windows[2]["is_maximized"].getBool()
+
+  test "DOD snapshot drives Niri IPC parity":
+    let source = dynamicParityModel()
+    checkNiriIpcParity(source, "\"Outputs\"")
+    checkNiriIpcParity(source, "\"Workspaces\"")
+    checkNiriIpcParity(source, "\"Windows\"")
+    checkNiriIpcParity(source, "\"FocusedWindow\"")
+    checkNiriIpcParity(source, "\"OverviewState\"")
+    checkNiriIpcParity(source, "\"EventStream\"")
+    checkNiriIpcParity(
+      source,
+      """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""")
+    checkNiriIpcParity(
+      source,
+      """{"Action":{"FocusWorkspaceDown":{}}}""")
+    checkNiriIpcParity(
+      source,
+      """{"Action":{"MaximizeWindowToEdges":{}}}""")
+
+  test "DOD snapshot drives native Triad IPC parity":
+    let source = dynamicParityModel()
+    checkTriadIpcParity(
+      source,
+      """{"triad":{"version":1,"request":"state"}}""")
+    checkTriadIpcParity(
+      source,
+      """{"triad":{"version":1,"request":"layout-state"}}""")
+    checkTriadIpcParity(
+      source,
+      """{"triad":{"version":1,"request":"set-layout","layout":"grid","target":{"tag":9}}}""")
+    checkTriadIpcParity(
+      source,
+      """{"triad":{"version":1,"request":"set-layout","layout":"monocle","target":{"workspace_idx":2}}}""")
+    checkTriadIpcParity(
+      source,
+      """{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}""")
 
   test "DOD layout projection matches tiled legacy layout":
     checkLayoutParity(tiledLayoutModel())

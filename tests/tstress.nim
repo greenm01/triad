@@ -3,6 +3,7 @@ import ../src/core/model
 import ../src/core/model_utils
 import ../src/core/msg
 import ../src/core/niri_state
+import ../src/core/shell_state
 import ../src/core/update
 import ../src/ipc/commands
 import ../src/ipc/niri_compat
@@ -17,6 +18,9 @@ type
     seed: uint64
     step: int
     op: string
+
+proc handleNiriRequest(line: string; model: Model): NiriIpcResult =
+  niri_compat.handleNiriRequest(line, shellSnapshot(model))
 
 proc initRng(seed: uint64): FuzzRng =
   FuzzRng(state: if seed == 0: 0x9e3779b97f4a7c15'u64 else: seed)

@@ -134,20 +134,26 @@ proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
 proc triadStateJson*(model: Model): JsonNode =
   triadStateJson(shellSnapshot(model))
 
-proc triadLayoutStateChangedEvent*(model: Model): string =
+proc triadLayoutStateChangedEvent*(snapshot: ShellSnapshot): string =
   $(%*{
     "triad": {
       "version": TriadIpcVersion,
       "event": "layout-state-changed",
-      "state": triadLayoutStateJson(model)
+      "state": triadLayoutStateJson(snapshot)
     }
   })
 
-proc triadStateChangedEvent*(model: Model): string =
+proc triadLayoutStateChangedEvent*(model: Model): string =
+  triadLayoutStateChangedEvent(shellSnapshot(model))
+
+proc triadStateChangedEvent*(snapshot: ShellSnapshot): string =
   $(%*{
     "triad": {
       "version": TriadIpcVersion,
       "event": "state-changed",
-      "state": triadStateJson(model)
+      "state": triadStateJson(snapshot)
     }
   })
+
+proc triadStateChangedEvent*(model: Model): string =
+  triadStateChangedEvent(shellSnapshot(model))

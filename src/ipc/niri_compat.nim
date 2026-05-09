@@ -1,8 +1,8 @@
-import json, options, strutils, tables
-import ../core/model
-import ../core/model_utils
+import json, options, strutils
 import ../core/msg
 import ../core/niri_state
+import ../types/shell_snapshot
+from ../types/legacy_model import DirDown, DirLeft, DirRight, DirUp, WindowId
 
 type
   NiriIpcResult* = object
@@ -46,12 +46,14 @@ proc boolFromField(node: JsonNode; field: string; fallback = false): bool =
   else:
     fallback
 
-proc nextTag(model: Model; direction: int): Option[uint32] =
-  let ids = model.visibleWorkspaceIds()
+proc nextTag(snapshot: ShellSnapshot; direction: int): Option[uint32] =
+  var ids: seq[uint32] = @[]
+  for workspace in snapshot.workspaces:
+    ids.add(workspace.tagId)
   if ids.len == 0:
     return none(uint32)
 
-  let active = model.activeTagOrFallback()
+  let active = snapshot.activeTag
   var idx = ids.find(active)
   if idx == -1:
     idx = 0
@@ -61,7 +63,16 @@ proc nextTag(model: Model; direction: int): Option[uint32] =
     return some(ids[idx + 1])
   some(ids[^1])
 
-proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messages: seq[Msg]] =
+proc focusedWindow(snapshot: ShellSnapshot): WindowId =
+  for win in snapshot.windows:
+    if win.isFocused:
+      return win.id
+  for workspace in snapshot.workspaces:
+    if workspace.isActive:
+      return workspace.focusedWindow
+  0'u32
+
+proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[handled: bool, messages: seq[Msg]] =
   if action.kind != JObject:
     return (false, @[])
 
@@ -79,11 +90,11 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
           if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
 
   elif action.hasKey("FocusWorkspaceDown"):
-    let tag = nextTag(model, 1)
+    let tag = nextTag(snapshot, 1)
     if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
 
   elif action.hasKey("FocusWorkspaceUp"):
-    let tag = nextTag(model, -1)
+    let tag = nextTag(snapshot, -1)
     if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
 
   elif action.hasKey("ToggleOverview"):
@@ -183,7 +194,7 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
     if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
       let win = uintFromNode(payload["id"])
       if win.isSome: return (true, @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: WindowId(win.get()))])
-    let focused = model.focusedOnActiveTag()
+    let focused = snapshot.focusedWindow()
     if focused != 0:
       return (true, @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: focused)])
     return (true, @[])
@@ -233,7 +244,7 @@ proc actionMessages(action: JsonNode; model: Model): tuple[handled: bool, messag
 
   (false, @[])
 
-proc handleNiriRequest*(line: string; model: Model): NiriIpcResult =
+proc handleNiriRequest*(line: string; snapshot: ShellSnapshot): NiriIpcResult =
   result.handled = false
   let stripped = line.strip()
   if stripped.len == 0 or (stripped[0] != '{' and stripped[0] != '"'):
@@ -252,31 +263,32 @@ proc handleNiriRequest*(line: string; model: Model): NiriIpcResult =
   if request.kind == JString:
     case request.getStr()
     of "Outputs":
-      result.reply = okReply(%*{"Outputs": niriOutputsJson(model)})
+      result.reply = okReply(%*{"Outputs": niriOutputsJson(snapshot)})
     of "Workspaces":
-      result.reply = okReply(%*{"Workspaces": niriWorkspacesJson(model)})
+      result.reply = okReply(%*{"Workspaces": niriWorkspacesJson(snapshot)})
     of "Windows":
-      result.reply = okReply(%*{"Windows": niriWindowsJson(model)})
+      result.reply = okReply(%*{"Windows": niriWindowsJson(snapshot)})
     of "FocusedWindow":
-      let focused = model.focusedOnActiveTag()
-      if focused != 0 and model.windows.hasKey(focused):
-        result.reply = okReply(%*{"FocusedWindow": niriWindowJson(model, model.windows[focused])})
-      else:
-        result.reply = okReply(%*{"FocusedWindow": newJNull()})
+      let focused = snapshot.focusedWindow()
+      for win in snapshot.windows:
+        if win.id == focused:
+          result.reply = okReply(%*{"FocusedWindow": niriWindowJson(snapshot, win)})
+          return
+      result.reply = okReply(%*{"FocusedWindow": newJNull()})
     of "OverviewState":
-      result.reply = okReply(%*{"OverviewState": niriOverviewJson(model)})
+      result.reply = okReply(%*{"OverviewState": niriOverviewJson(snapshot)})
     of "KeyboardLayouts":
       result.reply = okReply(%*{"KeyboardLayouts": niriKeyboardLayoutsJson()})
     of "EventStream":
       result.subscribe = true
       result.reply = okReply(%*{"Handled": {}})
-      result.initialEvents = initialNiriEvents(model)
+      result.initialEvents = initialNiriEvents(snapshot)
     else:
       result.reply = errReply("unsupported niri request: " & request.getStr())
     return
 
   if request.kind == JObject and request.hasKey("Action"):
-    let action = actionMessages(request["Action"], model)
+    let action = actionMessages(request["Action"], snapshot)
     result.messages = action.messages
     if action.handled:
       result.reply = okReply(%*{"Handled": {}})
