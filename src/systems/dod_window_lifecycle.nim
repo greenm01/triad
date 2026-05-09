@@ -148,14 +148,6 @@ proc placeRestoredWindow(model: var DodModel; targetSlot: uint32;
     discard model.addPlacedWindowColumn(tagId, winId)
   true
 
-proc rewriteRestoredWindowReferences(model: var DodModel;
-    restoredExternalId, externalId: ExternalWindowId) =
-  if restoredExternalId == externalId:
-    return
-  for item in model.restoreFocusHistory.mitems:
-    if item == restoredExternalId:
-      item = externalId
-
 proc applyRestoredWindowState(model: var DodModel; winId: WindowId;
     restored: RestoredWindowData) =
   discard model.setWindowRestoredState(winId, restored)
@@ -167,16 +159,16 @@ proc applyPendingRestore(model: var DodModel; externalId,
     return false
 
   var targetSlot = restored.slot
-  if model.restoreTagByWindow.hasKey(externalId):
-    targetSlot = model.restoreTagByWindow[externalId]
-    model.restoreTagByWindow.del(externalId)
-  if model.restoreTagByWindow.hasKey(restoredExternalId):
-    targetSlot = model.restoreTagByWindow[restoredExternalId]
-    model.restoreTagByWindow.del(restoredExternalId)
+  let externalSlot = model.consumeRestoreTagSlot(externalId)
+  if externalSlot.found:
+    targetSlot = externalSlot.slot
+  let restoredSlot = model.consumeRestoreTagSlot(restoredExternalId)
+  if restoredSlot.found:
+    targetSlot = restoredSlot.slot
 
-  model.restoreWindows.del(restoredExternalId)
+  discard model.consumeRestoreWindow(restoredExternalId)
   model.applyRestoredWindowState(winId, restored)
-  model.rewriteRestoredWindowReferences(restoredExternalId, externalId)
+  discard model.rewriteRestoreFocusRefs(restoredExternalId, externalId)
   model.recordRestoredScratchpad(restoredExternalId, winId)
 
   let restoresFocusedWindow =
@@ -198,26 +190,14 @@ proc applyPendingRestore(model: var DodModel; externalId,
     if tagId != NullTagId and model.tag(tagId).isSome and
         model.tag(tagId).get().focusedWindow == winId:
       model.recordFocus(winId)
-      model.restoreFocusedWindow = NullExternalWindowId
+      discard model.clearRestoreFocusedWindow(restoredExternalId)
 
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
   true
 
 proc applyLiveRestore*(model: var DodModel; state: DodLiveRestoreState) =
-  model.restoreActiveSlot = state.activeSlot
-  model.restoreFocusedWindow = state.focusedWindow
-  model.restoreTagByWindow = state.tagByWindow
-  model.restoreWindows = state.windows
-  model.restoreTags = state.tags
-  model.restoreOutputTags = state.outputTags
-  model.restoreScratchpadWindows = state.scratchpadWindows
-  model.restoreNamedScratchpads = state.namedScratchpads
-  model.restoreVisibleScratchpad = state.visibleScratchpad
-  model.restoreIsScratchpadVisible = state.isScratchpadVisible
-  model.restoreFocusHistory = state.focusHistory
-  model.restoreWorkspaceHistory = state.workspaceHistory
-
+  discard model.loadRestoreState(state)
   var targetSlot = state.activeSlot
   if targetSlot != 0:
     var activeHasRestoredWindow = false
@@ -256,9 +236,9 @@ proc createWindowForExternal*(model: var DodModel;
     if model.activeWorkspaceSlot() == 0: 1'u32
     else: model.activeWorkspaceSlot()
 
-  if model.restoreWindows.hasKey(externalId):
-    restored = model.restoreWindows[externalId]
-    model.restoreWindows.del(externalId)
+  let directRestore = model.consumeRestoreWindow(externalId)
+  if directRestore.isSome:
+    restored = directRestore.get()
     hasRestoredWindow = true
     if restored.slot != 0:
       targetSlot = restored.slot
@@ -267,24 +247,26 @@ proc createWindowForExternal*(model: var DodModel;
     let matched = model.findRestoredWindowByIdentity(
       appId, title, identifier)
     if matched != NullExternalWindowId:
-      restored = model.restoreWindows[matched]
-      model.restoreWindows.del(matched)
+      let matchedRestore = model.consumeRestoreWindow(matched)
+      if matchedRestore.isNone:
+        return NullWindowId
+      restored = matchedRestore.get()
       restoredExternalId = matched
       hasRestoredWindow = true
       if restored.slot != 0:
         targetSlot = restored.slot
         hasRestoredTag = true
 
-  if model.restoreTagByWindow.hasKey(externalId):
-    targetSlot = model.restoreTagByWindow[externalId]
-    model.restoreTagByWindow.del(externalId)
+  let externalSlot = model.consumeRestoreTagSlot(externalId)
+  if externalSlot.found:
+    targetSlot = externalSlot.slot
     hasRestoredTag = targetSlot != 0
     restoredExternalId = externalId
-  elif restoredExternalId != externalId and
-      model.restoreTagByWindow.hasKey(restoredExternalId):
-    targetSlot = model.restoreTagByWindow[restoredExternalId]
-    model.restoreTagByWindow.del(restoredExternalId)
-    hasRestoredTag = targetSlot != 0
+  elif restoredExternalId != externalId:
+    let restoredSlot = model.consumeRestoreTagSlot(restoredExternalId)
+    if restoredSlot.found:
+      targetSlot = restoredSlot.slot
+      hasRestoredTag = targetSlot != 0
 
   let ruleMatch = model.windowRuleFor(appId, title)
   if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and
@@ -367,13 +349,13 @@ proc createWindowForExternal*(model: var DodModel;
         discard model.setTagFocus(targetTag, result)
 
   if hasRestoredWindow:
-    model.rewriteRestoredWindowReferences(restoredExternalId, externalId)
+    discard model.rewriteRestoreFocusRefs(restoredExternalId, externalId)
     if restoresFocusedWindow and targetSlot == model.activeWorkspaceSlot():
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId and model.tag(targetTag).isSome and
           model.tag(targetTag).get().focusedWindow == result:
         model.recordFocus(result)
-        model.restoreFocusedWindow = NullExternalWindowId
+        discard model.clearRestoreFocusedWindow(restoredExternalId)
 
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()

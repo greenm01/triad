@@ -1226,6 +1226,104 @@ suite "DOD state primitives":
     check not model.isScratchpadVisible
     check model.validateInvariants().ok
 
+  test "DOD restore ops load restore buffers":
+    var restore = DodLiveRestoreState(
+      activeSlot: 2,
+      focusedWindow: ExternalWindowId(20),
+      visibleScratchpad: ExternalWindowId(30),
+      isScratchpadVisible: true,
+      focusHistory: @[ExternalWindowId(10), ExternalWindowId(20)],
+      workspaceHistory: @[1'u32, 2])
+    restore.tagByWindow[ExternalWindowId(20)] = 2
+    restore.windows[ExternalWindowId(20)] = RestoredWindowData(
+      slot: 2,
+      appId: "brave",
+      title: "Browser")
+    restore.tags[2] = RestoredTagData(
+      slot: 2,
+      name: "web",
+      layoutMode: legacy_model.Grid,
+      masterCount: 1,
+      masterSplitRatio: 0.55'f32)
+    restore.outputTags[ExternalOutputId(42)] = 2
+    restore.scratchpadWindows = @[ExternalWindowId(30)]
+    restore.namedScratchpads["terminal"] = ExternalWindowId(30)
+
+    var model = DodModel(defaultWorkspaceCount: 3)
+
+    check model.loadRestoreState(restore)
+    check model.restoreActiveSlot == restore.activeSlot
+    check model.restoreFocusedWindow == restore.focusedWindow
+    check model.restoreTagByWindow == restore.tagByWindow
+    check model.restoreWindows == restore.windows
+    check model.restoreTags == restore.tags
+    check model.restoreOutputTags == restore.outputTags
+    check model.restoreScratchpadWindows == restore.scratchpadWindows
+    check model.restoreNamedScratchpads == restore.namedScratchpads
+    check model.restoreVisibleScratchpad == restore.visibleScratchpad
+    check model.restoreIsScratchpadVisible == restore.isScratchpadVisible
+    check model.restoreFocusHistory == restore.focusHistory
+    check model.restoreWorkspaceHistory == restore.workspaceHistory
+
+  test "DOD restore ops consume window entries":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    model.restoreWindows[ExternalWindowId(10)] = RestoredWindowData(
+      slot: 1,
+      appId: "kitty")
+    model.restoreWindows[ExternalWindowId(11)] = RestoredWindowData(
+      slot: 2,
+      appId: "brave")
+
+    let consumed = model.consumeRestoreWindow(ExternalWindowId(10))
+
+    check consumed.isSome
+    check consumed.get().appId == "kitty"
+    check not model.restoreWindows.hasKey(ExternalWindowId(10))
+    check model.restoreWindows.hasKey(ExternalWindowId(11))
+    check model.consumeRestoreWindow(ExternalWindowId(99)).isNone
+
+  test "DOD restore ops consume tag slots":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    model.restoreTagByWindow[ExternalWindowId(10)] = 1
+    model.restoreTagByWindow[ExternalWindowId(11)] = 2
+
+    let consumed = model.consumeRestoreTagSlot(ExternalWindowId(10))
+
+    check consumed.found
+    check consumed.slot == 1
+    check not model.restoreTagByWindow.hasKey(ExternalWindowId(10))
+    check model.restoreTagByWindow.hasKey(ExternalWindowId(11))
+    check not model.consumeRestoreTagSlot(ExternalWindowId(99)).found
+
+  test "DOD restore ops rewrite focus history only":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    model.restoreFocusHistory = @[
+      ExternalWindowId(10),
+      ExternalWindowId(11),
+      ExternalWindowId(10)]
+    model.restoreTagByWindow[ExternalWindowId(10)] = 1
+
+    check model.rewriteRestoreFocusRefs(
+      ExternalWindowId(10), ExternalWindowId(210))
+
+    check model.restoreFocusHistory == @[
+      ExternalWindowId(210),
+      ExternalWindowId(11),
+      ExternalWindowId(210)]
+    check model.restoreTagByWindow.hasKey(ExternalWindowId(10))
+    check not model.rewriteRestoreFocusRefs(
+      ExternalWindowId(10), ExternalWindowId(10))
+
+  test "DOD restore ops clear focused window by expected id":
+    var model = DodModel(defaultWorkspaceCount: 3)
+    model.restoreFocusedWindow = ExternalWindowId(10)
+
+    check not model.clearRestoreFocusedWindow(ExternalWindowId(11))
+    check model.restoreFocusedWindow == ExternalWindowId(10)
+    check model.clearRestoreFocusedWindow(ExternalWindowId(10))
+    check model.restoreFocusedWindow == NullExternalWindowId
+    check not model.clearRestoreFocusedWindow(ExternalWindowId(10))
+
   test "DOD iterators skip dangling relationship rows":
     var model = DodModel(defaultWorkspaceCount: 3)
     let tag = model.addTag(1, "one")
