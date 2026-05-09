@@ -163,6 +163,7 @@ type
     defaultWorkspaceCount*: uint32
     visibleSlots*: seq[uint32]
     overviewActive*: bool
+    overviewSelectedWindow*: WindowId
     layerFocusExclusive*: bool
     sessionLocked*: bool
     activeModifiers*: uint32

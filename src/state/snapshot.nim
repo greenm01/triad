@@ -46,6 +46,11 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
   result.activeTag = model.activeSlot
   result.activeWorkspaceIdx = model.workspaceIndexForSlot(model.activeSlot)
   result.overviewActive = model.overviewActive
+  result.overviewSelectedWindow =
+    if model.overviewActive:
+      model.externalWindowId(model.selectedOverviewWindow())
+    else:
+      0'u32
   result.layoutCycle =
     if model.layoutCycle.len > 0:
       model.layoutCycle

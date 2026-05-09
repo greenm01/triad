@@ -314,6 +314,15 @@ proc shouldCollapseAfterUpdate*(kind: MsgKind): bool =
     MsgKind.CmdMoveToNamedScratchpad,
     MsgKind.CmdToggleNamedScratchpad}
 
+proc isOverviewPreviewCommand(kind: MsgKind): bool =
+  kind in {
+    MsgKind.CmdFocusNext,
+    MsgKind.CmdFocusPrev,
+    MsgKind.CmdFocusDirection,
+    MsgKind.CmdFocusWindowById,
+    MsgKind.CmdFocusWindowOrWorkspaceUp,
+    MsgKind.CmdFocusWindowOrWorkspaceDown}
+
 proc addSetFullscreenEffect*(effects: var seq[Effect];
     winId: runtime_values.WindowId; fullscreen: bool; outputId = 0'u32) =
   effects.add(Effect(
@@ -334,16 +343,22 @@ proc addPostUpdateEffects*(
     dirty, collapsed, pruned: bool) =
   let beforeFocus = before.focusedWindowId()
   let afterFocus = after.focusedWindowId()
+  let overviewPreview = after.overviewActive and
+    msg.kind.isOverviewPreviewCommand()
 
   if before.activeTag != after.activeTag and after.activeTag != 0:
     effects.add(broadcastWorkspaceActivated(after))
   if beforeFocus != afterFocus:
     effects.add(broadcastWindowFocusChanged(afterFocus))
-    if afterFocus != 0:
+    if afterFocus != 0 and after.overviewActive:
+      effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+    elif afterFocus != 0:
       effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
   elif msg.kind in {MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow} and
       afterFocus != 0:
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
+  elif dirty and overviewPreview:
+    effects.add(Effect(kind: EffectKind.EffFocusShellUi))
 
   if msg.kind in {MsgKind.WlWindowCreated, MsgKind.WlWindowAppId,
       MsgKind.WlWindowTitle}:
@@ -361,17 +376,20 @@ proc addPostUpdateEffects*(
     effects.add(Effect(kind: EffectKind.EffManageDirty))
 
   if dirty or collapsed or pruned:
-    if msg.kind.shouldBroadcastOutputsChanged():
-      effects.add(after.broadcastOutputsChanged())
-      effects.add(after.broadcastWorkspacesChanged())
-      effects.add(after.broadcastWindowsChanged())
-    elif msg.kind.shouldBroadcastWindowsChanged():
-      effects.add(after.broadcastWorkspacesChanged())
-      effects.add(after.broadcastWindowsChanged())
-    elif collapsed or pruned:
-      effects.add(after.broadcastWorkspacesChanged())
-
-    if msg.kind.shouldBroadcastTriadLayoutChanged() or collapsed or pruned:
-      effects.add(after.broadcastTriadLayoutStateChanged())
-    if msg.kind.shouldBroadcastTriadStateChanged() or collapsed or pruned:
+    if overviewPreview:
       effects.add(after.broadcastTriadStateChanged())
+    else:
+      if msg.kind.shouldBroadcastOutputsChanged():
+        effects.add(after.broadcastOutputsChanged())
+        effects.add(after.broadcastWorkspacesChanged())
+        effects.add(after.broadcastWindowsChanged())
+      elif msg.kind.shouldBroadcastWindowsChanged():
+        effects.add(after.broadcastWorkspacesChanged())
+        effects.add(after.broadcastWindowsChanged())
+      elif collapsed or pruned:
+        effects.add(after.broadcastWorkspacesChanged())
+
+      if msg.kind.shouldBroadcastTriadLayoutChanged() or collapsed or pruned:
+        effects.add(after.broadcastTriadLayoutStateChanged())
+      if msg.kind.shouldBroadcastTriadStateChanged() or collapsed or pruned:
+        effects.add(after.broadcastTriadStateChanged())

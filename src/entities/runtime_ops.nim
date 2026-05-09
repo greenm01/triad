@@ -1,4 +1,5 @@
 import ../types/model
+import ../types/core
 from ../types/runtime_values import PointerOpKind
 
 proc setOverviewActive*(model: var Model; active: bool): bool =
@@ -6,6 +7,16 @@ proc setOverviewActive*(model: var Model; active: bool): bool =
     return false
   model.overviewActive = active
   true
+
+proc setOverviewSelection*(
+    model: var Model; winId: WindowId): bool =
+  if model.overviewSelectedWindow == winId:
+    return false
+  model.overviewSelectedWindow = winId
+  true
+
+proc clearOverviewSelection*(model: var Model): bool =
+  model.setOverviewSelection(NullWindowId)
 
 proc setLayerFocusExclusiveState*(
     model: var Model; exclusive: bool): bool =

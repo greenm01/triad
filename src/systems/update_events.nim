@@ -10,6 +10,8 @@ import window_state
 
 proc setExternalFocus(model: var Model;
     externalId: ExternalWindowId): bool =
+  if model.overviewActive and externalId == NullExternalWindowId:
+    return false
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:

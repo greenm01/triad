@@ -2,6 +2,7 @@ import options
 import ../core/effects
 import ../core/msg
 import ../state/engine
+from ../types/runtime_values import Direction
 import focus
 import placement
 import runtime
@@ -11,10 +12,13 @@ import window_state
 import workspaces
 
 proc closeOverview(model: var Model): bool =
-  model.setOverviewActive(false)
+  result = model.setOverviewActive(false)
+  result = model.clearOverviewSelection() or result
 
 proc openOverview(model: var Model): bool =
-  model.setOverviewActive(true)
+  result = model.setOverviewActive(true)
+  if result:
+    discard model.setOverviewSelection(model.initialOverviewWindow())
 
 proc recomputeAllTagFocus(model: var Model) =
   for tagId, _ in model.tagsWithId():
@@ -57,29 +61,54 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdFocusDirection:
     result.dirty = model.focusByDirection(msg.direction)
   of MsgKind.CmdFocusLast:
-    result.dirty = model.focusLast()
+    if not model.overviewActive:
+      result.dirty = model.focusLast()
   of MsgKind.CmdFocusTagLeft:
-    result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, false))
+    if not model.overviewActive:
+      result.dirty = model.focusWorkspaceSlot(
+        model.nearestWorkspaceSlot(-1, false))
   of MsgKind.CmdFocusTagRight:
-    result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, false))
+    if not model.overviewActive:
+      result.dirty = model.focusWorkspaceSlot(
+        model.nearestWorkspaceSlot(1, false))
   of MsgKind.CmdFocusOccupiedTagLeft:
-    result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, true))
+    if not model.overviewActive:
+      result.dirty = model.focusWorkspaceSlot(
+        model.nearestWorkspaceSlot(-1, true))
   of MsgKind.CmdFocusOccupiedTagRight:
-    result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, true))
+    if not model.overviewActive:
+      result.dirty = model.focusWorkspaceSlot(
+        model.nearestWorkspaceSlot(1, true))
   of MsgKind.CmdFocusColumnFirst:
-    result.dirty = model.focusColumnAtEdge(true)
+    if not model.overviewActive:
+      result.dirty = model.focusColumnAtEdge(true)
   of MsgKind.CmdFocusColumnLast:
-    result.dirty = model.focusColumnAtEdge(false)
+    if not model.overviewActive:
+      result.dirty = model.focusColumnAtEdge(false)
   of MsgKind.CmdFocusWindowOrWorkspaceUp:
-    result.dirty = model.focusWindowOrWorkspace(-1)
+    if model.overviewActive:
+      result.dirty = model.focusByDirection(Direction.DirUp)
+    else:
+      result.dirty = model.focusWindowOrWorkspace(-1)
   of MsgKind.CmdFocusWindowOrWorkspaceDown:
-    result.dirty = model.focusWindowOrWorkspace(1)
+    if model.overviewActive:
+      result.dirty = model.focusByDirection(Direction.DirDown)
+    else:
+      result.dirty = model.focusWindowOrWorkspace(1)
   of MsgKind.CmdFocusTag:
-    result.dirty = model.focusWorkspaceSlot(msg.focusTag)
+    if not model.overviewActive:
+      result.dirty = model.focusWorkspaceSlot(msg.focusTag)
   of MsgKind.CmdFocusWorkspaceIndex:
-    result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
+    if not model.overviewActive:
+      result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
   of MsgKind.CmdFocusWindowById:
-    result.dirty = model.focusExternalWindow(msg.focusWindowId.externalWindowId())
+    if model.overviewActive:
+      let winId = model.windowForExternal(msg.focusWindowId.externalWindowId())
+      if model.overviewWindowIds().find(winId) != -1:
+        result.dirty = model.setOverviewSelection(winId)
+    else:
+      result.dirty = model.focusExternalWindow(
+        msg.focusWindowId.externalWindowId())
 
   of MsgKind.CmdMoveToTag:
     result.dirty = model.moveFocusedWindowToSlot(msg.targetTag)
@@ -155,7 +184,6 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdCloseOverview:
     result.dirty = model.closeOverview()
     if result.dirty:
-      model.recomputeAllTagFocus()
       result.effects.add(broadcastOverview(false))
 
   of MsgKind.CmdToggleFloating:
@@ -191,9 +219,10 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdToggleKeyboardShortcutsInhibit:
     result.dirty = model.toggleKeyboardShortcutsInhibitFocused()
   of MsgKind.CmdSelectWindow:
+    let selected = model.selectedOverviewWindow()
     result.dirty = model.closeOverview()
-    if result.dirty:
-      model.recomputeAllTagFocus()
+    if selected != NullWindowId:
+      result.dirty = model.focusWindow(selected) or result.dirty
   of MsgKind.CmdCloseWindow:
     let focused = model.focusedWindow()
     if focused != NullWindowId:

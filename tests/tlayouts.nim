@@ -102,3 +102,6 @@ suite "Layout Algorithm Math":
     check gridIndexByDelta(4, 5, 0, -1) == 1
     check gridIndexByDelta(2, 5, 0, 1) == 4
     check gridIndexByDelta(4, 5, 1, 0) == -1
+    check gridDimensions(8) == (cols: 3, rows: 3)
+    check gridIndexByDelta(3, 8, 0, 1) == 6
+    check gridIndexByDelta(6, 8, 0, -1) == 3

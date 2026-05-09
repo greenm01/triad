@@ -106,8 +106,33 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
     if tagId == NullTagId:
       continue
     for winId, win in model.windowsOnTagWithId(tagId):
-      if not win.isMinimized:
+      if not win.isMinimized and result.find(winId) == -1:
         result.add(winId)
+
+proc initialOverviewWindow*(model: Model): WindowId =
+  let windows = model.overviewWindowIds()
+  if windows.len == 0:
+    return NullWindowId
+
+  let activeTag = model.tagData(model.activeTag)
+  if activeTag.isSome:
+    let focused = activeTag.get().focusedWindow
+    if windows.find(focused) != -1:
+      return focused
+
+  for winId in model.focusHistoryIdsReverse():
+    if windows.find(winId) != -1:
+      return winId
+
+  windows[0]
+
+proc selectedOverviewWindow*(model: Model): WindowId =
+  let windows = model.overviewWindowIds()
+  if windows.len == 0:
+    return NullWindowId
+  if windows.find(model.overviewSelectedWindow) != -1:
+    return model.overviewSelectedWindow
+  model.initialOverviewWindow()
 
 proc columnCountForTag*(model: Model; tagId: TagId): int =
   if model.columnsByTag.hasKey(tagId):

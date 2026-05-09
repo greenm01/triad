@@ -59,6 +59,7 @@ type
     activeTag*: uint32
     activeWorkspaceIdx*: uint32
     overviewActive*: bool
+    overviewSelectedWindow*: WindowId
     layoutCycle*: seq[LayoutMode]
     workspaces*: seq[ShellWorkspace]
     windows*: seq[ShellWindow]

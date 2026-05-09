@@ -752,6 +752,9 @@ proc applyManageState() =
       seat.setXcursorTheme(cstring(currentModel.cursor.theme), cursorSize)
     if currentModel.layerFocusExclusive or currentModel.sessionLocked:
       seat.clearFocus()
+    elif currentModel.overviewActive and ownedShellSurfaceId != 0 and
+        shellSurfacePointers.hasKey(ownedShellSurfaceId):
+      seat.focusShellSurface(shellSurfacePointers[ownedShellSurfaceId])
     elif focused != 0 and windowPointers.hasKey(focused):
       seat.focusWindow(windowPointers[focused])
     else:
@@ -1105,6 +1108,7 @@ proc renderDesiredPlacements() =
   var visible = initTable[WindowId, bool]()
   var lastNode: ptr RiverNodeV1 = nil
   var firstNode: ptr RiverNodeV1 = nil
+  let highlighted = currentModel.highlightRiverId()
   for id in ids:
     if windowNodes.hasKey(id):
       let node = windowNodes[id]
@@ -1123,7 +1127,7 @@ proc renderDesiredPlacements() =
           visibility,
           placementNeedsCellClip(id, geom))
         windowPointers[id].applyBorder(
-          id == currentModel.activeFocusRiverId(), visibility.borderEdges)
+          id == highlighted, visibility.borderEdges)
 
   for id, win in windowPointers.pairs:
     if not visible.hasKey(id):
@@ -1137,8 +1141,7 @@ proc renderDesiredPlacements() =
       let winOpt = currentModel.windowDataForRiverId(id)
       let isFloating = winOpt.isSome and winOpt.get().isFloating
       let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
-      if isFloating or isScratchpad or isFullscreen or
-          id == currentModel.activeFocusRiverId():
+      if isFloating or isScratchpad or isFullscreen or id == highlighted:
         windowNodes[id].placeTop()
 
   if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):

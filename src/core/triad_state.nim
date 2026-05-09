@@ -125,7 +125,11 @@ proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
 
   %*{
     "version": snapshot.version,
-    "overview": {"is_open": snapshot.overviewActive},
+    "overview": {
+      "is_open": snapshot.overviewActive,
+      "selected_window_id": if snapshot.overviewSelectedWindow == 0:
+        newJNull() else: %snapshot.overviewSelectedWindow
+    },
     "layout": triadLayoutStateJson(snapshot),
     "outputs": outputs,
     "windows": windows

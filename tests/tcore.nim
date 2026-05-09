@@ -4,11 +4,11 @@ import ../src/core/effects
 import ../src/core/msg
 import ../src/core/render_visibility
 import ../src/core/restore_state
-import ../src/state/snapshot
+import ../src/state/engine
 import ../src/systems/runtime_facade
 import ../src/systems/update
 import ../src/types/model
-import ../src/types/runtime_values
+import ../src/types/runtime_values except WindowId
 
 proc configuredModel(): Model =
   initRuntimeStateFromConfig(Config(
@@ -29,11 +29,22 @@ proc applyMsg(model: var Model; msg: Msg) =
   let (nextModel, _) = model.update(msg)
   model = nextModel
 
-proc focusedWindowId(model: Model): WindowId =
+proc focusedWindowId(model: Model): uint32 =
   for win in model.shellSnapshot().windows:
     if win.isFocused:
-      return win.id
+      return uint32(win.id)
   0'u32
+
+proc activeWorkspaceFocusId(model: Model): uint32 =
+  for workspace in model.shellSnapshot().workspaces:
+    if workspace.isActive:
+      return uint32(workspace.focusedWindow)
+  0'u32
+
+proc updateModel(model: var Model; msg: Msg): seq[Effect] =
+  let (nextModel, effects) = model.update(msg)
+  model = nextModel
+  effects
 
 suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
@@ -58,22 +69,25 @@ suite "Core Runtime Logic":
       it.jsonPayload.contains("layout-state-changed"))
 
   test "Render visibility suppresses clipped scroller border rails":
-    let screen = Rect(x: 0, y: 0, w: 100, h: 80)
+    let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
 
-    let full = renderVisibility(Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+    let full = renderVisibility(
+      runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
     check full.visible
     check not full.clipped
     check full.borderEdges == RenderAllEdges
 
     let leftClip =
-      renderVisibility(Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+      renderVisibility(
+        runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
     check leftClip.visible
     check leftClip.clipped
     check (leftClip.borderEdges and RenderEdgeLeft) == 0
     check (leftClip.borderEdges and RenderEdgeRight) == 0
 
     let sliver =
-      renderVisibility(Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
+      renderVisibility(
+        runtime_values.Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
     check not sliver.visible
     check sliver.borderEdges == 0
 
@@ -95,7 +109,35 @@ suite "Core Runtime Logic":
       it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
 
-  test "Overview direction focus follows visual grid":
+  test "Opening overview initializes visible selection":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    check model.overviewActive
+    check model.selectedOverviewWindow() == WindowId(1)
+    check model.focusedWindowId() == 1
+    check model.activeWorkspaceFocusId() == 1
+    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+
+  test "Overview shell focus clear preserves selected window":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged,
+      newFocusedId: 0))
+
+    check model.overviewActive
+    check model.selectedOverviewWindow() == WindowId(1)
+    check model.focusedWindowId() == 1
+    check model.activeWorkspaceFocusId() == 1
+    check effects.len == 0
+
+  test "Overview direction selection follows visual grid":
     var model = configuredModel()
     for id in 1'u32 .. 5'u32:
       model.applyMsg(Msg(
@@ -105,38 +147,139 @@ suite "Core Runtime Logic":
         title: "Window " & $id))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
+    let activeTag = model.activeTag
+    let activeFocus = model.activeWorkspaceFocusId()
+    let focusHistory = model.focusHistory
+    let workspaceHistory = model.workspaceHistory
+
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
+    let rightEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusDirection,
       direction: Direction.DirRight))
-    check model.focusedWindowId() == 2
+    check model.selectedOverviewWindow() == WindowId(2)
+    check model.activeWorkspaceFocusId() == activeFocus
+    let previewSnapshot = model.shellSnapshot()
+    check previewSnapshot.overviewSelectedWindow == 2
+    check model.focusedWindowId() == activeFocus
+    check rightEffects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+    check not rightEffects.anyIt(it.kind == EffectKind.EffFocusWindow)
+    check not rightEffects.anyIt(it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("WindowFocusChanged"))
+    check not rightEffects.anyIt(it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("WorkspacesChanged"))
+    check not rightEffects.anyIt(it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("WindowsChanged"))
+    check rightEffects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
+      it.triadEventName == "state")
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
       direction: Direction.DirLeft))
-    check model.focusedWindowId() == 1
+    check model.selectedOverviewWindow() == WindowId(1)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
       direction: Direction.DirDown))
-    check model.focusedWindowId() == 5
+    check model.selectedOverviewWindow() == WindowId(5)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
       direction: Direction.DirUp))
-    check model.focusedWindowId() == 2
+    check model.selectedOverviewWindow() == WindowId(2)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
       direction: Direction.DirDown))
-    check model.focusedWindowId() == 5
+    check model.selectedOverviewWindow() == WindowId(5)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
       direction: Direction.DirRight))
-    check model.focusedWindowId() == 5
+    check model.selectedOverviewWindow() == WindowId(5)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
-    check model.focusedWindowId() == 1
+    check model.selectedOverviewWindow() == WindowId(1)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusPrev))
-    check model.focusedWindowId() == 5
+    check model.selectedOverviewWindow() == WindowId(5)
+
+    check model.activeTag == activeTag
+    check model.activeWorkspaceFocusId() == activeFocus
+    check model.focusHistory == focusHistory
+    check model.workspaceHistory == workspaceHistory
+
+    let closeEffects = model.updateModel(Msg(kind: MsgKind.CmdCloseOverview))
+    check not model.overviewActive
+    check model.overviewSelectedWindow == NullWindowId
+    check model.activeWorkspaceFocusId() == activeFocus
+    check closeEffects.anyIt(it.kind == EffectKind.EffFocusWindow and
+      uint32(it.focusId) == activeFocus)
+
+  test "Overview ignores workspace focus commands":
+    var model = configuredModel()
+    for id in 1'u32 .. 5'u32:
+      model.applyMsg(Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: id,
+        appId: "app",
+        title: "Window " & $id))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let activeTag = model.activeTag
+    let activeWorkspaceIdx = model.shellSnapshot().activeWorkspaceIdx
+    let focusHistory = model.focusHistory
+    let workspaceHistory = model.workspaceHistory
+
+    check model.selectedOverviewWindow() == WindowId(5)
+    check model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2)).len == 0
+    check model.updateModel(Msg(kind: MsgKind.CmdFocusTag,
+      focusTag: 2)).len == 0
+    check model.updateModel(Msg(kind: MsgKind.CmdFocusOccupiedTagRight)).len == 0
+    check model.updateModel(Msg(kind: MsgKind.CmdFocusTagRight)).len == 0
+
+    check model.activeTag == activeTag
+    check model.shellSnapshot().activeWorkspaceIdx == activeWorkspaceIdx
+    check model.selectedOverviewWindow() == WindowId(5)
+    check model.focusHistory == focusHistory
+    check model.workspaceHistory == workspaceHistory
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    let downEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
+    check model.selectedOverviewWindow() == WindowId(5)
+    check model.activeTag == activeTag
+    check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check downEffects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+
+  test "Selecting overview window commits focus":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Two"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdSelectWindow))
+
+    check not model.overviewActive
+    check model.overviewSelectedWindow == NullWindowId
+    check model.activeWorkspaceFocusId() == 2
+    check model.activeTag == model.tagForSlot(2)
+    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
+      uint32(it.focusId) == 2)
+
+  test "Overview order deduplicates multi-tag windows":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    let tag2 = model.tagForSlot(2)
+    let col2 = model.addColumn(tag2)
+    model.placeWindow(tag2, col2, WindowId(1))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    check model.overviewWindowIds() == @[WindowId(1)]
+    check model.selectedOverviewWindow() == WindowId(1)
 
   test "Configured defaults place floating windows":
     var model = configuredModel()

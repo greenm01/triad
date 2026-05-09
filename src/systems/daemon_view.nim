@@ -47,6 +47,11 @@ proc activeFocusRiverId*(model: Model): runtime_values.WindowId =
     return model.riverIdForWindow(tagOpt.get().focusedWindow)
   0'u32
 
+proc highlightRiverId*(model: Model): runtime_values.WindowId =
+  if model.overviewActive:
+    return model.riverIdForWindow(model.selectedOverviewWindow())
+  model.activeFocusRiverId()
+
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 

@@ -78,6 +78,8 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
     return (false, @[])
 
   if action.hasKey("FocusWorkspace"):
+    if snapshot.overviewActive:
+      return (true, @[])
     let payload = action["FocusWorkspace"]
     if payload.kind == JObject and payload.hasKey("reference"):
       let refNode = payload["reference"]
@@ -93,11 +95,17 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
               focusTag: tag.get())])
 
   elif action.hasKey("FocusWorkspaceDown"):
+    if snapshot.overviewActive:
+      return (true, @[Msg(kind: MsgKind.CmdFocusDirection,
+          direction: Direction.DirDown)])
     let tag = nextTag(snapshot, 1)
     if tag.isSome: return (true, @[Msg(kind: MsgKind.CmdFocusTag,
         focusTag: tag.get())])
 
   elif action.hasKey("FocusWorkspaceUp"):
+    if snapshot.overviewActive:
+      return (true, @[Msg(kind: MsgKind.CmdFocusDirection,
+          direction: Direction.DirUp)])
     let tag = nextTag(snapshot, -1)
     if tag.isSome: return (true, @[Msg(kind: MsgKind.CmdFocusTag,
         focusTag: tag.get())])

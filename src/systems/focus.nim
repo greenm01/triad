@@ -255,13 +255,13 @@ proc focusOverviewByStep*(model: var Model; step: int): bool =
   if windows.len == 0:
     return false
 
-  let current = model.focusedOnActiveTag()
+  let current = model.selectedOverviewWindow()
   var idx = windows.find(current)
   if idx == -1:
     idx = 0
   else:
     idx = (idx + step + windows.len) mod windows.len
-  model.focusWindow(windows[idx])
+  model.setOverviewSelection(windows[idx])
 
 proc focusOverviewByDelta(
     model: var Model; deltaCol, deltaRow: int): bool =
@@ -269,7 +269,7 @@ proc focusOverviewByDelta(
   if windows.len == 0:
     return false
 
-  let current = model.focusedOnActiveTag()
+  let current = model.selectedOverviewWindow()
   var idx = windows.find(current)
   if idx == -1:
     idx = 0
@@ -277,7 +277,7 @@ proc focusOverviewByDelta(
   let targetIdx = gridIndexByDelta(idx, windows.len, deltaCol, deltaRow)
   if targetIdx < 0 or targetIdx == idx:
     return false
-  model.focusWindow(windows[targetIdx])
+  model.setOverviewSelection(windows[targetIdx])
 
 proc focusByDirection*(model: var Model; direction: Direction): bool =
   if model.overviewActive:
