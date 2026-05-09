@@ -76,3 +76,12 @@ proc destroyWindow*(model: var DodModel; winId: WindowId): bool =
     if tag.focusedWindow == winId:
       model.tags.mEntity(tag.id).focusedWindow = NullWindowId
   model.windows.delete(winId)
+
+proc setWindowMinimized*(
+    model: var DodModel; winId: WindowId; minimized: bool): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).isMinimized = minimized
+  if minimized:
+    model.windows.mEntity(winId).isMaximized = false
+  true

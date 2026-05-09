@@ -11,6 +11,17 @@ proc refreshWindowIndexes(
       if model.placementByTagWindow.hasKey((tagId, winId)):
         model.placementByTagWindow[(tagId, winId)].windowIdx = uint32(idx + 1)
 
+proc deleteColumnIfEmpty(
+    model: var DodModel; tagId: TagId; columnId: ColumnId) =
+  if model.windowsByColumn.getOrDefault(columnId, @[]).len > 0:
+    return
+  if model.columnsByTag.hasKey(tagId):
+    let idx = model.columnsByTag[tagId].find(columnId)
+    if idx != -1:
+      model.columnsByTag[tagId].delete(idx)
+  model.windowsByColumn.del(columnId)
+  discard model.columns.delete(columnId)
+
 proc placeWindow*(
     model: var DodModel; tagId: TagId; columnId: ColumnId;
     winId: WindowId) =
@@ -35,6 +46,8 @@ proc placeWindow*(
       if oldIdx != -1:
         model.windowsByColumn[oldColumn].delete(oldIdx)
         model.refreshWindowIndexes(tagId, oldColumn)
+        if oldColumn != columnId:
+          model.deleteColumnIfEmpty(tagId, oldColumn)
   elif model.windowsByTag.mgetOrPut(tagId, @[]).find(winId) == -1:
     model.windowsByTag[tagId].add(winId)
 
@@ -64,6 +77,7 @@ proc removeWindowFromTag*(
     if idx != -1:
       model.windowsByColumn[columnId].delete(idx)
       model.refreshWindowIndexes(tagId, columnId)
+      model.deleteColumnIfEmpty(tagId, columnId)
 
   if model.windowsByTag.hasKey(tagId):
     let idx = model.windowsByTag[tagId].find(winId)

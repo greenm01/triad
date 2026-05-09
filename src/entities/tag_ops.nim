@@ -1,4 +1,4 @@
-import tables
+import options, sequtils, tables
 import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
@@ -34,3 +34,46 @@ proc addTag*(
   model.columnsByTag[id] = @[]
   model.windowsByTag[id] = @[]
   id
+
+proc setTagFocus*(
+    model: var DodModel; tagId: TagId; winId: WindowId): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  if winId != NullWindowId and model.windows.entity(winId).isNone:
+    return false
+  model.tags.mEntity(tagId).focusedWindow = winId
+  true
+
+proc destroyTag*(model: var DodModel; tagId: TagId): bool =
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+
+  let tag = tagOpt.get()
+  for winId in model.windowsByTag.getOrDefault(tagId, @[]):
+    if model.windowTags.hasKey(winId):
+      var mask = model.windowTags[winId]
+      mask.excl(tag.bit)
+      model.windowTags[winId] = mask
+    model.placementByTagWindow.del((tagId, winId))
+
+  for columnId in model.columnsByTag.getOrDefault(tagId, @[]):
+    model.windowsByColumn.del(columnId)
+    discard model.columns.delete(columnId)
+
+  model.columnsByTag.del(tagId)
+  model.windowsByTag.del(tagId)
+  model.tagBySlot.del(tag.slot)
+
+  var outputIds: seq[OutputId] = @[]
+  for outputId, outputTag in model.outputTags.pairs:
+    if outputTag == tagId:
+      outputIds.add(outputId)
+  for outputId in outputIds:
+    model.outputTags.del(outputId)
+
+  model.workspaceHistory.keepIf(proc(id: TagId): bool = id != tagId)
+  if model.activeTag == tagId:
+    model.activeTag = NullTagId
+    model.activeSlot = 0
+  model.tags.delete(tagId)

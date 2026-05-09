@@ -1,9 +1,11 @@
 import json, options, sequtils, strutils, tables
 import unittest
+import ../src/core/msg as core_msg
 import ../src/core/model_utils
 import ../src/core/niri_state
 import ../src/core/shell_state
 import ../src/core/triad_state
+import ../src/core/update as legacy_update
 import ../src/entities/dod_ops
 import ../src/state/dod_adapter
 import ../src/state/entity_manager
@@ -12,7 +14,9 @@ import ../src/state/dod_iterators
 import ../src/state/dod_queries
 import ../src/state/dod_snapshot
 import ../src/state/id_gen
+import ../src/systems/dod_focus
 import ../src/systems/dod_layout
+import ../src/systems/dod_workspaces
 import ../src/systems/layout_state
 import ../src/types/core
 import ../src/types/dod_model
@@ -63,6 +67,20 @@ proc checkLayoutParity(source: legacy_model.Model) =
   let legacySnapshot = shellSnapshot(legacyModel)
   let dodSnapshot = dodShellSnapshot(dod)
   check dodSnapshot == legacySnapshot
+
+proc checkFocusParity(
+    source: legacy_model.Model; msg: core_msg.Msg;
+    action: proc(dod: var DodModel)) =
+  let (legacyModel, _) = legacy_update.update(source, msg)
+  var dod = source.dodFromLegacy()
+
+  action(dod)
+  dod.refreshVisibleWorkspaceSlots()
+
+  check dod.validateInvariants().ok
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  check dod.dodFocusHistory() == legacyModel.focusHistory
+  check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
 
 proc baseParityModel(): legacy_model.Model =
   result = legacy_model.Model(
@@ -274,6 +292,69 @@ proc usableOutputLayoutModel(): legacy_model.Model =
     hasUsable: true)
   result.primaryOutput = 42
 
+proc focusParityModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 1,
+    screenWidth: 1200,
+    screenHeight: 800
+  )
+  result.workspaces.defaultCount = 3
+  result.tags[1] = initTagState(1, legacy_model.Scroller, "term")
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[
+      legacy_model.WindowId(10),
+      legacy_model.WindowId(11)
+    ],
+    widthProportion: 0.5))
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(12)], widthProportion: 0.5))
+  result.tags[1].focusedWindow = 10
+  result.tags[2] = initTagState(2, legacy_model.Scroller, "web")
+  result.tags[2].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(20)], widthProportion: 0.75))
+  result.tags[2].focusedWindow = 20
+  result.tags[3] = initTagState(3, legacy_model.Grid, "files")
+  result.windows[10] = legacy_model.WindowData(
+    id: 10, appId: "term", title: "one")
+  result.windows[11] = legacy_model.WindowData(
+    id: 11, appId: "term", title: "two")
+  result.windows[12] = legacy_model.WindowData(
+    id: 12, appId: "term", title: "three")
+  result.windows[20] = legacy_model.WindowData(
+    id: 20, appId: "web", title: "browser")
+  result.focusHistory = @[legacy_model.WindowId(10), 20]
+  result.workspaceHistory = @[1'u32, 2]
+
+proc minimizedFocusModel(): legacy_model.Model =
+  result = focusParityModel()
+  result.activeTag = 1
+  result.windows[20].isMinimized = true
+
+proc trailingWorkspaceFocusModel(): legacy_model.Model =
+  result = legacy_model.Model(
+    activeTag: 3,
+    screenWidth: 1200,
+    screenHeight: 800
+  )
+  result.workspaces.defaultCount = 3
+  result.tags[1] = initTagState(1, legacy_model.Scroller, "term")
+  result.tags[2] = initTagState(2, legacy_model.Scroller, "web")
+  result.tags[3] = initTagState(3, legacy_model.Scroller, "files")
+  result.tags[3].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(30)], widthProportion: 0.5))
+  result.tags[3].focusedWindow = 30
+  result.windows[30] = legacy_model.WindowData(
+    id: 30, appId: "files", title: "files")
+  result.focusHistory = @[legacy_model.WindowId(30)]
+  result.workspaceHistory = @[3'u32]
+
+proc closedFocusedWindowModel(): legacy_model.Model =
+  result = focusParityModel()
+  result.activeTag = 2
+  result.tags[2].focusedWindow = 20
+  result.focusHistory = @[legacy_model.WindowId(10), 20]
+  result.workspaceHistory = @[1'u32, 2]
+
 suite "DOD state primitives":
   test "logical IDs are monotonic and reserve zero":
     var counters = IdCounters()
@@ -455,3 +536,99 @@ suite "DOD state primitives":
 
   test "DOD layout projection matches usable output geometry":
     checkLayoutParity(usableOutputLayoutModel())
+
+  test "DOD focus tag matches legacy focus behavior":
+    checkFocusParity(
+      focusParityModel(),
+      core_msg.Msg(kind: core_msg.CmdFocusTag, focusTag: 2),
+      proc(dod: var DodModel) =
+        discard dod.focusWorkspaceSlot(2)
+    )
+
+  test "DOD focus workspace index matches trailing workspace behavior":
+    checkFocusParity(
+      trailingWorkspaceFocusModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdFocusWorkspaceIndex,
+        workspaceIndex: 4),
+      proc(dod: var DodModel) =
+        discard dod.focusWorkspaceIndex(4)
+    )
+
+  test "DOD focus external window unminimizes like legacy":
+    checkFocusParity(
+      minimizedFocusModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdFocusWindowById,
+        focusWindowId: 20),
+      proc(dod: var DodModel) =
+        discard dod.focusExternalWindow(ExternalWindowId(20))
+    )
+
+  test "DOD focus cycle matches legacy next and previous":
+    checkFocusParity(
+      focusParityModel(),
+      core_msg.Msg(kind: core_msg.CmdFocusNext),
+      proc(dod: var DodModel) =
+        discard dod.focusCycle(1)
+    )
+    checkFocusParity(
+      focusParityModel(),
+      core_msg.Msg(kind: core_msg.CmdFocusPrev),
+      proc(dod: var DodModel) =
+        discard dod.focusCycle(-1)
+    )
+
+  test "DOD directional focus matches legacy columns":
+    checkFocusParity(
+      focusParityModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdFocusDirection,
+        direction: legacy_model.DirRight),
+      proc(dod: var DodModel) =
+        discard dod.focusByDirection(legacy_model.DirRight)
+    )
+
+  test "DOD overview vertical focus matches legacy workspace navigation":
+    checkFocusParity(
+      overviewLayoutModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdFocusDirection,
+        direction: legacy_model.DirDown),
+      proc(dod: var DodModel) =
+        discard dod.focusByDirection(legacy_model.DirDown)
+    )
+
+  test "DOD focus last matches legacy focus history":
+    checkFocusParity(
+      focusParityModel(),
+      core_msg.Msg(kind: core_msg.CmdFocusLast),
+      proc(dod: var DodModel) =
+        discard dod.focusLast()
+    )
+
+  test "DOD focus fallback after close matches legacy history":
+    checkFocusParity(
+      closedFocusedWindowModel(),
+      core_msg.Msg(
+        kind: core_msg.WlWindowDestroyed,
+        destroyedId: 20),
+      proc(dod: var DodModel) =
+        let winId = dod.windowForExternal(ExternalWindowId(20))
+        discard dod.destroyWindow(winId)
+        if not dod.focusMostRecentWindow():
+          discard dod.focusMostRecentWorkspace()
+        discard dod.pruneDynamicWorkspaces()
+    )
+
+  test "DOD dynamic workspace pruning matches legacy":
+    var legacyState = trailingWorkspaceFocusModel()
+    legacyState.tags[4] = initTagState(4, legacy_model.Scroller, "tail")
+    legacyState.tags[5] = initTagState(5, legacy_model.Scroller, "stale")
+    var dod = legacyState.dodFromLegacy()
+
+    discard legacyState.pruneDynamicWorkspaces()
+    discard dod.pruneDynamicWorkspaces()
+
+    check dod.validateInvariants().ok
+    check dodShellSnapshot(dod) == shellSnapshot(legacyState)
