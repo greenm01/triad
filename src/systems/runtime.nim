@@ -1,6 +1,6 @@
 import math, options
 import ../state/engine
-from ../types/runtime_values import OpMove, OpNone, OpResize, PointerOpKind
+from ../types/runtime_values import PointerOpKind
 
 proc keyboardShortcutsInhibited*(model: Model): bool =
   if model.sessionLocked or model.layerFocusExclusive:
@@ -31,7 +31,7 @@ proc beginPointerMove*(model: var Model; externalId: ExternalWindowId):
   if winOpt.isNone or not winOpt.get().isFloating:
     return false
   model.setPointerOpState(PointerOpData(
-    kind: OpMove,
+    kind: PointerOpKind.OpMove,
     windowId: winId,
     initialGeom: winOpt.get().floatingGeom
   ))
@@ -43,7 +43,7 @@ proc beginPointerResize*(model: var Model; externalId: ExternalWindowId;
   if winOpt.isNone or not winOpt.get().isFloating:
     return false
   model.setPointerOpState(PointerOpData(
-    kind: OpResize,
+    kind: PointerOpKind.OpResize,
     windowId: winId,
     initialGeom: winOpt.get().floatingGeom,
     edges: edges
@@ -51,7 +51,7 @@ proc beginPointerResize*(model: var Model; externalId: ExternalWindowId;
 
 proc applyPointerDelta*(model: var Model; dx, dy: int32): bool =
   let op = model.pointerOp
-  if op.kind == OpNone:
+  if op.kind == PointerOpKind.OpNone:
     return false
   let winOpt = model.windowData(op.windowId)
   if winOpt.isNone:
@@ -59,10 +59,10 @@ proc applyPointerDelta*(model: var Model; dx, dy: int32): bool =
 
   var geom = winOpt.get().floatingGeom
   case op.kind
-  of OpMove:
+  of PointerOpKind.OpMove:
     geom.x = op.initialGeom.x + dx
     geom.y = op.initialGeom.y + dy
-  of OpResize:
+  of PointerOpKind.OpResize:
     if (op.edges and 1) != 0:
       geom.y = op.initialGeom.y + dy
       geom.h = max(model.effectiveFloatingMinHeight(), op.initialGeom.h - dy)
@@ -73,14 +73,14 @@ proc applyPointerDelta*(model: var Model; dx, dy: int32): bool =
       geom.w = max(model.effectiveFloatingMinWidth(), op.initialGeom.w - dx)
     elif (op.edges and 8) != 0:
       geom.w = max(model.effectiveFloatingMinWidth(), op.initialGeom.w + dx)
-  of OpNone:
+  of PointerOpKind.OpNone:
     return false
 
   model.setWindowFloatingGeom(op.windowId, geom)
 
 proc finishPointerOp*(model: var Model): WindowId =
   result =
-    if model.pointerOp.kind == OpResize: model.pointerOp.windowId
+    if model.pointerOp.kind == PointerOpKind.OpResize: model.pointerOp.windowId
     else: NullWindowId
   discard model.clearPointerOp()
 

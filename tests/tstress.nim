@@ -58,7 +58,8 @@ proc baseModel(): Model =
       defaultWindowHeight: 0.7,
       enableAnimations: true,
       animationSpeed: 0.2,
-      layoutCycle: @[Scroller, Grid, Deck, Monocle]),
+      layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid, LayoutMode.Deck,
+          LayoutMode.Monocle]),
     workspaces: WorkspaceConfig(defaultCount: 4))).model
 
 proc modelSummary(model: Model): string =
@@ -103,70 +104,71 @@ proc generatedMsg(
   case rng.pick(24)
   of 0:
     result = Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: nextWindow,
       appId: "app-" & $nextWindow,
       title: "window-" & $nextWindow)
     inc nextWindow
   of 1:
-    result = Msg(kind: WlWindowDestroyed, destroyedId: rng.chooseWindow(model))
+    result = Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: rng.chooseWindow(model))
   of 2:
-    result = Msg(kind: WlFocusChanged, newFocusedId: rng.chooseWindow(model))
+    result = Msg(kind: MsgKind.WlFocusChanged, newFocusedId: rng.chooseWindow(model))
   of 3:
-    result = Msg(kind: CmdFocusWorkspaceIndex,
+    result = Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
       workspaceIndex: uint32(1 + rng.pick(6)))
   of 4:
-    result = Msg(kind: CmdMoveToWorkspaceIndex,
+    result = Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
       workspaceIndex: uint32(1 + rng.pick(6)))
   of 5:
-    result = Msg(kind: CmdSetLayout, newLayout: rng.chooseLayout(),
+    result = Msg(kind: MsgKind.CmdSetLayout, newLayout: rng.chooseLayout(),
       layoutTargetTag: uint32(rng.pick(5)))
   of 6:
-    result = Msg(kind: CmdToggleFloating)
+    result = Msg(kind: MsgKind.CmdToggleFloating)
   of 7:
-    result = Msg(kind: CmdToggleFullscreen)
+    result = Msg(kind: MsgKind.CmdToggleFullscreen)
   of 8:
-    result = Msg(kind: CmdMoveFloating,
+    result = Msg(kind: MsgKind.CmdMoveFloating,
       moveDX: rng.chooseDelta(),
       moveDY: rng.chooseDelta())
   of 9:
-    result = Msg(kind: CmdResizeFloating,
+    result = Msg(kind: MsgKind.CmdResizeFloating,
       deltaFW: rng.chooseDelta(),
       deltaFH: rng.chooseDelta())
   of 10:
-    result = Msg(kind: CmdMoveWindowLeft)
+    result = Msg(kind: MsgKind.CmdMoveWindowLeft)
   of 11:
-    result = Msg(kind: CmdMoveWindowRight)
+    result = Msg(kind: MsgKind.CmdMoveWindowRight)
   of 12:
-    result = Msg(kind: CmdMoveWindowUp)
+    result = Msg(kind: MsgKind.CmdMoveWindowUp)
   of 13:
-    result = Msg(kind: CmdMoveWindowDown)
+    result = Msg(kind: MsgKind.CmdMoveWindowDown)
   of 14:
-    result = Msg(kind: CmdMoveToScratchpad)
+    result = Msg(kind: MsgKind.CmdMoveToScratchpad)
   of 15:
-    result = Msg(kind: CmdToggleScratchpad)
+    result = Msg(kind: MsgKind.CmdToggleScratchpad)
   of 16:
-    result = Msg(kind: CmdToggleOverview)
+    result = Msg(kind: MsgKind.CmdToggleOverview)
   of 17:
-    result = Msg(kind: CmdAdjustGaps, deltaG: rng.chooseDelta(8))
+    result = Msg(kind: MsgKind.CmdAdjustGaps, deltaG: rng.chooseDelta(8))
   of 18:
-    result = Msg(kind: WlOutputDimensions,
+    result = Msg(kind: MsgKind.WlOutputDimensions,
       outputId: uint32(1 + rng.pick(3)),
       width: int32(640 + rng.pick(1920)),
       height: int32(480 + rng.pick(1080)))
   of 19:
-    result = Msg(kind: WlOutputRemoved, removedOutputId: uint32(1 + rng.pick(3)))
+    result = Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: uint32(1 +
+        rng.pick(3)))
   of 20:
-    result = Msg(kind: WlWindowDimensions,
+    result = Msg(kind: MsgKind.WlWindowDimensions,
       dimensionsWindowId: rng.chooseWindow(model),
       actualWidth: int32(rng.pick(2000)),
       actualHeight: int32(rng.pick(1200)))
   of 21:
-    result = Msg(kind: CmdFocusNext)
+    result = Msg(kind: MsgKind.CmdFocusNext)
   of 22:
-    result = Msg(kind: CmdFocusPrev)
+    result = Msg(kind: MsgKind.CmdFocusPrev)
   else:
-    result = Msg(kind: CmdTick)
+    result = Msg(kind: MsgKind.CmdTick)
 
 proc checkInvariants(ctx: FuzzContext; model: Model) =
   let report = model.validateInvariants()

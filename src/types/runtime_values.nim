@@ -12,7 +12,7 @@ type
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
 
-  PresentationMode* = enum
+  PresentationMode* {.pure.} = enum
     PresentationDefault,
     PresentationVsync,
     PresentationAsync
@@ -21,7 +21,7 @@ type
     windowId*: WindowId
     geom*: Rect
 
-  LayoutMode* = enum
+  LayoutMode* {.pure.} = enum
     Scroller,
     VerticalScroller,
     MasterStack,
@@ -34,7 +34,7 @@ type
     VerticalGrid,
     VerticalDeck
 
-  Direction* = enum
+  Direction* {.pure.} = enum
     DirLeft,
     DirRight,
     DirUp,
@@ -143,12 +143,12 @@ type
     theme*: string
     size*: uint32
 
-  PointerOpKind* = enum
+  PointerOpKind* {.pure.} = enum
     OpNone,
     OpMove,
     OpResize
 
-  BindingMode* = enum
+  BindingMode* {.pure.} = enum
     BindAlways,
     BindNormal,
     BindOverview

@@ -78,7 +78,7 @@ proc layoutModeFromJson(node: JsonNode): LayoutMode =
       return parseEnum[LayoutMode](node.getStr())
   except CatchableError:
     discard
-  Scroller
+  LayoutMode.Scroller
 
 proc parseTagState(
     state: var LiveRestoreState; node: JsonNode) =
@@ -91,10 +91,10 @@ proc parseTagState(
   var tag = RestoredTagState(
     tagId: tagId.get(),
     layoutMode:
-      if node.hasKey("layout_mode"):
+    if node.hasKey("layout_mode"):
         layoutModeFromJson(node["layout_mode"])
       else:
-        Scroller,
+        LayoutMode.Scroller,
     masterCount: DefaultMasterCount,
     masterSplitRatio: DefaultMasterRatio
   )

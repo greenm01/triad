@@ -164,7 +164,8 @@ proc parseDesktopEntry*(path, root: string): Option[DesktopEntry] =
     of "StartupWMClass":
       entry.startupWmClass = value
     of "Categories":
-      entry.categories = value.split(';').filterIt(it.strip().len > 0).mapIt(it.strip())
+      entry.categories = value.split(';').filterIt(it.strip().len > 0).mapIt(
+          it.strip())
     of "Hidden":
       hidden = value.normalizeKey() == "true"
     else:
@@ -185,11 +186,13 @@ proc addEntry*(index: var AppIdentityIndex; entry: DesktopEntry) =
   index.entries.add(entry)
   index.byDesktopId.addIfMissing(entry.id, idx)
   if entry.id.endsWith(".desktop"):
-    index.byDesktopId.addIfMissing(entry.id[0 ..< entry.id.len - ".desktop".len], idx)
+    index.byDesktopId.addIfMissing(entry.id[0 ..< entry.id.len -
+        ".desktop".len], idx)
   index.byExecBase.addIfMissing(entry.execBase, idx)
   index.byStartupWmClass.addIfMissing(entry.startupWmClass, idx)
 
-proc buildAppIdentityIndex*(applicationDirs: openArray[string]): AppIdentityIndex =
+proc buildAppIdentityIndex*(applicationDirs: openArray[
+    string]): AppIdentityIndex =
   for dir in applicationDirs:
     if not dirExists(dir):
       continue

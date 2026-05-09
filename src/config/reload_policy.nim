@@ -5,7 +5,8 @@ type
     pending*: bool
     deadlineMs*: int64
 
-proc schedule*(debouncer: var ConfigReloadDebouncer; nowMs: int64; debounceMs = DefaultConfigReloadDebounceMs) =
+proc schedule*(debouncer: var ConfigReloadDebouncer; nowMs: int64;
+    debounceMs = DefaultConfigReloadDebounceMs) =
   debouncer.pending = true
   debouncer.deadlineMs = nowMs + max(0'i64, debounceMs)
 

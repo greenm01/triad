@@ -1,12 +1,12 @@
 import ../types/runtime_values
 
 type
-  ScreenshotKind* = enum
+  ScreenshotKind* {.pure.} = enum
     ShotRegion,
     ShotScreen,
     ShotWindow
 
-  MsgKind* = enum
+  MsgKind* {.pure.} = enum
     # Wayland Events
     WlWindowCreated,
     WlWindowDestroyed,
@@ -131,133 +131,133 @@ type
 
   Msg* = object
     case kind*: MsgKind
-    of WlWindowCreated:
+    of MsgKind.WlWindowCreated:
       windowId*: WindowId
       appId*: string
       title*: string
       createdIdentifier*: string
-    of WlWindowDestroyed:
+    of MsgKind.WlWindowDestroyed:
       destroyedId*: WindowId
-    of WlFocusChanged:
+    of MsgKind.WlFocusChanged:
       newFocusedId*: WindowId
-    of WlWindowFullscreenRequested:
+    of MsgKind.WlWindowFullscreenRequested:
       fullscreenRequestId*: WindowId
       fullscreenOutputId*: uint32
-    of WlWindowExitFullscreenRequested:
+    of MsgKind.WlWindowExitFullscreenRequested:
       exitFullscreenRequestId*: WindowId
-    of WlWindowParent:
+    of MsgKind.WlWindowParent:
       childWindowId*: WindowId
       parentWindowId*: WindowId
-    of WlWindowIdentifier:
+    of MsgKind.WlWindowIdentifier:
       identifierWindowId*: WindowId
       identifier*: string
-    of WlWindowAppId:
+    of MsgKind.WlWindowAppId:
       appIdWindowId*: WindowId
       updatedAppId*: string
-    of WlWindowTitle:
+    of MsgKind.WlWindowTitle:
       titleWindowId*: WindowId
       updatedTitle*: string
-    of WlWindowDimensionsHint:
+    of MsgKind.WlWindowDimensionsHint:
       hintWindowId*: WindowId
       minWidth*, minHeight*, maxWidth*, maxHeight*: int32
-    of WlWindowDimensions:
+    of MsgKind.WlWindowDimensions:
       dimensionsWindowId*: WindowId
       actualWidth*, actualHeight*: int32
-    of WlWindowDecorationHint:
+    of MsgKind.WlWindowDecorationHint:
       decorationWindowId*: WindowId
       decorationHint*: uint32
-    of WlWindowPresentationHint:
+    of MsgKind.WlWindowPresentationHint:
       presentationWindowId*: WindowId
       presentationHint*: uint32
-    of WlWindowMenuRequested:
+    of MsgKind.WlWindowMenuRequested:
       menuWindowId*: WindowId
       menuX*: int32
       menuY*: int32
-    of WlWindowMaximizeRequested:
+    of MsgKind.WlWindowMaximizeRequested:
       maximizeRequestId*: WindowId
-    of WlWindowUnmaximizeRequested:
+    of MsgKind.WlWindowUnmaximizeRequested:
       unmaximizeRequestId*: WindowId
-    of WlWindowMinimizeRequested:
+    of MsgKind.WlWindowMinimizeRequested:
       minimizeRequestId*: WindowId
-    of WlOutputDimensions:
+    of MsgKind.WlOutputDimensions:
       outputId*: uint32
       width*: int32
       height*: int32
-    of WlOutputName:
+    of MsgKind.WlOutputName:
       nameOutputId*: uint32
       outputName*: string
-    of WlOutputPosition:
+    of MsgKind.WlOutputPosition:
       positionOutputId*: uint32
       outputX*: int32
       outputY*: int32
-    of WlOutputUsable:
+    of MsgKind.WlOutputUsable:
       usableOutputId*: uint32
       usableX*: int32
       usableY*: int32
       usableW*: int32
       usableH*: int32
-    of WlOutputRemoved:
+    of MsgKind.WlOutputRemoved:
       removedOutputId*: uint32
-    of WlPointerMoveRequested:
+    of MsgKind.WlPointerMoveRequested:
       moveWinId*: WindowId
-      moveSeat*: pointer # ptr RiverSeatV1
-    of WlPointerResizeRequested:
+      moveSeat*: pointer   # ptr RiverSeatV1
+    of MsgKind.WlPointerResizeRequested:
       resizeWinId*: WindowId
       resizeSeat*: pointer # ptr RiverSeatV1
       resizeEdges*: uint32
-    of WlPointerDelta:
+    of MsgKind.WlPointerDelta:
       dx*, dy*: int32
-    of WlShellSurfaceInteraction:
+    of MsgKind.WlShellSurfaceInteraction:
       shellSurfaceId*: uint32
-    of WlModifiersChanged:
+    of MsgKind.WlModifiersChanged:
       oldModifiers*: uint32
       newModifiers*: uint32
-    of CmdMoveFloating:
+    of MsgKind.CmdMoveFloating:
       moveDX*, moveDY*: int32
-    of CmdSetLayout:
+    of MsgKind.CmdSetLayout:
       newLayout*: LayoutMode
       layoutTargetTag*: uint32
-    of CmdFocusDirection:
+    of MsgKind.CmdFocusDirection:
       direction*: Direction
-    of CmdMoveToTag:
+    of MsgKind.CmdMoveToTag:
       targetTag*: uint32
-    of CmdSwapWindowToTag:
+    of MsgKind.CmdSwapWindowToTag:
       targetTagSwap*: uint32
-    of CmdRenameTag:
+    of MsgKind.CmdRenameTag:
       newName*: string
-    of CmdMoveToNamedScratchpad, CmdToggleNamedScratchpad:
+    of MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleNamedScratchpad:
       scratchpadName*: string
-    of CmdSetMasterCount:
+    of MsgKind.CmdSetMasterCount:
       count*: int
-    of CmdSetMasterRatio:
+    of MsgKind.CmdSetMasterRatio:
       ratio*: float32
-    of CmdAdjustMasterCount:
+    of MsgKind.CmdAdjustMasterCount:
       deltaMC*: int
-    of CmdAdjustMasterRatio:
+    of MsgKind.CmdAdjustMasterRatio:
       deltaMR*: float32
-    of CmdResizeWidth:
+    of MsgKind.CmdResizeWidth:
       deltaW*: float32
-    of CmdResizeHeight:
+    of MsgKind.CmdResizeHeight:
       deltaH*: float32
-    of CmdSetColumnWidth:
+    of MsgKind.CmdSetColumnWidth:
       targetWidth*: float32
-    of CmdAdjustGaps:
+    of MsgKind.CmdAdjustGaps:
       deltaG*: int32
-    of CmdResizeFloating:
+    of MsgKind.CmdResizeFloating:
       deltaFW*, deltaFH*: int32
-    of CmdFocusTag:
+    of MsgKind.CmdFocusTag:
       focusTag*: uint32
-    of CmdFocusWorkspaceIndex, CmdMoveToWorkspaceIndex:
+    of MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdMoveToWorkspaceIndex:
       workspaceIndex*: uint32
-    of CmdFocusWindowById:
+    of MsgKind.CmdFocusWindowById:
       focusWindowId*: WindowId
-    of CmdCloseWindowById:
+    of MsgKind.CmdCloseWindowById:
       closeWindowId*: WindowId
-    of CmdSpawn:
+    of MsgKind.CmdSpawn:
       spawnCommand*: seq[string]
-    of CmdWarpPointer:
+    of MsgKind.CmdWarpPointer:
       warpX*, warpY*: int32
-    of CmdScreenshot:
+    of MsgKind.CmdScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string
       screenshotShowPointer*: bool

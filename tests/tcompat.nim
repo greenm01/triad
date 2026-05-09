@@ -32,13 +32,13 @@ proc snapshotForShell(): ShellSnapshot =
     version: 1,
     activeTag: 1,
     activeWorkspaceIdx: 1,
-    layoutCycle: @[Scroller, Grid, Monocle],
+    layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid, LayoutMode.Monocle],
     workspaces: @[
       ShellWorkspace(
         tagId: 1,
         workspaceIdx: 1,
         name: "main",
-        layoutMode: Scroller,
+        layoutMode: LayoutMode.Scroller,
         isActive: true,
         focusedWindow: 10,
         occupied: true,
@@ -53,7 +53,7 @@ proc snapshotForShell(): ShellSnapshot =
         tagId: 2,
         workspaceIdx: 2,
         name: "web",
-        layoutMode: Grid,
+        layoutMode: LayoutMode.Grid,
         outputName: "triad-0",
         masterCount: 1,
         masterSplitRatio: 0.5),
@@ -61,7 +61,7 @@ proc snapshotForShell(): ShellSnapshot =
         tagId: 3,
         workspaceIdx: 3,
         name: "",
-        layoutMode: Scroller,
+        layoutMode: LayoutMode.Scroller,
         outputName: "triad-0",
         masterCount: 1,
         masterSplitRatio: 0.5)
@@ -134,27 +134,27 @@ suite "Shell compatibility contracts":
       """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""",
       snapshot)
     check focusWs.messages.len == 1
-    check focusWs.messages[0].kind == CmdFocusWorkspaceIndex
+    check focusWs.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check focusWs.messages[0].workspaceIndex == 2
 
     let focusNext =
       handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", snapshot)
     check focusNext.messages.len == 1
-    check focusNext.messages[0].kind == CmdFocusTag
+    check focusNext.messages[0].kind == MsgKind.CmdFocusTag
     check focusNext.messages[0].focusTag == 2
 
     let closeWin =
       handleNiriRequest("""{"Action":{"CloseWindow":{"id":10}}}""", snapshot)
     check closeWin.messages.len == 1
-    check closeWin.messages[0].kind == CmdCloseWindowById
+    check closeWin.messages[0].kind == MsgKind.CmdCloseWindowById
     check closeWin.messages[0].closeWindowId == 10
 
     let screenshot = handleNiriRequest(
       """{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""",
       snapshot)
     check screenshot.messages.len == 1
-    check screenshot.messages[0].kind == CmdScreenshot
-    check screenshot.messages[0].screenshotKind == ShotRegion
+    check screenshot.messages[0].kind == MsgKind.CmdScreenshot
+    check screenshot.messages[0].screenshotKind == ScreenshotKind.ShotRegion
     check screenshot.messages[0].screenshotPath == "/tmp/triad-shot.png"
 
   test "Triad native reads and layout commands use shell snapshots":
@@ -176,8 +176,8 @@ suite "Shell compatibility contracts":
       snapshot)
     check parseJson(setLayout.reply)["ok"].getBool()
     check setLayout.messages.len == 1
-    check setLayout.messages[0].kind == CmdSetLayout
-    check setLayout.messages[0].newLayout == Deck
+    check setLayout.messages[0].kind == MsgKind.CmdSetLayout
+    check setLayout.messages[0].newLayout == LayoutMode.Deck
     check setLayout.messages[0].layoutTargetTag == 2
 
   test "event streams start with current snapshot state":
@@ -197,20 +197,21 @@ suite "Shell compatibility contracts":
   test "triad_niri shim parses shell commands":
     let action =
       buildNiriCliRequest(@["msg", "action", "focus-workspace", "2"])
-    check action.kind == NckRequest
+    check action.kind == NiriCliKind.NckRequest
     let forwarded = handleNiriRequest(action.socketPayload, snapshotForShell())
     check forwarded.messages.len == 1
-    check forwarded.messages[0].kind == CmdFocusWorkspaceIndex
+    check forwarded.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check forwarded.messages[0].workspaceIndex == 2
 
     let screenshotScreen = buildNiriCliRequest(@[
       "msg", "action", "screenshot-screen", "--path",
       "/tmp/triad-screen.png", "--show-pointer"])
-    check screenshotScreen.kind == NckRequest
+    check screenshotScreen.kind == NiriCliKind.NckRequest
     let screenshotForwarded =
       handleNiriRequest(screenshotScreen.socketPayload, snapshotForShell())
-    check screenshotForwarded.messages[0].kind == CmdScreenshot
-    check screenshotForwarded.messages[0].screenshotKind == ShotScreen
+    check screenshotForwarded.messages[0].kind == MsgKind.CmdScreenshot
+    check screenshotForwarded.messages[0].screenshotKind ==
+        ScreenshotKind.ShotScreen
     check screenshotForwarded.messages[0].screenshotShowPointer
 
   test "Quickshell compatibility environment is private":
@@ -299,6 +300,6 @@ Categories=System;TerminalEmulator;
   test "text IPC remains Triad-native":
     let msg = parseTextCommand("focus-workspace 2")
     check msg.isSome
-    check msg.get().kind == CmdFocusWorkspaceIndex
+    check msg.get().kind == MsgKind.CmdFocusWorkspaceIndex
     check msg.get().workspaceIndex == 2
     check parseTextCommand("mmsg -g -A").isNone

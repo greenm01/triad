@@ -1,6 +1,6 @@
 import algorithm, options
 import ../state/engine
-from ../types/runtime_values import Scroller
+from ../types/runtime_values import LayoutMode
 
 proc activeWorkspaceSlot*(model: Model): uint32 =
   let tagOpt = model.tagData(model.activeTag)
@@ -27,7 +27,7 @@ proc ensureWorkspaceSlot*(
     elif tagRule.found:
       tagRule.rule.defaultLayout
     else:
-      Scroller
+      LayoutMode.Scroller
   let name =
     if tagRule.found: tagRule.rule.name
     else: ""

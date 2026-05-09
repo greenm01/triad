@@ -1,33 +1,31 @@
 import options
-from ../types/runtime_values import CenterTile, Deck, Grid, LayoutMode,
-  MasterStack, Monocle, RightTile, Scroller, VerticalDeck, VerticalGrid,
-  VerticalScroller, VerticalTile
+from ../types/runtime_values import LayoutMode
 
 proc layoutModeId*(mode: LayoutMode): string =
   case mode
-  of Scroller: "scroller"
-  of VerticalScroller: "vertical-scroller"
-  of MasterStack: "tile"
-  of Grid: "grid"
-  of Monocle: "monocle"
-  of Deck: "deck"
-  of CenterTile: "center-tile"
-  of RightTile: "right-tile"
-  of VerticalTile: "vertical-tile"
-  of VerticalGrid: "vertical-grid"
-  of VerticalDeck: "vertical-deck"
+  of LayoutMode.Scroller: "scroller"
+  of LayoutMode.VerticalScroller: "vertical-scroller"
+  of LayoutMode.MasterStack: "tile"
+  of LayoutMode.Grid: "grid"
+  of LayoutMode.Monocle: "monocle"
+  of LayoutMode.Deck: "deck"
+  of LayoutMode.CenterTile: "center-tile"
+  of LayoutMode.RightTile: "right-tile"
+  of LayoutMode.VerticalTile: "vertical-tile"
+  of LayoutMode.VerticalGrid: "vertical-grid"
+  of LayoutMode.VerticalDeck: "vertical-deck"
 
 proc parseLayoutModeId*(value: string): Option[LayoutMode] =
   case value
-  of "scroller": some(Scroller)
-  of "vertical-scroller": some(VerticalScroller)
-  of "tile": some(MasterStack)
-  of "grid": some(Grid)
-  of "monocle": some(Monocle)
-  of "deck": some(Deck)
-  of "center-tile": some(CenterTile)
-  of "right-tile": some(RightTile)
-  of "vertical-tile": some(VerticalTile)
-  of "vertical-grid": some(VerticalGrid)
-  of "vertical-deck": some(VerticalDeck)
+  of "scroller": some(LayoutMode.Scroller)
+  of "vertical-scroller": some(LayoutMode.VerticalScroller)
+  of "tile": some(LayoutMode.MasterStack)
+  of "grid": some(LayoutMode.Grid)
+  of "monocle": some(LayoutMode.Monocle)
+  of "deck": some(LayoutMode.Deck)
+  of "center-tile": some(LayoutMode.CenterTile)
+  of "right-tile": some(LayoutMode.RightTile)
+  of "vertical-tile": some(LayoutMode.VerticalTile)
+  of "vertical-grid": some(LayoutMode.VerticalGrid)
+  of "vertical-deck": some(LayoutMode.VerticalDeck)
   else: none(LayoutMode)

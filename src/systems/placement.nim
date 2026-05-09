@@ -2,8 +2,7 @@ import options
 import focus
 import workspaces
 import ../state/engine
-from ../types/runtime_values import LayoutMode, MasterStack, Scroller,
-  VerticalScroller
+from ../types/runtime_values import LayoutMode
 
 proc focusedPosition(model: var Model):
     tuple[found: bool, tagId: TagId, winId: WindowId, columnId: ColumnId,
@@ -89,13 +88,13 @@ proc resizeWidth*(model: var Model; delta: float32): bool =
     return false
   let tag = model.tagData(pos.tagId).get()
   case tag.layoutMode
-  of Scroller:
+  of LayoutMode.Scroller:
     let column = model.column(pos.columnId).get()
     model.setColumnWidth(pos.columnId, column.widthProportion + delta)
-  of VerticalScroller:
+  of LayoutMode.VerticalScroller:
     let win = model.windowData(pos.winId).get()
     model.setWindowWidthProportion(pos.winId, win.widthProportion + delta)
-  of MasterStack:
+  of LayoutMode.MasterStack:
     model.setTagMasterRatio(pos.tagId, tag.masterSplitRatio + delta)
   else:
     false
@@ -106,10 +105,10 @@ proc resizeHeight*(model: var Model; delta: float32): bool =
     return false
   let tag = model.tagData(pos.tagId).get()
   case tag.layoutMode
-  of VerticalScroller:
+  of LayoutMode.VerticalScroller:
     let column = model.column(pos.columnId).get()
     model.setColumnWidth(pos.columnId, column.widthProportion + delta)
-  of Scroller:
+  of LayoutMode.Scroller:
     let win = model.windowData(pos.winId).get()
     model.setWindowHeightProportion(pos.winId, win.heightProportion + delta)
   else:
@@ -120,7 +119,7 @@ proc setFocusedColumnWidth*(model: var Model; width: float32): bool =
   if not pos.found:
     return false
   let tag = model.tagData(pos.tagId).get()
-  if tag.layoutMode != Scroller:
+  if tag.layoutMode != LayoutMode.Scroller:
     return false
   model.setColumnWidth(pos.columnId, width)
 

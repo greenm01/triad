@@ -66,7 +66,8 @@ proc niriWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
       "is_urgent": false,
       "is_active": workspace.isActive,
       "is_focused": workspace.isActive,
-      "active_window_id": if workspace.focusedWindow != 0: %workspace.focusedWindow else: newJNull(),
+      "active_window_id": if workspace.focusedWindow !=
+          0: %workspace.focusedWindow else: newJNull(),
       "occupied": workspace.occupied
     })
 

@@ -19,11 +19,11 @@ const
 var subscribers*: seq[AsyncSocket] = @[]
 var triadSubscribers*: seq[TriadSubscriber] = @[]
 
-proc getRuntimeDir*(): string =
+proc runtimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
 
-proc getTriadSocketPath*(): string =
-  getRuntimeDir() / "triad.sock"
+proc triadSocketPath*(): string =
+  runtimeDir() / "triad.sock"
 
 proc unixPathExists*(path: string): bool =
   var st: Stat
@@ -54,22 +54,23 @@ proc prepareUnixSocketPath(path: string): Future[bool] {.async.} =
     return true
 
   if not unixPathIsSocket(path):
-    error "IPC path exists but is not a Unix socket", path=path
+    error "IPC path exists but is not a Unix socket", path = path
     return false
 
   if await unixSocketAcceptsConnections(path):
-    error "IPC socket already accepts connections; refusing to replace it", path=path
+    error "IPC socket already accepts connections; refusing to replace it", path = path
     return false
 
-  warn "Removing stale IPC socket", path=path
+  warn "Removing stale IPC socket", path = path
   try:
     removeFile(path)
     true
   except CatchableError as e:
-    error "Failed to remove stale IPC socket", path=path, error=e.msg
+    error "Failed to remove stale IPC socket", path = path, error = e.msg
     false
 
-proc recvLineLimited(client: AsyncSocket; maxBytes = MaxIpcLineBytes): Future[string] {.async.} =
+proc recvLineLimited(client: AsyncSocket; maxBytes = MaxIpcLineBytes): Future[
+    string] {.async.} =
   var line = ""
   while line.len <= maxBytes:
     let chunk = await client.recv(1)
@@ -124,23 +125,23 @@ proc startIpcServer*(
     server.bindUnix(path)
     server.listen()
   except CatchableError as e:
-    error "IPC server failed to start", path=path, error=e.msg
+    error "IPC server failed to start", path = path, error = e.msg
     if not server.isClosed:
       server.close()
     return
-  
-  info "IPC server listening", path=path
-  
+
+  info "IPC server listening", path = path
+
   while true:
     var client: AsyncSocket
     try:
       client = await server.accept()
       if client == nil:
-        warn "IPC accept returned nil client", path=path
+        warn "IPC accept returned nil client", path = path
         continue
-      debug "IPC client connected", path=path
+      debug "IPC client connected", path = path
     except CatchableError as e:
-      warn "IPC accept failed", path=path, error=e.msg
+      warn "IPC accept failed", path = path, error = e.msg
       continue
 
     let acceptedClient = client
@@ -163,7 +164,8 @@ proc startIpcServer*(
             let snapshot = getSnapshot()
             let triad = handleTriadRequest(line, snapshot)
             if triad.handled:
-              if (triad.subscribeLayout or triad.subscribeState) and not canSubscribeTriad():
+              if (triad.subscribeLayout or triad.subscribeState) and
+                  not canSubscribeTriad():
                 await client.send("""{"ok":false,"error":"too many event-stream subscribers"}""" & "\L")
                 break
               if triad.reply.len > 0:
@@ -199,7 +201,8 @@ proc startIpcServer*(
 
           if line.strip() == "event-stream":
             if not canSubscribe():
-              warn "Rejecting event-stream subscriber; subscriber cap reached", cap=MaxIpcSubscribers
+              warn "Rejecting event-stream subscriber; subscriber cap reached",
+                  cap = MaxIpcSubscribers
               break
             subscribers.add(client)
             keepOpen = true
@@ -208,15 +211,15 @@ proc startIpcServer*(
           if parsed.isSome:
             onMsg(parsed.get())
           else:
-            warn "Unknown or invalid IPC command", command=line
+            warn "Unknown or invalid IPC command", command = line
       except CatchableError as e:
-        warn "IPC client error", path=path, error=e.msg
+        warn "IPC client error", path = path, error = e.msg
 
       if client != nil and not keepOpen and not client.isClosed:
         client.close()
     )()
 
-proc sendIpcMsg*(path: string, msg: string) {.async.} =
+proc sendIpcMsg*(path: string; msg: string) {.async.} =
   let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     await client.connectUnix(path)
@@ -227,7 +230,8 @@ proc sendIpcMsg*(path: string, msg: string) {.async.} =
     raise
   client.close()
 
-proc sendIpcRequest*(path: string, msg: string; timeoutMs = 3000): Future[string] {.async.} =
+proc sendIpcRequest*(path: string; msg: string; timeoutMs = 3000): Future[
+    string] {.async.} =
   let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     await client.connectUnix(path)
@@ -254,7 +258,7 @@ proc broadcastJson*(payload: string) {.async.} =
         await client.send(payload & "\L")
         inc i
       except CatchableError as e:
-        warn "Dropping failed IPC subscriber", error=e.msg
+        warn "Dropping failed IPC subscriber", error = e.msg
         client.close()
         subscribers.delete(i)
 
@@ -273,6 +277,6 @@ proc broadcastTriadJson*(payload: string; eventName: string) {.async.} =
         await client.send(payload & "\L")
         inc i
       except CatchableError as e:
-        warn "Dropping failed Triad IPC subscriber", error=e.msg
+        warn "Dropping failed Triad IPC subscriber", error = e.msg
         client.close()
         triadSubscribers.delete(i)

@@ -27,7 +27,7 @@ proc consumeRestoreWindow*(
   model.restoreWindows.del(externalId)
 
 proc consumeRestoreTagSlot*(model: var Model; externalId: ExternalWindowId):
-    tuple[found: bool, slot: uint32] =
+    tuple[found: bool; slot: uint32] =
   if not model.restoreTagByWindow.hasKey(externalId):
     return (false, 0'u32)
   result = (true, model.restoreTagByWindow[externalId])

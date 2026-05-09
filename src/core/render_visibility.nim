@@ -14,7 +14,8 @@ type
     borderEdges*: uint32
     clipped*: bool
 
-proc renderVisibility*(geom, screen: Rect; minVisibleThickness: int32): RenderVisibility =
+proc renderVisibility*(geom, screen: Rect;
+    minVisibleThickness: int32): RenderVisibility =
   let
     left = max(geom.x, screen.x)
     top = max(geom.y, screen.y)
@@ -34,9 +35,11 @@ proc renderVisibility*(geom, screen: Rect; minVisibleThickness: int32): RenderVi
     return
 
   result.clipped =
-    result.clipX > 0 or result.clipY > 0 or result.clipW < geom.w or result.clipH < geom.h
+    result.clipX > 0 or result.clipY > 0 or result.clipW < geom.w or
+        result.clipH < geom.h
 
-  if result.clipped and (visibleW <= minVisibleThickness or visibleH <= minVisibleThickness):
+  if result.clipped and (visibleW <= minVisibleThickness or visibleH <=
+      minVisibleThickness):
     result.visible = false
     result.borderEdges = 0
     return

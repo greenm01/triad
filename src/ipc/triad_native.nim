@@ -26,7 +26,8 @@ proc uintFromField(node: JsonNode; field: string): Option[uint32] =
   if node.kind != JObject or not node.hasKey(field):
     return none(uint32)
   try:
-    if node[field].kind == JInt and node[field].getInt() > 0 and node[field].getInt() <= int(high(uint32)):
+    if node[field].kind == JInt and node[field].getInt() > 0 and node[
+        field].getInt() <= int(high(uint32)):
       return some(uint32(node[field].getInt()))
   except CatchableError:
     discard
@@ -62,13 +63,15 @@ proc hasUnsupportedEvent(node: JsonNode): bool =
       return true
   false
 
-proc tagForWorkspaceIndex(snapshot: ShellSnapshot; workspaceIdx: uint32): uint32 =
+proc tagForWorkspaceIndex(snapshot: ShellSnapshot;
+    workspaceIdx: uint32): uint32 =
   for workspace in snapshot.workspaces:
     if workspace.workspaceIdx == workspaceIdx:
       return workspace.tagId
   0
 
-proc targetTagFromPayload(payload: JsonNode; snapshot: ShellSnapshot): tuple[ok: bool, tag: uint32, error: string] =
+proc targetTagFromPayload(payload: JsonNode; snapshot: ShellSnapshot): tuple[
+    ok: bool; tag: uint32; error: string] =
   if payload.kind != JObject or not payload.hasKey("target"):
     return (true, 0'u32, "")
   let target = payload["target"]
@@ -142,15 +145,17 @@ proc handleTriadRequest*(line: string; snapshot: ShellSnapshot): TriadIpcResult 
       result.reply = errReply(target.error)
       return
 
-    result.messages.add(Msg(kind: CmdSetLayout, newLayout: layout.get(), layoutTargetTag: target.tag))
+    result.messages.add(Msg(kind: MsgKind.CmdSetLayout, newLayout: layout.get(),
+        layoutTargetTag: target.tag))
     result.reply = ackReply()
 
   of "switch-layout":
-    result.messages.add(Msg(kind: CmdSwitchLayout))
+    result.messages.add(Msg(kind: MsgKind.CmdSwitchLayout))
     result.reply = ackReply()
 
   of "event-stream":
-    if payload.hasUnsupportedEvent() or (not payload.hasEvent("layout") and not payload.hasEvent("state")):
+    if payload.hasUnsupportedEvent() or (not payload.hasEvent("layout") and
+        not payload.hasEvent("state")):
       result.reply = errReply("unsupported event stream")
       return
     result.subscribeLayout = payload.hasEvent("layout")

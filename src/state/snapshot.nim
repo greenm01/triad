@@ -51,9 +51,10 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       model.layoutCycle
     else:
       @[
-        runtime_values.Scroller, runtime_values.MasterStack,
-        runtime_values.Grid, runtime_values.Monocle,
-        runtime_values.VerticalScroller
+        runtime_values.LayoutMode.Scroller,
+            runtime_values.LayoutMode.MasterStack,
+        runtime_values.LayoutMode.Grid, runtime_values.LayoutMode.Monocle,
+        runtime_values.LayoutMode.VerticalScroller
       ]
 
   for idx, slot in model.visibleWorkspaceSlots():
@@ -62,7 +63,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       if tagId != NullTagId: model.tagData(tagId) else: none(TagData)
     let tag =
       if tagOpt.isSome: tagOpt.get()
-      else: TagData(slot: slot, layoutMode: runtime_values.Scroller,
+      else: TagData(slot: slot, layoutMode: runtime_values.LayoutMode.Scroller,
         masterCount: model.snapshotDefaultMasterCount(),
         masterSplitRatio: model.snapshotDefaultMasterRatio())
 
@@ -99,9 +100,9 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       appId: win.appId,
       tagId: if pos.found: some(pos.slot) else: none(uint32),
       workspaceIdx:
-        if pos.found: model.workspaceIndexForSlot(pos.slot) else: 0'u32,
+      if pos.found: model.workspaceIndexForSlot(pos.slot) else: 0'u32,
       outputName:
-        if pos.found: model.shellWorkspaceOutputName(pos.tagId) else: "",
+      if pos.found: model.shellWorkspaceOutputName(pos.tagId) else: "",
       colIdx: pos.colIdx,
       winIdx: pos.winIdx,
       isFocused: focused,

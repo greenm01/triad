@@ -27,23 +27,24 @@ proc configuredModel(): Model =
 
 suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
-    let (_, effects) = update(Model(), Msg(kind: CmdTriadReload))
+    var model = Model()
+    let (_, effects) = model.update(Msg(kind: MsgKind.CmdTriadReload))
     check effects.len == 1
-    check effects[0].kind == EffTriadReload
+    check effects[0].kind == EffectKind.EffTriadReload
 
   test "Targeted layout command updates requested slot only":
     var model = configuredModel()
     let (nextModel, effects) =
-      update(model, Msg(kind: CmdSetLayout, newLayout: Deck,
+      model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck,
         layoutTargetTag: 2))
     let snapshot = nextModel.shellSnapshot()
 
     check snapshot.activeTag == 1
-    check snapshot.workspaces[0].layoutMode == Scroller
-    check snapshot.workspaces[1].layoutMode == Deck
-    check effects.anyIt(it.kind == EffManageDirty)
+    check snapshot.workspaces[0].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
-      it.kind == EffBroadcastTriadJson and
+      it.kind == EffectKind.EffBroadcastTriadJson and
       it.jsonPayload.contains("layout-state-changed"))
 
   test "Render visibility suppresses clipped scroller border rails":
@@ -68,8 +69,8 @@ suite "Core Runtime Logic":
 
   test "Window lifecycle mutates state and emits shell updates":
     var model = configuredModel()
-    let (nextModel, effects) = update(model, Msg(
-      kind: WlWindowCreated,
+    let (nextModel, effects) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
       windowId: 100,
       appId: "firefox",
       title: "Mozilla Firefox"))
@@ -79,15 +80,15 @@ suite "Core Runtime Logic":
     check snapshot.windows[0].id == 100
     check snapshot.windows[0].appId == "firefox"
     check snapshot.workspaces[0].focusedWindow == 100
-    check effects.anyIt(it.kind == EffManageDirty)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
-      it.kind == EffBroadcastJson and
+      it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
 
   test "Configured defaults place floating windows":
     var model = configuredModel()
-    let (nextModel, _) = update(model, Msg(
-      kind: WlWindowCreated,
+    let (nextModel, _) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
       windowId: 130,
       appId: "float-me",
       title: "Tool"))
@@ -103,8 +104,8 @@ suite "Core Runtime Logic":
 
   test "Window rule marks matching windows as shortcut-inhibiting":
     var model = configuredModel()
-    let (nextModel, _) = update(model, Msg(
-      kind: WlWindowCreated,
+    let (nextModel, _) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
       windowId: 140,
       appId: "qemu-system-x86_64",
       title: "Void"))
@@ -129,7 +130,7 @@ suite "Core Runtime Logic":
 """)
     check native.isSome
     check native.get().activeTag == 2
-    check native.get().tags[2].layoutMode == Deck
+    check native.get().tags[2].layoutMode == LayoutMode.Deck
     check native.get().windows[10].appId == "term"
 
     let invalid = parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""")
@@ -137,13 +138,13 @@ suite "Core Runtime Logic":
 
   test "Niri window event includes focused workspace state":
     var model = configuredModel()
-    let (_, effects) = update(model, Msg(
-      kind: WlWindowCreated,
+    let (_, effects) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
       windowId: 120,
       appId: "alacritty",
       title: "Alacritty"))
     let event = effects.filterIt(
-      it.kind == EffBroadcastJson and
+      it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))[0]
     let win = parseJson(event.jsonPayload)["WindowOpenedOrChanged"]["window"]
 

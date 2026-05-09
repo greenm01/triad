@@ -10,8 +10,7 @@ import ../entities/ops
 import ../types/core
 import ../types/model
 import ../types/shell_snapshot
-from ../types/runtime_values import Grid, LayoutMode, MasterStack, Monocle,
-  Scroller, VerticalScroller
+from ../types/runtime_values import LayoutMode
 
 export defaults
 export iterators
@@ -70,9 +69,10 @@ proc layoutCycle*(model: Model): seq[LayoutMode] =
   if model.layoutCycle.len > 0:
     model.layoutCycle
   else:
-    @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+    @[LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid,
+        LayoutMode.Monocle, LayoutMode.VerticalScroller]
 
-proc safeLayoutMode*(stored: int; fallback = Scroller): LayoutMode =
+proc safeLayoutMode*(stored: int; fallback = LayoutMode.Scroller): LayoutMode =
   if stored >= ord(low(LayoutMode)) + 1 and
       stored <= ord(high(LayoutMode)) + 1:
     LayoutMode(stored - 1)
@@ -133,14 +133,14 @@ proc matches(rule: WindowRuleData; appId, title: string): bool =
   appIdMatches and titleMatches
 
 proc tagRuleForSlot*(model: Model; slot: uint32):
-    tuple[found: bool, rule: TagRuleData] =
+    tuple[found: bool; rule: TagRuleData] =
   for rule in model.tagRules:
     if rule.slot == slot:
       return (true, rule)
   (false, TagRuleData())
 
 proc windowRuleFor*(model: Model; appId, title: string):
-    tuple[found: bool, rule: WindowRuleData] =
+    tuple[found: bool; rule: WindowRuleData] =
   for rule in model.windowRules:
     if rule.matches(appId, title):
       return (true, rule)

@@ -6,7 +6,7 @@ proc socketPath(): string =
   let niriSocket = getEnv("NIRI_SOCKET", "")
   if niriSocket.len > 0:
     return niriSocket
-  getTriadSocketPath()
+  triadSocketPath()
 
 proc fail(message: string) =
   stderr.writeLine("triad_niri: " & message)
@@ -16,11 +16,11 @@ when isMainModule:
   let request = buildNiriCliRequest(commandLineParams())
 
   case request.kind
-  of NckValidate:
+  of NiriCliKind.NckValidate:
     quit 0
-  of NckInvalid:
+  of NiriCliKind.NckInvalid:
     fail(request.error)
-  of NckRequest:
+  of NiriCliKind.NckRequest:
     let path = socketPath()
     var reply = ""
     try:

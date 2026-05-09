@@ -27,7 +27,7 @@ proc setExternalFocus(model: var Model;
 
 proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind
-  of WlManageStart:
+  of MsgKind.WlManageStart:
     let focused = model.focusedWindow()
     if focused != NullWindowId:
       discard model.recordWorkspace(model.activeTag)
@@ -35,32 +35,33 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       let externalId = model.runtimeWindowId(focused)
       result.effects.add(broadcastWindowFocusChanged(externalId))
       if not model.sessionLocked and not model.layerFocusExclusive:
-        result.effects.add(Effect(kind: EffFocusWindow, focusId: externalId))
+        result.effects.add(Effect(kind: EffectKind.EffFocusWindow,
+            focusId: externalId))
     result.dirty = true
 
-  of WlOutputDimensions:
+  of MsgKind.WlOutputDimensions:
     result.dirty = model.setOutputDimensionsForExternal(
       msg.outputId.externalOutputId(), msg.width, msg.height)
-  of WlOutputName:
+  of MsgKind.WlOutputName:
     result.dirty = model.setOutputNameForExternal(
       msg.nameOutputId.externalOutputId(), msg.outputName)
-  of WlOutputPosition:
+  of MsgKind.WlOutputPosition:
     result.dirty = model.setOutputPositionForExternal(
       msg.positionOutputId.externalOutputId(), msg.outputX, msg.outputY)
-  of WlOutputUsable:
+  of MsgKind.WlOutputUsable:
     result.dirty = model.setOutputUsableForExternal(
       msg.usableOutputId.externalOutputId(),
       msg.usableX,
       msg.usableY,
       msg.usableW,
       msg.usableH)
-  of WlOutputRemoved:
+  of MsgKind.WlOutputRemoved:
     for winId in model.removeOutputForExternal(
         msg.removedOutputId.externalOutputId()):
       result.dirty = true
       result.effects.addSetFullscreenEffect(model.runtimeWindowId(winId), false)
 
-  of WlWindowCreated:
+  of MsgKind.WlWindowCreated:
     let winId = model.createWindowForExternal(
       msg.windowId.externalWindowId(),
       msg.appId,
@@ -75,37 +76,37 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       if win.isMaximized:
         result.effects.addSetMaximizedEffect(msg.windowId, true)
 
-  of WlWindowDestroyed:
+  of MsgKind.WlWindowDestroyed:
     result.dirty = model.destroyWindowForExternal(
       msg.destroyedId.externalWindowId())
     if result.dirty:
       result.effects.add(broadcastWindowClosed(msg.destroyedId))
 
-  of WlWindowDimensions:
+  of MsgKind.WlWindowDimensions:
     result.dirty = model.updateWindowDimensionsForExternal(
       msg.dimensionsWindowId.externalWindowId(),
       msg.actualWidth,
       msg.actualHeight)
-  of WlWindowDecorationHint:
+  of MsgKind.WlWindowDecorationHint:
     result.dirty = model.updateWindowDecorationHintForExternal(
       msg.decorationWindowId.externalWindowId(), msg.decorationHint)
-  of WlWindowPresentationHint:
+  of MsgKind.WlWindowPresentationHint:
     result.dirty = model.updateWindowPresentationHintForExternal(
       msg.presentationWindowId.externalWindowId(), msg.presentationHint)
-  of WlWindowParent:
+  of MsgKind.WlWindowParent:
     result.dirty = model.updateWindowParentForExternal(
       msg.childWindowId.externalWindowId(),
       msg.parentWindowId.externalWindowId())
-  of WlWindowIdentifier:
+  of MsgKind.WlWindowIdentifier:
     result.dirty = model.updateWindowIdentifierAndRestoreForExternal(
       msg.identifierWindowId.externalWindowId(), msg.identifier)
-  of WlWindowAppId:
+  of MsgKind.WlWindowAppId:
     result.dirty = model.updateWindowAppIdForExternal(
       msg.appIdWindowId.externalWindowId(), msg.updatedAppId)
-  of WlWindowTitle:
+  of MsgKind.WlWindowTitle:
     result.dirty = model.updateWindowTitleForExternal(
       msg.titleWindowId.externalWindowId(), msg.updatedTitle)
-  of WlWindowDimensionsHint:
+  of MsgKind.WlWindowDimensionsHint:
     result.dirty = model.updateWindowDimensionsHintForExternal(
       msg.hintWindowId.externalWindowId(),
       msg.minWidth,
@@ -113,83 +114,87 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.maxWidth,
       msg.maxHeight)
 
-  of WlWindowMenuRequested:
+  of MsgKind.WlWindowMenuRequested:
     if model.windowMenuCommand.len > 0 and
         model.windowForExternal(msg.menuWindowId.externalWindowId()) !=
         NullWindowId:
       result.effects.add(Effect(
-        kind: EffSpawnWindowMenu,
+        kind: EffectKind.EffSpawnWindowMenu,
         windowMenuCommand: model.windowMenuCommand,
         windowMenuId: msg.menuWindowId,
         windowMenuX: msg.menuX,
         windowMenuY: msg.menuY))
-  of WlShellSurfaceInteraction:
+  of MsgKind.WlShellSurfaceInteraction:
     if msg.shellSurfaceId != 0 and not model.sessionLocked and
         not model.layerFocusExclusive:
       result.effects.add(Effect(
-        kind: EffFocusShellSurface,
+        kind: EffectKind.EffFocusShellSurface,
         focusShellSurfaceId: msg.shellSurfaceId))
-  of WlModifiersChanged:
+  of MsgKind.WlModifiersChanged:
     discard model.setActiveModifiers(msg.newModifiers)
-  of WlLayerFocusExclusive:
+  of MsgKind.WlLayerFocusExclusive:
     result.dirty = model.setLayerFocusExclusive(true)
-  of WlLayerFocusNonExclusive, WlLayerFocusNone:
+  of MsgKind.WlLayerFocusNonExclusive, MsgKind.WlLayerFocusNone:
     result.dirty = model.setLayerFocusExclusive(false)
-  of WlSessionLocked:
+  of MsgKind.WlSessionLocked:
     result.dirty = model.setSessionLocked(true)
-  of WlSessionUnlocked:
+  of MsgKind.WlSessionUnlocked:
     result.dirty = model.setSessionLocked(false)
     let focused = model.focusedWindow()
     if focused != NullWindowId:
       let externalId = model.runtimeWindowId(focused)
       result.effects.add(broadcastWindowFocusChanged(externalId))
-      result.effects.add(Effect(kind: EffFocusWindow, focusId: externalId))
-  of WlPointerMoveRequested:
+      result.effects.add(Effect(kind: EffectKind.EffFocusWindow,
+          focusId: externalId))
+  of MsgKind.WlPointerMoveRequested:
     if model.beginPointerMove(msg.moveWinId.externalWindowId()):
-      result.effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.moveSeat))
-  of WlPointerResizeRequested:
+      result.effects.add(Effect(kind: EffectKind.EffOpStartPointer,
+          opSeat: msg.moveSeat))
+  of MsgKind.WlPointerResizeRequested:
     if model.beginPointerResize(
         msg.resizeWinId.externalWindowId(), msg.resizeEdges):
       result.effects.add(Effect(
-        kind: EffInformResizeStart,
+        kind: EffectKind.EffInformResizeStart,
         resizeLifecycleWinId: msg.resizeWinId))
-      result.effects.add(Effect(kind: EffOpStartPointer, opSeat: msg.resizeSeat))
-  of WlPointerDelta:
+      result.effects.add(Effect(kind: EffectKind.EffOpStartPointer,
+          opSeat: msg.resizeSeat))
+  of MsgKind.WlPointerDelta:
     result.dirty = model.applyPointerDelta(msg.dx, msg.dy)
-  of WlPointerRelease:
+  of MsgKind.WlPointerRelease:
     let resized = model.finishPointerOp()
     if resized != NullWindowId:
       result.effects.add(Effect(
-        kind: EffInformResizeEnd,
+        kind: EffectKind.EffInformResizeEnd,
         resizeLifecycleWinId: model.runtimeWindowId(resized)))
 
-  of WlFocusChanged:
+  of MsgKind.WlFocusChanged:
     result.dirty = model.setExternalFocus(msg.newFocusedId.externalWindowId())
-  of WlWindowFullscreenRequested:
+  of MsgKind.WlWindowFullscreenRequested:
     result.dirty = model.requestFullscreenForExternal(
       msg.fullscreenRequestId.externalWindowId(),
       msg.fullscreenOutputId.externalOutputId())
     if result.dirty:
-      let winId = model.windowForExternal(msg.fullscreenRequestId.externalWindowId())
+      let winId = model.windowForExternal(
+          msg.fullscreenRequestId.externalWindowId())
       let win = model.windowData(winId).get()
       result.effects.addSetFullscreenEffect(
         msg.fullscreenRequestId, true, uint32(win.fullscreenOutput))
-  of WlWindowExitFullscreenRequested:
+  of MsgKind.WlWindowExitFullscreenRequested:
     result.dirty = model.exitFullscreenForExternal(
       msg.exitFullscreenRequestId.externalWindowId())
     if result.dirty:
       result.effects.addSetFullscreenEffect(msg.exitFullscreenRequestId, false)
-  of WlWindowMaximizeRequested:
+  of MsgKind.WlWindowMaximizeRequested:
     result.dirty = model.requestMaximizeForExternal(
       msg.maximizeRequestId.externalWindowId())
     if result.dirty:
       result.effects.addSetMaximizedEffect(msg.maximizeRequestId, true)
-  of WlWindowUnmaximizeRequested:
+  of MsgKind.WlWindowUnmaximizeRequested:
     result.dirty = model.requestUnmaximizeForExternal(
       msg.unmaximizeRequestId.externalWindowId())
     if result.dirty:
       result.effects.addSetMaximizedEffect(msg.unmaximizeRequestId, false)
-  of WlWindowMinimizeRequested:
+  of MsgKind.WlWindowMinimizeRequested:
     result.dirty = model.requestMinimizeForExternal(
       msg.minimizeRequestId.externalWindowId())
     if result.dirty:

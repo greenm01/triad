@@ -1,7 +1,7 @@
 import options
 import workspaces
 import ../state/engine
-from ../types/runtime_values import Direction, DirDown, DirLeft, DirRight, DirUp
+from ../types/runtime_values import Direction
 
 proc windowOnTag(model: Model; tagId: TagId; winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
@@ -179,7 +179,7 @@ proc visibleWindowNear(
   NullWindowId
 
 proc findWindowPosition(model: Model; tagId: TagId; winId: WindowId):
-    tuple[found: bool, colIdx, winIdx: int, columnId: ColumnId] =
+    tuple[found: bool; colIdx, winIdx: int; columnId: ColumnId] =
   let placementOpt = model.placementForWindowOnTag(tagId, winId)
   if placementOpt.isNone:
     return (false, -1, -1, NullColumnId)
@@ -267,13 +267,13 @@ proc focusOverviewByStep*(model: var Model; step: int): bool =
 proc focusByDirection*(model: var Model; direction: Direction): bool =
   if model.overviewActive:
     case direction
-    of DirLeft:
+    of Direction.DirLeft:
       return model.focusColumnByStep(-1)
-    of DirRight:
+    of Direction.DirRight:
       return model.focusColumnByStep(1)
-    of DirUp:
+    of Direction.DirUp:
       return model.focusWindowOrWorkspace(-1)
-    of DirDown:
+    of Direction.DirDown:
       return model.focusWindowOrWorkspace(1)
 
   let tagId = model.activeTag
@@ -285,21 +285,21 @@ proc focusByDirection*(model: var Model; direction: Direction): bool =
   let columns = model.columnsForTag(tagId)
   var target = NullWindowId
   case direction
-  of DirLeft:
+  of Direction.DirLeft:
     var i = pos.colIdx - 1
     while i >= 0 and target == NullWindowId:
       target = model.visibleWindowNear(columns[i], pos.winIdx)
       dec i
-  of DirRight:
+  of Direction.DirRight:
     var i = pos.colIdx + 1
     while i < columns.len and target == NullWindowId:
       target = model.visibleWindowNear(columns[i], pos.winIdx)
       inc i
-  of DirUp:
+  of Direction.DirUp:
     let windows = model.windowsForColumn(pos.columnId)
     if pos.winIdx > 0:
       target = windows[pos.winIdx - 1]
-  of DirDown:
+  of Direction.DirDown:
     let windows = model.windowsForColumn(pos.columnId)
     if pos.winIdx >= 0 and pos.winIdx < windows.len - 1:
       target = windows[pos.winIdx + 1]

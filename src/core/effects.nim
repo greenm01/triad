@@ -2,7 +2,7 @@ import msg
 import ../types/runtime_values
 
 type
-  EffectKind* = enum
+  EffectKind* {.pure.} = enum
     EffNone,
     EffManageFinish,
     EffRenderFinish,
@@ -35,45 +35,45 @@ type
 
   Effect* = object
     case kind*: EffectKind
-    of EffLog:
+    of EffectKind.EffLog:
       msg*: string
-    of EffSetPosition:
+    of EffectKind.EffSetPosition:
       windowId*: WindowId
       x*, y*, w*, h*: int32
-    of EffFocusWindow:
+    of EffectKind.EffFocusWindow:
       focusId*: WindowId
-    of EffFocusShellSurface:
+    of EffectKind.EffFocusShellSurface:
       focusShellSurfaceId*: uint32
-    of EffCloseWindow:
+    of EffectKind.EffCloseWindow:
       closeId*: WindowId
-    of EffBroadcastJson, EffBroadcastTriadJson:
+    of EffectKind.EffBroadcastJson, EffectKind.EffBroadcastTriadJson:
       jsonPayload*: string
       triadEventName*: string
-    of EffOpStartPointer:
+    of EffectKind.EffOpStartPointer:
       opSeat*: pointer
-    of EffOpEnd:
+    of EffectKind.EffOpEnd:
       endSeat*: pointer
-    of EffSetFullscreen:
+    of EffectKind.EffSetFullscreen:
       fsWinId*: WindowId
       isFullscreen*: bool
       fsOutputId*: uint32
-    of EffSetMaximized:
+    of EffectKind.EffSetMaximized:
       maxWinId*: WindowId
       isMaximized*: bool
-    of EffInformResizeStart, EffInformResizeEnd:
+    of EffectKind.EffInformResizeStart, EffectKind.EffInformResizeEnd:
       resizeLifecycleWinId*: WindowId
-    of EffSpawnScreenLock:
+    of EffectKind.EffSpawnScreenLock:
       screenLockCommand*: seq[string]
-    of EffSpawnWindowMenu:
+    of EffectKind.EffSpawnWindowMenu:
       windowMenuCommand*: seq[string]
       windowMenuId*: WindowId
       windowMenuX*: int32
       windowMenuY*: int32
-    of EffSpawn:
+    of EffectKind.EffSpawn:
       spawnCommand*: seq[string]
-    of EffPointerWarp:
+    of EffectKind.EffPointerWarp:
       warpX*, warpY*: int32
-    of EffScreenshot:
+    of EffectKind.EffScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string
       screenshotShowPointer*: bool

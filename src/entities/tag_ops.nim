@@ -5,10 +5,10 @@ import ../state/entity_manager
 import ../state/id_gen
 import ../types/core
 import ../types/model
-from ../types/runtime_values import LayoutMode, Scroller
+from ../types/runtime_values import LayoutMode
 
 proc addTag*(
-    model: var Model; slot: uint32; name = ""; layoutMode = Scroller;
+    model: var Model; slot: uint32; name = ""; layoutMode = LayoutMode.Scroller;
     focusedWindow = NullWindowId; targetViewportXOffset = 0.0'f32;
     currentViewportXOffset = 0.0'f32; targetViewportYOffset = 0.0'f32;
     currentViewportYOffset = 0.0'f32; masterCount = 1;

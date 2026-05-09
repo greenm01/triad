@@ -72,7 +72,7 @@ proc runtimeWindowTable(
       keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass)
 
 proc projectedTag(model: Model; tagId: core_types.TagId):
-    tuple[found: bool, tag: rv.TagState] =
+    tuple[found: bool; tag: rv.TagState] =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return (false, rv.TagState())
@@ -108,31 +108,31 @@ proc layoutForTag(
     outerGap, innerGap: int32; focusCenter, preferCenter: bool;
     centerMode: string): seq[rv.RenderInstruction] =
   case tag.layoutMode
-  of rv.Scroller:
+  of rv.LayoutMode.Scroller:
     layoutScroller(
       tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter,
       centerMode)
-  of rv.VerticalScroller:
+  of rv.LayoutMode.VerticalScroller:
     layoutVerticalScroller(
       tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter,
       centerMode)
-  of rv.MasterStack:
+  of rv.LayoutMode.MasterStack:
     layoutMasterStack(tag, screen, outerGap, innerGap)
-  of rv.Grid:
+  of rv.LayoutMode.Grid:
     layoutGrid(tag, screen, outerGap, innerGap)
-  of rv.Monocle:
+  of rv.LayoutMode.Monocle:
     layoutMonocle(tag, screen, outerGap)
-  of rv.Deck:
+  of rv.LayoutMode.Deck:
     layoutDeck(tag, screen, outerGap, innerGap)
-  of rv.CenterTile:
+  of rv.LayoutMode.CenterTile:
     layoutCenterTile(tag, screen, outerGap, innerGap)
-  of rv.RightTile:
+  of rv.LayoutMode.RightTile:
     layoutRightTile(tag, screen, outerGap, innerGap)
-  of rv.VerticalTile:
+  of rv.LayoutMode.VerticalTile:
     layoutVerticalMasterStack(tag, screen, outerGap, innerGap)
-  of rv.VerticalGrid:
+  of rv.LayoutMode.VerticalGrid:
     layoutVerticalGrid(tag, screen, outerGap, innerGap)
-  of rv.VerticalDeck:
+  of rv.LayoutMode.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
 
 proc layoutProjection*(model: Model): LayoutProjection =
@@ -140,7 +140,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
   let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
-    var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.Grid)
+    var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.LayoutMode.Grid)
     var slots = model.sortedSlots()
     slots.sort()
     for slot in slots:

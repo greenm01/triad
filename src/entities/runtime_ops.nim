@@ -1,5 +1,5 @@
 import ../types/model
-from ../types/runtime_values import OpNone
+from ../types/runtime_values import PointerOpKind
 
 proc setOverviewActive*(model: var Model; active: bool): bool =
   if model.overviewActive == active:
@@ -15,9 +15,9 @@ proc setLayerFocusExclusiveState*(
   true
 
 proc clearPointerOp*(model: var Model): bool =
-  if model.pointerOp.kind == OpNone:
+  if model.pointerOp.kind == PointerOpKind.OpNone:
     return false
-  model.pointerOp = PointerOpData(kind: OpNone)
+  model.pointerOp = PointerOpData(kind: PointerOpKind.OpNone)
   true
 
 proc setSessionLockedState*(model: var Model; locked: bool): bool =

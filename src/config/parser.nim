@@ -75,7 +75,8 @@ proc runtimeLayoutCycle*(cycle: seq[LayoutMode]): seq[LayoutMode] =
   if cycle.len > 0:
     cycle
   else:
-    @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+    @[LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid,
+        LayoutMode.Monocle, LayoutMode.VerticalScroller]
 
 proc normalizeWorkspaceCountFromConfig(count: int): uint32 =
   if count <= 0:
@@ -97,34 +98,34 @@ proc parseColor(value: string; fallback: uint32): uint32 =
   except CatchableError:
     result = fallback
 
-proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
+proc parseLayoutName(name: string; fallback: LayoutMode): LayoutMode =
   case name
-  of "scroller": Scroller
-  of "vertical-scroller": VerticalScroller
-  of "tile": MasterStack
-  of "grid": Grid
-  of "monocle": Monocle
-  of "deck": Deck
-  of "center-tile", "center_tile": CenterTile
-  of "right-tile", "right_tile": RightTile
-  of "vertical-tile", "vertical_tile": VerticalTile
-  of "vertical-grid", "vertical_grid": VerticalGrid
-  of "vertical-deck", "vertical_deck": VerticalDeck
+  of "scroller": LayoutMode.Scroller
+  of "vertical-scroller": LayoutMode.VerticalScroller
+  of "tile": LayoutMode.MasterStack
+  of "grid": LayoutMode.Grid
+  of "monocle": LayoutMode.Monocle
+  of "deck": LayoutMode.Deck
+  of "center-tile", "center_tile": LayoutMode.CenterTile
+  of "right-tile", "right_tile": LayoutMode.RightTile
+  of "vertical-tile", "vertical_tile": LayoutMode.VerticalTile
+  of "vertical-grid", "vertical_grid": LayoutMode.VerticalGrid
+  of "vertical-deck", "vertical_deck": LayoutMode.VerticalDeck
   else: fallback
 
 proc forcedLayoutValue(name: string): int =
   case name
-  of "scroller": ord(Scroller) + 1
-  of "vertical-scroller": ord(VerticalScroller) + 1
-  of "tile": ord(MasterStack) + 1
-  of "grid": ord(Grid) + 1
-  of "monocle": ord(Monocle) + 1
-  of "deck": ord(Deck) + 1
-  of "center-tile", "center_tile": ord(CenterTile) + 1
-  of "right-tile", "right_tile": ord(RightTile) + 1
-  of "vertical-tile", "vertical_tile": ord(VerticalTile) + 1
-  of "vertical-grid", "vertical_grid": ord(VerticalGrid) + 1
-  of "vertical-deck", "vertical_deck": ord(VerticalDeck) + 1
+  of "scroller": ord(LayoutMode.Scroller) + 1
+  of "vertical-scroller": ord(LayoutMode.VerticalScroller) + 1
+  of "tile": ord(LayoutMode.MasterStack) + 1
+  of "grid": ord(LayoutMode.Grid) + 1
+  of "monocle": ord(LayoutMode.Monocle) + 1
+  of "deck": ord(LayoutMode.Deck) + 1
+  of "center-tile", "center_tile": ord(LayoutMode.CenterTile) + 1
+  of "right-tile", "right_tile": ord(LayoutMode.RightTile) + 1
+  of "vertical-tile", "vertical_tile": ord(LayoutMode.VerticalTile) + 1
+  of "vertical-grid", "vertical_grid": ord(LayoutMode.VerticalGrid) + 1
+  of "vertical-deck", "vertical_deck": ord(LayoutMode.VerticalDeck) + 1
   else: 0
 
 proc modifierValue(name: string): uint32 =
@@ -155,7 +156,7 @@ proc buttonValue(name: string): uint32 =
       discard
     0'u32
 
-proc parseKeySpec(value: string): tuple[key: string, modifiers: uint32] =
+proc parseKeySpec(value: string): tuple[key: string; modifiers: uint32] =
   let parts = value.split("+")
   if parts.len == 0:
     return ("", 0'u32)
@@ -165,21 +166,21 @@ proc parseKeySpec(value: string): tuple[key: string, modifiers: uint32] =
 
 proc parsePointerOp(value: string): PointerOpKind =
   case value
-  of "move", "Move": OpMove
-  of "resize", "Resize": OpResize
-  else: OpNone
+  of "move", "Move": PointerOpKind.OpMove
+  of "resize", "Resize": PointerOpKind.OpResize
+  else: PointerOpKind.OpNone
 
 proc parseBindingMode(value: string): BindingMode =
   case value.normalize()
-  of "normal": BindNormal
-  of "overview": BindOverview
-  else: BindAlways
+  of "normal": BindingMode.BindNormal
+  of "overview": BindingMode.BindOverview
+  else: BindingMode.BindAlways
 
 proc parsePresentationMode(value: string): PresentationMode =
   case value
-  of "vsync", "Vsync", "VSYNC": PresentationVsync
-  of "async", "Async", "ASYNC": PresentationAsync
-  else: PresentationDefault
+  of "vsync", "Vsync", "VSYNC": PresentationMode.PresentationVsync
+  of "async", "Async", "ASYNC": PresentationMode.PresentationAsync
+  else: PresentationMode.PresentationDefault
 
 proc defaultKeyBindings*(): seq[KeyBindingConfig] =
   @[
@@ -187,7 +188,8 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "f", modifiers: 64'u32, command: "toggle-fullscreen"),
     KeyBindingConfig(key: "m", modifiers: 64'u32, command: "toggle-maximized"),
     KeyBindingConfig(key: "i", modifiers: 64'u32, command: "minimize"),
-    KeyBindingConfig(key: "r", modifiers: 12'u32, command: "triad-reload", bypassShortcutsInhibit: true),
+    KeyBindingConfig(key: "r", modifiers: 12'u32, command: "triad-reload",
+        bypassShortcutsInhibit: true),
     KeyBindingConfig(key: "t", modifiers: 64'u32, command: "spawn-terminal"),
     KeyBindingConfig(key: "Tab", modifiers: 64'u32, command: "focus-next"),
     KeyBindingConfig(key: "Left", modifiers: 8'u32, command: "focus-left"),
@@ -203,11 +205,13 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
 
 proc defaultPointerBindings*(): seq[PointerBindingConfig] =
   @[
-    PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32, op: OpMove),
-    PointerBindingConfig(button: 0x111'u32, modifiers: 64'u32, op: OpResize)
+    PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32,
+        op: PointerOpKind.OpMove),
+    PointerBindingConfig(button: 0x111'u32, modifiers: 64'u32,
+        op: PointerOpKind.OpResize)
   ]
 
-proc getConfigPath*(): string =
+proc defaultConfigPath*(): string =
   let configHome = getEnv("XDG_CONFIG_HOME", getHomeDir() / ".config")
   return configHome / "triad" / "config.kdl"
 
@@ -228,7 +232,8 @@ proc loadConfig*(path: string): Config =
   result.layout.enableAnimations = true
   result.layout.animationSpeed = DefaultAnimationSpeed
   result.layout.smartGaps = false
-  result.layout.layoutCycle = @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+  result.layout.layoutCycle = @[LayoutMode.Scroller, LayoutMode.MasterStack,
+      LayoutMode.Grid, LayoutMode.Monocle, LayoutMode.VerticalScroller]
   result.workspaces.defaultCount = DefaultWorkspaceCount
   result.scratchpad.widthRatio = DefaultScratchpadWidthRatio
   result.scratchpad.heightRatio = DefaultScratchpadHeightRatio
@@ -246,7 +251,7 @@ proc loadConfig*(path: string): Config =
   result.screenshot.captureCommand = DefaultScreenshotCaptureCommand
   result.screenshot.regionSelectorCommand = DefaultScreenshotRegionSelectorCommand
   result.protocolSurfaces.enabled = true
-  
+
   try:
     let doc = parseKdlFile(path)
     for node in doc:
@@ -260,34 +265,52 @@ proc loadConfig*(path: string): Config =
               if mode in ["never", "always", "on-overflow"]:
                 result.layout.centerFocusedColumn = mode
             elif child.name == "default-column-width":
-              if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
-                result.layout.defaultColumnWidth = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+              if child.children.len > 0 and child.children[0].name ==
+                  "proportion" and child.children[0].args.len > 0:
+                result.layout.defaultColumnWidth = clampF32(float32(
+                    child.children[0].args[0].kFloat()), 0.05, 1.0)
             elif child.name == "default-window-width":
-              if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
-                result.layout.defaultWindowWidth = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+              if child.children.len > 0 and child.children[0].name ==
+                  "proportion" and child.children[0].args.len > 0:
+                result.layout.defaultWindowWidth = clampF32(float32(
+                    child.children[0].args[0].kFloat()), 0.05, 1.0)
             elif child.name == "default-window-height":
-              if child.children.len > 0 and child.children[0].name == "proportion" and child.children[0].args.len > 0:
-                result.layout.defaultWindowHeight = clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+              if child.children.len > 0 and child.children[0].name ==
+                  "proportion" and child.children[0].args.len > 0:
+                result.layout.defaultWindowHeight = clampF32(float32(
+                    child.children[0].args[0].kFloat()), 0.05, 1.0)
             elif child.name == "master":
               for masterChild in child.children:
                 try:
                   if masterChild.name == "count" and masterChild.args.len > 0:
-                    result.layout.defaultMasterCount = max(1, masterChild.args[0].kInt())
-                  elif masterChild.name == "split-ratio" and masterChild.args.len > 0:
-                    result.layout.defaultMasterRatio = clampF32(float32(masterChild.args[0].kFloat()), 0.05, 0.95)
+                    result.layout.defaultMasterCount = max(1, masterChild.args[
+                        0].kInt())
+                  elif masterChild.name == "split-ratio" and
+                      masterChild.args.len > 0:
+                    result.layout.defaultMasterRatio = clampF32(float32(
+                        masterChild.args[0].kFloat()), 0.05, 0.95)
                 except CatchableError as e:
-                  warn "Ignoring invalid master config field", field=masterChild.name, error=e.msg
+                  warn "Ignoring invalid master config field",
+                      field = masterChild.name, error = e.msg
             elif child.name == "border":
               for borderChild in child.children:
                 try:
                   if borderChild.name == "width" and borderChild.args.len > 0:
-                    result.layout.borderWidth = clamp32(int32(borderChild.args[0].kInt()), 0, 64)
-                  elif borderChild.name == "active-color" and borderChild.args.len > 0:
-                    result.layout.focusedBorderColor = parseColor(borderChild.args[0].kString(), result.layout.focusedBorderColor)
-                  elif borderChild.name == "inactive-color" and borderChild.args.len > 0:
-                    result.layout.unfocusedBorderColor = parseColor(borderChild.args[0].kString(), result.layout.unfocusedBorderColor)
+                    result.layout.borderWidth = clamp32(int32(borderChild.args[
+                        0].kInt()), 0, 64)
+                  elif borderChild.name == "active-color" and
+                      borderChild.args.len > 0:
+                    result.layout.focusedBorderColor = parseColor(
+                        borderChild.args[0].kString(),
+                        result.layout.focusedBorderColor)
+                  elif borderChild.name == "inactive-color" and
+                      borderChild.args.len > 0:
+                    result.layout.unfocusedBorderColor = parseColor(
+                        borderChild.args[0].kString(),
+                        result.layout.unfocusedBorderColor)
                 except CatchableError as e:
-                  warn "Ignoring invalid border config field", field=borderChild.name, error=e.msg
+                  warn "Ignoring invalid border config field",
+                      field = borderChild.name, error = e.msg
             elif child.name == "scroller-focus-center" and child.args.len > 0:
               result.layout.scrollerFocusCenter = child.args[0].kBool()
             elif child.name == "scroller-prefer-center" and child.args.len > 0:
@@ -295,16 +318,18 @@ proc loadConfig*(path: string): Config =
             elif child.name == "enable-animations" and child.args.len > 0:
               result.layout.enableAnimations = child.args[0].kBool()
             elif child.name == "animation-speed" and child.args.len > 0:
-              result.layout.animationSpeed = clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
+              result.layout.animationSpeed = clampF32(float32(child.args[
+                  0].kFloat()), 0.0, 1.0)
             elif child.name == "smart-gaps" and child.args.len > 0:
               result.layout.smartGaps = child.args[0].kBool()
             elif child.name == "layout-cycle":
               result.layout.layoutCycle = @[]
               for arg in child.args:
-                result.layout.layoutCycle.add(parseLayoutName(arg.kString(), Scroller))
+                result.layout.layoutCycle.add(parseLayoutName(arg.kString(),
+                    LayoutMode.Scroller))
           except CatchableError as e:
-            warn "Ignoring invalid layout config field", field=child.name, error=e.msg
-      
+            warn "Ignoring invalid layout config field", field = child.name, error = e.msg
+
       elif node.name == "workspaces":
         for child in node.children:
           try:
@@ -312,7 +337,7 @@ proc loadConfig*(path: string): Config =
               let count = child.args[0].kInt()
               result.workspaces.defaultCount = normalizeWorkspaceCountFromConfig(count)
           except CatchableError as e:
-            warn "Ignoring invalid workspace config field", field=child.name, error=e.msg
+            warn "Ignoring invalid workspace config field", field = child.name, error = e.msg
 
       elif node.name == "tag-rules":
         for child in node.children:
@@ -321,16 +346,17 @@ proc loadConfig*(path: string): Config =
               let rawId = child.args[0].kInt()
               if rawId <= 0: continue
               let id = uint32(rawId)
-              var layout = Scroller
+              var layout = LayoutMode.Scroller
               var tagName = ""
               if child.props.hasKey("name"):
                 tagName = child.props["name"].kString()
               if child.props.hasKey("default-layout"):
                 layout = parseLayoutName(child.props["default-layout"].kString(), layout)
-              result.tagRules.add(TagRule(tagId: id, defaultLayout: layout, name: tagName))
+              result.tagRules.add(TagRule(tagId: id, defaultLayout: layout,
+                  name: tagName))
             except CatchableError as e:
-              warn "Ignoring invalid tag rule", error=e.msg
-            
+              warn "Ignoring invalid tag rule", error = e.msg
+
       elif node.name == "window-rule":
         var rule = WindowRule()
         for child in node.children:
@@ -350,7 +376,7 @@ proc loadConfig*(path: string): Config =
             elif child.name == "forced-layout" and child.args.len > 0:
               rule.forcedLayout = forcedLayoutValue(child.args[0].kString())
           except CatchableError as e:
-            warn "Ignoring invalid window rule field", field=child.name, error=e.msg
+            warn "Ignoring invalid window rule field", field = child.name, error = e.msg
         result.windowRules.add(rule)
 
       elif node.name == "spawn-at-startup":
@@ -359,7 +385,7 @@ proc loadConfig*(path: string): Config =
           for arg in node.args:
             cmd.add(arg.kString())
         except CatchableError as e:
-          warn "Ignoring invalid startup command", error=e.msg
+          warn "Ignoring invalid startup command", error = e.msg
         if cmd.len > 0:
           result.startupCommands.add(cmd)
 
@@ -369,7 +395,7 @@ proc loadConfig*(path: string): Config =
           for arg in node.args:
             cmd.add(arg.kString())
         except CatchableError as e:
-          warn "Ignoring invalid window menu command", error=e.msg
+          warn "Ignoring invalid window menu command", error = e.msg
         if cmd.len > 0:
           result.windowMenu.command = cmd
 
@@ -383,7 +409,7 @@ proc loadConfig*(path: string): Config =
                   key: spec.key,
                   modifiers: spec.modifiers,
                   command: child.args[1].kString(),
-                  mode: BindAlways)
+                  mode: BindingMode.BindAlways)
                 if child.props.hasKey("layout"):
                   let layout = child.props["layout"].kInt()
                   if layout >= 0:
@@ -392,19 +418,20 @@ proc loadConfig*(path: string): Config =
                 if child.props.hasKey("mode"):
                   binding.mode = parseBindingMode(child.props["mode"].kString())
                 if child.props.hasKey("allow-inhibiting"):
-                  binding.bypassShortcutsInhibit = not child.props["allow-inhibiting"].kBool()
+                  binding.bypassShortcutsInhibit = not child.props[
+                      "allow-inhibiting"].kBool()
                 result.keyBindings.add(binding)
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               let button = buttonValue(spec.key)
               let op = parsePointerOp(child.args[1].kString())
-              if button != 0 and op != OpNone:
+              if button != 0 and op != PointerOpKind.OpNone:
                 result.pointerBindings.add(PointerBindingConfig(
                   button: button,
                   modifiers: spec.modifiers,
                   op: op))
           except CatchableError as e:
-            warn "Ignoring invalid binding config field", field=child.name, error=e.msg
+            warn "Ignoring invalid binding config field", field = child.name, error = e.msg
 
       elif node.name == "quickshell":
         for child in node.children:
@@ -419,7 +446,7 @@ proc loadConfig*(path: string): Config =
               for arg in child.args:
                 result.quickshell.args.add(arg.kString())
           except CatchableError as e:
-            warn "Ignoring invalid quickshell field", field=child.name, error=e.msg
+            warn "Ignoring invalid quickshell field", field = child.name, error = e.msg
 
       elif node.name == "terminal":
         for child in node.children:
@@ -429,7 +456,7 @@ proc loadConfig*(path: string): Config =
               for arg in child.args:
                 result.terminal.command.add(arg.kString())
           except CatchableError as e:
-            warn "Ignoring invalid terminal field", field=child.name, error=e.msg
+            warn "Ignoring invalid terminal field", field = child.name, error = e.msg
 
       elif node.name == "screen-lock":
         for child in node.children:
@@ -441,17 +468,19 @@ proc loadConfig*(path: string): Config =
               if cmd.len > 0:
                 result.screenLock.command = cmd
           except CatchableError as e:
-            warn "Ignoring invalid screen-lock field", field=child.name, error=e.msg
+            warn "Ignoring invalid screen-lock field", field = child.name, error = e.msg
 
       elif node.name == "scratchpad":
         for child in node.children:
           try:
             if child.name == "width-ratio" and child.args.len > 0:
-              result.scratchpad.widthRatio = clampF32(float32(child.args[0].kFloat()), 0.1, 1.0)
+              result.scratchpad.widthRatio = clampF32(float32(child.args[
+                  0].kFloat()), 0.1, 1.0)
             elif child.name == "height-ratio" and child.args.len > 0:
-              result.scratchpad.heightRatio = clampF32(float32(child.args[0].kFloat()), 0.1, 1.0)
+              result.scratchpad.heightRatio = clampF32(float32(child.args[
+                  0].kFloat()), 0.1, 1.0)
           except CatchableError as e:
-            warn "Ignoring invalid scratchpad field", field=child.name, error=e.msg
+            warn "Ignoring invalid scratchpad field", field = child.name, error = e.msg
 
       elif node.name == "overview":
         for child in node.children:
@@ -459,27 +488,33 @@ proc loadConfig*(path: string): Config =
             if child.name == "outer-gap" and child.args.len > 0:
               result.overview.outerGap = clamp32(int32(child.args[0].kInt()), 0, 512)
             elif child.name == "inner-gap-multiplier" and child.args.len > 0:
-              result.overview.innerGapMultiplier = clampF32(float32(child.args[0].kFloat()), 0.0, 8.0)
+              result.overview.innerGapMultiplier = clampF32(float32(child.args[
+                  0].kFloat()), 0.0, 8.0)
           except CatchableError as e:
-            warn "Ignoring invalid overview field", field=child.name, error=e.msg
+            warn "Ignoring invalid overview field", field = child.name, error = e.msg
 
       elif node.name == "floating":
         for child in node.children:
           try:
             if child.name == "x-ratio" and child.args.len > 0:
-              result.floating.xRatio = clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
+              result.floating.xRatio = clampF32(float32(child.args[0].kFloat()),
+                  0.0, 1.0)
             elif child.name == "y-ratio" and child.args.len > 0:
-              result.floating.yRatio = clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
+              result.floating.yRatio = clampF32(float32(child.args[0].kFloat()),
+                  0.0, 1.0)
             elif child.name == "width-ratio" and child.args.len > 0:
-              result.floating.widthRatio = clampF32(float32(child.args[0].kFloat()), 0.05, 1.0)
+              result.floating.widthRatio = clampF32(float32(child.args[
+                  0].kFloat()), 0.05, 1.0)
             elif child.name == "height-ratio" and child.args.len > 0:
-              result.floating.heightRatio = clampF32(float32(child.args[0].kFloat()), 0.05, 1.0)
+              result.floating.heightRatio = clampF32(float32(child.args[
+                  0].kFloat()), 0.05, 1.0)
             elif child.name == "min-width" and child.args.len > 0:
               result.floating.minWidth = clamp32(int32(child.args[0].kInt()), 1, 4096)
             elif child.name == "min-height" and child.args.len > 0:
-              result.floating.minHeight = clamp32(int32(child.args[0].kInt()), 1, 4096)
+              result.floating.minHeight = clamp32(int32(child.args[0].kInt()),
+                  1, 4096)
           except CatchableError as e:
-            warn "Ignoring invalid floating field", field=child.name, error=e.msg
+            warn "Ignoring invalid floating field", field = child.name, error = e.msg
 
       elif node.name == "screenshot":
         for child in node.children:
@@ -495,7 +530,7 @@ proc loadConfig*(path: string): Config =
             elif child.name == "show-pointer" and child.args.len > 0:
               result.screenshot.showPointer = child.args[0].kBool()
           except CatchableError as e:
-            warn "Ignoring invalid screenshot field", field=child.name, error=e.msg
+            warn "Ignoring invalid screenshot field", field = child.name, error = e.msg
 
       elif node.name == "cursor":
         for child in node.children:
@@ -507,19 +542,19 @@ proc loadConfig*(path: string): Config =
               if size > 0:
                 result.cursor.size = uint32(min(size, 512))
           except CatchableError as e:
-            warn "Ignoring invalid cursor field", field=child.name, error=e.msg
+            warn "Ignoring invalid cursor field", field = child.name, error = e.msg
 
       elif node.name == "presentation-mode" and node.args.len > 0:
         try:
           result.presentationMode = parsePresentationMode(node.args[0].kString())
         except CatchableError as e:
-          warn "Ignoring invalid presentation mode", error=e.msg
+          warn "Ignoring invalid presentation mode", error = e.msg
 
       elif node.name == "allow-exit-session" and node.args.len > 0:
         try:
           result.allowExitSession = node.args[0].kBool()
         except CatchableError as e:
-          warn "Ignoring invalid allow-exit-session value", error=e.msg
+          warn "Ignoring invalid allow-exit-session value", error = e.msg
 
       elif node.name == "protocol-surfaces":
         for child in node.children:
@@ -529,11 +564,11 @@ proc loadConfig*(path: string): Config =
             elif child.name == "visible-debug" and child.args.len > 0:
               result.protocolSurfaces.visibleDebug = child.args[0].kBool()
           except CatchableError as e:
-            warn "Ignoring invalid protocol-surfaces field", field=child.name, error=e.msg
-            
+            warn "Ignoring invalid protocol-surfaces field", field = child.name, error = e.msg
+
   except:
     let e = getCurrentException()
-    warn "Could not load config, using defaults", path=path, error=e.msg
+    warn "Could not load config, using defaults", path = path, error = e.msg
 
   if result.keyBindings.len == 0:
     result.keyBindings = defaultKeyBindings()

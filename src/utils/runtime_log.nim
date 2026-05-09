@@ -38,16 +38,16 @@ proc configureLogging*() =
   let rawLevel = getEnv("TRIAD_LOG_LEVEL", "")
   if rawLevel.len == 0:
     setLogLevel(DefaultLogLevel)
-    info "Logging initialized", level=DefaultLogLevel.logLevelName()
+    info "Logging initialized", level = DefaultLogLevel.logLevelName()
     return
 
   let parsed = parseLogLevel(rawLevel)
   if parsed.isSome:
     let level = parsed.get()
     setLogLevel(level)
-    info "Logging initialized", level=level.logLevelName()
+    info "Logging initialized", level = level.logLevelName()
   else:
     setLogLevel(DefaultLogLevel)
     warn "Invalid TRIAD_LOG_LEVEL; using default",
-      value=rawLevel,
-      default=DefaultLogLevel.logLevelName()
+      value = rawLevel,
+      default = DefaultLogLevel.logLevelName()

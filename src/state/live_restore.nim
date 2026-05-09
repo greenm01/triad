@@ -105,7 +105,7 @@ proc shouldPersistTag(model: Model; tag: TagData): bool =
   if tag.id == model.activeTag or model.tagHasLiveWindows(tag.id) or
       model.hasOutputTag(tag.id):
     return true
-  if tag.name.len > 0 or tag.layoutMode != Scroller:
+  if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller:
     return true
   if tag.focusedWindow != NullWindowId or model.columnsForTag(tag.id).len > 0:
     return true

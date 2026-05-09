@@ -53,7 +53,7 @@ proc hasEffect*(effects: seq[Effect]; kind: EffectKind): bool =
 
 proc broadcastWorkspaceActivated*(snapshot: ShellSnapshot): Effect =
   let workspace = snapshot.activeWorkspace()
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "WorkspaceActivated": {
       "id": workspace.tagId,
       "focused": true
@@ -61,7 +61,7 @@ proc broadcastWorkspaceActivated*(snapshot: ShellSnapshot): Effect =
   }))
 
 proc broadcastWindowFocusChanged*(winId: runtime_values.WindowId): Effect =
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "WindowFocusChanged": {
       "id": winId
     }
@@ -71,43 +71,43 @@ proc broadcastWindowOpened*(snapshot: ShellSnapshot;
     winId: runtime_values.WindowId): Effect =
   for win in snapshot.windows:
     if win.id == winId:
-      return Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+      return Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
         "WindowOpenedOrChanged": {
           "window": niriWindowJson(snapshot, win)
         }
       }))
-  Effect(kind: EffNone)
+  Effect(kind: EffectKind.EffNone)
 
 proc broadcastWindowClosed*(winId: runtime_values.WindowId): Effect =
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "WindowClosed": {
       "id": winId
     }
   }))
 
 proc broadcastWindowsChanged*(snapshot: ShellSnapshot): Effect =
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "WindowsChanged": {
       "windows": niriWindowsJson(snapshot)
     }
   }))
 
 proc broadcastWorkspacesChanged*(snapshot: ShellSnapshot): Effect =
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "WorkspacesChanged": {
       "workspaces": niriWorkspacesJson(snapshot)
     }
   }))
 
 proc broadcastOutputsChanged*(snapshot: ShellSnapshot): Effect =
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "OutputsChanged": {
       "outputs": niriOutputsJson(snapshot)
     }
   }))
 
 proc broadcastOverview*(open: bool): Effect =
-  Effect(kind: EffBroadcastJson, jsonPayload: $(%*{
+  Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "OverviewOpenedOrClosed": {
       "is_open": open
     }
@@ -133,141 +133,141 @@ proc triadStateChangedEvent(snapshot: ShellSnapshot): string =
 
 proc broadcastTriadLayoutStateChanged*(snapshot: ShellSnapshot): Effect =
   Effect(
-    kind: EffBroadcastTriadJson,
+    kind: EffectKind.EffBroadcastTriadJson,
     jsonPayload: triadLayoutStateChangedEvent(snapshot),
     triadEventName: "layout")
 
 proc broadcastTriadStateChanged*(snapshot: ShellSnapshot): Effect =
   Effect(
-    kind: EffBroadcastTriadJson,
+    kind: EffectKind.EffBroadcastTriadJson,
     jsonPayload: triadStateChangedEvent(snapshot),
     triadEventName: "state")
 
 proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
   case kind
-  of WlWindowCreated,
-      WlWindowDestroyed,
-      WlFocusChanged,
-      WlWindowFullscreenRequested,
-      WlWindowExitFullscreenRequested,
-      WlWindowMaximizeRequested,
-      WlWindowUnmaximizeRequested,
-      WlWindowMinimizeRequested,
-      WlWindowDimensions,
-      WlWindowIdentifier,
-      WlWindowAppId,
-      WlWindowTitle,
-      WlWindowDimensionsHint,
-      CmdFocusNext,
-      CmdFocusPrev,
-      CmdFocusDirection,
-      CmdFocusLast,
-      CmdFocusTagLeft,
-      CmdFocusTagRight,
-      CmdFocusOccupiedTagLeft,
-      CmdFocusOccupiedTagRight,
-      CmdFocusColumnFirst,
-      CmdFocusColumnLast,
-      CmdFocusWindowOrWorkspaceUp,
-      CmdFocusWindowOrWorkspaceDown,
-      CmdFocusWorkspaceIndex,
-      CmdMoveToTagLeft,
-      CmdMoveToTagRight,
-      CmdMoveToWorkspaceIndex,
-      CmdMoveWindow,
-      CmdMoveWindowLeft,
-      CmdMoveWindowRight,
-      CmdMoveWindowUp,
-      CmdMoveWindowDown,
-      CmdMoveWindowUpOrToWorkspaceUp,
-      CmdMoveWindowDownOrToWorkspaceDown,
-      CmdMoveColumnLeft,
-      CmdMoveColumnRight,
-      CmdMoveColumnToFirst,
-      CmdMoveColumnToLast,
-      CmdSwapWindowUp,
-      CmdSwapWindowDown,
-      CmdConsumeWindow,
-      CmdExpelWindow,
-      CmdMoveToTag,
-      CmdSwapWindowToTag,
-      CmdMoveToScratchpad,
-      CmdMoveToNamedScratchpad,
-      CmdToggleScratchpad,
-      CmdToggleNamedScratchpad,
-      CmdRestoreScratchpad,
-      CmdToggleFloating,
-      CmdToggleFullscreen,
-      CmdToggleMaximized,
-      CmdMinimize,
-      CmdSelectWindow,
-      CmdFocusTag,
-      CmdFocusWindowById:
+  of MsgKind.WlWindowCreated,
+      MsgKind.WlWindowDestroyed,
+      MsgKind.WlFocusChanged,
+      MsgKind.WlWindowFullscreenRequested,
+      MsgKind.WlWindowExitFullscreenRequested,
+      MsgKind.WlWindowMaximizeRequested,
+      MsgKind.WlWindowUnmaximizeRequested,
+      MsgKind.WlWindowMinimizeRequested,
+      MsgKind.WlWindowDimensions,
+      MsgKind.WlWindowIdentifier,
+      MsgKind.WlWindowAppId,
+      MsgKind.WlWindowTitle,
+      MsgKind.WlWindowDimensionsHint,
+      MsgKind.CmdFocusNext,
+      MsgKind.CmdFocusPrev,
+      MsgKind.CmdFocusDirection,
+      MsgKind.CmdFocusLast,
+      MsgKind.CmdFocusTagLeft,
+      MsgKind.CmdFocusTagRight,
+      MsgKind.CmdFocusOccupiedTagLeft,
+      MsgKind.CmdFocusOccupiedTagRight,
+      MsgKind.CmdFocusColumnFirst,
+      MsgKind.CmdFocusColumnLast,
+      MsgKind.CmdFocusWindowOrWorkspaceUp,
+      MsgKind.CmdFocusWindowOrWorkspaceDown,
+      MsgKind.CmdFocusWorkspaceIndex,
+      MsgKind.CmdMoveToTagLeft,
+      MsgKind.CmdMoveToTagRight,
+      MsgKind.CmdMoveToWorkspaceIndex,
+      MsgKind.CmdMoveWindow,
+      MsgKind.CmdMoveWindowLeft,
+      MsgKind.CmdMoveWindowRight,
+      MsgKind.CmdMoveWindowUp,
+      MsgKind.CmdMoveWindowDown,
+      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
+      MsgKind.CmdMoveColumnLeft,
+      MsgKind.CmdMoveColumnRight,
+      MsgKind.CmdMoveColumnToFirst,
+      MsgKind.CmdMoveColumnToLast,
+      MsgKind.CmdSwapWindowUp,
+      MsgKind.CmdSwapWindowDown,
+      MsgKind.CmdConsumeWindow,
+      MsgKind.CmdExpelWindow,
+      MsgKind.CmdMoveToTag,
+      MsgKind.CmdSwapWindowToTag,
+      MsgKind.CmdMoveToScratchpad,
+      MsgKind.CmdMoveToNamedScratchpad,
+      MsgKind.CmdToggleScratchpad,
+      MsgKind.CmdToggleNamedScratchpad,
+      MsgKind.CmdRestoreScratchpad,
+      MsgKind.CmdToggleFloating,
+      MsgKind.CmdToggleFullscreen,
+      MsgKind.CmdToggleMaximized,
+      MsgKind.CmdMinimize,
+      MsgKind.CmdSelectWindow,
+      MsgKind.CmdFocusTag,
+      MsgKind.CmdFocusWindowById:
     true
   else:
     false
 
 proc shouldBroadcastOutputsChanged*(kind: MsgKind): bool =
   case kind
-  of WlOutputDimensions,
-      WlOutputName,
-      WlOutputPosition,
-      WlOutputUsable,
-      WlOutputRemoved:
+  of MsgKind.WlOutputDimensions,
+      MsgKind.WlOutputName,
+      MsgKind.WlOutputPosition,
+      MsgKind.WlOutputUsable,
+      MsgKind.WlOutputRemoved:
     true
   else:
     false
 
 proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
   case kind
-  of WlWindowCreated,
-      WlWindowDestroyed,
-      WlWindowDimensions,
-      WlWindowFullscreenRequested,
-      WlWindowExitFullscreenRequested,
-      WlWindowMaximizeRequested,
-      WlWindowUnmaximizeRequested,
-      WlWindowMinimizeRequested,
-      CmdSetLayout,
-      CmdSwitchLayout,
-      CmdSetMasterCount,
-      CmdSetMasterRatio,
-      CmdAdjustMasterCount,
-      CmdAdjustMasterRatio,
-      CmdResizeWidth,
-      CmdResizeHeight,
-      CmdSetColumnWidth,
-      CmdFocusTag,
-      CmdFocusWorkspaceIndex,
-      CmdMoveToTag,
-      CmdMoveToWorkspaceIndex,
-      CmdMoveToTagLeft,
-      CmdMoveToTagRight,
-      CmdMoveWindow,
-      CmdMoveWindowLeft,
-      CmdMoveWindowRight,
-      CmdMoveWindowUp,
-      CmdMoveWindowDown,
-      CmdMoveWindowUpOrToWorkspaceUp,
-      CmdMoveWindowDownOrToWorkspaceDown,
-      CmdMoveColumnLeft,
-      CmdMoveColumnRight,
-      CmdMoveColumnToFirst,
-      CmdMoveColumnToLast,
-      CmdSwapWindowUp,
-      CmdSwapWindowDown,
-      CmdConsumeWindow,
-      CmdExpelWindow,
-      CmdMoveToScratchpad,
-      CmdMoveToNamedScratchpad,
-      CmdToggleScratchpad,
-      CmdToggleNamedScratchpad,
-      CmdRestoreScratchpad,
-      CmdToggleFloating,
-      CmdToggleFullscreen,
-      CmdToggleMaximized,
-      CmdMinimize,
-      CmdSelectWindow:
+  of MsgKind.WlWindowCreated,
+      MsgKind.WlWindowDestroyed,
+      MsgKind.WlWindowDimensions,
+      MsgKind.WlWindowFullscreenRequested,
+      MsgKind.WlWindowExitFullscreenRequested,
+      MsgKind.WlWindowMaximizeRequested,
+      MsgKind.WlWindowUnmaximizeRequested,
+      MsgKind.WlWindowMinimizeRequested,
+      MsgKind.CmdSetLayout,
+      MsgKind.CmdSwitchLayout,
+      MsgKind.CmdSetMasterCount,
+      MsgKind.CmdSetMasterRatio,
+      MsgKind.CmdAdjustMasterCount,
+      MsgKind.CmdAdjustMasterRatio,
+      MsgKind.CmdResizeWidth,
+      MsgKind.CmdResizeHeight,
+      MsgKind.CmdSetColumnWidth,
+      MsgKind.CmdFocusTag,
+      MsgKind.CmdFocusWorkspaceIndex,
+      MsgKind.CmdMoveToTag,
+      MsgKind.CmdMoveToWorkspaceIndex,
+      MsgKind.CmdMoveToTagLeft,
+      MsgKind.CmdMoveToTagRight,
+      MsgKind.CmdMoveWindow,
+      MsgKind.CmdMoveWindowLeft,
+      MsgKind.CmdMoveWindowRight,
+      MsgKind.CmdMoveWindowUp,
+      MsgKind.CmdMoveWindowDown,
+      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
+      MsgKind.CmdMoveColumnLeft,
+      MsgKind.CmdMoveColumnRight,
+      MsgKind.CmdMoveColumnToFirst,
+      MsgKind.CmdMoveColumnToLast,
+      MsgKind.CmdSwapWindowUp,
+      MsgKind.CmdSwapWindowDown,
+      MsgKind.CmdConsumeWindow,
+      MsgKind.CmdExpelWindow,
+      MsgKind.CmdMoveToScratchpad,
+      MsgKind.CmdMoveToNamedScratchpad,
+      MsgKind.CmdToggleScratchpad,
+      MsgKind.CmdToggleNamedScratchpad,
+      MsgKind.CmdRestoreScratchpad,
+      MsgKind.CmdToggleFloating,
+      MsgKind.CmdToggleFullscreen,
+      MsgKind.CmdToggleMaximized,
+      MsgKind.CmdMinimize,
+      MsgKind.CmdSelectWindow:
     true
   else:
     false
@@ -276,47 +276,48 @@ proc shouldBroadcastTriadStateChanged*(kind: MsgKind): bool =
   kind.shouldBroadcastTriadLayoutChanged() or
     kind.shouldBroadcastWindowsChanged() or
     kind.shouldBroadcastOutputsChanged() or
-    kind in {CmdToggleOverview, CmdOpenOverview, CmdCloseOverview}
+    kind in {MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview,
+        MsgKind.CmdCloseOverview}
 
 proc isFocusChangingCommand*(kind: MsgKind): bool =
   kind in {
-    WlFocusChanged,
-    CmdFocusNext,
-    CmdFocusPrev,
-    CmdFocusDirection,
-    CmdFocusLast,
-    CmdFocusTagLeft,
-    CmdFocusTagRight,
-    CmdFocusOccupiedTagLeft,
-    CmdFocusOccupiedTagRight,
-    CmdFocusColumnFirst,
-    CmdFocusColumnLast,
-    CmdFocusWindowOrWorkspaceUp,
-    CmdFocusWindowOrWorkspaceDown,
-    CmdFocusTag,
-    CmdFocusWindowById,
-    CmdSelectWindow,
-    CmdToggleScratchpad,
-    CmdToggleNamedScratchpad,
-    CmdRestoreScratchpad,
-    WlShellSurfaceInteraction
+    MsgKind.WlFocusChanged,
+    MsgKind.CmdFocusNext,
+    MsgKind.CmdFocusPrev,
+    MsgKind.CmdFocusDirection,
+    MsgKind.CmdFocusLast,
+    MsgKind.CmdFocusTagLeft,
+    MsgKind.CmdFocusTagRight,
+    MsgKind.CmdFocusOccupiedTagLeft,
+    MsgKind.CmdFocusOccupiedTagRight,
+    MsgKind.CmdFocusColumnFirst,
+    MsgKind.CmdFocusColumnLast,
+    MsgKind.CmdFocusWindowOrWorkspaceUp,
+    MsgKind.CmdFocusWindowOrWorkspaceDown,
+    MsgKind.CmdFocusTag,
+    MsgKind.CmdFocusWindowById,
+    MsgKind.CmdSelectWindow,
+    MsgKind.CmdToggleScratchpad,
+    MsgKind.CmdToggleNamedScratchpad,
+    MsgKind.CmdRestoreScratchpad,
+    MsgKind.WlShellSurfaceInteraction
   }
 
 proc shouldCollapseAfterUpdate*(kind: MsgKind): bool =
   kind in {
-    WlWindowDestroyed,
-    CmdMoveToTag,
-    CmdMoveWindowUpOrToWorkspaceUp,
-    CmdMoveWindowDownOrToWorkspaceDown,
-    CmdMoveToWorkspaceIndex,
-    CmdMoveToScratchpad,
-    CmdMoveToNamedScratchpad,
-    CmdToggleNamedScratchpad}
+    MsgKind.WlWindowDestroyed,
+    MsgKind.CmdMoveToTag,
+    MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+    MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
+    MsgKind.CmdMoveToWorkspaceIndex,
+    MsgKind.CmdMoveToScratchpad,
+    MsgKind.CmdMoveToNamedScratchpad,
+    MsgKind.CmdToggleNamedScratchpad}
 
 proc addSetFullscreenEffect*(effects: var seq[Effect];
     winId: runtime_values.WindowId; fullscreen: bool; outputId = 0'u32) =
   effects.add(Effect(
-    kind: EffSetFullscreen,
+    kind: EffectKind.EffSetFullscreen,
     fsWinId: winId,
     isFullscreen: fullscreen,
     fsOutputId: outputId))
@@ -324,7 +325,7 @@ proc addSetFullscreenEffect*(effects: var seq[Effect];
 proc addSetMaximizedEffect*(effects: var seq[Effect];
     winId: runtime_values.WindowId; maximized: bool) =
   effects.add(Effect(
-    kind: EffSetMaximized,
+    kind: EffectKind.EffSetMaximized,
     maxWinId: winId,
     isMaximized: maximized))
 
@@ -339,23 +340,25 @@ proc addPostUpdateEffects*(
   if beforeFocus != afterFocus:
     effects.add(broadcastWindowFocusChanged(afterFocus))
     if afterFocus != 0:
-      effects.add(Effect(kind: EffFocusWindow, focusId: afterFocus))
-  elif msg.kind in {CmdCloseOverview, CmdSelectWindow} and afterFocus != 0:
-    effects.add(Effect(kind: EffFocusWindow, focusId: afterFocus))
+      effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
+  elif msg.kind in {MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow} and
+      afterFocus != 0:
+    effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
 
-  if msg.kind in {WlWindowCreated, WlWindowAppId, WlWindowTitle}:
+  if msg.kind in {MsgKind.WlWindowCreated, MsgKind.WlWindowAppId,
+      MsgKind.WlWindowTitle}:
     let openedId =
       case msg.kind
-      of WlWindowCreated: msg.windowId
-      of WlWindowAppId: msg.appIdWindowId
-      of WlWindowTitle: msg.titleWindowId
+      of MsgKind.WlWindowCreated: msg.windowId
+      of MsgKind.WlWindowAppId: msg.appIdWindowId
+      of MsgKind.WlWindowTitle: msg.titleWindowId
       else: 0'u32
     let effect = after.broadcastWindowOpened(openedId)
-    if effect.kind != EffNone:
+    if effect.kind != EffectKind.EffNone:
       effects.add(effect)
 
-  if dirty and not effects.hasEffect(EffManageDirty):
-    effects.add(Effect(kind: EffManageDirty))
+  if dirty and not effects.hasEffect(EffectKind.EffManageDirty):
+    effects.add(Effect(kind: EffectKind.EffManageDirty))
 
   if dirty or collapsed or pruned:
     if msg.kind.shouldBroadcastOutputsChanged():

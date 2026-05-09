@@ -2,7 +2,7 @@ import json, options, strutils
 import ../core/msg
 import ../core/niri_state
 import ../types/shell_snapshot
-from ../types/runtime_values import DirDown, DirLeft, DirRight, DirUp, WindowId
+from ../types/runtime_values import Direction, WindowId
 
 type
   NiriIpcResult* = object
@@ -72,7 +72,8 @@ proc focusedWindow(snapshot: ShellSnapshot): WindowId =
       return workspace.focusedWindow
   0'u32
 
-proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[handled: bool, messages: seq[Msg]] =
+proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
+    handled: bool; messages: seq[Msg]] =
   if action.kind != JObject:
     return (false, @[])
 
@@ -84,149 +85,169 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[handled: b
         if refNode.hasKey("Index"):
           let index = uintFromNode(refNode["Index"])
           if index.isSome:
-            return (true, @[Msg(kind: CmdFocusWorkspaceIndex, workspaceIndex: index.get())])
+            return (true, @[Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+                workspaceIndex: index.get())])
         elif refNode.hasKey("Id"):
           let tag = uintFromNode(refNode["Id"])
-          if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+          if tag.isSome: return (true, @[Msg(kind: MsgKind.CmdFocusTag,
+              focusTag: tag.get())])
 
   elif action.hasKey("FocusWorkspaceDown"):
     let tag = nextTag(snapshot, 1)
-    if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+    if tag.isSome: return (true, @[Msg(kind: MsgKind.CmdFocusTag,
+        focusTag: tag.get())])
 
   elif action.hasKey("FocusWorkspaceUp"):
     let tag = nextTag(snapshot, -1)
-    if tag.isSome: return (true, @[Msg(kind: CmdFocusTag, focusTag: tag.get())])
+    if tag.isSome: return (true, @[Msg(kind: MsgKind.CmdFocusTag,
+        focusTag: tag.get())])
 
   elif action.hasKey("ToggleOverview"):
-    return (true, @[Msg(kind: CmdToggleOverview)])
+    return (true, @[Msg(kind: MsgKind.CmdToggleOverview)])
 
   elif action.hasKey("OpenOverview"):
-    return (true, @[Msg(kind: CmdOpenOverview)])
+    return (true, @[Msg(kind: MsgKind.CmdOpenOverview)])
 
   elif action.hasKey("CloseOverview"):
-    return (true, @[Msg(kind: CmdCloseOverview)])
+    return (true, @[Msg(kind: MsgKind.CmdCloseOverview)])
 
   elif action.hasKey("ToggleKeyboardShortcutsInhibit"):
-    return (true, @[Msg(kind: CmdToggleKeyboardShortcutsInhibit)])
+    return (true, @[Msg(kind: MsgKind.CmdToggleKeyboardShortcutsInhibit)])
 
   elif action.hasKey("FocusColumnLeft"):
-    return (true, @[Msg(kind: CmdFocusDirection, direction: DirLeft)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusDirection,
+        direction: Direction.DirLeft)])
 
   elif action.hasKey("FocusColumnRight"):
-    return (true, @[Msg(kind: CmdFocusDirection, direction: DirRight)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusDirection,
+        direction: Direction.DirRight)])
 
   elif action.hasKey("FocusColumnFirst"):
-    return (true, @[Msg(kind: CmdFocusColumnFirst)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusColumnFirst)])
 
   elif action.hasKey("FocusColumnLast"):
-    return (true, @[Msg(kind: CmdFocusColumnLast)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusColumnLast)])
 
   elif action.hasKey("FocusWindowUp"):
-    return (true, @[Msg(kind: CmdFocusDirection, direction: DirUp)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusDirection,
+        direction: Direction.DirUp)])
 
   elif action.hasKey("FocusWindowDown"):
-    return (true, @[Msg(kind: CmdFocusDirection, direction: DirDown)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusDirection,
+        direction: Direction.DirDown)])
 
   elif action.hasKey("FocusWindowOrWorkspaceUp"):
-    return (true, @[Msg(kind: CmdFocusWindowOrWorkspaceUp)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp)])
 
   elif action.hasKey("FocusWindowOrWorkspaceDown"):
-    return (true, @[Msg(kind: CmdFocusWindowOrWorkspaceDown)])
+    return (true, @[Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown)])
 
   elif action.hasKey("MoveColumnLeft"):
-    return (true, @[Msg(kind: CmdMoveColumnLeft)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveColumnLeft)])
 
   elif action.hasKey("MoveColumnRight"):
-    return (true, @[Msg(kind: CmdMoveColumnRight)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveColumnRight)])
 
   elif action.hasKey("MoveColumnToFirst"):
-    return (true, @[Msg(kind: CmdMoveColumnToFirst)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveColumnToFirst)])
 
   elif action.hasKey("MoveColumnToLast"):
-    return (true, @[Msg(kind: CmdMoveColumnToLast)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveColumnToLast)])
 
   elif action.hasKey("MoveWindowUp"):
-    return (true, @[Msg(kind: CmdMoveWindowUp)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveWindowUp)])
 
   elif action.hasKey("MoveWindowDown"):
-    return (true, @[Msg(kind: CmdMoveWindowDown)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveWindowDown)])
 
   elif action.hasKey("MoveWindowUpOrToWorkspaceUp"):
-    return (true, @[Msg(kind: CmdMoveWindowUpOrToWorkspaceUp)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveWindowUpOrToWorkspaceUp)])
 
   elif action.hasKey("MoveWindowDownOrToWorkspaceDown"):
-    return (true, @[Msg(kind: CmdMoveWindowDownOrToWorkspaceDown)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveWindowDownOrToWorkspaceDown)])
 
   elif action.hasKey("MoveWindowLeft"):
-    return (true, @[Msg(kind: CmdMoveWindowLeft)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveWindowLeft)])
 
   elif action.hasKey("MoveWindowRight"):
-    return (true, @[Msg(kind: CmdMoveWindowRight)])
+    return (true, @[Msg(kind: MsgKind.CmdMoveWindowRight)])
 
   elif action.hasKey("FocusWindow"):
     let payload = action["FocusWindow"]
-    if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
+    if payload.kind == JObject and payload.hasKey("id") and payload[
+        "id"].kind != JNull:
       let win = uintFromNode(payload["id"])
-      if win.isSome: return (true, @[Msg(kind: CmdFocusWindowById, focusWindowId: WindowId(win.get()))])
+      if win.isSome: return (true, @[Msg(kind: MsgKind.CmdFocusWindowById,
+          focusWindowId: WindowId(win.get()))])
 
   elif action.hasKey("CloseWindow"):
     let payload = action["CloseWindow"]
-    if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
+    if payload.kind == JObject and payload.hasKey("id") and payload[
+        "id"].kind != JNull:
       let win = uintFromNode(payload["id"])
-      if win.isSome: return (true, @[Msg(kind: CmdCloseWindowById, closeWindowId: WindowId(win.get()))])
-    return (true, @[Msg(kind: CmdCloseWindow)])
+      if win.isSome: return (true, @[Msg(kind: MsgKind.CmdCloseWindowById,
+          closeWindowId: WindowId(win.get()))])
+    return (true, @[Msg(kind: MsgKind.CmdCloseWindow)])
 
   elif action.hasKey("SwitchLayout"):
-    return (true, @[Msg(kind: CmdSwitchLayout)])
+    return (true, @[Msg(kind: MsgKind.CmdSwitchLayout)])
 
   elif action.hasKey("SetWorkspaceName"):
     let payload = action["SetWorkspaceName"]
-    return (true, @[Msg(kind: CmdRenameTag, newName: stringFromField(payload, "name"))])
+    return (true, @[Msg(kind: MsgKind.CmdRenameTag, newName: stringFromField(
+        payload, "name"))])
 
   elif action.hasKey("UnsetWorkspaceName"):
-    return (true, @[Msg(kind: CmdRenameTag, newName: "")])
+    return (true, @[Msg(kind: MsgKind.CmdRenameTag, newName: "")])
 
   elif action.hasKey("FullscreenWindow"):
-    return (true, @[Msg(kind: CmdToggleFullscreen)])
+    return (true, @[Msg(kind: MsgKind.CmdToggleFullscreen)])
 
   elif action.hasKey("MaximizeWindowToEdges"):
     let payload = action["MaximizeWindowToEdges"]
-    if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
+    if payload.kind == JObject and payload.hasKey("id") and payload[
+        "id"].kind != JNull:
       let win = uintFromNode(payload["id"])
-      if win.isSome: return (true, @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: WindowId(win.get()))])
+      if win.isSome: return (true, @[Msg(
+          kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: WindowId(
+          win.get()))])
     let focused = snapshot.focusedWindow()
     if focused != 0:
-      return (true, @[Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: focused)])
+      return (true, @[Msg(kind: MsgKind.WlWindowMaximizeRequested,
+          maximizeRequestId: focused)])
     return (true, @[])
 
   elif action.hasKey("ToggleWindowFloating"):
-    return (true, @[Msg(kind: CmdToggleFloating)])
+    return (true, @[Msg(kind: MsgKind.CmdToggleFloating)])
 
   elif action.hasKey("Screenshot"):
     let payload = action["Screenshot"]
     return (true, @[Msg(
-      kind: CmdScreenshot,
-      screenshotKind: ShotRegion,
+      kind: MsgKind.CmdScreenshot,
+      screenshotKind: ScreenshotKind.ShotRegion,
       screenshotPath: stringFromField(payload, "path"),
-      screenshotShowPointer: boolFromField(payload, "show_pointer", boolFromField(payload, "show-pointer"))
+      screenshotShowPointer: boolFromField(payload, "show_pointer",
+          boolFromField(payload, "show-pointer"))
     )])
 
   elif action.hasKey("ScreenshotScreen"):
     let payload = action["ScreenshotScreen"]
     return (true, @[Msg(
-      kind: CmdScreenshot,
-      screenshotKind: ShotScreen,
+      kind: MsgKind.CmdScreenshot,
+      screenshotKind: ScreenshotKind.ShotScreen,
       screenshotPath: stringFromField(payload, "path"),
-      screenshotShowPointer: boolFromField(payload, "show_pointer", boolFromField(payload, "show-pointer"))
+      screenshotShowPointer: boolFromField(payload, "show_pointer",
+          boolFromField(payload, "show-pointer"))
     )])
 
   elif action.hasKey("ScreenshotWindow"):
     let payload = action["ScreenshotWindow"]
     return (true, @[Msg(
-      kind: CmdScreenshot,
-      screenshotKind: ShotWindow,
+      kind: MsgKind.CmdScreenshot,
+      screenshotKind: ScreenshotKind.ShotWindow,
       screenshotPath: stringFromField(payload, "path"),
-      screenshotShowPointer: boolFromField(payload, "show_pointer", boolFromField(payload, "show-pointer"))
+      screenshotShowPointer: boolFromField(payload, "show_pointer",
+          boolFromField(payload, "show-pointer"))
     )])
 
   elif action.hasKey("DoScreenTransition") or

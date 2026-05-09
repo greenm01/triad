@@ -87,7 +87,8 @@ proc renderSvgToPng(sourcePath, destPath: string): bool =
 
   fileExists(destPath)
 
-proc writeResolvedIconAlias(rootPath, aliasName: string; iconNames: openArray[string]; fallbackSvg = ""): bool =
+proc writeResolvedIconAlias(rootPath, aliasName: string; iconNames: openArray[
+    string]; fallbackSvg = ""): bool =
   if not aliasName.validIconAliasName:
     return false
 
@@ -130,7 +131,8 @@ proc writeTerminalIconAlias(rootPath: string; entry: DesktopEntry) =
     GenericTerminalSvg
   )
 
-proc writeDesktopIconAlias(rootPath: string; entry: DesktopEntry; seen: var Table[string, bool]) =
+proc writeDesktopIconAlias(rootPath: string; entry: DesktopEntry;
+    seen: var Table[string, bool]) =
   let iconName = entry.icon.strip()
   if not iconName.validIconAliasName:
     return
@@ -225,7 +227,8 @@ proc installShellOverlay*(
     for entry in terminalEntries(index):
       if entry.sourcePath.startsWith(result.sharePath):
         continue
-      writeFile(applicationsDir / entry.shellOverlayDesktopId(), desktopEntryText(entry))
+      writeFile(applicationsDir / entry.shellOverlayDesktopId(),
+          desktopEntryText(entry))
       writeTerminalIconAlias(result.rootPath, entry)
 
     result.ok = true

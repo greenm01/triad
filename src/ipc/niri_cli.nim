@@ -1,7 +1,7 @@
 import json, options, strutils
 
 type
-  NiriCliKind* = enum
+  NiriCliKind* {.pure.} = enum
     NckInvalid,
     NckValidate,
     NckRequest
@@ -58,7 +58,8 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
       return none(JsonNode)
     let idx = intArg(args[1])
     if idx.isSome:
-      return some(%*{"Action": {"FocusWorkspace": {"reference": {"Index": idx.get()}}}})
+      return some(%*{"Action": {"FocusWorkspace": {"reference": {
+          "Index": idx.get()}}}})
   of "focusworkspaceup", "focus-workspace-up":
     return some(%*{"Action": {"FocusWorkspaceUp": {}}})
   of "focusworkspacedown", "focus-workspace-down":
@@ -136,15 +137,18 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
   of "poweronmonitors", "power-on-monitors":
     return some(%*{"Action": {"PowerOnMonitors": {}}})
   of "switchlayout", "switch-layout":
-    let layout = if args.len >= 2 and args[1].normalize() == "next": "Next" else: "Prev"
+    let layout = if args.len >= 2 and args[1].normalize() ==
+        "next": "Next" else: "Prev"
     return some(%*{"Action": {"SwitchLayout": {"layout": layout}}})
   of "setworkspacename", "set-workspace-name":
     let name = if args.len >= 2: args[1] else: ""
-    return some(%*{"Action": {"SetWorkspaceName": {"name": name, "workspace": newJNull()}}})
+    return some(%*{"Action": {"SetWorkspaceName": {"name": name,
+        "workspace": newJNull()}}})
   of "unsetworkspacename", "unset-workspace-name":
     return some(%*{"Action": {"UnsetWorkspaceName": {"workspace": newJNull()}}})
   of "quit":
-    return some(%*{"Action": {"Quit": {"skip_confirmation": args.contains("--skip-confirmation")}}})
+    return some(%*{"Action": {"Quit": {"skip_confirmation": args.contains(
+        "--skip-confirmation")}}})
   of "screenshot":
     return some(%*{"Action": {"Screenshot": {
       "path": optionValue(args, "--path").get(""),
@@ -169,13 +173,15 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
 
 proc buildNiriCliRequest*(args: seq[string]): NiriCliRequest =
   if args.len == 0:
-    return NiriCliRequest(kind: NckInvalid, error: "missing command")
+    return NiriCliRequest(kind: NiriCliKind.NckInvalid,
+        error: "missing command")
 
   if args[0] == "validate":
-    return NiriCliRequest(kind: NckValidate)
+    return NiriCliRequest(kind: NiriCliKind.NckValidate)
 
   if args[0] != "msg":
-    return NiriCliRequest(kind: NckInvalid, error: "unsupported niri command: " & args[0])
+    return NiriCliRequest(kind: NiriCliKind.NckInvalid,
+        error: "unsupported niri command: " & args[0])
 
   var jsonOutput = false
   var msgArgs: seq[string] = @[]
@@ -187,27 +193,32 @@ proc buildNiriCliRequest*(args: seq[string]): NiriCliRequest =
       msgArgs.add(args[i])
 
   if msgArgs.len == 0:
-    return NiriCliRequest(kind: NckInvalid, error: "missing niri msg request")
+    return NiriCliRequest(kind: NiriCliKind.NckInvalid,
+        error: "missing niri msg request")
 
   if msgArgs[0] == "action":
     let actionArgs = if msgArgs.len > 1: msgArgs[1..^1] else: @[]
     let payload = actionPayload(actionArgs)
     if payload.isNone:
-      return NiriCliRequest(kind: NckInvalid, error: "unsupported niri action")
-    return NiriCliRequest(kind: NckRequest, jsonOutput: jsonOutput, socketPayload: $payload.get())
+      return NiriCliRequest(kind: NiriCliKind.NckInvalid,
+          error: "unsupported niri action")
+    return NiriCliRequest(kind: NiriCliKind.NckRequest, jsonOutput: jsonOutput,
+        socketPayload: $payload.get())
 
   let req = requestName(msgArgs[0])
   if req.isNone:
-    return NiriCliRequest(kind: NckInvalid, error: "unsupported niri msg request: " & msgArgs[0])
+    return NiriCliRequest(kind: NiriCliKind.NckInvalid,
+        error: "unsupported niri msg request: " & msgArgs[0])
 
   NiriCliRequest(
-    kind: NckRequest,
+    kind: NiriCliKind.NckRequest,
     jsonOutput: jsonOutput,
     socketPayload: "\"" & req.get() & "\"",
     unwrapKey: req.get()
   )
 
-proc unwrapNiriReply*(reply: string; unwrapKey: string): tuple[ok: bool, output: string] =
+proc unwrapNiriReply*(reply: string; unwrapKey: string): tuple[ok: bool;
+    output: string] =
   try:
     let parsed = parseJson(reply)
     if parsed.kind == JObject and parsed.hasKey("Err"):

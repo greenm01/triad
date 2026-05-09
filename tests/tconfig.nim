@@ -21,12 +21,12 @@ suite "KDL Configuration Parser":
       workspaces: WorkspaceConfig(defaultCount: 3)))
     var state = initial
     discard state.applyRuntimeUpdate(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 7,
       appId: "brave",
       title: "Brave"))
     discard state.applyRuntimeUpdate(Msg(
-      kind: WlWindowDimensions,
+      kind: MsgKind.WlWindowDimensions,
       dimensionsWindowId: 7,
       actualWidth: 1200,
       actualHeight: 800))
@@ -48,11 +48,12 @@ suite "KDL Configuration Parser":
         enableAnimations: false,
         animationSpeed: 0.5,
         smartGaps: true,
-        layoutCycle: @[Scroller, Deck, VerticalGrid]),
+        layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck,
+            LayoutMode.VerticalGrid]),
       workspaces: WorkspaceConfig(defaultCount: 4),
       tagRules: @[
-        TagRule(tagId: 1, name: "term", defaultLayout: Scroller),
-        TagRule(tagId: 2, name: "web", defaultLayout: Grid)
+        TagRule(tagId: 1, name: "term", defaultLayout: LayoutMode.Scroller),
+        TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid)
       ],
       windowRules: @[
         WindowRule(appIdMatch: "brave", keyboardShortcutsInhibit: true)
@@ -73,7 +74,7 @@ suite "KDL Configuration Parser":
       windowMenu: WindowMenuConfig(command: @["bemenu"]),
       scratchpad: ScratchpadConfig(widthRatio: 0.7, heightRatio: 0.6),
       cursor: CursorConfig(theme: "Bibata", size: 32),
-      presentationMode: PresentationAsync,
+      presentationMode: PresentationMode.PresentationAsync,
       allowExitSession: true,
       protocolSurfaces: ProtocolSurfacesConfig(enabled: true),
       keyBindings: @[
@@ -84,7 +85,8 @@ suite "KDL Configuration Parser":
           bypassShortcutsInhibit: true)
       ],
       pointerBindings: @[
-        PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32, op: OpMove)
+        PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32,
+            op: PointerOpKind.OpMove)
       ])
 
     check state.applyRuntimeConfig(config)
@@ -93,7 +95,8 @@ suite "KDL Configuration Parser":
     check state.model.innerGaps == 12
     check state.model.borderWidth == 4
     check state.model.defaultWorkspaceCount == 4
-    check state.model.layoutCycle == @[Scroller, Deck, VerticalGrid]
+    check state.model.layoutCycle == @[LayoutMode.Scroller, LayoutMode.Deck,
+        LayoutMode.VerticalGrid]
     check state.model.terminal.command == @["kitty"]
     check state.model.keyBindings.len == 1
 
@@ -198,11 +201,12 @@ bindings {
     check config.layout.gaps == 32
     check config.layout.borderWidth == 3
     check config.layout.centerFocusedColumn == "always"
-    check config.layout.layoutCycle == @[Scroller, Deck, VerticalGrid]
+    check config.layout.layoutCycle == @[LayoutMode.Scroller, LayoutMode.Deck,
+        LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
     check config.tagRules.len == 1
     check config.tagRules[0].tagId == 2
-    check config.tagRules[0].defaultLayout == Grid
+    check config.tagRules[0].defaultLayout == LayoutMode.Grid
     check config.windowRules.len == 1
     check config.windowRules[0].defaultTag == 3
     check config.windowRules[0].openFloating
@@ -213,7 +217,7 @@ bindings {
     check config.windowMenu.command == @["bemenu"]
     check config.scratchpad.widthRatio == 0.7'f32
     check config.cursor.theme == "Bibata"
-    check config.presentationMode == PresentationAsync
+    check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
     check config.protocolSurfaces.enabled
     check config.keyBindings.len > 0

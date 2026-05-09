@@ -21,12 +21,12 @@ proc baseSnapshot(): ShellSnapshot =
     version: 1,
     activeTag: 1,
     activeWorkspaceIdx: 1,
-    layoutCycle: @[Scroller, Grid],
+    layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid],
     workspaces: @[
       ShellWorkspace(
         tagId: 1,
         workspaceIdx: 1,
-        layoutMode: Scroller,
+        layoutMode: LayoutMode.Scroller,
         isActive: true,
         outputName: "triad-0",
         masterCount: 1,
@@ -47,7 +47,7 @@ suite "Crash hardening":
       workspaces: WorkspaceConfig(defaultCount: 3))).model
     for title in ["old", "new"]:
       let (next, _) = model.update(Msg(
-        kind: WlWindowCreated,
+        kind: MsgKind.WlWindowCreated,
         windowId: 10,
         appId: "app",
         title: title))
@@ -64,14 +64,14 @@ suite "Crash hardening":
       workspaces: WorkspaceConfig(defaultCount: 3))).model
 
     for msg in [
-      Msg(kind: CmdMoveToScratchpad),
-      Msg(kind: CmdConsumeWindow),
-      Msg(kind: CmdExpelWindow),
-      Msg(kind: CmdZoom),
-      Msg(kind: CmdMoveWindowLeft),
-      Msg(kind: CmdMoveWindowRight),
-      Msg(kind: CmdToggleFloating),
-      Msg(kind: CmdToggleFullscreen)
+      Msg(kind: MsgKind.CmdMoveToScratchpad),
+      Msg(kind: MsgKind.CmdConsumeWindow),
+      Msg(kind: MsgKind.CmdExpelWindow),
+      Msg(kind: MsgKind.CmdZoom),
+      Msg(kind: MsgKind.CmdMoveWindowLeft),
+      Msg(kind: MsgKind.CmdMoveWindowRight),
+      Msg(kind: MsgKind.CmdToggleFloating),
+      Msg(kind: MsgKind.CmdToggleFullscreen)
     ]:
       let (next, _) = model.update(msg)
       model = next
@@ -82,9 +82,11 @@ suite "Crash hardening":
     var model = initRuntimeStateFromConfig(Config(
       workspaces: WorkspaceConfig(defaultCount: 3))).model
     for msg in [
-      Msg(kind: WlOutputDimensions, outputId: 42, width: 1280, height: 720),
-      Msg(kind: WlWindowCreated, windowId: 7, appId: "app", title: "title"),
-      Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: 7,
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 42, width: 1280,
+          height: 720),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 7, appId: "app",
+          title: "title"),
+      Msg(kind: MsgKind.WlWindowFullscreenRequested, fullscreenRequestId: 7,
         fullscreenOutputId: 0)
     ]:
       let (next, _) = model.update(msg)
@@ -92,23 +94,23 @@ suite "Crash hardening":
 
     var effects: seq[Effect]
     (model, effects) = model.update(Msg(
-      kind: WlOutputRemoved,
+      kind: MsgKind.WlOutputRemoved,
       removedOutputId: 42))
     check model.validateInvariants().ok
     check effects.anyIt(
-      it.kind == EffSetFullscreen and it.fsWinId == 7 and
+      it.kind == EffectKind.EffSetFullscreen and it.fsWinId == 7 and
       not it.isFullscreen)
 
   test "dimension hints are normalized for daemon bounds":
     var model = initRuntimeStateFromConfig(Config()).model
     let (next, _) = model.update(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 7,
       appId: "app",
       title: "title"))
     model = next
     let (hinted, _) = model.update(Msg(
-      kind: WlWindowDimensionsHint,
+      kind: MsgKind.WlWindowDimensionsHint,
       hintWindowId: 7,
       minWidth: -10,
       minHeight: 200,
@@ -138,7 +140,7 @@ suite "Crash hardening":
     check parseTextCommand("").isNone
     check parseTextCommand("focus-workspace nope").isNone
     check parseTextCommand("focus-workspace 2").get().kind ==
-      CmdFocusWorkspaceIndex
+      MsgKind.CmdFocusWorkspaceIndex
 
   test "native live restore parser rejects invalid or old payloads":
     check parseLiveRestoreJson("").isNone
@@ -157,7 +159,7 @@ suite "Crash hardening":
     let screen = Rect(x: 0, y: 0, w: 100, h: 80)
     var tag = TagState(
       tagId: 1,
-      layoutMode: Scroller,
+      layoutMode: LayoutMode.Scroller,
       focusedWindow: 1,
       masterCount: 1,
       masterSplitRatio: 0.5)

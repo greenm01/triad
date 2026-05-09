@@ -22,121 +22,121 @@ proc recomputeAllTagFocus(model: var Model) =
 
 proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind
-  of CmdSetLayout:
+  of MsgKind.CmdSetLayout:
     result.dirty = model.setLayoutForSlot(msg.layoutTargetTag, msg.newLayout)
-  of CmdSwitchLayout:
+  of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
-  of CmdSetMasterCount:
+  of MsgKind.CmdSetMasterCount:
     result.dirty = model.setMasterCount(msg.count)
-  of CmdAdjustMasterCount:
+  of MsgKind.CmdAdjustMasterCount:
     result.dirty = model.adjustMasterCount(msg.deltaMC)
-  of CmdSetMasterRatio:
+  of MsgKind.CmdSetMasterRatio:
     result.dirty = model.setMasterRatio(msg.ratio)
-  of CmdAdjustMasterRatio:
+  of MsgKind.CmdAdjustMasterRatio:
     result.dirty = model.adjustMasterRatio(msg.deltaMR)
-  of CmdResizeWidth:
+  of MsgKind.CmdResizeWidth:
     result.dirty = model.resizeWidth(msg.deltaW)
-  of CmdResizeHeight:
+  of MsgKind.CmdResizeHeight:
     result.dirty = model.resizeHeight(msg.deltaH)
-  of CmdSetColumnWidth:
+  of MsgKind.CmdSetColumnWidth:
     result.dirty = model.setFocusedColumnWidth(msg.targetWidth)
 
-  of CmdRenameTag:
+  of MsgKind.CmdRenameTag:
     result.dirty = model.renameActiveWorkspace(msg.newName)
     if result.dirty:
       result.effects.add(broadcastWorkspaceActivated(shellSnapshot(model)))
-  of CmdGroupWindows:
+  of MsgKind.CmdGroupWindows:
     result.dirty = model.groupFocusedWindow()
-  of CmdUngroupWindow, CmdFocusNextInGroup:
+  of MsgKind.CmdUngroupWindow, MsgKind.CmdFocusNextInGroup:
     result.dirty = true
 
-  of CmdFocusNext:
+  of MsgKind.CmdFocusNext:
     result.dirty = model.focusCycle(1)
-  of CmdFocusPrev:
+  of MsgKind.CmdFocusPrev:
     result.dirty = model.focusCycle(-1)
-  of CmdFocusDirection:
+  of MsgKind.CmdFocusDirection:
     result.dirty = model.focusByDirection(msg.direction)
-  of CmdFocusLast:
+  of MsgKind.CmdFocusLast:
     result.dirty = model.focusLast()
-  of CmdFocusTagLeft:
+  of MsgKind.CmdFocusTagLeft:
     result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, false))
-  of CmdFocusTagRight:
+  of MsgKind.CmdFocusTagRight:
     result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, false))
-  of CmdFocusOccupiedTagLeft:
+  of MsgKind.CmdFocusOccupiedTagLeft:
     result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, true))
-  of CmdFocusOccupiedTagRight:
+  of MsgKind.CmdFocusOccupiedTagRight:
     result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, true))
-  of CmdFocusColumnFirst:
+  of MsgKind.CmdFocusColumnFirst:
     result.dirty = model.focusColumnAtEdge(true)
-  of CmdFocusColumnLast:
+  of MsgKind.CmdFocusColumnLast:
     result.dirty = model.focusColumnAtEdge(false)
-  of CmdFocusWindowOrWorkspaceUp:
+  of MsgKind.CmdFocusWindowOrWorkspaceUp:
     result.dirty = model.focusWindowOrWorkspace(-1)
-  of CmdFocusWindowOrWorkspaceDown:
+  of MsgKind.CmdFocusWindowOrWorkspaceDown:
     result.dirty = model.focusWindowOrWorkspace(1)
-  of CmdFocusTag:
+  of MsgKind.CmdFocusTag:
     result.dirty = model.focusWorkspaceSlot(msg.focusTag)
-  of CmdFocusWorkspaceIndex:
+  of MsgKind.CmdFocusWorkspaceIndex:
     result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
-  of CmdFocusWindowById:
+  of MsgKind.CmdFocusWindowById:
     result.dirty = model.focusExternalWindow(msg.focusWindowId.externalWindowId())
 
-  of CmdMoveToTag:
+  of MsgKind.CmdMoveToTag:
     result.dirty = model.moveFocusedWindowToSlot(msg.targetTag)
-  of CmdSwapWindowToTag:
+  of MsgKind.CmdSwapWindowToTag:
     result.dirty = model.swapFocusedWindowToSlot(msg.targetTagSwap)
-  of CmdMoveToTagLeft:
+  of MsgKind.CmdMoveToTagLeft:
     result.dirty = model.moveFocusedWindowToSlot(
       model.nearestWorkspaceSlot(-1, false))
-  of CmdMoveToTagRight:
+  of MsgKind.CmdMoveToTagRight:
     result.dirty = model.moveFocusedWindowToSlot(
       model.nearestWorkspaceSlot(1, false))
-  of CmdMoveToWorkspaceIndex:
+  of MsgKind.CmdMoveToWorkspaceIndex:
     let slot = model.workspaceSlotForClampedIndex(msg.workspaceIndex)
     result.dirty = slot != 0 and model.moveFocusedWindowToSlot(slot)
-  of CmdMoveWindowLeft:
+  of MsgKind.CmdMoveWindowLeft:
     result.dirty = model.moveFocusedWindowLeft()
-  of CmdMoveWindowRight:
+  of MsgKind.CmdMoveWindowRight:
     result.dirty = model.moveFocusedWindowRight()
-  of CmdMoveWindowUp:
+  of MsgKind.CmdMoveWindowUp:
     result.dirty = model.moveFocusedWindowUp()
-  of CmdMoveWindowDown:
+  of MsgKind.CmdMoveWindowDown:
     result.dirty = model.moveFocusedWindowDown()
-  of CmdMoveWindowUpOrToWorkspaceUp:
+  of MsgKind.CmdMoveWindowUpOrToWorkspaceUp:
     result.dirty = model.moveFocusedWindowUpOrWorkspace()
-  of CmdMoveWindowDownOrToWorkspaceDown:
+  of MsgKind.CmdMoveWindowDownOrToWorkspaceDown:
     result.dirty = model.moveFocusedWindowDownOrWorkspace()
-  of CmdMoveColumnLeft:
+  of MsgKind.CmdMoveColumnLeft:
     result.dirty = model.moveFocusedColumnLeft()
-  of CmdMoveColumnRight:
+  of MsgKind.CmdMoveColumnRight:
     result.dirty = model.moveFocusedColumnRight()
-  of CmdMoveColumnToFirst:
+  of MsgKind.CmdMoveColumnToFirst:
     result.dirty = model.moveFocusedColumnToFirst()
-  of CmdMoveColumnToLast:
+  of MsgKind.CmdMoveColumnToLast:
     result.dirty = model.moveFocusedColumnToLast()
-  of CmdSwapWindowUp:
+  of MsgKind.CmdSwapWindowUp:
     result.dirty = model.moveFocusedWindowUp()
-  of CmdSwapWindowDown:
+  of MsgKind.CmdSwapWindowDown:
     result.dirty = model.moveFocusedWindowDown()
-  of CmdConsumeWindow:
+  of MsgKind.CmdConsumeWindow:
     result.dirty = model.consumeNextColumnWindow()
-  of CmdExpelWindow:
+  of MsgKind.CmdExpelWindow:
     result.dirty = model.expelFocusedWindow()
-  of CmdZoom:
+  of MsgKind.CmdZoom:
     result.dirty = model.zoomFocusedWindow()
 
-  of CmdMoveToScratchpad:
+  of MsgKind.CmdMoveToScratchpad:
     result.dirty = model.moveFocusedToScratchpad()
-  of CmdMoveToNamedScratchpad:
+  of MsgKind.CmdMoveToNamedScratchpad:
     result.dirty = model.moveFocusedToScratchpad(msg.scratchpadName)
-  of CmdToggleScratchpad:
+  of MsgKind.CmdToggleScratchpad:
     result.dirty = model.toggleScratchpad()
-  of CmdToggleNamedScratchpad:
+  of MsgKind.CmdToggleNamedScratchpad:
     result.dirty = model.toggleNamedScratchpad(msg.scratchpadName)
-  of CmdRestoreScratchpad:
+  of MsgKind.CmdRestoreScratchpad:
     result.dirty = model.restoreScratchpad()
 
-  of CmdToggleOverview:
+  of MsgKind.CmdToggleOverview:
     if model.overviewActive:
       result.dirty = model.closeOverview()
       if result.dirty:
@@ -146,29 +146,29 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
       result.dirty = model.openOverview()
       if result.dirty:
         result.effects.add(broadcastOverview(true))
-        result.effects.add(Effect(kind: EffFocusShellUi))
-  of CmdOpenOverview:
+        result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+  of MsgKind.CmdOpenOverview:
     result.dirty = model.openOverview()
     if result.dirty:
       result.effects.add(broadcastOverview(true))
-      result.effects.add(Effect(kind: EffFocusShellUi))
-  of CmdCloseOverview:
+      result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+  of MsgKind.CmdCloseOverview:
     result.dirty = model.closeOverview()
     if result.dirty:
       model.recomputeAllTagFocus()
       result.effects.add(broadcastOverview(false))
 
-  of CmdToggleFloating:
+  of MsgKind.CmdToggleFloating:
     result.dirty = model.toggleFloatingFocused()
-  of CmdMoveFloating:
+  of MsgKind.CmdMoveFloating:
     result.dirty = model.moveFloatingFocused(msg.moveDX, msg.moveDY)
-  of CmdResizeFloating:
+  of MsgKind.CmdResizeFloating:
     result.dirty = model.resizeFloatingFocused(msg.deltaFW, msg.deltaFH)
-  of CmdAdjustGaps:
+  of MsgKind.CmdAdjustGaps:
     result.dirty = model.adjustGaps(msg.deltaG)
-  of CmdToggleGaps:
+  of MsgKind.CmdToggleGaps:
     result.dirty = model.toggleGaps()
-  of CmdToggleFullscreen:
+  of MsgKind.CmdToggleFullscreen:
     let focused = model.focusedWindow()
     result.dirty = model.toggleFullscreenFocused()
     if result.dirty:
@@ -176,78 +176,80 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
       result.effects.addSetFullscreenEffect(
         model.runtimeWindowId(focused), win.isFullscreen,
         uint32(win.fullscreenOutput))
-  of CmdToggleMaximized:
+  of MsgKind.CmdToggleMaximized:
     let focused = model.focusedWindow()
     result.dirty = model.toggleMaximizedFocused()
     if result.dirty:
       let win = model.windowData(focused).get()
       result.effects.addSetMaximizedEffect(
         model.runtimeWindowId(focused), win.isMaximized)
-  of CmdMinimize:
+  of MsgKind.CmdMinimize:
     let focused = model.focusedWindow()
     result.dirty = model.minimizeFocused()
     if result.dirty:
       result.effects.addSetMaximizedEffect(model.runtimeWindowId(focused), false)
-  of CmdToggleKeyboardShortcutsInhibit:
+  of MsgKind.CmdToggleKeyboardShortcutsInhibit:
     result.dirty = model.toggleKeyboardShortcutsInhibitFocused()
-  of CmdSelectWindow:
+  of MsgKind.CmdSelectWindow:
     result.dirty = model.closeOverview()
     if result.dirty:
       model.recomputeAllTagFocus()
-  of CmdCloseWindow:
+  of MsgKind.CmdCloseWindow:
     let focused = model.focusedWindow()
     if focused != NullWindowId:
       result.effects.add(Effect(
-        kind: EffCloseWindow,
+        kind: EffectKind.EffCloseWindow,
         closeId: model.runtimeWindowId(focused)))
-  of CmdCloseWindowById:
+  of MsgKind.CmdCloseWindowById:
     if model.windowForExternal(msg.closeWindowId.externalWindowId()) !=
         NullWindowId:
-      result.effects.add(Effect(kind: EffCloseWindow, closeId: msg.closeWindowId))
-  of CmdSpawn:
+      result.effects.add(Effect(kind: EffectKind.EffCloseWindow,
+          closeId: msg.closeWindowId))
+  of MsgKind.CmdSpawn:
     if msg.spawnCommand.len > 0:
-      result.effects.add(Effect(kind: EffSpawn, spawnCommand: msg.spawnCommand))
-  of CmdTick:
+      result.effects.add(Effect(kind: EffectKind.EffSpawn,
+          spawnCommand: msg.spawnCommand))
+  of MsgKind.CmdTick:
     result.dirty = model.tickAnimations()
-  of CmdLockSession:
+  of MsgKind.CmdLockSession:
     if model.screenLockCommand.len > 0:
       result.effects.add(Effect(
-        kind: EffSpawnScreenLock,
+        kind: EffectKind.EffSpawnScreenLock,
         screenLockCommand: model.screenLockCommand))
     else:
       result.effects.add(Effect(
-        kind: EffLog,
+        kind: EffectKind.EffLog,
         msg: "screen lock command is not configured"))
-  of CmdWarpPointer:
+  of MsgKind.CmdWarpPointer:
     result.effects.add(Effect(
-      kind: EffPointerWarp,
+      kind: EffectKind.EffPointerWarp,
       warpX: msg.warpX,
       warpY: msg.warpY))
-  of CmdEatNextKey:
-    result.effects.add(Effect(kind: EffEnsureNextKeyEaten))
-  of CmdCancelEatNextKey:
-    result.effects.add(Effect(kind: EffCancelEnsureNextKeyEaten))
-  of CmdStopManager:
-    result.effects.add(Effect(kind: EffStopManager))
-  of CmdTriadReload:
-    result.effects.add(Effect(kind: EffTriadReload))
-  of CmdExitSession:
+  of MsgKind.CmdEatNextKey:
+    result.effects.add(Effect(kind: EffectKind.EffEnsureNextKeyEaten))
+  of MsgKind.CmdCancelEatNextKey:
+    result.effects.add(Effect(kind: EffectKind.EffCancelEnsureNextKeyEaten))
+  of MsgKind.CmdStopManager:
+    result.effects.add(Effect(kind: EffectKind.EffStopManager))
+  of MsgKind.CmdTriadReload:
+    result.effects.add(Effect(kind: EffectKind.EffTriadReload))
+  of MsgKind.CmdExitSession:
     if model.allowExitSession:
-      result.effects.add(Effect(kind: EffExitSession))
+      result.effects.add(Effect(kind: EffectKind.EffExitSession))
     else:
       result.effects.add(Effect(
-        kind: EffLog,
+        kind: EffectKind.EffLog,
         msg: "exit-session is disabled by config"))
-  of CmdFocusShellUi:
+  of MsgKind.CmdFocusShellUi:
     if not model.sessionLocked and not model.layerFocusExclusive:
-      result.effects.add(Effect(kind: EffFocusShellUi))
-  of CmdScreenshot:
+      result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+  of MsgKind.CmdScreenshot:
     result.effects.add(Effect(
-      kind: EffScreenshot,
+      kind: EffectKind.EffScreenshot,
       screenshotKind: msg.screenshotKind,
       screenshotPath: msg.screenshotPath,
       screenshotShowPointer: msg.screenshotShowPointer))
-  of CmdConfigReload, CmdSpawnTerminal:
+  of MsgKind.CmdConfigReload, MsgKind.CmdSpawnTerminal:
     result.dirty = true
   else:
     discard

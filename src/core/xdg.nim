@@ -1,6 +1,7 @@
 import os, strutils, tables
 
-proc addUnique(result: var seq[string]; seen: var Table[string, bool]; path: string) =
+proc addUnique(result: var seq[string]; seen: var Table[string, bool];
+    path: string) =
   let trimmed = path.strip()
   if trimmed.len == 0:
     return

@@ -152,7 +152,7 @@ proc shellWorkspaceOutputName*(model: Model; tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))
 
 proc firstWindowPosition*(model: Model; winId: WindowId):
-    tuple[found: bool, tagId: TagId, slot, colIdx, winIdx: uint32] =
+    tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =
   for slot in model.visibleWorkspaceSlots():
     let tagId = model.tagForSlot(slot)
     if tagId == NullTagId:

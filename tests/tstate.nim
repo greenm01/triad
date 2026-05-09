@@ -29,6 +29,8 @@ const DeletedRuntimeModules = [
   "src/types/dod_shadow_health.nim"
 ]
 
+const MaxKnownOverlongLines = 108
+
 proc baseConfig(): Config =
   Config(
     layout: LayoutConfig(
@@ -38,11 +40,11 @@ proc baseConfig(): Config =
       defaultWindowHeight: 0.7,
       defaultMasterCount: 2,
       defaultMasterRatio: 0.55,
-      layoutCycle: @[Scroller, Deck, Grid]),
+      layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid]),
     workspaces: WorkspaceConfig(defaultCount: 3),
     tagRules: @[
-      TagRule(tagId: 1, name: "main", defaultLayout: Scroller),
-      TagRule(tagId: 2, name: "web", defaultLayout: Grid)
+      TagRule(tagId: 1, name: "main", defaultLayout: LayoutMode.Scroller),
+      TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid)
     ],
     terminal: TerminalConfig(command: @["foot"]))
 
@@ -55,6 +57,22 @@ proc typeFiles(): seq[string] =
   for path in walkDirRec("src/types"):
     if path.endsWith(".nim"):
       result.add(path)
+
+proc styleSourceFiles(): seq[string] =
+  for root in ["src", "tests"]:
+    for path in walkDirRec(root):
+      if path.endsWith(".nim") and "/nimcache/" notin path and
+          not path.startsWith("src/protocols/"):
+        result.add(path)
+
+proc sourceLineFailures(
+    checkLine: proc(path, line: string): bool): seq[string] =
+  for path in styleSourceFiles():
+    var lineNo = 0
+    for line in lines(path):
+      inc lineNo
+      if checkLine(path, line):
+        result.add(path & ":" & $lineNo & ": " & line)
 
 proc isAllowedTypeInterop(path, line: string): bool =
   if path != "src/types/core.nim":
@@ -111,6 +129,36 @@ suite "Runtime state primitives":
             checkpoint path & ":" & $(lineNo + 1) & ": " & line
           check path.isAllowedTypeInterop(line)
 
+  test "source follows enforceable style rules":
+    let tabFailures = sourceLineFailures(
+      proc(path, line: string): bool =
+        line.contains("\t"))
+    check tabFailures.len == 0
+
+    let enumFailures = sourceLineFailures(
+      proc(path, line: string): bool =
+        line.contains("= enum") and "{.pure.}" notin line)
+    check enumFailures.len == 0
+
+    let getterFailures = sourceLineFailures(
+      proc(path, line: string): bool =
+        let trimmed = line.strip()
+        result = trimmed.startsWith("proc get") or
+          trimmed.startsWith("func get"))
+    check getterFailures.len == 0
+
+    let entityStorageFailures = sourceLineFailures(
+      proc(path, line: string): bool =
+        path != "src/state/entity_manager.nim" and
+          path != "tests/tstate.nim" and
+          (".data" in line or ".index" in line))
+    check entityStorageFailures.len == 0
+
+    let overlongFailures = sourceLineFailures(
+      proc(path, line: string): bool =
+        line.len > 80)
+    check overlongFailures.len <= MaxKnownOverlongLines
+
   test "runtime init builds a valid model from config":
     let initialized = initRuntimeStateFromConfig(baseConfig())
     let snapshot = initialized.readRuntimeSnapshot()
@@ -118,24 +166,25 @@ suite "Runtime state primitives":
     check initialized.model.validateInvariants().ok
     check initialized.model.defaultWorkspaceCount == 3
     check initialized.model.outerGaps == 12
-    check initialized.model.layoutCycle == @[Scroller, Deck, Grid]
+    check initialized.model.layoutCycle == @[LayoutMode.Scroller,
+        LayoutMode.Deck, LayoutMode.Grid]
     check snapshot.activeTag == 1
     check snapshot.workspaces.len == 3
     check snapshot.workspaces[0].name == "main"
-    check snapshot.workspaces[1].layoutMode == Grid
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Grid
 
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())
     let effects = state.applyRuntimeUpdate(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 42,
       appId: "term",
       title: "Terminal"))
     let snapshot = state.readRuntimeSnapshot()
 
-    check effects.anyIt(it.kind == EffManageDirty)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
-      it.kind == EffBroadcastJson and
+      it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
     check state.model.validateInvariants().ok
     check snapshot.windows.len == 1
@@ -145,16 +194,17 @@ suite "Runtime state primitives":
   test "runtime config reload preserves live state":
     var state = initRuntimeStateFromConfig(baseConfig())
     discard state.applyRuntimeUpdate(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 42,
       appId: "term",
       title: "Terminal"))
 
     let reloaded = Config(
-      layout: LayoutConfig(gaps: 30, layoutCycle: @[Monocle, Deck]),
+      layout: LayoutConfig(gaps: 30, layoutCycle: @[LayoutMode.Monocle,
+          LayoutMode.Deck]),
       workspaces: WorkspaceConfig(defaultCount: 4),
       tagRules: @[
-        TagRule(tagId: 1, name: "renamed", defaultLayout: Monocle)
+        TagRule(tagId: 1, name: "renamed", defaultLayout: LayoutMode.Monocle)
       ])
     check state.applyRuntimeConfig(reloaded)
 
@@ -164,7 +214,7 @@ suite "Runtime state primitives":
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 42
     check snapshot.workspaces[0].name == "renamed"
-    check snapshot.workspaces[0].layoutMode == Monocle
+    check snapshot.workspaces[0].layoutMode == LayoutMode.Monocle
 
   test "runtime live restore applies to model":
     var state = initRuntimeStateFromConfig(baseConfig())
@@ -172,7 +222,7 @@ suite "Runtime state primitives":
     restore.tags[2] = RestoredTagState(
       tagId: 2,
       name: "restored-web",
-      layoutMode: Deck,
+      layoutMode: LayoutMode.Deck,
       focusedWindow: 50,
       columns: @[
         RestoredColumnState(
@@ -191,7 +241,7 @@ suite "Runtime state primitives":
 
     check state.applyRuntimeLiveRestore(restore)
     discard state.applyRuntimeUpdate(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 50,
       appId: "browser",
       title: "Browser"))
@@ -201,12 +251,12 @@ suite "Runtime state primitives":
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 50
     check snapshot.windows[0].workspaceIdx == 2
-    check snapshot.workspaces[1].layoutMode == Deck
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
 
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())
     discard state.applyRuntimeUpdate(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 10,
       appId: "term",
       title: "Terminal"))
@@ -219,7 +269,7 @@ suite "Runtime state primitives":
   test "snapshot and live restore reads come from state":
     var state = initRuntimeStateFromConfig(baseConfig())
     discard state.applyRuntimeUpdate(Msg(
-      kind: WlWindowCreated,
+      kind: MsgKind.WlWindowCreated,
       windowId: 10,
       appId: "term",
       title: "Terminal"))
@@ -233,13 +283,13 @@ suite "Runtime state primitives":
   test "direct reducer keeps invariants over a short lifecycle":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     for msg in [
-      Msg(kind: WlWindowCreated, windowId: 1, appId: "a", title: "A"),
-      Msg(kind: WlWindowCreated, windowId: 2, appId: "b", title: "B"),
-      Msg(kind: CmdFocusWindowById, focusWindowId: 1),
-      Msg(kind: CmdMoveToWorkspaceIndex, workspaceIndex: 2),
-      Msg(kind: CmdFocusWorkspaceIndex, workspaceIndex: 2),
-      Msg(kind: CmdToggleFloating),
-      Msg(kind: WlWindowDestroyed, destroyedId: 1)
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "a", title: "A"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "b", title: "B"),
+      Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1),
+      Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2),
+      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2),
+      Msg(kind: MsgKind.CmdToggleFloating),
+      Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 1)
     ]:
       let (next, _) = model.update(msg)
       model = next

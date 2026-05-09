@@ -15,9 +15,9 @@ proc update*(model: Model; msg: Msg): (Model, seq[Effect]) =
   let before = shellSnapshot(model)
   let step =
     case msg.kind
-    of WlWindowCreated .. WlModifiersChanged:
+    of MsgKind.WlWindowCreated .. MsgKind.WlModifiersChanged:
       next.applyEvent(msg)
-    of CmdSetLayout .. CmdScreenshot:
+    of MsgKind.CmdSetLayout .. MsgKind.CmdScreenshot:
       next.applyCommand(msg)
   for effect in step.effects:
     effects.add(effect)

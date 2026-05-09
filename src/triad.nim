@@ -27,20 +27,20 @@ import utils/runtime_log
 import utils/session_env
 import utils/wayland_runtime
 from types/runtime_values import nil
-from types/runtime_values import BindAlways, BindNormal, BindOverview,
-  BindingMode, KeyBindingConfig, OpNone, PointerBindingConfig, PointerOpKind,
-  PresentationAsync, PresentationDefault, PresentationMode,
+from types/runtime_values import BindingMode, KeyBindingConfig,
+  PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
   ScreenshotConfig, TerminalConfig, WindowId
-import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet, nativesockets, osproc, strutils, options, times, json
+import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet,
+    nativesockets, osproc, strutils, options, times, json
 
 type
-  RiverPhase = enum
+  RiverPhase {.pure.} = enum
     RiverIdle,
     RiverManage,
     RiverRender
 
-  ProtocolSurfaceKind = enum
+  ProtocolSurfaceKind {.pure.} = enum
     PskShell,
     PskDecorationAbove,
     PskDecorationBelow
@@ -66,16 +66,16 @@ var
   river_xkb_bindings: ptr river_xkb.RiverXkbBindingsV1
   compositor: ptr Compositor
   singlePixelManager: ptr singlepixel.WpSinglePixelBufferManagerV1
-  riverPhase = RiverIdle
+  riverPhase = RiverPhase.RiverIdle
   bindingsConfigured = false
-  
+
   # Runtime State
   runtimeState: TriadRuntimeState
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
   desiredPlacements: Table[WindowId, Rect]
   lastPointerOpSeat: pointer
-  
+
   # Mapping from logical IDs to Wayland pointers
   windowPointers: Table[WindowId, ptr RiverWindowV1]
   windowNodes: Table[WindowId, ptr RiverNodeV1]
@@ -124,9 +124,7 @@ var
 template currentModel: untyped =
   runtimeState.model
 
-# --- Helpers ---
-
-proc get_id(p: pointer): uint32 =
+proc id(p: pointer): uint32 =
   get_id(cast[ptr Proxy](p))
 
 proc failCli(message: string) =
@@ -164,38 +162,39 @@ proc applyPendingLiveRestore() =
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied at manage start",
-    path=pendingLiveRestorePath,
-    activeTag=state.activeTag,
-    windows=state.tagByWindow.len
+    path = pendingLiveRestorePath,
+    activeTag = state.activeTag,
+    windows = state.tagByWindow.len
 
 proc commitPendingLiveRestore() =
   if not liveRestoreCommitPending:
     return
 
   if completeLiveRestoreState(pendingLiveRestorePath):
-    info "Live restore snapshot committed", path=pendingLiveRestorePath
+    info "Live restore snapshot committed", path = pendingLiveRestorePath
     liveRestoreCommitPending = false
   else:
-    warn "Live restore snapshot could not be committed", path=pendingLiveRestorePath
+    warn "Live restore snapshot could not be committed",
+        path = pendingLiveRestorePath
 
 proc setupConfig() =
-  configPath = getConfigPath()
+  configPath = defaultConfigPath()
   let configDir = configPath.splitFile().dir
   if not dirExists(configDir):
     createDir(configDir)
-  
+
   if not fileExists(configPath):
     writeFile(configPath, FallbackConfigContent)
-    info "Created default config", path=configPath
+    info "Created default config", path = configPath
 
 proc spawnStartupCommands(model: Model) =
   for cmd in model.startupCommands:
     if cmd.len > 0:
       try:
         let p = startProcess(cmd[0], args = cmd[1..^1], options = {poUsePath})
-        info "Spawned startup command", cmd=cmd[0], pid=p.processID
+        info "Spawned startup command", cmd = cmd[0], pid = p.processID
       except CatchableError as e:
-        warn "Failed to spawn startup command", cmd=cmd[0], error=e.msg
+        warn "Failed to spawn startup command", cmd = cmd[0], error = e.msg
 
 proc stopTrackedQuickshell(reason: string) =
   if quickshellProcess == nil:
@@ -208,9 +207,9 @@ proc stopTrackedQuickshell(reason: string) =
     if code == -1:
       quickshellProcess.kill()
       discard quickshellProcess.waitForExit(1000)
-    info "Stopped Quickshell", pid=pid, reason=reason
+    info "Stopped Quickshell", pid = pid, reason = reason
   except CatchableError as e:
-    warn "Failed to stop Quickshell", pid=pid, reason=reason, error=e.msg
+    warn "Failed to stop Quickshell", pid = pid, reason = reason, error = e.msg
 
   try:
     quickshellProcess.close()
@@ -230,27 +229,27 @@ proc stopConfiguredQuickshell(model: Model; reason: string) =
       p.kill()
       discard p.waitForExit(1000)
       warn "Timed out stopping configured Quickshell instance",
-        command=model.quickshell.command,
-        theme=model.quickshell.theme,
-        reason=reason
+        command = model.quickshell.command,
+        theme = model.quickshell.theme,
+        reason = reason
     elif code == 0:
       info "Stopped configured Quickshell instance",
-        command=model.quickshell.command,
-        theme=model.quickshell.theme,
-        reason=reason
+        command = model.quickshell.command,
+        theme = model.quickshell.theme,
+        reason = reason
     else:
       debug "Configured Quickshell instance was not running",
-        command=model.quickshell.command,
-        theme=model.quickshell.theme,
-        reason=reason,
-        exitCode=code
+        command = model.quickshell.command,
+        theme = model.quickshell.theme,
+        reason = reason,
+        exitCode = code
     p.close()
   except CatchableError as e:
     warn "Failed to stop configured Quickshell instance",
-      command=model.quickshell.command,
-      theme=model.quickshell.theme,
-      reason=reason,
-      error=e.msg
+      command = model.quickshell.command,
+      theme = model.quickshell.theme,
+      reason = reason,
+      error = e.msg
 
 proc stopQuickshell(model: Model; reason: string; authoritative = false) =
   stopTrackedQuickshell(reason)
@@ -260,23 +259,26 @@ proc stopQuickshell(model: Model; reason: string; authoritative = false) =
 proc spawnQuickshell(model: Model; niriSocketPath: string) =
   if model.quickshell.enabled and model.quickshell.theme != "":
     let args = quickshellLaunchArgs(model.quickshell)
-    
+
     try:
       let compat = prepareQuickshellCompatEnv(niriSocketPath)
       if compat.warning.len > 0:
-        warn "Quickshell compatibility environment is incomplete", warning=compat.warning
-      let p = startProcess(model.quickshell.command, args = args, env = compat.env, options = {poUsePath})
+        warn "Quickshell compatibility environment is incomplete",
+            warning = compat.warning
+      let p = startProcess(model.quickshell.command, args = args,
+          env = compat.env, options = {poUsePath})
       quickshellProcess = p
       info "Spawned Quickshell",
-        command=model.quickshell.command,
-        theme=model.quickshell.theme,
-        pid=p.processID,
-        niriSocket=compat.niriSocketPath,
-        shimReady=compat.shimReady,
-        overlayReady=compat.overlayReady,
-        xdgShare=compat.xdgSharePath
+        command = model.quickshell.command,
+        theme = model.quickshell.theme,
+        pid = p.processID,
+        niriSocket = compat.niriSocketPath,
+        shimReady = compat.shimReady,
+        overlayReady = compat.overlayReady,
+        xdgShare = compat.xdgSharePath
     except CatchableError as e:
-      warn "Failed to spawn Quickshell", command=model.quickshell.command, theme=model.quickshell.theme, error=e.msg
+      warn "Failed to spawn Quickshell", command = model.quickshell.command,
+          theme = model.quickshell.theme, error = e.msg
 
 proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
   stopQuickshell(model, reason, authoritative = true)
@@ -298,26 +300,29 @@ proc broadcastNiriSnapshot(snapshot: ShellSnapshot) =
 proc applyConfigReload(configPath, niriSocketPath: string): bool =
   let loaded = loadConfigStrict(configPath)
   if not loaded.ok:
-    warn "Config reload rejected; keeping current config", path=configPath, error=loaded.error
+    warn "Config reload rejected; keeping current config", path = configPath,
+        error = loaded.error
     return false
 
   let previousModel = currentModel
   discard runtimeState.applyRuntimeConfig(loaded.config)
   quickshellSpawnPending = false
 
-  if not sameQuickshellConfig(previousModel.quickshell, currentModel.quickshell):
+  if not sameQuickshellConfig(previousModel.quickshell,
+      currentModel.quickshell):
     stopQuickshell(previousModel, "config reload", authoritative = true)
     if currentModel.quickshell.enabled:
       spawnQuickshell(currentModel, niriSocketPath)
 
   destroyBindings()
-  info "Config reloaded", path=configPath
+  info "Config reloaded", path = configPath
   requestManage("config reload")
   broadcastNiriSnapshot(readModelSnapshot())
   true
 
 proc scheduleQuickshellSpawn(model: Model) =
-  quickshellSpawnPending = model.quickshell.enabled and model.quickshell.theme.strip().len > 0
+  quickshellSpawnPending = model.quickshell.enabled and
+      model.quickshell.theme.strip().len > 0
 
 proc spawnPendingQuickshell(
     model: Model; niriSocketPath, reason: string) =
@@ -337,9 +342,9 @@ proc spawnScreenLock(command: seq[string]) =
 
   try:
     let p = startProcess(command[0], args = args, options = {poUsePath})
-    info "Spawned screen lock", cmd=command[0], pid=p.processID
+    info "Spawned screen lock", cmd = command[0], pid = p.processID
   except CatchableError as e:
-    warn "Failed to spawn screen lock", cmd=command[0], error=e.msg
+    warn "Failed to spawn screen lock", cmd = command[0], error = e.msg
 
 proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
   if command.len == 0:
@@ -352,9 +357,10 @@ proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
 
   try:
     let p = startProcess(command[0], args = args, options = {poUsePath})
-    info "Spawned window menu", cmd=command[0], pid=p.processID, windowId=windowId, x=x, y=y
+    info "Spawned window menu", cmd = command[0], pid = p.processID,
+        windowId = windowId, x = x, y = y
   except CatchableError as e:
-    warn "Failed to spawn window menu", cmd=command[0], windowId=windowId, error=e.msg
+    warn "Failed to spawn window menu", cmd = command[0], windowId = windowId, error = e.msg
 
 proc spawnTerminal(model: Model) =
   for command in terminalCandidates(model.terminal.command):
@@ -365,10 +371,10 @@ proc spawnTerminal(model: Model) =
       args = command[1..^1]
     try:
       let p = startProcess(command[0], args = args, options = {poUsePath})
-      info "Spawned terminal", terminal=command[0], pid=p.processID
+      info "Spawned terminal", terminal = command[0], pid = p.processID
       return
     except CatchableError as e:
-      trace "Terminal candidate failed", terminal=command[0], error=e.msg
+      trace "Terminal candidate failed", terminal = command[0], error = e.msg
 
   warn "No terminal command could be spawned"
 
@@ -383,9 +389,9 @@ proc spawnCommand(command: seq[string]) =
 
   try:
     let p = startProcess(command[0], args = args, options = {poUsePath})
-    info "Spawned command", cmd=command[0], pid=p.processID
+    info "Spawned command", cmd = command[0], pid = p.processID
   except CatchableError as e:
-    warn "Failed to spawn command", cmd=command[0], error=e.msg
+    warn "Failed to spawn command", cmd = command[0], error = e.msg
 
 const
   RiverEdgeTop = 1'u32
@@ -397,7 +403,8 @@ const
   RiverCapabilityMaximize = 2'u32
   RiverCapabilityMinimize = 8'u32
   RiverCapabilityWindowMenu = 1'u32
-  RiverBaseCapabilities = RiverCapabilityFullscreen or RiverCapabilityMaximize or RiverCapabilityMinimize
+  RiverBaseCapabilities = RiverCapabilityFullscreen or
+      RiverCapabilityMaximize or RiverCapabilityMinimize
   RiverDecorationOnlySupportsCsd = 0'u32
   RiverPresentationVsync = 0'u32
   RiverPresentationAsync = 1'u32
@@ -427,9 +434,9 @@ proc createProtocolBuffer(kind: ProtocolSurfaceKind): ptr Buffer =
     return nil
   let alpha = if currentModel.protocolSurfaces.visibleDebug: 0x80000000'u32 else: 0'u32
   let color = case kind
-    of PskShell: 0x3aa5ff00'u32 or alpha
-    of PskDecorationAbove: 0xffcc0000'u32 or alpha
-    of PskDecorationBelow: 0x2233cc00'u32 or alpha
+    of ProtocolSurfaceKind.PskShell: 0x3aa5ff00'u32 or alpha
+    of ProtocolSurfaceKind.PskDecorationAbove: 0xffcc0000'u32 or alpha
+    of ProtocolSurfaceKind.PskDecorationBelow: 0x2233cc00'u32 or alpha
   let rgba = premulColor(color)
   singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
 
@@ -468,7 +475,7 @@ proc destroyProtocolSurface(surf: var OwnedProtocolSurface) =
     surf.decoration.destroy()
     surf.decoration = nil
   if surf.shellSurface != nil:
-    shellSurfacePointers.del(surf.shellSurface.get_id())
+    shellSurfacePointers.del(surf.shellSurface.id())
     surf.shellSurface.destroy()
     surf.shellSurface = nil
   if surf.surface != nil:
@@ -487,7 +494,7 @@ proc ensureOwnedShellSurface() =
     return
   if river_manager == nil or compositor == nil:
     return
-  var surf = createProtocolWlSurface(PskShell)
+  var surf = createProtocolWlSurface(ProtocolSurfaceKind.PskShell)
   if surf.surface == nil:
     warn "Unable to create protocol shell wl_surface"
     return
@@ -497,20 +504,23 @@ proc ensureOwnedShellSurface() =
     destroyProtocolSurface(surf)
     return
   surf.node = surf.shellSurface.getNode()
-  ownedShellSurfaceId = surf.shellSurface.get_id()
+  ownedShellSurfaceId = surf.shellSurface.id()
   shellSurfacePointers[ownedShellSurfaceId] = surf.shellSurface
   commitProtocolSurface(surf)
   protocolSurfaces[ownedShellSurfaceId] = surf
-  debug "Created protocol shell surface", shellSurfaceId=ownedShellSurfaceId
+  debug "Created protocol shell surface", shellSurfaceId = ownedShellSurfaceId
 
-proc ensureDecorationSurface(windowId: WindowId; kind: ProtocolSurfaceKind): uint32 =
+proc ensureDecorationSurface(windowId: WindowId;
+    kind: ProtocolSurfaceKind): uint32 =
   if not currentModel.protocolSurfaces.enabled:
     return 0
   if not windowPointers.hasKey(windowId) or compositor == nil:
     return 0
-  if kind == PskDecorationAbove and windowDecorationAbove.hasKey(windowId):
+  if kind == ProtocolSurfaceKind.PskDecorationAbove and
+      windowDecorationAbove.hasKey(windowId):
     return windowDecorationAbove[windowId]
-  if kind == PskDecorationBelow and windowDecorationBelow.hasKey(windowId):
+  if kind == ProtocolSurfaceKind.PskDecorationBelow and
+      windowDecorationBelow.hasKey(windowId):
     return windowDecorationBelow[windowId]
 
   var surf = createProtocolWlSurface(kind)
@@ -518,9 +528,9 @@ proc ensureDecorationSurface(windowId: WindowId; kind: ProtocolSurfaceKind): uin
     return 0
   surf.windowId = windowId
   case kind
-  of PskDecorationAbove:
+  of ProtocolSurfaceKind.PskDecorationAbove:
     surf.decoration = windowPointers[windowId].getDecorationAbove(surf.surface)
-  of PskDecorationBelow:
+  of ProtocolSurfaceKind.PskDecorationBelow:
     surf.decoration = windowPointers[windowId].getDecorationBelow(surf.surface)
   else:
     discard
@@ -529,14 +539,15 @@ proc ensureDecorationSurface(windowId: WindowId; kind: ProtocolSurfaceKind): uin
     return 0
   surf.decoration.setOffset(0, 0)
   commitProtocolSurface(surf)
-  let id = surf.decoration.get_id()
+  let id = surf.decoration.id()
   protocolSurfaces[id] = surf
-  if kind == PskDecorationAbove:
+  if kind == ProtocolSurfaceKind.PskDecorationAbove:
     windowDecorationAbove[windowId] = id
-  elif kind == PskDecorationBelow:
+  elif kind == ProtocolSurfaceKind.PskDecorationBelow:
     windowDecorationBelow[windowId] = id
   let kindText = $kind
-  debug "Created protocol decoration surface", windowId=windowId, decorationId=id, kind=kindText
+  debug "Created protocol decoration surface", windowId = windowId,
+      decorationId = id, kind = kindText
   id
 
 proc destroyWindowProtocolSurfaces(windowId: WindowId) =
@@ -578,27 +589,28 @@ proc supportedCapabilities(model: Model): uint32 =
 
 proc configuredPresentationMode(model: Model): uint32 =
   case model.presentationMode
-  of PresentationAsync: RiverPresentationAsync
+  of PresentationMode.PresentationAsync: RiverPresentationAsync
   else: RiverPresentationVsync
 
 proc hasPresentationPreference(model: Model): bool =
-  model.presentationMode != PresentationDefault
+  model.presentationMode != PresentationMode.PresentationDefault
 
 proc outputIdForPointer(output: ptr RiverOutputV1): uint32 =
   if output == nil:
     return 0
-  let id = output.get_id()
+  let id = output.id()
   if outputPointers.hasKey(id):
     id
   else:
     0
 
 proc attachLayerOutput(outputId: uint32) =
-  if river_layer_shell == nil or not outputPointers.hasKey(outputId) or layerOutputPointers.hasKey(outputId):
+  if river_layer_shell == nil or not outputPointers.hasKey(outputId) or
+      layerOutputPointers.hasKey(outputId):
     return
   let layerOutput = river_layer_shell.getOutput(outputPointers[outputId])
   layerOutputPointers[outputId] = layerOutput
-  layerOutputOwners[layerOutput.get_id()] = outputId
+  layerOutputOwners[layerOutput.id()] = outputId
   discard layerOutput.addListener(layer_output_listener.addr, nil)
 
 proc attachLayerSeat(seat: ptr RiverSeatV1) =
@@ -613,7 +625,7 @@ proc attachXkbSeat(seat: ptr RiverSeatV1) =
     return
   if river_xkb_bindings.getVersion() < 2'u32:
     return
-  let seatId = seat.get_id()
+  let seatId = seat.id()
   if xkbSeatPointers.hasKey(seatId):
     return
   let xkbSeat = river_xkb_bindings.getSeat(seat)
@@ -646,36 +658,39 @@ proc destroyXkbSeats() =
     xkbSeat.destroy()
   xkbSeatPointers.clear()
 
-proc addXkbBinding(seat: ptr RiverSeatV1; bindingConfig: KeyBindingConfig; keysym, modifiers: uint32; msg: Msg) =
+proc addXkbBinding(seat: ptr RiverSeatV1; bindingConfig: KeyBindingConfig;
+    keysym, modifiers: uint32; msg: Msg) =
   if river_xkb_bindings == nil:
     return
   let binding = river_xkb_bindings.getXkbBinding(seat, keysym, modifiers)
   xkbBindingPointers.add(binding)
-  xkbBindings[binding.get_id()] = msg
-  xkbBindingModes[binding.get_id()] = bindingConfig.mode
+  xkbBindings[binding.id()] = msg
+  xkbBindingModes[binding.id()] = bindingConfig.mode
   discard binding.addListener(xkb_binding_listener.addr, nil)
   if bindingConfig.hasLayoutOverride:
     binding.setLayoutOverride(bindingConfig.layoutOverride)
   binding.enable()
 
-proc addPointerBinding(seat: ptr RiverSeatV1; button, modifiers: uint32; op: PointerOpKind) =
+proc addPointerBinding(seat: ptr RiverSeatV1; button, modifiers: uint32;
+    op: PointerOpKind) =
   let binding = seat.getPointerBinding(button, modifiers)
   pointerBindingPointers.add(binding)
-  pointerBindingKinds[binding.get_id()] = op
-  pointerBindingSeats[binding.get_id()] = seat
+  pointerBindingKinds[binding.id()] = op
+  pointerBindingSeats[binding.id()] = seat
   discard binding.addListener(pointer_binding_listener.addr, nil)
   binding.enable()
 
 proc bindingModeActive(mode: BindingMode): bool =
   case mode
-  of BindAlways: true
-  of BindNormal: not currentModel.overviewActive
-  of BindOverview: currentModel.overviewActive
+  of BindingMode.BindAlways: true
+  of BindingMode.BindNormal: not currentModel.overviewActive
+  of BindingMode.BindOverview: currentModel.overviewActive
 
 proc keyBindingActive(binding: KeyBindingConfig): bool =
   if not bindingModeActive(binding.mode):
     return false
-  if currentModel.keyboardShortcutsInhibited() and not binding.bypassShortcutsInhibit:
+  if currentModel.keyboardShortcutsInhibited() and
+      not binding.bypassShortcutsInhibit:
     return false
   true
 
@@ -721,8 +736,10 @@ proc applyManageState() =
       win.setDimensionBounds(data.maxWidth, data.maxHeight)
       if data.isFloating or data.isFullscreen:
         edges = 0
-      discard ensureDecorationSurface(id, PskDecorationBelow)
-      discard ensureDecorationSurface(id, PskDecorationAbove)
+      discard ensureDecorationSurface(id,
+          ProtocolSurfaceKind.PskDecorationBelow)
+      discard ensureDecorationSurface(id,
+          ProtocolSurfaceKind.PskDecorationAbove)
     else:
       win.useSsd()
     win.setTiled(edges)
@@ -730,7 +747,8 @@ proc applyManageState() =
   let focused = currentModel.activeFocusRiverId()
   for seat in seatPointers:
     if currentModel.cursor.theme.len > 0:
-      let cursorSize = if currentModel.cursor.size == 0: 24'u32 else: currentModel.cursor.size
+      let cursorSize = if currentModel.cursor.size ==
+          0: 24'u32 else: currentModel.cursor.size
       seat.setXcursorTheme(cstring(currentModel.cursor.theme), cursorSize)
     if currentModel.layerFocusExclusive or currentModel.sessionLocked:
       seat.clearFocus()
@@ -753,9 +771,9 @@ proc removeSeatPointer(seat: ptr RiverSeatV1) =
     else:
       inc i
 
-proc on_seat_removed(data: pointer, seat: ptr RiverSeatV1) =
+proc on_seat_removed(data: pointer; seat: ptr RiverSeatV1) =
   info "Seat removed"
-  let seatId = seat.get_id()
+  let seatId = seat.id()
   removeSeatPointer(seat)
   seatWlNames.del(seatId)
   pointerWindowBySeat.del(seatId)
@@ -769,41 +787,46 @@ proc on_seat_removed(data: pointer, seat: ptr RiverSeatV1) =
   destroyBindings()
   seat.destroy()
 
-proc on_seat_wl_seat(data: pointer, seat: ptr RiverSeatV1, name: uint32) =
-  seatWlNames[seat.get_id()] = name
-  trace "Seat wl_seat received", seatId=seat.get_id(), name=name
+proc on_seat_wl_seat(data: pointer; seat: ptr RiverSeatV1; name: uint32) =
+  seatWlNames[seat.id()] = name
+  trace "Seat wl_seat received", seatId = seat.id(), name = name
 
-proc on_seat_pointer_enter(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
+proc on_seat_pointer_enter(data: pointer; seat: ptr RiverSeatV1;
+    win: ptr RiverWindowV1) =
   if win != nil:
-    pointerWindowBySeat[seat.get_id()] = win.get_id()
-    trace "Pointer entered window", seatId=seat.get_id(), windowId=win.get_id()
+    pointerWindowBySeat[seat.id()] = win.id()
+    trace "Pointer entered window", seatId = seat.id(),
+        windowId = win.id()
 
-proc on_seat_pointer_leave(data: pointer, seat: ptr RiverSeatV1) =
-  pointerWindowBySeat.del(seat.get_id())
-  trace "Pointer left window", seatId=seat.get_id()
+proc on_seat_pointer_leave(data: pointer; seat: ptr RiverSeatV1) =
+  pointerWindowBySeat.del(seat.id())
+  trace "Pointer left window", seatId = seat.id()
 
-proc on_seat_window_interaction(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
+proc on_seat_window_interaction(data: pointer; seat: ptr RiverSeatV1;
+    win: ptr RiverWindowV1) =
   if win != nil:
-    let id = win.get_id()
-    debug "Seat window interaction", windowId=id
-    msgQueue.add(Msg(kind: WlFocusChanged, newFocusedId: id))
+    let id = win.id()
+    debug "Seat window interaction", windowId = id
+    msgQueue.add(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: id))
 
-proc on_seat_shell_surface_interaction(data: pointer, seat: ptr RiverSeatV1, shellSurface: ptr RiverShellSurfaceV1) =
+proc on_seat_shell_surface_interaction(data: pointer; seat: ptr RiverSeatV1;
+    shellSurface: ptr RiverShellSurfaceV1) =
   if shellSurface != nil:
-    let id = shellSurface.get_id()
+    let id = shellSurface.id()
     shellSurfacePointers[id] = shellSurface
-    trace "Seat shell surface interaction", shellSurfaceId=id
-    msgQueue.add(Msg(kind: WlShellSurfaceInteraction, shellSurfaceId: id))
+    trace "Seat shell surface interaction", shellSurfaceId = id
+    msgQueue.add(Msg(kind: MsgKind.WlShellSurfaceInteraction,
+        shellSurfaceId: id))
 
-proc on_op_delta(data: pointer, seat: ptr RiverSeatV1, dx: int32, dy: int32) =
-  msgQueue.add(Msg(kind: WlPointerDelta, dx: dx, dy: dy))
+proc on_op_delta(data: pointer; seat: ptr RiverSeatV1; dx: int32; dy: int32) =
+  msgQueue.add(Msg(kind: MsgKind.WlPointerDelta, dx: dx, dy: dy))
 
-proc on_op_release(data: pointer, seat: ptr RiverSeatV1) =
-  msgQueue.add(Msg(kind: WlPointerRelease))
+proc on_op_release(data: pointer; seat: ptr RiverSeatV1) =
+  msgQueue.add(Msg(kind: MsgKind.WlPointerRelease))
 
-proc on_seat_pointer_position(data: pointer, seat: ptr RiverSeatV1, x: int32, y: int32) =
-  pointerPositionBySeat[seat.get_id()] = Rect(x: x, y: y, w: 0, h: 0)
-  trace "Seat pointer position", seatId=seat.get_id(), x=x, y=y
+proc on_seat_pointer_position(data: pointer; seat: ptr RiverSeatV1; x: int32; y: int32) =
+  pointerPositionBySeat[seat.id()] = Rect(x: x, y: y, w: 0, h: 0)
+  trace "Seat pointer position", seatId = seat.id(), x = x, y = y
 
 var seat_listener = RiverSeatV1Listener(
   removed: on_seat_removed,
@@ -817,22 +840,22 @@ var seat_listener = RiverSeatV1Listener(
   pointerPosition: on_seat_pointer_position
 )
 
-proc on_xkb_pressed(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
-  let id = binding.get_id()
+proc on_xkb_pressed(data: pointer; binding: ptr river_xkb.RiverXkbBindingV1) =
+  let id = binding.id()
   xkbBindingPressed[id] = true
   if xkbBindingModes.hasKey(id) and not bindingModeActive(xkbBindingModes[id]):
     return
   if xkbBindings.hasKey(id):
     msgQueue.add(xkbBindings[id])
 
-proc on_xkb_released(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
-  xkbBindingPressed[binding.get_id()] = false
-  trace "XKB binding released", bindingId=binding.get_id()
+proc on_xkb_released(data: pointer; binding: ptr river_xkb.RiverXkbBindingV1) =
+  xkbBindingPressed[binding.id()] = false
+  trace "XKB binding released", bindingId = binding.id()
 
-proc on_xkb_stop_repeat(data: pointer, binding: ptr river_xkb.RiverXkbBindingV1) =
-  let id = binding.get_id()
+proc on_xkb_stop_repeat(data: pointer; binding: ptr river_xkb.RiverXkbBindingV1) =
+  let id = binding.id()
   xkbStopRepeatCount[id] = xkbStopRepeatCount.getOrDefault(id, 0'u32) + 1'u32
-  trace "XKB binding stop-repeat", bindingId=id, count=xkbStopRepeatCount[id]
+  trace "XKB binding stop-repeat", bindingId = id, count = xkbStopRepeatCount[id]
 
 xkb_binding_listener = river_xkb.RiverXkbBindingV1Listener(
   pressed: on_xkb_pressed,
@@ -840,22 +863,26 @@ xkb_binding_listener = river_xkb.RiverXkbBindingV1Listener(
   stopRepeat: on_xkb_stop_repeat
 )
 
-proc on_xkb_seat_ate_unbound_key(data: pointer, seat: ptr river_xkb.RiverXkbBindingsSeatV1) =
-  let id = seat.get_id()
+proc on_xkb_seat_ate_unbound_key(data: pointer;
+    seat: ptr river_xkb.RiverXkbBindingsSeatV1) =
+  let id = seat.id()
   xkbSeatAteUnbound[id] = xkbSeatAteUnbound.getOrDefault(id, 0'u32) + 1'u32
-  trace "XKB seat ate unbound key", xkbSeatId=id, count=xkbSeatAteUnbound[id]
+  trace "XKB seat ate unbound key", xkbSeatId = id, count = xkbSeatAteUnbound[id]
 
-proc on_xkb_seat_modifiers_update(data: pointer, seat: ptr river_xkb.RiverXkbBindingsSeatV1, old: uint32, new: uint32) =
-  trace "XKB modifiers updated", xkbSeatId=seat.get_id(), old=old, new=new
-  msgQueue.add(Msg(kind: WlModifiersChanged, oldModifiers: old, newModifiers: new))
+proc on_xkb_seat_modifiers_update(data: pointer;
+    seat: ptr river_xkb.RiverXkbBindingsSeatV1; old: uint32; new: uint32) =
+  trace "XKB modifiers updated", xkbSeatId = seat.id(), old = old, new = new
+  msgQueue.add(Msg(kind: MsgKind.WlModifiersChanged, oldModifiers: old,
+      newModifiers: new))
 
 xkb_seat_listener = river_xkb.RiverXkbBindingsSeatV1Listener(
   ateUnboundKey: on_xkb_seat_ate_unbound_key,
   modifiersUpdate: on_xkb_seat_modifiers_update
 )
 
-proc on_pointer_binding_pressed(data: pointer, binding: ptr RiverPointerBindingV1) =
-  let id = binding.get_id()
+proc on_pointer_binding_pressed(data: pointer;
+    binding: ptr RiverPointerBindingV1) =
+  let id = binding.id()
   pointerBindingPressed[id] = true
   let focused = currentModel.activeFocusRiverId()
   if focused == 0 or not pointerBindingSeats.hasKey(id):
@@ -863,18 +890,22 @@ proc on_pointer_binding_pressed(data: pointer, binding: ptr RiverPointerBindingV
   let seat = pointerBindingSeats[id]
   if pointerBindingKinds.hasKey(id):
     case pointerBindingKinds[id]
-    of OpMove:
-      msgQueue.add(Msg(kind: WlPointerMoveRequested, moveWinId: focused, moveSeat: seat))
-    of OpResize:
-      msgQueue.add(Msg(kind: WlPointerResizeRequested, resizeWinId: focused, resizeSeat: seat, resizeEdges: RiverEdgeBottom or RiverEdgeRight))
+    of PointerOpKind.OpMove:
+      msgQueue.add(Msg(kind: MsgKind.WlPointerMoveRequested, moveWinId: focused,
+          moveSeat: seat))
+    of PointerOpKind.OpResize:
+      msgQueue.add(Msg(kind: MsgKind.WlPointerResizeRequested,
+          resizeWinId: focused, resizeSeat: seat,
+          resizeEdges: RiverEdgeBottom or RiverEdgeRight))
     else:
       discard
   elif pointerBindings.hasKey(id):
     msgQueue.add(pointerBindings[id])
 
-proc on_pointer_binding_released(data: pointer, binding: ptr RiverPointerBindingV1) =
-  pointerBindingPressed[binding.get_id()] = false
-  trace "Pointer binding released", bindingId=binding.get_id()
+proc on_pointer_binding_released(data: pointer;
+    binding: ptr RiverPointerBindingV1) =
+  pointerBindingPressed[binding.id()] = false
+  trace "Pointer binding released", bindingId = binding.id()
 
 pointer_binding_listener = RiverPointerBindingV1Listener(
   pressed: on_pointer_binding_pressed,
@@ -882,31 +913,35 @@ pointer_binding_listener = RiverPointerBindingV1Listener(
 )
 
 proc on_layer_output_non_exclusive(
-    data: pointer,
-    layerOutput: ptr river_layer.RiverLayerShellOutputV1,
-    x: int32,
-    y: int32,
-    width: int32,
+    data: pointer;
+    layerOutput: ptr river_layer.RiverLayerShellOutputV1;
+    x: int32;
+    y: int32;
+    width: int32;
     height: int32) =
-  let layerId = layerOutput.get_id()
+  let layerId = layerOutput.id()
   if layerOutputOwners.hasKey(layerId):
     let outputId = layerOutputOwners[layerId]
-    msgQueue.add(Msg(kind: WlOutputUsable, usableOutputId: outputId, usableX: x, usableY: y, usableW: width, usableH: height))
+    msgQueue.add(Msg(kind: MsgKind.WlOutputUsable, usableOutputId: outputId,
+        usableX: x, usableY: y, usableW: width, usableH: height))
 
 layer_output_listener = river_layer.RiverLayerShellOutputV1Listener(
   nonExclusiveArea: on_layer_output_non_exclusive
 )
 
-proc on_layer_seat_focus_exclusive(data: pointer, seat: ptr river_layer.RiverLayerShellSeatV1) =
+proc on_layer_seat_focus_exclusive(data: pointer;
+    seat: ptr river_layer.RiverLayerShellSeatV1) =
   trace "Layer shell focus exclusive"
-  msgQueue.add(Msg(kind: WlLayerFocusExclusive))
+  msgQueue.add(Msg(kind: MsgKind.WlLayerFocusExclusive))
 
-proc on_layer_seat_focus_non_exclusive(data: pointer, seat: ptr river_layer.RiverLayerShellSeatV1) =
+proc on_layer_seat_focus_non_exclusive(data: pointer;
+    seat: ptr river_layer.RiverLayerShellSeatV1) =
   trace "Layer shell focus non-exclusive"
-  msgQueue.add(Msg(kind: WlLayerFocusNonExclusive))
+  msgQueue.add(Msg(kind: MsgKind.WlLayerFocusNonExclusive))
 
-proc on_layer_seat_focus_none(data: pointer, seat: ptr river_layer.RiverLayerShellSeatV1) =
-  msgQueue.add(Msg(kind: WlLayerFocusNone))
+proc on_layer_seat_focus_none(data: pointer;
+    seat: ptr river_layer.RiverLayerShellSeatV1) =
+  msgQueue.add(Msg(kind: MsgKind.WlLayerFocusNone))
   requestManage("layer focus none")
 
 layer_seat_listener = river_layer.RiverLayerShellSeatV1Listener(
@@ -919,43 +954,45 @@ layer_seat_listener = river_layer.RiverLayerShellSeatV1Listener(
 
 proc requestManage(reason: string) =
   if river_manager != nil:
-    trace "Requesting River manage sequence", reason=reason
+    trace "Requesting River manage sequence", reason = reason
     river_manager.manageDirty()
 
 proc executeManageEffect(eff: Effect) =
   case eff.kind
-  of EffOpStartPointer:
+  of EffectKind.EffOpStartPointer:
     if eff.opSeat != nil:
       lastPointerOpSeat = eff.opSeat
       cast[ptr RiverSeatV1](eff.opSeat).opStartPointer()
-  of EffOpEnd:
+  of EffectKind.EffOpEnd:
     if eff.endSeat != nil:
       cast[ptr RiverSeatV1](eff.endSeat).opEnd()
       if lastPointerOpSeat == eff.endSeat:
         lastPointerOpSeat = nil
-  of EffSetPosition:
+  of EffectKind.EffSetPosition:
     if windowPointers.hasKey(eff.windowId):
-      windowPointers[eff.windowId].proposeDimensions(max(0'i32, eff.w), max(0'i32, eff.h))
-  of EffFocusWindow:
+      windowPointers[eff.windowId].proposeDimensions(max(0'i32, eff.w), max(
+          0'i32, eff.h))
+  of EffectKind.EffFocusWindow:
     if not currentModel.sessionLocked and windowPointers.hasKey(eff.focusId):
       let win = windowPointers[eff.focusId]
       for seat in seatPointers:
         seat.focusWindow(win)
-  of EffFocusShellSurface:
-    if not currentModel.sessionLocked and shellSurfacePointers.hasKey(eff.focusShellSurfaceId):
+  of EffectKind.EffFocusShellSurface:
+    if not currentModel.sessionLocked and shellSurfacePointers.hasKey(
+        eff.focusShellSurfaceId):
       let shellSurface = shellSurfacePointers[eff.focusShellSurfaceId]
       for seat in seatPointers:
         seat.focusShellSurface(shellSurface)
-  of EffCloseWindow:
+  of EffectKind.EffCloseWindow:
     if windowPointers.hasKey(eff.closeId):
       windowPointers[eff.closeId].close()
-  of EffInformResizeStart:
+  of EffectKind.EffInformResizeStart:
     if windowPointers.hasKey(eff.resizeLifecycleWinId):
       windowPointers[eff.resizeLifecycleWinId].informResizeStart()
-  of EffInformResizeEnd:
+  of EffectKind.EffInformResizeEnd:
     if windowPointers.hasKey(eff.resizeLifecycleWinId):
       windowPointers[eff.resizeLifecycleWinId].informResizeEnd()
-  of EffSetFullscreen:
+  of EffectKind.EffSetFullscreen:
     if windowPointers.hasKey(eff.fsWinId):
       let win = windowPointers[eff.fsWinId]
       if eff.isFullscreen:
@@ -976,7 +1013,7 @@ proc executeManageEffect(eff: Effect) =
       else:
         win.exitFullscreen()
         win.informNotFullscreen()
-  of EffSetMaximized:
+  of EffectKind.EffSetMaximized:
     if windowPointers.hasKey(eff.maxWinId):
       if eff.isMaximized:
         windowPointers[eff.maxWinId].informMaximized()
@@ -986,7 +1023,7 @@ proc executeManageEffect(eff: Effect) =
     discard
 
 proc queueManageEffect(eff: Effect) =
-  if riverPhase == RiverManage:
+  if riverPhase == RiverPhase.RiverManage:
     executeManageEffect(eff)
   else:
     pendingManageEffects.add(eff)
@@ -1010,14 +1047,17 @@ proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
         instr.windowId, geom.w, geom.h)
       geom.w = bounded.w
       geom.h = bounded.h
-      windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(0'i32, geom.h))
+      windowPointers[instr.windowId].proposeDimensions(max(0'i32, geom.w), max(
+          0'i32, geom.h))
 
 proc applyVisibility(win: ptr RiverWindowV1; visibility: RenderVisibility) =
   if visibility.visible:
     win.show()
     if visibility.clipped:
-      win.setClipBox(visibility.clipX, visibility.clipY, visibility.clipW, visibility.clipH)
-      win.setContentClipBox(visibility.clipX, visibility.clipY, visibility.clipW, visibility.clipH)
+      win.setClipBox(visibility.clipX, visibility.clipY, visibility.clipW,
+          visibility.clipH)
+      win.setContentClipBox(visibility.clipX, visibility.clipY,
+          visibility.clipW, visibility.clipH)
     else:
       win.setClipBox(0, 0, 0, 0)
       win.setContentClipBox(0, 0, 0, 0)
@@ -1050,7 +1090,8 @@ proc renderDesiredPlacements() =
         node.placeAbove(lastNode)
       lastNode = node
       if windowPointers.hasKey(id):
-        let visibility = renderVisibility(geom, screen, max(currentModel.borderWidth * 2, 4'i32))
+        let visibility = renderVisibility(geom, screen, max(
+            currentModel.borderWidth * 2, 4'i32))
         windowPointers[id].applyVisibility(visibility)
         windowPointers[id].applyBorder(
           id == currentModel.activeFocusRiverId(), visibility.borderEdges)
@@ -1119,7 +1160,8 @@ proc focusedWindowGeometry(): Rect =
       return win.floatingGeom
   currentModel.primaryScreen()
 
-proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string; showPointer: bool) {.async.} =
+proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string;
+    showPointer: bool) {.async.} =
   let screenshotConfig = currentModel.screenshot
   let path = screenshotPathOrDefault(requestedPath, screenshotConfig)
   let dir = path.splitFile().dir
@@ -1127,7 +1169,7 @@ proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string; showPoint
     try:
       createDir(dir)
     except CatchableError as e:
-      warn "Failed to create screenshot directory", path=dir, error=e.msg
+      warn "Failed to create screenshot directory", path = dir, error = e.msg
       return
 
   let captureCommand =
@@ -1143,86 +1185,96 @@ proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string; showPoint
   let pointerFlag = if showPointer or screenshotConfig.showPointer: " -c" else: ""
   let command =
     case kind
-    of ShotRegion:
-      shellQuote(captureCommand) & pointerFlag & " -g \"$(" & shellQuote(regionSelectorCommand) & ")\" " & shellQuote(path)
-    of ShotScreen:
-      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(geometryArg(currentModel.primaryScreen())) & " " & shellQuote(path)
-    of ShotWindow:
-      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(geometryArg(focusedWindowGeometry())) & " " & shellQuote(path)
+    of ScreenshotKind.ShotRegion:
+      shellQuote(captureCommand) & pointerFlag & " -g \"$(" & shellQuote(
+          regionSelectorCommand) & ")\" " & shellQuote(path)
+    of ScreenshotKind.ShotScreen:
+      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(
+          geometryArg(currentModel.primaryScreen())) & " " & shellQuote(path)
+    of ScreenshotKind.ShotWindow:
+      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(
+          geometryArg(focusedWindowGeometry())) & " " & shellQuote(path)
 
   try:
     let p = startProcess("sh", args = @["-c", command], options = {poUsePath})
     let code = p.waitForExit()
     p.close()
     if code == 0:
-      info "Screenshot captured", path=path
+      info "Screenshot captured", path = path
       asyncCheck broadcastJson($(%*{"ScreenshotCaptured": {"path": path}}))
     else:
-      warn "Screenshot capture failed", path=path, exitCode=code
+      warn "Screenshot capture failed", path = path, exitCode = code
   except CatchableError as e:
-    warn "Screenshot capture failed", path=path, error=e.msg
+    warn "Screenshot capture failed", path = path, error = e.msg
 
 proc executeEffect(eff: Effect) =
   case eff.kind
-  of EffLog:
-    info "log", msg=eff.msg
-  of EffManageFinish:
-    if river_manager != nil and riverPhase == RiverManage:
+  of EffectKind.EffLog:
+    info "log", msg = eff.msg
+  of EffectKind.EffManageFinish:
+    if river_manager != nil and riverPhase == RiverPhase.RiverManage:
       river_manager.manageFinish()
       commitPendingLiveRestore()
-  of EffRenderFinish:
-    if river_manager != nil and riverPhase == RiverRender:
+  of EffectKind.EffRenderFinish:
+    if river_manager != nil and riverPhase == RiverPhase.RiverRender:
       river_manager.renderFinish()
-  of EffManageDirty:
+  of EffectKind.EffManageDirty:
     requestManage("effect")
-  of EffBroadcastJson:
+  of EffectKind.EffBroadcastJson:
     asyncCheck broadcastJson(eff.jsonPayload)
-  of EffBroadcastTriadJson:
+  of EffectKind.EffBroadcastTriadJson:
     asyncCheck broadcastTriadJson(eff.jsonPayload, eff.triadEventName)
-  of EffSpawnScreenLock:
+  of EffectKind.EffSpawnScreenLock:
     spawnScreenLock(eff.screenLockCommand)
-  of EffSpawnWindowMenu:
-    spawnWindowMenu(eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX, eff.windowMenuY)
-  of EffSpawn:
+  of EffectKind.EffSpawnWindowMenu:
+    spawnWindowMenu(eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX,
+        eff.windowMenuY)
+  of EffectKind.EffSpawn:
     spawnCommand(eff.spawnCommand)
-  of EffPointerWarp:
+  of EffectKind.EffPointerWarp:
     for seat in seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)
-  of EffEnsureNextKeyEaten:
+  of EffectKind.EffEnsureNextKeyEaten:
     for xkbSeat in xkbSeatPointers.values:
       xkbSeat.ensureNextKeyEaten()
-  of EffCancelEnsureNextKeyEaten:
+  of EffectKind.EffCancelEnsureNextKeyEaten:
     for xkbSeat in xkbSeatPointers.values:
       xkbSeat.cancelEnsureNextKeyEaten()
-  of EffStopManager:
+  of EffectKind.EffStopManager:
     quickshellSpawnPending = false
     stopQuickshell(currentModel, "manager stop", authoritative = true)
     if river_manager != nil:
       river_manager.stop()
-  of EffTriadReload:
+  of EffectKind.EffTriadReload:
     let restore = writeCurrentLiveRestoreState()
     if not restore.ok:
       warn "Triad reload rejected; live restore snapshot could not be written",
-        path=restore.path,
-        error=restore.error
+        path = restore.path,
+        error = restore.error
       return
     quickshellSpawnPending = false
     stopQuickshell(currentModel, "triad reload", authoritative = true)
     if river_manager != nil:
       river_manager.stop()
-  of EffExitSession:
+  of EffectKind.EffExitSession:
     if river_manager != nil and currentModel.allowExitSession:
       river_manager.exitSession()
-  of EffFocusShellUi:
+  of EffectKind.EffFocusShellUi:
     ensureOwnedShellSurface()
     if ownedShellSurfaceId != 0:
-      queueManageEffect(Effect(kind: EffFocusShellSurface, focusShellSurfaceId: ownedShellSurfaceId))
-  of EffScreenshot:
-    asyncCheck runScreenshotCapture(eff.screenshotKind, eff.screenshotPath, eff.screenshotShowPointer)
-  of EffOpStartPointer, EffOpEnd, EffFocusWindow, EffFocusShellSurface, EffCloseWindow, EffSetFullscreen, EffSetMaximized, EffInformResizeStart, EffInformResizeEnd:
+      queueManageEffect(Effect(kind: EffectKind.EffFocusShellSurface,
+          focusShellSurfaceId: ownedShellSurfaceId))
+  of EffectKind.EffScreenshot:
+    asyncCheck runScreenshotCapture(eff.screenshotKind, eff.screenshotPath,
+        eff.screenshotShowPointer)
+  of EffectKind.EffOpStartPointer, EffectKind.EffOpEnd,
+      EffectKind.EffFocusWindow, EffectKind.EffFocusShellSurface,
+      EffectKind.EffCloseWindow, EffectKind.EffSetFullscreen,
+      EffectKind.EffSetMaximized, EffectKind.EffInformResizeStart,
+      EffectKind.EffInformResizeEnd:
     queueManageEffect(eff)
-  of EffSetPosition:
-    if riverPhase == RiverRender and windowNodes.hasKey(eff.windowId):
+  of EffectKind.EffSetPosition:
+    if riverPhase == RiverPhase.RiverRender and windowNodes.hasKey(eff.windowId):
       let node = windowNodes[eff.windowId]
       node.setPosition(eff.x, eff.y)
 
@@ -1254,153 +1306,183 @@ proc forgetWindow(id: WindowId) =
     windowPointers.del(id)
     win.destroy()
 
-proc on_window_app_id(data: pointer, win: ptr RiverWindowV1, appId: cstring) =
-  let id = win.get_id()
+proc on_window_app_id(data: pointer; win: ptr RiverWindowV1; appId: cstring) =
+  let id = win.id()
   let appIdText = cstringOrEmpty(appId)
-  debug "Window app-id received", windowId=id, appId=appIdText
+  debug "Window app-id received", windowId = id, appId = appIdText
   if pendingWindows.hasKey(id):
     pendingWindows[id].appId = appIdText
   elif currentModel.hasRiverWindow(id):
-    msgQueue.add(Msg(kind: WlWindowAppId, appIdWindowId: id, updatedAppId: appIdText))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: id,
+        updatedAppId: appIdText))
 
-proc on_window_title(data: pointer, win: ptr RiverWindowV1, title: cstring) =
-  let id = win.get_id()
+proc on_window_title(data: pointer; win: ptr RiverWindowV1; title: cstring) =
+  let id = win.id()
   let titleText = cstringOrEmpty(title)
-  debug "Window title received", windowId=id, title=titleText
+  debug "Window title received", windowId = id, title = titleText
   if pendingWindows.hasKey(id):
     pendingWindows[id].title = titleText
   elif currentModel.hasRiverWindow(id):
-    msgQueue.add(Msg(kind: WlWindowTitle, titleWindowId: id, updatedTitle: titleText))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowTitle, titleWindowId: id,
+        updatedTitle: titleText))
 
-proc on_window_closed(data: pointer, win: ptr RiverWindowV1) =
-  let id = win.get_id()
-  info "Window closed", windowId=id
-  msgQueue.add(Msg(kind: WlWindowDestroyed, destroyedId: id))
+proc on_window_closed(data: pointer; win: ptr RiverWindowV1) =
+  let id = win.id()
+  info "Window closed", windowId = id
+  msgQueue.add(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: id))
   forgetWindow(id)
 
 proc on_window_dimensions_hint(
-    data: pointer,
-    win: ptr RiverWindowV1,
-    minWidth: int32,
-    minHeight: int32,
-    maxWidth: int32,
+    data: pointer;
+    win: ptr RiverWindowV1;
+    minWidth: int32;
+    minHeight: int32;
+    maxWidth: int32;
     maxHeight: int32) =
   trace "Window dimensions hint received",
-    windowId=win.get_id(),
-    minWidth=minWidth,
-    minHeight=minHeight,
-    maxWidth=maxWidth,
-    maxHeight=maxHeight
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].minWidth = max(0'i32, minWidth)
-    pendingWindows[win.get_id()].minHeight = max(0'i32, minHeight)
-    pendingWindows[win.get_id()].maxWidth = max(0'i32, maxWidth)
-    pendingWindows[win.get_id()].maxHeight = max(0'i32, maxHeight)
-  elif currentModel.hasRiverWindow(win.get_id()):
+    windowId = win.id(),
+    minWidth = minWidth,
+    minHeight = minHeight,
+    maxWidth = maxWidth,
+    maxHeight = maxHeight
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].minWidth = max(0'i32, minWidth)
+    pendingWindows[win.id()].minHeight = max(0'i32, minHeight)
+    pendingWindows[win.id()].maxWidth = max(0'i32, maxWidth)
+    pendingWindows[win.id()].maxHeight = max(0'i32, maxHeight)
+  elif currentModel.hasRiverWindow(win.id()):
     msgQueue.add(Msg(
-      kind: WlWindowDimensionsHint,
-      hintWindowId: win.get_id(),
+      kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: win.id(),
       minWidth: minWidth,
       minHeight: minHeight,
       maxWidth: maxWidth,
       maxHeight: maxHeight))
 
-proc on_window_dimensions(data: pointer, win: ptr RiverWindowV1, width: int32, height: int32) =
-  trace "Window dimensions acknowledged", windowId=win.get_id(), width=width, height=height
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].actualW = max(0'i32, width)
-    pendingWindows[win.get_id()].actualH = max(0'i32, height)
+proc on_window_dimensions(data: pointer; win: ptr RiverWindowV1; width: int32;
+    height: int32) =
+  trace "Window dimensions acknowledged", windowId = win.id(),
+      width = width, height = height
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].actualW = max(0'i32, width)
+    pendingWindows[win.id()].actualH = max(0'i32, height)
   else:
-    msgQueue.add(Msg(kind: WlWindowDimensions, dimensionsWindowId: win.get_id(), actualWidth: width, actualHeight: height))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: win.id(), actualWidth: width,
+        actualHeight: height))
 
-proc on_window_parent(data: pointer, win: ptr RiverWindowV1, parent: ptr RiverWindowV1) =
-  let parentId = if parent == nil: 0'u32 else: parent.get_id()
-  trace "Window parent received", windowId=win.get_id(), parentId=parentId
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].parentId = parentId
+proc on_window_parent(data: pointer; win: ptr RiverWindowV1;
+    parent: ptr RiverWindowV1) =
+  let parentId = if parent == nil: 0'u32 else: parent.id()
+  trace "Window parent received", windowId = win.id(), parentId = parentId
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].parentId = parentId
   else:
-    msgQueue.add(Msg(kind: WlWindowParent, childWindowId: win.get_id(), parentWindowId: parentId))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowParent, childWindowId: win.id(),
+        parentWindowId: parentId))
 
-proc on_window_decoration_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
-  trace "Window decoration hint received", windowId=win.get_id(), hint=hint
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].hasDecorationHint = true
-    pendingWindows[win.get_id()].decorationHint = hint
+proc on_window_decoration_hint(data: pointer; win: ptr RiverWindowV1;
+    hint: uint32) =
+  trace "Window decoration hint received", windowId = win.id(), hint = hint
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].hasDecorationHint = true
+    pendingWindows[win.id()].decorationHint = hint
   else:
-    msgQueue.add(Msg(kind: WlWindowDecorationHint, decorationWindowId: win.get_id(), decorationHint: hint))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowDecorationHint,
+        decorationWindowId: win.id(), decorationHint: hint))
 
-proc on_window_pointer_move_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1) =
-  debug "Pointer move requested", windowId=win.get_id()
-  msgQueue.add(Msg(kind: WlPointerMoveRequested, moveWinId: win.get_id(), moveSeat: seat))
+proc on_window_pointer_move_requested(data: pointer; win: ptr RiverWindowV1;
+    seat: ptr RiverSeatV1) =
+  debug "Pointer move requested", windowId = win.id()
+  msgQueue.add(Msg(kind: MsgKind.WlPointerMoveRequested, moveWinId: win.id(),
+      moveSeat: seat))
 
-proc on_window_pointer_resize_requested(data: pointer, win: ptr RiverWindowV1, seat: ptr RiverSeatV1, edges: uint32) =
-  debug "Pointer resize requested", windowId=win.get_id(), edges=edges
-  msgQueue.add(Msg(kind: WlPointerResizeRequested, resizeWinId: win.get_id(), resizeSeat: seat, resizeEdges: edges))
+proc on_window_pointer_resize_requested(data: pointer; win: ptr RiverWindowV1;
+    seat: ptr RiverSeatV1; edges: uint32) =
+  debug "Pointer resize requested", windowId = win.id(), edges = edges
+  msgQueue.add(Msg(kind: MsgKind.WlPointerResizeRequested,
+      resizeWinId: win.id(), resizeSeat: seat, resizeEdges: edges))
 
-proc on_window_show_menu_requested(data: pointer, win: ptr RiverWindowV1, x: int32, y: int32) =
-  debug "Window menu requested", windowId=win.get_id(), x=x, y=y
-  msgQueue.add(Msg(kind: WlWindowMenuRequested, menuWindowId: win.get_id(), menuX: x, menuY: y))
+proc on_window_show_menu_requested(data: pointer; win: ptr RiverWindowV1;
+    x: int32; y: int32) =
+  debug "Window menu requested", windowId = win.id(), x = x, y = y
+  msgQueue.add(Msg(kind: MsgKind.WlWindowMenuRequested,
+      menuWindowId: win.id(), menuX: x, menuY: y))
 
-proc on_window_maximize_requested(data: pointer, win: ptr RiverWindowV1) =
-  debug "Window maximize requested", windowId=win.get_id()
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].isMaximized = true
-    pendingWindows[win.get_id()].isMinimized = false
+proc on_window_maximize_requested(data: pointer; win: ptr RiverWindowV1) =
+  debug "Window maximize requested", windowId = win.id()
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].isMaximized = true
+    pendingWindows[win.id()].isMinimized = false
   else:
-    msgQueue.add(Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: win.get_id()))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+        maximizeRequestId: win.id()))
 
-proc on_window_unmaximize_requested(data: pointer, win: ptr RiverWindowV1) =
-  debug "Window unmaximize requested", windowId=win.get_id()
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].isMaximized = false
+proc on_window_unmaximize_requested(data: pointer; win: ptr RiverWindowV1) =
+  debug "Window unmaximize requested", windowId = win.id()
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].isMaximized = false
   else:
-    msgQueue.add(Msg(kind: WlWindowUnmaximizeRequested, unmaximizeRequestId: win.get_id()))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowUnmaximizeRequested,
+        unmaximizeRequestId: win.id()))
 
-proc on_window_fullscreen_requested(data: pointer, win: ptr RiverWindowV1, output: ptr RiverOutputV1) =
+proc on_window_fullscreen_requested(data: pointer; win: ptr RiverWindowV1;
+    output: ptr RiverOutputV1) =
   let requestedOutput = outputIdForPointer(output)
-  debug "Window fullscreen requested", windowId=win.get_id(), outputId=requestedOutput
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].isFullscreen = true
-    pendingWindows[win.get_id()].fullscreenOutput = requestedOutput
+  debug "Window fullscreen requested", windowId = win.id(),
+      outputId = requestedOutput
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].isFullscreen = true
+    pendingWindows[win.id()].fullscreenOutput = requestedOutput
   else:
-    msgQueue.add(Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: win.get_id(), fullscreenOutputId: requestedOutput))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: win.id(), fullscreenOutputId: requestedOutput))
 
-proc on_window_exit_fullscreen_requested(data: pointer, win: ptr RiverWindowV1) =
-  debug "Window exit fullscreen requested", windowId=win.get_id()
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].isFullscreen = false
-    pendingWindows[win.get_id()].fullscreenOutput = 0
+proc on_window_exit_fullscreen_requested(data: pointer;
+    win: ptr RiverWindowV1) =
+  debug "Window exit fullscreen requested", windowId = win.id()
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].isFullscreen = false
+    pendingWindows[win.id()].fullscreenOutput = 0
   else:
-    msgQueue.add(Msg(kind: WlWindowExitFullscreenRequested, exitFullscreenRequestId: win.get_id()))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowExitFullscreenRequested,
+        exitFullscreenRequestId: win.id()))
 
-proc on_window_minimize_requested(data: pointer, win: ptr RiverWindowV1) =
-  debug "Window minimize requested", windowId=win.get_id()
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].isMinimized = true
-    pendingWindows[win.get_id()].isMaximized = false
+proc on_window_minimize_requested(data: pointer; win: ptr RiverWindowV1) =
+  debug "Window minimize requested", windowId = win.id()
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].isMinimized = true
+    pendingWindows[win.id()].isMaximized = false
   else:
-    msgQueue.add(Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: win.get_id()))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowMinimizeRequested,
+        minimizeRequestId: win.id()))
 
-proc on_window_unreliable_pid(data: pointer, win: ptr RiverWindowV1, unreliablePid: int32) =
-  windowUnreliablePids[win.get_id()] = unreliablePid
-  trace "Window unreliable pid received", windowId=win.get_id(), pid=unreliablePid
+proc on_window_unreliable_pid(data: pointer; win: ptr RiverWindowV1;
+    unreliablePid: int32) =
+  windowUnreliablePids[win.id()] = unreliablePid
+  trace "Window unreliable pid received", windowId = win.id(),
+      pid = unreliablePid
 
-proc on_window_presentation_hint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
-  trace "Window presentation hint received", windowId=win.get_id(), hint=hint
-  if pendingWindows.hasKey(win.get_id()):
-    pendingWindows[win.get_id()].hasPresentationHint = true
-    pendingWindows[win.get_id()].presentationHint = hint
+proc on_window_presentation_hint(data: pointer; win: ptr RiverWindowV1;
+    hint: uint32) =
+  trace "Window presentation hint received", windowId = win.id(), hint = hint
+  if pendingWindows.hasKey(win.id()):
+    pendingWindows[win.id()].hasPresentationHint = true
+    pendingWindows[win.id()].presentationHint = hint
   else:
-    msgQueue.add(Msg(kind: WlWindowPresentationHint, presentationWindowId: win.get_id(), presentationHint: hint))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowPresentationHint,
+        presentationWindowId: win.id(), presentationHint: hint))
 
-proc on_window_identifier(data: pointer, win: ptr RiverWindowV1, identifier: cstring) =
+proc on_window_identifier(data: pointer; win: ptr RiverWindowV1;
+    identifier: cstring) =
   let text = cstringOrEmpty(identifier)
-  let id = win.get_id()
-  trace "Window identifier received", windowId=id, identifier=text
+  let id = win.id()
+  trace "Window identifier received", windowId = id, identifier = text
   if pendingWindows.hasKey(id):
     pendingWindows[id].identifier = text
   else:
-    msgQueue.add(Msg(kind: WlWindowIdentifier, identifierWindowId: id, identifier: text))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowIdentifier, identifierWindowId: id,
+        identifier: text))
 
 var window_listener = RiverWindowV1Listener(
   closed: on_window_closed,
@@ -1440,7 +1522,7 @@ proc cleanupRiverObjects() =
   for id in outputIds:
     if layerOutputPointers.hasKey(id):
       let layerOutput = layerOutputPointers[id]
-      layerOutputOwners.del(layerOutput.get_id())
+      layerOutputOwners.del(layerOutput.id())
       layerOutputPointers.del(id)
       layerOutput.destroy()
     let output = outputPointers[id]
@@ -1471,11 +1553,11 @@ proc cleanupRiverObjects() =
     river_layer_shell.destroy()
     river_layer_shell = nil
 
-proc on_manager_unavailable(data: pointer, mgr: ptr RiverWindowManagerV1) =
+proc on_manager_unavailable(data: pointer; mgr: ptr RiverWindowManagerV1) =
   fatal "River window manager interface is unavailable"
   quit 1
 
-proc on_manager_finished(data: pointer, mgr: ptr RiverWindowManagerV1) =
+proc on_manager_finished(data: pointer; mgr: ptr RiverWindowManagerV1) =
   warn "River window manager interface finished"
   cleanupRiverObjects()
   if river_manager != nil:
@@ -1483,52 +1565,63 @@ proc on_manager_finished(data: pointer, mgr: ptr RiverWindowManagerV1) =
     river_manager = nil
   shouldExit = true
 
-proc on_session_locked(data: pointer, mgr: ptr RiverWindowManagerV1) =
+proc on_session_locked(data: pointer; mgr: ptr RiverWindowManagerV1) =
   info "River session locked"
-  msgQueue.add(Msg(kind: WlSessionLocked))
+  msgQueue.add(Msg(kind: MsgKind.WlSessionLocked))
 
-proc on_session_unlocked(data: pointer, mgr: ptr RiverWindowManagerV1) =
+proc on_session_unlocked(data: pointer; mgr: ptr RiverWindowManagerV1) =
   info "River session unlocked"
-  msgQueue.add(Msg(kind: WlSessionUnlocked))
+  msgQueue.add(Msg(kind: MsgKind.WlSessionUnlocked))
 
-proc on_manage_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
-  debug "River manage start", pendingWindows=pendingWindows.len
+proc on_manage_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
+  debug "River manage start", pendingWindows = pendingWindows.len
   applyPendingLiveRestore()
   # Before starting manage, move all pending windows to the message queue
   for id, data in pendingWindows:
-    msgQueue.add(Msg(kind: WlWindowCreated, windowId: id, appId: data.appId, title: data.title, createdIdentifier: data.identifier))
+    msgQueue.add(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
+        appId: data.appId, title: data.title,
+        createdIdentifier: data.identifier))
     if data.actualW > 0 or data.actualH > 0:
-      msgQueue.add(Msg(kind: WlWindowDimensions, dimensionsWindowId: id, actualWidth: data.actualW, actualHeight: data.actualH))
+      msgQueue.add(Msg(kind: MsgKind.WlWindowDimensions, dimensionsWindowId: id,
+          actualWidth: data.actualW, actualHeight: data.actualH))
     if data.hasDecorationHint:
-      msgQueue.add(Msg(kind: WlWindowDecorationHint, decorationWindowId: id, decorationHint: data.decorationHint))
+      msgQueue.add(Msg(kind: MsgKind.WlWindowDecorationHint,
+          decorationWindowId: id, decorationHint: data.decorationHint))
     if data.hasPresentationHint:
-      msgQueue.add(Msg(kind: WlWindowPresentationHint, presentationWindowId: id, presentationHint: data.presentationHint))
+      msgQueue.add(Msg(kind: MsgKind.WlWindowPresentationHint,
+          presentationWindowId: id, presentationHint: data.presentationHint))
     if data.parentId != 0:
-      msgQueue.add(Msg(kind: WlWindowParent, childWindowId: id, parentWindowId: data.parentId))
-    if data.minWidth > 0 or data.minHeight > 0 or data.maxWidth > 0 or data.maxHeight > 0:
+      msgQueue.add(Msg(kind: MsgKind.WlWindowParent, childWindowId: id,
+          parentWindowId: data.parentId))
+    if data.minWidth > 0 or data.minHeight > 0 or data.maxWidth > 0 or
+        data.maxHeight > 0:
       msgQueue.add(Msg(
-        kind: WlWindowDimensionsHint,
+        kind: MsgKind.WlWindowDimensionsHint,
         hintWindowId: id,
         minWidth: data.minWidth,
         minHeight: data.minHeight,
         maxWidth: data.maxWidth,
         maxHeight: data.maxHeight))
     if data.isFullscreen:
-      msgQueue.add(Msg(kind: WlWindowFullscreenRequested, fullscreenRequestId: id, fullscreenOutputId: data.fullscreenOutput))
+      msgQueue.add(Msg(kind: MsgKind.WlWindowFullscreenRequested,
+          fullscreenRequestId: id, fullscreenOutputId: data.fullscreenOutput))
     if data.isMaximized:
-      msgQueue.add(Msg(kind: WlWindowMaximizeRequested, maximizeRequestId: id))
+      msgQueue.add(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+          maximizeRequestId: id))
     if data.isMinimized:
-      msgQueue.add(Msg(kind: WlWindowMinimizeRequested, minimizeRequestId: id))
+      msgQueue.add(Msg(kind: MsgKind.WlWindowMinimizeRequested,
+          minimizeRequestId: id))
   pendingWindows.clear()
-  msgQueue.add(Msg(kind: WlManageStart))
+  msgQueue.add(Msg(kind: MsgKind.WlManageStart))
 
-proc on_render_start(data: pointer, mgr: ptr RiverWindowManagerV1) =
+proc on_render_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
   trace "River render start"
-  msgQueue.add(Msg(kind: WlRenderStart))
+  msgQueue.add(Msg(kind: MsgKind.WlRenderStart))
 
-proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindowV1) =
-  let id = win.get_id()
-  info "Window discovered", windowId=id
+proc on_window(data: pointer; mgr: ptr RiverWindowManagerV1;
+    win: ptr RiverWindowV1) =
+  let id = win.id()
+  info "Window discovered", windowId = id
   windowPointers[id] = win
   windowNodes[id] = win.getNode()
   # Start tracking as pending until we get metadata or manage starts
@@ -1536,32 +1629,37 @@ proc on_window(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindo
     id: id, appId: "unknown", title: "unknown")
   discard win.addListener(window_listener.addr, nil)
 
-proc on_output_dimensions(data: pointer, output: ptr RiverOutputV1, width: int32, height: int32) =
-  info "Output dimensions changed", outputId=output.get_id(), width=width, height=height
-  msgQueue.add(Msg(kind: WlOutputDimensions, outputId: output.get_id(), width: width, height: height))
+proc on_output_dimensions(data: pointer; output: ptr RiverOutputV1;
+    width: int32; height: int32) =
+  info "Output dimensions changed", outputId = output.id(), width = width,
+      height = height
+  msgQueue.add(Msg(kind: MsgKind.WlOutputDimensions, outputId: output.id(),
+      width: width, height: height))
 
-proc on_output_removed(data: pointer, output: ptr RiverOutputV1) =
-  let id = output.get_id()
-  info "Output removed", outputId=id
+proc on_output_removed(data: pointer; output: ptr RiverOutputV1) =
+  let id = output.id()
+  info "Output removed", outputId = id
   if layerOutputPointers.hasKey(id):
     let layerOutput = layerOutputPointers[id]
-    layerOutputOwners.del(layerOutput.get_id())
+    layerOutputOwners.del(layerOutput.id())
     layerOutputPointers.del(id)
     layerOutput.destroy()
   outputPointers.del(id)
   if outputWlNames.hasKey(id):
     outputGlobalOwners.del(outputWlNames[id])
     outputWlNames.del(id)
-  msgQueue.add(Msg(kind: WlOutputRemoved, removedOutputId: id))
+  msgQueue.add(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
   output.destroy()
 
-proc on_output_wl_output(data: pointer, output: ptr RiverOutputV1, name: uint32) =
-  let outputId = output.get_id()
+proc on_output_wl_output(data: pointer; output: ptr RiverOutputV1;
+    name: uint32) =
+  let outputId = output.id()
   outputWlNames[outputId] = name
   outputGlobalOwners[name] = outputId
-  trace "Output wl_output received", outputId=outputId, name=name
+  trace "Output wl_output received", outputId = outputId, name = name
   if outputGlobalNames.hasKey(name):
-    msgQueue.add(Msg(kind: WlOutputName, nameOutputId: outputId, outputName: outputGlobalNames[name]))
+    msgQueue.add(Msg(kind: MsgKind.WlOutputName, nameOutputId: outputId,
+        outputName: outputGlobalNames[name]))
 
 proc on_wl_output_geometry(
   data: pointer;
@@ -1597,32 +1695,38 @@ proc on_wl_output_name(data: pointer; output: ptr Output; name: cstring) =
   let globalName = uint32(cast[uint](data))
   let outputName = $name
   outputGlobalNames[globalName] = outputName
-  trace "wl_output name received", globalName=globalName, outputName=outputName
+  trace "wl_output name received", globalName = globalName,
+      outputName = outputName
   if outputGlobalOwners.hasKey(globalName):
-    msgQueue.add(Msg(kind: WlOutputName, nameOutputId: outputGlobalOwners[globalName], outputName: outputName))
+    msgQueue.add(Msg(kind: MsgKind.WlOutputName,
+        nameOutputId: outputGlobalOwners[globalName], outputName: outputName))
 
-proc on_wl_output_description(data: pointer; output: ptr Output; description: cstring) =
+proc on_wl_output_description(data: pointer; output: ptr Output;
+    description: cstring) =
   discard
 
-proc on_output_position(data: pointer, output: ptr RiverOutputV1, x: int32, y: int32) =
-  info "Output position changed", outputId=output.get_id(), x=x, y=y
-  msgQueue.add(Msg(kind: WlOutputPosition, positionOutputId: output.get_id(), outputX: x, outputY: y))
+proc on_output_position(data: pointer; output: ptr RiverOutputV1; x: int32; y: int32) =
+  info "Output position changed", outputId = output.id(), x = x, y = y
+  msgQueue.add(Msg(kind: MsgKind.WlOutputPosition,
+      positionOutputId: output.id(), outputX: x, outputY: y))
 
 # Listener setup
-var 
+var
   manager_listener: RiverWindowManagerV1Listener
   output_listener: RiverOutputV1Listener
   wl_output_listener: wl_core.OutputListener
 
-proc on_output(data: pointer, mgr: ptr RiverWindowManagerV1, output: ptr RiverOutputV1) =
-  let id = output.get_id()
-  info "Output discovered", outputId=id
+proc on_output(data: pointer; mgr: ptr RiverWindowManagerV1;
+    output: ptr RiverOutputV1) =
+  let id = output.id()
+  info "Output discovered", outputId = id
   outputPointers[id] = output
   discard output.addListener(output_listener.addr, nil)
   attachLayerOutput(id)
 
-proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1) =
-  info "Seat discovered", seatIndex=seatPointers.len
+proc on_seat(data: pointer; mgr: ptr RiverWindowManagerV1;
+    seat: ptr RiverSeatV1) =
+  info "Seat discovered", seatIndex = seatPointers.len
   seatPointers.add(seat)
   discard seat.addListener(seat_listener.addr, nil)
   attachLayerSeat(seat)
@@ -1631,46 +1735,63 @@ proc on_seat(data: pointer, mgr: ptr RiverWindowManagerV1, seat: ptr RiverSeatV1
 
 # --- Registry Callbacks ---
 
-proc registry_handle_global(data: pointer, registry: ptr Registry, name: uint32, interface_name: cstring, version: uint32) =
+proc registry_handle_global(data: pointer; registry: ptr Registry; name: uint32;
+    interface_name: cstring; version: uint32) =
   let interfaceName = $interface_name
-  debug "Wayland global advertised", name=name, interfaceName=interfaceName, version=version
+  debug "Wayland global advertised", name = name, interfaceName = interfaceName,
+      version = version
   # Bind to the river_window_manager_v1 interface
   if interfaceName == "river_window_manager_v1":
     if version < 4'u32:
-      fatal "river_window_manager_v1 v4 is required", advertisedVersion=version
+      fatal "river_window_manager_v1 v4 is required",
+          advertisedVersion = version
       quit 1
-    river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name, river_window_manager_v1_interface.addr, 4'u32))
+    river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name,
+        river_window_manager_v1_interface.addr, 4'u32))
     discard river_manager.addListener(manager_listener.addr, nil)
-    info "Bound to river_window_manager_v1", name=name, advertisedVersion=version, boundVersion=4
+    info "Bound to river_window_manager_v1", name = name,
+        advertisedVersion = version, boundVersion = 4
     ensureOwnedShellSurface()
   elif interfaceName == "wl_compositor":
-    compositor = cast[ptr Compositor](registry.`bind`(name, wl_compositor_interface.addr, min(version, 6'u32)))
-    info "Bound to wl_compositor", name=name, advertisedVersion=version
+    compositor = cast[ptr Compositor](registry.`bind`(name,
+        wl_compositor_interface.addr, min(version, 6'u32)))
+    info "Bound to wl_compositor", name = name, advertisedVersion = version
     ensureOwnedShellSurface()
   elif interfaceName == "wl_output":
-    let wlOutput = cast[ptr Output](registry.`bind`(name, wl_core.wl_output_interface.addr, min(version, 4'u32)))
+    let wlOutput = cast[ptr Output](registry.`bind`(name,
+        wl_core.wl_output_interface.addr, min(version, 4'u32)))
     wlOutputPointers[name] = wlOutput
     discard wlOutput.addListener(wl_output_listener.addr, cast[pointer](uint(name)))
-    debug "Bound to wl_output", name=name, advertisedVersion=version, boundVersion=min(version, 4'u32)
+    debug "Bound to wl_output", name = name, advertisedVersion = version,
+        boundVersion = min(version, 4'u32)
   elif interfaceName == "river_layer_shell_v1":
-    river_layer_shell = cast[ptr river_layer.RiverLayerShellV1](registry.`bind`(name, river_layer.river_layer_shell_v1_interface.addr, min(version, 1'u32)))
+    river_layer_shell = cast[ptr river_layer.RiverLayerShellV1](registry.`bind`(
+        name, river_layer.river_layer_shell_v1_interface.addr, min(version, 1'u32)))
     for outputId in outputPointers.keys:
       attachLayerOutput(outputId)
     for seat in seatPointers:
       attachLayerSeat(seat)
-    info "Bound to river_layer_shell_v1", name=name, advertisedVersion=version
+    info "Bound to river_layer_shell_v1", name = name,
+        advertisedVersion = version
   elif interfaceName == "river_xkb_bindings_v1":
-    river_xkb_bindings = cast[ptr river_xkb.RiverXkbBindingsV1](registry.`bind`(name, river_xkb.river_xkb_bindings_v1_interface.addr, min(version, 3'u32)))
+    river_xkb_bindings = cast[ptr river_xkb.RiverXkbBindingsV1](registry.`bind`(
+        name, river_xkb.river_xkb_bindings_v1_interface.addr, min(version, 3'u32)))
     bindingsConfigured = false
     requestManage("xkb bindings discovered")
-    info "Bound to river_xkb_bindings_v1", name=name, advertisedVersion=version
+    info "Bound to river_xkb_bindings_v1", name = name,
+        advertisedVersion = version
   elif interfaceName == "wp_single_pixel_buffer_manager_v1":
-    singlePixelManager = cast[ptr singlepixel.WpSinglePixelBufferManagerV1](registry.`bind`(name, singlepixel.wp_single_pixel_buffer_manager_v1_interface.addr, min(version, 1'u32)))
-    info "Bound to wp_single_pixel_buffer_manager_v1", name=name, advertisedVersion=version
+    singlePixelManager = cast[ptr singlepixel.WpSinglePixelBufferManagerV1](
+        registry.`bind`(name,
+        singlepixel.wp_single_pixel_buffer_manager_v1_interface.addr, min(
+        version, 1'u32)))
+    info "Bound to wp_single_pixel_buffer_manager_v1", name = name,
+        advertisedVersion = version
 
 
-proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: uint32) =
-  debug "Wayland global removed", name=name
+proc registry_handle_global_remove(data: pointer; registry: ptr Registry;
+    name: uint32) =
+  debug "Wayland global removed", name = name
   if wlOutputPointers.hasKey(name):
     wlOutputPointers[name].release()
     wlOutputPointers.del(name)
@@ -1678,7 +1799,8 @@ proc registry_handle_global_remove(data: pointer, registry: ptr Registry, name: 
   if outputGlobalOwners.hasKey(name):
     let outputId = outputGlobalOwners[name]
     outputGlobalOwners.del(name)
-    msgQueue.add(Msg(kind: WlOutputName, nameOutputId: outputId, outputName: ""))
+    msgQueue.add(Msg(kind: MsgKind.WlOutputName, nameOutputId: outputId,
+        outputName: ""))
 
 var registry_listener = RegistryListener(
   global: registry_handle_global,
@@ -1688,7 +1810,7 @@ var registry_listener = RegistryListener(
 proc startAnimationLoop() {.async.} =
   while true:
     {.cast(gcsafe).}:
-      msgQueue.add(Msg(kind: CmdTick))
+      msgQueue.add(Msg(kind: MsgKind.CmdTick))
     await sleepAsync(16) # ~60fps
 
 proc processQueuedMessages(configPath, niriSocketPath: string) =
@@ -1696,16 +1818,17 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
     let msg = msgQueue[0]
     msgQueue.delete(0)
 
-    if msg.kind == WlPointerRelease:
-      if currentModel.pointerOp.kind != OpNone:
+    if msg.kind == MsgKind.WlPointerRelease:
+      if currentModel.pointerOp.kind != PointerOpKind.OpNone:
         if lastPointerOpSeat != nil:
-          executeEffect(Effect(kind: EffOpEnd, endSeat: lastPointerOpSeat))
+          executeEffect(Effect(kind: EffectKind.EffOpEnd,
+              endSeat: lastPointerOpSeat))
 
-    if msg.kind == CmdSpawnTerminal:
+    if msg.kind == MsgKind.CmdSpawnTerminal:
       spawnTerminal(currentModel)
       continue
 
-    if msg.kind == CmdConfigReload:
+    if msg.kind == MsgKind.CmdConfigReload:
       discard applyConfigReload(configPath, niriSocketPath)
       continue
 
@@ -1717,29 +1840,29 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       destroyBindings()
       requestManage("binding profile changed")
 
-    if msg.kind == WlManageStart:
-      riverPhase = RiverManage
+    if msg.kind == MsgKind.WlManageStart:
+      riverPhase = RiverPhase.RiverManage
       let instructions = syncRuntimeLayoutProjection("manage layout", msg)
       proposeDesiredDimensions(instructions)
       applyManageState()
       flushPendingManageEffects()
       for eff in effects:
-        if eff.kind != EffManageDirty:
+        if eff.kind != EffectKind.EffManageDirty:
           executeEffect(eff)
-      executeEffect(Effect(kind: EffManageFinish))
-      riverPhase = RiverIdle
+      executeEffect(Effect(kind: EffectKind.EffManageFinish))
+      riverPhase = RiverPhase.RiverIdle
       spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
       continue
 
-    if msg.kind == WlRenderStart:
-      riverPhase = RiverRender
+    if msg.kind == MsgKind.WlRenderStart:
+      riverPhase = RiverPhase.RiverRender
       if desiredPlacements.len == 0:
         let instructions = syncRuntimeLayoutProjection("render layout", msg)
         for instr in instructions:
           desiredPlacements[instr.windowId] = instr.geom
       renderDesiredPlacements()
-      executeEffect(Effect(kind: EffRenderFinish))
-      riverPhase = RiverIdle
+      executeEffect(Effect(kind: EffectKind.EffRenderFinish))
+      riverPhase = RiverPhase.RiverIdle
       continue
 
     for eff in effects:
@@ -1756,7 +1879,7 @@ proc main() =
       # Subscription client
       let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
       try:
-        waitFor client.connectUnix(getTriadSocketPath())
+        waitFor client.connectUnix(triadSocketPath())
         waitFor client.send("event-stream\L")
         while not client.isClosed:
           let line = waitFor client.recvLine()
@@ -1773,22 +1896,22 @@ proc main() =
       cmd.add(paramStr(i))
     try:
       if cmd == "dump-live-restore-state":
-        let reply = waitFor sendIpcRequest(getTriadSocketPath(), cmd)
+        let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
         stdout.writeLine(reply)
       else:
-        waitFor sendIpcMsg(getTriadSocketPath(), cmd)
+        waitFor sendIpcMsg(triadSocketPath(), cmd)
     except CatchableError as e:
       failCli("socket request failed: " & e.msg)
     return
 
   info "Triad process starting",
-    pid=getCurrentProcessId(),
-    runtimeDir=getRuntimeDir(),
-    waylandDisplay=getEnv("WAYLAND_DISPLAY", "")
+    pid = getCurrentProcessId(),
+    runtimeDir = runtimeDir(),
+    waylandDisplay = getEnv("WAYLAND_DISPLAY", "")
 
   let sessionProblem = currentWaylandSessionProblem()
   if sessionProblem.len > 0:
-    fatal "Refusing to start outside a Wayland session", reason=sessionProblem
+    fatal "Refusing to start outside a Wayland session", reason = sessionProblem
     quit 1
 
   display = connectDisplay(nil)
@@ -1800,19 +1923,20 @@ proc main() =
   discard registry.addListener(registry_listener.addr, nil)
 
   let roundtripResult = display.roundtrip()
-  debug "Wayland registry roundtrip finished", result=roundtripResult
+  debug "Wayland registry roundtrip finished", result = roundtripResult
 
   if river_manager == nil:
     fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"
     quit 1
 
-  info "Triad connected to River", outputs=outputPointers.len, seats=seatPointers.len
+  info "Triad connected to River", outputs = outputPointers.len,
+      seats = seatPointers.len
 
   # Setup and Load Config
   setupConfig()
   let initialConfig = loadConfig(configPath)
   runtimeState = initRuntimeStateFromConfig(initialConfig)
-  info "Initial config loaded", path=configPath
+  info "Initial config loaded", path = configPath
 
   pendingLiveRestorePath = defaultLiveRestorePath()
   let hadRestoreSnapshot = fileExists(pendingLiveRestorePath)
@@ -1820,21 +1944,23 @@ proc main() =
   if pendingLiveRestore.isSome:
     let state = pendingLiveRestore.get()
     info "Live restore snapshot loaded",
-      path=pendingLiveRestorePath,
-      activeTag=state.activeTag,
-      windows=state.tagByWindow.len
+      path = pendingLiveRestorePath,
+      activeTag = state.activeTag,
+      windows = state.tagByWindow.len
   elif hadRestoreSnapshot:
     if quarantineLiveRestoreState(pendingLiveRestorePath):
-      warn "Invalid live restore snapshot quarantined", path=pendingLiveRestorePath
+      warn "Invalid live restore snapshot quarantined",
+          path = pendingLiveRestorePath
     else:
-      warn "Invalid live restore snapshot could not be quarantined", path=pendingLiveRestorePath
+      warn "Invalid live restore snapshot could not be quarantined",
+          path = pendingLiveRestorePath
 
   # Setup Watcher
   watcher = initWatcher()
   proc onConfigChange(events: seq[PathEvent]) {.gcsafe.} =
     {.cast(gcsafe).}:
       configReloadDebouncer.schedule(int64(epochTime() * 1000.0))
-  
+
   watcher.register(configPath, onConfigChange)
 
   # Start IPC Server
@@ -1850,24 +1976,24 @@ proc main() =
     {.cast(gcsafe).}:
       readLiveRestoreJson()
 
-  let triadSocketPath = getTriadSocketPath()
-  info "Starting Triad IPC server", path=triadSocketPath
+  let triadSocketPath = triadSocketPath()
+  info "Starting Triad IPC server", path = triadSocketPath
   asyncCheck startIpcServer(
     triadSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
   let niriSocketPath = chooseNiriCompatSocketPath(triadSocketPath)
   if niriSocketPath.len > 0 and niriSocketPath != triadSocketPath:
-    info "Starting Niri-compatible IPC server", path=niriSocketPath
+    info "Starting Niri-compatible IPC server", path = niriSocketPath
     asyncCheck startIpcServer(
       niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()
-  
+
   # Spawn startup commands (e.g. Noctalia shell)
   spawnStartupCommands(currentModel)
   scheduleQuickshellSpawn(currentModel)
-  
+
   var running = true
   while running:
     if not dispatchPendingWayland(display):
@@ -1875,12 +2001,12 @@ proc main() =
 
     # Poll watcher (non-blocking)
     watcher.poll(0)
-    
+
     # Poll async (IPC)
     asyncdispatch.poll(16)
 
     if configReloadDebouncer.takeDue(int64(epochTime() * 1000.0)):
-      msgQueue.add(Msg(kind: CmdConfigReload))
+      msgQueue.add(Msg(kind: MsgKind.CmdConfigReload))
 
     # Process Message Queue
     processQueuedMessages(configPath, niriSocketPath)
@@ -1925,5 +2051,5 @@ if isMainModule:
     name: on_wl_output_name,
     description: on_wl_output_description
   )
-  
+
   main()
