@@ -1,14 +1,13 @@
 import ../core/model
 import ../types/dod_model
+import ../types/dod_runtime_policy
 import ../types/layout_projection
 import dod_layout
 import layout_state
 
-type
-  LayoutAuthority* = enum
-    LegacyLayoutAuthority
-    DodLayoutAuthority
+export dod_runtime_policy
 
+type
   LayoutProjectionSyncReport* = object
     authority*: LayoutAuthority
     ok*: bool

@@ -233,11 +233,12 @@ projections, applies each model's own viewport targets, and reports projection
 mismatches through the shadow divergence path. This keeps DoD snapshots current
 without making DoD placement authoritative yet.
 
-The layout bridge also has an explicit authority policy. The daemon uses
+Layout authority is runtime data on `TriadRuntimePolicy`. The daemon initializes
 `LegacyLayoutAuthority` today, so `authoritativeProjection` is the legacy
-projection and River placement remains unchanged. Tests can select
-`DodLayoutAuthority` to prove that the bridge can return DoD instructions as
-authoritative while still computing legacy projection for parity checks.
+projection and River placement remains unchanged. Tests can set
+`DodLayoutAuthority` on `TriadRuntimeState.policy` to prove that the runtime
+facade can return DoD instructions as authoritative while still computing
+legacy projection for parity checks.
 
 ## Runtime Update Sync
 
@@ -254,12 +255,13 @@ Runtime updates are also bridged explicitly during the shadow phase:
 This keeps update policy out of the daemon loop and gives the final DoD runtime
 promotion a single seam to change when DoD effects become authoritative.
 
-That seam is represented by an explicit runtime authority policy. The daemon
-uses `LegacyRuntimeAuthority` today, so `authoritativeEffects` are the legacy
-effects and live behavior is unchanged. Tests can select `DodRuntimeAuthority`
-to prove that the same bridge can return DoD effects as authoritative while
-still advancing legacy state for parity checks. Config and IPC do not expose
-this policy yet; it is an internal promotion control.
+That seam is represented by `TriadRuntimePolicy`, stored on `TriadRuntimeState`.
+The daemon initializes `LegacyRuntimeAuthority` today, so
+`authoritativeEffects` are the legacy effects and live behavior is unchanged.
+Tests can set `DodRuntimeAuthority` to prove that the runtime facade can return
+DoD effects as authoritative while still advancing legacy state for parity
+checks. Config and IPC do not expose this policy yet; it is an internal
+promotion control.
 
 ## Config Application
 

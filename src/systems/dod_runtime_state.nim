@@ -54,59 +54,54 @@ proc initRuntimeStateFromConfig*(
   result.state = TriadRuntimeState(
     legacyModel: syncResult.legacyModel,
     shadowModel: syncResult.shadowModel,
-    shadowHealth: initDodShadowHealth())
+    shadowHealth: initDodShadowHealth(),
+    policy: defaultTriadRuntimePolicy())
   result.shadowChecked = syncResult.shadowChecked
   result.shadowReport = syncResult.shadowReport
   result.observation = result.state.observeShadowReport(
     syncResult.shadowChecked, syncResult.shadowReport)
 
 proc applyRuntimeUpdate*(
-    state: var TriadRuntimeState; msg: Msg;
-    authority = LegacyRuntimeAuthority): RuntimeUpdateSyncResult =
+    state: var TriadRuntimeState; msg: Msg): RuntimeUpdateSyncResult =
   runtime_update_sync.syncRuntimeUpdate(
     state.legacyModel,
     state.shadowModel,
     msg,
     state.shadowHealth.shadowSyncEnabled(),
-    authority)
+    state.policy.runtimeAuthority)
 
 proc applyRuntimeShadowOnly*(
-    state: var TriadRuntimeState; msg: Msg;
-    authority = LegacyRuntimeAuthority): RuntimeUpdateSyncResult =
+    state: var TriadRuntimeState; msg: Msg): RuntimeUpdateSyncResult =
   syncShadowOnlyMessage(
     state.legacyModel,
     state.shadowModel,
     msg,
     state.shadowHealth.shadowSyncEnabled(),
-    authority)
+    state.policy.runtimeAuthority)
 
 proc applyObservedRuntimeUpdate*(
-    state: var TriadRuntimeState; msg: Msg;
-    authority = LegacyRuntimeAuthority): ObservedRuntimeUpdateResult =
-  result.syncResult = state.applyRuntimeUpdate(msg, authority)
+    state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
+  result.syncResult = state.applyRuntimeUpdate(msg)
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
 
 proc applyObservedRuntimeShadowOnly*(
-    state: var TriadRuntimeState; msg: Msg;
-    authority = LegacyRuntimeAuthority): ObservedRuntimeUpdateResult =
-  result.syncResult = state.applyRuntimeShadowOnly(msg, authority)
+    state: var TriadRuntimeState; msg: Msg): ObservedRuntimeUpdateResult =
+  result.syncResult = state.applyRuntimeShadowOnly(msg)
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked, result.syncResult.shadowReport)
 
 proc applyRuntimeLayoutProjection*(
-    state: var TriadRuntimeState;
-    authority = LegacyLayoutAuthority): LayoutProjectionSyncReport =
+    state: var TriadRuntimeState): LayoutProjectionSyncReport =
   syncLayoutProjection(
     state.legacyModel,
     state.shadowModel,
     state.shadowHealth.shadowSyncEnabled(),
-    authority)
+    state.policy.layoutAuthority)
 
 proc applyObservedRuntimeLayoutProjection*(
-    state: var TriadRuntimeState;
-    authority = LegacyLayoutAuthority): ObservedLayoutProjectionResult =
-  result.syncResult = state.applyRuntimeLayoutProjection(authority)
+    state: var TriadRuntimeState): ObservedLayoutProjectionResult =
+  result.syncResult = state.applyRuntimeLayoutProjection()
   result.observation = state.observeShadowReport(
     result.syncResult.shadowChecked,
     DodShadowReport(

@@ -3,14 +3,13 @@ import ../core/model
 import ../core/msg
 import ../core/update as legacy_update
 import ../types/dod_model
+import ../types/dod_runtime_policy
 import dod_update
 import dod_shadow_runtime
 
-type
-  RuntimeAuthority* = enum
-    LegacyRuntimeAuthority
-    DodRuntimeAuthority
+export dod_runtime_policy
 
+type
   RuntimeUpdateSyncResult* = object
     authority*: RuntimeAuthority
     legacyEffects*: seq[Effect]

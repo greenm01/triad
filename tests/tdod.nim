@@ -1491,6 +1491,8 @@ suite "DOD state primitives":
     check result.state.shadowHealth.initialized
     check result.state.shadowHealth.readHealthy
     check result.state.shadowHealth.divergenceCount == 0
+    check result.state.policy.runtimeAuthority == LegacyRuntimeAuthority
+    check result.state.policy.layoutAuthority == LegacyLayoutAuthority
     check readRuntimeSnapshot(result.state) ==
       shellSnapshot(result.state.legacyModel)
 
@@ -1556,6 +1558,36 @@ suite "DOD state primitives":
     check layoutResult.syncResult.ok
     check layoutResult.syncResult.authoritativeProjection.instructions ==
       state.legacyModel.layoutProjection().instructions
+
+  test "DOD runtime state policy can select DOD authorities":
+    let seed = lifecycleParityModel()
+    var state = TriadRuntimeState(
+      legacyModel: seed,
+      shadowModel: seed.dodFromLegacy(),
+      shadowHealth: initDodShadowHealth(),
+      policy: TriadRuntimePolicy(
+        runtimeAuthority: DodRuntimeAuthority,
+        layoutAuthority: DodLayoutAuthority))
+
+    let msg = Msg(
+      kind: WlWindowCreated,
+      windowId: 30,
+      appId: "kitty",
+      title: "shell",
+      createdIdentifier: "kitty-30")
+    let updateResult = state.applyObservedRuntimeUpdate(msg)
+    check updateResult.syncResult.authority == DodRuntimeAuthority
+    check updateResult.observation.checked
+    check updateResult.observation.decision.reportOk
+    check updateResult.syncResult.authoritativeEffects.stableEffectSignatures(msg) ==
+      updateResult.syncResult.dodEffects.stableEffectSignatures(msg)
+
+    let layoutResult = state.applyObservedRuntimeLayoutProjection()
+    check layoutResult.syncResult.authority == DodLayoutAuthority
+    check layoutResult.observation.checked
+    check layoutResult.observation.decision.reportOk
+    check layoutResult.syncResult.authoritativeProjection.instructions ==
+      layoutResult.syncResult.dodProjection.instructions
 
   test "DOD observed runtime facade disables reads on divergence":
     let seed = lifecycleParityModel()
