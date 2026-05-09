@@ -1690,6 +1690,24 @@ suite "DOD state primitives":
     check state.legacyModel.outerGaps == 25
     check state.shadowModel.outerGaps == 25
 
+  test "DOD runtime authority handles animation ticks":
+    var state = TriadRuntimeState(
+      legacyModel: animationRuntimeModel(),
+      shadowModel: animationRuntimeModel().dodFromLegacy(),
+      shadowHealth: initDodShadowHealth(),
+      policy: defaultTriadRuntimePolicy())
+
+    let msg = Msg(kind: CmdTick)
+    let tickResult = state.applyObservedRuntimeUpdate(msg)
+    check tickResult.syncResult.authority == DodRuntimeAuthority
+    check tickResult.observation.checked
+    check tickResult.observation.decision.reportOk
+    check tickResult.syncResult.shadowReport.effectParityChecked
+    check tickResult.syncResult.authoritativeEffects.stableEffectSignatures(msg) ==
+      tickResult.syncResult.dodEffects.stableEffectSignatures(msg)
+    check tickResult.syncResult.authoritativeEffects.containsEffect(
+      EffManageDirty)
+
   test "DOD runtime authority keeps parity-exempt messages legacy-authoritative":
     let seed = lifecycleParityModel()
     var state = TriadRuntimeState(
@@ -1715,6 +1733,13 @@ suite "DOD state primitives":
     check spawnTerminal.observation.decision.reportOk
     check spawnTerminal.syncResult.authoritativeEffects.len == 0
     check spawnTerminal.syncResult.dodEffects.len > 0
+
+    let renderStart = state.applyObservedRuntimeUpdate(
+      Msg(kind: WlRenderStart))
+    check renderStart.syncResult.authority == LegacyRuntimeAuthority
+    check renderStart.observation.checked
+    check renderStart.observation.decision.reportOk
+    check not renderStart.syncResult.shadowReport.effectParityChecked
 
   test "DOD runtime model read view falls back after divergence":
     let seed = lifecycleParityModel()
@@ -3579,3 +3604,16 @@ suite "DOD state primitives":
 
     check report.ok
     check not report.effectParityChecked
+
+  test "DOD shadow runtime checks effect parity for animation ticks":
+    let model = animationRuntimeModel()
+    var shadow = model.dodFromLegacy()
+    let report = shadow_runtime.compareShadowState(
+      model,
+      shadow,
+      core_msg.Msg(kind: core_msg.CmdTick),
+      @[Effect(kind: EffManageDirty)],
+      @[])
+
+    check report.ok
+    check report.effectParityChecked

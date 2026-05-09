@@ -263,7 +263,7 @@ Runtime updates are also bridged explicitly during the shadow phase:
 - shadow state, effect signatures, snapshots, histories, and layout projections
   are compared after each bridged update
 - parity-exempt or runtime-owned messages, such as config reload, terminal
-  spawning, render starts, and ticks, remain legacy-authoritative for now
+  spawning, and render starts, remain legacy-authoritative for now
 
 This keeps update policy out of the daemon loop and gives the final DoD runtime
 promotion one aggregate seam to change when the live model becomes DoD-native.

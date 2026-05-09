@@ -89,7 +89,7 @@ proc stableEffectSignatures*(
   result.sort()
 
 proc shouldCheckEffectParity*(kind: MsgKind): bool =
-  kind notin {CmdTick, CmdConfigReload, CmdSpawnTerminal, WlRenderStart}
+  kind notin {CmdConfigReload, CmdSpawnTerminal, WlRenderStart}
 
 proc shouldCheckLayoutParity(kind: MsgKind; effects: seq[Effect]): bool =
   if kind in {WlManageStart, WlRenderStart, CmdTick}:
