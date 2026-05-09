@@ -5,9 +5,7 @@ import ../core/msg
 import ../core/shell_state
 import ../core/update as legacy_update
 import ../state/dod_adapter
-import ../state/dod_invariants
-import ../state/dod_queries
-import ../state/dod_snapshot
+import ../state/engine
 import ../types/core as dod_core
 import ../types/dod_model
 from ../types/legacy_model import nil

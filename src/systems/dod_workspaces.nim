@@ -1,12 +1,6 @@
 import algorithm, options
-import ../core/defaults
 import ../state/engine
-
-proc defaultWorkspaceCount*(model: DodModel): uint32 =
-  if model.defaultWorkspaceCount == 0:
-    DefaultWorkspaceCount
-  else:
-    min(model.defaultWorkspaceCount, MaxTagBits)
+from ../types/legacy_model import Scroller
 
 proc activeWorkspaceSlot*(model: DodModel): uint32 =
   if model.activeSlot != 0:
@@ -16,19 +10,36 @@ proc activeWorkspaceSlot*(model: DodModel): uint32 =
     return tagOpt.get().slot
   0
 
-proc ensureWorkspaceSlot*(model: var DodModel; slot: uint32): TagId =
+proc ensureWorkspaceSlot*(
+    model: var DodModel; slot: uint32; forcedLayout = 0): TagId =
   if slot == 0 or slot > MaxTagBits:
     return NullTagId
   result = model.tagForSlot(slot)
   if result != NullTagId:
+    if forcedLayout != 0:
+      discard model.setTagLayout(
+        result, dodSafeLayoutMode(forcedLayout, model.tag(result).get().layoutMode))
     return result
+  let tagRule = model.tagRuleForSlot(slot)
+  let layoutMode =
+    if forcedLayout != 0:
+      dodSafeLayoutMode(forcedLayout)
+    elif tagRule.found:
+      tagRule.rule.defaultLayout
+    else:
+      Scroller
+  let name =
+    if tagRule.found: tagRule.rule.name
+    else: ""
   result = model.addTag(
     slot = slot,
+    name = name,
+    layoutMode = layoutMode,
     masterCount = model.dodDefaultMasterCount(),
     masterSplitRatio = model.dodDefaultMasterRatio())
 
 proc computedVisibleWorkspaceSlots*(model: DodModel): seq[uint32] =
-  let defaultCount = model.defaultWorkspaceCount()
+  let defaultCount = model.dodDefaultWorkspaceCount()
   for slot in 1'u32 .. defaultCount:
     result.add(slot)
 
@@ -87,7 +98,7 @@ proc workspaceSlotForClampedIndex*(model: DodModel; index: uint32): uint32 =
   slots[i]
 
 proc nextDynamicWorkspaceSlot*(model: DodModel): uint32 =
-  result = model.defaultWorkspaceCount() + 1
+  result = model.dodDefaultWorkspaceCount() + 1
   for slot in model.sortedSlots():
     if slot >= result:
       result = slot + 1
@@ -123,7 +134,7 @@ proc nearestWorkspaceSlot*(
       if slot > active and
           (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
         return slot
-    if not occupiedOnly and active <= model.defaultWorkspaceCount() and
+    if not occupiedOnly and active <= model.dodDefaultWorkspaceCount() and
         active == slots[^1]:
       return model.nextDynamicWorkspaceSlot()
   0
@@ -134,13 +145,13 @@ proc lowerWorkspaceFallback*(model: DodModel; fromSlot: uint32): uint32 =
     let slot = slots[i]
     if slot < fromSlot and slot != fromSlot:
       return slot
-  if model.defaultWorkspaceCount() > 0:
+  if model.dodDefaultWorkspaceCount() > 0:
     let below = if fromSlot > 1: fromSlot - 1 else: 1'u32
-    return min(model.defaultWorkspaceCount(), max(1'u32, below))
+    return min(model.dodDefaultWorkspaceCount(), max(1'u32, below))
   1'u32
 
 proc pruneDynamicWorkspaces*(model: var DodModel): bool =
-  let defaultCount = model.defaultWorkspaceCount()
+  let defaultCount = model.dodDefaultWorkspaceCount()
   let activeSlot = model.activeWorkspaceSlot()
   let trailing = model.trailingWorkspaceSlot()
   let slots = model.sortedSlots()

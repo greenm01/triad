@@ -1,20 +1,8 @@
 import options, strutils, tables
 import dod_focus
+import dod_placement
 import dod_workspaces
 import ../state/engine
-
-proc defaultColumnWidth(model: DodModel): float32 =
-  if model.defaultColumnWidth > 0:
-    clamp(model.defaultColumnWidth, 0.05'f32, 1.0'f32)
-  else:
-    DefaultColumnWidth
-
-proc removeWindowFromAllTags(model: var DodModel; winId: WindowId): bool =
-  for slot in model.sortedSlots():
-    let tagId = model.tagForSlot(slot)
-    if tagId != NullTagId and model.removeWindowFromTag(tagId, winId):
-      discard model.recomputeVisibleFocus(tagId)
-      result = true
 
 proc addScratchpadWindow(model: var DodModel; winId: WindowId) =
   if model.scratchpadWindows.find(winId) == -1:
@@ -66,7 +54,7 @@ proc moveFocusedToScratchpad*(model: var DodModel; name = ""): bool =
       model.placementForWindowOnTag(activeTag, focused).isNone:
     return false
 
-  discard model.removeWindowFromAllTags(focused)
+  discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
   model.addScratchpadWindow(focused)
   let scratchpadName = name.strip()
   if scratchpadName.len > 0:
@@ -143,9 +131,8 @@ proc restoreScratchpad*(model: var DodModel): bool =
   if tagId == NullTagId:
     return false
 
-  discard model.removeWindowFromAllTags(winId)
-  let columnId = model.addColumn(tagId, model.defaultColumnWidth())
-  discard model.moveWindowToColumn(tagId, winId, columnId, 0)
+  discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
+  discard model.addPlacedWindowColumn(tagId, winId)
   discard model.setTagFocus(tagId, winId)
   model.focusWindow(winId)
 

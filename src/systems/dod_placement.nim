@@ -1,22 +1,9 @@
 import options
 import dod_focus
 import dod_workspaces
-import ../core/defaults
 import ../state/engine
-from ../types/legacy_model import Grid, LayoutMode, MasterStack, Monocle,
-  Scroller, VerticalScroller
-
-proc defaultColumnWidth(model: DodModel): float32 =
-  if model.defaultColumnWidth > 0:
-    clamp(model.defaultColumnWidth, 0.05'f32, 1.0'f32)
-  else:
-    DefaultColumnWidth
-
-proc fallbackLayoutCycle(model: DodModel): seq[LayoutMode] =
-  if model.layoutCycle.len > 0:
-    model.layoutCycle
-  else:
-    @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+from ../types/legacy_model import LayoutMode, MasterStack, Scroller,
+  VerticalScroller
 
 proc focusedPosition(model: DodModel):
     tuple[found: bool, tagId: TagId, winId: WindowId, columnId: ColumnId,
@@ -39,32 +26,19 @@ proc focusedPosition(model: DodModel):
     int(placement.windowIdx) - 1
   )
 
-proc recomputeTagFocus(model: var DodModel; tagId: TagId) =
-  let tagOpt = model.tagData(tagId)
-  if tagOpt.isNone:
-    return
-  let focused = tagOpt.get().focusedWindow
-  if focused != NullWindowId and
-      model.placementForWindowOnTag(tagId, focused).isSome:
-    return
-  let windows = model.windowsForTag(tagId)
-  let nextFocus =
-    if windows.len > 0: windows[0]
-    else: NullWindowId
-  discard model.setTagFocus(tagId, nextFocus)
-
-proc removeWindowFromAllTags(model: var DodModel; winId: WindowId): bool =
+proc removeWindowFromAllTagsAndRefreshFocus*(
+    model: var DodModel; winId: WindowId): bool =
   let slots = model.sortedSlots()
   for slot in slots:
     let tagId = model.tagForSlot(slot)
     if tagId != NullTagId and model.removeWindowFromTag(tagId, winId):
-      model.recomputeTagFocus(tagId)
+      discard model.recomputeVisibleFocus(tagId)
       result = true
 
-proc addWindowColumn(
+proc addPlacedWindowColumn*(
     model: var DodModel; tagId: TagId; winId: WindowId;
     index = high(int)): ColumnId =
-  result = model.insertColumn(tagId, index, model.defaultColumnWidth())
+  result = model.insertColumn(tagId, index, model.dodDefaultColumnWidth())
   discard model.moveWindowToColumn(tagId, winId, result, 0)
 
 proc setLayoutForSlot*(
@@ -80,7 +54,7 @@ proc switchLayout*(model: var DodModel): bool =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
-  let cycle = model.fallbackLayoutCycle()
+  let cycle = model.dodLayoutCycle()
   let idx = cycle.find(tagOpt.get().layoutMode)
   let nextIdx =
     if idx == -1: 0
@@ -159,8 +133,8 @@ proc moveFocusedWindowToSlot*(
   if targetTag == NullTagId:
     return false
 
-  discard model.removeWindowFromAllTags(focused)
-  discard model.addWindowColumn(targetTag, focused)
+  discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
+  discard model.addPlacedWindowColumn(targetTag, focused)
   discard model.setTagFocus(targetTag, focused)
   if model.overviewActive:
     model.activeTag = targetTag
@@ -211,7 +185,7 @@ proc moveFocusedWindowLeft*(model: var DodModel): bool =
     model.moveWindowToColumn(pos.tagId, pos.winId, target, targetIdx)
   else:
     let target = model.insertColumn(
-      pos.tagId, 0, model.defaultColumnWidth())
+      pos.tagId, 0, model.dodDefaultColumnWidth())
     model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
 
 proc moveFocusedWindowRight*(model: var DodModel): bool =
@@ -222,7 +196,7 @@ proc moveFocusedWindowRight*(model: var DodModel): bool =
   if pos.colIdx < columns.len - 1:
     model.moveWindowToColumn(pos.tagId, pos.winId, columns[pos.colIdx + 1], 0)
   else:
-    let target = model.addColumn(pos.tagId, model.defaultColumnWidth())
+    let target = model.addColumn(pos.tagId, model.dodDefaultColumnWidth())
     model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
 
 proc moveFocusedWindowUp*(model: var DodModel): bool =
@@ -301,7 +275,7 @@ proc expelFocusedWindow*(model: var DodModel): bool =
   if model.windowsForColumn(pos.columnId).len <= 1:
     return false
   let target = model.insertColumn(
-    pos.tagId, pos.colIdx + 1, model.defaultColumnWidth())
+    pos.tagId, pos.colIdx + 1, model.dodDefaultColumnWidth())
   model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
 
 proc zoomFocusedWindow*(model: var DodModel): bool =

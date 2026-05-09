@@ -122,7 +122,7 @@ proc isRestorableWorkspace(model: DodModel; tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
-  tagOpt.get().slot <= model.defaultWorkspaceCount() or
+  tagOpt.get().slot <= model.dodDefaultWorkspaceCount() or
     model.tagHasFocusableWindow(tagId)
 
 proc focusMostRecentWorkspace*(model: var DodModel): bool =
@@ -328,7 +328,7 @@ proc focusByDirection*(model: var DodModel; direction: Direction): bool =
 
 proc collapseEmptyActiveDynamicWorkspace*(model: var DodModel): bool =
   let oldSlot = model.activeWorkspaceSlot()
-  if oldSlot == 0 or oldSlot <= model.defaultWorkspaceCount():
+  if oldSlot == 0 or oldSlot <= model.dodDefaultWorkspaceCount():
     return false
   let oldTag = model.activeTag
   if oldTag == NullTagId or model.tagData(oldTag).isNone:

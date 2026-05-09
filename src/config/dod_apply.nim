@@ -22,25 +22,6 @@ proc dodTagRule(rule: legacy.TagRule): TagRuleData =
     defaultLayout: rule.defaultLayout
   )
 
-proc matches(rule: WindowRuleData; appId, title: string): bool =
-  let appIdMatches = rule.appIdMatch == "" or appId.contains(rule.appIdMatch)
-  let titleMatches = rule.titleMatch == "" or title.contains(rule.titleMatch)
-  appIdMatches and titleMatches
-
-proc windowKeyboardShortcutsInhibit(model: DodModel; appId, title: string):
-    bool =
-  for rule in model.windowRules:
-    if rule.matches(appId, title):
-      return rule.keyboardShortcutsInhibit
-  false
-
-proc tagRuleForSlot(model: DodModel; slot: uint32):
-    tuple[found: bool, rule: TagRuleData] =
-  for rule in model.tagRules:
-    if rule.slot == slot:
-      return (true, rule)
-  (false, TagRuleData())
-
 proc applyConfig*(model: var DodModel; config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)

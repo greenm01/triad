@@ -1,4 +1,4 @@
-import algorithm, json, options, sequtils, strutils, tables
+import algorithm, json, options, os, sequtils, strutils, tables
 import unittest
 import ../src/core/effects
 import ../src/core/msg as core_msg
@@ -964,6 +964,34 @@ proc lifecycleCollapseDestroyModel(): legacy_model.Model =
     id: 40, appId: "scratch", title: "temp")
 
 suite "DOD state primitives":
+  test "DOD systems stay behind state engine facade":
+    var checkedFiles: seq[string] = @[]
+    for path in walkFiles("src/systems/dod_*.nim"):
+      checkedFiles.add(path)
+    checkedFiles.add("src/config/dod_apply.nim")
+
+    let forbiddenImports = [
+      "../state/dod_invariants",
+      "../state/dod_iterators",
+      "../state/dod_queries",
+      "../state/dod_snapshot",
+      "../state/entity_manager"
+    ]
+    let forbiddenStorage = [
+      ".data",
+      ".index",
+      ".entity(",
+      ".mEntity("
+    ]
+
+    check checkedFiles.len > 0
+    for path in checkedFiles:
+      let source = readFile(path)
+      for pattern in forbiddenImports:
+        check not source.contains(pattern)
+      for pattern in forbiddenStorage:
+        check not source.contains(pattern)
+
   test "logical IDs are monotonic and reserve zero":
     var counters = IdCounters()
 

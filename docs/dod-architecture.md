@@ -65,6 +65,8 @@ Rules:
   entity manager itself.
 - Systems must not import `entity_manager.nim` directly or reach into
   `model.windows.entity(...)`; add a typed query or entity operation instead.
+- DOD system source is checked by tests for facade-only state imports and no
+  direct entity manager storage access.
 
 #### The Read Layer: Iterators and Queries
 

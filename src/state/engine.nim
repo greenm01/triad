@@ -1,4 +1,4 @@
-import options
+import options, strutils
 import entity_manager
 import id_gen
 import dod_iterators
@@ -10,6 +10,8 @@ import ../entities/dod_ops
 import ../types/core
 import ../types/dod_model
 import ../types/shell_snapshot
+from ../types/legacy_model import Grid, LayoutMode, MasterStack, Monocle,
+  Scroller, VerticalScroller
 
 export defaults
 export dod_iterators
@@ -51,6 +53,31 @@ proc dodDefaultMasterRatio*(model: DodModel): float32 =
     clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
   else:
     DefaultMasterRatio
+
+proc dodDefaultWorkspaceCount*(model: DodModel): uint32 =
+  if model.defaultWorkspaceCount == 0:
+    DefaultWorkspaceCount
+  else:
+    min(model.defaultWorkspaceCount, MaxTagBits)
+
+proc dodDefaultColumnWidth*(model: DodModel): float32 =
+  if model.defaultColumnWidth > 0:
+    clamp(model.defaultColumnWidth, 0.05'f32, 1.0'f32)
+  else:
+    DefaultColumnWidth
+
+proc dodLayoutCycle*(model: DodModel): seq[LayoutMode] =
+  if model.layoutCycle.len > 0:
+    model.layoutCycle
+  else:
+    @[Scroller, MasterStack, Grid, Monocle, VerticalScroller]
+
+proc dodSafeLayoutMode*(stored: int; fallback = Scroller): LayoutMode =
+  if stored >= ord(low(LayoutMode)) + 1 and
+      stored <= ord(high(LayoutMode)) + 1:
+    LayoutMode(stored - 1)
+  else:
+    fallback
 
 proc dodFloatingMinWidth*(model: DodModel): int32 =
   if model.floatingMinWidth > 0:
@@ -99,6 +126,30 @@ proc dodDefaultFloatingGeom*(model: DodModel): LegacyRect =
     h: max(model.dodFloatingMinHeight(),
       int32(float32(screenH) * clampProportion(heightRatio)))
   )
+
+proc matches(rule: WindowRuleData; appId, title: string): bool =
+  let appIdMatches = rule.appIdMatch == "" or appId.contains(rule.appIdMatch)
+  let titleMatches = rule.titleMatch == "" or title.contains(rule.titleMatch)
+  appIdMatches and titleMatches
+
+proc tagRuleForSlot*(model: DodModel; slot: uint32):
+    tuple[found: bool, rule: TagRuleData] =
+  for rule in model.tagRules:
+    if rule.slot == slot:
+      return (true, rule)
+  (false, TagRuleData())
+
+proc windowRuleFor*(model: DodModel; appId, title: string):
+    tuple[found: bool, rule: WindowRuleData] =
+  for rule in model.windowRules:
+    if rule.matches(appId, title):
+      return (true, rule)
+  (false, WindowRuleData())
+
+proc windowKeyboardShortcutsInhibit*(
+    model: DodModel; appId, title: string): bool =
+  let ruleMatch = model.windowRuleFor(appId, title)
+  ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
 
 proc window*(model: DodModel; winId: WindowId): Option[WindowData] =
   model.windowData(winId)
