@@ -4,6 +4,7 @@ import ../layouts/tiling
 import ../state/engine
 import ../types/core as dod_core
 import ../types/legacy_model as legacy
+import ../types/layout_projection
 
 proc externalWindowId(model: DodModel; winId: dod_core.WindowId):
     legacy.WindowId =
@@ -133,8 +134,7 @@ proc layoutForTag(
   of legacy.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
 
-proc dodLayoutInstructions*(model: var DodModel):
-    seq[legacy.RenderInstruction] =
+proc layoutProjection*(model: DodModel): LayoutProjection =
   let screen = model.primaryScreen()
   let windows = model.legacyWindowTable()
 
@@ -151,19 +151,20 @@ proc dodLayoutInstructions*(model: var DodModel):
           overviewTag.columns.add(legacy.Column(
             windows: @[model.externalWindowId(winId)],
             widthProportion: 1.0))
-    return layoutGrid(
+    result.instructions = layoutGrid(
       overviewTag,
       screen,
       max(0'i32, model.overviewOuterGap),
       max(0'i32, int32(float32(model.innerGaps) *
         model.overviewInnerGapMultiplier)))
+    return
 
   if model.activeTag == NullTagId:
-    return @[]
+    return
 
   let projected = model.projectedTag(model.activeTag)
   if not projected.found:
-    return @[]
+    return
 
   var currentOuterGap = model.outerGaps
   var currentInnerGap = model.innerGaps
@@ -176,7 +177,7 @@ proc dodLayoutInstructions*(model: var DodModel):
     currentInnerGap = 0
 
   var tagForLayout = projected.tag
-  result = layoutForTag(
+  result.instructions = layoutForTag(
     tagForLayout,
     windows,
     screen,
@@ -185,15 +186,14 @@ proc dodLayoutInstructions*(model: var DodModel):
     model.scrollerFocusCenter,
     model.scrollerPreferCenter,
     model.centerFocusedColumn)
-
-  discard model.setTagViewportTarget(
-    model.activeTag,
-    tagForLayout.targetViewportXOffset,
-    tagForLayout.targetViewportYOffset)
+  result.viewportTargets.add(LayoutViewportTarget(
+    tagSlot: projected.tag.tagId,
+    targetX: tagForLayout.targetViewportXOffset,
+    targetY: tagForLayout.targetViewportYOffset))
 
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if win.isFloating and not win.isMinimized:
-      result.add(legacy.RenderInstruction(
+      result.instructions.add(legacy.RenderInstruction(
         windowId: model.externalWindowId(winId),
         geom: win.floatingGeom))
 
@@ -206,7 +206,7 @@ proc dodLayoutInstructions*(model: var DodModel):
     if model.windowData(winId).isSome:
       let sw = int32(float32(screen.w) * model.dodScratchpadWidthRatio())
       let sh = int32(float32(screen.h) * model.dodScratchpadHeightRatio())
-      result.add(legacy.RenderInstruction(
+      result.instructions.add(legacy.RenderInstruction(
         windowId: model.externalWindowId(winId),
         geom: legacy.Rect(
           x: screen.x + (screen.w - sw) div 2,
@@ -219,6 +219,18 @@ proc dodLayoutInstructions*(model: var DodModel):
   if focusedOpt.isSome:
     let win = focusedOpt.get()
     if win.isFullscreen or win.isMaximized:
-      result = @[legacy.RenderInstruction(
+      result.instructions = @[legacy.RenderInstruction(
         windowId: model.externalWindowId(focused),
         geom: screen)]
+
+proc applyLayoutProjection*(model: var DodModel; projection: LayoutProjection) =
+  for target in projection.viewportTargets:
+    let tagId = model.tagForSlot(target.tagSlot)
+    if tagId != NullTagId:
+      discard model.setTagViewportTarget(tagId, target.targetX, target.targetY)
+
+proc dodLayoutInstructions*(model: var DodModel):
+    seq[legacy.RenderInstruction] =
+  let projection = model.layoutProjection()
+  model.applyLayoutProjection(projection)
+  projection.instructions

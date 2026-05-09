@@ -3,6 +3,7 @@ import ../core/model
 import ../core/model_utils
 import ../layouts/scroller
 import ../layouts/tiling
+import ../types/layout_projection
 
 proc primaryScreen*(model: Model): Rect =
   if model.primaryOutput != 0 and model.outputs.hasKey(model.primaryOutput):
@@ -49,9 +50,52 @@ proc tiledTagState*(tag: TagState; model: Model): TagState =
       filteredCol.windows = filteredWindows
       result.columns.add(filteredCol)
 
-proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
+proc layoutForTag(
+    tag: var TagState; windows: Table[WindowId, WindowData]; screen: Rect;
+    outerGap, innerGap: int32; focusCenter, preferCenter: bool;
+    centerMode: string): seq[RenderInstruction] =
+  case tag.layoutMode
+  of Scroller:
+    layoutScroller(
+      tag,
+      windows,
+      screen,
+      outerGap,
+      innerGap,
+      focusCenter,
+      preferCenter,
+      centerMode)
+  of VerticalScroller:
+    layoutVerticalScroller(
+      tag,
+      windows,
+      screen,
+      outerGap,
+      innerGap,
+      focusCenter,
+      preferCenter,
+      centerMode)
+  of MasterStack:
+    layoutMasterStack(tag, screen, outerGap, innerGap)
+  of Grid:
+    layoutGrid(tag, screen, outerGap, innerGap)
+  of Monocle:
+    layoutMonocle(tag, screen, outerGap)
+  of Deck:
+    layoutDeck(tag, screen, outerGap, innerGap)
+  of CenterTile:
+    layoutCenterTile(tag, screen, outerGap, innerGap)
+  of RightTile:
+    layoutRightTile(tag, screen, outerGap, innerGap)
+  of VerticalTile:
+    layoutVerticalMasterStack(tag, screen, outerGap, innerGap)
+  of VerticalGrid:
+    layoutVerticalGrid(tag, screen, outerGap, innerGap)
+  of VerticalDeck:
+    layoutVerticalDeck(tag, screen, outerGap, innerGap)
+
+proc layoutProjection*(model: Model): LayoutProjection =
   let screen = model.primaryScreen()
-  result = @[]
 
   if model.overviewActive:
     var overviewTag = TagState(tagId: 0, layoutMode: Grid)
@@ -68,7 +112,7 @@ proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
               windows: @[win],
               widthProportion: 1.0))
 
-    result = layoutGrid(
+    result.instructions = layoutGrid(
       overviewTag,
       screen,
       max(0'i32, model.overview.outerGap),
@@ -76,7 +120,7 @@ proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
         model.overview.innerGapMultiplier)))
 
   elif model.tags.hasKey(model.activeTag):
-    var tag = model.tags[model.activeTag]
+    let tag = model.tags[model.activeTag]
     let tiledTag = tag.tiledTagState(model)
 
     var currentOuterGap = model.outerGaps
@@ -91,60 +135,26 @@ proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
       currentInnerGap = 0
 
     var tagForLayout = tiledTag
-    result = case tagForLayout.layoutMode
-    of Scroller:
-      layoutScroller(
-        tagForLayout,
-        model.windows,
-        screen,
-        currentOuterGap,
-        currentInnerGap,
-        model.scrollerFocusCenter,
-        model.scrollerPreferCenter,
-        model.centerFocusedColumn)
-    of VerticalScroller:
-      layoutVerticalScroller(
-        tagForLayout,
-        model.windows,
-        screen,
-        currentOuterGap,
-        currentInnerGap,
-        model.scrollerFocusCenter,
-        model.scrollerPreferCenter,
-        model.centerFocusedColumn)
-    of MasterStack:
-      layoutMasterStack(tagForLayout, screen, currentOuterGap, currentInnerGap)
-    of Grid:
-      layoutGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
-    of Monocle:
-      layoutMonocle(tagForLayout, screen, currentOuterGap)
-    of Deck:
-      layoutDeck(tagForLayout, screen, currentOuterGap, currentInnerGap)
-    of CenterTile:
-      layoutCenterTile(tagForLayout, screen, currentOuterGap, currentInnerGap)
-    of RightTile:
-      layoutRightTile(tagForLayout, screen, currentOuterGap, currentInnerGap)
-    of VerticalTile:
-      layoutVerticalMasterStack(
-        tagForLayout,
-        screen,
-        currentOuterGap,
-        currentInnerGap)
-    of VerticalGrid:
-      layoutVerticalGrid(tagForLayout, screen, currentOuterGap, currentInnerGap)
-    of VerticalDeck:
-      layoutVerticalDeck(tagForLayout, screen, currentOuterGap, currentInnerGap)
-
-    tag.targetViewportXOffset = tagForLayout.targetViewportXOffset
-    tag.targetViewportYOffset = tagForLayout.targetViewportYOffset
-    model.tags[model.activeTag] = tag
+    result.instructions = layoutForTag(
+      tagForLayout,
+      model.windows,
+      screen,
+      currentOuterGap,
+      currentInnerGap,
+      model.scrollerFocusCenter,
+      model.scrollerPreferCenter,
+      model.centerFocusedColumn)
+    result.viewportTargets.add(LayoutViewportTarget(
+      tagSlot: model.activeTag,
+      targetX: tagForLayout.targetViewportXOffset,
+      targetY: tagForLayout.targetViewportYOffset))
 
     for col in tag.columns:
       for winId in col.windows:
         if model.windows.hasKey(winId):
           let winData = model.windows[winId]
           if winData.isFloating and not winData.isMinimized:
-            result.add(RenderInstruction(
+            result.instructions.add(RenderInstruction(
               windowId: winId,
               geom: winData.floatingGeom))
 
@@ -157,7 +167,7 @@ proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
       if model.windows.hasKey(winId):
         let sw = int32(float32(screen.w) * model.scratchpadWidthRatio)
         let sh = int32(float32(screen.h) * model.scratchpadHeightRatio)
-        result.add(RenderInstruction(
+        result.instructions.add(RenderInstruction(
           windowId: winId,
           geom: Rect(
             x: screen.x + (screen.w - sw) div 2,
@@ -169,4 +179,18 @@ proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
     if focused != 0 and model.windows.hasKey(focused) and
         (model.windows[focused].isFullscreen or
         model.windows[focused].isMaximized):
-      result = @[RenderInstruction(windowId: focused, geom: screen)]
+      result.instructions = @[
+        RenderInstruction(windowId: focused, geom: screen)]
+
+proc applyLayoutProjection*(model: var Model; projection: LayoutProjection) =
+  for target in projection.viewportTargets:
+    if model.tags.hasKey(target.tagSlot):
+      var tag = model.tags[target.tagSlot]
+      tag.targetViewportXOffset = target.targetX
+      tag.targetViewportYOffset = target.targetY
+      model.tags[target.tagSlot] = tag
+
+proc layoutInstructions*(model: var Model): seq[RenderInstruction] =
+  let projection = model.layoutProjection()
+  model.applyLayoutProjection(projection)
+  projection.instructions

@@ -118,6 +118,25 @@ proc checkLayoutParity(source: legacy_model.Model) =
   let dodSnapshot = dodShellSnapshot(dod)
   check dodSnapshot == legacySnapshot
 
+proc checkLayoutProjectionParity(source: legacy_model.Model) =
+  var legacyBefore = source
+  let legacyProjection = legacyBefore.layoutProjection()
+  check legacyBefore == source
+
+  var dodBefore = source.dodFromLegacy()
+  let dodOriginal = dodBefore
+  let dodProjection = dodBefore.layoutProjection()
+  check dodBefore == dodOriginal
+
+  check dodProjection.instructions == legacyProjection.instructions
+  check dodProjection.viewportTargets == legacyProjection.viewportTargets
+
+  var legacyApplied = source
+  var dodApplied = source.dodFromLegacy()
+  legacyApplied.applyLayoutProjection(legacyProjection)
+  dodApplied.applyLayoutProjection(dodProjection)
+  check dodShellSnapshot(dodApplied) == shellSnapshot(legacyApplied)
+
 proc checkFocusParity(
     source: legacy_model.Model; msg: core_msg.Msg;
     action: proc(dod: var DodModel)) =
@@ -1155,6 +1174,15 @@ suite "DOD state primitives":
 
   test "DOD layout projection matches scroller viewport updates":
     checkLayoutParity(scrollerLayoutModel())
+
+  test "DOD explicit layout projection is pure and matches legacy":
+    checkLayoutProjectionParity(tiledLayoutModel())
+    checkLayoutProjectionParity(scrollerLayoutModel())
+    checkLayoutProjectionParity(floatingLayoutModel())
+    checkLayoutProjectionParity(maximizedLayoutModel())
+
+  test "DOD explicit vertical scroller projection matches viewport writes":
+    checkLayoutProjectionParity(dynamicParityModel())
 
   test "DOD layout projection matches floating windows":
     checkLayoutParity(floatingLayoutModel())
