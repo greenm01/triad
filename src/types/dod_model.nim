@@ -95,6 +95,7 @@ type
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
+    defaultColumnWidth*: float32
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]

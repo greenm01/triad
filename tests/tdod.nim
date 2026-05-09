@@ -16,6 +16,7 @@ import ../src/state/dod_snapshot
 import ../src/state/id_gen
 import ../src/systems/dod_focus
 import ../src/systems/dod_layout
+import ../src/systems/dod_placement
 import ../src/systems/dod_workspaces
 import ../src/systems/layout_state
 import ../src/types/core
@@ -81,6 +82,24 @@ proc checkFocusParity(
   check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
   check dod.dodFocusHistory() == legacyModel.focusHistory
   check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+
+proc checkPlacementParity(
+    source: legacy_model.Model; msg: core_msg.Msg;
+    action: proc(dod: var DodModel)) =
+  let (legacyModel, _) = legacy_update.update(source, msg)
+  var dod = source.dodFromLegacy()
+
+  action(dod)
+  dod.refreshVisibleWorkspaceSlots()
+
+  check dod.validateInvariants().ok
+  check dodShellSnapshot(dod) == shellSnapshot(legacyModel)
+  check dod.dodFocusHistory() == legacyModel.focusHistory
+  check dod.dodWorkspaceHistory() == legacyModel.workspaceHistory
+
+  var legacyLayout = legacyModel
+  var dodLayout = dod
+  check legacyLayout.layoutInstructions() == dodLayout.dodLayoutInstructions()
 
 proc baseParityModel(): legacy_model.Model =
   result = legacy_model.Model(
@@ -354,6 +373,42 @@ proc closedFocusedWindowModel(): legacy_model.Model =
   result.tags[2].focusedWindow = 20
   result.focusHistory = @[legacy_model.WindowId(10), 20]
   result.workspaceHistory = @[1'u32, 2]
+
+proc placementParityModel(): legacy_model.Model =
+  result = focusParityModel()
+  result.layoutCycle = @[
+    legacy_model.Scroller, legacy_model.MasterStack, legacy_model.Grid
+  ]
+  result.defaultColumnWidth = 0.7'f32
+  result.tags[1].layoutMode = legacy_model.Scroller
+  result.tags[1].columns.add(legacy_model.Column(
+    windows: @[legacy_model.WindowId(13)], widthProportion: 0.6))
+  result.windows[13] = legacy_model.WindowData(
+    id: 13, appId: "term", title: "four")
+
+proc focusWindowInPlacementModel(winId: legacy_model.WindowId):
+    legacy_model.Model =
+  result = placementParityModel()
+  result.tags[1].focusedWindow = winId
+  result.focusHistory = @[legacy_model.WindowId(10), 20, winId]
+
+proc activeSecondPlacementModel(): legacy_model.Model =
+  result = placementParityModel()
+  result.activeTag = 2
+  result.tags[2].focusedWindow = 20
+  result.focusHistory = @[legacy_model.WindowId(10), 20]
+  result.workspaceHistory = @[1'u32, 2]
+
+proc masterPlacementModel(): legacy_model.Model =
+  result = placementParityModel()
+  result.tags[1].layoutMode = legacy_model.MasterStack
+  result.tags[1].masterCount = 1
+  result.tags[1].masterSplitRatio = 0.5'f32
+
+proc verticalPlacementModel(): legacy_model.Model =
+  result = placementParityModel()
+  result.tags[1].layoutMode = legacy_model.VerticalScroller
+  result.windows[10].widthProportion = 0.5'f32
 
 suite "DOD state primitives":
   test "logical IDs are monotonic and reserve zero":
@@ -632,3 +687,182 @@ suite "DOD state primitives":
 
     check dod.validateInvariants().ok
     check dodShellSnapshot(dod) == shellSnapshot(legacyState)
+
+  test "DOD layout command parity matches legacy":
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(
+        kind: core_msg.CmdSetLayout,
+        newLayout: legacy_model.Deck,
+        layoutTargetTag: 2),
+      proc(dod: var DodModel) =
+        discard dod.setLayoutForSlot(2, legacy_model.Deck)
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdSwitchLayout),
+      proc(dod: var DodModel) =
+        discard dod.switchLayout()
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdSetMasterCount, count: 3),
+      proc(dod: var DodModel) =
+        discard dod.setMasterCount(3)
+    )
+    checkPlacementParity(
+      masterPlacementModel(),
+      core_msg.Msg(kind: core_msg.CmdAdjustMasterCount, deltaMC: 2),
+      proc(dod: var DodModel) =
+        discard dod.adjustMasterCount(2)
+    )
+    checkPlacementParity(
+      masterPlacementModel(),
+      core_msg.Msg(kind: core_msg.CmdSetMasterRatio, ratio: 0.7),
+      proc(dod: var DodModel) =
+        discard dod.setMasterRatio(0.7'f32)
+    )
+    checkPlacementParity(
+      masterPlacementModel(),
+      core_msg.Msg(kind: core_msg.CmdAdjustMasterRatio, deltaMR: 0.1),
+      proc(dod: var DodModel) =
+        discard dod.adjustMasterRatio(0.1'f32)
+    )
+
+  test "DOD resize command parity matches legacy":
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdResizeWidth, deltaW: 0.1),
+      proc(dod: var DodModel) =
+        discard dod.resizeWidth(0.1'f32)
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdResizeHeight, deltaH: -0.1),
+      proc(dod: var DodModel) =
+        discard dod.resizeHeight(-0.1'f32)
+    )
+    checkPlacementParity(
+      verticalPlacementModel(),
+      core_msg.Msg(kind: core_msg.CmdResizeWidth, deltaW: 0.1),
+      proc(dod: var DodModel) =
+        discard dod.resizeWidth(0.1'f32)
+    )
+    checkPlacementParity(
+      verticalPlacementModel(),
+      core_msg.Msg(kind: core_msg.CmdResizeHeight, deltaH: 0.1),
+      proc(dod: var DodModel) =
+        discard dod.resizeHeight(0.1'f32)
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdSetColumnWidth, targetWidth: 0.8),
+      proc(dod: var DodModel) =
+        discard dod.setFocusedColumnWidth(0.8'f32)
+    )
+
+  test "DOD window movement parity matches legacy":
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowRight),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowRight()
+    )
+    checkPlacementParity(
+      focusWindowInPlacementModel(12),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowLeft),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowLeft()
+    )
+    checkPlacementParity(
+      focusWindowInPlacementModel(11),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowUp),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowUp()
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowDown),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowDown()
+    )
+
+  test "DOD edge window movement parity follows focused window":
+    checkPlacementParity(
+      activeSecondPlacementModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowUpOrToWorkspaceUp),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowUpOrWorkspace()
+        discard dod.collapseEmptyActiveDynamicWorkspace()
+        discard dod.pruneDynamicWorkspaces()
+    )
+    checkPlacementParity(
+      focusWindowInPlacementModel(11),
+      core_msg.Msg(kind: core_msg.CmdMoveWindowDownOrToWorkspaceDown),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowDownOrWorkspace()
+        discard dod.collapseEmptyActiveDynamicWorkspace()
+        discard dod.pruneDynamicWorkspaces()
+    )
+
+  test "DOD column movement parity matches legacy":
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveColumnRight),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedColumnRight()
+    )
+    checkPlacementParity(
+      focusWindowInPlacementModel(12),
+      core_msg.Msg(kind: core_msg.CmdMoveColumnLeft),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedColumnLeft()
+    )
+    checkPlacementParity(
+      focusWindowInPlacementModel(13),
+      core_msg.Msg(kind: core_msg.CmdMoveColumnToFirst),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedColumnToFirst()
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveColumnToLast),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedColumnToLast()
+    )
+
+  test "DOD consume expel and zoom parity matches legacy":
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdConsumeWindow),
+      proc(dod: var DodModel) =
+        discard dod.consumeNextColumnWindow()
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdExpelWindow),
+      proc(dod: var DodModel) =
+        discard dod.expelFocusedWindow()
+    )
+    checkPlacementParity(
+      focusWindowInPlacementModel(12),
+      core_msg.Msg(kind: core_msg.CmdZoom),
+      proc(dod: var DodModel) =
+        discard dod.zoomFocusedWindow()
+    )
+
+  test "DOD move and swap tag parity matches legacy":
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdMoveToTag, targetTag: 2),
+      proc(dod: var DodModel) =
+        discard dod.moveFocusedWindowToSlot(2)
+        discard dod.collapseEmptyActiveDynamicWorkspace()
+        discard dod.pruneDynamicWorkspaces()
+    )
+    checkPlacementParity(
+      placementParityModel(),
+      core_msg.Msg(kind: core_msg.CmdSwapWindowToTag, targetTagSwap: 2),
+      proc(dod: var DodModel) =
+        discard dod.swapFocusedWindowToSlot(2)
+    )

@@ -69,6 +69,7 @@ proc dodFromLegacy*(source: legacy.Model): DodModel =
   result.scrollerFocusCenter = source.scrollerFocusCenter
   result.scrollerPreferCenter = source.scrollerPreferCenter
   result.centerFocusedColumn = source.centerFocusedColumn
+  result.defaultColumnWidth = source.defaultColumnWidth()
   result.layoutCycle = source.layoutCycle
 
   for slot in source.sortedTagSlots():

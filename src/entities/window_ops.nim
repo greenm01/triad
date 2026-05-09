@@ -85,3 +85,19 @@ proc setWindowMinimized*(
   if minimized:
     model.windows.mEntity(winId).isMaximized = false
   true
+
+proc setWindowWidthProportion*(
+    model: var DodModel; winId: WindowId; widthProportion: float32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).widthProportion =
+    clamp(widthProportion, 0.05'f32, 1.0'f32)
+  true
+
+proc setWindowHeightProportion*(
+    model: var DodModel; winId: WindowId; heightProportion: float32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).heightProportion =
+    clamp(heightProportion, 0.05'f32, 1.0'f32)
+  true

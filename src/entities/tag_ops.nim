@@ -4,6 +4,7 @@ import ../state/id_gen
 import ../types/core
 import ../types/dod_model
 from ../types/legacy_model import Scroller
+from ../types/legacy_model import LayoutMode
 
 proc addTag*(
     model: var DodModel; slot: uint32; name = ""; layoutMode = Scroller;
@@ -42,6 +43,27 @@ proc setTagFocus*(
   if winId != NullWindowId and model.windows.entity(winId).isNone:
     return false
   model.tags.mEntity(tagId).focusedWindow = winId
+  true
+
+proc setTagLayout*(model: var DodModel; tagId: TagId; mode: LayoutMode): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).layoutMode = mode
+  true
+
+proc setTagMasterCount*(
+    model: var DodModel; tagId: TagId; count: int): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).masterCount = max(1, count)
+  true
+
+proc setTagMasterRatio*(
+    model: var DodModel; tagId: TagId; ratio: float32): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).masterSplitRatio =
+    clamp(ratio, 0.05'f32, 0.95'f32)
   true
 
 proc destroyTag*(model: var DodModel; tagId: TagId): bool =

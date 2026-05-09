@@ -18,3 +18,35 @@ proc addColumn*(
   model.columnsByTag.mgetOrPut(tagId, @[]).add(id)
   model.windowsByColumn[id] = @[]
   id
+
+proc insertColumn*(
+    model: var DodModel; tagId: TagId; index: int;
+    widthProportion = 1.0'f32): ColumnId =
+  result = model.addColumn(tagId, widthProportion)
+  let lastIdx = model.columnsByTag[tagId].len - 1
+  let targetIdx = clamp(index, 0, lastIdx)
+  if targetIdx != lastIdx:
+    model.columnsByTag[tagId].delete(lastIdx)
+    model.columnsByTag[tagId].insert(result, targetIdx)
+
+proc setColumnWidth*(
+    model: var DodModel; columnId: ColumnId; widthProportion: float32): bool =
+  if model.columns.entity(columnId).isNone:
+    return false
+  model.columns.mEntity(columnId).widthProportion =
+    clamp(widthProportion, 0.05'f32, 1.0'f32)
+  true
+
+proc moveColumn*(
+    model: var DodModel; tagId: TagId; fromIdx, toIdx: int): bool =
+  if not model.columnsByTag.hasKey(tagId):
+    return false
+  let count = model.columnsByTag[tagId].len
+  if fromIdx < 0 or fromIdx >= count or toIdx < 0 or toIdx >= count:
+    return false
+  if fromIdx == toIdx:
+    return true
+  let columnId = model.columnsByTag[tagId][fromIdx]
+  model.columnsByTag[tagId].delete(fromIdx)
+  model.columnsByTag[tagId].insert(columnId, toIdx)
+  true
