@@ -14,6 +14,13 @@ type
     borderEdges*: uint32
     clipped*: bool
 
+  RenderClipBoxes* = object
+    windowX*, windowY*, windowW*, windowH*: int32
+    contentX*, contentY*, contentW*, contentH*: int32
+
+proc hasRenderEdge(edges, edge: uint32): bool =
+  (edges and edge) != 0
+
 proc renderVisibility*(geom, screen: Rect;
     minVisibleThickness: int32): RenderVisibility =
   let
@@ -54,3 +61,27 @@ proc renderVisibility*(geom, screen: Rect;
     result.borderEdges = result.borderEdges and not (RenderEdgeLeft or RenderEdgeRight)
   if clippedVertically:
     result.borderEdges = result.borderEdges and not (RenderEdgeTop or RenderEdgeBottom)
+
+proc renderClipBoxes*(
+    visibility: RenderVisibility; borderWidth: int32): RenderClipBoxes =
+  result.contentX = visibility.clipX
+  result.contentY = visibility.clipY
+  result.contentW = visibility.clipW
+  result.contentH = visibility.clipH
+  if not visibility.visible:
+    return
+
+  let border = max(0'i32, borderWidth)
+  let leftPad =
+    if visibility.borderEdges.hasRenderEdge(RenderEdgeLeft): border else: 0'i32
+  let rightPad =
+    if visibility.borderEdges.hasRenderEdge(RenderEdgeRight): border else: 0'i32
+  let topPad =
+    if visibility.borderEdges.hasRenderEdge(RenderEdgeTop): border else: 0'i32
+  let bottomPad =
+    if visibility.borderEdges.hasRenderEdge(RenderEdgeBottom): border else: 0'i32
+
+  result.windowX = visibility.clipX - leftPad
+  result.windowY = visibility.clipY - topPad
+  result.windowW = max(0'i32, visibility.clipW + leftPad + rightPad)
+  result.windowH = max(0'i32, visibility.clipH + topPad + bottomPad)

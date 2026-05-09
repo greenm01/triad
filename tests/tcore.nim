@@ -84,12 +84,46 @@ suite "Core Runtime Logic":
     check leftClip.clipped
     check (leftClip.borderEdges and RenderEdgeLeft) == 0
     check (leftClip.borderEdges and RenderEdgeRight) == 0
+    let leftClips = leftClip.renderClipBoxes(3)
+    check leftClips.contentX == 20
+    check leftClips.contentY == 0
+    check leftClips.contentW == 40
+    check leftClips.contentH == 30
+    check leftClips.windowX == 20
+    check leftClips.windowW == 40
+    check leftClips.windowY == -3
+    check leftClips.windowH == 36
 
     let sliver =
       renderVisibility(
         runtime_values.Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
     check not sliver.visible
     check sliver.borderEdges == 0
+
+  test "Forced cell clipping preserves border space":
+    let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
+    let cell = renderVisibility(
+      runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+
+    let clips = cell.renderClipBoxes(3)
+    check clips.contentX == 0
+    check clips.contentY == 0
+    check clips.contentW == 40
+    check clips.contentH == 30
+    check clips.windowX == -3
+    check clips.windowY == -3
+    check clips.windowW == 46
+    check clips.windowH == 36
+
+    let clipped = renderVisibility(
+      runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+    let clippedBoxes = clipped.renderClipBoxes(3)
+    check clippedBoxes.contentX == 20
+    check clippedBoxes.contentW == 40
+    check clippedBoxes.windowX == 20
+    check clippedBoxes.windowW == 40
+    check clippedBoxes.windowY == -3
+    check clippedBoxes.windowH == 36
 
   test "Window lifecycle mutates state and emits shell updates":
     var model = configuredModel()

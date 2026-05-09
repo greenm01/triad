@@ -1080,14 +1080,16 @@ proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
           0'i32, geom.h))
 
 proc applyVisibility(
-    win: ptr RiverWindowV1; visibility: RenderVisibility; forceClip: bool) =
+    win: ptr RiverWindowV1; visibility: RenderVisibility; forceClip: bool;
+    borderWidth: int32) =
   if visibility.visible:
     win.show()
     if visibility.clipped or forceClip:
-      win.setClipBox(visibility.clipX, visibility.clipY, visibility.clipW,
-          visibility.clipH)
-      win.setContentClipBox(visibility.clipX, visibility.clipY,
-          visibility.clipW, visibility.clipH)
+      let clips = visibility.renderClipBoxes(borderWidth)
+      win.setClipBox(clips.windowX, clips.windowY, clips.windowW,
+          clips.windowH)
+      win.setContentClipBox(clips.contentX, clips.contentY,
+          clips.contentW, clips.contentH)
     else:
       win.setClipBox(0, 0, 0, 0)
       win.setContentClipBox(0, 0, 0, 0)
@@ -1125,7 +1127,8 @@ proc renderDesiredPlacements() =
             currentModel.borderWidth * 2, 4'i32))
         windowPointers[id].applyVisibility(
           visibility,
-          placementNeedsCellClip(id, geom))
+          placementNeedsCellClip(id, geom),
+          currentModel.borderWidth)
         windowPointers[id].applyBorder(
           id == highlighted, visibility.borderEdges)
 
