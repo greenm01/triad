@@ -450,6 +450,23 @@ suite "Core Runtime Logic":
 
     check model.viewport(1).targetViewportXOffset != 0.0'f32
 
+  test "External focus observation uses normal focus path":
+    var model = cameraModel()
+    model.seedCameraWindows()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged,
+      newFocusedId: 1))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 1
+    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
+      uint32(it.focusId) == 1)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+
   test "Shell snapshot exposes active workspace focus globally":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,

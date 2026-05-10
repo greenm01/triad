@@ -130,6 +130,10 @@ suite "Runtime state primitives":
       check not source.contains("logShadowObservation")
       check not source.contains("applyObservedRuntimeShadowOnly")
 
+  test "daemon click focus uses command focus path":
+    let source = readFile("src/triad.nim")
+    check not source.contains("MsgKind.WlFocusChanged")
+
   test "types modules stay data-only":
     for path in typeFiles():
       let lines = readFile(path).splitLines()

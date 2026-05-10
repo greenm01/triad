@@ -31,10 +31,7 @@ proc setExternalFocus(model: var Model;
   if winId == NullWindowId or
       model.placementForWindowOnTag(tagId, winId).isNone:
     return false
-  discard model.setTagFocus(tagId, winId)
-  discard model.recordWorkspace(tagId)
-  discard model.recordFocus(winId)
-  true
+  model.focusWindow(winId)
 
 proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind

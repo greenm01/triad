@@ -824,12 +824,22 @@ proc on_seat_pointer_leave(data: pointer; seat: ptr RiverSeatV1) =
   pointerWindowBySeat.del(seat.id())
   trace "Pointer left window", seatId = seat.id()
 
+proc queueWindowFocus(target: WindowId) =
+  if target == 0:
+    return
+  msgQueue.add(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: target))
+
+proc queueWindowInteraction(target: WindowId) =
+  queueWindowFocus(target)
+  if currentModel.overviewActive and target != 0:
+    msgQueue.add(Msg(kind: MsgKind.CmdSelectWindow))
+
 proc on_seat_window_interaction(data: pointer; seat: ptr RiverSeatV1;
     win: ptr RiverWindowV1) =
   if win != nil:
     let id = win.id()
     debug "Seat window interaction", windowId = id
-    msgQueue.add(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: id))
+    queueWindowInteraction(id)
 
 proc on_seat_shell_surface_interaction(data: pointer; seat: ptr RiverSeatV1;
     shellSurface: ptr RiverShellSurfaceV1) =
@@ -935,16 +945,13 @@ proc on_pointer_binding_pressed(data: pointer;
         msgQueue.add(msg)
     of MsgKind.CmdSelectWindow:
       if currentModel.overviewActive and target != 0:
-        msgQueue.add(Msg(kind: MsgKind.CmdFocusWindowById,
-          focusWindowId: target))
+        queueWindowFocus(target)
       msgQueue.add(msg)
     of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
         MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
         MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
         MsgKind.CmdMoveFloating, MsgKind.CmdResizeFloating:
-      if target != 0:
-        msgQueue.add(Msg(kind: MsgKind.WlFocusChanged,
-          newFocusedId: target))
+      queueWindowFocus(target)
       msgQueue.add(msg)
     else:
       msgQueue.add(msg)
