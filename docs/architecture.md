@@ -73,6 +73,10 @@ Triad uses KDL for robust, hot-reloadable configuration.
 *   **Tag Rules:** Provides lazy name/layout templates for tags when they are created (e.g., `tag 1 default-layout="scroller"`).
 *   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific tag assignments.
 
+Config names follow the policy in `docs/configuration.md`: Niri-style KDL
+clarity is the naming baseline, while Mango remains a feature reference for
+layouts, tags, scratchpads, and pointer workflows.
+
 ### 5. Shell IPC and Quickshell Integration
 Triad is designed to act as the backend window manager for a full desktop environment powered by Quickshell or other shell deployers.
 

@@ -18,7 +18,7 @@ this file adds the operational details an agent needs to act safely.
 6. **Data-Oriented Design (DOD)**: Prioritize data layout and transformations (following Yehonathan Sharvit's principles). Keep data separate from logic. Refer to `docs/dod-architecture.md`.
 7. **Lean & Mean Source Files**: Keep files small and focused. If a file grows too large, split it by domain.
 8. **Manageable Submodules**: Organize code into submodules by domain (e.g., `core`, `layouts`, `config`) to maintain a clean architecture.
-9. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md` and `docs/dod-architecture.md`. These are foundational mandates. To maintain perfect consistency, you must re-read these documents upon every context compaction or session initialization.
+9. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md`, `docs/dod-architecture.md`, and `docs/configuration.md` when touching config or command surfaces. Keep `docs/comp/config-command-matrix.md` updated alongside config or command changes. These are foundational mandates. To maintain perfect consistency, you must re-read the style and DOD documents upon every context compaction or session initialization.
 
 ## DOD runtime direction
 

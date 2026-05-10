@@ -150,6 +150,8 @@ artifacts, and fails if executable binaries are tracked or left in the project.
 For the first real compositor run, follow the live test runbook in
 `docs/live-testing.md`.
 
+For config structure and naming conventions, see `docs/configuration.md`.
+
 For VT switching and compositor recovery checks, use the QEMU runbook in
 `docs/qemu-vt-smoke.md`.
 

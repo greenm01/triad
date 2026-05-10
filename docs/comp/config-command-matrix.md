@@ -1,0 +1,336 @@
+# Config Command Matrix
+
+This document compares Mango, current River, and Triad by user-facing
+configuration surface. The main table groups commands by functionality so name
+differences are visible. `X` means Triad has a user-facing config key, binding
+command, IPC request, or implemented behavior for that feature.
+
+Sources:
+
+- Mango:
+  `/home/niltempus/src/mango/docs/configuration`,
+  `/home/niltempus/src/mango/docs/bindings`, and
+  `/home/niltempus/src/mango/docs/window-management`
+- River:
+  `/home/niltempus/src/river/doc/river.1.scd`,
+  `/home/niltempus/src/river/README.md`, and
+  `/home/niltempus/src/river/protocol`
+- Triad:
+  `src/config/parser.nim`, `src/ipc/commands.nim`,
+  `src/ipc/triad_native.nim`, `src/protocols/coverage.nim`,
+  `docs/ipc.md`, and `config.default.kdl`
+
+Current River is non-monolithic. It supplies compositor configuration,
+startup, and protocol primitives, while window-management policy belongs to the
+external window manager.
+
+## Feature Matrix
+
+| Area | Functionality | Mango name(s) | River surface | Triad name(s) | Triad | Notes |
+| :--- | :--- | :--- | :--- | :--- | :---: | :--- |
+| Config lifecycle | Default config file | `~/.config/mango/config.conf` | `$XDG_CONFIG_HOME/river/init` or `~/.config/river/init` | `$XDG_CONFIG_HOME/triad/config.kdl` | X | Triad creates a fallback config when missing. |
+| Config lifecycle | Custom config on launch | `mango -c` | `river -c` shell command | | | Triad currently uses the default config path. |
+| Config lifecycle | Config validation | `mango -c ... -p` | | | | No standalone Triad config-check command. |
+| Config lifecycle | Config includes | `source`, `source-optional` | Shell script can source files | | | Triad KDL has no include directive. |
+| Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config and rebuilds bindings. |
+| Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
+| Startup | Environment variables | `env` | Init script environment | | | Triad does not set arbitrary env vars from config. |
+| Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
+| Session | Quit manager | `quit` | `river_window_manager_v1.stop` | `stop-manager` | X | Triad also has `exit-session` behind config. |
+| Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
+| Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
+| Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, and inhibit policy. |
+| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. |
+| Bindings | HJKL/arrow mirroring | Manual binds | WM policy | `mirror-hjkl-arrows` | X | Triad can generate arrow equivalents for HJKL binds. |
+| Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
+| Bindings | Eat next key | | `ensure_next_key_eaten` | `eat-next-key`, `cancel-eat-next-key` | X | Useful for modal shell interactions. |
+| Pointer | Mouse button bindings | `mousebind` | `river_seat_v1.get_pointer_binding` | `bindings { pointer-bind ... }` | X | Triad supports configured move/resize pointer bindings. |
+| Pointer | Scroll wheel bindings | `axisbind` | Pointer axis from Wayland, policy in WM | | | Triad has no config-level axis binding. |
+| Pointer | Touchpad gestures | `gesturebind` | Libinput/Wayland input events | | | Triad has no gesture binding surface. |
+| Pointer | Lid/switch bindings | `switchbind` | Input events/protocols | | | Triad has no switch binding surface. |
+| Pointer | Pointer warp | `warpcursor` | `river_seat_v1.pointer_warp` | `warp-pointer` | X | Triad exposes explicit IPC. |
+| Input | Keyboard repeat | `repeat_rate`, `repeat_delay` | `river_input_device_v1.set_repeat_info` | | | River has protocol support; Triad does not expose config. |
+| Input | XKB rules/layout/options | `xkb_rules_*` | `river_xkb_config_v1` | | | Triad binds can set per-binding layout override only. |
+| Input | Keyboard layout switch | `switch_keyboard_layout` | `set_layout_by_index/name` | `bind ... layout=<index>` | | Triad binds may override layout, but cannot cycle XKB layouts. |
+| Input | NumLock/CapsLock | `numlockon` | `numlock_enable`, `capslock_enable` | | | No Triad config. |
+| Input | Pointer acceleration | `mouse_accel_*`, `trackpad_accel_*` | `set_accel_profile`, `set_accel_speed` | | | No Triad config. |
+| Input | Natural scroll | `mouse_natural_scrolling`, `trackpad_natural_scrolling` | `set_natural_scroll` | | | No Triad config. |
+| Input | Tap/click/drag settings | `tap_to_click`, `click_method`, `tap_and_drag`, `drag_lock` | libinput config requests | | | No Triad config. |
+| Input | Left-handed/middle emulation | `left_handed`, `middle_button_emulation` | libinput config requests | | | No Triad config. |
+| Input | Scroll factor/button/method | `axis_scroll_factor`, `scroll_button`, `scroll_method` | input/libinput config requests | | | No Triad config. |
+| Output | Monitor rules | `monitorrule` | Init script or external tools | | | Triad tracks River outputs but has no monitor layout config. |
+| Output | Monitor power | `disable_monitor`, `enable_monitor`, `toggle_monitor` | External output management | | | Not exposed by Triad. |
+| Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports vsync/async presentation mode. |
+| Output | Cursor theme/size | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size }` | X | Applied through River seat protocol. |
+| Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
+| Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
+| Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad also has `move-to-workspace`. |
+| Tags | Toggle/multi-tag view | `toggletag`, `toggleview`, `comboview` | WM policy | | | Triad uses canonical tag masks internally but exposes single-target commands. |
+| Tags | Rename tags | | WM policy | `rename-tag`, `tag-rules { tag ... name=... }` | X | Runtime and config naming are supported. |
+| Tags | Tag rules | `tagrule` | WM policy | `tag-rules { tag ... }` | X | Triad supports tag name and default layout. |
+| Monitor focus | Focus monitor | `focusmon` | WM policy | | | Triad is currently single-seat/output-oriented in command surface. |
+| Monitor focus | Move window to monitor | `tagmon`, `tagcrossmon`, `viewcrossmon` | WM policy | | | No Triad config command. |
+| Focus | Directional focus | `focusdir` | `river_seat_v1.focus_window` primitive | `focus-left/right/up/down` | X | Triad maps to model focus commands. |
+| Focus | Stack/next/previous focus | `focusstack` | WM policy | `focus-next`, `focus-prev` | X | |
+| Focus | Last focus | `focuslast` | WM policy | `focus-last` | X | |
+| Focus | Column boundary focus | | WM policy | `focus-column-first/last` | X | Triad-specific column navigation. |
+| Focus | Focus by window id | | WM policy | `focus-window <id>` | X | Used by shell/overview. |
+| Focus | Focus shell UI | | `river_seat_v1.focus_shell_surface` | `focus-shell-ui` | X | Triad shell integration. |
+| Window lifecycle | Close focused window | `killclient` | `river_window_v1.close` | `close-window` | X | Optional id argument is supported. |
+| Window lifecycle | Minimize | `minimized`, `restore_minimized` | minimize request/capability | `minimize`, `restore-scratchpad` | X | Triad minimize flows through scratchpad-like state. |
+| Window state | Toggle floating | `togglefloating` | `set_tiled` primitive | `toggle-floating` | X | |
+| Window state | Toggle all floating | `toggle_all_floating` | WM policy | | | Not exposed by Triad. |
+| Window state | Fullscreen | `togglefullscreen` | fullscreen requests and commands | `toggle-fullscreen`, `exit-fullscreen` | X | Optional id argument is supported. |
+| Window state | Fake fullscreen | `togglefakefullscreen` | WM policy | | | No Triad equivalent. |
+| Window state | Maximize | `togglemaximizescreen` | maximize request/capability | `toggle-maximized`, `toggle-maximize` | X | |
+| Window state | Sticky/global window | `toggleglobal`, `isglobal` | WM policy | | | Not exposed by Triad. |
+| Window state | Overlay/global unmanaged | `toggleoverlay`, `isoverlay`, `isunglobal` | Layer/shell primitives | | | Not exposed by Triad. |
+| Window state | Center floating window | `centerwin`, `no_force_center` | WM policy | `floating { x-ratio; y-ratio; ... }` | | Triad controls default floating placement but has no center command. |
+| Window movement | Swap/move by direction | `exchange_client` | WM policy | `move-window-*`, `swap-window-up/down` | X | Triad separates moves and stack swaps. |
+| Window movement | Stack exchange | `exchange_stack_client` | WM policy | `swap-window-up/down` | X | |
+| Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
+| Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
+| Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window` | X | Triad has explicit groups and consume/expel commands. |
+| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, native `set-layout` | X | Triad supports scroller, tile, grid, monocle, deck, and variants. |
+| Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order. |
+| Layouts | Layout defaults per tag | `tagrule layout_name` | WM policy | `tag-rules default-layout=...` | X | |
+| Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |
+| Layouts | Master ratio | `setmfact`, `default_mfact`, `mfact` | WM policy | `master-ratio`, `adjust-master-ratio`, `layout.master.split-ratio` | X | |
+| Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width` | X | Triad uses column/window width proportions. |
+| Layouts | Scroller focus centering | `scroller_focus_center`, `scroller_prefer_center` | WM policy | `scroller-focus-center`, `scroller-prefer-center` | X | |
+| Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | | | Not exposed by Triad. |
+| Layouts | TGMix layout | `tgmix` | WM policy | | | Not implemented. |
+| Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
+| Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
+| Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
+| Overview | Overview layout gaps | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap }` | X | |
+| Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | | | Not implemented. |
+| Overview | Overview tab mode | `ov_tab_mode` | WM policy | | | Not implemented. |
+| Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |
+| Scratchpad | Named scratchpad | `toggle_named_scratchpad`, `isnamedscratchpad` | WM policy | `move-to-named-scratchpad`, `toggle-named-scratchpad` | X | Triad names scratchpads directly. |
+| Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
+| Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=... }` | X | |
+| Window rules | Default tag | `windowrule tags` | WM policy | `window-rule default-tag` | X | |
+| Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | |
+| Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
+| Window rules | Shortcut inhibition | `allow_shortcuts_inhibit` | client inhibit protocol/policy | `keyboard-shortcuts-inhibit`, `toggle-keyboard-shortcuts-inhibit` | X | |
+| Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | | | Not implemented. |
+| Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `floating` defaults | | Triad has global floating defaults, not rule-specific size/offsets. |
+| Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `enable-animations`, `animation-speed` | | Triad has global animation config, not per-window visual rules. |
+| Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy | | | Not implemented. |
+| Window rules | Global keybinding | `globalkeybinding` | WM policy | | | Not implemented. |
+| Layer rules | Layer shell rules | `layerrule` | Layer shell protocols | | | Triad handles shell/layer focus but has no rule config. |
+| Shell | Shell integration | External bars/tools | Protocol/shell surfaces | `quickshell`, native state events | X | Triad has Quickshell launch/compat and native events. |
+| Shell | Window menu | `show_window_menu` request policy | River window menu request | `window-menu-command` | X | Capability is advertised only when configured. |
+| Screenshot | Screenshots | External binds to `spawn` | External tools | `screenshot` config, niri-compatible IPC | X | Triad wraps configured capture tools. |
+| Portals | XDG portal setup | Portal config docs | External services | | | Not Triad config. |
+| Virtual output | Headless output | `create_virtual_output`, `destroy_all_virtual_output` | River compositor/output stack | | | Not exposed by Triad. |
+
+## Mango Inventory
+
+Configuration keys:
+
+- Lifecycle and startup: `source`, `source-optional`, `env`, `exec-once`,
+  `exec`, `mango -c`, `mango -c ... -p`.
+- Monitor/output: `monitorrule` with `name`, `make`, `model`, `serial`,
+  `width`, `height`, `refresh`, `x`, `y`, `scale`, `vrr`, `rr`, `custom`;
+  `allow_tearing`.
+- Keyboard input: `repeat_rate`, `repeat_delay`, `numlockon`,
+  `xkb_rules_rules`, `xkb_rules_model`, `xkb_rules_layout`,
+  `xkb_rules_variant`, `xkb_rules_options`.
+- Mouse and touchpad input: `mouse_natural_scrolling`,
+  `mouse_accel_profile`, `mouse_accel_speed`, `left_handed`,
+  `axis_scroll_factor`, `disable_trackpad`, `tap_to_click`,
+  `tap_and_drag`, `trackpad_natural_scrolling`, `trackpad_accel_profile`,
+  `trackpad_accel_speed`, `scroll_button`, `scroll_method`,
+  `click_method`, `send_events_mode`, `drag_lock`,
+  `disable_while_typing`, `middle_button_emulation`,
+  `swipe_min_threshold`, `button_map`, `trackpad_scroll_factor`.
+- Misc: `xwayland_persistence`, `syncobj_enable`,
+  `allow_lock_transparent`, `allow_shortcuts_inhibit`, `focus_on_activate`,
+  `sloppyfocus`, `warpcursor`, `cursor_hide_timeout`,
+  `drag_tile_to_tile`, `drag_tile_small`, `drag_corner`,
+  `drag_warp_cursor`, `axis_bind_apply_timeout`, `focus_cross_monitor`,
+  `exchange_cross_monitor`, `focus_cross_tag`, `view_current_to_back`,
+  `scratchpad_cross_monitor`, `single_scratchpad`, `circle_layout`,
+  `enable_floating_snap`, `snap_distance`, `no_border_when_single`,
+  `idleinhibit_ignore_visible`, `drag_tile_refresh_interval`,
+  `drag_floating_refresh_interval`.
+- Layouts: `scroller_structs`, `scroller_default_proportion`,
+  `scroller_focus_center`, `scroller_prefer_center`,
+  `scroller_prefer_overspread`, `edge_scroller_pointer_focus`,
+  `scroller_proportion_preset`, `scroller_ignore_proportion_single`,
+  `scroller_default_proportion_single`, `new_is_master`, `default_mfact`,
+  `default_nmaster`, `smartgaps`, `center_master_overspread`,
+  `center_when_single_stack`.
+- Overview and scratchpad: `hotarea_size`, `enable_hotarea`,
+  `hotarea_corner`, `ov_tab_mode`, `overviewgappi`, `overviewgappo`,
+  `scratchpad_width_ratio`, `scratchpad_height_ratio`, `scratchpadcolor`.
+
+Bindable dispatchers:
+
+- Window management: `killclient`, `togglefloating`,
+  `toggle_all_floating`, `togglefullscreen`, `togglefakefullscreen`,
+  `togglemaximizescreen`, `toggleglobal`, `toggle_render_border`,
+  `centerwin`, `minimized`, `restore_minimized`, `toggle_scratchpad`,
+  `toggle_named_scratchpad`.
+- Focus and movement: `focusdir`, `focusstack`, `focuslast`,
+  `exchange_client`, `exchange_stack_client`, `zoom`.
+- Tags and monitors: `view`, `viewtoleft`, `viewtoright`,
+  `viewtoleft_have_client`, `viewtoright_have_client`, `viewcrossmon`,
+  `tag`, `tagsilent`, `tagtoleft`, `tagtoright`, `tagcrossmon`,
+  `toggletag`, `toggleview`, `comboview`, `focusmon`, `tagmon`.
+- Layouts: `setlayout`, `switch_layout`, `incnmaster`, `setmfact`,
+  `set_proportion`, `switch_proportion_preset`, `scroller_stack`,
+  `incgaps`, `togglegaps`.
+- System: `spawn`, `spawn_shell`, `spawn_on_empty`, `reload_config`,
+  `quit`, `toggleoverview`, `create_virtual_output`,
+  `destroy_all_virtual_output`, `toggleoverlay`, `toggle_trackpad_enable`,
+  `setkeymode`, `switch_keyboard_layout`, `setoption`,
+  `disable_monitor`, `enable_monitor`, `toggle_monitor`.
+- Floating movement: `smartmovewin`, `smartresizewin`, `movewin`,
+  `resizewin`.
+- Pointer and hardware bindings: `mousebind`, `axisbind`, `gesturebind`,
+  `switchbind`.
+
+Rules:
+
+- `windowrule`: `appid`, `title`, `isfloating`, `isfullscreen`,
+  `isfakefullscreen`, `isglobal`, `isoverlay`, `isopensilent`,
+  `istagsilent`, `force_fakemaximize`, `ignore_maximize`,
+  `ignore_minimize`, `force_tiled_state`, `noopenmaximized`,
+  `single_scratchpad`, `allow_shortcuts_inhibit`,
+  `indleinhibit_when_focus`, `width`, `height`, `offsetx`, `offsety`,
+  `monitor`, `tags`, `no_force_center`, `isnosizehint`, `noblur`,
+  `isnoborder`, `isnoshadow`, `isnoradius`, `isnoanimation`,
+  `focused_opacity`, `unfocused_opacity`, `allow_csd`,
+  `scroller_proportion`, `scroller_proportion_single`,
+  `animation_type_open`, `animation_type_close`, `nofadein`,
+  `nofadeout`, `isterm`, `noswallow`, `globalkeybinding`,
+  `isunglobal`, `isnamedscratchpad`, `force_tearing`.
+- `tagrule`: `id`, `monitor_name`, `monitor_make`, `monitor_model`,
+  `monitor_serial`, `layout_name`, `no_render_border`,
+  `open_as_floating`, `no_hide`, `nmaster`, `mfact`.
+- `layerrule`: `layer_name`, `animation_type_open`,
+  `animation_type_close`, `noblur`, `noanim`, `noshadow`.
+
+## River Inventory
+
+River command-line and startup surface:
+
+- `river -h`
+- `river -version`
+- `river -c <shell_command>`
+- `river -log-level error|warning|info|debug`
+- `river -no-xwayland`
+- Startup init executable at `$XDG_CONFIG_HOME/river/init` or
+  `~/.config/river/init`.
+
+Window-management protocol requests used as the comparable River surface:
+
+- Manager: `stop`, `manage_finish`, `manage_dirty`, `render_finish`,
+  `get_shell_surface`, `exit_session`.
+- Window: `close`, `get_node`, `propose_dimensions`, `hide`, `show`,
+  `use_csd`, `use_ssd`, `set_borders`, `set_tiled`,
+  `get_decoration_above`, `get_decoration_below`,
+  `inform_resize_start`, `inform_resize_end`, `set_capabilities`,
+  `inform_maximized`, `inform_unmaximized`, `inform_fullscreen`,
+  `inform_not_fullscreen`, `fullscreen`, `exit_fullscreen`,
+  `set_clip_box`, `set_content_clip_box`, `set_dimension_bounds`.
+- Node/output/seat: `set_position`, `place_top`, `place_bottom`,
+  `place_above`, `place_below`, `set_presentation_mode`,
+  `focus_window`, `focus_shell_surface`, `clear_focus`,
+  `op_start_pointer`, `op_end`, `get_pointer_binding`,
+  `set_xcursor_theme`, `pointer_warp`.
+- Pointer and key binding protocols: `enable`, `disable`,
+  `get_xkb_binding`, `set_layout_override`, `ensure_next_key_eaten`,
+  `cancel_ensure_next_key_eaten`, `modifiers_watch`.
+- Input management: `create_seat`, `destroy_seat`, `assign_to_seat`,
+  `set_repeat_info`, `set_scroll_factor`, `map_to_output`,
+  `map_to_rectangle`.
+- XKB/libinput config: `create_keymap`, `set_keymap`,
+  `set_layout_by_index`, `set_layout_by_name`, `capslock_enable`,
+  `capslock_disable`, `numlock_enable`, `numlock_disable`,
+  `set_send_events`, `set_tap`, `set_tap_button_map`, `set_drag`,
+  `set_drag_lock`, `set_three_finger_drag`, `set_calibration_matrix`,
+  `set_accel_profile`, `set_accel_speed`, `apply_accel_config`,
+  `set_natural_scroll`, `set_left_handed`, `set_click_method`,
+  `set_clickfinger_button_map`, `set_middle_emulation`,
+  `set_scroll_method`, `set_scroll_button`, `set_scroll_button_lock`,
+  `set_dwt`, `set_dwtp`, `set_rotation`.
+
+## Triad Inventory
+
+KDL config nodes and fields:
+
+- `layout`: `gaps`, `center-focused-column`, `default-column-width`,
+  `default-window-width`, `default-window-height`, `master.count`,
+  `master.split-ratio`, `border.width`, `border.active-color`,
+  `border.inactive-color`, `scroller-focus-center`,
+  `scroller-prefer-center`, `enable-animations`, `animation-speed`,
+  `smart-gaps`, `layout-cycle`.
+- `workspaces`: `default-count`.
+- `tag-rules`: `tag <id> name=... default-layout=...`.
+- `window-rule`: `match app-id=... title=...`, `default-tag`,
+  `open-floating`, `keyboard-shortcuts-inhibit`, `forced-layout`.
+- `spawn-at-startup`, `window-menu-command`.
+- `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, plus
+  `layout`, `mode`, and `allow-inhibiting` properties.
+- `quickshell`: `enabled`, `command`, `theme`, `args`.
+- `terminal`: `command`.
+- `screen-lock`: `command`.
+- `scratchpad`: `width-ratio`, `height-ratio`.
+- `overview`: `outer-gap`, `inner-gap-multiplier`.
+- `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,
+  `min-width`, `min-height`.
+- `screenshot`: `directory`, `filename-prefix`, `capture-command`,
+  `region-selector-command`, `show-pointer`.
+- `cursor`: `theme`, `size`.
+- Top-level: `presentation-mode`, `allow-exit-session`,
+  `protocol-surfaces.enabled`, `protocol-surfaces.visible-debug`.
+
+Text IPC and bind commands:
+
+- Focus: `focus-next`, `focus-prev`, `focus-left`, `focus-right`,
+  `focus-up`, `focus-down`, `focus-last`, `focus-tag-left`,
+  `focus-tag-right`, `focus-occupied-tag-left`,
+  `focus-occupied-tag-right`, `focus-column-first`,
+  `focus-column-last`, `focus-window-or-workspace-up`,
+  `focus-window-or-workspace-down`, `focus-window`,
+  `focus-workspace`, `focus-tag`, `focus-shell-ui`.
+- Window and session: `close-window`, `toggle-floating`,
+  `toggle-fullscreen`, `exit-fullscreen`, `toggle-maximized`,
+  `toggle-maximize`, `minimize`, `minimize-window`, `spawn`,
+  `spawn-terminal`, `lock-session`, `warp-pointer`, `eat-next-key`,
+  `cancel-eat-next-key`, `toggle-keyboard-shortcuts-inhibit`,
+  `keyboard-shortcuts-inhibit`, `stop-manager`, `triad-reload`,
+  `exit-session`, `config-reload`.
+- Layout: `layout-scroller`, `layout-vertical-scroller`,
+  `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`,
+  `layout-center-tile`, `layout-right-tile`, `layout-vertical-tile`,
+  `layout-vertical-grid`, `layout-vertical-deck`, `switch-layout`,
+  `master-count`, `adjust-master-count`, `master-ratio`,
+  `adjust-master-ratio`, `resize-width`, `resize-height`,
+  `set-column-width`, `adjust-gaps`, `toggle-gaps`, `zoom`.
+- Tags, movement, and groups: `move-to-tag-left`, `move-to-tag-right`,
+  `move-to-tag`, `move-to-workspace`, `swap-to-tag`, `rename-tag`,
+  `move-floating`, `resize-floating`, `consume-window`,
+  `expel-window`, `move-column-left`, `move-column-right`,
+  `move-column-to-first`, `move-column-to-last`, `move-window-left`,
+  `move-window-right`, `move-window-up`, `move-window-down`,
+  `move-window-up-or-to-workspace-up`,
+  `move-window-down-or-to-workspace-down`, `swap-window-up`,
+  `swap-window-down`, `group-windows`, `ungroup-window`,
+  `focus-next-in-group`.
+- Overview and scratchpad: `toggle-overview`, `open-overview`,
+  `close-overview`, `select-window`, `move-to-scratchpad`,
+  `move-to-named-scratchpad`, `toggle-scratchpad`,
+  `toggle-named-scratchpad`, `restore-scratchpad`.
+
+Native JSON IPC requests:
+
+- `state`
+- `layout-state`
+- `set-layout`
+- `switch-layout`
+- `event-stream`
