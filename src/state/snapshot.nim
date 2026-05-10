@@ -98,7 +98,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     let tagOpt =
       if pos.found: model.tagData(pos.tagId) else: none(TagData)
     let focused =
-      tagOpt.isSome and tagOpt.get().focusedWindow == winId
+      pos.found and pos.tagId == model.activeTag and tagOpt.isSome and
+        tagOpt.get().focusedWindow == winId
     result.windows.add(ShellWindow(
       id: runtime_values.WindowId(uint32(win.externalId)),
       title: win.title,

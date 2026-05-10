@@ -128,6 +128,32 @@ suite "Shell compatibility contracts":
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
 
+  test "Niri focused window prefers active workspace focus":
+    var snapshot = snapshotForShell()
+    snapshot.workspaces[0].isActive = false
+    snapshot.workspaces[0].focusedWindow = 10
+    snapshot.workspaces[1].isActive = true
+    snapshot.workspaces[1].focusedWindow = 20
+    snapshot.windows.add(ShellWindow(
+      id: 20,
+      title: "Browser",
+      appId: "brave-browser",
+      tagId: some(2'u32),
+      workspaceIdx: 2,
+      outputName: "triad-0",
+      colIdx: 1,
+      winIdx: 1,
+      widthProportion: 0.5,
+      heightProportion: 1.0,
+      actualW: 800,
+      actualH: 600))
+
+    let focused =
+      parseJson(handleNiriRequest("\"FocusedWindow\"", snapshot).reply)[
+        "Ok"]["FocusedWindow"]
+    check focused["id"].getInt() == 20
+    check focused["workspace_id"].getInt() == 2
+
   test "Niri actions map to Triad messages":
     let snapshot = snapshotForShell()
     let focusWs = handleNiriRequest(

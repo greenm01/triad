@@ -302,6 +302,53 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
       uint32(it.focusId) == 2)
 
+  test "Shell snapshot exposes active workspace focus globally":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "term", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "browser", title: "Two"))
+
+    var snapshot = model.shellSnapshot()
+    let focused = snapshot.windows.filterIt(it.isFocused)
+    check snapshot.activeWorkspaceIdx == 2
+    check focused.len == 1
+    check focused[0].id == 2
+    check focused[0].workspaceIdx == 2
+    check snapshot.workspaces[0].focusedWindow == 1
+    check snapshot.workspaces[1].focusedWindow == 2
+
+    let tag2 = model.tagForSlot(2)
+    let col2 = model.columnAt(tag2, 0)
+    model.placeWindow(tag2, col2, WindowId(1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+
+    snapshot = model.shellSnapshot()
+    let activeFocused = snapshot.windows.filterIt(it.isFocused)
+    check activeFocused.len == 1
+    check activeFocused[0].id == 1
+    check activeFocused[0].workspaceIdx == 2
+    check activeFocused[0].tagId.isSome
+    check activeFocused[0].tagId.get() == 2
+
+  test "Workspace focus broadcasts workspace and window snapshots":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "term", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "browser", title: "Two"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 1))
+    check effects.anyIt(it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("WorkspacesChanged"))
+    check effects.anyIt(it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("WindowsChanged"))
+
   test "Overview order deduplicates multi-tag windows":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,

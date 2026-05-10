@@ -64,12 +64,12 @@ proc nextTag(snapshot: ShellSnapshot; direction: int): Option[uint32] =
   some(ids[^1])
 
 proc focusedWindow(snapshot: ShellSnapshot): WindowId =
+  for workspace in snapshot.workspaces:
+    if workspace.isActive and workspace.focusedWindow != 0:
+      return workspace.focusedWindow
   for win in snapshot.windows:
     if win.isFocused:
       return win.id
-  for workspace in snapshot.workspaces:
-    if workspace.isActive:
-      return workspace.focusedWindow
   0'u32
 
 proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[

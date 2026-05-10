@@ -301,23 +301,36 @@ proc workspaceOutput*(model: Model; tagId: TagId): OutputId =
 proc shellWorkspaceOutputName*(model: Model; tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))
 
+proc windowPositionOnTag*(model: Model; tagId: TagId; winId: WindowId):
+    tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =
+  if tagId == NullTagId:
+    return (false, NullTagId, 0'u32, 0'u32, 0'u32)
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return (false, NullTagId, 0'u32, 0'u32, 0'u32)
+  let placementOpt = model.placementForWindowOnTag(tagId, winId)
+  if placementOpt.isNone:
+    return (false, NullTagId, 0'u32, 0'u32, 0'u32)
+  let placement = placementOpt.get()
+  if placement.columnId == NullColumnId:
+    return (false, NullTagId, 0'u32, 0'u32, 0'u32)
+  (
+    true,
+    tagId,
+    tagOpt.get().slot,
+    model.columnIndexForTag(tagId, placement.columnId),
+    placement.windowIdx
+  )
+
 proc firstWindowPosition*(model: Model; winId: WindowId):
     tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =
+  let activePosition = model.windowPositionOnTag(model.activeTag, winId)
+  if activePosition.found:
+    return activePosition
+
   for slot in model.visibleWorkspaceSlots():
     let tagId = model.tagForSlot(slot)
-    if tagId == NullTagId:
-      continue
-    let placementOpt = model.placementForWindowOnTag(tagId, winId)
-    if placementOpt.isNone:
-      continue
-    let placement = placementOpt.get()
-    if placement.columnId == NullColumnId:
-      continue
-    return (
-      true,
-      tagId,
-      slot,
-      model.columnIndexForTag(tagId, placement.columnId),
-      placement.windowIdx
-    )
+    let position = model.windowPositionOnTag(tagId, winId)
+    if position.found:
+      return position
   (false, NullTagId, 0'u32, 0'u32, 0'u32)
