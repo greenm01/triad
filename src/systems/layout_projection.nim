@@ -134,6 +134,45 @@ proc layoutForTag(
   of rv.LayoutMode.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
 
+proc activeFocusLayoutInstructions*(model: Model):
+    seq[rv.RenderInstruction] =
+  if model.activeTag == NullTagId:
+    return
+
+  let projected = model.projectedTag(model.activeTag)
+  if not projected.found:
+    return
+
+  let screen = model.primaryScreen()
+  let windows = model.runtimeWindowTable()
+  var currentOuterGap = model.outerGaps
+  var currentInnerGap = model.innerGaps
+  var tiledWindowCount = 0
+  for col in projected.tag.columns:
+    tiledWindowCount += col.windows.len
+
+  if model.smartGaps and tiledWindowCount <= 1:
+    currentOuterGap = 0
+    currentInnerGap = 0
+
+  let retargetViewport = model.viewportRetargetRequested(model.activeTag)
+  var tagForLayout = projected.tag
+  result = layoutForTag(
+    tagForLayout,
+    windows,
+    screen,
+    currentOuterGap,
+    currentInnerGap,
+    retargetViewport and model.scrollerFocusCenter,
+    retargetViewport and model.scrollerPreferCenter,
+    if retargetViewport: model.centerFocusedColumn else: "never")
+
+  for winId, win in model.windowsOnTagWithId(model.activeTag):
+    if win.isFloating and not win.isMinimized:
+      result.add(rv.RenderInstruction(
+        windowId: model.externalWindowId(winId),
+        geom: win.floatingGeom))
+
 proc upsertInstruction(
     instructions: var seq[rv.RenderInstruction]; instruction:
     rv.RenderInstruction) =

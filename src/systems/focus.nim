@@ -2,7 +2,14 @@ import options
 import workspaces
 import ../layouts/grid_math
 import ../state/engine
-from ../types/runtime_values import Direction
+from ../types/runtime_values import Direction, RenderInstruction
+import layout_projection
+
+type
+  FocusCandidate = object
+    winId: WindowId
+    geom: typeof(RenderInstruction().geom)
+    order: int
 
 proc windowOnTag(model: Model; tagId: TagId; winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
@@ -206,6 +213,95 @@ proc findWindowPosition(model: Model; tagId: TagId; winId: WindowId):
     return (false, -1, -1, NullColumnId)
   (true, colIdx, int(placement.windowIdx) - 1, placement.columnId)
 
+proc centerX(rect: typeof(RenderInstruction().geom)): int64 =
+  int64(rect.x) * 2'i64 + int64(rect.w)
+
+proc centerY(rect: typeof(RenderInstruction().geom)): int64 =
+  int64(rect.y) * 2'i64 + int64(rect.h)
+
+proc sameRect(
+    a, b: typeof(RenderInstruction().geom)): bool =
+  a.x == b.x and a.y == b.y and a.w == b.w and a.h == b.h
+
+proc focusCandidateIndex(
+    candidates: openArray[FocusCandidate]; winId: WindowId): int =
+  for idx, candidate in candidates:
+    if candidate.winId == winId:
+      return idx
+  -1
+
+proc visualFocusCandidates(model: Model): seq[FocusCandidate] =
+  for order, instr in model.activeFocusLayoutInstructions():
+    let winId = model.windowForExternal(ExternalWindowId(uint32(instr.windowId)))
+    if winId == NullWindowId or not model.isFocusableWindow(winId):
+      continue
+    if result.focusCandidateIndex(winId) != -1:
+      continue
+    result.add(FocusCandidate(winId: winId, geom: instr.geom, order: order))
+
+proc orderedFallbackFocus(
+    model: var Model; candidates: openArray[FocusCandidate]; currentIdx: int;
+    direction: Direction): bool =
+  if candidates.len <= 1:
+    return false
+
+  let step =
+    case direction
+    of Direction.DirLeft, Direction.DirUp: -1
+    of Direction.DirRight, Direction.DirDown: 1
+  let targetIdx = (currentIdx + step + candidates.len) mod candidates.len
+  model.focusWindow(candidates[targetIdx].winId)
+
+proc focusByVisualDirection*(
+    model: var Model; direction: Direction): bool =
+  let focused = model.focusedOnActiveTag()
+  if focused == NullWindowId:
+    return false
+
+  let candidates = model.visualFocusCandidates()
+  let currentIdx = candidates.focusCandidateIndex(focused)
+  if currentIdx < 0:
+    return false
+  let current = candidates[currentIdx]
+  let currentCx = current.geom.centerX()
+  let currentCy = current.geom.centerY()
+
+  var bestIdx = -1
+  var bestPrimary = high(int64)
+  var bestPerp = high(int64)
+  var bestOrder = high(int)
+
+  for idx, candidate in candidates:
+    if idx == currentIdx:
+      continue
+
+    let cx = candidate.geom.centerX()
+    let cy = candidate.geom.centerY()
+    let (primary, perp) =
+      case direction
+      of Direction.DirLeft: (currentCx - cx, abs(currentCy - cy))
+      of Direction.DirRight: (cx - currentCx, abs(currentCy - cy))
+      of Direction.DirUp: (currentCy - cy, abs(currentCx - cx))
+      of Direction.DirDown: (cy - currentCy, abs(currentCx - cx))
+    if primary <= 0:
+      continue
+    if perp < bestPerp or (perp == bestPerp and primary < bestPrimary) or
+        (perp == bestPerp and primary == bestPrimary and
+          candidate.order < bestOrder):
+      bestIdx = idx
+      bestPrimary = primary
+      bestPerp = perp
+      bestOrder = candidate.order
+
+  if bestIdx >= 0:
+    return model.focusWindow(candidates[bestIdx].winId)
+
+  for idx, candidate in candidates:
+    if idx != currentIdx and candidate.geom.sameRect(current.geom):
+      return model.orderedFallbackFocus(candidates, currentIdx, direction)
+
+  false
+
 proc focusColumnByStep*(model: var Model; step: int): bool =
   if step == 0:
     return false
@@ -304,6 +400,9 @@ proc focusByDirection*(model: var Model; direction: Direction): bool =
       return model.focusOverviewByDelta(0, -1)
     of Direction.DirDown:
       return model.focusOverviewByDelta(0, 1)
+
+  if model.focusByVisualDirection(direction):
+    return true
 
   let tagId = model.activeTag
   let focused = model.focusedOnActiveTag()

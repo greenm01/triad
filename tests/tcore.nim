@@ -126,6 +126,18 @@ proc seedCameraWindows(model: var Model; count = 3'u32) =
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
       appId: "app", title: "Window " & $id))
 
+proc directionalModel(mode: LayoutMode; count = 5'u32): Model =
+  result = cameraModel()
+  result.seedCameraWindows(count)
+  result.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: mode))
+
+proc focusExternal(model: var Model; id: uint32) =
+  model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: id))
+
+proc focusDirection(model: var Model; direction: Direction): uint32 =
+  model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: direction))
+  model.focusedWindowId()
+
 proc restoreMatchingModel(): Model =
   initRuntimeStateFromConfig(Config(
     workspaces: WorkspaceConfig(defaultCount: 3),
@@ -253,6 +265,79 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastTriadJson and
       it.jsonPayload.contains("layout-state-changed"))
+
+  test "Grid directional focus follows rendered rows":
+    var model = directionalModel(LayoutMode.Grid)
+
+    model.focusExternal(2)
+    check model.focusDirection(Direction.DirDown) == 5
+    check model.focusDirection(Direction.DirUp) == 2
+
+    model.focusExternal(3)
+    check model.focusDirection(Direction.DirDown) == 5
+
+  test "Vertical grid directional focus follows rendered columns":
+    var model = directionalModel(LayoutMode.VerticalGrid)
+
+    model.focusExternal(1)
+    check model.focusDirection(Direction.DirDown) == 2
+    check model.focusDirection(Direction.DirUp) == 1
+
+    model.focusExternal(2)
+    check model.focusDirection(Direction.DirRight) == 5
+    check model.focusDirection(Direction.DirLeft) == 2
+
+  test "Vertical scroller directional focus follows visual rows":
+    var model = directionalModel(LayoutMode.VerticalScroller, 3)
+
+    model.focusExternal(1)
+    check model.focusDirection(Direction.DirDown) == 2
+    check model.focusDirection(Direction.DirUp) == 1
+
+    let tagId = model.activeTag
+    let firstColumn = model.columnAt(tagId, 0)
+    let second = model.windowForExternal(ExternalWindowId(2))
+    discard model.moveWindowToColumn(tagId, second, firstColumn, 1)
+
+    model.focusExternal(1)
+    check model.focusDirection(Direction.DirRight) == 2
+    check model.focusDirection(Direction.DirLeft) == 1
+
+  test "Master layouts use visual directional focus":
+    var tile = directionalModel(LayoutMode.MasterStack, 3)
+    tile.focusExternal(1)
+    check tile.focusDirection(Direction.DirRight) == 3
+    check tile.focusDirection(Direction.DirUp) == 2
+
+    var vertical = directionalModel(LayoutMode.VerticalTile, 3)
+    vertical.focusExternal(1)
+    check vertical.focusDirection(Direction.DirDown) == 3
+
+    var rightTile = directionalModel(LayoutMode.RightTile, 3)
+    rightTile.focusExternal(1)
+    check rightTile.focusDirection(Direction.DirLeft) == 3
+
+    var centerTile = directionalModel(LayoutMode.CenterTile, 5)
+    centerTile.focusExternal(1)
+    check centerTile.focusDirection(Direction.DirLeft) == 4
+    centerTile.focusExternal(1)
+    check centerTile.focusDirection(Direction.DirRight) == 5
+
+  test "Overlapping layouts use ordered directional fallback":
+    var deck = directionalModel(LayoutMode.Deck, 3)
+    deck.focusExternal(2)
+    check deck.focusDirection(Direction.DirDown) == 3
+    check deck.focusDirection(Direction.DirUp) == 2
+
+    var verticalDeck = directionalModel(LayoutMode.VerticalDeck, 3)
+    verticalDeck.focusExternal(2)
+    check verticalDeck.focusDirection(Direction.DirRight) == 3
+    check verticalDeck.focusDirection(Direction.DirLeft) == 2
+
+    var monocle = directionalModel(LayoutMode.Monocle, 3)
+    monocle.focusExternal(1)
+    check monocle.focusDirection(Direction.DirRight) == 2
+    check monocle.focusDirection(Direction.DirLeft) == 1
 
   test "Render visibility suppresses clipped scroller border rails":
     let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
