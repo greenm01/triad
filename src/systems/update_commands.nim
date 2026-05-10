@@ -226,8 +226,7 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     let selected = model.selectedOverviewWindow()
     result.dirty = model.closeOverview()
     if selected != NullWindowId:
-      result.dirty = model.focusWindow(
-        selected, retargetViewport = false) or result.dirty
+      result.dirty = model.focusWindow(selected) or result.dirty
   of MsgKind.CmdCloseWindow:
     let focused = model.focusedWindow()
     if focused != NullWindowId:

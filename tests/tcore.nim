@@ -337,13 +337,12 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
       uint32(it.focusId) == 2)
 
-  test "Overview select preserves same-workspace camera":
+  test "Overview select retargets same-workspace camera":
     var model = cameraModel()
     model.seedCameraWindows()
     model.setViewport(1, targetX = 125.0, currentX = 125.0)
 
     let beforeViewport = model.viewport(1)
-    let beforeInstructions = model.layoutInstructions()
 
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
@@ -351,9 +350,13 @@ suite "Core Runtime Logic":
 
     check model.focusedWindowId() == 1
     check model.viewport(1) == beforeViewport
-    check model.layoutInstructions() == beforeInstructions
+    discard model.layoutInstructions()
+    check model.viewport(1).currentViewportXOffset ==
+      beforeViewport.currentViewportXOffset
+    check model.viewport(1).targetViewportXOffset !=
+      beforeViewport.targetViewportXOffset
 
-  test "Overview select restores target workspace camera":
+  test "Overview select retargets target workspace camera":
     var model = cameraModel()
     model.seedCameraWindows(1)
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
@@ -378,6 +381,12 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 2
     check model.viewport(1) == workspace1Viewport
     check model.viewport(2) == workspace2Viewport
+    discard model.layoutInstructions()
+    check model.viewport(1) == workspace1Viewport
+    check model.viewport(2).currentViewportXOffset ==
+      workspace2Viewport.currentViewportXOffset
+    check model.viewport(2).targetViewportXOffset !=
+      workspace2Viewport.targetViewportXOffset
 
   test "Closing overview restores original camera":
     var model = cameraModel()
