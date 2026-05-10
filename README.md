@@ -142,10 +142,13 @@ Before publishing changes, run the full local preflight:
 
 ```bash
 nimble verify
+nimble liveReload
 ```
 
 `verify` requires a clean working tree, runs tests and builds, tidies generated
 artifacts, and fails if executable binaries are tracked or left in the project.
+For runtime-facing work, run `nimble liveReload` last from inside the live
+session so the installed manager replacement path is covered.
 
 For the first real compositor run, follow the live test runbook in
 `docs/live-testing.md`.

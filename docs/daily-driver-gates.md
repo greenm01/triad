@@ -23,12 +23,15 @@ Run from inside a River-compatible session:
 
 ```bash
 sh tools/live_smoke.sh
+nimble liveReload
 ```
 
 The live smoke starts Triad, checks River startup milestones, sends the
 navigation/layout/scratchpad workflow commands, reloads config, verifies the
 Niri shim, subscribes to `event-stream`, and confirms `toggle-overview`
-produces an `OverviewOpenedOrClosed` event.
+produces an `OverviewOpenedOrClosed` event. Run `nimble liveReload` last so the
+same change is verified through the live-manager replacement path after the
+smoke workflow has passed.
 
 Useful optional passes:
 
