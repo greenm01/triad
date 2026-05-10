@@ -920,6 +920,56 @@ suite "Core Runtime Logic":
     check focused[0].workspaceIdx == 2
     model.requireTagShellSemantics("scratchpad restored scenario")
 
+  test "Closing transient window keeps focus on active workspace":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "brave", title: "Browser"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "thunar", title: "Pictures"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
+      appId: "kitty", title: "Terminal A"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 4,
+      appId: "kitty", title: "Terminal B"))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 5,
+      appId: "image-viewer", title: "Screenshot"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
+      destroyedId: 5))
+
+    check model.shellSnapshot().activeTag == 1
+    check model.activeWorkspaceFocusId() == 2
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    check not effects.hasFocusEffect(3)
+    check not effects.hasFocusEffect(4)
+    model.requireTagShellSemantics("transient close local focus scenario")
+
+  test "Closing last dynamic workspace window still collapses workspace":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "term", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "term", title: "Dynamic"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
+      destroyedId: 2))
+    let snapshot = model.shellSnapshot()
+
+    check snapshot.activeTag == 3
+    check not snapshot.workspaces.anyIt(it.tagId == 4)
+    check not effects.hasFocusEffect(1)
+    model.requireTagShellSemantics("dynamic close collapse scenario")
+
   test "Overview order deduplicates multi-tag windows":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,

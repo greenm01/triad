@@ -104,6 +104,16 @@ proc focusMostRecentWindow*(model: var Model): bool =
     return false
   model.focusWindow(candidates[^1])
 
+proc focusMostRecentWindowOnTag*(
+    model: var Model; tagId: TagId): bool =
+  if tagId == NullTagId:
+    return false
+  for candidate in model.focusHistoryIdsReverse():
+    if model.isFocusableWindow(candidate) and model.windowOnTag(
+        tagId, candidate):
+      return model.focusWindow(candidate)
+  false
+
 proc isRestorableWorkspace(model: Model; tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:

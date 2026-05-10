@@ -374,10 +374,11 @@ proc destroyWindowForExternal*(
   if winId == NullWindowId:
     return false
 
+  let activeTag = model.activeTag
   let closedWasFocused =
     model.focusedOnActiveTag() == winId or
-    (model.tag(model.activeTag).isSome and
-      model.tag(model.activeTag).get().focusedWindow == winId)
+    (model.tag(activeTag).isSome and
+      model.tag(activeTag).get().focusedWindow == winId)
   var affectedTags: seq[TagId] = @[]
   for tagId, placementWinId, _ in model.placementsWithId():
     if placementWinId == winId and affectedTags.find(tagId) == -1:
@@ -386,11 +387,16 @@ proc destroyWindowForExternal*(
     return false
   model.pruneScratchpads()
   for tagId in affectedTags:
-    if not closedWasFocused or tagId != model.activeTag:
+    if not closedWasFocused or tagId != activeTag:
       discard model.recomputeVisibleFocus(tagId)
 
   if closedWasFocused:
-    if not model.focusMostRecentWindow():
+    if model.tagHasFocusableWindow(activeTag):
+      if not model.focusMostRecentWindowOnTag(activeTag):
+        let focused = model.recomputeVisibleFocus(activeTag)
+        if focused != NullWindowId:
+          discard model.focusWindow(focused)
+    elif not model.collapseEmptyActiveDynamicWorkspace():
       discard model.focusMostRecentWorkspace()
   discard model.collapseEmptyActiveDynamicWorkspace()
   discard model.pruneDynamicWorkspaces()
