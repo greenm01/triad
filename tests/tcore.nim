@@ -11,6 +11,7 @@ import ../src/systems/update
 import ../src/systems/window_lifecycle
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
+import ../src/utils/overview_hit_test
 import ../src/utils/screenshot_capture
 import tag_semantics_checks
 
@@ -820,6 +821,24 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 1
     check model.activeWorkspaceFocusId() == 1
     check effects.len == 0
+
+  test "Overview hit testing uses topmost preview under pointer":
+    let instructions = @[
+      RenderInstruction(
+        windowId: 1,
+        geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)),
+      RenderInstruction(
+        windowId: 2,
+        geom: runtime_values.Rect(x: 50, y: 50, w: 100, h: 100)),
+      RenderInstruction(
+        windowId: 3,
+        geom: runtime_values.Rect(x: 200, y: 50, w: 100, h: 100))
+    ]
+
+    check overviewHitTest(instructions, 10, 10) == 1
+    check overviewHitTest(instructions, 60, 60) == 2
+    check overviewHitTest(instructions, 220, 70) == 3
+    check overviewHitTest(instructions, 400, 400) == 0
 
   test "Overview direction selection follows visual grid":
     var model = configuredModel()

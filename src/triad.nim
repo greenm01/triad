@@ -23,6 +23,7 @@ import ipc/commands
 import ipc/socket
 import ipc/quickshell_compat
 import utils/terminal
+import utils/overview_hit_test
 import utils/runtime_log
 import utils/screenshot_capture
 import utils/session_env
@@ -34,6 +35,7 @@ from types/runtime_values import BindingMode, KeyBindingConfig,
   ScreenshotConfig, TerminalConfig, WindowId
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet,
     nativesockets, osproc, strutils, options, times, json
+from std/posix import nil
 
 type
   RiverPhase {.pure.} = enum
@@ -52,6 +54,10 @@ type
     shellSurface: ptr RiverShellSurfaceV1
     decoration: ptr RiverDecorationV1
     node: ptr RiverNodeV1
+    bufferW: int32
+    bufferH: int32
+    inputW: int32
+    inputH: int32
     windowId: WindowId
     kind: ProtocolSurfaceKind
     offsetX: int32
@@ -66,12 +72,14 @@ var
   river_layer_shell: ptr river_layer.RiverLayerShellV1
   river_xkb_bindings: ptr river_xkb.RiverXkbBindingsV1
   compositor: ptr Compositor
+  shm: ptr Shm
   singlePixelManager: ptr singlepixel.WpSinglePixelBufferManagerV1
   riverPhase = RiverPhase.RiverIdle
   bindingsConfigured = false
   manageRequestPending = false
   manageRequestReason = ""
   screenshotCaptureActive = false
+  shmBufferCounter = 0'u32
 
   # Runtime State
   runtimeState: TriadRuntimeState
@@ -471,6 +479,47 @@ proc createProtocolBuffer(kind: ProtocolSurfaceKind): ptr Buffer =
   let rgba = premulColor(color)
   singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
 
+proc createTransparentShmBuffer(width, height: int32): ptr Buffer =
+  if shm == nil:
+    return nil
+  let w = max(1'i32, width)
+  let h = max(1'i32, height)
+  let stride = w * 4
+  let size = stride * h
+  inc shmBufferCounter
+  let path = getTempDir() / (
+    "triad-overview-shield-" & $getCurrentProcessId() & "-" &
+    $shmBufferCounter)
+  let fd = posix.open(
+    path.cstring,
+    posix.O_RDWR or posix.O_CREAT or posix.O_EXCL,
+    posix.S_IRUSR or posix.S_IWUSR)
+  if fd < 0:
+    warn "Unable to create overview shield shm file", path = path
+    return nil
+
+  try:
+    if posix.ftruncate(fd, posix.Off(size)) != 0:
+      warn "Unable to size overview shield shm file", path = path
+      return nil
+    let pool = shm.createPool(fd, size)
+    if pool == nil:
+      warn "Unable to create overview shield shm pool"
+      return nil
+    result = pool.createBuffer(
+      0,
+      w,
+      h,
+      stride,
+      uint32(ShmFormat.format_argb8888))
+    pool.destroy()
+  finally:
+    discard posix.close(fd)
+    try:
+      removeFile(path)
+    except CatchableError:
+      discard
+
 proc createProtocolWlSurface(kind: ProtocolSurfaceKind): OwnedProtocolSurface =
   result.kind = kind
   if compositor == nil:
@@ -479,6 +528,8 @@ proc createProtocolWlSurface(kind: ProtocolSurfaceKind): OwnedProtocolSurface =
   if result.surface == nil:
     return
   result.buffer = createProtocolBuffer(kind)
+  result.bufferW = 1
+  result.bufferH = 1
 
 proc commitProtocolSurface(surf: var OwnedProtocolSurface) =
   if surf.surface == nil:
@@ -490,13 +541,24 @@ proc commitProtocolSurface(surf: var OwnedProtocolSurface) =
   if compositor != nil:
     let input = compositor.createRegion()
     if input != nil:
+      if surf.inputW > 0 and surf.inputH > 0:
+        input.add(0, 0, surf.inputW, surf.inputH)
       surf.surface.setInputRegion(input)
       input.destroy()
   if surf.buffer != nil:
     surf.surface.attach(surf.buffer, 0, 0)
-    surf.surface.damage(0, 0, 1, 1)
+    surf.surface.damage(0, 0, max(1'i32, surf.bufferW),
+        max(1'i32, surf.bufferH))
   surf.surface.commit()
   surf.syncPending = false
+
+proc setProtocolSurfaceBuffer(
+    surf: var OwnedProtocolSurface; buffer: ptr Buffer; width, height: int32) =
+  if surf.buffer != nil and surf.buffer != buffer:
+    surf.buffer.destroy()
+  surf.buffer = buffer
+  surf.bufferW = width
+  surf.bufferH = height
 
 proc destroyProtocolSurface(surf: var OwnedProtocolSurface) =
   if surf.node != nil:
@@ -540,6 +602,36 @@ proc ensureOwnedShellSurface() =
   commitProtocolSurface(surf)
   protocolSurfaces[ownedShellSurfaceId] = surf
   debug "Created protocol shell surface", shellSurfaceId = ownedShellSurfaceId
+
+proc syncOwnedShellSurface(screen: Rect) =
+  if ownedShellSurfaceId == 0 or
+      not protocolSurfaces.hasKey(ownedShellSurfaceId):
+    return
+
+  var surf = protocolSurfaces[ownedShellSurfaceId]
+  let wantsShield = currentModel.overviewActive and shm != nil
+  let desiredW = if wantsShield: max(1'i32, screen.w) else: 1'i32
+  let desiredH = if wantsShield: max(1'i32, screen.h) else: 1'i32
+  if surf.buffer == nil or surf.bufferW != desiredW or
+      surf.bufferH != desiredH:
+    let buffer =
+      if wantsShield:
+        createTransparentShmBuffer(desiredW, desiredH)
+      else:
+        createProtocolBuffer(ProtocolSurfaceKind.PskShell)
+    if buffer != nil:
+      surf.setProtocolSurfaceBuffer(buffer, desiredW, desiredH)
+    elif wantsShield:
+      warn "Overview input shield unavailable; previews may receive pointer"
+
+  if wantsShield and surf.bufferW == desiredW and surf.bufferH == desiredH:
+    surf.inputW = desiredW
+    surf.inputH = desiredH
+  else:
+    surf.inputW = 0
+    surf.inputH = 0
+  commitProtocolSurface(surf)
+  protocolSurfaces[ownedShellSurfaceId] = surf
 
 proc ensureDecorationSurface(windowId: WindowId;
     kind: ProtocolSurfaceKind): uint32 =
@@ -743,6 +835,21 @@ proc pointerBindingActive(binding: PointerBindingConfig): bool =
     return false
   true
 
+proc hasOverviewLeftClickBinding(): bool =
+  for binding in currentModel.pointerBindings:
+    if binding.button == 0x110'u32 and binding.modifiers == 0'u32 and
+        binding.mode in {BindingMode.BindAlways, BindingMode.BindOverview}:
+      return true
+  false
+
+proc overviewSelectPointerBinding(): PointerBindingConfig =
+  PointerBindingConfig(
+    button: 0x110'u32,
+    modifiers: 0'u32,
+    op: PointerOpKind.OpNone,
+    command: "select-window",
+    mode: BindingMode.BindOverview)
+
 proc setupDefaultBindings() =
   if bindingsConfigured:
     return
@@ -763,6 +870,8 @@ proc setupDefaultBindings() =
     for binding in currentModel.pointerBindings:
       if pointerBindingActive(binding):
         addPointerBinding(seat, binding)
+    if currentModel.overviewActive and not hasOverviewLeftClickBinding():
+      addPointerBinding(seat, overviewSelectPointerBinding())
 
   bindingsConfigured = true
 
@@ -861,9 +970,37 @@ proc queueWindowFocus(target: WindowId) =
   msgQueue.add(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: target))
 
 proc queueWindowInteraction(target: WindowId) =
+  if currentModel.overviewActive:
+    return
   queueWindowFocus(target)
-  if currentModel.overviewActive and target != 0:
-    msgQueue.add(Msg(kind: MsgKind.CmdSelectWindow))
+
+proc orderedDesiredInstructions(): seq[RenderInstruction] =
+  var ids: seq[WindowId] = @[]
+  for id in desiredPlacements.keys:
+    ids.add(id)
+  ids.sort()
+
+  let highlighted =
+    if currentModel.overviewActive: currentModel.highlightRiverId()
+    else: 0'u32
+  for id in ids:
+    if id != highlighted:
+      result.add(RenderInstruction(
+        windowId: id,
+        geom: desiredPlacements[id]))
+  if highlighted != 0 and desiredPlacements.hasKey(highlighted):
+    result.add(RenderInstruction(
+      windowId: highlighted,
+      geom: desiredPlacements[highlighted]))
+
+proc overviewWindowAtPointer(seat: ptr RiverSeatV1): WindowId =
+  if not currentModel.overviewActive or seat == nil:
+    return 0
+  let seatId = seat.id()
+  if not pointerPositionBySeat.hasKey(seatId):
+    return 0
+  let point = pointerPositionBySeat[seatId]
+  overviewHitTest(orderedDesiredInstructions(), point.x, point.y)
 
 proc on_seat_window_interaction(data: pointer; seat: ptr RiverSeatV1;
     win: ptr RiverWindowV1) =
@@ -951,8 +1088,14 @@ proc on_pointer_binding_pressed(data: pointer;
     return
   let seat = pointerBindingSeats[id]
   let focused = currentModel.activeFocusRiverId()
-  let target = pointerWindowBySeat.getOrDefault(seat.id(), focused)
+  let target =
+    if currentModel.overviewActive:
+      overviewWindowAtPointer(seat)
+    else:
+      pointerWindowBySeat.getOrDefault(seat.id(), focused)
   if pointerBindingKinds.hasKey(id):
+    if currentModel.overviewActive:
+      return
     if target == 0:
       return
     case pointerBindingKinds[id]
@@ -972,18 +1115,29 @@ proc on_pointer_binding_pressed(data: pointer;
       if target != 0:
         msgQueue.add(Msg(kind: MsgKind.CmdCloseWindowById,
           closeWindowId: target))
+      elif not currentModel.overviewActive:
+        msgQueue.add(msg)
+    of MsgKind.CmdCloseWindowById:
+      if target != 0 and currentModel.overviewActive:
+        msgQueue.add(Msg(kind: MsgKind.CmdCloseWindowById,
+          closeWindowId: target))
       else:
         msgQueue.add(msg)
     of MsgKind.CmdSelectWindow:
       if currentModel.overviewActive and target != 0:
         queueWindowFocus(target)
-      msgQueue.add(msg)
+        msgQueue.add(msg)
+      elif not currentModel.overviewActive:
+        msgQueue.add(msg)
     of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
         MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
         MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
         MsgKind.CmdMoveFloating, MsgKind.CmdResizeFloating:
-      queueWindowFocus(target)
-      msgQueue.add(msg)
+      if target != 0:
+        queueWindowFocus(target)
+        msgQueue.add(msg)
+      elif not currentModel.overviewActive:
+        msgQueue.add(msg)
     else:
       msgQueue.add(msg)
 
@@ -1258,12 +1412,16 @@ proc renderDesiredPlacements() =
         windowNodes[id].placeTop()
 
   if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
+    syncOwnedShellSurface(screen)
     var shell = protocolSurfaces[ownedShellSurfaceId]
     if shell.node != nil:
       shell.node.setPosition(screen.x, screen.y)
-      shell.node.placeBottom()
-      if firstNode != nil:
-        shell.node.placeBelow(firstNode)
+      if currentModel.overviewActive:
+        shell.node.placeTop()
+      else:
+        shell.node.placeBottom()
+        if firstNode != nil:
+          shell.node.placeBelow(firstNode)
     protocolSurfaces[ownedShellSurfaceId] = shell
 
 proc focusedWindowGeometry(): Rect =
@@ -1896,6 +2054,10 @@ proc registry_handle_global(data: pointer; registry: ptr Registry; name: uint32;
         wl_compositor_interface.addr, min(version, 6'u32)))
     info "Bound to wl_compositor", name = name, advertisedVersion = version
     ensureOwnedShellSurface()
+  elif interfaceName == "wl_shm":
+    shm = cast[ptr Shm](registry.`bind`(name,
+        wl_core.wl_shm_interface.addr, min(version, 1'u32)))
+    info "Bound to wl_shm", name = name, advertisedVersion = version
   elif interfaceName == "wl_output":
     let wlOutput = cast[ptr Output](registry.`bind`(name,
         wl_core.wl_output_interface.addr, min(version, 4'u32)))
