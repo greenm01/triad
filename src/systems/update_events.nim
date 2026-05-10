@@ -76,10 +76,6 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.createdIdentifier,
       msg.createdParentWindowId.externalWindowId())
     result.dirty = winId != NullWindowId
-    if result.dirty:
-      let win = model.windowData(winId).get()
-      if win.isMaximized:
-        result.effects.addSetMaximizedEffect(msg.windowId, true)
 
   of MsgKind.WlWindowDestroyed:
     result.dirty = model.destroyWindowForExternal(
@@ -104,16 +100,8 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.parentWindowId.externalWindowId())
   of MsgKind.WlWindowIdentifier:
     let externalId = msg.identifierWindowId.externalWindowId()
-    let winId = model.windowForExternal(externalId)
-    let beforeOpt = model.windowData(winId)
-    let wasMaximized = beforeOpt.isSome and beforeOpt.get().isMaximized
     result.dirty = model.updateWindowIdentifierAndRestoreForExternal(
       externalId, msg.identifier)
-    let afterOpt = model.windowData(winId)
-    if result.dirty and afterOpt.isSome and
-        afterOpt.get().isMaximized != wasMaximized:
-      result.effects.addSetMaximizedEffect(
-        msg.identifierWindowId, afterOpt.get().isMaximized)
   of MsgKind.WlWindowAppId:
     result.dirty = model.updateWindowAppIdForExternal(
       msg.appIdWindowId.externalWindowId(), msg.updatedAppId)
@@ -195,17 +183,11 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.WlWindowMaximizeRequested:
     result.dirty = model.requestMaximizeForExternal(
       msg.maximizeRequestId.externalWindowId())
-    if result.dirty:
-      result.effects.addSetMaximizedEffect(msg.maximizeRequestId, true)
   of MsgKind.WlWindowUnmaximizeRequested:
     result.dirty = model.requestUnmaximizeForExternal(
       msg.unmaximizeRequestId.externalWindowId())
-    if result.dirty:
-      result.effects.addSetMaximizedEffect(msg.unmaximizeRequestId, false)
   of MsgKind.WlWindowMinimizeRequested:
     result.dirty = model.requestMinimizeForExternal(
       msg.minimizeRequestId.externalWindowId())
-    if result.dirty:
-      result.effects.addSetMaximizedEffect(msg.minimizeRequestId, false)
   else:
     discard

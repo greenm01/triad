@@ -6,6 +6,7 @@ import ../core/triad_state
 import ../state/engine
 import ../types/shell_snapshot
 from ../types/runtime_values import nil
+import presentation_policy
 
 type
   UpdateStep* = object
@@ -372,6 +373,14 @@ proc hasFullscreenEffect(
         effect.fsWinId == winId and effect.isFullscreen == fullscreen:
       return true
 
+proc hasMaximizedEffect(
+    effects: seq[Effect]; winId: runtime_values.WindowId;
+    maximized: bool): bool =
+  for effect in effects:
+    if effect.kind == EffectKind.EffSetMaximized and
+        effect.maxWinId == winId and effect.isMaximized == maximized:
+      return true
+
 proc addFullscreenPresentationEffect(
     effects: var seq[Effect]; win: ShellWindow; present: bool) =
   if effects.hasFullscreenEffect(win.id, present):
@@ -381,23 +390,27 @@ proc addFullscreenPresentationEffect(
     present,
     if present: win.fullscreenOutput else: 0'u32)
 
-proc fullscreenWindow(snapshot: ShellSnapshot;
-    winId: runtime_values.WindowId): Option[ShellWindow] =
-  for win in snapshot.windows:
-    if win.id == winId and win.isFullscreen:
-      return some(win)
+proc addMaximizedPresentationEffect(
+    effects: var seq[Effect]; win: ShellWindow; present: bool) =
+  if effects.hasMaximizedEffect(win.id, present):
+    return
+  effects.addSetMaximizedEffect(win.id, present)
+
+proc fullscreenWindow(
+    snapshot: ShellSnapshot; winId: runtime_values.WindowId):
+    Option[ShellWindow] =
+  let win = snapshot.windowById(winId)
+  if win.isSome and win.get().isFullscreen:
+    return win
   none(ShellWindow)
 
-proc windowById(snapshot: ShellSnapshot;
-    winId: runtime_values.WindowId): Option[ShellWindow] =
-  for win in snapshot.windows:
-    if win.id == winId:
-      return some(win)
+proc maximizedWindow(
+    snapshot: ShellSnapshot; winId: runtime_values.WindowId):
+    Option[ShellWindow] =
+  let win = snapshot.windowById(winId)
+  if win.isSome and win.get().isMaximized:
+    return win
   none(ShellWindow)
-
-proc windowOnActiveWorkspace(snapshot: ShellSnapshot;
-    win: ShellWindow): bool =
-  win.tagId.isSome and win.tagId.get() == snapshot.activeTag
 
 proc shouldSyncFullscreenPresentation(
     kind: MsgKind; before, after: ShellSnapshot): bool =
@@ -443,6 +456,45 @@ proc addFullscreenPresentationSync(
     if beforeWin.isFullscreen and after.fullscreenWindow(beforeWin.id).isNone:
       effects.addFullscreenPresentationEffect(beforeWin, false)
 
+proc shouldSyncMaximizedPresentation(
+    kind: MsgKind; before, after: ShellSnapshot): bool =
+  if before.focusedWindowId() != after.focusedWindowId() or
+      before.activeTag != after.activeTag or
+      before.overviewActive != after.overviewActive:
+    return true
+  kind in {
+    MsgKind.WlManageStart,
+    MsgKind.WlWindowCreated,
+    MsgKind.WlWindowDestroyed,
+    MsgKind.WlWindowMaximizeRequested,
+    MsgKind.WlWindowUnmaximizeRequested,
+    MsgKind.WlWindowMinimizeRequested,
+    MsgKind.CmdSetLayout,
+    MsgKind.CmdSwitchLayout,
+    MsgKind.CmdToggleMaximized,
+    MsgKind.CmdMinimize,
+    MsgKind.CmdToggleFloating,
+    MsgKind.CmdToggleOverview,
+    MsgKind.CmdOpenOverview,
+    MsgKind.CmdCloseOverview,
+    MsgKind.CmdSelectWindow
+  }
+
+proc addMaximizedPresentationSync(
+    effects: var seq[Effect]; msg: Msg; before, after: ShellSnapshot) =
+  if not msg.kind.shouldSyncMaximizedPresentation(before, after):
+    return
+
+  let afterFocus = after.focusedWindowId()
+  for win in after.windows:
+    if win.isMaximized:
+      effects.addMaximizedPresentationEffect(
+        win, after.effectiveMaximized(win, afterFocus))
+
+  for beforeWin in before.windows:
+    if beforeWin.isMaximized and after.maximizedWindow(beforeWin.id).isNone:
+      effects.addMaximizedPresentationEffect(beforeWin, false)
+
 proc addPostUpdateEffects*(
     effects: var seq[Effect]; msg: Msg; before, after: ShellSnapshot;
     dirty, collapsed, pruned: bool) =
@@ -469,6 +521,7 @@ proc addPostUpdateEffects*(
     effects.add(Effect(kind: EffectKind.EffFocusShellUi))
 
   effects.addFullscreenPresentationSync(msg, before, after)
+  effects.addMaximizedPresentationSync(msg, before, after)
 
   if msg.kind in {MsgKind.WlWindowCreated, MsgKind.WlWindowAppId,
       MsgKind.WlWindowTitle}:

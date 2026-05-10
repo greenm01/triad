@@ -1,4 +1,3 @@
-import options
 import ../core/effects
 import ../core/msg
 import ../state/engine
@@ -209,17 +208,9 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.exitFullscreenForExternal(
       msg.fullscreenWindowId.externalWindowId())
   of MsgKind.CmdToggleMaximized:
-    let focused = model.focusedWindow()
     result.dirty = model.toggleMaximizedFocused()
-    if result.dirty:
-      let win = model.windowData(focused).get()
-      result.effects.addSetMaximizedEffect(
-        model.runtimeWindowId(focused), win.isMaximized)
   of MsgKind.CmdMinimize:
-    let focused = model.focusedWindow()
     result.dirty = model.minimizeFocused()
-    if result.dirty:
-      result.effects.addSetMaximizedEffect(model.runtimeWindowId(focused), false)
   of MsgKind.CmdToggleKeyboardShortcutsInhibit:
     result.dirty = model.toggleKeyboardShortcutsInhibitFocused()
   of MsgKind.CmdSelectWindow:

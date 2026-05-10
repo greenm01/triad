@@ -1,6 +1,7 @@
 import options
 import ../state/engine
 from ../types/runtime_values import nil
+import presentation_policy
 
 proc runtimeWindowId*(model: Model; winId: WindowId):
     runtime_values.WindowId =
@@ -60,6 +61,10 @@ proc visibleScratchpadRiverId*(model: Model): runtime_values.WindowId =
   if scratchpad != NullWindowId:
     return model.riverIdForWindow(scratchpad)
   0'u32
+
+proc activeLayoutSupportsMaximize*(model: Model): bool =
+  let tagOpt = model.tagData(model.activeTag)
+  tagOpt.isSome and tagOpt.get().layoutMode.layoutSupportsMaximize()
 
 proc windowDataForRiverId*(
     model: Model; winId: runtime_values.WindowId): Option[WindowData] =

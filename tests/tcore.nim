@@ -638,6 +638,79 @@ suite "Core Runtime Logic":
       focusWindowId: 2))
     check returnEffects.hasFullscreenEffect(2, true)
 
+  test "Grid suspends maximized presentation without clearing state":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 2))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.Grid))
+    let screen = model.primaryScreen()
+    let win = model.snapshotWindow(2)
+    let geom = model.instructionGeom(2)
+
+    check win.isMaximized
+    check effects.hasMaximizedEffect(2, false)
+    check geom != screen
+    check geom.w < screen.w
+
+  test "Scroller restores suspended maximized presentation":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 2))
+    discard model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.Grid))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.Scroller))
+    let screen = model.primaryScreen()
+
+    check model.snapshotWindow(2).isMaximized
+    check effects.hasMaximizedEffect(2, true)
+    check model.instructionGeom(2) == screen
+
+  test "Non-scroller layouts do not present maximized windows":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 2))
+
+    for mode in [LayoutMode.MasterStack, LayoutMode.Deck,
+        LayoutMode.Monocle]:
+      let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+        newLayout: mode))
+      check model.snapshotWindow(2).isMaximized
+      check effects.hasMaximizedEffect(2, false)
+      check model.instructionGeom(2) != model.primaryScreen()
+
+  test "Minimize preserves desired maximized state":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 2))
+
+    let minimizeEffects = model.updateModel(Msg(kind: MsgKind.CmdMinimize))
+    let minimized = model.snapshotWindow(2)
+
+    check minimized.isMaximized
+    check minimized.isMinimized
+    check minimizeEffects.hasMaximizedEffect(2, false)
+
+    let restoreEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+    let restored = model.snapshotWindow(2)
+
+    check restored.isMaximized
+    check not restored.isMinimized
+    check restoreEffects.hasMaximizedEffect(2, true)
+
   test "Floating popup preserves maximized backing windows":
     var model = initRuntimeStateFromConfig(Config(
       layout: LayoutConfig(
@@ -661,7 +734,8 @@ suite "Core Runtime Logic":
       kind: MsgKind.WlWindowMaximizeRequested,
       maximizeRequestId: 2))
 
-    check firstMaxEffects.hasMaximizedEffect(1, true)
+    check model.snapshotWindow(1).isMaximized
+    check firstMaxEffects.hasMaximizedEffect(1, false)
     check secondMaxEffects.hasMaximizedEffect(2, true)
 
     let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
@@ -670,6 +744,7 @@ suite "Core Runtime Logic":
 
     check not popupEffects.hasMaximizedEffect(1, false)
     check not popupEffects.hasMaximizedEffect(2, false)
+    check popupEffects.hasMaximizedEffect(1, true)
     check model.instructionGeom(1) == screen
     check model.instructionGeom(2) == screen
     check model.instructionGeom(3).w > 0

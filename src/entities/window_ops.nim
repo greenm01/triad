@@ -110,8 +110,6 @@ proc setWindowMinimized*(
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).isMinimized = minimized
-  if minimized:
-    model.windows.mEntity(winId).isMaximized = false
   true
 
 proc setWindowWidthProportion*(

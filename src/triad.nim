@@ -1388,6 +1388,7 @@ proc renderDesiredPlacements() =
     if not visible.hasKey(id):
       win.hide()
 
+  let maxSupported = currentModel.activeLayoutSupportsMaximize()
   for id in ids:
     if windowNodes.hasKey(id):
       let visibleScratchpad = currentModel.visibleScratchpadRiverId()
@@ -1398,7 +1399,8 @@ proc renderDesiredPlacements() =
       let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
       let isMaximized = winOpt.isSome and winOpt.get().isMaximized
       if not isFloating and not isScratchpad and
-          (isFullscreen or isMaximized or id == highlighted):
+          (isFullscreen or (isMaximized and maxSupported) or
+            id == highlighted):
         windowNodes[id].placeTop()
 
   for id in ids:

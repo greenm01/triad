@@ -5,6 +5,7 @@ import ../state/engine
 import ../types/core as core_types
 import ../types/layout_projection
 import ../types/runtime_values as rv
+import presentation_policy
 
 proc externalWindowId(model: Model; winId: core_types.WindowId):
     rv.WindowId =
@@ -151,9 +152,12 @@ proc activeFocusIsOverlay(model: Model; focused: core_types.WindowId): bool =
 proc preserveBackingPresentation(
     model: Model; instructions: var seq[rv.RenderInstruction];
     screen: rv.Rect) =
+  let tagOpt = model.tagData(model.activeTag)
+  let maxSupported = tagOpt.isSome and
+    tagOpt.get().layoutMode.layoutSupportsMaximize()
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if not win.isFloating and not win.isMinimized and
-        (win.isFullscreen or win.isMaximized):
+        (win.isFullscreen or (win.isMaximized and maxSupported)):
       instructions.upsertInstruction(rv.RenderInstruction(
         windowId: model.externalWindowId(winId),
         geom: screen))
@@ -237,7 +241,8 @@ proc layoutProjection*(model: Model): LayoutProjection =
 
   if focusedOpt.isSome and not overlayActive:
     let win = focusedOpt.get()
-    if win.isFullscreen or win.isMaximized:
+    let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()
+    if win.isFullscreen or (win.isMaximized and maxSupported):
       result.instructions = @[rv.RenderInstruction(
         windowId: model.externalWindowId(focused),
         geom: screen)]
