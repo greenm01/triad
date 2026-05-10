@@ -24,6 +24,7 @@ import ipc/socket
 import ipc/quickshell_compat
 import utils/terminal
 import utils/runtime_log
+import utils/screenshot_capture
 import utils/session_env
 import utils/wayland_runtime
 from types/runtime_values import nil
@@ -1207,34 +1208,6 @@ proc renderDesiredPlacements() =
         shell.node.placeBelow(firstNode)
     protocolSurfaces[ownedShellSurfaceId] = shell
 
-proc shellQuote(value: string): string =
-  "'" & value.replace("'", "'\\''") & "'"
-
-proc expandUserPath(path: string): string =
-  if path == "~":
-    return getHomeDir().strip(chars = {'/'})
-  if path.startsWith("~/"):
-    return getHomeDir().strip(chars = {'/'}) / path[2 .. ^1]
-  path
-
-proc screenshotPathOrDefault(path: string; config: ScreenshotConfig): string =
-  if path.len > 0:
-    return expandUserPath(path)
-  let dir =
-    if config.directory.strip().len > 0:
-      expandUserPath(config.directory.strip())
-    else:
-      getHomeDir() / "Pictures" / "Screenshots"
-  let prefix =
-    if config.filenamePrefix.strip().len > 0:
-      config.filenamePrefix.strip()
-    else:
-      "triad-screenshot"
-  dir / (prefix & "-" & $getTime().toUnix() & ".png")
-
-proc geometryArg(rect: Rect): string =
-  $rect.x & "," & $rect.y & " " & $max(1'i32, rect.w) & "x" & $max(1'i32, rect.h)
-
 proc focusedWindowGeometry(): Rect =
   let focused = currentModel.activeFocusRiverId()
   if focused != 0 and desiredPlacements.hasKey(focused):
@@ -1246,10 +1219,20 @@ proc focusedWindowGeometry(): Rect =
       return win.floatingGeom
   currentModel.primaryScreen()
 
+proc runShellCommand(command: string): int =
+  let p = startProcess("sh", args = @["-c", command], options = {poUsePath})
+  result = p.waitForExit()
+  p.close()
+
 proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string;
-    showPointer: bool) {.async.} =
+    pointerMode: ScreenshotPointerMode; writeToDisk,
+    copyToClipboard: bool) {.async.} =
   let screenshotConfig = currentModel.screenshot
-  let path = screenshotPathOrDefault(requestedPath, screenshotConfig)
+  let path =
+    if writeToDisk:
+      screenshotPathOrDefault(requestedPath, screenshotConfig)
+    else:
+      screenshotTempPath(screenshotConfig)
   let dir = path.splitFile().dir
   if dir.len > 0:
     try:
@@ -1258,40 +1241,39 @@ proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string;
       warn "Failed to create screenshot directory", path = dir, error = e.msg
       return
 
-  let captureCommand =
-    if screenshotConfig.captureCommand.strip().len > 0:
-      screenshotConfig.captureCommand.strip()
-    else:
-      "grim"
-  let regionSelectorCommand =
-    if screenshotConfig.regionSelectorCommand.strip().len > 0:
-      screenshotConfig.regionSelectorCommand.strip()
-    else:
-      "slurp"
-  let pointerFlag = if showPointer or screenshotConfig.showPointer: " -c" else: ""
-  let command =
-    case kind
-    of ScreenshotKind.ShotRegion:
-      shellQuote(captureCommand) & pointerFlag & " -g \"$(" & shellQuote(
-          regionSelectorCommand) & ")\" " & shellQuote(path)
-    of ScreenshotKind.ShotScreen:
-      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(
-          geometryArg(currentModel.primaryScreen())) & " " & shellQuote(path)
-    of ScreenshotKind.ShotWindow:
-      shellQuote(captureCommand) & pointerFlag & " -g " & shellQuote(
-          geometryArg(focusedWindowGeometry())) & " " & shellQuote(path)
+  let command = screenshotCaptureCommand(kind, path, screenshotConfig,
+      currentModel.primaryScreen(), focusedWindowGeometry(), pointerMode)
 
   try:
-    let p = startProcess("sh", args = @["-c", command], options = {poUsePath})
-    let code = p.waitForExit()
-    p.close()
+    let code = runShellCommand(command)
     if code == 0:
+      var clipboardOk = true
+      if copyToClipboard:
+        let copyCode = runShellCommand(screenshotClipboardCommand(path,
+            screenshotConfig))
+        if copyCode != 0:
+          warn "Screenshot clipboard copy failed", path = path,
+              exitCode = copyCode
+          clipboardOk = false
+      if not writeToDisk and not clipboardOk:
+        return
       info "Screenshot captured", path = path
-      asyncCheck broadcastJson($(%*{"ScreenshotCaptured": {"path": path}}))
+      let event =
+        if writeToDisk:
+          %*{"ScreenshotCaptured": {"path": path}}
+        else:
+          %*{"ScreenshotCaptured": {}}
+      asyncCheck broadcastJson($event)
     else:
       warn "Screenshot capture failed", path = path, exitCode = code
   except CatchableError as e:
     warn "Screenshot capture failed", path = path, error = e.msg
+  finally:
+    if not writeToDisk and fileExists(path):
+      try:
+        removeFile(path)
+      except CatchableError:
+        discard
 
 proc executeEffect(eff: Effect) =
   case eff.kind
@@ -1352,7 +1334,8 @@ proc executeEffect(eff: Effect) =
           focusShellSurfaceId: ownedShellSurfaceId))
   of EffectKind.EffScreenshot:
     asyncCheck runScreenshotCapture(eff.screenshotKind, eff.screenshotPath,
-        eff.screenshotShowPointer)
+        eff.screenshotPointerMode, eff.screenshotWriteToDisk,
+        eff.screenshotCopyToClipboard)
   of EffectKind.EffOpStartPointer, EffectKind.EffOpEnd,
       EffectKind.EffFocusWindow, EffectKind.EffFocusShellSurface,
       EffectKind.EffCloseWindow, EffectKind.EffSetFullscreen,

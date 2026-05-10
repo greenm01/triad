@@ -100,8 +100,9 @@ query Triad through the shell-facing `$NIRI_SOCKET`. Triad also prepends
 shells can resolve Triad-provided desktop/icon aliases without changing the rest
 of the user session.
 
-DMS screenshot actions require `grim` and `slurp`. `satty` or `swappy` are
-opened by DMS after Triad emits the Niri-compatible `ScreenshotCaptured` event.
+DMS screenshot actions require `grim`, `slurp`, and `wl-copy`. `satty` or
+`swappy` are opened by DMS after Triad emits the Niri-compatible
+`ScreenshotCaptured` event for disk-backed captures.
 
 ## Exercise Windows
 

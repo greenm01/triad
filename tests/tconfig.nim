@@ -192,6 +192,26 @@ suite "KDL Configuration Parser":
     check focusedToggle.isSome
     check focusedToggle.get().kind == MsgKind.CmdToggleFullscreen
 
+    let screenshot = parseTextCommand(
+      "screenshot-screen --path /tmp/a.png --hide-pointer --no-clipboard")
+    check screenshot.isSome
+    check screenshot.get().kind == MsgKind.CmdScreenshot
+    check screenshot.get().screenshotKind == ScreenshotKind.ShotScreen
+    check screenshot.get().screenshotPath == "/tmp/a.png"
+    check screenshot.get().screenshotPointerMode ==
+      ScreenshotPointerMode.PointerHide
+    check screenshot.get().screenshotWriteToDisk
+    check not screenshot.get().screenshotCopyToClipboard
+
+    let clipboardOnly = parseTextCommand("screenshot --clipboard-only")
+    check clipboardOnly.isSome
+    check clipboardOnly.get().screenshotKind == ScreenshotKind.ShotRegion
+    check not clipboardOnly.get().screenshotWriteToDisk
+    check clipboardOnly.get().screenshotCopyToClipboard
+
+    check parseTextCommand("screenshot --clipboard-only --no-clipboard").isNone
+    check parseTextCommand("screenshot --path").isNone
+
   test "Config reload debouncer coalesces file watcher events":
     var debouncer: ConfigReloadDebouncer
     debouncer.schedule(1000, debounceMs = 200)
@@ -242,6 +262,14 @@ quickshell {
   args "--verbose"
 }
 terminal { command "kitty" }
+screenshot {
+  directory "~/shots"
+  filename-prefix "triad-test"
+  capture-command "grim -t png"
+  region-selector-command "slurp -d"
+  clipboard-command "wl-copy --type image/png"
+  show-pointer #true
+}
 screen-lock { command "swaylock" }
 window-menu-command "bemenu"
 scratchpad {
@@ -288,6 +316,12 @@ bindings {
     check config.startupCommands == @[@["notify-send", "triad"]]
     check config.quickshell.theme == "noctalia"
     check config.terminal.command.len > 0
+    check config.screenshot.directory == "~/shots"
+    check config.screenshot.filenamePrefix == "triad-test"
+    check config.screenshot.captureCommand == "grim -t png"
+    check config.screenshot.regionSelectorCommand == "slurp -d"
+    check config.screenshot.clipboardCommand == "wl-copy --type image/png"
+    check config.screenshot.showPointer
     check config.screenLock.command == @["swaylock"]
     check config.windowMenu.command == @["bemenu"]
     check config.scratchpad.widthRatio == 0.7'f32
@@ -372,6 +406,11 @@ bindings {
         "shift"]
     check config.spawnForBinding("x", Super) ==
       @["wtype", "-M", "ctrl", "x", "-m", "ctrl"]
+    check config.msgKindForBinding("Print", 0'u32) == MsgKind.CmdScreenshot
+    check config.commandForBinding("Print", Ctrl) == "screenshot-screen"
+    check config.commandForBinding("Print", Alt) == "screenshot-window"
+    check config.commandForBinding("Print", Super) ==
+      "screenshot --clipboard-only"
     for key in ["c", "v", "x"]:
       let bindings = config.keyBindings.filterIt(
         it.key == key and it.modifiers == Super)

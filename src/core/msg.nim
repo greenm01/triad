@@ -6,6 +6,11 @@ type
     ShotScreen,
     ShotWindow
 
+  ScreenshotPointerMode* {.pure.} = enum
+    PointerDefault,
+    PointerShow,
+    PointerHide
+
   MsgKind* {.pure.} = enum
     # Wayland Events
     WlWindowCreated,
@@ -265,6 +270,8 @@ type
     of MsgKind.CmdScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string
-      screenshotShowPointer*: bool
+      screenshotPointerMode*: ScreenshotPointerMode
+      screenshotWriteToDisk*: bool
+      screenshotCopyToClipboard*: bool
     else:
       discard

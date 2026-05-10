@@ -77,6 +77,7 @@ screenshot {
     filename-prefix "triad-screenshot"
     capture-command "grim"
     region-selector-command "slurp"
+    clipboard-command "wl-copy --type image/png"
     show-pointer #false
 }
 
@@ -125,6 +126,12 @@ bindings {
     bind "Super+c" "spawn wtype -M ctrl -P Insert -p Insert -m ctrl" allow-inhibiting=#false
     bind "Super+v" "spawn wtype -M shift -P Insert -p Insert -m shift" allow-inhibiting=#false
     bind "Super+x" "spawn wtype -M ctrl x -m ctrl" allow-inhibiting=#false
+
+    // Screenshots.
+    bind "Print" "screenshot"
+    bind "Ctrl+Print" "screenshot-screen"
+    bind "Alt+Print" "screenshot-window"
+    bind "Super+Print" "screenshot --clipboard-only"
 
     // Focus. Arrow keys mirror h/j/k/l via mirror-hjkl-arrows.
     bind "Super+h" "focus-left"

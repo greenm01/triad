@@ -11,6 +11,7 @@ import ../src/systems/update
 import ../src/systems/window_lifecycle
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
+import ../src/utils/screenshot_capture
 import tag_semantics_checks
 
 proc configuredModel(): Model =
@@ -105,6 +106,48 @@ suite "Core Runtime Logic":
     let (_, effects) = model.update(Msg(kind: MsgKind.CmdTriadReload))
     check effects.len == 1
     check effects[0].kind == EffectKind.EffTriadReload
+
+  test "Screenshot command emits explicit capture effect":
+    var model = Model()
+    let (_, effects) = model.update(Msg(
+      kind: MsgKind.CmdScreenshot,
+      screenshotKind: ScreenshotKind.ShotWindow,
+      screenshotPath: "/tmp/window.png",
+      screenshotPointerMode: ScreenshotPointerMode.PointerShow,
+      screenshotWriteToDisk: true,
+      screenshotCopyToClipboard: false))
+
+    check effects.len == 1
+    check effects[0].kind == EffectKind.EffScreenshot
+    check effects[0].screenshotKind == ScreenshotKind.ShotWindow
+    check effects[0].screenshotPath == "/tmp/window.png"
+    check effects[0].screenshotPointerMode ==
+      ScreenshotPointerMode.PointerShow
+    check effects[0].screenshotWriteToDisk
+    check not effects[0].screenshotCopyToClipboard
+
+  test "Screenshot command builder preserves shell snippets and quotes data":
+    let config = ScreenshotConfig(
+      captureCommand: "grim -t png",
+      regionSelectorCommand: "slurp -d",
+      clipboardCommand: "wl-copy --type image/png")
+    let screen = runtime_values.Rect(x: 0, y: 0, w: 1920, h: 1080)
+    let win = runtime_values.Rect(x: 40, y: 50, w: 800, h: 600)
+
+    check screenshotCaptureCommand(ScreenshotKind.ShotRegion,
+      "/tmp/region shot.png", config, screen, win,
+      ScreenshotPointerMode.PointerDefault) ==
+        "grim -t png -g \"$(slurp -d)\" '/tmp/region shot.png'"
+    check screenshotCaptureCommand(ScreenshotKind.ShotScreen,
+      "/tmp/screen.png", config, screen, win,
+      ScreenshotPointerMode.PointerShow) ==
+        "grim -t png -c -g '0,0 1920x1080' '/tmp/screen.png'"
+    check screenshotCaptureCommand(ScreenshotKind.ShotWindow,
+      "/tmp/window.png", config, screen, win,
+      ScreenshotPointerMode.PointerHide) ==
+        "grim -t png -g '40,50 800x600' '/tmp/window.png'"
+    check screenshotClipboardCommand("/tmp/window.png", config) ==
+      "wl-copy --type image/png < '/tmp/window.png'"
 
   test "Targeted layout command updates requested slot only":
     var model = configuredModel()

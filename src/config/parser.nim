@@ -297,6 +297,7 @@ proc loadConfig*(path: string): Config =
   result.screenshot.filenamePrefix = DefaultScreenshotFilenamePrefix
   result.screenshot.captureCommand = DefaultScreenshotCaptureCommand
   result.screenshot.regionSelectorCommand = DefaultScreenshotRegionSelectorCommand
+  result.screenshot.clipboardCommand = DefaultScreenshotClipboardCommand
   result.protocolSurfaces.enabled = true
 
   try:
@@ -586,6 +587,8 @@ proc loadConfig*(path: string): Config =
               result.screenshot.captureCommand = child.args[0].kString()
             elif child.name == "region-selector-command" and child.args.len > 0:
               result.screenshot.regionSelectorCommand = child.args[0].kString()
+            elif child.name == "clipboard-command" and child.args.len > 0:
+              result.screenshot.clipboardCommand = child.args[0].kString()
             elif child.name == "show-pointer" and child.args.len > 0:
               result.screenshot.showPointer = child.args[0].kBool()
           except CatchableError as e:

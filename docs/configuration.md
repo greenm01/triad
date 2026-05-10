@@ -65,6 +65,32 @@ capability changes, update this guide and
 guide states Triad's naming policy; the comparison matrix shows how that policy
 maps against Mango and River.
 
+## Screenshots
+
+The `screenshot` block configures still-image capture:
+
+```kdl
+screenshot {
+  directory "~/Pictures/Screenshots"
+  filename-prefix "triad-screenshot"
+  capture-command "grim"
+  region-selector-command "slurp"
+  clipboard-command "wl-copy --type image/png"
+  show-pointer #false
+}
+```
+
+Default bindings are:
+
+- `Print`: `screenshot`
+- `Ctrl+Print`: `screenshot-screen`
+- `Alt+Print`: `screenshot-window`
+- `Super+Print`: `screenshot --clipboard-only`
+
+Screenshot commands save to disk and copy to the clipboard by default. Use
+`--no-clipboard` for disk-only capture or `--clipboard-only` for clipboard-only
+capture.
+
 ## Change Rules
 
 New config should follow the data model rather than compositor object shapes.

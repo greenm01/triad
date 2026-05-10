@@ -115,6 +115,7 @@ type
     filenamePrefix*: string
     captureCommand*: string
     regionSelectorCommand*: string
+    clipboardCommand*: string
     showPointer*: bool
 
   OverviewConfig* = object

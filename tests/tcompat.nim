@@ -239,6 +239,30 @@ suite "Shell compatibility contracts":
     check screenshot.messages[0].kind == MsgKind.CmdScreenshot
     check screenshot.messages[0].screenshotKind == ScreenshotKind.ShotRegion
     check screenshot.messages[0].screenshotPath == "/tmp/triad-shot.png"
+    check screenshot.messages[0].screenshotPointerMode ==
+      ScreenshotPointerMode.PointerShow
+    check screenshot.messages[0].screenshotWriteToDisk
+    check screenshot.messages[0].screenshotCopyToClipboard
+
+    let screenshotClipboardOnly = handleNiriRequest(
+      """{"Action":{"ScreenshotScreen":{"write-to-disk":false}}}""",
+      snapshot)
+    check screenshotClipboardOnly.messages.len == 1
+    check screenshotClipboardOnly.messages[0].screenshotKind ==
+      ScreenshotKind.ShotScreen
+    check not screenshotClipboardOnly.messages[0].screenshotWriteToDisk
+    check screenshotClipboardOnly.messages[0].screenshotCopyToClipboard
+    check screenshotClipboardOnly.messages[0].screenshotPointerMode ==
+      ScreenshotPointerMode.PointerShow
+
+    let screenshotWindow = handleNiriRequest(
+      """{"Action":{"ScreenshotWindow":{}}}""",
+      snapshot)
+    check screenshotWindow.messages.len == 1
+    check screenshotWindow.messages[0].screenshotKind ==
+      ScreenshotKind.ShotWindow
+    check screenshotWindow.messages[0].screenshotPointerMode ==
+      ScreenshotPointerMode.PointerHide
 
   test "Triad native reads and layout commands use shell snapshots":
     var snapshot = snapshotForShell()
@@ -295,7 +319,9 @@ suite "Shell compatibility contracts":
     check screenshotForwarded.messages[0].kind == MsgKind.CmdScreenshot
     check screenshotForwarded.messages[0].screenshotKind ==
         ScreenshotKind.ShotScreen
-    check screenshotForwarded.messages[0].screenshotShowPointer
+    check screenshotForwarded.messages[0].screenshotPointerMode ==
+      ScreenshotPointerMode.PointerShow
+    check screenshotForwarded.messages[0].screenshotWriteToDisk
 
   test "Quickshell compatibility environment is private":
     let tmp = getTempDir() / ("triad-compat-" & $getCurrentProcessId())

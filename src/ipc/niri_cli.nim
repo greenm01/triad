@@ -31,6 +31,16 @@ proc optionValue(args: seq[string]; name: string): Option[string] =
 proc hasFlag(args: seq[string]; name: string): bool =
   args.contains(name)
 
+proc pointerFlagValue(args: seq[string]; fallback: bool): bool =
+  if args.hasFlag("--hide-pointer"):
+    return false
+  if args.hasFlag("--show-pointer"):
+    return true
+  fallback
+
+proc writeToDiskValue(args: seq[string]): bool =
+  not args.hasFlag("--no-write-to-disk")
+
 proc requestName(command: string): Option[string] =
   case command.normalize()
   of "outputs":
@@ -152,19 +162,20 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
   of "screenshot":
     return some(%*{"Action": {"Screenshot": {
       "path": optionValue(args, "--path").get(""),
-      "show_pointer": hasFlag(args, "--show-pointer")
+      "show_pointer": pointerFlagValue(args, true),
+      "write_to_disk": writeToDiskValue(args)
     }}})
   of "screenshotscreen", "screenshot-screen":
     return some(%*{"Action": {"ScreenshotScreen": {
       "path": optionValue(args, "--path").get(""),
-      "show_pointer": hasFlag(args, "--show-pointer"),
-      "write_to_disk": true
+      "show_pointer": pointerFlagValue(args, true),
+      "write_to_disk": writeToDiskValue(args)
     }}})
   of "screenshotwindow", "screenshot-window":
     return some(%*{"Action": {"ScreenshotWindow": {
       "path": optionValue(args, "--path").get(""),
-      "show_pointer": hasFlag(args, "--show-pointer"),
-      "write_to_disk": true
+      "show_pointer": pointerFlagValue(args, false),
+      "write_to_disk": writeToDiskValue(args)
     }}})
   else:
     discard

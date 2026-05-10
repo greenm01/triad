@@ -281,7 +281,9 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
       kind: EffectKind.EffScreenshot,
       screenshotKind: msg.screenshotKind,
       screenshotPath: msg.screenshotPath,
-      screenshotShowPointer: msg.screenshotShowPointer))
+      screenshotPointerMode: msg.screenshotPointerMode,
+      screenshotWriteToDisk: msg.screenshotWriteToDisk,
+      screenshotCopyToClipboard: msg.screenshotCopyToClipboard))
   of MsgKind.CmdConfigReload, MsgKind.CmdSpawnTerminal:
     result.dirty = true
   else:

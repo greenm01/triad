@@ -122,7 +122,7 @@ external window manager.
 | Layer rules | Layer shell rules | `layerrule` | Layer shell protocols | | | Triad handles shell/layer focus but has no rule config. |
 | Shell | Shell integration | External bars/tools | Protocol/shell surfaces | `quickshell`, native state events | X | Triad has Quickshell launch/compat and native events. |
 | Shell | Window menu | `show_window_menu` request policy | River window menu request | `window-menu-command` | X | Capability is advertised only when configured. |
-| Screenshot | Screenshots | External binds to `spawn` | External tools | `screenshot` config, niri-compatible IPC | X | Triad wraps configured capture tools. |
+| Screenshot | Screenshots | External binds to `spawn` | External tools | `screenshot`, `screenshot-screen`, `screenshot-window`, `screenshot` config | X | Triad wraps configured capture tools and emits Niri-compatible events. |
 | Portals | XDG portal setup | Portal config docs | External services | | | Not Triad config. |
 | Virtual output | Headless output | `create_virtual_output`, `destroy_all_virtual_output` | River compositor/output stack | | | Not exposed by Triad. |
 
@@ -284,7 +284,7 @@ KDL config nodes and fields:
 - `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,
   `min-width`, `min-height`.
 - `screenshot`: `directory`, `filename-prefix`, `capture-command`,
-  `region-selector-command`, `show-pointer`.
+  `region-selector-command`, `clipboard-command`, `show-pointer`.
 - `cursor`: `theme`, `size`.
 - Top-level: `presentation-mode`, `allow-exit-session`,
   `protocol-surfaces.enabled`, `protocol-surfaces.visible-debug`.
@@ -304,7 +304,8 @@ Text IPC and bind commands:
   `spawn-terminal`, `lock-session`, `warp-pointer`, `eat-next-key`,
   `cancel-eat-next-key`, `toggle-keyboard-shortcuts-inhibit`,
   `keyboard-shortcuts-inhibit`, `stop-manager`, `triad-reload`,
-  `exit-session`, `config-reload`.
+  `exit-session`, `config-reload`, `screenshot`, `screenshot-screen`,
+  `screenshot-window`.
 - Layout: `layout-scroller`, `layout-vertical-scroller`,
   `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`,
   `layout-center-tile`, `layout-right-tile`, `layout-vertical-tile`,

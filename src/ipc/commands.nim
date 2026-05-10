@@ -22,6 +22,55 @@ proc parseFloat32Arg(s: string): Option[float32] =
   except CatchableError:
     none(float32)
 
+proc parseScreenshotCommand(parts: seq[string];
+    kind: ScreenshotKind): Option[Msg] =
+  var path = ""
+  var pointerMode = ScreenshotPointerMode.PointerDefault
+  var writeToDisk = true
+  var copyToClipboard = true
+  var i = 1
+  while i < parts.len:
+    case parts[i]
+    of "--path":
+      if i + 1 >= parts.len:
+        return none(Msg)
+      path = parts[i + 1]
+      inc i, 2
+    of "--show-pointer":
+      if pointerMode == ScreenshotPointerMode.PointerHide:
+        return none(Msg)
+      pointerMode = ScreenshotPointerMode.PointerShow
+      inc i
+    of "--hide-pointer":
+      if pointerMode == ScreenshotPointerMode.PointerShow:
+        return none(Msg)
+      pointerMode = ScreenshotPointerMode.PointerHide
+      inc i
+    of "--no-clipboard":
+      if not writeToDisk:
+        return none(Msg)
+      copyToClipboard = false
+      inc i
+    of "--clipboard-only":
+      if not copyToClipboard:
+        return none(Msg)
+      writeToDisk = false
+      copyToClipboard = true
+      inc i
+    else:
+      return none(Msg)
+
+  if not writeToDisk and not copyToClipboard:
+    return none(Msg)
+
+  some(Msg(
+    kind: MsgKind.CmdScreenshot,
+    screenshotKind: kind,
+    screenshotPath: path,
+    screenshotPointerMode: pointerMode,
+    screenshotWriteToDisk: writeToDisk,
+    screenshotCopyToClipboard: copyToClipboard))
+
 proc parseTextCommand*(line: string): Option[Msg] =
   let parts = line.strip().splitWhitespace()
   if parts.len == 0:
@@ -111,6 +160,12 @@ proc parseTextCommand*(line: string): Option[Msg] =
   of "toggle-maximized", "toggle-maximize": some(Msg(
       kind: MsgKind.CmdToggleMaximized))
   of "minimize", "minimize-window": some(Msg(kind: MsgKind.CmdMinimize))
+  of "screenshot":
+    parseScreenshotCommand(parts, ScreenshotKind.ShotRegion)
+  of "screenshot-screen":
+    parseScreenshotCommand(parts, ScreenshotKind.ShotScreen)
+  of "screenshot-window":
+    parseScreenshotCommand(parts, ScreenshotKind.ShotWindow)
   of "spawn":
     if parts.len >= 2: some(Msg(kind: MsgKind.CmdSpawn, spawnCommand: parts[
         1..^1])) else: none(Msg)

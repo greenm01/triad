@@ -75,6 +75,8 @@ proc applyConfig*(model: var Model; config: Config) =
   if model.screenshot.regionSelectorCommand.strip().len == 0:
     model.screenshot.regionSelectorCommand =
       DefaultScreenshotRegionSelectorCommand
+  if model.screenshot.clipboardCommand.strip().len == 0:
+    model.screenshot.clipboardCommand = DefaultScreenshotClipboardCommand
 
   model.overviewOuterGap = config.overview.outerGap
   if model.overviewOuterGap < 0:

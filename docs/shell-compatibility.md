@@ -73,8 +73,11 @@ Screenshot actions are implemented through `grim` and `slurp`:
 - `Screenshot` captures an interactively selected region.
 - `ScreenshotScreen` captures the primary output geometry known to Triad.
 - `ScreenshotWindow` captures the focused window geometry known to Triad.
-- On success Triad emits Niri's `ScreenshotCaptured` event with the output path,
-  letting DMS open `satty`, `swappy`, or another configured editor.
+- Captures copy to the clipboard through `wl-copy --type image/png` by default.
+- On disk-backed success Triad emits Niri's `ScreenshotCaptured` event with the
+  output path, letting DMS open `satty`, `swappy`, or another configured
+  editor.
+- Clipboard-only captures emit `ScreenshotCaptured` without a path.
 
 Output mutation commands such as `niri msg output DP-1 scale 1.25` are not
 implemented. Triad refuses those rather than pretending to update compositor

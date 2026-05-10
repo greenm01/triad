@@ -76,6 +76,8 @@ type
     of EffectKind.EffScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string
-      screenshotShowPointer*: bool
+      screenshotPointerMode*: ScreenshotPointerMode
+      screenshotWriteToDisk*: bool
+      screenshotCopyToClipboard*: bool
     else:
       discard

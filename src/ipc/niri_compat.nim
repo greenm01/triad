@@ -46,6 +46,16 @@ proc boolFromField(node: JsonNode; field: string; fallback = false): bool =
   else:
     fallback
 
+proc boolFromEitherField(node: JsonNode; snake, kebab: string;
+    fallback = false): bool =
+  boolFromField(node, snake, boolFromField(node, kebab, fallback))
+
+proc pointerMode(showPointer: bool): ScreenshotPointerMode =
+  if showPointer:
+    ScreenshotPointerMode.PointerShow
+  else:
+    ScreenshotPointerMode.PointerHide
+
 proc nextTag(snapshot: ShellSnapshot; direction: int): Option[uint32] =
   var ids: seq[uint32] = @[]
   for workspace in snapshot.workspaces:
@@ -234,8 +244,11 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
       kind: MsgKind.CmdScreenshot,
       screenshotKind: ScreenshotKind.ShotRegion,
       screenshotPath: stringFromField(payload, "path"),
-      screenshotShowPointer: boolFromField(payload, "show_pointer",
-          boolFromField(payload, "show-pointer"))
+      screenshotPointerMode: pointerMode(boolFromEitherField(payload,
+          "show_pointer", "show-pointer", true)),
+      screenshotWriteToDisk: boolFromEitherField(payload, "write_to_disk",
+          "write-to-disk", true),
+      screenshotCopyToClipboard: true
     )])
 
   elif action.hasKey("ScreenshotScreen"):
@@ -244,8 +257,11 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
       kind: MsgKind.CmdScreenshot,
       screenshotKind: ScreenshotKind.ShotScreen,
       screenshotPath: stringFromField(payload, "path"),
-      screenshotShowPointer: boolFromField(payload, "show_pointer",
-          boolFromField(payload, "show-pointer"))
+      screenshotPointerMode: pointerMode(boolFromEitherField(payload,
+          "show_pointer", "show-pointer", true)),
+      screenshotWriteToDisk: boolFromEitherField(payload, "write_to_disk",
+          "write-to-disk", true),
+      screenshotCopyToClipboard: true
     )])
 
   elif action.hasKey("ScreenshotWindow"):
@@ -254,8 +270,11 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
       kind: MsgKind.CmdScreenshot,
       screenshotKind: ScreenshotKind.ShotWindow,
       screenshotPath: stringFromField(payload, "path"),
-      screenshotShowPointer: boolFromField(payload, "show_pointer",
-          boolFromField(payload, "show-pointer"))
+      screenshotPointerMode: pointerMode(boolFromEitherField(payload,
+          "show_pointer", "show-pointer", false)),
+      screenshotWriteToDisk: boolFromEitherField(payload, "write_to_disk",
+          "write-to-disk", true),
+      screenshotCopyToClipboard: true
     )])
 
   elif action.hasKey("DoScreenTransition") or

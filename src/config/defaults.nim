@@ -53,6 +53,7 @@ screenshot {
     filename-prefix "triad-screenshot"
     capture-command "grim"
     region-selector-command "slurp"
+    clipboard-command "wl-copy --type image/png"
     show-pointer #false
 }
 
@@ -76,6 +77,10 @@ bindings {
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Super+t" "spawn-terminal"
+    bind "Print" "screenshot"
+    bind "Ctrl+Print" "screenshot-screen"
+    bind "Alt+Print" "screenshot-window"
+    bind "Super+Print" "screenshot --clipboard-only"
     bind "Super+Tab" "focus-next"
     bind "Alt+Left" "focus-left"
     bind "Alt+Right" "focus-right"
