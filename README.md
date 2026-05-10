@@ -66,15 +66,15 @@ The result is dull in the right places:
 Different window managers choose different shapes. Triad borrows the useful
 lessons and keeps its own center.
 
-| Method   | Language | Paradigm                    | Core Idea                                | Advantage                               |
-|:-------- |:-------- |:--------------------------- |:---------------------------------------- |:--------------------------------------- |
-| Triad    | Nim      | DOD                         | River owns surfaces. Triad owns policy.  | Isolation, dynamic tags, indexed state. |
-| Mango    | C        | Procedural                  | Tag-first compositor with broad layouts. | Rich per-tag layout vocabulary.         |
-| niri     | Rust     | Scrollable compositor model | Tiling on an infinite horizontal strip.  | New windows do not resize old ones.     |
-| Hyprland | C++      | OOP                         | Dynamic tiling, IPC, and plugins.        | Custom, polished desktop.               |
-| Sway/i3  | C        | Container tree              | Tree-shaped containers                   | Predictable keyboard workflow.          |
-| dwm      | C        | procedural                  | Source-configured X11 manager with tags. | Fast policy and a proven tag model.     |
-| bspwm    | C        | procedural                  | Binary-space splits controlled over IPC. | Precise split control over a socket.    |
+| Manager   | Language | Design Paradigm | Role                | Layout Model               | Key Trait                                     |
+| --------- | -------- | --------------- | ------------------- | -------------------------- | --------------------------------------------- |
+| **Triad** | Nim      | DOD             | River layout client | Hybrid                     | Hot-restartable policy; native IPC projection |
+| Mango     | C        | Suckless        | Wayland compositor  | Hybrid                     | Rich per-tag layout vocabulary                |
+| niri      | Rust     | Event-driven    | Wayland compositor  | Infinite horizontal scroll | New windows never resize existing ones        |
+| Hyprland  | C++      | OOP             | Wayland compositor  | Hybrid                     | Plugin ecosystem; polished UX                 |
+| Sway/i3   | C        | Tree-based      | Wayland compositor  | Container tree             | Mature, predictable keyboard workflow         |
+| dwm       | C        | Suckless        | X11 compositor      | Tag-based monocle/tile     | Policy lives in patched source                |
+| bspwm     | C        | IPC-driven      | X11 compositor      | Binary space partition     | Precise split control via IPC                 |
 
 [river]: https://www.mankier.com/1/river
 [mango]: https://mangowm.github.io/docs/

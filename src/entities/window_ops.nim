@@ -61,7 +61,8 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
 proc setWindowCreatedState*(model: var Model; winId: WindowId;
     title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
     heightProportion = 1.0'f32; isFloating = false;
-    floatingGeom = Rect(); keyboardShortcutsInhibit = false): bool =
+    floatingGeom = Rect(); parentExternalId = NullExternalWindowId;
+    keyboardShortcutsInhibit = false): bool =
   if model.windows.entity(winId).isNone:
     return false
   let externalId = model.windows.mEntity(winId).externalId
@@ -75,6 +76,7 @@ proc setWindowCreatedState*(model: var Model; winId: WindowId;
     heightProportion: heightProportion,
     isFloating: isFloating,
     floatingGeom: floatingGeom,
+    parentExternalId: parentExternalId,
     keyboardShortcutsInhibit: keyboardShortcutsInhibit
   )
   true

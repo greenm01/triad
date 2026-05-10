@@ -1662,23 +1662,18 @@ proc on_session_unlocked(data: pointer; mgr: ptr RiverWindowManagerV1) =
 proc on_manage_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
   debug "River manage start", pendingWindows = pendingWindows.len
   applyPendingLiveRestore()
-  # Before starting manage, move all pending windows to the message queue
+  # Queue all creations first so parent metadata can resolve against any other
+  # window discovered in this manage batch.
   for id, data in pendingWindows:
     msgQueue.add(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
+        createdParentWindowId: data.parentId,
         appId: data.appId, title: data.title,
         createdIdentifier: data.identifier))
+
+  for id, data in pendingWindows:
     if data.actualW > 0 or data.actualH > 0:
       msgQueue.add(Msg(kind: MsgKind.WlWindowDimensions, dimensionsWindowId: id,
           actualWidth: data.actualW, actualHeight: data.actualH))
-    if data.hasDecorationHint:
-      msgQueue.add(Msg(kind: MsgKind.WlWindowDecorationHint,
-          decorationWindowId: id, decorationHint: data.decorationHint))
-    if data.hasPresentationHint:
-      msgQueue.add(Msg(kind: MsgKind.WlWindowPresentationHint,
-          presentationWindowId: id, presentationHint: data.presentationHint))
-    if data.parentId != 0:
-      msgQueue.add(Msg(kind: MsgKind.WlWindowParent, childWindowId: id,
-          parentWindowId: data.parentId))
     if data.minWidth > 0 or data.minHeight > 0 or data.maxWidth > 0 or
         data.maxHeight > 0:
       msgQueue.add(Msg(
@@ -1688,6 +1683,15 @@ proc on_manage_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
         minHeight: data.minHeight,
         maxWidth: data.maxWidth,
         maxHeight: data.maxHeight))
+    if data.hasDecorationHint:
+      msgQueue.add(Msg(kind: MsgKind.WlWindowDecorationHint,
+          decorationWindowId: id, decorationHint: data.decorationHint))
+    if data.hasPresentationHint:
+      msgQueue.add(Msg(kind: MsgKind.WlWindowPresentationHint,
+          presentationWindowId: id, presentationHint: data.presentationHint))
+    if data.parentId != 0:
+      msgQueue.add(Msg(kind: MsgKind.WlWindowParent, childWindowId: id,
+          parentWindowId: data.parentId))
     if data.isFullscreen:
       msgQueue.add(Msg(kind: MsgKind.WlWindowFullscreenRequested,
           fullscreenRequestId: id, fullscreenOutputId: data.fullscreenOutput))

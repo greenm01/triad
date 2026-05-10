@@ -73,7 +73,8 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.windowId.externalWindowId(),
       msg.appId,
       msg.title,
-      msg.createdIdentifier)
+      msg.createdIdentifier,
+      msg.createdParentWindowId.externalWindowId())
     result.dirty = winId != NullWindowId
     if result.dirty:
       let win = model.windowData(winId).get()

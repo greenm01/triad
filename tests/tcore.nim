@@ -77,6 +77,13 @@ proc viewport(model: Model; slot: uint32): ViewportState =
     targetViewportYOffset: tag.targetViewportYOffset,
     currentViewportYOffset: tag.currentViewportYOffset)
 
+proc instructionGeom(model: Model; id: uint32): runtime_values.Rect =
+  let projection = model.layoutProjection()
+  for instr in projection.instructions:
+    if uint32(instr.windowId) == id:
+      return instr.geom
+  runtime_values.Rect()
+
 proc setViewport(
     model: var Model; slot: uint32; targetX, currentX: float32;
     targetY = 0.0'f32; currentY = 0.0'f32) =
@@ -226,6 +233,84 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 2
     check model.activeWorkspaceFocusId() == 2
     check model.viewport(1).targetViewportXOffset != 0.0'f32
+
+  test "Parented window opens floating over parent without moving camera":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    let parentGeom = model.instructionGeom(1)
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+    discard model.layoutInstructions()
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let child = model.windowData(childId).get()
+    check child.parentExternalId == ExternalWindowId(1)
+    check child.isFloating
+    check child.floatingGeom.x ==
+      parentGeom.x + (parentGeom.w - child.floatingGeom.w) div 2
+    check child.floatingGeom.y ==
+      parentGeom.y + (parentGeom.h - child.floatingGeom.h) div 2
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+    check not model.viewportRetargetRequested(model.activeTag)
+    check effects.hasFocusEffect(2)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Late parent event floats child without moving camera":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowParent,
+      childWindowId: 2, parentWindowId: 1))
+    discard model.layoutInstructions()
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let child = model.windowData(childId).get()
+    check child.parentExternalId == ExternalWindowId(1)
+    check child.isFloating
+    check model.focusedWindowId() == 2
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+    check not model.viewportRetargetRequested(model.activeTag)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check effects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
+      it.triadEventName == "layout")
+
+  test "Fixed-size hint opens normal window as floating":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "dialog", title: "Tool"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: 1, minWidth: 260, minHeight: 140,
+      maxWidth: 260, maxHeight: 140))
+    discard model.layoutInstructions()
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    let win = model.windowData(winId).get()
+    check win.isFloating
+    check win.floatingGeom.w == 260
+    check win.floatingGeom.h == 140
+    check not model.viewportRetargetRequested(model.activeTag)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check effects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
+      it.triadEventName == "layout")
 
   test "New active-tag window focuses after live restore settles":
     var model = cameraModel()

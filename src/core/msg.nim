@@ -135,6 +135,7 @@ type
     case kind*: MsgKind
     of MsgKind.WlWindowCreated:
       windowId*: WindowId
+      createdParentWindowId*: WindowId
       appId*: string
       title*: string
       createdIdentifier*: string

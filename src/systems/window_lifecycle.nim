@@ -1,5 +1,6 @@
 import options, tables
 import focus
+import floating_policy
 import placement
 import scratchpad
 import workspaces
@@ -195,7 +196,8 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
   discard model.pruneDynamicWorkspaces()
 
 proc createWindowForExternal*(model: var Model;
-    externalId: ExternalWindowId; appId, title: string; identifier = ""):
+    externalId: ExternalWindowId; appId, title: string; identifier = "";
+    parentExternalId = NullExternalWindowId):
     WindowId =
   if externalId == NullExternalWindowId:
     return NullWindowId
@@ -250,6 +252,11 @@ proc createWindowForExternal*(model: var Model;
   let forcedLayout =
     if ruleMatch.found: ruleMatch.rule.forcedLayout
     else: 0
+  let parentKnown = parentExternalId != NullExternalWindowId and
+    model.windowForExternal(parentExternalId) != NullWindowId
+  let parentSlot = model.parentWorkspaceSlot(parentExternalId)
+  if parentSlot != 0 and not hasRestoredTag:
+    targetSlot = parentSlot
 
   var isFloating = false
   var floatingGeom = GeometryRect()
@@ -262,6 +269,8 @@ proc createWindowForExternal*(model: var Model;
   if hasRestoredWindow:
     isFloating = restored.isFloating
     floatingGeom = restored.floatingGeom
+  elif parentKnown:
+    isFloating = true
 
   result = model.windowForExternal(externalId)
   if result == NullWindowId:
@@ -278,8 +287,13 @@ proc createWindowForExternal*(model: var Model;
     heightProportion = model.defaultWindowHeight(),
     isFloating = isFloating,
     floatingGeom = floatingGeom,
+    parentExternalId = parentExternalId,
     keyboardShortcutsInhibit = shortcutInhibit
   )
+
+  if isFloating and not hasRestoredWindow:
+    discard model.ensureFloatingAt(
+      result, model.floatingGeomForWindow(result, parentExternalId))
 
   if hasRestoredWindow:
     model.applyRestoredWindowState(result, restored)
@@ -306,7 +320,9 @@ proc createWindowForExternal*(model: var Model;
             forcedLayout, model.tag(targetTag).get().layoutMode))
       discard model.addPlacedWindowColumn(targetTag, result)
       if not model.sessionLocked and not restoreFocusPending:
-        if targetSlot == model.activeWorkspaceSlot():
+        if parentKnown:
+          discard model.focusWindow(result, retargetViewport = false)
+        elif targetSlot == model.activeWorkspaceSlot():
           discard model.focusWindow(result)
         else:
           discard model.setTagFocus(targetTag, result)

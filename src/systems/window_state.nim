@@ -1,4 +1,5 @@
 import options
+import floating_policy
 import ../state/engine
 
 proc chooseFullscreenOutput*(
@@ -33,7 +34,15 @@ proc updateWindowPresentationHintForExternal*(
 proc updateWindowParentForExternal*(model: var Model;
     externalId: ExternalWindowId; parentExternalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
-  winId != NullWindowId and model.setWindowParent(winId, parentExternalId)
+  if winId == NullWindowId:
+    return false
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  result = winOpt.get().parentExternalId != parentExternalId
+  discard model.setWindowParent(winId, parentExternalId)
+  if parentExternalId != NullExternalWindowId:
+    result = model.applyParentFloatingPolicy(winId, parentExternalId) or result
 
 proc updateWindowIdentifierForExternal*(
     model: var Model; externalId: ExternalWindowId; identifier: string):
@@ -63,8 +72,11 @@ proc updateWindowDimensionsHintForExternal*(model: var Model;
     externalId: ExternalWindowId; minWidth, minHeight, maxWidth,
     maxHeight: int32): bool =
   let winId = model.windowForExternal(externalId)
-  winId != NullWindowId and model.setWindowDimensionsHint(
+  if winId == NullWindowId:
+    return false
+  result = model.setWindowDimensionsHint(
     winId, minWidth, minHeight, maxWidth, maxHeight)
+  result = model.applyFixedSizeFloatingPolicy(winId) or result
 
 proc requestFullscreenForExternal*(model: var Model;
     externalId: ExternalWindowId; requestedOutput: ExternalOutputId): bool =
