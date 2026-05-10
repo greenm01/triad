@@ -2002,6 +2002,33 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
     for eff in effects:
       executeEffect(eff)
 
+proc hasInitialRiverState(): bool =
+  outputPointers.len > 0 or seatPointers.len > 0
+
+proc waitForInitialRiverState(timeoutMs: int): bool =
+  let deadline = epochTime() + timeoutMs.float / 1000.0
+  while not hasInitialRiverState() and epochTime() < deadline:
+    if not dispatchPendingWayland(display):
+      return false
+    if hasInitialRiverState():
+      return true
+    if not prepareWaylandRead(display):
+      return false
+    if hasInitialRiverState():
+      display.cancel_read()
+      return true
+
+    discard display.flush()
+    let remainingMs = max(1, min(16,
+      int((deadline - epochTime()) * 1000.0)))
+    if waitForWaylandEvents(display, remainingMs):
+      if display.read_events() == -1:
+        return false
+    else:
+      display.cancel_read()
+
+  hasInitialRiverState()
+
 # --- Main Loop ---
 
 proc main() =
@@ -2076,14 +2103,6 @@ proc main() =
     fatal "Failed during River manager initialization roundtrip"
     quit 1
 
-  if hadRestoreSnapshot and outputPointers.len == 0 and seatPointers.len == 0:
-    warn "Live restore handoff has no initial River state; retrying startup",
-      path = pendingLiveRestorePath
-    quit 0
-
-  info "Triad connected to River", outputs = outputPointers.len,
-      seats = seatPointers.len
-
   # Setup and Load Config
   setupConfig()
   let initialConfig = loadConfig(configPath)
@@ -2097,7 +2116,6 @@ proc main() =
       path = pendingLiveRestorePath,
       activeTag = state.activeTag,
       windows = state.tagByWindow.len
-    applyPendingLiveRestore("startup")
   elif hadRestoreSnapshot:
     if quarantineLiveRestoreState(pendingLiveRestorePath):
       warn "Invalid live restore snapshot quarantined",
@@ -2105,6 +2123,19 @@ proc main() =
     else:
       warn "Invalid live restore snapshot could not be quarantined",
           path = pendingLiveRestorePath
+
+  if pendingLiveRestore.isSome and not hasInitialRiverState():
+    info "Live restore handoff waiting for initial River state",
+      path = pendingLiveRestorePath
+    if not waitForInitialRiverState(250):
+      warn "Live restore handoff has no initial River state; retrying startup",
+        path = pendingLiveRestorePath
+      quit 0
+
+  info "Triad connected to River", outputs = outputPointers.len,
+      seats = seatPointers.len
+
+  applyPendingLiveRestore("startup")
 
   # Setup Watcher
   watcher = initWatcher()

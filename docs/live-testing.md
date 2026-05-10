@@ -52,18 +52,20 @@ nimble liveReload
 ```
 
 `nimble liveReload` writes a native `triad-live-restore-v2` snapshot before it
-installs binaries and stops the live manager. If that native snapshot cannot be
-captured, the reload aborts rather than falling back to the Niri-compatible
-state view, because that view cannot preserve camera offsets or full floating
-geometry.
+installs binaries and sends `triad-reload` to the live manager. The manager
+stops its River interface after writing its own restore snapshot; the normal
+session restart path starts the replacement manager. If that native snapshot
+cannot be captured, the reload aborts rather than falling back to the
+Niri-compatible state view, because that view cannot preserve camera offsets or
+full floating geometry.
 
 Expected startup milestones in `triad.log`:
 
 - `Logging initialized`
 - `Triad process starting`
 - `Bound to river_window_manager_v1`
-- `Triad connected to River`
 - `Initial config loaded`
+- `Triad connected to River`
 - `Initial manage completed`
 - `Starting Triad IPC server`
 

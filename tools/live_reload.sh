@@ -46,18 +46,18 @@ wait_restore_ready() {
   return 1
 }
 
-wait_restarted() {
+wait_reload_ready() {
   i=0
   while [ "$i" -lt 50 ]; do
-    new_pid="$(latest_triad_pid)"
-    if [ -n "$new_pid" ] && [ "$new_pid" != "$old_pid" ]; then
+    current_pid="$(latest_triad_pid)"
+    if [ -n "$current_pid" ] && [ "$current_pid" != "$old_pid" ]; then
       wait_restore_ready ||
-        fail "installed binaries and restarted manager pid $old_pid -> $new_pid, but restored workspace state did not become ready"
+        fail "installed binaries and requested reload, but restored workspace state did not become ready"
       ready_pid="$(latest_triad_pid)"
       if [ -z "$ready_pid" ] || [ "$ready_pid" = "$old_pid" ]; then
-        fail "restored workspace state became ready, but no restarted manager remained"
+        fail "restored workspace state became ready, but no replacement triad manager remained"
       fi
-      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $ready_pid; restored active tag $snapshot_active_tag is ready"
+      printf '%s\n' "live-reload: installed binaries and reloaded manager pid $old_pid -> $ready_pid; restored active tag $snapshot_active_tag is ready"
       return 0
     fi
     i=$((i + 1))
@@ -108,9 +108,9 @@ mkdir -p "$bin_dir"
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 
-if "$repo_dir/triad" msg stop-manager; then
-  wait_restarted ||
-    fail "installed binaries and requested restart, but no new triad pid appeared"
+if "$repo_dir/triad" msg triad-reload; then
+  wait_reload_ready ||
+    fail "installed binaries and requested reload, but triad did not become ready"
 else
-  fail "installed binaries, but stop-manager IPC failed"
+  fail "installed binaries, but triad-reload IPC failed"
 fi

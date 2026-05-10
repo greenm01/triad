@@ -77,7 +77,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   Screenshot flags: `--path <path>`, `--show-pointer`,
     `--hide-pointer`, `--no-clipboard`, and `--clipboard-only`.
 *   `config-reload`: Reloads the KDL config without restarting Triad or the configured shell unless the shell config changed.
-*   `triad-reload`: Writes a live-restore snapshot and asks River to restart the Triad manager.
+*   `triad-reload`: Writes a live-restore snapshot and stops the active River
+    manager so the normal session restart path can start a replacement.
 *   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus history, sizing, and window state.
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
 *   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.

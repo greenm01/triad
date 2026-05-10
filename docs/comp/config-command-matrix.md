@@ -32,7 +32,7 @@ external window manager.
 | Config lifecycle | Custom config on launch | `mango -c` | `river -c` shell command | | | Triad currently uses the default config path. |
 | Config lifecycle | Config validation | `mango -c ... -p` | | | | No standalone Triad config-check command. |
 | Config lifecycle | Config includes | `source`, `source-optional` | Shell script can source files | | | Triad KDL has no include directive. |
-| Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config and rebuilds bindings. |
+| Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config in-process; full Triad reload snapshots state and restarts through the session manager path. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
 | Startup | Environment variables | `env` | Init script environment | | | Triad does not set arbitrary env vars from config. |
 | Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
