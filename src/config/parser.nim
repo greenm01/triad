@@ -144,9 +144,22 @@ proc parseModifiers(value: string): uint32 =
 
 proc buttonValue(name: string): uint32 =
   case name
-  of "left", "Left", "BTN_LEFT", "btn-left": 0x110'u32
-  of "right", "Right", "BTN_RIGHT", "btn-right": 0x111'u32
-  of "middle", "Middle", "BTN_MIDDLE", "btn-middle": 0x112'u32
+  of "left", "Left", "BTN_LEFT", "btn-left", "btn_left":
+    0x110'u32
+  of "right", "Right", "BTN_RIGHT", "btn-right", "btn_right":
+    0x111'u32
+  of "middle", "Middle", "BTN_MIDDLE", "btn-middle", "btn_middle":
+    0x112'u32
+  of "side", "Side", "BTN_SIDE", "btn-side", "btn_side":
+    0x113'u32
+  of "extra", "Extra", "BTN_EXTRA", "btn-extra", "btn_extra":
+    0x114'u32
+  of "forward", "Forward", "BTN_FORWARD", "btn-forward", "btn_forward":
+    0x115'u32
+  of "back", "Back", "BTN_BACK", "btn-back", "btn_back":
+    0x116'u32
+  of "task", "Task", "BTN_TASK", "btn-task", "btn_task":
+    0x117'u32
   else:
     try:
       let parsed = parseInt(name)
@@ -206,9 +219,9 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
 proc defaultPointerBindings*(): seq[PointerBindingConfig] =
   @[
     PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32,
-        op: PointerOpKind.OpMove),
+        op: PointerOpKind.OpMove, command: "move"),
     PointerBindingConfig(button: 0x111'u32, modifiers: 64'u32,
-        op: PointerOpKind.OpResize)
+        op: PointerOpKind.OpResize, command: "resize")
   ]
 
 proc defaultConfigPath*(): string =
@@ -424,12 +437,20 @@ proc loadConfig*(path: string): Config =
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               let button = buttonValue(spec.key)
-              let op = parsePointerOp(child.args[1].kString())
-              if button != 0 and op != PointerOpKind.OpNone:
-                result.pointerBindings.add(PointerBindingConfig(
+              let command = child.args[1].kString()
+              if button != 0 and command.len > 0:
+                var binding = PointerBindingConfig(
                   button: button,
                   modifiers: spec.modifiers,
-                  op: op))
+                  op: parsePointerOp(command),
+                  command: command,
+                  mode: BindingMode.BindAlways)
+                if child.props.hasKey("mode"):
+                  binding.mode = parseBindingMode(child.props["mode"].kString())
+                if child.props.hasKey("allow-inhibiting"):
+                  binding.bypassShortcutsInhibit = not child.props[
+                      "allow-inhibiting"].kBool()
+                result.pointerBindings.add(binding)
           except CatchableError as e:
             warn "Ignoring invalid binding config field", field = child.name, error = e.msg
 

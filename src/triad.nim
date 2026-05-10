@@ -671,11 +671,21 @@ proc addXkbBinding(seat: ptr RiverSeatV1; bindingConfig: KeyBindingConfig;
     binding.setLayoutOverride(bindingConfig.layoutOverride)
   binding.enable()
 
-proc addPointerBinding(seat: ptr RiverSeatV1; button, modifiers: uint32;
-    op: PointerOpKind) =
-  let binding = seat.getPointerBinding(button, modifiers)
+proc addPointerBinding(
+    seat: ptr RiverSeatV1; bindingConfig: PointerBindingConfig) =
+  var msg = none(Msg)
+  if bindingConfig.op == PointerOpKind.OpNone:
+    msg = parseTextCommand(bindingConfig.command)
+    if msg.isNone:
+      return
+
+  let binding = seat.getPointerBinding(
+    bindingConfig.button, bindingConfig.modifiers)
   pointerBindingPointers.add(binding)
-  pointerBindingKinds[binding.id()] = op
+  if bindingConfig.op != PointerOpKind.OpNone:
+    pointerBindingKinds[binding.id()] = bindingConfig.op
+  else:
+    pointerBindings[binding.id()] = msg.get()
   pointerBindingSeats[binding.id()] = seat
   discard binding.addListener(pointer_binding_listener.addr, nil)
   binding.enable()
@@ -687,6 +697,14 @@ proc bindingModeActive(mode: BindingMode): bool =
   of BindingMode.BindOverview: currentModel.overviewActive
 
 proc keyBindingActive(binding: KeyBindingConfig): bool =
+  if not bindingModeActive(binding.mode):
+    return false
+  if currentModel.keyboardShortcutsInhibited() and
+      not binding.bypassShortcutsInhibit:
+    return false
+  true
+
+proc pointerBindingActive(binding: PointerBindingConfig): bool =
   if not bindingModeActive(binding.mode):
     return false
   if currentModel.keyboardShortcutsInhibited() and
@@ -712,7 +730,8 @@ proc setupDefaultBindings() =
         addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
 
     for binding in currentModel.pointerBindings:
-      addPointerBinding(seat, binding.button, binding.modifiers, binding.op)
+      if pointerBindingActive(binding):
+        addPointerBinding(seat, binding)
 
   bindingsConfigured = true
 
@@ -887,23 +906,48 @@ proc on_pointer_binding_pressed(data: pointer;
     binding: ptr RiverPointerBindingV1) =
   let id = binding.id()
   pointerBindingPressed[id] = true
-  let focused = currentModel.activeFocusRiverId()
-  if focused == 0 or not pointerBindingSeats.hasKey(id):
+  if not pointerBindingSeats.hasKey(id):
     return
   let seat = pointerBindingSeats[id]
+  let focused = currentModel.activeFocusRiverId()
+  let target = pointerWindowBySeat.getOrDefault(seat.id(), focused)
   if pointerBindingKinds.hasKey(id):
+    if target == 0:
+      return
     case pointerBindingKinds[id]
     of PointerOpKind.OpMove:
-      msgQueue.add(Msg(kind: MsgKind.WlPointerMoveRequested, moveWinId: focused,
+      msgQueue.add(Msg(kind: MsgKind.WlPointerMoveRequested, moveWinId: target,
           moveSeat: seat))
     of PointerOpKind.OpResize:
       msgQueue.add(Msg(kind: MsgKind.WlPointerResizeRequested,
-          resizeWinId: focused, resizeSeat: seat,
+          resizeWinId: target, resizeSeat: seat,
           resizeEdges: RiverEdgeBottom or RiverEdgeRight))
     else:
       discard
   elif pointerBindings.hasKey(id):
-    msgQueue.add(pointerBindings[id])
+    let msg = pointerBindings[id]
+    case msg.kind
+    of MsgKind.CmdCloseWindow:
+      if target != 0:
+        msgQueue.add(Msg(kind: MsgKind.CmdCloseWindowById,
+          closeWindowId: target))
+      else:
+        msgQueue.add(msg)
+    of MsgKind.CmdSelectWindow:
+      if currentModel.overviewActive and target != 0:
+        msgQueue.add(Msg(kind: MsgKind.CmdFocusWindowById,
+          focusWindowId: target))
+      msgQueue.add(msg)
+    of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
+        MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
+        MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
+        MsgKind.CmdMoveFloating, MsgKind.CmdResizeFloating:
+      if target != 0:
+        msgQueue.add(Msg(kind: MsgKind.WlFocusChanged,
+          newFocusedId: target))
+      msgQueue.add(msg)
+    else:
+      msgQueue.add(msg)
 
 proc on_pointer_binding_released(data: pointer;
     binding: ptr RiverPointerBindingV1) =

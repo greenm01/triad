@@ -77,6 +77,22 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
 *   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.
 
+#### Pointer Bindings
+`pointer-bind` entries in `config.kdl` use the same command strings as IPC and
+keyboard bindings:
+
+```kdl
+pointer-bind "Super+left" "move"
+pointer-bind "Super+right" "resize"
+pointer-bind "Super+middle" "toggle-maximized"
+pointer-bind "right" "close-window" mode="overview"
+```
+
+`move` and `resize` start River pointer operations. Other commands are parsed
+as normal Triad commands and target the window under the pointer when the
+command is window-specific. Mouse-wheel and touchpad gesture bindings are not
+part of the current River input surface Triad receives.
+
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.
 *   `adjust-master-count <delta>`: Increments or decrements the master window count.

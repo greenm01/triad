@@ -337,6 +337,25 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
       uint32(it.focusId) == 2)
 
+  test "Clicking overview window commits focus":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Two"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged,
+      newFocusedId: 2))
+
+    check not model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.focusedWindowId() == 2
+    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
+      uint32(it.focusId) == 2)
+
   test "Overview select retargets same-workspace camera":
     var model = cameraModel()
     model.seedCameraWindows()

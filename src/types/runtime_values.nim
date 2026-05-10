@@ -166,6 +166,9 @@ type
     button*: uint32
     modifiers*: uint32
     op*: PointerOpKind
+    command*: string
+    mode*: BindingMode
+    bypassShortcutsInhibit*: bool
 
   ProtocolSurfacesConfig* = object
     enabled*: bool

@@ -2,6 +2,7 @@ import options
 import ../core/effects
 import ../core/msg
 import ../state/engine
+import focus
 import outputs
 import runtime
 import update_effects
@@ -12,6 +13,14 @@ proc setExternalFocus(model: var Model;
     externalId: ExternalWindowId): bool =
   if model.overviewActive and externalId == NullExternalWindowId:
     return false
+  if model.overviewActive:
+    let winId = model.windowForExternal(externalId)
+    if winId == NullWindowId or model.overviewWindowIds().find(winId) == -1:
+      return false
+    discard model.restoreOverviewViewportSnapshot()
+    discard model.setOverviewActive(false)
+    discard model.clearOverviewSelection()
+    return model.focusWindow(winId)
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:

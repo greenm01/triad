@@ -248,6 +248,9 @@ bindings {
     // Pointer operations.
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
+    pointer-bind "Super+middle" "toggle-maximized"
+    pointer-bind "Super+Ctrl+right" "close-window"
+    pointer-bind "right" "close-window" mode="overview"
 }
 
 window-rule {

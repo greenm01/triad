@@ -86,7 +86,7 @@ suite "KDL Configuration Parser":
       ],
       pointerBindings: @[
         PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32,
-            op: PointerOpKind.OpMove)
+            op: PointerOpKind.OpMove, command: "move")
       ])
 
     check state.applyRuntimeConfig(config)
@@ -193,6 +193,9 @@ protocol-surfaces {
 bindings {
   bind "Super+Return" "spawn-terminal"
   pointer-bind "Super+left" "move"
+  pointer-bind "Super+middle" "toggle-maximized"
+  pointer-bind "right" "close-window" mode="overview"
+  pointer-bind "Super+btn_back" "focus-last"
 }
 """)
     let config = loadConfig(path)
@@ -221,7 +224,16 @@ bindings {
     check config.allowExitSession
     check config.protocolSurfaces.enabled
     check config.keyBindings.len > 0
-    check config.pointerBindings.len > 0
+    check config.pointerBindings.len == 4
+    check config.pointerBindings.anyIt(
+      it.button == 0x110'u32 and it.op == PointerOpKind.OpMove)
+    check config.pointerBindings.anyIt(
+      it.button == 0x112'u32 and it.command == "toggle-maximized")
+    check config.pointerBindings.anyIt(
+      it.button == 0x111'u32 and it.command == "close-window" and
+        it.mode == BindingMode.BindOverview)
+    check config.pointerBindings.anyIt(
+      it.button == 0x116'u32 and it.command == "focus-last")
 
   test "config defaults clamp invalid runtime values":
     var model = Model()
