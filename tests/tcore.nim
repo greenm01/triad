@@ -8,6 +8,7 @@ import ../src/state/engine
 import ../src/systems/layout_projection
 import ../src/systems/runtime_facade
 import ../src/systems/update
+import ../src/systems/window_lifecycle
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
 import tag_semantics_checks
@@ -62,6 +63,11 @@ proc hasFocusEffect(effects: seq[Effect]; id: uint32): bool =
   effects.anyIt(it.kind == EffectKind.EffFocusWindow and
     uint32(it.focusId) == id)
 
+proc hasFullscreenEffect(
+    effects: seq[Effect]; id: uint32; fullscreen: bool): bool =
+  effects.anyIt(it.kind == EffectKind.EffSetFullscreen and
+    uint32(it.fsWinId) == id and it.isFullscreen == fullscreen)
+
 proc viewport(model: Model; slot: uint32): ViewportState =
   let tagId = model.tagForSlot(slot)
   let tag = model.tagData(tagId).get()
@@ -77,6 +83,7 @@ proc setViewport(
   let tagId = model.tagForSlot(slot)
   discard model.setTagViewportTarget(tagId, targetX, targetY)
   discard model.setTagViewportCurrent(tagId, currentX, currentY)
+  discard model.clearTagViewportRetarget(tagId)
 
 proc seedCameraWindows(model: var Model; count = 3'u32) =
   model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
@@ -181,6 +188,159 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
+
+  test "New active-tag window focuses and retargets camera":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, appId: "app", title: "Two"))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+    check effects.hasFocusEffect(2)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "New active-tag window records focus under layer focus":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+    discard model.updateModel(Msg(kind: MsgKind.WlLayerFocusExclusive))
+
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, appId: "app", title: "Two"))
+    discard model.updateModel(Msg(kind: MsgKind.WlLayerFocusNone))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+
+  test "New active-tag window focuses after live restore settles":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    var restore = PendingRestoreState(
+      activeSlot: 1,
+      focusedWindow: ExternalWindowId(1),
+      focusHistory: @[ExternalWindowId(1)])
+    restore.windows[ExternalWindowId(1)] = RestoredWindowData(
+      slot: 1,
+      appId: "app",
+      title: "One",
+      widthProportion: 0.5,
+      heightProportion: 1.0)
+    restore.tagByWindow[ExternalWindowId(1)] = 1
+    model.applyLiveRestore(restore)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    check not model.restoreFocusedWindowPending()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, appId: "app", title: "Two"))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+    check effects.hasFocusEffect(2)
+
+  test "Rule-placed new window does not steal active camera":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        centerFocusedColumn: "always",
+        enableAnimations: true,
+        animationSpeed: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(appIdMatch: "chat", defaultTag: 2)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+    let beforeViewport = model.viewport(1)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, appId: "chat", title: "Chat"))
+    discard model.layoutInstructions()
+    let snapshot = model.shellSnapshot()
+
+    check snapshot.activeTag == 1
+    check model.focusedWindowId() == 1
+    check model.activeWorkspaceFocusId() == 1
+    check snapshot.workspaces[1].focusedWindow == 2
+    check model.viewport(1) == beforeViewport
+    check not effects.hasFocusEffect(2)
+
+  test "Fullscreen presentation follows active focus":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+
+    let fullscreenEffects = model.updateModel(Msg(
+      kind: MsgKind.WlWindowFullscreenRequested,
+      fullscreenRequestId: 2,
+      fullscreenOutputId: 0))
+    check fullscreenEffects.hasFullscreenEffect(2, true)
+
+    let leaveEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 1))
+    check leaveEffects.hasFullscreenEffect(2, false)
+
+    let returnEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+    check returnEffects.hasFullscreenEffect(2, true)
+
+  test "Overview suspends fullscreen presentation":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowFullscreenRequested,
+      fullscreenRequestId: 1,
+      fullscreenOutputId: 0))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    check model.overviewActive
+    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+    check effects.hasFullscreenEffect(1, false)
+
+  test "Targeted fullscreen IPC can repair a non-focused window":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowFullscreenRequested,
+      fullscreenRequestId: 2,
+      fullscreenOutputId: 0))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 1))
+
+    let effects = model.updateModel(Msg(
+      kind: MsgKind.CmdExitFullscreenById,
+      fullscreenWindowId: 2))
+    let winId = model.windowForExternal(ExternalWindowId(2))
+
+    check winId != NullWindowId
+    check not model.windowData(winId).get().isFullscreen
+    check effects.hasFullscreenEffect(2, false)
 
   test "Moving focused window across columns preserves focus":
     var model = cameraModel()

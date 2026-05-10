@@ -52,7 +52,20 @@ proc parseTextCommand*(line: string): Option[Msg] =
       kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
   of "move-to-tag-left": some(Msg(kind: MsgKind.CmdMoveToTagLeft))
   of "move-to-tag-right": some(Msg(kind: MsgKind.CmdMoveToTagRight))
-  of "close-window": some(Msg(kind: MsgKind.CmdCloseWindow))
+  of "close-window":
+    if parts.len >= 2:
+      let win = parseUInt32Arg(parts[1])
+      if win.isSome: some(Msg(kind: MsgKind.CmdCloseWindowById,
+          closeWindowId: WindowId(win.get()))) else: none(Msg)
+    else:
+      some(Msg(kind: MsgKind.CmdCloseWindow))
+  of "focus-window":
+    if parts.len >= 2:
+      let win = parseUInt32Arg(parts[1])
+      if win.isSome: some(Msg(kind: MsgKind.CmdFocusWindowById,
+          focusWindowId: WindowId(win.get()))) else: none(Msg)
+    else:
+      none(Msg)
   of "config-reload": some(Msg(kind: MsgKind.CmdConfigReload))
   of "layout-scroller": some(Msg(kind: MsgKind.CmdSetLayout,
       newLayout: LayoutMode.Scroller))
@@ -81,7 +94,20 @@ proc parseTextCommand*(line: string): Option[Msg] =
   of "open-overview": some(Msg(kind: MsgKind.CmdOpenOverview))
   of "close-overview": some(Msg(kind: MsgKind.CmdCloseOverview))
   of "toggle-floating": some(Msg(kind: MsgKind.CmdToggleFloating))
-  of "toggle-fullscreen": some(Msg(kind: MsgKind.CmdToggleFullscreen))
+  of "toggle-fullscreen":
+    if parts.len >= 2:
+      let win = parseUInt32Arg(parts[1])
+      if win.isSome: some(Msg(kind: MsgKind.CmdToggleFullscreenById,
+          fullscreenWindowId: WindowId(win.get()))) else: none(Msg)
+    else:
+      some(Msg(kind: MsgKind.CmdToggleFullscreen))
+  of "exit-fullscreen":
+    if parts.len >= 2:
+      let win = parseUInt32Arg(parts[1])
+      if win.isSome: some(Msg(kind: MsgKind.CmdExitFullscreenById,
+          fullscreenWindowId: WindowId(win.get()))) else: none(Msg)
+    else:
+      none(Msg)
   of "toggle-maximized", "toggle-maximize": some(Msg(
       kind: MsgKind.CmdToggleMaximized))
   of "minimize", "minimize-window": some(Msg(kind: MsgKind.CmdMinimize))

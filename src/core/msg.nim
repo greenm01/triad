@@ -104,6 +104,8 @@ type
     CmdCloseOverview,
     CmdToggleFloating,
     CmdToggleFullscreen,
+    CmdToggleFullscreenById,
+    CmdExitFullscreenById,
     CmdToggleMaximized,
     CmdMinimize,
     CmdResizeFloating,
@@ -253,6 +255,8 @@ type
       focusWindowId*: WindowId
     of MsgKind.CmdCloseWindowById:
       closeWindowId*: WindowId
+    of MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById:
+      fullscreenWindowId*: WindowId
     of MsgKind.CmdSpawn:
       spawnCommand*: seq[string]
     of MsgKind.CmdWarpPointer:

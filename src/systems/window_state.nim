@@ -79,6 +79,19 @@ proc exitFullscreenForExternal*(
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowFullscreen(winId, false)
 
+proc toggleFullscreenForExternal*(
+    model: var Model; externalId: ExternalWindowId): bool =
+  let winId = model.windowForExternal(externalId)
+  let win = model.window(winId)
+  if win.isNone:
+    return false
+  let nextFullscreen = not win.get().isFullscreen
+  model.setWindowFullscreen(
+    winId,
+    nextFullscreen,
+    if nextFullscreen: model.chooseFullscreenOutput(NullExternalOutputId)
+    else: NullExternalOutputId)
+
 proc requestMaximizeForExternal*(
     model: var Model; externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)

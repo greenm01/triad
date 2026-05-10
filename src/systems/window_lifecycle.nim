@@ -204,6 +204,7 @@ proc createWindowForExternal*(model: var Model;
   var hasRestoredWindow = false
   var restoredExternalId = externalId
   var restored = RestoredWindowData()
+  discard model.clearSettledRestoreFocus()
   let restoreFocusPending = model.restoreFocusedWindowPending()
   var targetSlot =
     if model.activeWorkspaceSlot() == 0: 1'u32
@@ -305,7 +306,10 @@ proc createWindowForExternal*(model: var Model;
             forcedLayout, model.tag(targetTag).get().layoutMode))
       discard model.addPlacedWindowColumn(targetTag, result)
       if not model.sessionLocked and not restoreFocusPending:
-        discard model.setTagFocus(targetTag, result)
+        if targetSlot == model.activeWorkspaceSlot():
+          discard model.focusWindow(result)
+        else:
+          discard model.setTagFocus(targetTag, result)
 
     if restoresFocusedWindow:
       let targetTag = model.tagForSlot(targetSlot)
@@ -315,12 +319,6 @@ proc createWindowForExternal*(model: var Model;
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId:
         discard model.recomputeVisibleFocus(targetTag)
-    if not model.sessionLocked and not hasRestoredTag and
-        not restoreFocusPending:
-      let targetTag = model.tagForSlot(targetSlot)
-      if targetTag != NullTagId:
-        discard model.setTagFocus(targetTag, result)
-
   if hasRestoredWindow:
     discard model.rewriteRestoreFocusRefs(restoredExternalId, externalId)
     if restoresFocusedWindow and targetSlot == model.activeWorkspaceSlot():
@@ -332,6 +330,7 @@ proc createWindowForExternal*(model: var Model;
 
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
+  discard model.clearSettledRestoreFocus()
   discard model.pruneDynamicWorkspaces()
 
 proc updateWindowIdentifierAndRestoreForExternal*(model: var Model;

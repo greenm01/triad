@@ -198,6 +198,8 @@ proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
       MsgKind.CmdRestoreScratchpad,
       MsgKind.CmdToggleFloating,
       MsgKind.CmdToggleFullscreen,
+      MsgKind.CmdToggleFullscreenById,
+      MsgKind.CmdExitFullscreenById,
       MsgKind.CmdToggleMaximized,
       MsgKind.CmdMinimize,
       MsgKind.CmdSelectWindow,
@@ -265,6 +267,8 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
       MsgKind.CmdRestoreScratchpad,
       MsgKind.CmdToggleFloating,
       MsgKind.CmdToggleFullscreen,
+      MsgKind.CmdToggleFullscreenById,
+      MsgKind.CmdExitFullscreenById,
       MsgKind.CmdToggleMaximized,
       MsgKind.CmdMinimize,
       MsgKind.CmdSelectWindow:
@@ -357,6 +361,67 @@ proc addSetMaximizedEffect*(effects: var seq[Effect];
     maxWinId: winId,
     isMaximized: maximized))
 
+proc hasFullscreenEffect(
+    effects: seq[Effect]; winId: runtime_values.WindowId;
+    fullscreen: bool): bool =
+  for effect in effects:
+    if effect.kind == EffectKind.EffSetFullscreen and
+        effect.fsWinId == winId and effect.isFullscreen == fullscreen:
+      return true
+
+proc addFullscreenPresentationEffect(
+    effects: var seq[Effect]; win: ShellWindow; present: bool) =
+  if effects.hasFullscreenEffect(win.id, present):
+    return
+  effects.addSetFullscreenEffect(
+    win.id,
+    present,
+    if present: win.fullscreenOutput else: 0'u32)
+
+proc fullscreenWindow(snapshot: ShellSnapshot;
+    winId: runtime_values.WindowId): Option[ShellWindow] =
+  for win in snapshot.windows:
+    if win.id == winId and win.isFullscreen:
+      return some(win)
+  none(ShellWindow)
+
+proc shouldSyncFullscreenPresentation(
+    kind: MsgKind; before, after: ShellSnapshot): bool =
+  if before.focusedWindowId() != after.focusedWindowId() or
+      before.overviewActive != after.overviewActive:
+    return true
+  kind in {
+    MsgKind.WlManageStart,
+    MsgKind.WlWindowCreated,
+    MsgKind.WlWindowDestroyed,
+    MsgKind.WlWindowFullscreenRequested,
+    MsgKind.WlWindowExitFullscreenRequested,
+    MsgKind.WlOutputRemoved,
+    MsgKind.CmdToggleFullscreen,
+    MsgKind.CmdToggleFullscreenById,
+    MsgKind.CmdExitFullscreenById,
+    MsgKind.CmdToggleOverview,
+    MsgKind.CmdOpenOverview,
+    MsgKind.CmdCloseOverview,
+    MsgKind.CmdSelectWindow
+  }
+
+proc addFullscreenPresentationSync(
+    effects: var seq[Effect]; msg: Msg; before, after: ShellSnapshot) =
+  if not msg.kind.shouldSyncFullscreenPresentation(before, after):
+    return
+
+  let activeFullscreen =
+    if after.overviewActive: runtime_values.WindowId(0)
+    else: after.focusedWindowId()
+  for win in after.windows:
+    if win.isFullscreen:
+      effects.addFullscreenPresentationEffect(win, win.id == activeFullscreen)
+
+  for beforeWin in before.windows:
+    if beforeWin.isFullscreen and after.fullscreenWindow(beforeWin.id).isNone:
+      effects.addFullscreenPresentationEffect(beforeWin, false)
+
 proc addPostUpdateEffects*(
     effects: var seq[Effect]; msg: Msg; before, after: ShellSnapshot;
     dirty, collapsed, pruned: bool) =
@@ -381,6 +446,8 @@ proc addPostUpdateEffects*(
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
   elif dirty and overviewPreview:
     effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+
+  effects.addFullscreenPresentationSync(msg, before, after)
 
   if msg.kind in {MsgKind.WlWindowCreated, MsgKind.WlWindowAppId,
       MsgKind.WlWindowTitle}:

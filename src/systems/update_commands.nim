@@ -201,13 +201,13 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdToggleGaps:
     result.dirty = model.toggleGaps()
   of MsgKind.CmdToggleFullscreen:
-    let focused = model.focusedWindow()
     result.dirty = model.toggleFullscreenFocused()
-    if result.dirty:
-      let win = model.windowData(focused).get()
-      result.effects.addSetFullscreenEffect(
-        model.runtimeWindowId(focused), win.isFullscreen,
-        uint32(win.fullscreenOutput))
+  of MsgKind.CmdToggleFullscreenById:
+    result.dirty = model.toggleFullscreenForExternal(
+      msg.fullscreenWindowId.externalWindowId())
+  of MsgKind.CmdExitFullscreenById:
+    result.dirty = model.exitFullscreenForExternal(
+      msg.fullscreenWindowId.externalWindowId())
   of MsgKind.CmdToggleMaximized:
     let focused = model.focusedWindow()
     result.dirty = model.toggleMaximizedFocused()

@@ -67,7 +67,6 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
     for winId in model.removeOutputForExternal(
         msg.removedOutputId.externalOutputId()):
       result.dirty = true
-      result.effects.addSetFullscreenEffect(model.runtimeWindowId(winId), false)
 
   of MsgKind.WlWindowCreated:
     let winId = model.createWindowForExternal(
@@ -78,9 +77,6 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = winId != NullWindowId
     if result.dirty:
       let win = model.windowData(winId).get()
-      if win.isFullscreen:
-        result.effects.addSetFullscreenEffect(
-          msg.windowId, true, uint32(win.fullscreenOutput))
       if win.isMaximized:
         result.effects.addSetMaximizedEffect(msg.windowId, true)
 
@@ -182,16 +178,10 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.fullscreenRequestId.externalWindowId(),
       msg.fullscreenOutputId.externalOutputId())
     if result.dirty:
-      let winId = model.windowForExternal(
-          msg.fullscreenRequestId.externalWindowId())
-      let win = model.windowData(winId).get()
-      result.effects.addSetFullscreenEffect(
-        msg.fullscreenRequestId, true, uint32(win.fullscreenOutput))
+      discard
   of MsgKind.WlWindowExitFullscreenRequested:
     result.dirty = model.exitFullscreenForExternal(
       msg.exitFullscreenRequestId.externalWindowId())
-    if result.dirty:
-      result.effects.addSetFullscreenEffect(msg.exitFullscreenRequestId, false)
   of MsgKind.WlWindowMaximizeRequested:
     result.dirty = model.requestMaximizeForExternal(
       msg.maximizeRequestId.externalWindowId())

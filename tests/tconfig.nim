@@ -167,6 +167,31 @@ suite "KDL Configuration Parser":
     check not loaded.ok
     check loaded.error.len > 0
 
+  test "Text command parser accepts targeted window recovery commands":
+    let focus = parseTextCommand("focus-window 42")
+    check focus.isSome
+    check focus.get().kind == MsgKind.CmdFocusWindowById
+    check focus.get().focusWindowId == 42
+
+    let close = parseTextCommand("close-window 43")
+    check close.isSome
+    check close.get().kind == MsgKind.CmdCloseWindowById
+    check close.get().closeWindowId == 43
+
+    let exitFullscreen = parseTextCommand("exit-fullscreen 44")
+    check exitFullscreen.isSome
+    check exitFullscreen.get().kind == MsgKind.CmdExitFullscreenById
+    check exitFullscreen.get().fullscreenWindowId == 44
+
+    let toggleFullscreen = parseTextCommand("toggle-fullscreen 45")
+    check toggleFullscreen.isSome
+    check toggleFullscreen.get().kind == MsgKind.CmdToggleFullscreenById
+    check toggleFullscreen.get().fullscreenWindowId == 45
+
+    let focusedToggle = parseTextCommand("toggle-fullscreen")
+    check focusedToggle.isSome
+    check focusedToggle.get().kind == MsgKind.CmdToggleFullscreen
+
   test "Config reload debouncer coalesces file watcher events":
     var debouncer: ConfigReloadDebouncer
     debouncer.schedule(1000, debounceMs = 200)
