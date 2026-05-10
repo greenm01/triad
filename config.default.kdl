@@ -121,6 +121,11 @@ bindings {
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"
 
+    // Clipboard compatibility.
+    bind "Super+c" "spawn wtype -M ctrl -P Insert -p Insert -m ctrl" allow-inhibiting=#false
+    bind "Super+v" "spawn wtype -M shift -P Insert -p Insert -m shift" allow-inhibiting=#false
+    bind "Super+x" "spawn wtype -M ctrl x -m ctrl" allow-inhibiting=#false
+
     // Focus. Arrow keys mirror h/j/k/l via mirror-hjkl-arrows.
     bind "Super+h" "focus-left"
     bind "Super+j" "focus-down"
@@ -191,10 +196,10 @@ bindings {
     bind "Super+d" "layout-tile"
     bind "Super+g" "layout-grid"
     bind "Super+Shift+g" "layout-vertical-grid"
-    bind "Super+v" "layout-deck"
-    bind "Super+c" "layout-center-tile"
+    bind "Super+Ctrl+v" "layout-deck"
+    bind "Super+Ctrl+c" "layout-center-tile"
     bind "Super+Shift+c" "layout-right-tile"
-    bind "Super+x" "layout-monocle"
+    bind "Super+Ctrl+x" "layout-monocle"
 
     // Scroller movement and stack surgery.
     bind "Super+Ctrl+h" "move-column-left"

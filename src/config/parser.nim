@@ -131,12 +131,15 @@ proc forcedLayoutValue(name: string): int =
 
 proc modifierValue(name: string): uint32 =
   case name
-  of "Shift", "shift": 1'u32
-  of "Ctrl", "Control", "ctrl", "control": 4'u32
-  of "Alt", "Mod1", "alt", "mod1": 8'u32
-  of "Mod3", "mod3": 32'u32
-  of "Super", "Logo", "Mod4", "super", "logo", "mod4": 64'u32
-  of "Mod5", "mod5": 128'u32
+  of "Shift", "shift", "SHIFT": 1'u32
+  of "Ctrl", "Control", "ctrl", "control", "CTRL", "CONTROL": 4'u32
+  of "Alt", "Mod1", "alt", "mod1", "ALT", "MOD1": 8'u32
+  of "Mod3", "mod3", "MOD3": 32'u32
+  of "Super", "Logo", "Mod4", "super", "logo", "mod4", "SUPER", "LOGO",
+      "MOD4":
+    64'u32
+  of "Mod5", "mod5", "MOD5": 128'u32
+  of "None", "none", "NONE": 0'u32
   else: 0'u32
 
 proc parseModifiers(value: string): uint32 =

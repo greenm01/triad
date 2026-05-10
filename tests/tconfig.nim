@@ -35,6 +35,24 @@ proc msgKindForBinding(
   check parsed.isSome
   parsed.get().kind
 
+proc layoutForBinding(
+    config: Config; key: string; modifiers: uint32): LayoutMode =
+  let command = config.commandForBinding(key, modifiers)
+  check command.len > 0
+  let parsed = parseTextCommand(command)
+  check parsed.isSome
+  check parsed.get().kind == MsgKind.CmdSetLayout
+  parsed.get().newLayout
+
+proc spawnForBinding(
+    config: Config; key: string; modifiers: uint32): seq[string] =
+  let command = config.commandForBinding(key, modifiers)
+  check command.len > 0
+  let parsed = parseTextCommand(command)
+  check parsed.isSome
+  check parsed.get().kind == MsgKind.CmdSpawn
+  parsed.get().spawnCommand
+
 suite "KDL Configuration Parser":
   test "config application preserves live window state":
     let initial = initRuntimeStateFromConfig(Config(
@@ -218,6 +236,8 @@ protocol-surfaces {
 bindings {
   mirror-hjkl-arrows #true
   bind "Super+Return" "spawn-terminal"
+  bind "SUPER+CTRL+c" "layout-center-tile" allow-inhibiting=#false
+  bind "NONE+F12" "focus-last"
   pointer-bind "Super+left" "move"
   pointer-bind "Super+middle" "toggle-maximized"
   pointer-bind "right" "close-window" mode="overview"
@@ -251,6 +271,12 @@ bindings {
     check config.allowExitSession
     check config.protocolSurfaces.enabled
     check config.keyBindings.len > 0
+    check config.commandForBinding("c", Super + Ctrl) == "layout-center-tile"
+    let uppercaseBindings = config.keyBindings.filterIt(
+      it.key == "c" and it.modifiers == Super + Ctrl)
+    check uppercaseBindings.len == 1
+    check uppercaseBindings[0].bypassShortcutsInhibit
+    check config.commandForBinding("F12", 0'u32) == "focus-last"
     check config.pointerBindings.len == 4
     check config.pointerBindings.anyIt(
       it.button == 0x110'u32 and it.op == PointerOpKind.OpMove)
@@ -314,6 +340,22 @@ bindings {
       MsgKind.CmdMoveToScratchpad
     check config.msgKindForBinding("r", Super + Shift) ==
       MsgKind.CmdRestoreScratchpad
+    check config.spawnForBinding("c", Super) ==
+      @["wtype", "-M", "ctrl", "-P", "Insert", "-p", "Insert", "-m", "ctrl"]
+    check config.spawnForBinding("v", Super) ==
+      @["wtype", "-M", "shift", "-P", "Insert", "-p", "Insert", "-m",
+        "shift"]
+    check config.spawnForBinding("x", Super) ==
+      @["wtype", "-M", "ctrl", "x", "-m", "ctrl"]
+    for key in ["c", "v", "x"]:
+      let bindings = config.keyBindings.filterIt(
+        it.key == key and it.modifiers == Super)
+      check bindings.len == 1
+      check bindings[0].bypassShortcutsInhibit
+    check config.layoutForBinding("c", Super + Ctrl) == LayoutMode.CenterTile
+    check config.layoutForBinding("v", Super + Ctrl) == LayoutMode.Deck
+    check config.layoutForBinding("x", Super + Ctrl) == LayoutMode.Monocle
+    check config.layoutForBinding("c", Super + Shift) == LayoutMode.RightTile
 
   test "config defaults clamp invalid runtime values":
     var model = Model()
