@@ -122,6 +122,7 @@ var
   quickshellProcess: Process
   quickshellSpawnPending = false
   startupCommandsPending = false
+  initialManageComplete = false
   pendingLiveRestorePath: string
   pendingLiveRestore: Option[LiveRestoreState]
   liveRestoreCommitPending = false
@@ -1977,6 +1978,12 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
           executeEffect(eff)
       executeEffect(Effect(kind: EffectKind.EffManageFinish))
       riverPhase = RiverPhase.RiverIdle
+      if not initialManageComplete:
+        initialManageComplete = true
+        info "Initial manage completed",
+          outputs = outputPointers.len,
+          windows = windowPointers.len,
+          seats = seatPointers.len
       spawnPendingStartupCommands(currentModel, "initial manage")
       spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
       continue
@@ -2036,6 +2043,9 @@ proc main() =
     runtimeDir = runtimeDir(),
     waylandDisplay = getEnv("WAYLAND_DISPLAY", "")
 
+  pendingLiveRestorePath = defaultLiveRestorePath()
+  let hadRestoreSnapshot = fileExists(pendingLiveRestorePath)
+
   let sessionProblem = currentWaylandSessionProblem()
   if sessionProblem.len > 0:
     fatal "Refusing to start outside a Wayland session", reason = sessionProblem
@@ -2066,6 +2076,11 @@ proc main() =
     fatal "Failed during River manager initialization roundtrip"
     quit 1
 
+  if hadRestoreSnapshot and outputPointers.len == 0 and seatPointers.len == 0:
+    warn "Live restore handoff has no initial River state; retrying startup",
+      path = pendingLiveRestorePath
+    quit 0
+
   info "Triad connected to River", outputs = outputPointers.len,
       seats = seatPointers.len
 
@@ -2075,8 +2090,6 @@ proc main() =
   runtimeState = initRuntimeStateFromConfig(initialConfig)
   info "Initial config loaded", path = configPath
 
-  pendingLiveRestorePath = defaultLiveRestorePath()
-  let hadRestoreSnapshot = fileExists(pendingLiveRestorePath)
   pendingLiveRestore = loadLiveRestoreState(pendingLiveRestorePath)
   if pendingLiveRestore.isSome:
     let state = pendingLiveRestore.get()
@@ -2114,16 +2127,22 @@ proc main() =
     {.cast(gcsafe).}:
       readLiveRestoreJson()
 
-  let triadSocketPath = triadSocketPath()
-  info "Starting Triad IPC server", path = triadSocketPath
-  asyncCheck startIpcServer(
-    triadSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
+  let triadSocket = triadSocketPath()
+  let niriSocketPath = chooseNiriCompatSocketPath(triadSocket)
+  var ipcStarted = false
 
-  let niriSocketPath = chooseNiriCompatSocketPath(triadSocketPath)
-  if niriSocketPath.len > 0 and niriSocketPath != triadSocketPath:
-    info "Starting Niri-compatible IPC server", path = niriSocketPath
+  proc startIpcServers() =
+    if ipcStarted:
+      return
+    ipcStarted = true
+    info "Starting Triad IPC server", path = triadSocket
     asyncCheck startIpcServer(
-      niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
+      triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson)
+
+    if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
+      info "Starting Niri-compatible IPC server", path = niriSocketPath
+      asyncCheck startIpcServer(
+        niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()
@@ -2151,6 +2170,9 @@ proc main() =
     if shouldExit:
       running = false
       continue
+
+    if initialManageComplete:
+      startIpcServers()
 
     flushManageRequest()
 
