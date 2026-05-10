@@ -121,6 +121,7 @@ var
   shouldExit = false
   quickshellProcess: Process
   quickshellSpawnPending = false
+  startupCommandsPending = false
   pendingLiveRestorePath: string
   pendingLiveRestore: Option[LiveRestoreState]
   liveRestoreCommitPending = false
@@ -157,7 +158,7 @@ proc syncRuntimeLayoutProjection(
     context: string; msg: Msg): seq[RenderInstruction] =
   runtimeState.applyRuntimeLayoutProjection().instructions
 
-proc applyPendingLiveRestore() =
+proc applyPendingLiveRestore(context: string) =
   if pendingLiveRestore.isNone:
     return
 
@@ -165,8 +166,9 @@ proc applyPendingLiveRestore() =
   discard runtimeState.applyRuntimeLiveRestore(state)
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
-  info "Live restore snapshot applied at manage start",
+  info "Live restore snapshot applied",
     path = pendingLiveRestorePath,
+    context = context,
     activeTag = state.activeTag,
     windows = state.tagByWindow.len
 
@@ -199,6 +201,16 @@ proc spawnStartupCommands(model: Model) =
         info "Spawned startup command", cmd = cmd[0], pid = p.processID
       except CatchableError as e:
         warn "Failed to spawn startup command", cmd = cmd[0], error = e.msg
+
+proc scheduleStartupCommands(model: Model) =
+  startupCommandsPending = model.startupCommands.len > 0
+
+proc spawnPendingStartupCommands(model: Model; reason: string) =
+  if not startupCommandsPending:
+    return
+  startupCommandsPending = false
+  info "Spawning startup commands", reason = reason
+  spawnStartupCommands(model)
 
 proc stopTrackedQuickshell(reason: string) =
   if quickshellProcess == nil:
@@ -1671,7 +1683,7 @@ proc on_session_unlocked(data: pointer; mgr: ptr RiverWindowManagerV1) =
 
 proc on_manage_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
   debug "River manage start", pendingWindows = pendingWindows.len
-  applyPendingLiveRestore()
+  applyPendingLiveRestore("manage start")
   # Queue all creations first so parent metadata can resolve against any other
   # window discovered in this manage batch.
   for id, data in pendingWindows:
@@ -1951,6 +1963,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
           executeEffect(eff)
       executeEffect(Effect(kind: EffectKind.EffManageFinish))
       riverPhase = RiverPhase.RiverIdle
+      spawnPendingStartupCommands(currentModel, "initial manage")
       spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
       continue
 
@@ -2029,6 +2042,16 @@ proc main() =
     fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"
     quit 1
 
+  let managerRoundtripResult = display.roundtrip()
+  debug "River manager roundtrip finished",
+    result = managerRoundtripResult,
+    outputs = outputPointers.len,
+    pendingWindows = pendingWindows.len,
+    seats = seatPointers.len
+  if managerRoundtripResult == -1:
+    fatal "Failed during River manager initialization roundtrip"
+    quit 1
+
   info "Triad connected to River", outputs = outputPointers.len,
       seats = seatPointers.len
 
@@ -2047,6 +2070,7 @@ proc main() =
       path = pendingLiveRestorePath,
       activeTag = state.activeTag,
       windows = state.tagByWindow.len
+    applyPendingLiveRestore("startup")
   elif hadRestoreSnapshot:
     if quarantineLiveRestoreState(pendingLiveRestorePath):
       warn "Invalid live restore snapshot quarantined",
@@ -2090,8 +2114,8 @@ proc main() =
   # Start Animation Loop
   asyncCheck startAnimationLoop()
 
-  # Spawn startup commands (e.g. Noctalia shell)
-  spawnStartupCommands(currentModel)
+  # Spawn startup commands after River accepts the initial manage pass.
+  scheduleStartupCommands(currentModel)
   scheduleQuickshellSpawn(currentModel)
 
   var running = true

@@ -186,7 +186,7 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
       let fallback = model.lowerWorkspaceFallback(targetSlot)
       if fallback != 0 and fallback != targetSlot:
         targetSlot = fallback
-    let tagId = model.ensureWorkspaceSlot(targetSlot)
+    let tagId = model.materializeRestoredTarget(targetSlot)
     if tagId != NullTagId:
       discard model.setActiveWorkspace(tagId)
       if model.primaryOutput != NullOutputId:
@@ -194,6 +194,7 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
   discard model.pruneDynamicWorkspaces()
+  model.refreshVisibleWorkspaceSlots()
 
 proc createWindowForExternal*(model: var Model;
     externalId: ExternalWindowId; appId, title: string; identifier = "";

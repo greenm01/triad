@@ -20,11 +20,25 @@ latest_triad_pid() {
   pgrep -n -x triad 2>/dev/null || true
 }
 
-wait_niri_ready() {
+active_tag_from_snapshot() {
+  printf '%s\n' "$1" |
+    sed -n 's/.*"active_tag"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' |
+    head -n 1
+}
+
+wait_restore_ready() {
   i=0
-  while [ "$i" -lt 50 ]; do
-    if "$repo_dir/triad_niri" msg -j workspaces >/dev/null 2>&1; then
-      return 0
+  while [ "$i" -lt 100 ]; do
+    if [ ! -e "$restore_path" ] &&
+        "$repo_dir/triad_niri" msg -j workspaces >/dev/null 2>&1; then
+      current_snapshot="$(
+        timeout 1 "$repo_dir/triad" msg dump-live-restore-state \
+          2>/dev/null || true
+      )"
+      current_active_tag="$(active_tag_from_snapshot "$current_snapshot")"
+      if [ "$current_active_tag" = "$snapshot_active_tag" ]; then
+        return 0
+      fi
     fi
     i=$((i + 1))
     sleep 0.1
@@ -37,9 +51,13 @@ wait_restarted() {
   while [ "$i" -lt 50 ]; do
     new_pid="$(latest_triad_pid)"
     if [ -n "$new_pid" ] && [ "$new_pid" != "$old_pid" ]; then
-      wait_niri_ready ||
-        fail "installed binaries and restarted manager pid $old_pid -> $new_pid, but Niri-compatible IPC did not become ready"
-      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $new_pid; Niri-compatible IPC is ready"
+      wait_restore_ready ||
+        fail "installed binaries and restarted manager pid $old_pid -> $new_pid, but restored workspace state did not become ready"
+      ready_pid="$(latest_triad_pid)"
+      if [ -z "$ready_pid" ] || [ "$ready_pid" = "$old_pid" ]; then
+        fail "restored workspace state became ready, but no restarted manager remained"
+      fi
+      printf '%s\n' "live-reload: installed binaries and restarted manager pid $old_pid -> $ready_pid; restored active tag $snapshot_active_tag is ready"
       return 0
     fi
     i=$((i + 1))
@@ -55,6 +73,10 @@ snapshot_restore_state() {
   if snapshot="$(timeout 3 "$repo_dir/triad" msg dump-live-restore-state 2>/dev/null)"; then
     if printf '%s\n' "$snapshot" |
         grep -q '"schema"[[:space:]]*:[[:space:]]*"triad-live-restore-v2"'; then
+      snapshot_active_tag="$(active_tag_from_snapshot "$snapshot")"
+      if [ -z "$snapshot_active_tag" ]; then
+        fail "native live restore snapshot did not include active_tag"
+      fi
       restore_dir="$(dirname -- "$restore_path")"
       mkdir -p "$restore_dir"
       tmp="$restore_path.tmp.$$"

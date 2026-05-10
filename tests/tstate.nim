@@ -348,11 +348,22 @@ suite "Runtime state primitives":
     restore.tagByWindow[50] = 2
 
     check state.applyRuntimeLiveRestore(restore)
+    let restoredSnapshot = state.readRuntimeSnapshot()
+    check restoredSnapshot.activeTag == 2
+    check restoredSnapshot.activeWorkspaceIdx == 2
+    check restoredSnapshot.workspaces[1].isActive
+    check restoredSnapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check restoredSnapshot.workspaces[1].targetViewportXOffset == 320.0'f32
+    check restoredSnapshot.workspaces[1].currentViewportXOffset == 280.0'f32
+    check restoredSnapshot.workspaces[1].targetViewportYOffset == 40.0'f32
+    check restoredSnapshot.workspaces[1].currentViewportYOffset == 20.0'f32
+
     discard state.applyRuntimeUpdate(Msg(
       kind: MsgKind.WlWindowCreated,
       windowId: 50,
       appId: "browser",
       title: "Browser"))
+    discard state.applyRuntimeLayoutProjection()
 
     let snapshot = state.readRuntimeSnapshot()
     check snapshot.activeTag == 2
@@ -364,6 +375,8 @@ suite "Runtime state primitives":
     check snapshot.workspaces[1].currentViewportXOffset == 280.0'f32
     check snapshot.workspaces[1].targetViewportYOffset == 40.0'f32
     check snapshot.workspaces[1].currentViewportYOffset == 20.0'f32
+    check snapshot.workspaces[1].columns.len == 1
+    check snapshot.workspaces[1].columns[0].widthProportion == 0.75'f32
     check snapshot.windows[0].isFloating
     check snapshot.windows[0].floatingGeom ==
       runtime_values.Rect(x: 100, y: 80, w: 640, h: 480)
