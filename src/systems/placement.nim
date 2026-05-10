@@ -123,6 +123,21 @@ proc setFocusedColumnWidth*(model: var Model; width: float32): bool =
     return false
   model.setColumnWidth(pos.columnId, width)
 
+proc preserveMovedFocus(
+    model: var Model; tagId: TagId; winId: WindowId; moved: bool): bool =
+  if not moved:
+    return false
+  discard model.setTagFocus(tagId, winId)
+  discard model.requestTagViewportRetarget(tagId)
+  true
+
+proc retargetMovedFocus(
+    model: var Model; tagId: TagId; moved: bool): bool =
+  if not moved:
+    return false
+  discard model.requestTagViewportRetarget(tagId)
+  true
+
 proc moveFocusedWindowToSlot*(
     model: var Model; targetSlot: uint32): bool =
   if targetSlot == 0:
@@ -182,11 +197,15 @@ proc moveFocusedWindowLeft*(model: var Model): bool =
   if pos.colIdx > 0:
     let target = model.columnAt(pos.tagId, pos.colIdx - 1)
     let targetIdx = model.windowCountForColumn(target)
-    model.moveWindowToColumn(pos.tagId, pos.winId, target, targetIdx)
+    return model.preserveMovedFocus(
+      pos.tagId, pos.winId,
+      model.moveWindowToColumn(pos.tagId, pos.winId, target, targetIdx))
   else:
     let target = model.insertColumn(
       pos.tagId, 0, model.defaultColumnWidth())
-    model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
+    return model.preserveMovedFocus(
+      pos.tagId, pos.winId,
+      model.moveWindowToColumn(pos.tagId, pos.winId, target, 0))
 
 proc moveFocusedWindowRight*(model: var Model): bool =
   let pos = model.focusedPosition()
@@ -194,17 +213,24 @@ proc moveFocusedWindowRight*(model: var Model): bool =
     return false
   let columnCount = model.columnCountForTag(pos.tagId)
   if pos.colIdx < columnCount - 1:
-    model.moveWindowToColumn(
-      pos.tagId, pos.winId, model.columnAt(pos.tagId, pos.colIdx + 1), 0)
+    return model.preserveMovedFocus(
+      pos.tagId, pos.winId,
+      model.moveWindowToColumn(
+        pos.tagId, pos.winId, model.columnAt(pos.tagId, pos.colIdx + 1), 0))
   else:
     let target = model.addColumn(pos.tagId, model.defaultColumnWidth())
-    model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
+    return model.preserveMovedFocus(
+      pos.tagId, pos.winId,
+      model.moveWindowToColumn(pos.tagId, pos.winId, target, 0))
 
 proc moveFocusedWindowUp*(model: var Model): bool =
   let pos = model.focusedPosition()
   if not pos.found or pos.winIdx <= 0:
     return false
-  model.moveWindowToColumn(pos.tagId, pos.winId, pos.columnId, pos.winIdx - 1)
+  model.preserveMovedFocus(
+    pos.tagId, pos.winId,
+    model.moveWindowToColumn(
+      pos.tagId, pos.winId, pos.columnId, pos.winIdx - 1))
 
 proc moveFocusedWindowDown*(model: var Model): bool =
   let pos = model.focusedPosition()
@@ -213,7 +239,10 @@ proc moveFocusedWindowDown*(model: var Model): bool =
   let windowCount = model.windowCountForColumn(pos.columnId)
   if pos.winIdx < 0 or pos.winIdx >= windowCount - 1:
     return false
-  model.moveWindowToColumn(pos.tagId, pos.winId, pos.columnId, pos.winIdx + 1)
+  model.preserveMovedFocus(
+    pos.tagId, pos.winId,
+    model.moveWindowToColumn(
+      pos.tagId, pos.winId, pos.columnId, pos.winIdx + 1))
 
 proc moveFocusedWindowUpOrWorkspace*(model: var Model): bool =
   let pos = model.focusedPosition()
@@ -236,24 +265,41 @@ proc moveFocusedWindowDownOrWorkspace*(model: var Model): bool =
 
 proc moveFocusedColumnLeft*(model: var Model): bool =
   let pos = model.focusedPosition()
-  pos.found and pos.colIdx > 0 and
-    model.moveColumn(pos.tagId, pos.colIdx, pos.colIdx - 1)
+  if not pos.found or pos.colIdx <= 0:
+    return false
+  model.retargetMovedFocus(
+    pos.tagId,
+    model.moveColumn(pos.tagId, pos.colIdx, pos.colIdx - 1))
 
 proc moveFocusedColumnRight*(model: var Model): bool =
   let pos = model.focusedPosition()
+  if not pos.found:
+    return false
   let columnCount = model.columnCountForTag(pos.tagId)
-  pos.found and pos.colIdx < columnCount - 1 and
-    model.moveColumn(pos.tagId, pos.colIdx, pos.colIdx + 1)
+  if pos.colIdx >= columnCount - 1:
+    return false
+  model.retargetMovedFocus(
+    pos.tagId,
+    model.moveColumn(pos.tagId, pos.colIdx, pos.colIdx + 1))
 
 proc moveFocusedColumnToFirst*(model: var Model): bool =
   let pos = model.focusedPosition()
-  pos.found and pos.colIdx > 0 and model.moveColumn(pos.tagId, pos.colIdx, 0)
+  if not pos.found or pos.colIdx <= 0:
+    return false
+  model.retargetMovedFocus(
+    pos.tagId,
+    model.moveColumn(pos.tagId, pos.colIdx, 0))
 
 proc moveFocusedColumnToLast*(model: var Model): bool =
   let pos = model.focusedPosition()
+  if not pos.found:
+    return false
   let columnCount = model.columnCountForTag(pos.tagId)
-  pos.found and pos.colIdx < columnCount - 1 and
-    model.moveColumn(pos.tagId, pos.colIdx, columnCount - 1)
+  if pos.colIdx >= columnCount - 1:
+    return false
+  model.retargetMovedFocus(
+    pos.tagId,
+    model.moveColumn(pos.tagId, pos.colIdx, columnCount - 1))
 
 proc consumeNextColumnWindow*(model: var Model): bool =
   let pos = model.focusedPosition()
@@ -277,7 +323,9 @@ proc expelFocusedWindow*(model: var Model): bool =
     return false
   let target = model.insertColumn(
     pos.tagId, pos.colIdx + 1, model.defaultColumnWidth())
-  model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
+  model.preserveMovedFocus(
+    pos.tagId, pos.winId,
+    model.moveWindowToColumn(pos.tagId, pos.winId, target, 0))
 
 proc zoomFocusedWindow*(model: var Model): bool =
   let pos = model.focusedPosition()
@@ -290,4 +338,6 @@ proc zoomFocusedWindow*(model: var Model): bool =
     return false
   if master == pos.winId:
     return false
-  model.swapPlacedWindows(pos.tagId, master, pos.tagId, pos.winId)
+  model.preserveMovedFocus(
+    pos.tagId, pos.winId,
+    model.swapPlacedWindows(pos.tagId, master, pos.tagId, pos.winId))

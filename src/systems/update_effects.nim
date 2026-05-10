@@ -323,6 +323,25 @@ proc isOverviewPreviewCommand(kind: MsgKind): bool =
     MsgKind.CmdFocusWindowOrWorkspaceUp,
     MsgKind.CmdFocusWindowOrWorkspaceDown}
 
+proc isFocusPreservingLayoutCommand(kind: MsgKind): bool =
+  kind in {
+    MsgKind.CmdMoveWindow,
+    MsgKind.CmdMoveWindowLeft,
+    MsgKind.CmdMoveWindowRight,
+    MsgKind.CmdMoveWindowUp,
+    MsgKind.CmdMoveWindowDown,
+    MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+    MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
+    MsgKind.CmdMoveColumnLeft,
+    MsgKind.CmdMoveColumnRight,
+    MsgKind.CmdMoveColumnToFirst,
+    MsgKind.CmdMoveColumnToLast,
+    MsgKind.CmdSwapWindowUp,
+    MsgKind.CmdSwapWindowDown,
+    MsgKind.CmdConsumeWindow,
+    MsgKind.CmdExpelWindow,
+    MsgKind.CmdZoom}
+
 proc addSetFullscreenEffect*(effects: var seq[Effect];
     winId: runtime_values.WindowId; fullscreen: bool; outputId = 0'u32) =
   effects.add(Effect(
@@ -354,6 +373,9 @@ proc addPostUpdateEffects*(
       effects.add(Effect(kind: EffectKind.EffFocusShellUi))
     elif afterFocus != 0:
       effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
+  elif dirty and afterFocus != 0 and not after.overviewActive and
+      msg.kind.isFocusPreservingLayoutCommand():
+    effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
   elif msg.kind in {MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow} and
       afterFocus != 0:
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))

@@ -58,6 +58,10 @@ proc updateModel(model: var Model; msg: Msg): seq[Effect] =
   model = nextModel
   effects
 
+proc hasFocusEffect(effects: seq[Effect]; id: uint32): bool =
+  effects.anyIt(it.kind == EffectKind.EffFocusWindow and
+    uint32(it.focusId) == id)
+
 proc viewport(model: Model; slot: uint32): ViewportState =
   let tagId = model.tagForSlot(slot)
   let tag = model.tagData(tagId).get()
@@ -177,6 +181,65 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowOpenedOrChanged"))
+
+  test "Moving focused window across columns preserves focus":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveWindowLeft))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+    check effects.hasFocusEffect(2)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Moving focused stacked window preserves focus":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Two"))
+
+    let tagId = model.tagForSlot(1)
+    let firstColumn = model.columnAt(tagId, 0)
+    let winId = model.windowForExternal(ExternalWindowId(2))
+    discard model.moveWindowToColumn(tagId, winId, firstColumn, 1)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveWindowUp))
+
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check effects.hasFocusEffect(2)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "No-op focused window move does not reassert focus":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveWindowUp))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 1
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+    check not effects.hasFocusEffect(1)
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Moving focused column retargets camera":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveColumnLeft))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 2
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+    check effects.hasFocusEffect(2)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Opening overview initializes visible selection":
     var model = configuredModel()
