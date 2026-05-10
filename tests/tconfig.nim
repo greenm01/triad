@@ -1,14 +1,39 @@
-import os, sequtils, unittest
+import options, os, sequtils, unittest
 import ../src/config/defaults
 import ../src/config/apply
 import ../src/config/parser
 import ../src/config/reload_policy
 import ../src/core/msg
+import ../src/ipc/commands
 import ../src/state/invariants
 import ../src/state/snapshot
 import ../src/systems/runtime_facade
 import ../src/types/model
 import ../src/types/runtime_values
+
+const
+  Shift = 1'u32
+  Ctrl = 4'u32
+  Alt = 8'u32
+  Super = 64'u32
+
+proc commandForBinding(
+    config: Config; key: string; modifiers: uint32;
+    mode = BindingMode.BindAlways): string =
+  for binding in config.keyBindings:
+    if binding.key == key and binding.modifiers == modifiers and
+        binding.mode == mode:
+      return binding.command
+  ""
+
+proc msgKindForBinding(
+    config: Config; key: string; modifiers: uint32;
+    mode = BindingMode.BindAlways): MsgKind =
+  let command = config.commandForBinding(key, modifiers, mode)
+  check command.len > 0
+  let parsed = parseTextCommand(command)
+  check parsed.isSome
+  parsed.get().kind
 
 suite "KDL Configuration Parser":
   test "config application preserves live window state":
@@ -191,6 +216,7 @@ protocol-surfaces {
   visible-debug #true
 }
 bindings {
+  mirror-hjkl-arrows #true
   bind "Super+Return" "spawn-terminal"
   pointer-bind "Super+left" "move"
   pointer-bind "Super+middle" "toggle-maximized"
@@ -202,6 +228,7 @@ bindings {
     removeFile(path)
 
     check config.layout.gaps == 32
+    check config.mirrorHjklArrows
     check config.layout.borderWidth == 3
     check config.layout.centerFocusedColumn == "always"
     check config.layout.layoutCycle == @[LayoutMode.Scroller, LayoutMode.Deck,
@@ -234,6 +261,59 @@ bindings {
         it.mode == BindingMode.BindOverview)
     check config.pointerBindings.anyIt(
       it.button == 0x116'u32 and it.command == "focus-last")
+
+  test "HJKL mirroring preserves binding settings":
+    let path = getCurrentDir() / "test_config_mirror.kdl"
+    writeFile(path, """
+bindings {
+  mirror-hjkl-arrows #true
+  bind "Super+h" "focus-left" allow-inhibiting=#false
+  bind "Super+j" "focus-down" mode="overview"
+  bind "Super+k" "focus-up" allow-inhibiting=#false
+  bind "Super+Left" "custom-left"
+}
+""")
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.commandForBinding("Left", Super) == "custom-left"
+    check config.commandForBinding(
+      "Down", Super, BindingMode.BindOverview) == "focus-down"
+    let mirroredDown = config.keyBindings.filterIt(
+      it.key == "Down" and it.modifiers == Super and
+        it.mode == BindingMode.BindOverview)
+    check mirroredDown.len == 1
+    let mirroredUp = config.keyBindings.filterIt(
+      it.key == "Up" and it.modifiers == Super and
+        it.command == "focus-up")
+    check mirroredUp.len == 1
+    check mirroredUp[0].bypassShortcutsInhibit
+
+  test "Default bindings follow Niri-style movement and scratchpad chords":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+
+    check config.msgKindForBinding("h", Super + Ctrl) ==
+      MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("Left", Super + Ctrl) ==
+      MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("j", Super + Ctrl) ==
+      MsgKind.CmdMoveWindowDown
+    check config.msgKindForBinding("Down", Super + Ctrl) ==
+      MsgKind.CmdMoveWindowDown
+    check config.msgKindForBinding("k", Super + Ctrl) ==
+      MsgKind.CmdMoveWindowUp
+    check config.msgKindForBinding("l", Super + Ctrl) ==
+      MsgKind.CmdMoveColumnRight
+    check config.msgKindForBinding("h", Super + Alt) ==
+      MsgKind.CmdMoveWindowLeft
+    check config.msgKindForBinding("Right", Super + Alt) ==
+      MsgKind.CmdMoveWindowRight
+    check config.msgKindForBinding("w", Super) ==
+      MsgKind.CmdToggleScratchpad
+    check config.msgKindForBinding("w", Super + Shift) ==
+      MsgKind.CmdMoveToScratchpad
+    check config.msgKindForBinding("r", Super + Shift) ==
+      MsgKind.CmdRestoreScratchpad
 
   test "config defaults clamp invalid runtime values":
     var model = Model()

@@ -21,6 +21,7 @@ type
     presentationMode*: PresentationMode
     allowExitSession*: bool
     protocolSurfaces*: ProtocolSurfacesConfig
+    mirrorHjklArrows*: bool
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
 
@@ -188,6 +189,36 @@ proc parseBindingMode(value: string): BindingMode =
   of "normal": BindingMode.BindNormal
   of "overview": BindingMode.BindOverview
   else: BindingMode.BindAlways
+
+proc mirroredArrowKey(key: string): string =
+  case key.toLowerAscii()
+  of "h": "Left"
+  of "j": "Down"
+  of "k": "Up"
+  of "l": "Right"
+  else: ""
+
+proc sameKeySlot(a, b: KeyBindingConfig): bool =
+  a.key.toLowerAscii() == b.key.toLowerAscii() and
+    a.modifiers == b.modifiers and a.mode == b.mode
+
+proc hasKeySlot(bindings: seq[KeyBindingConfig];
+    candidate: KeyBindingConfig): bool =
+  for binding in bindings:
+    if binding.sameKeySlot(candidate):
+      return true
+  false
+
+proc mirrorHjklArrowBindings(bindings: var seq[KeyBindingConfig]) =
+  let source = bindings
+  for binding in source:
+    let arrow = binding.key.mirroredArrowKey()
+    if arrow.len == 0:
+      continue
+    var mirrored = binding
+    mirrored.key = arrow
+    if not bindings.hasKeySlot(mirrored):
+      bindings.add(mirrored)
 
 proc parsePresentationMode(value: string): PresentationMode =
   case value
@@ -415,7 +446,9 @@ proc loadConfig*(path: string): Config =
       elif node.name == "bindings":
         for child in node.children:
           try:
-            if child.name == "bind" and child.args.len >= 2:
+            if child.name == "mirror-hjkl-arrows" and child.args.len > 0:
+              result.mirrorHjklArrows = child.args[0].kBool()
+            elif child.name == "bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               if spec.key.len > 0:
                 var binding = KeyBindingConfig(
@@ -453,6 +486,8 @@ proc loadConfig*(path: string): Config =
                 result.pointerBindings.add(binding)
           except CatchableError as e:
             warn "Ignoring invalid binding config field", field = child.name, error = e.msg
+        if result.mirrorHjklArrows:
+          result.keyBindings.mirrorHjklArrowBindings()
 
       elif node.name == "quickshell":
         for child in node.children:

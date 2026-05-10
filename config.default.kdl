@@ -108,6 +108,8 @@ spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 &
 spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || true"
 
 bindings {
+    mirror-hjkl-arrows #true
+
     // Launch/session.
     bind "Super+Return" "spawn kitty"
     bind "Super+Space" "spawn fuzzel"
@@ -119,16 +121,11 @@ bindings {
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"
 
-    // Focus. Arrow and Page keys are intentionally avoided until Triad's
-    // keysym mapper grows named-key coverage.
+    // Focus. Arrow keys mirror h/j/k/l via mirror-hjkl-arrows.
     bind "Super+h" "focus-left"
     bind "Super+j" "focus-down"
     bind "Super+k" "focus-up"
     bind "Super+l" "focus-right"
-    bind "Super+Left" "focus-left"
-    bind "Super+Down" "focus-down"
-    bind "Super+Up" "focus-up"
-    bind "Super+Right" "focus-right"
     bind "Super+Tab" "focus-last"
     bind "Super+Shift+Tab" "focus-prev"
     bind "Super+u" "focus-occupied-tag-right"
@@ -200,12 +197,12 @@ bindings {
     bind "Super+x" "layout-monocle"
 
     // Scroller movement and stack surgery.
-    bind "Super+Ctrl+h" "move-window-left"
-    bind "Super+Ctrl+j" "move-window-down-or-to-workspace-down"
-    bind "Super+Ctrl+k" "move-window-up-or-to-workspace-up"
-    bind "Super+Ctrl+l" "move-window-right"
-    bind "Super+Alt+h" "move-column-left"
-    bind "Super+Alt+l" "move-column-right"
+    bind "Super+Ctrl+h" "move-column-left"
+    bind "Super+Ctrl+j" "move-window-down"
+    bind "Super+Ctrl+k" "move-window-up"
+    bind "Super+Ctrl+l" "move-column-right"
+    bind "Super+Alt+h" "move-window-left"
+    bind "Super+Alt+l" "move-window-right"
     bind "Super+Alt+Home" "move-column-to-first"
     bind "Super+Alt+End" "move-column-to-last"
     bind "Super+z" "zoom"
@@ -232,10 +229,6 @@ bindings {
     bind "Super+o" "toggle-overview"
     bind "Super+p" "select-window"
     bind "Super+Shift+Space" "focus-shell-ui"
-    bind "Left" "focus-left" mode="overview"
-    bind "Down" "focus-window-or-workspace-down" mode="overview"
-    bind "Up" "focus-window-or-workspace-up" mode="overview"
-    bind "Right" "focus-right" mode="overview"
     bind "h" "focus-left" mode="overview"
     bind "j" "focus-window-or-workspace-down" mode="overview"
     bind "k" "focus-window-or-workspace-up" mode="overview"
