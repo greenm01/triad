@@ -69,6 +69,9 @@ var
   singlePixelManager: ptr singlepixel.WpSinglePixelBufferManagerV1
   riverPhase = RiverPhase.RiverIdle
   bindingsConfigured = false
+  manageRequestPending = false
+  manageRequestReason = ""
+  screenshotCaptureActive = false
 
   # Runtime State
   runtimeState: TriadRuntimeState
@@ -1008,9 +1011,25 @@ layer_seat_listener = river_layer.RiverLayerShellSeatV1Listener(
 # --- Effects Execution ---
 
 proc requestManage(reason: string) =
-  if river_manager != nil:
-    trace "Requesting River manage sequence", reason = reason
-    river_manager.manageDirty()
+  if river_manager == nil:
+    return
+  if manageRequestPending:
+    trace "Coalescing River manage request", reason = reason,
+      pendingReason = manageRequestReason
+    return
+  manageRequestPending = true
+  manageRequestReason = reason
+  trace "Queued River manage sequence", reason = reason
+
+proc flushManageRequest() =
+  if not manageRequestPending or river_manager == nil or
+      riverPhase != RiverPhase.RiverIdle:
+    return
+  let reason = manageRequestReason
+  manageRequestPending = false
+  manageRequestReason = ""
+  trace "Requesting River manage sequence", reason = reason
+  river_manager.manageDirty()
 
 proc executeManageEffect(eff: Effect) =
   case eff.kind
@@ -1219,57 +1238,62 @@ proc focusedWindowGeometry(): Rect =
       return win.floatingGeom
   currentModel.primaryScreen()
 
-proc runShellCommand(command: string): int =
-  let p = startProcess("sh", args = @["-c", command], options = {poUsePath})
-  result = p.waitForExit()
-  p.close()
-
 proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string;
     pointerMode: ScreenshotPointerMode; writeToDisk,
     copyToClipboard: bool) {.async.} =
-  let screenshotConfig = currentModel.screenshot
-  let path =
-    if writeToDisk:
-      screenshotPathOrDefault(requestedPath, screenshotConfig)
-    else:
-      screenshotTempPath(screenshotConfig)
-  let dir = path.splitFile().dir
-  if dir.len > 0:
-    try:
-      createDir(dir)
-    except CatchableError as e:
-      warn "Failed to create screenshot directory", path = dir, error = e.msg
+  if screenshotCaptureActive:
+    warn "Screenshot capture skipped; capture already running"
+    return
+
+  screenshotCaptureActive = true
+  var path = ""
+  try:
+    let screenshotConfig = currentModel.screenshot
+    path =
+      if writeToDisk:
+        screenshotPathOrDefault(requestedPath, screenshotConfig)
+      else:
+        screenshotTempPath(screenshotConfig)
+    let dir = path.splitFile().dir
+    if dir.len > 0:
+      try:
+        createDir(dir)
+      except CatchableError as e:
+        warn "Failed to create screenshot directory", path = dir, error = e.msg
+        return
+
+    let command = screenshotCaptureCommand(kind, path, screenshotConfig,
+        currentModel.primaryScreen(), focusedWindowGeometry(), pointerMode)
+    info "Screenshot capture started", path = path, screenshotKind = $kind
+
+    let code = await runShellCommandAsync(command)
+    if code != 0:
+      warn "Screenshot capture failed", path = path, exitCode = code
       return
 
-  let command = screenshotCaptureCommand(kind, path, screenshotConfig,
-      currentModel.primaryScreen(), focusedWindowGeometry(), pointerMode)
+    var clipboardOk = true
+    if copyToClipboard:
+      let copyCode = await runShellCommandAsync(
+        screenshotClipboardCommand(path, screenshotConfig))
+      if copyCode != 0:
+        warn "Screenshot clipboard copy failed", path = path,
+          exitCode = copyCode
+        clipboardOk = false
+    if not writeToDisk and not clipboardOk:
+      return
 
-  try:
-    let code = runShellCommand(command)
-    if code == 0:
-      var clipboardOk = true
-      if copyToClipboard:
-        let copyCode = runShellCommand(screenshotClipboardCommand(path,
-            screenshotConfig))
-        if copyCode != 0:
-          warn "Screenshot clipboard copy failed", path = path,
-              exitCode = copyCode
-          clipboardOk = false
-      if not writeToDisk and not clipboardOk:
-        return
-      info "Screenshot captured", path = path
-      let event =
-        if writeToDisk:
-          %*{"ScreenshotCaptured": {"path": path}}
-        else:
-          %*{"ScreenshotCaptured": {}}
-      asyncCheck broadcastJson($event)
-    else:
-      warn "Screenshot capture failed", path = path, exitCode = code
+    info "Screenshot captured", path = path
+    let event =
+      if writeToDisk:
+        %*{"ScreenshotCaptured": {"path": path}}
+      else:
+        %*{"ScreenshotCaptured": {}}
+    asyncCheck broadcastJson($event)
   except CatchableError as e:
     warn "Screenshot capture failed", path = path, error = e.msg
   finally:
-    if not writeToDisk and fileExists(path):
+    screenshotCaptureActive = false
+    if path.len > 0 and not writeToDisk and fileExists(path):
       try:
         removeFile(path)
       except CatchableError:
@@ -1577,6 +1601,9 @@ var window_listener = RiverWindowV1Listener(
 # --- Wayland Callbacks ---
 
 proc cleanupRiverObjects() =
+  manageRequestPending = false
+  manageRequestReason = ""
+
   destroyAllProtocolSurfaces()
 
   var winIds: seq[WindowId] = @[]
@@ -2086,6 +2113,8 @@ proc main() =
     if shouldExit:
       running = false
       continue
+
+    flushManageRequest()
 
     if not prepareWaylandRead(display):
       break

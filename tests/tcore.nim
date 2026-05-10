@@ -1,4 +1,4 @@
-import json, options, sequtils, strutils, tables, unittest
+import asyncdispatch, json, options, sequtils, strutils, tables, unittest
 import ../src/config/parser
 import ../src/core/effects
 import ../src/core/msg
@@ -148,6 +148,21 @@ suite "Core Runtime Logic":
         "grim -t png -g '40,50 800x600' '/tmp/window.png'"
     check screenshotClipboardCommand("/tmp/window.png", config) ==
       "wl-copy --type image/png < '/tmp/window.png'"
+
+  test "Async shell command runner yields while process runs":
+    var ticked = false
+
+    proc markTick() {.async.} =
+      await sleepAsync(20)
+      ticked = true
+
+    proc runSlow(): Future[int] {.async.} =
+      asyncCheck markTick()
+      result = await runShellCommandAsync("sleep 0.1", pollMs = 10)
+
+    check waitFor(runSlow()) == 0
+    check ticked
+    check waitFor(runShellCommandAsync("exit 7", pollMs = 10)) == 7
 
   test "Targeted layout command updates requested slot only":
     var model = configuredModel()

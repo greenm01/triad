@@ -1,4 +1,4 @@
-import os, strutils, times
+import asyncdispatch, os, osproc, strutils, times
 import ../core/defaults
 import ../core/msg
 import ../types/runtime_values
@@ -86,3 +86,32 @@ proc screenshotClipboardCommand*(path: string;
     else:
       DefaultScreenshotClipboardCommand
   clipboardCommand & " < " & shellQuote(path)
+
+proc runShellCommandAsync*(command: string; pollMs = 50): Future[int]
+    {.async.} =
+  var process: Process
+  var finished = false
+  try:
+    process = startProcess(
+      "sh",
+      args = @["-c", command],
+      options = {poUsePath, poParentStreams})
+    while true:
+      let code = process.peekExitCode()
+      if code != -1:
+        finished = true
+        return code
+      await sleepAsync(pollMs)
+  finally:
+    if process != nil:
+      if not finished:
+        try:
+          if process.running():
+            process.terminate()
+            discard process.waitForExit(1000)
+        except CatchableError:
+          discard
+      try:
+        process.close()
+      except CatchableError:
+        discard
