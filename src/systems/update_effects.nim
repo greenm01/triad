@@ -388,6 +388,17 @@ proc fullscreenWindow(snapshot: ShellSnapshot;
       return some(win)
   none(ShellWindow)
 
+proc windowById(snapshot: ShellSnapshot;
+    winId: runtime_values.WindowId): Option[ShellWindow] =
+  for win in snapshot.windows:
+    if win.id == winId:
+      return some(win)
+  none(ShellWindow)
+
+proc windowOnActiveWorkspace(snapshot: ShellSnapshot;
+    win: ShellWindow): bool =
+  win.tagId.isSome and win.tagId.get() == snapshot.activeTag
+
 proc shouldSyncFullscreenPresentation(
     kind: MsgKind; before, after: ShellSnapshot): bool =
   if before.focusedWindowId() != after.focusedWindowId() or
@@ -414,12 +425,19 @@ proc addFullscreenPresentationSync(
   if not msg.kind.shouldSyncFullscreenPresentation(before, after):
     return
 
-  let activeFullscreen =
-    if after.overviewActive: runtime_values.WindowId(0)
-    else: after.focusedWindowId()
+  let afterFocus = after.focusedWindowId()
+  let focusedWin = after.windowById(afterFocus)
+  let overlayFocus = focusedWin.isSome and focusedWin.get().isFloating
   for win in after.windows:
     if win.isFullscreen:
-      effects.addFullscreenPresentationEffect(win, win.id == activeFullscreen)
+      let present =
+        if after.overviewActive:
+          false
+        elif overlayFocus:
+          not win.isFloating and after.windowOnActiveWorkspace(win)
+        else:
+          win.id == afterFocus
+      effects.addFullscreenPresentationEffect(win, present)
 
   for beforeWin in before.windows:
     if beforeWin.isFullscreen and after.fullscreenWindow(beforeWin.id).isNone:

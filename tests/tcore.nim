@@ -69,6 +69,11 @@ proc hasFullscreenEffect(
   effects.anyIt(it.kind == EffectKind.EffSetFullscreen and
     uint32(it.fsWinId) == id and it.isFullscreen == fullscreen)
 
+proc hasMaximizedEffect(
+    effects: seq[Effect]; id: uint32; maximized: bool): bool =
+  effects.anyIt(it.kind == EffectKind.EffSetMaximized and
+    uint32(it.maxWinId) == id and it.isMaximized == maximized)
+
 proc viewport(model: Model; slot: uint32): ViewportState =
   let tagId = model.tagForSlot(slot)
   let tag = model.tagData(tagId).get()
@@ -451,6 +456,70 @@ suite "Core Runtime Logic":
       kind: MsgKind.CmdFocusWindowById,
       focusWindowId: 2))
     check returnEffects.hasFullscreenEffect(2, true)
+
+  test "Floating popup preserves maximized backing windows":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        centerFocusedColumn: "always",
+        enableAnimations: true,
+        animationSpeed: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(appIdMatch: "pinentry", openFloating: true)
+      ])).model
+    model.seedCameraWindows(2)
+
+    let firstMaxEffects = model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+    let secondMaxEffects = model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 2))
+
+    check firstMaxEffects.hasMaximizedEffect(1, true)
+    check secondMaxEffects.hasMaximizedEffect(2, true)
+
+    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 3, appId: "pinentry", title: "Password"))
+    let screen = model.primaryScreen()
+
+    check not popupEffects.hasMaximizedEffect(1, false)
+    check not popupEffects.hasMaximizedEffect(2, false)
+    check model.instructionGeom(1) == screen
+    check model.instructionGeom(2) == screen
+    check model.instructionGeom(3).w > 0
+    check model.focusedWindowId() == 3
+
+  test "Floating popup preserves fullscreen presentation":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        centerFocusedColumn: "always",
+        enableAnimations: true,
+        animationSpeed: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(appIdMatch: "pinentry", openFloating: true)
+      ])).model
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowFullscreenRequested,
+      fullscreenRequestId: 2,
+      fullscreenOutputId: 0))
+
+    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 3, appId: "pinentry", title: "Password"))
+    let screen = model.primaryScreen()
+
+    check not popupEffects.hasFullscreenEffect(2, false)
+    check model.instructionGeom(2) == screen
+    check model.instructionGeom(3).w > 0
+    check model.focusedWindowId() == 3
 
   test "Overview suspends fullscreen presentation":
     var model = cameraModel()

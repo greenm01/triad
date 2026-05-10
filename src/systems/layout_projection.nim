@@ -133,6 +133,31 @@ proc layoutForTag(
   of rv.LayoutMode.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
 
+proc upsertInstruction(
+    instructions: var seq[rv.RenderInstruction]; instruction:
+    rv.RenderInstruction) =
+  for idx, existing in instructions.mpairs:
+    if existing.windowId == instruction.windowId:
+      instructions[idx] = instruction
+      return
+  instructions.add(instruction)
+
+proc activeFocusIsOverlay(model: Model; focused: core_types.WindowId): bool =
+  if model.activeScratchpadWindow() != NullWindowId:
+    return true
+  let focusedOpt = model.windowData(focused)
+  focusedOpt.isSome and focusedOpt.get().isFloating
+
+proc preserveBackingPresentation(
+    model: Model; instructions: var seq[rv.RenderInstruction];
+    screen: rv.Rect) =
+  for winId, win in model.windowsOnTagWithId(model.activeTag):
+    if not win.isFloating and not win.isMinimized and
+        (win.isFullscreen or win.isMaximized):
+      instructions.upsertInstruction(rv.RenderInstruction(
+        windowId: model.externalWindowId(winId),
+        geom: screen))
+
 proc layoutProjection*(model: Model): LayoutProjection =
   let screen = model.primaryScreen()
   let windows = model.runtimeWindowTable()
@@ -185,6 +210,12 @@ proc layoutProjection*(model: Model): LayoutProjection =
       targetX: tagForLayout.targetViewportXOffset,
       targetY: tagForLayout.targetViewportYOffset))
 
+  let focused = model.activeFocus()
+  let focusedOpt = model.windowData(focused)
+  let overlayActive = model.activeFocusIsOverlay(focused)
+  if overlayActive:
+    model.preserveBackingPresentation(result.instructions, screen)
+
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if win.isFloating and not win.isMinimized:
       result.instructions.add(rv.RenderInstruction(
@@ -204,9 +235,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
           w: sw,
           h: sh)))
 
-  let focused = model.activeFocus()
-  let focusedOpt = model.windowData(focused)
-  if focusedOpt.isSome:
+  if focusedOpt.isSome and not overlayActive:
     let win = focusedOpt.get()
     if win.isFullscreen or win.isMaximized:
       result.instructions = @[rv.RenderInstruction(

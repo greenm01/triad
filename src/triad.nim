@@ -1242,7 +1242,19 @@ proc renderDesiredPlacements() =
       let winOpt = currentModel.windowDataForRiverId(id)
       let isFloating = winOpt.isSome and winOpt.get().isFloating
       let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
-      if isFloating or isScratchpad or isFullscreen or id == highlighted:
+      let isMaximized = winOpt.isSome and winOpt.get().isMaximized
+      if not isFloating and not isScratchpad and
+          (isFullscreen or isMaximized or id == highlighted):
+        windowNodes[id].placeTop()
+
+  for id in ids:
+    if windowNodes.hasKey(id):
+      let visibleScratchpad = currentModel.visibleScratchpadRiverId()
+      let isScratchpad = currentModel.isScratchpadVisible and
+        visibleScratchpad == id
+      let winOpt = currentModel.windowDataForRiverId(id)
+      let isFloating = winOpt.isSome and winOpt.get().isFloating
+      if isFloating or isScratchpad or id == highlighted:
         windowNodes[id].placeTop()
 
   if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
