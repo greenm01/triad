@@ -326,6 +326,10 @@ suite "Runtime state primitives":
       name: "restored-web",
       layoutMode: LayoutMode.Deck,
       focusedWindow: 50,
+      targetViewportXOffset: 320.0,
+      currentViewportXOffset: 280.0,
+      targetViewportYOffset: 40.0,
+      currentViewportYOffset: 20.0,
       columns: @[
         RestoredColumnState(
           windows: @[WindowId(50)],
@@ -338,7 +342,9 @@ suite "Runtime state primitives":
       appId: "browser",
       title: "Browser",
       widthProportion: 0.75,
-      heightProportion: 0.8)
+      heightProportion: 0.8,
+      isFloating: true,
+      floatingGeom: runtime_values.Rect(x: 100, y: 80, w: 640, h: 480))
     restore.tagByWindow[50] = 2
 
     check state.applyRuntimeLiveRestore(restore)
@@ -354,6 +360,13 @@ suite "Runtime state primitives":
     check snapshot.windows[0].id == 50
     check snapshot.windows[0].workspaceIdx == 2
     check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check snapshot.workspaces[1].targetViewportXOffset == 320.0'f32
+    check snapshot.workspaces[1].currentViewportXOffset == 280.0'f32
+    check snapshot.workspaces[1].targetViewportYOffset == 40.0'f32
+    check snapshot.workspaces[1].currentViewportYOffset == 20.0'f32
+    check snapshot.windows[0].isFloating
+    check snapshot.windows[0].floatingGeom ==
+      runtime_values.Rect(x: 100, y: 80, w: 640, h: 480)
 
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())

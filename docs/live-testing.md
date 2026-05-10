@@ -50,6 +50,12 @@ For changes that should pass the daily-driver live gate, run:
 TRIAD_DAILY_GATE_LIVE=1 nimble verify
 ```
 
+`nimble liveReload` writes a native `triad-live-restore-v2` snapshot before it
+installs binaries and stops the live manager. If that native snapshot cannot be
+captured, the reload aborts rather than falling back to the Niri-compatible
+state view, because that view cannot preserve camera offsets or full floating
+geometry.
+
 Expected startup milestones in `triad.log`:
 
 - `Logging initialized`

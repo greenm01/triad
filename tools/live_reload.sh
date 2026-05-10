@@ -53,7 +53,8 @@ snapshot_restore_state() {
   snapshot=""
 
   if snapshot="$(timeout 3 "$repo_dir/triad" msg dump-live-restore-state 2>/dev/null)"; then
-    if printf '%s\n' "$snapshot" | grep -q '"schema":"triad-live-restore-v2"'; then
+    if printf '%s\n' "$snapshot" |
+        grep -q '"schema"[[:space:]]*:[[:space:]]*"triad-live-restore-v2"'; then
       restore_dir="$(dirname -- "$restore_path")"
       mkdir -p "$restore_dir"
       tmp="$restore_path.tmp.$$"
@@ -63,23 +64,10 @@ snapshot_restore_state() {
       printf '%s\n' "live-reload: snapshotted native state for $window_count item(s) to $restore_path"
       return 0
     fi
+    fail "native live restore snapshot had an unsupported schema; aborting reload to preserve state"
   else
-    printf '%s\n' "live-reload: native snapshot timed out or failed; falling back to Niri-compatible snapshot" >&2
+    fail "native live restore snapshot timed out or failed; aborting reload to preserve state"
   fi
-
-  workspaces="$("$repo_dir/triad_niri" msg -j workspaces)" ||
-    fail "failed to snapshot workspaces before restart"
-  windows="$("$repo_dir/triad_niri" msg -j windows)" ||
-    fail "failed to snapshot windows before restart"
-
-  restore_dir="$(dirname -- "$restore_path")"
-  mkdir -p "$restore_dir"
-  tmp="$restore_path.tmp.$$"
-  printf '{"workspaces":%s,"windows":%s}\n' "$workspaces" "$windows" > "$tmp"
-  mv -f "$tmp" "$restore_path"
-
-  window_count="$(printf '%s\n' "$windows" | tr ',' '\n' | grep -c '"workspace_id"' || true)"
-  printf '%s\n' "live-reload: snapshotted $window_count window(s) to $restore_path"
 }
 
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -97,13 +85,6 @@ mkdir -p "$bin_dir"
 
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
-
-if "$repo_dir/triad" msg triad-reload; then
-  if wait_restarted; then
-    exit 0
-  fi
-  printf '%s\n' "live-reload: triad-reload did not restart the current manager; trying stop-manager fallback" >&2
-fi
 
 if "$repo_dir/triad" msg stop-manager; then
   wait_restarted ||
