@@ -233,6 +233,20 @@ proc stopTrackedQuickshell(reason: string) =
     discard
   quickshellProcess = nil
 
+proc releaseTrackedQuickshell(reason: string) =
+  if quickshellProcess == nil:
+    return
+
+  let pid = quickshellProcess.processID
+  try:
+    quickshellProcess.close()
+    info "Released Quickshell for manager handoff", pid = pid,
+        reason = reason
+  except CatchableError as e:
+    warn "Failed to release Quickshell for manager handoff", pid = pid,
+        reason = reason, error = e.msg
+  quickshellProcess = nil
+
 proc stopConfiguredQuickshell(model: Model; reason: string) =
   let args = quickshellKillArgs(model.quickshell)
   if args.len == 0 or model.quickshell.command.strip().len == 0:
@@ -1346,7 +1360,7 @@ proc executeEffect(eff: Effect) =
       xkbSeat.cancelEnsureNextKeyEaten()
   of EffectKind.EffStopManager:
     quickshellSpawnPending = false
-    stopQuickshell(currentModel, "manager stop", authoritative = true)
+    releaseTrackedQuickshell("manager stop")
     if river_manager != nil:
       river_manager.stop()
   of EffectKind.EffTriadReload:
@@ -1357,7 +1371,7 @@ proc executeEffect(eff: Effect) =
         error = restore.error
       return
     quickshellSpawnPending = false
-    stopQuickshell(currentModel, "triad reload", authoritative = true)
+    releaseTrackedQuickshell("triad reload")
     if river_manager != nil:
       river_manager.stop()
   of EffectKind.EffExitSession:
