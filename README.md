@@ -9,12 +9,12 @@ state projections. Everyone has a job. Everyone stays in their lane.
 
 Triad's architecture has three parts:
 
-*   **Protocol:** River owns the Wayland session, input, outputs, and atomic
-    surface placement.
-*   **Model:** Triad owns window-management policy in one canonical,
-    data-oriented runtime model.
-*   **Projection:** Quickshell and IPC clients consume snapshots of that model,
-    including Niri-shaped JSON for existing shell ecosystems.
+* **Protocol:** River owns the Wayland session, input, outputs, and atomic
+  surface placement.
+* **Model:** Triad owns window-management policy in one canonical,
+  data-oriented runtime model.
+* **Projection:** Quickshell and IPC clients consume snapshots of that model,
+  including Niri-shaped JSON for existing shell ecosystems.
 
 That is the trinity: protocol, model, projection. Not a theme. A boundary.
 
@@ -29,13 +29,13 @@ atomic commits. Triad does manager work: tags, columns, focus, scratchpads,
 restore state, layout policy, and shell state. If the manager is restarted, the
 display does not have to be. This is not glamorous. It is better than glamorous.
 
-| Technical Benefit | Monolithic Compositor | River Layout Client |
-| :--- | :--- | :--- |
-| **Crash safety** | Layout bugs can end the session. | The manager can restart alone. |
-| **Atomic placement** | Policy and rendering share one process. | River commits final placements. |
-| **Language choice** | Policy is tied to compositor internals. | Triad can be Nim. |
-| **Hot swapping** | Policy changes usually change the session. | The client can restart in place. |
-| **Trust** | More behavior lives inside the compositor. | Movement uses a narrow protocol. |
+| Technical Benefit    | Monolithic Compositor                      | River Layout Client              |
+|:-------------------- |:------------------------------------------ |:-------------------------------- |
+| **Crash safety**     | Layout bugs can end the session.           | The manager can restart alone.   |
+| **Atomic placement** | Policy and rendering share one process.    | River commits final placements.  |
+| **Language choice**  | Policy is tied to compositor internals.    | Triad can be Nim.                |
+| **Hot swapping**     | Policy changes usually change the session. | The client can restart in place. |
+| **Trust**            | More behavior lives inside the compositor. | Movement uses a narrow protocol. |
 
 ### Why DOD for a Window Manager?
 
@@ -52,29 +52,29 @@ actions.
 
 The result is dull in the right places:
 
-*   **Stable identity:** Triad IDs are independent of River, Wayland, or shell
-    handles.
-*   **Fast lookup:** hot paths use indexed tables instead of walking display
-    objects and hoping.
-*   **Explicit relationships:** tags, columns, groups, focus, and restore state
-    are modeled directly.
-*   **Deterministic updates:** events enter the model; effects and snapshots
-    leave it.
-*   **Portable projections:** shell IPC is derived from canonical state, not
-    from a second private truth.
+* **Stable identity:** Triad IDs are independent of River, Wayland, or shell
+  handles.
+* **Fast lookup:** hot paths use indexed tables instead of walking display
+  objects and hoping.
+* **Explicit relationships:** tags, columns, groups, focus, and restore state
+  are modeled directly.
+* **Deterministic updates:** events enter the model; effects and snapshots
+  leave it.
+* **Portable projections:** shell IPC is derived from canonical state, not
+  from a second private truth.
 
 Different window managers choose different shapes. Triad borrows the useful
 lessons and keeps its own center.
 
-| Method | Core Idea | Advantage |
-| :--- | :--- | :--- |
-| [Triad][river] | River client with a DOD model. | Isolation, dynamic tags, indexed state. |
-| [Mango][mango] | dwl-based compositor with tags. | Rich per-tag layout vocabulary. |
-| [niri][niri] | Scrollable tiling on an infinite strip. | New windows do not resize old ones. |
-| [Hyprland][hyprland] | Dynamic tiling, IPC, and plugins. | Custom, polished desktop. |
-| [Sway/i3][sway] | Tree-shaped containers and i3-style control. | Predictable keyboard workflow. |
-| [dwm][dwm] | Small dynamic X11 manager with tags. | Fast policy and a proven tag model. |
-| [bspwm][bspwm] | Binary-space-partitioned window tree. | Precise split control over a socket. |
+| Method   | Language | Paradigm                    | Core Idea                                | Advantage                               |
+|:-------- |:-------- |:--------------------------- |:---------------------------------------- |:--------------------------------------- |
+| Triad    | Nim      | DOD                         | River owns surfaces. Triad owns policy.  | Isolation, dynamic tags, indexed state. |
+| Mango    | C        | Procedural                  | Tag-first compositor with broad layouts. | Rich per-tag layout vocabulary.         |
+| niri     | Rust     | Scrollable compositor model | Tiling on an infinite horizontal strip.  | New windows do not resize old ones.     |
+| Hyprland | C++      | OOP                         | Dynamic tiling, IPC, and plugins.        | Custom, polished desktop.               |
+| Sway/i3  | C        | Container tree              | Tree-shaped containers                   | Predictable keyboard workflow.          |
+| dwm      | C        | procedural                  | Source-configured X11 manager with tags. | Fast policy and a proven tag model.     |
+| bspwm    | C        | procedural                  | Binary-space splits controlled over IPC. | Precise split control over a socket.    |
 
 [river]: https://www.mankier.com/1/river
 [mango]: https://mangowm.github.io/docs/
@@ -93,18 +93,18 @@ it presentable. A fair division of labor, and frankly overdue.
 
 ### Features
 
-*   **Hybrid Layouts:** Toggle between Scroller, Vertical Scroller,
-    Master-Stack, Grid, and Monocle modes independently for each workspace.
-*   **Dynamic Workspaces:** Start with a configurable workspace floor, then grow
-    and prune extra workspaces as they are used.
-*   **Smooth Animations:** Experience fluid window movement driven by a 60FPS
-    internal clock and exponential easing.
-*   **Interactive Controls:** Use keyboard and mouse controls for resizing,
-    moving, and reordering windows within stacks and columns.
-*   **Scratchpad:** Send utility windows away and summon them instantly as
-    centered overlays.
-*   **KDL Configuration:** Use robust, hot-reloadable configuration through the
-    KDL 2.0 document language.
+* **Hybrid Layouts:** Toggle between Scroller, Vertical Scroller,
+  Master-Stack, Grid, and Monocle modes independently for each workspace.
+* **Dynamic Workspaces:** Start with a configurable workspace floor, then grow
+  and prune extra workspaces as they are used.
+* **Smooth Animations:** Experience fluid window movement driven by a 60FPS
+  internal clock and exponential easing.
+* **Interactive Controls:** Use keyboard and mouse controls for resizing,
+  moving, and reordering windows within stacks and columns.
+* **Scratchpad:** Send utility windows away and summon them instantly as
+  centered overlays.
+* **KDL Configuration:** Use robust, hot-reloadable configuration through the
+  KDL 2.0 document language.
 
 ### Installation
 
