@@ -6,11 +6,16 @@ import ../types/runtime_values
 proc shellQuote*(value: string): string =
   "'" & value.replace("'", "'\\''") & "'"
 
+proc homeDirPath(): string =
+  result = getHomeDir()
+  while result.len > 1 and result.endsWith("/"):
+    result.setLen(result.len - 1)
+
 proc expandUserPath*(path: string): string =
-  if path == "~":
-    return getHomeDir().strip(chars = {'/'})
+  if path == "~" or path == "~/":
+    return homeDirPath()
   if path.startsWith("~/"):
-    return getHomeDir().strip(chars = {'/'}) / path[2 .. ^1]
+    return homeDirPath() / path[2 .. ^1]
   path
 
 proc screenshotPathOrDefault*(path: string;

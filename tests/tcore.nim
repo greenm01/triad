@@ -1,4 +1,4 @@
-import asyncdispatch, json, options, sequtils, strutils, tables, unittest
+import asyncdispatch, json, options, os, sequtils, strutils, tables, unittest
 import ../src/config/parser
 import ../src/core/effects
 import ../src/core/msg
@@ -205,6 +205,23 @@ suite "Core Runtime Logic":
         "grim -t png -g '40,50 800x600' '/tmp/window.png'"
     check screenshotClipboardCommand("/tmp/window.png", config) ==
       "wl-copy --type image/png < '/tmp/window.png'"
+
+  test "Screenshot paths expand home directory absolutely":
+    let home = getHomeDir().strip(leading = false, trailing = true,
+      chars = {'/'})
+    let config = ScreenshotConfig(
+      directory: "~/Pictures/Screenshots",
+      filenamePrefix: "screenshot")
+    let path = screenshotPathOrDefault("", config)
+
+    check expandUserPath("~") == home
+    check expandUserPath("~/") == home
+    check expandUserPath("~/Pictures/Screenshots") ==
+      home / "Pictures" / "Screenshots"
+    check expandUserPath("/tmp/shot.png") == "/tmp/shot.png"
+    check path.startsWith(home / "Pictures" / "Screenshots" /
+      "screenshot-")
+    check not path.startsWith("home/")
 
   test "Async shell command runner yields while process runs":
     var ticked = false
