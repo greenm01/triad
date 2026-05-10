@@ -5,6 +5,7 @@ import placement
 import scratchpad
 import workspaces
 import ../state/engine
+from ../types/runtime_values import LayoutMode
 
 proc restoredWindowId(model: Model; externalId: ExternalWindowId):
     WindowId =
@@ -196,6 +197,31 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()
 
+proc newWindowColumnIndex(model: Model; tagId: TagId;
+    isFloating: bool): int =
+  result = high(int)
+  if isFloating or tagId == NullTagId or tagId != model.activeTag:
+    return
+
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone or tagOpt.get().layoutMode != LayoutMode.Scroller:
+    return
+
+  let focused = tagOpt.get().focusedWindow
+  let focusedOpt = model.windowData(focused)
+  if focused == NullWindowId or focusedOpt.isNone or
+      focusedOpt.get().isFloating:
+    return
+
+  let placementOpt = model.placementForWindowOnTag(tagId, focused)
+  if placementOpt.isNone:
+    return
+
+  let colIdx = model.columnIndexForTag(tagId, placementOpt.get().columnId)
+  if colIdx == 0:
+    return
+  result = int(colIdx)
+
 proc createWindowForExternal*(model: var Model;
     externalId: ExternalWindowId; appId, title: string; identifier = "";
     parentExternalId = NullExternalWindowId):
@@ -319,7 +345,10 @@ proc createWindowForExternal*(model: var Model;
         discard model.setTagLayout(
           targetTag, safeLayoutMode(
             forcedLayout, model.tag(targetTag).get().layoutMode))
-      discard model.addPlacedWindowColumn(targetTag, result)
+      discard model.addPlacedWindowColumn(
+        targetTag,
+        result,
+        model.newWindowColumnIndex(targetTag, isFloating))
       if not model.sessionLocked and not restoreFocusPending:
         if parentKnown:
           discard model.focusWindow(result, retargetViewport = false)

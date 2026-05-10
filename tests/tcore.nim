@@ -90,6 +90,13 @@ proc instructionGeom(model: Model; id: uint32): runtime_values.Rect =
       return instr.geom
   runtime_values.Rect()
 
+proc columnHeads(model: Model; slot: uint32): seq[uint32] =
+  let tagId = model.tagForSlot(slot)
+  for columnId, _ in model.columnsOnTagWithId(tagId):
+    for winId, _ in model.windowsOnColumnWithId(columnId):
+      result.add(uint32(model.windowData(winId).get().externalId))
+      break
+
 proc setViewport(
     model: var Model; slot: uint32; targetX, currentX: float32;
     targetY = 0.0'f32; currentY = 0.0'f32) =
@@ -404,6 +411,22 @@ suite "Core Runtime Logic":
     check model.activeWorkspaceFocusId() == 2
     check model.viewport(1).targetViewportXOffset != 0.0'f32
     check effects.hasFocusEffect(2)
+
+  test "New scroller window opens beside focused window":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, appId: "app", title: "Window 4"))
+    discard model.layoutInstructions()
+
+    check model.columnHeads(1) == @[1'u32, 2, 4, 3]
+    check model.focusedWindowId() == 4
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
+    check effects.hasFocusEffect(4)
 
   test "Rule-placed new window does not steal active camera":
     var model = initRuntimeStateFromConfig(Config(
