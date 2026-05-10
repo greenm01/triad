@@ -51,7 +51,8 @@ proc isFocusableWindow*(model: Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   winOpt.isSome and not winOpt.get().isMinimized
 
-proc focusWindow*(model: var Model; winId: WindowId): bool =
+proc focusWindow*(
+    model: var Model; winId: WindowId; retargetViewport = true): bool =
   if model.windowData(winId).isNone:
     return false
   let tagId = model.tagForWindow(winId)
@@ -66,6 +67,8 @@ proc focusWindow*(model: var Model; winId: WindowId): bool =
   model.refreshVisibleWorkspaceSlots()
   discard model.recordWorkspace(tagId)
   discard model.setTagFocus(tagId, winId)
+  if retargetViewport:
+    discard model.requestTagViewportRetarget(tagId)
   discard model.recordFocus(winId)
   true
 
@@ -155,6 +158,7 @@ proc focusCycle*(model: var Model; step: int): bool =
     else: (idx + step + windows.len) mod windows.len
   let target = windows[nextIdx]
   discard model.setTagFocus(tagId, target)
+  discard model.requestTagViewportRetarget(tagId)
   discard model.recordWorkspace(tagId)
   discard model.recordFocus(target)
   true

@@ -5,6 +5,7 @@ import ../src/core/msg
 import ../src/core/render_visibility
 import ../src/core/restore_state
 import ../src/state/engine
+import ../src/systems/layout_projection
 import ../src/systems/runtime_facade
 import ../src/systems/update
 import ../src/types/model
@@ -26,6 +27,16 @@ proc configuredModel(): Model =
       WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true)
     ])).model
 
+proc cameraModel(): Model =
+  initRuntimeStateFromConfig(Config(
+    layout: LayoutConfig(
+      gaps: 10,
+      defaultColumnWidth: 0.7,
+      centerFocusedColumn: "always",
+      enableAnimations: true,
+      animationSpeed: 0.5),
+    workspaces: WorkspaceConfig(defaultCount: 3))).model
+
 proc applyMsg(model: var Model; msg: Msg) =
   let (nextModel, _) = model.update(msg)
   model = nextModel
@@ -46,6 +57,29 @@ proc updateModel(model: var Model; msg: Msg): seq[Effect] =
   let (nextModel, effects) = model.update(msg)
   model = nextModel
   effects
+
+proc viewport(model: Model; slot: uint32): ViewportState =
+  let tagId = model.tagForSlot(slot)
+  let tag = model.tagData(tagId).get()
+  ViewportState(
+    targetViewportXOffset: tag.targetViewportXOffset,
+    currentViewportXOffset: tag.currentViewportXOffset,
+    targetViewportYOffset: tag.targetViewportYOffset,
+    currentViewportYOffset: tag.currentViewportYOffset)
+
+proc setViewport(
+    model: var Model; slot: uint32; targetX, currentX: float32;
+    targetY = 0.0'f32; currentY = 0.0'f32) =
+  let tagId = model.tagForSlot(slot)
+  discard model.setTagViewportTarget(tagId, targetX, targetY)
+  discard model.setTagViewportCurrent(tagId, currentX, currentY)
+
+proc seedCameraWindows(model: var Model; count = 3'u32) =
+  model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+    width: 1000, height: 700))
+  for id in 1'u32 .. count:
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
+      appId: "app", title: "Window " & $id))
 
 suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
@@ -302,6 +336,91 @@ suite "Core Runtime Logic":
     check model.activeTag == model.tagForSlot(2)
     check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
       uint32(it.focusId) == 2)
+
+  test "Overview select preserves same-workspace camera":
+    var model = cameraModel()
+    model.seedCameraWindows()
+    model.setViewport(1, targetX = 125.0, currentX = 125.0)
+
+    let beforeViewport = model.viewport(1)
+    let beforeInstructions = model.layoutInstructions()
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdSelectWindow))
+
+    check model.focusedWindowId() == 1
+    check model.viewport(1) == beforeViewport
+    check model.layoutInstructions() == beforeInstructions
+
+  test "Overview select restores target workspace camera":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Two"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
+      appId: "app", title: "Three"))
+    model.setViewport(2, targetX = 250.0, currentX = 175.0)
+    let workspace2Viewport = model.viewport(2)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 1))
+    model.setViewport(1, targetX = 80.0, currentX = 80.0)
+    let workspace1Viewport = model.viewport(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdSelectWindow))
+
+    check model.activeTag == model.tagForSlot(2)
+    check model.focusedWindowId() == 2
+    check model.viewport(1) == workspace1Viewport
+    check model.viewport(2) == workspace2Viewport
+
+  test "Closing overview restores original camera":
+    var model = cameraModel()
+    model.seedCameraWindows()
+    model.setViewport(1, targetX = 300.0, currentX = 100.0)
+    let beforeViewport = model.viewport(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick))
+    model.applyMsg(Msg(kind: MsgKind.CmdCloseOverview))
+
+    check model.viewport(1) == beforeViewport
+
+  test "Workspace round trip preserves each camera":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.setViewport(1, targetX = 300.0, currentX = 0.0)
+    let workspace1Viewport = model.viewport(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Two"))
+    model.setViewport(2, targetX = 75.0, currentX = 75.0)
+    let workspace2Viewport = model.viewport(2)
+
+    for _ in 0 ..< 4:
+      discard model.updateModel(Msg(kind: MsgKind.CmdTick))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 1))
+
+    check model.viewport(1) == workspace1Viewport
+    check model.viewport(2) == workspace2Viewport
+
+  test "Normal focus navigation can retarget camera":
+    var model = cameraModel()
+    model.seedCameraWindows()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.layoutInstructions()
+
+    check model.viewport(1).targetViewportXOffset != 0.0'f32
 
   test "Shell snapshot exposes active workspace focus globally":
     var model = configuredModel()

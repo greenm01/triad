@@ -1,4 +1,4 @@
-import algorithm, options, tables
+import algorithm, options, sets, tables
 import iterators
 import entity_manager
 import ../types/core
@@ -300,6 +300,9 @@ proc workspaceOutput*(model: Model; tagId: TagId): OutputId =
 
 proc shellWorkspaceOutputName*(model: Model; tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))
+
+proc viewportRetargetRequested*(model: Model; tagId: TagId): bool =
+  model.viewportRetargetTags.contains(tagId)
 
 proc windowPositionOnTag*(model: Model; tagId: TagId; winId: WindowId):
     tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =

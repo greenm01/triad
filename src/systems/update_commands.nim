@@ -12,12 +12,16 @@ import window_state
 import workspaces
 
 proc closeOverview(model: var Model): bool =
+  let wasActive = model.overviewActive
   result = model.setOverviewActive(false)
   result = model.clearOverviewSelection() or result
+  if wasActive:
+    result = model.restoreOverviewViewportSnapshot() or result
 
 proc openOverview(model: var Model): bool =
   result = model.setOverviewActive(true)
   if result:
+    discard model.saveOverviewViewportSnapshot()
     discard model.setOverviewSelection(model.initialOverviewWindow())
 
 proc recomputeAllTagFocus(model: var Model) =
@@ -222,7 +226,8 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     let selected = model.selectedOverviewWindow()
     result.dirty = model.closeOverview()
     if selected != NullWindowId:
-      result.dirty = model.focusWindow(selected) or result.dirty
+      result.dirty = model.focusWindow(
+        selected, retargetViewport = false) or result.dirty
   of MsgKind.CmdCloseWindow:
     let focused = model.focusedWindow()
     if focused != NullWindowId:

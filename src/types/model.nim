@@ -1,4 +1,4 @@
-import tables
+import sets, tables
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,
@@ -120,6 +120,12 @@ type
     initialGeom*: Rect
     edges*: uint32
 
+  ViewportState* = object
+    targetViewportXOffset*: float32
+    currentViewportXOffset*: float32
+    targetViewportYOffset*: float32
+    currentViewportYOffset*: float32
+
   PendingRestoreState* = object
     activeSlot*: uint32
     focusedWindow*: ExternalWindowId
@@ -164,6 +170,8 @@ type
     visibleSlots*: seq[uint32]
     overviewActive*: bool
     overviewSelectedWindow*: WindowId
+    overviewViewportSnapshot*: Table[TagId, ViewportState]
+    viewportRetargetTags*: HashSet[TagId]
     layerFocusExclusive*: bool
     sessionLocked*: bool
     activeModifiers*: uint32

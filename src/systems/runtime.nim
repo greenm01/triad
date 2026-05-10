@@ -141,11 +141,13 @@ proc groupFocusedWindow*(model: var Model): bool =
   model.addGroup(@[focused], focused) != NullGroupId
 
 proc tickAnimations*(model: var Model): bool =
-  if not model.enableAnimations:
+  if not model.enableAnimations or model.overviewActive:
     return false
   let speed = model.animationSpeed
   let epsilon = 0.5'f32
   for tagId, tag in model.tagsWithId():
+    if tagId != model.activeTag:
+      continue
     var currentX = tag.currentViewportXOffset
     var currentY = tag.currentViewportYOffset
     let dx = tag.targetViewportXOffset - currentX

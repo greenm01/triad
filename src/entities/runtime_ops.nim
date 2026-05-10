@@ -1,3 +1,5 @@
+import options, sets, tables
+import ../state/entity_manager
 import ../types/model
 import ../types/core
 from ../types/runtime_values import PointerOpKind
@@ -17,6 +19,35 @@ proc setOverviewSelection*(
 
 proc clearOverviewSelection*(model: var Model): bool =
   model.setOverviewSelection(NullWindowId)
+
+proc saveOverviewViewportSnapshot*(model: var Model): bool =
+  model.overviewViewportSnapshot.clear()
+  for tag in model.tags.entities:
+    model.overviewViewportSnapshot[tag.id] = ViewportState(
+      targetViewportXOffset: tag.targetViewportXOffset,
+      currentViewportXOffset: tag.currentViewportXOffset,
+      targetViewportYOffset: tag.targetViewportYOffset,
+      currentViewportYOffset: tag.currentViewportYOffset)
+  true
+
+proc restoreOverviewViewportSnapshot*(model: var Model): bool =
+  for tagId, viewport in model.overviewViewportSnapshot.pairs:
+    if model.tags.entity(tagId).isSome:
+      model.tags.mEntity(tagId).targetViewportXOffset =
+        viewport.targetViewportXOffset
+      model.tags.mEntity(tagId).currentViewportXOffset =
+        viewport.currentViewportXOffset
+      model.tags.mEntity(tagId).targetViewportYOffset =
+        viewport.targetViewportYOffset
+      model.tags.mEntity(tagId).currentViewportYOffset =
+        viewport.currentViewportYOffset
+      result = true
+  if model.overviewViewportSnapshot.len > 0:
+    model.overviewViewportSnapshot.clear()
+    result = true
+  if model.viewportRetargetTags.len > 0:
+    model.viewportRetargetTags.clear()
+    result = true
 
 proc setLayerFocusExclusiveState*(
     model: var Model; exclusive: bool): bool =

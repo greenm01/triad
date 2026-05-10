@@ -168,6 +168,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
     currentOuterGap = 0
     currentInnerGap = 0
 
+  let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
   result.instructions = layoutForTag(
     tagForLayout,
@@ -175,9 +176,9 @@ proc layoutProjection*(model: Model): LayoutProjection =
     screen,
     currentOuterGap,
     currentInnerGap,
-    model.scrollerFocusCenter,
-    model.scrollerPreferCenter,
-    model.centerFocusedColumn)
+    retargetViewport and model.scrollerFocusCenter,
+    retargetViewport and model.scrollerPreferCenter,
+    if retargetViewport: model.centerFocusedColumn else: "never")
   if tagForLayout.columns.len > 0:
     result.viewportTargets.add(LayoutViewportTarget(
       tagSlot: projected.tag.tagId,
@@ -217,6 +218,7 @@ proc applyLayoutProjection*(model: var Model; projection: LayoutProjection) =
     let tagId = model.tagForSlot(target.tagSlot)
     if tagId != NullTagId:
       discard model.setTagViewportTarget(tagId, target.targetX, target.targetY)
+      discard model.clearTagViewportRetarget(tagId)
 
 proc layoutInstructions*(model: var Model):
     seq[rv.RenderInstruction] =

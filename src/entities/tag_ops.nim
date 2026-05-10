@@ -1,4 +1,4 @@
-import options, tables
+import options, sets, tables
 import active_workspace_ops
 import history_ops
 import ../state/entity_manager
@@ -89,6 +89,22 @@ proc setTagViewportCurrent*(
   model.tags.mEntity(tagId).currentViewportYOffset = yOffset
   true
 
+proc requestTagViewportRetarget*(
+    model: var Model; tagId: TagId): bool =
+  if tagId == NullTagId or model.tags.entity(tagId).isNone:
+    return false
+  if model.viewportRetargetTags.contains(tagId):
+    return false
+  model.viewportRetargetTags.incl(tagId)
+  true
+
+proc clearTagViewportRetarget*(
+    model: var Model; tagId: TagId): bool =
+  if not model.viewportRetargetTags.contains(tagId):
+    return false
+  model.viewportRetargetTags.excl(tagId)
+  true
+
 proc setTagRestoredState*(model: var Model; tagId: TagId;
     name: string; layoutMode: LayoutMode;
     targetViewportXOffset, currentViewportXOffset, targetViewportYOffset,
@@ -128,6 +144,8 @@ proc destroyTag*(model: var Model; tagId: TagId): bool =
   model.columnsByTag.del(tagId)
   model.windowsByTag.del(tagId)
   model.tagBySlot.del(tag.slot)
+  discard model.clearTagViewportRetarget(tagId)
+  model.overviewViewportSnapshot.del(tagId)
 
   var outputIds: seq[OutputId] = @[]
   for outputId, outputTag in model.outputTags.pairs:
