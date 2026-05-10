@@ -47,7 +47,6 @@ bindings {
     bind "Super+m" "toggle-maximized"
     bind "Super+i" "minimize"
     bind "Super+n" "switch-layout"
-    bind "Super+r" "reload-config"
     bind "Super+t" "spawn-terminal"
     bind "Super+Tab" "focus-next"
     bind "Alt+Left" "focus-left"
