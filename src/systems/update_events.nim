@@ -103,8 +103,17 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.childWindowId.externalWindowId(),
       msg.parentWindowId.externalWindowId())
   of MsgKind.WlWindowIdentifier:
+    let externalId = msg.identifierWindowId.externalWindowId()
+    let winId = model.windowForExternal(externalId)
+    let beforeOpt = model.windowData(winId)
+    let wasMaximized = beforeOpt.isSome and beforeOpt.get().isMaximized
     result.dirty = model.updateWindowIdentifierAndRestoreForExternal(
-      msg.identifierWindowId.externalWindowId(), msg.identifier)
+      externalId, msg.identifier)
+    let afterOpt = model.windowData(winId)
+    if result.dirty and afterOpt.isSome and
+        afterOpt.get().isMaximized != wasMaximized:
+      result.effects.addSetMaximizedEffect(
+        msg.identifierWindowId, afterOpt.get().isMaximized)
   of MsgKind.WlWindowAppId:
     result.dirty = model.updateWindowAppIdForExternal(
       msg.appIdWindowId.externalWindowId(), msg.updatedAppId)

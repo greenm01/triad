@@ -90,6 +90,19 @@ proc instructionGeom(model: Model; id: uint32): runtime_values.Rect =
       return instr.geom
   runtime_values.Rect()
 
+proc snapshotWindow(model: Model; id: uint32): ShellWindow =
+  for win in model.shellSnapshot().windows:
+    if uint32(win.id) == id:
+      return win
+  ShellWindow()
+
+proc restoreWindowJson(model: Model; id: uint32): JsonNode =
+  let root = parseJson(model.liveRestoreJson())
+  for node in root["windows"]:
+    if node["id"].getInt() == int(id):
+      return node
+  newJNull()
+
 proc columnHeads(model: Model; slot: uint32): seq[uint32] =
   let tagId = model.tagForSlot(slot)
   for columnId, _ in model.columnsOnTagWithId(tagId):
@@ -111,6 +124,38 @@ proc seedCameraWindows(model: var Model; count = 3'u32) =
   for id in 1'u32 .. count:
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
       appId: "app", title: "Window " & $id))
+
+proc restoreMatchingModel(): Model =
+  initRuntimeStateFromConfig(Config(
+    workspaces: WorkspaceConfig(defaultCount: 3),
+    windowRules: @[
+      WindowRule(appIdMatch: "generic-app", defaultTag: 2)
+    ])).model
+
+proc addRestoredWindow(
+    restore: var PendingRestoreState; externalId: ExternalWindowId;
+    slot: uint32; appId, title: string; isMaximized = false;
+    identifier = "") =
+  restore.windows[externalId] = RestoredWindowData(
+    slot: slot,
+    appId: appId,
+    title: title,
+    identifier: identifier,
+    widthProportion: 0.8,
+    heightProportion: 0.6,
+    isMaximized: isMaximized)
+  restore.tagByWindow[externalId] = slot
+  restore.tags[slot] = RestoredTagData(
+    slot: slot,
+    layoutMode: LayoutMode.Scroller,
+    focusedWindow: externalId,
+    columns: @[
+      RestoredColumnData(
+        windows: @[externalId],
+        widthProportion: 0.7)
+    ],
+    masterCount: 1,
+    masterSplitRatio: 0.5)
 
 suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
@@ -427,6 +472,101 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 4
     check model.viewport(1).targetViewportXOffset != 0.0'f32
     check effects.hasFocusEffect(4)
+
+  test "Live restore JSON records moved maximized window":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10,
+      appId: "generic-app", title: "Window"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 1))
+
+    let win = model.restoreWindowJson(10)
+
+    check win.kind == JObject
+    check win["tag_id"].getInt() == 1
+    check win["is_maximized"].getBool()
+
+  test "Live restore matches unique app id after title changes":
+    var model = restoreMatchingModel()
+    var restore = PendingRestoreState(
+      activeSlot: 1,
+      focusedWindow: ExternalWindowId(50))
+    restore.addRestoredWindow(
+      ExternalWindowId(50),
+      1,
+      "generic-app",
+      "Old title",
+      isMaximized = true)
+    model.applyLiveRestore(restore)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 70, appId: "generic-app", title: "New title"))
+    let win = model.snapshotWindow(70)
+
+    check win.id == 70
+    check win.workspaceIdx == 1
+    check win.isMaximized
+    check effects.hasMaximizedEffect(70, true)
+
+  test "Live restore does not guess between duplicate app ids":
+    var model = restoreMatchingModel()
+    var restore = PendingRestoreState(activeSlot: 1)
+    restore.addRestoredWindow(
+      ExternalWindowId(50),
+      1,
+      "generic-app",
+      "Old title A",
+      isMaximized = true)
+    restore.addRestoredWindow(
+      ExternalWindowId(51),
+      3,
+      "generic-app",
+      "Old title B",
+      isMaximized = true)
+    model.applyLiveRestore(restore)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 70, appId: "generic-app", title: "New title"))
+    let win = model.snapshotWindow(70)
+
+    check win.id == 70
+    check win.workspaceIdx == 2
+    check not win.isMaximized
+    check not effects.hasMaximizedEffect(70, true)
+
+  test "Late identifier restore emits maximized state":
+    var model = restoreMatchingModel()
+    var restore = PendingRestoreState(activeSlot: 1)
+    restore.addRestoredWindow(
+      ExternalWindowId(50),
+      1,
+      "generic-app",
+      "Old title A",
+      isMaximized = true,
+      identifier = "stable-target")
+    restore.addRestoredWindow(
+      ExternalWindowId(51),
+      3,
+      "generic-app",
+      "Old title B",
+      identifier = "stable-other")
+    model.applyLiveRestore(restore)
+
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 70, appId: "generic-app", title: "New title"))
+    check model.snapshotWindow(70).workspaceIdx == 2
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowIdentifier,
+      identifierWindowId: 70, identifier: "stable-target"))
+    let win = model.snapshotWindow(70)
+
+    check win.workspaceIdx == 1
+    check win.isMaximized
+    check effects.hasMaximizedEffect(70, true)
 
   test "Rule-placed new window does not steal active camera":
     var model = initRuntimeStateFromConfig(Config(

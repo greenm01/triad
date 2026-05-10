@@ -254,14 +254,24 @@ proc findRestoredWindowByIdentity*(
 
   var matched = NullExternalWindowId
   var matches = 0
-  for externalId, restored in model.restoreWindowsWithId():
-    if restored.identifier.len == 0 and restored.appId.len > 0 and
-        restored.title.len > 0 and restored.appId == appId and
-        restored.title == title:
-      matched = externalId
-      inc matches
-  if matches == 1:
-    return matched
+  if appId.len > 0 and title.len > 0:
+    for externalId, restored in model.restoreWindowsWithId():
+      if restored.appId.len > 0 and restored.title.len > 0 and
+          restored.appId == appId and restored.title == title:
+        matched = externalId
+        inc matches
+    if matches == 1:
+      return matched
+
+  matched = NullExternalWindowId
+  matches = 0
+  if appId.len > 0:
+    for externalId, restored in model.restoreWindowsWithId():
+      if restored.appId.len > 0 and restored.appId == appId:
+        matched = externalId
+        inc matches
+    if matches == 1:
+      return matched
   NullExternalWindowId
 
 proc sortedWindowIdsByExternal*(model: Model): seq[WindowId] =
