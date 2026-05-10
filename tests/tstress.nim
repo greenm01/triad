@@ -1,13 +1,13 @@
-import algorithm, json, os, strutils, unittest
+import algorithm, os, strutils, unittest
 import ../src/config/parser
 import ../src/core/msg
-import ../src/ipc/niri_compat
 import ../src/state/invariants
 import ../src/state/snapshot
 import ../src/systems/runtime_facade
 import ../src/systems/update
 import ../src/types/model
 import ../src/types/runtime_values
+import tag_semantics_checks
 
 type
   FuzzRng = object
@@ -101,7 +101,7 @@ proc chooseLayout(rng: var FuzzRng): LayoutMode =
 
 proc generatedMsg(
     rng: var FuzzRng; model: Model; nextWindow: var WindowId): Msg =
-  case rng.pick(24)
+  case rng.pick(36)
   of 0:
     result = Msg(
       kind: MsgKind.WlWindowCreated,
@@ -110,9 +110,11 @@ proc generatedMsg(
       title: "window-" & $nextWindow)
     inc nextWindow
   of 1:
-    result = Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: rng.chooseWindow(model))
+    result = Msg(kind: MsgKind.WlWindowDestroyed,
+      destroyedId: rng.chooseWindow(model))
   of 2:
-    result = Msg(kind: MsgKind.WlFocusChanged, newFocusedId: rng.chooseWindow(model))
+    result = Msg(kind: MsgKind.WlFocusChanged,
+      newFocusedId: rng.chooseWindow(model))
   of 3:
     result = Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
       workspaceIndex: uint32(1 + rng.pick(6)))
@@ -167,6 +169,31 @@ proc generatedMsg(
     result = Msg(kind: MsgKind.CmdFocusNext)
   of 22:
     result = Msg(kind: MsgKind.CmdFocusPrev)
+  of 23:
+    result = Msg(kind: MsgKind.CmdFocusTagLeft)
+  of 24:
+    result = Msg(kind: MsgKind.CmdFocusTagRight)
+  of 25:
+    result = Msg(kind: MsgKind.CmdFocusOccupiedTagLeft)
+  of 26:
+    result = Msg(kind: MsgKind.CmdFocusOccupiedTagRight)
+  of 27:
+    result = Msg(kind: MsgKind.CmdMoveToTagLeft)
+  of 28:
+    result = Msg(kind: MsgKind.CmdMoveToTagRight)
+  of 29:
+    result = Msg(kind: MsgKind.CmdMoveWindowUpOrToWorkspaceUp)
+  of 30:
+    result = Msg(kind: MsgKind.CmdMoveWindowDownOrToWorkspaceDown)
+  of 31:
+    result = Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: rng.chooseWindow(model))
+  of 32:
+    result = Msg(kind: MsgKind.CmdOpenOverview)
+  of 33:
+    result = Msg(kind: MsgKind.CmdCloseOverview)
+  of 34:
+    result = Msg(kind: MsgKind.CmdSelectWindow)
   else:
     result = Msg(kind: MsgKind.CmdTick)
 
@@ -178,12 +205,11 @@ proc checkInvariants(ctx: FuzzContext; model: Model) =
       errors.add(error.message)
     fail(ctx, model, errors.join("; "))
 
-  let snapshot = model.shellSnapshot()
-  discard niri_compat.handleNiriRequest("\"Workspaces\"", snapshot)
-  discard niri_compat.handleNiriRequest("\"Windows\"", snapshot)
-  let outputs = niri_compat.handleNiriRequest("\"Outputs\"", snapshot)
-  require(ctx, model, outputs.handled, "outputs request not handled")
-  discard parseJson(outputs.reply)
+  try:
+    model.requireTagShellSemantics(
+      "stress seed=" & $ctx.seed & " step=" & $ctx.step & " op=" & ctx.op)
+  except AssertionDefect as e:
+    fail(ctx, model, e.msg)
 
 suite "Deterministic runtime stress":
   test "random reducer trace preserves invariants":

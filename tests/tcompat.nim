@@ -1,4 +1,4 @@
-import json, options, os, strtabs, strutils, unittest
+import json, options, os, sequtils, strtabs, strutils, unittest
 import ../src/core/app_identity
 import ../src/core/msg
 import ../src/ipc/commands
@@ -131,9 +131,12 @@ suite "Shell compatibility contracts":
   test "Niri focused window prefers active workspace focus":
     var snapshot = snapshotForShell()
     snapshot.workspaces[0].isActive = false
-    snapshot.workspaces[0].focusedWindow = 10
     snapshot.workspaces[1].isActive = true
+    snapshot.activeTag = 2
+    snapshot.activeWorkspaceIdx = 2
+    snapshot.workspaces[0].focusedWindow = 10
     snapshot.workspaces[1].focusedWindow = 20
+    snapshot.windows[0].isFocused = false
     snapshot.windows.add(ShellWindow(
       id: 20,
       title: "Browser",
@@ -153,6 +156,37 @@ suite "Shell compatibility contracts":
         "Ok"]["FocusedWindow"]
     check focused["id"].getInt() == 20
     check focused["workspace_id"].getInt() == 2
+
+  test "Niri event stream exposes one global focused window":
+    var snapshot = snapshotForShell()
+    snapshot.workspaces[0].isActive = false
+    snapshot.workspaces[1].isActive = true
+    snapshot.activeTag = 2
+    snapshot.activeWorkspaceIdx = 2
+    snapshot.workspaces[0].focusedWindow = 10
+    snapshot.workspaces[1].focusedWindow = 20
+    snapshot.windows[0].isFocused = false
+    snapshot.windows.add(ShellWindow(
+      id: 20,
+      title: "Browser",
+      appId: "brave-browser",
+      tagId: some(2'u32),
+      workspaceIdx: 2,
+      outputName: "triad-0",
+      colIdx: 1,
+      winIdx: 1,
+      isFocused: true,
+      widthProportion: 0.5,
+      heightProportion: 1.0,
+      actualW: 800,
+      actualH: 600))
+
+    let niri = handleNiriRequest("\"EventStream\"", snapshot)
+    let windows =
+      parseJson(niri.initialEvents[1])["WindowsChanged"]["windows"]
+    check windows.filterIt(it["is_focused"].getBool()).len == 1
+    check windows[1]["id"].getInt() == 20
+    check windows[1]["workspace_id"].getInt() == 2
 
   test "Niri actions map to Triad messages":
     let snapshot = snapshotForShell()

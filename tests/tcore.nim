@@ -9,6 +9,7 @@ import ../src/systems/runtime_facade
 import ../src/systems/update
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
+import tag_semantics_checks
 
 proc configuredModel(): Model =
   initRuntimeStateFromConfig(Config(
@@ -332,6 +333,7 @@ suite "Core Runtime Logic":
     check activeFocused[0].workspaceIdx == 2
     check activeFocused[0].tagId.isSome
     check activeFocused[0].tagId.get() == 2
+    model.requireTagShellSemantics("active workspace focus scenario")
 
   test "Workspace focus broadcasts workspace and window snapshots":
     var model = configuredModel()
@@ -348,6 +350,45 @@ suite "Core Runtime Logic":
       it.jsonPayload.contains("WorkspacesChanged"))
     check effects.anyIt(it.kind == EffectKind.EffBroadcastJson and
       it.jsonPayload.contains("WindowsChanged"))
+    model.requireTagShellSemantics("workspace focus broadcast scenario")
+
+  test "Empty dynamic workspaces prune after focus leaves":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "term", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+
+    var snapshot = model.shellSnapshot()
+    check snapshot.activeTag == 4
+    check snapshot.workspaces.anyIt(it.tagId == 4)
+    model.requireTagShellSemantics("empty dynamic active scenario")
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    snapshot = model.shellSnapshot()
+    check snapshot.activeTag == 2
+    check not snapshot.workspaces.anyIt(it.tagId == 4)
+    model.requireTagShellSemantics("empty dynamic pruned scenario")
+
+  test "Scratchpad restore returns window to active tag":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "term", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    model.requireTagShellSemantics("scratchpad hidden scenario")
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdRestoreScratchpad))
+
+    let snapshot = model.shellSnapshot()
+    let focused = snapshot.windows.filterIt(it.isFocused)
+    check focused.len == 1
+    check focused[0].id == 1
+    check focused[0].workspaceIdx == 2
+    model.requireTagShellSemantics("scratchpad restored scenario")
 
   test "Overview order deduplicates multi-tag windows":
     var model = configuredModel()
