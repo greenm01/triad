@@ -10,7 +10,6 @@ import core/restore_state
 import core/niri_state
 import core/render_visibility
 import systems/daemon_view
-import systems/hotkey_overlay
 import systems/layout_projection
 import systems/runtime
 import systems/runtime_facade
@@ -20,101 +19,91 @@ import config/parser
 import config/defaults
 import config/keysyms
 import config/reload_policy
+import daemon/state
 import daemon/process_runner
-import daemon/hotkey_overlay_render
 import daemon/protocol_surfaces
+import daemon/protocol_surface_runtime
 import daemon/quickshell_runner
+import daemon/river_windows
+import daemon/screenshot_runner
 import ipc/commands
 import ipc/quickshell_compat
 import ipc/socket
 import utils/overview_hit_test
 import utils/behavior_log
 import utils/runtime_log
-import utils/screenshot_capture
 import utils/session_env
 import utils/wayland_runtime
 from types/runtime_values import nil
 from types/runtime_values import BindingMode, KeyBindingConfig,
-  HotkeyOverlayRow, PointerBindingConfig, PointerOpKind, PresentationMode,
+  PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
-  ScreenshotConfig, TerminalConfig, WindowId
+  TerminalConfig, WindowId
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet,
     nativesockets, strutils, options, times, json
-from std/posix import nil
 
-type
-  RiverPhase {.pure.} = enum
-    RiverIdle,
-    RiverManage,
-    RiverRender
+var daemon = initTriadDaemon()
 
-# --- Global Engine State ---
-var
-  display: ptr Display
-  registry: ptr Registry
-  river_manager: ptr RiverWindowManagerV1
-  river_layer_shell: ptr river_layer.RiverLayerShellV1
-  river_xkb_bindings: ptr river_xkb.RiverXkbBindingsV1
-  compositor: ptr Compositor
-  shm: ptr Shm
-  singlePixelManager: ptr singlepixel.WpSinglePixelBufferManagerV1
-  riverPhase = RiverPhase.RiverIdle
-  bindingsConfigured = false
-  manageRequestPending = false
-  manageRequestReason = ""
-  screenshotCaptureActive = false
-  shmBufferCounter = 0'u32
-
-  # Runtime State
-  runtimeState: TriadRuntimeState
-  msgQueue: seq[Msg] = @[]
-  pendingManageEffects: seq[Effect] = @[]
-  desiredPlacements: Table[WindowId, Rect]
-  desiredPlacementOrder: seq[WindowId] = @[]
-  lastPointerOpSeat: pointer
-
-  # Mapping from logical IDs to Wayland pointers
-  windowPointers: Table[WindowId, ptr RiverWindowV1]
-  windowNodes: Table[WindowId, ptr RiverNodeV1]
-  outputPointers: Table[uint32, ptr RiverOutputV1]
-  layerOutputPointers: Table[uint32, ptr river_layer.RiverLayerShellOutputV1]
-  layerOutputOwners: Table[uint32, uint32]
-  seatPointers: seq[ptr RiverSeatV1] = @[]
-  layerSeatPointers: seq[ptr river_layer.RiverLayerShellSeatV1] = @[]
-  xkbBindings: Table[uint32, Msg]
-  xkbBindingPointers: seq[ptr river_xkb.RiverXkbBindingV1] = @[]
-  xkbSeatPointers: Table[uint32, ptr river_xkb.RiverXkbBindingsSeatV1]
-  xkbSeatAteUnbound: Table[uint32, uint32]
-  xkbBindingPressed: Table[uint32, bool]
-  xkbBindingModes: Table[uint32, BindingMode]
-  xkbStopRepeatCount: Table[uint32, uint32]
-  pointerBindings: Table[uint32, Msg]
-  pointerBindingKinds: Table[uint32, PointerOpKind]
-  pointerBindingSeats: Table[uint32, ptr RiverSeatV1]
-  pointerBindingPointers: seq[ptr RiverPointerBindingV1] = @[]
-  pointerBindingPressed: Table[uint32, bool]
-  shellSurfacePointers: Table[uint32, ptr RiverShellSurfaceV1]
-  protocolSurfaceRuntime: ProtocolSurfaceRuntime
-  outputWlNames: Table[uint32, uint32]
-  outputGlobalOwners: Table[uint32, uint32]
-  outputGlobalNames: Table[uint32, string]
-  wlOutputPointers: Table[uint32, ptr Output]
-  seatWlNames: Table[uint32, uint32]
-  pointerWindowBySeat: Table[uint32, WindowId]
-  pointerPositionBySeat: Table[uint32, Rect]
-  windowUnreliablePids: Table[WindowId, int32]
-
-  # Config Watcher
-  configPath: string
-  watcher: Watcher
-  configReloadDebouncer: ConfigReloadDebouncer
-  shouldExit = false
-  quickshellState: QuickshellRunner
-  startupCommandsPending = false
-  initialManageComplete = false
-  pendingLiveRestorePath: string
-  pendingLiveRestore: Option[LiveRestoreState]
-  liveRestoreCommitPending = false
+template display: untyped = daemon.display
+template registry: untyped = daemon.registry
+template river_manager: untyped = daemon.riverManager
+template river_layer_shell: untyped = daemon.riverLayerShell
+template river_xkb_bindings: untyped = daemon.riverXkbBindings
+template compositor: untyped = daemon.compositor
+template shm: untyped = daemon.shm
+template singlePixelManager: untyped = daemon.singlePixelManager
+template riverPhase: untyped = daemon.riverPhase
+template bindingsConfigured: untyped = daemon.bindingsConfigured
+template manageRequestPending: untyped = daemon.manageRequestPending
+template manageRequestReason: untyped = daemon.manageRequestReason
+template shmBufferCounter: untyped = daemon.shmBufferCounter
+template runtimeState: untyped = daemon.runtimeState
+template msgQueue: untyped = daemon.msgQueue
+template pendingManageEffects: untyped = daemon.pendingManageEffects
+template desiredPlacements: untyped = daemon.desiredPlacements
+template desiredPlacementOrder: untyped = daemon.desiredPlacementOrder
+template lastPointerOpSeat: untyped = daemon.lastPointerOpSeat
+template windowPointers: untyped = daemon.windowPointers
+template windowNodes: untyped = daemon.windowNodes
+template outputPointers: untyped = daemon.outputPointers
+template layerOutputPointers: untyped = daemon.layerOutputPointers
+template layerOutputOwners: untyped = daemon.layerOutputOwners
+template seatPointers: untyped = daemon.seatPointers
+template layerSeatPointers: untyped = daemon.layerSeatPointers
+template xkbBindings: untyped = daemon.xkbBindings
+template xkbBindingPointers: untyped = daemon.xkbBindingPointers
+template xkbSeatPointers: untyped = daemon.xkbSeatPointers
+template xkbSeatAteUnbound: untyped = daemon.xkbSeatAteUnbound
+template xkbBindingPressed: untyped = daemon.xkbBindingPressed
+template xkbBindingModes: untyped = daemon.xkbBindingModes
+template xkbStopRepeatCount: untyped = daemon.xkbStopRepeatCount
+template pointerBindings: untyped = daemon.pointerBindings
+template pointerBindingKinds: untyped = daemon.pointerBindingKinds
+template pointerBindingSeats: untyped = daemon.pointerBindingSeats
+template pointerBindingPointers: untyped = daemon.pointerBindingPointers
+template pointerBindingPressed: untyped = daemon.pointerBindingPressed
+template shellSurfacePointers: untyped = daemon.shellSurfacePointers
+template protocolSurfaceRuntime: untyped = daemon.protocolSurfaceRuntime
+template outputWlNames: untyped = daemon.outputWlNames
+template outputGlobalOwners: untyped = daemon.outputGlobalOwners
+template outputGlobalNames: untyped = daemon.outputGlobalNames
+template wlOutputPointers: untyped = daemon.wlOutputPointers
+template wlOutputListenerData: untyped = daemon.wlOutputListenerData
+template seatWlNames: untyped = daemon.seatWlNames
+template pointerWindowBySeat: untyped = daemon.pointerWindowBySeat
+template pointerPositionBySeat: untyped = daemon.pointerPositionBySeat
+template windowUnreliablePids: untyped = daemon.windowUnreliablePids
+template pendingWindows: untyped = daemon.pendingWindows
+template configPath: untyped = daemon.configPath
+template watcher: untyped = daemon.watcher
+template configReloadDebouncer: untyped = daemon.configReloadDebouncer
+template shouldExit: untyped = daemon.shouldExit
+template quickshellState: untyped = daemon.quickshellState
+template startupCommandsPending: untyped = daemon.startupCommandsPending
+template initialManageComplete: untyped = daemon.initialManageComplete
+template pendingLiveRestorePath: untyped = daemon.pendingLiveRestorePath
+template pendingLiveRestore: untyped = daemon.pendingLiveRestore
+template liveRestoreCommitPending: untyped = daemon.liveRestoreCommitPending
 
 template currentModel: untyped =
   runtimeState.model
@@ -140,12 +129,6 @@ proc id(p: pointer): uint32 =
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
-
-proc cstringOrEmpty(value: cstring): string =
-  if value == nil:
-    ""
-  else:
-    $value
 
 proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
   runtimeState.applyRuntimeUpdate(msg)
@@ -309,357 +292,14 @@ var
   layer_seat_listener: river_layer.RiverLayerShellSeatV1Listener
   xkb_seat_listener: river_xkb.RiverXkbBindingsSeatV1Listener
 
-proc premulColor(value: uint32): tuple[r, g, b, a: uint32] =
-  let r8 = (value shr 24) and 0xff
-  let g8 = (value shr 16) and 0xff
-  let b8 = (value shr 8) and 0xff
-  let a8 = value and 0xff
-  let max32 = uint64(high(uint32))
-  let a32 = uint32((uint64(a8) * max32) div 255)
-  result.r = uint32((uint64(r8) * uint64(a8) * max32) div (255'u64 * 255'u64))
-  result.g = uint32((uint64(g8) * uint64(a8) * max32) div (255'u64 * 255'u64))
-  result.b = uint32((uint64(b8) * uint64(a8) * max32) div (255'u64 * 255'u64))
-  result.a = a32
-
-proc createProtocolBuffer(kind: ProtocolSurfaceKind): ptr Buffer =
-  if singlePixelManager == nil:
-    return nil
-  let alpha = if currentModel.protocolSurfaces.visibleDebug: 0x80000000'u32 else: 0'u32
-  let color = case kind
-    of ProtocolSurfaceKind.PskShell: 0x3aa5ff00'u32 or alpha
-    of ProtocolSurfaceKind.PskHotkeyOverlay: 0x11111100'u32 or alpha
-    of ProtocolSurfaceKind.PskDecorationAbove: 0xffcc0000'u32 or alpha
-    of ProtocolSurfaceKind.PskDecorationBelow: 0x2233cc00'u32 or alpha
-  let rgba = premulColor(color)
-  singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
-
-proc createTransparentShmBuffer(width, height: int32): ptr Buffer =
-  if shm == nil:
-    return nil
-  let w = max(1'i32, width)
-  let h = max(1'i32, height)
-  let stride = w * 4
-  let size = stride * h
-  inc shmBufferCounter
-  let path = getTempDir() / (
-    "triad-overview-shield-" & $getCurrentProcessId() & "-" &
-    $shmBufferCounter)
-  let fd = posix.open(
-    path.cstring,
-    posix.O_RDWR or posix.O_CREAT or posix.O_EXCL,
-    posix.S_IRUSR or posix.S_IWUSR)
-  if fd < 0:
-    warn "Unable to create overview shield shm file", path = path
-    return nil
-
-  try:
-    if posix.ftruncate(fd, posix.Off(size)) != 0:
-      warn "Unable to size overview shield shm file", path = path
-      return nil
-    let pool = shm.createPool(fd, size)
-    if pool == nil:
-      warn "Unable to create overview shield shm pool"
-      return nil
-    result = pool.createBuffer(
-      0,
-      w,
-      h,
-      stride,
-      uint32(ShmFormat.format_argb8888))
-    pool.destroy()
-  finally:
-    discard posix.close(fd)
-    try:
-      removeFile(path)
-    except CatchableError:
-      discard
-
-proc createArgbShmBuffer(buf: PixelBuffer): ptr Buffer =
-  if shm == nil:
-    return nil
-  inc shmBufferCounter
-  let path = getTempDir() / (
-    "triad-hotkey-overlay-" & $getCurrentProcessId() & "-" &
-    $shmBufferCounter)
-  try:
-    writeFile(path, argbBytes(buf.pixels))
-    let fd = posix.open(path.cstring, posix.O_RDWR)
-    if fd < 0:
-      return nil
-    try:
-      let size = buf.width * buf.height * 4
-      let pool = shm.createPool(fd, size)
-      if pool == nil:
-        return nil
-      result = pool.createBuffer(
-        0,
-        buf.width,
-        buf.height,
-        buf.width * 4,
-        uint32(ShmFormat.format_argb8888))
-      pool.destroy()
-    finally:
-      discard posix.close(fd)
-  except CatchableError as e:
-    warn "Unable to create hotkey overlay shm buffer", path = path,
-      error = e.msg
-  finally:
-    try:
-      if fileExists(path):
-        removeFile(path)
-    except CatchableError:
-      discard
-
-proc createProtocolWlSurface(kind: ProtocolSurfaceKind): OwnedProtocolSurface =
-  result.kind = kind
-  if compositor == nil:
-    return
-  result.surface = compositor.createSurface()
-  if result.surface == nil:
-    return
-  result.buffer = createProtocolBuffer(kind)
-  result.bufferW = 1
-  result.bufferH = 1
-
-proc commitProtocolSurface(surf: var OwnedProtocolSurface) =
-  if surf.surface == nil:
-    return
-  if surf.shellSurface != nil:
-    surf.shellSurface.syncNextCommit()
-  if surf.decoration != nil:
-    surf.decoration.syncNextCommit()
-  if compositor != nil:
-    let input = compositor.createRegion()
-    if input != nil:
-      if surf.inputW > 0 and surf.inputH > 0:
-        input.add(0, 0, surf.inputW, surf.inputH)
-      surf.surface.setInputRegion(input)
-      input.destroy()
-  if surf.buffer != nil:
-    surf.surface.attach(surf.buffer, 0, 0)
-    surf.surface.damage(0, 0, max(1'i32, surf.bufferW),
-        max(1'i32, surf.bufferH))
-  surf.surface.commit()
-  surf.syncPending = false
-
-proc setProtocolSurfaceBuffer(
-    surf: var OwnedProtocolSurface; buffer: ptr Buffer; width, height: int32) =
-  if surf.buffer != nil and surf.buffer != buffer:
-    surf.buffer.destroy()
-  surf.buffer = buffer
-  surf.bufferW = width
-  surf.bufferH = height
-
-proc destroyProtocolSurface(surf: var OwnedProtocolSurface) =
-  if surf.node != nil:
-    surf.node.destroy()
-    surf.node = nil
-  if surf.decoration != nil:
-    surf.decoration.destroy()
-    surf.decoration = nil
-  if surf.shellSurface != nil:
-    shellSurfacePointers.del(surf.shellSurface.id())
-    surf.shellSurface.destroy()
-    surf.shellSurface = nil
-  if surf.surface != nil:
-    surf.surface.attach(nil, 0, 0)
-    surf.surface.commit()
-    surf.surface.destroy()
-    surf.surface = nil
-  if surf.buffer != nil:
-    surf.buffer.destroy()
-    surf.buffer = nil
-
-proc ensureOwnedShellSurface() =
-  if not currentModel.protocolSurfaces.enabled:
-    return
-  if ownedShellSurfaceId != 0 and surfaceTable.hasKey(ownedShellSurfaceId):
-    return
-  if river_manager == nil or compositor == nil:
-    return
-  var surf = createProtocolWlSurface(ProtocolSurfaceKind.PskShell)
-  if surf.surface == nil:
-    warn "Unable to create protocol shell wl_surface"
-    return
-  surf.shellSurface = river_manager.getShellSurface(surf.surface)
-  if surf.shellSurface == nil:
-    warn "Unable to create River shell surface"
-    destroyProtocolSurface(surf)
-    return
-  surf.node = surf.shellSurface.getNode()
-  ownedShellSurfaceId = surf.shellSurface.id()
-  shellSurfacePointers[ownedShellSurfaceId] = surf.shellSurface
-  commitProtocolSurface(surf)
-  surfaceTable[ownedShellSurfaceId] = surf
-  debug "Created protocol shell surface", shellSurfaceId = ownedShellSurfaceId
-
-proc ensureHotkeyOverlaySurface() =
-  if not currentModel.protocolSurfaces.enabled:
-    return
-  if hotkeyOverlaySurfaceId != 0 and
-      surfaceTable.hasKey(hotkeyOverlaySurfaceId):
-    return
-  if river_manager == nil or compositor == nil:
-    return
-  var surf = createProtocolWlSurface(ProtocolSurfaceKind.PskHotkeyOverlay)
-  if surf.surface == nil:
-    warn "Unable to create hotkey overlay wl_surface"
-    return
-  surf.shellSurface = river_manager.getShellSurface(surf.surface)
-  if surf.shellSurface == nil:
-    warn "Unable to create hotkey overlay shell surface"
-    destroyProtocolSurface(surf)
-    return
-  surf.node = surf.shellSurface.getNode()
-  hotkeyOverlaySurfaceId = surf.shellSurface.id()
-  shellSurfacePointers[hotkeyOverlaySurfaceId] = surf.shellSurface
-  commitProtocolSurface(surf)
-  surfaceTable[hotkeyOverlaySurfaceId] = surf
-  debug "Created hotkey overlay shell surface",
-    shellSurfaceId = hotkeyOverlaySurfaceId
-
-proc syncOwnedShellSurface(screen: Rect) =
-  if ownedShellSurfaceId == 0 or
-      not surfaceTable.hasKey(ownedShellSurfaceId):
-    return
-
-  var surf = surfaceTable[ownedShellSurfaceId]
-  let wantsShield = currentModel.overviewActive and shm != nil
-  let desiredW = if wantsShield: max(1'i32, screen.w) else: 1'i32
-  let desiredH = if wantsShield: max(1'i32, screen.h) else: 1'i32
-  if surf.buffer == nil or surf.bufferW != desiredW or
-      surf.bufferH != desiredH:
-    let buffer =
-      if wantsShield:
-        createTransparentShmBuffer(desiredW, desiredH)
-      else:
-        createProtocolBuffer(ProtocolSurfaceKind.PskShell)
-    if buffer != nil:
-      surf.setProtocolSurfaceBuffer(buffer, desiredW, desiredH)
-    elif wantsShield:
-      warn "Overview input shield unavailable; previews may receive pointer"
-
-  if wantsShield and surf.bufferW == desiredW and surf.bufferH == desiredH:
-    surf.inputW = desiredW
-    surf.inputH = desiredH
-  else:
-    surf.inputW = 0
-    surf.inputH = 0
-  commitProtocolSurface(surf)
-  surfaceTable[ownedShellSurfaceId] = surf
-
-proc syncHotkeyOverlaySurface(screen: Rect) =
-  if not currentModel.hotkeyOverlayOpen:
-    if hotkeyOverlaySurfaceId != 0 and
-        surfaceTable.hasKey(hotkeyOverlaySurfaceId):
-      var surf = surfaceTable[hotkeyOverlaySurfaceId]
-      surf.inputW = 0
-      surf.inputH = 0
-      let buffer = createProtocolBuffer(ProtocolSurfaceKind.PskHotkeyOverlay)
-      if buffer != nil:
-        surf.setProtocolSurfaceBuffer(buffer, 1, 1)
-      if surf.node != nil:
-        surf.node.placeBottom()
-      commitProtocolSurface(surf)
-      surfaceTable[hotkeyOverlaySurfaceId] = surf
-    return
-
-  ensureHotkeyOverlaySurface()
-  if hotkeyOverlaySurfaceId == 0 or
-      not surfaceTable.hasKey(hotkeyOverlaySurfaceId):
-    return
-
-  let rows = currentModel.hotkeyOverlayRows()
-  let rendered = renderHotkeyOverlayBuffer(rows, screen)
-  var surf = surfaceTable[hotkeyOverlaySurfaceId]
-  let buffer = createArgbShmBuffer(rendered)
-  if buffer != nil:
-    surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
-  else:
-    warn "Hotkey overlay buffer unavailable"
-    return
-  surf.inputW = surf.bufferW
-  surf.inputH = surf.bufferH
-  commitProtocolSurface(surf)
-  if surf.node != nil:
-    let x = screen.x + max(0'i32, (screen.w - surf.bufferW) div 2)
-    let y = screen.y + max(0'i32, (screen.h - surf.bufferH) div 2)
-    surf.node.setPosition(x, y)
-    surf.node.placeTop()
-  surfaceTable[hotkeyOverlaySurfaceId] = surf
-
-proc ensureDecorationSurface(windowId: WindowId;
-    kind: ProtocolSurfaceKind): uint32 =
-  if not currentModel.protocolSurfaces.enabled:
-    return 0
-  if not windowPointers.hasKey(windowId) or compositor == nil:
-    return 0
-  if kind == ProtocolSurfaceKind.PskDecorationAbove and
-      windowDecorationAbove.hasKey(windowId):
-    return windowDecorationAbove[windowId]
-  if kind == ProtocolSurfaceKind.PskDecorationBelow and
-      windowDecorationBelow.hasKey(windowId):
-    return windowDecorationBelow[windowId]
-
-  var surf = createProtocolWlSurface(kind)
-  if surf.surface == nil:
-    return 0
-  surf.windowId = windowId
-  case kind
-  of ProtocolSurfaceKind.PskDecorationAbove:
-    surf.decoration = windowPointers[windowId].getDecorationAbove(surf.surface)
-  of ProtocolSurfaceKind.PskDecorationBelow:
-    surf.decoration = windowPointers[windowId].getDecorationBelow(surf.surface)
-  else:
-    discard
-  if surf.decoration == nil:
-    destroyProtocolSurface(surf)
-    return 0
-  surf.decoration.setOffset(0, 0)
-  commitProtocolSurface(surf)
-  let id = surf.decoration.id()
-  surfaceTable[id] = surf
-  if kind == ProtocolSurfaceKind.PskDecorationAbove:
-    windowDecorationAbove[windowId] = id
-  elif kind == ProtocolSurfaceKind.PskDecorationBelow:
-    windowDecorationBelow[windowId] = id
-  let kindText = $kind
-  debug "Created protocol decoration surface", windowId = windowId,
-      decorationId = id, kind = kindText
-  id
-
-proc destroyWindowProtocolSurfaces(windowId: WindowId) =
-  if windowDecorationAbove.hasKey(windowId):
-    let id = windowDecorationAbove[windowId]
-    windowDecorationAbove.del(windowId)
-    if surfaceTable.hasKey(id):
-      var surf = surfaceTable[id]
-      surfaceTable.del(id)
-      destroyProtocolSurface(surf)
-  if windowDecorationBelow.hasKey(windowId):
-    let id = windowDecorationBelow[windowId]
-    windowDecorationBelow.del(windowId)
-    if surfaceTable.hasKey(id):
-      var surf = surfaceTable[id]
-      surfaceTable.del(id)
-      destroyProtocolSurface(surf)
-
-proc destroyAllProtocolSurfaces() =
-  var ids: seq[uint32] = @[]
-  for id in surfaceTable.keys:
-    ids.add(id)
-  for id in ids:
-    var surf = surfaceTable[id]
-    surfaceTable.del(id)
-    destroyProtocolSurface(surf)
-  ownedShellSurfaceId = 0
-  hotkeyOverlaySurfaceId = 0
-  windowDecorationAbove.clear()
-  windowDecorationBelow.clear()
-
 proc applyBorder(win: ptr RiverWindowV1; focused: bool; edges: uint32) =
-  let color = premulColor(if focused: currentModel.focusedBorderColor else: currentModel.unfocusedBorderColor)
-  win.setBorders(edges, currentModel.borderWidth, color.r, color.g, color.b, color.a)
+  let color =
+    if focused:
+      premulColor(currentModel.focusedBorderColor)
+    else:
+      premulColor(currentModel.unfocusedBorderColor)
+  win.setBorders(
+    edges, currentModel.borderWidth, color.r, color.g, color.b, color.a)
 
 proc supportedCapabilities(model: Model): uint32 =
   result = RiverBaseCapabilities
@@ -674,15 +314,6 @@ proc configuredPresentationMode(model: Model): uint32 =
 proc hasPresentationPreference(model: Model): bool =
   model.presentationMode != PresentationMode.PresentationDefault
 
-proc outputIdForPointer(output: ptr RiverOutputV1): uint32 =
-  if output == nil:
-    return 0
-  let id = output.id()
-  if outputPointers.hasKey(id):
-    id
-  else:
-    0
-
 proc attachLayerOutput(outputId: uint32) =
   if river_layer_shell == nil or not outputPointers.hasKey(outputId) or
       layerOutputPointers.hasKey(outputId):
@@ -690,14 +321,15 @@ proc attachLayerOutput(outputId: uint32) =
   let layerOutput = river_layer_shell.getOutput(outputPointers[outputId])
   layerOutputPointers[outputId] = layerOutput
   layerOutputOwners[layerOutput.id()] = outputId
-  discard layerOutput.addListener(layer_output_listener.addr, nil)
+  discard layerOutput.addListener(
+    layer_output_listener.addr, daemonData(daemon))
 
 proc attachLayerSeat(seat: ptr RiverSeatV1) =
   if river_layer_shell == nil or seat == nil:
     return
   let layerSeat = river_layer_shell.getSeat(seat)
   layerSeatPointers.add(layerSeat)
-  discard layerSeat.addListener(layer_seat_listener.addr, nil)
+  discard layerSeat.addListener(layer_seat_listener.addr, daemonData(daemon))
 
 proc attachXkbSeat(seat: ptr RiverSeatV1) =
   if river_xkb_bindings == nil or seat == nil:
@@ -709,7 +341,7 @@ proc attachXkbSeat(seat: ptr RiverSeatV1) =
     return
   let xkbSeat = river_xkb_bindings.getSeat(seat)
   xkbSeatPointers[seatId] = xkbSeat
-  discard xkbSeat.addListener(xkb_seat_listener.addr, nil)
+  discard xkbSeat.addListener(xkb_seat_listener.addr, daemonData(daemon))
   xkbSeat.modifiersWatch(AllWatchedModifiers)
 
 proc destroyBindings() =
@@ -745,7 +377,7 @@ proc addXkbBinding(seat: ptr RiverSeatV1; bindingConfig: KeyBindingConfig;
   xkbBindingPointers.add(binding)
   xkbBindings[binding.id()] = msg
   xkbBindingModes[binding.id()] = bindingConfig.mode
-  discard binding.addListener(xkb_binding_listener.addr, nil)
+  discard binding.addListener(xkb_binding_listener.addr, daemonData(daemon))
   if bindingConfig.hasLayoutOverride:
     binding.setLayoutOverride(bindingConfig.layoutOverride)
   binding.enable()
@@ -766,7 +398,7 @@ proc addPointerBinding(
   else:
     pointerBindings[binding.id()] = msg.get()
   pointerBindingSeats[binding.id()] = seat
-  discard binding.addListener(pointer_binding_listener.addr, nil)
+  discard binding.addListener(pointer_binding_listener.addr, daemonData(daemon))
   binding.enable()
 
 proc bindingModeActive(mode: BindingMode): bool =
@@ -834,9 +466,9 @@ proc setupDefaultBindings() =
 proc applyManageState() =
   setupDefaultBindings()
   if currentModel.protocolSurfaces.enabled:
-    ensureOwnedShellSurface()
+    daemon.ensureOwnedShellSurface()
   else:
-    destroyAllProtocolSurfaces()
+    daemon.destroyAllProtocolSurfaces()
 
   for id, win in windowPointers.pairs:
     win.setCapabilities(currentModel.supportedCapabilities())
@@ -851,9 +483,9 @@ proc applyManageState() =
       win.setDimensionBounds(data.maxWidth, data.maxHeight)
       if data.isFloating or data.isFullscreen:
         edges = 0
-      discard ensureDecorationSurface(id,
+      discard daemon.ensureDecorationSurface(id,
           ProtocolSurfaceKind.PskDecorationBelow)
-      discard ensureDecorationSurface(id,
+      discard daemon.ensureDecorationSurface(id,
           ProtocolSurfaceKind.PskDecorationAbove)
     else:
       win.useSsd()
@@ -1420,7 +1052,7 @@ proc renderDesiredPlacements() =
         windowNodes[id].placeTop()
 
   if ownedShellSurfaceId != 0 and surfaceTable.hasKey(ownedShellSurfaceId):
-    syncOwnedShellSurface(screen)
+    daemon.syncOwnedShellSurface(screen)
     var shell = surfaceTable[ownedShellSurfaceId]
     if shell.node != nil:
       shell.node.setPosition(screen.x, screen.y)
@@ -1432,79 +1064,7 @@ proc renderDesiredPlacements() =
           shell.node.placeBelow(firstNode)
     surfaceTable[ownedShellSurfaceId] = shell
 
-  syncHotkeyOverlaySurface(screen)
-
-proc focusedWindowGeometry(): Rect =
-  let focused = currentModel.activeFocusRiverId()
-  if focused != 0 and desiredPlacements.hasKey(focused):
-    return desiredPlacements[focused]
-  let winOpt = currentModel.windowDataForRiverId(focused)
-  if focused != 0 and winOpt.isSome:
-    let win = winOpt.get()
-    if win.isFloating and win.floatingGeom.w > 0 and win.floatingGeom.h > 0:
-      return win.floatingGeom
-  currentModel.primaryScreen()
-
-proc runScreenshotCapture(kind: ScreenshotKind; requestedPath: string;
-    pointerMode: ScreenshotPointerMode; writeToDisk,
-    copyToClipboard: bool) {.async.} =
-  if screenshotCaptureActive:
-    warn "Screenshot capture skipped; capture already running"
-    return
-
-  screenshotCaptureActive = true
-  var path = ""
-  try:
-    let screenshotConfig = currentModel.screenshot
-    path =
-      if writeToDisk:
-        screenshotPathOrDefault(requestedPath, screenshotConfig)
-      else:
-        screenshotTempPath(screenshotConfig)
-    let dir = path.splitFile().dir
-    if dir.len > 0:
-      try:
-        createDir(dir)
-      except CatchableError as e:
-        warn "Failed to create screenshot directory", path = dir, error = e.msg
-        return
-
-    let command = screenshotCaptureCommand(kind, path, screenshotConfig,
-        currentModel.primaryScreen(), focusedWindowGeometry(), pointerMode)
-    info "Screenshot capture started", path = path, screenshotKind = $kind
-
-    let code = await runShellCommandAsync(command)
-    if code != 0:
-      warn "Screenshot capture failed", path = path, exitCode = code
-      return
-
-    var clipboardOk = true
-    if copyToClipboard:
-      let copyCode = await runShellCommandAsync(
-        screenshotClipboardCommand(path, screenshotConfig))
-      if copyCode != 0:
-        warn "Screenshot clipboard copy failed", path = path,
-          exitCode = copyCode
-        clipboardOk = false
-    if not writeToDisk and not clipboardOk:
-      return
-
-    info "Screenshot captured", path = path
-    let event =
-      if writeToDisk:
-        %*{"ScreenshotCaptured": {"path": path}}
-      else:
-        %*{"ScreenshotCaptured": {}}
-    asyncCheck broadcastJson($event)
-  except CatchableError as e:
-    warn "Screenshot capture failed", path = path, error = e.msg
-  finally:
-    screenshotCaptureActive = false
-    if path.len > 0 and not writeToDisk and fileExists(path):
-      try:
-        removeFile(path)
-      except CatchableError:
-        discard
+  daemon.syncHotkeyOverlaySurface(screen)
 
 proc executeEffect(eff: Effect) =
   case eff.kind
@@ -1559,12 +1119,13 @@ proc executeEffect(eff: Effect) =
     if river_manager != nil and currentModel.allowExitSession:
       river_manager.exitSession()
   of EffectKind.EffFocusShellUi:
-    ensureOwnedShellSurface()
+    daemon.ensureOwnedShellSurface()
     if ownedShellSurfaceId != 0:
       queueManageEffect(Effect(kind: EffectKind.EffFocusShellSurface,
           focusShellSurfaceId: ownedShellSurfaceId))
   of EffectKind.EffScreenshot:
-    asyncCheck runScreenshotCapture(eff.screenshotKind, eff.screenshotPath,
+    asyncCheck runScreenshotCapture(
+        addr daemon, eff.screenshotKind, eff.screenshotPath,
         eff.screenshotPointerMode, eff.screenshotWriteToDisk,
         eff.screenshotCopyToClipboard)
   of EffectKind.EffOpStartPointer, EffectKind.EffOpEnd,
@@ -1589,237 +1150,19 @@ proc executeEffect(eff: Effect) =
   else:
     discard
 
-# Mapping from logical IDs to window metadata for late creation
-var pendingWindows: Table[WindowId, runtime_values.WindowData]
-
-# --- RiverWindowV1 Callbacks ---
-
-proc forgetWindow(id: WindowId) =
-  destroyWindowProtocolSurfaces(id)
-  desiredPlacements.del(id)
-  pendingWindows.del(id)
-  windowUnreliablePids.del(id)
-  if windowNodes.hasKey(id):
-    let node = windowNodes[id]
-    windowNodes.del(id)
-    node.destroy()
-  if windowPointers.hasKey(id):
-    let win = windowPointers[id]
-    windowPointers.del(id)
-    win.destroy()
-
-proc on_window_app_id(data: pointer; win: ptr RiverWindowV1; appId: cstring) =
-  let id = win.id()
-  let appIdText = cstringOrEmpty(appId)
-  debug "Window app-id received", windowId = id, appId = appIdText
-  if pendingWindows.hasKey(id):
-    pendingWindows[id].appId = appIdText
-  elif currentModel.hasRiverWindow(id):
-    msgQueue.add(Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: id,
-        updatedAppId: appIdText))
-
-proc on_window_title(data: pointer; win: ptr RiverWindowV1; title: cstring) =
-  let id = win.id()
-  let titleText = cstringOrEmpty(title)
-  debug "Window title received", windowId = id, title = titleText
-  if pendingWindows.hasKey(id):
-    pendingWindows[id].title = titleText
-  elif currentModel.hasRiverWindow(id):
-    msgQueue.add(Msg(kind: MsgKind.WlWindowTitle, titleWindowId: id,
-        updatedTitle: titleText))
-
-proc on_window_closed(data: pointer; win: ptr RiverWindowV1) =
-  let id = win.id()
-  info "Window closed", windowId = id
-  msgQueue.add(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: id))
-  forgetWindow(id)
-
-proc on_window_dimensions_hint(
-    data: pointer;
-    win: ptr RiverWindowV1;
-    minWidth: int32;
-    minHeight: int32;
-    maxWidth: int32;
-    maxHeight: int32) =
-  trace "Window dimensions hint received",
-    windowId = win.id(),
-    minWidth = minWidth,
-    minHeight = minHeight,
-    maxWidth = maxWidth,
-    maxHeight = maxHeight
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].minWidth = max(0'i32, minWidth)
-    pendingWindows[win.id()].minHeight = max(0'i32, minHeight)
-    pendingWindows[win.id()].maxWidth = max(0'i32, maxWidth)
-    pendingWindows[win.id()].maxHeight = max(0'i32, maxHeight)
-  elif currentModel.hasRiverWindow(win.id()):
-    msgQueue.add(Msg(
-      kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: win.id(),
-      minWidth: minWidth,
-      minHeight: minHeight,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight))
-
-proc on_window_dimensions(data: pointer; win: ptr RiverWindowV1; width: int32;
-    height: int32) =
-  trace "Window dimensions acknowledged", windowId = win.id(),
-      width = width, height = height
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].actualW = max(0'i32, width)
-    pendingWindows[win.id()].actualH = max(0'i32, height)
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowDimensions,
-        dimensionsWindowId: win.id(), actualWidth: width,
-        actualHeight: height))
-
-proc on_window_parent(data: pointer; win: ptr RiverWindowV1;
-    parent: ptr RiverWindowV1) =
-  let parentId = if parent == nil: 0'u32 else: parent.id()
-  trace "Window parent received", windowId = win.id(), parentId = parentId
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].parentId = parentId
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowParent, childWindowId: win.id(),
-        parentWindowId: parentId))
-
-proc on_window_decoration_hint(data: pointer; win: ptr RiverWindowV1;
-    hint: uint32) =
-  trace "Window decoration hint received", windowId = win.id(), hint = hint
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].hasDecorationHint = true
-    pendingWindows[win.id()].decorationHint = hint
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowDecorationHint,
-        decorationWindowId: win.id(), decorationHint: hint))
-
-proc on_window_pointer_move_requested(data: pointer; win: ptr RiverWindowV1;
-    seat: ptr RiverSeatV1) =
-  debug "Pointer move requested", windowId = win.id()
-  msgQueue.add(Msg(kind: MsgKind.WlPointerMoveRequested, moveWinId: win.id(),
-      moveSeat: seat))
-
-proc on_window_pointer_resize_requested(data: pointer; win: ptr RiverWindowV1;
-    seat: ptr RiverSeatV1; edges: uint32) =
-  debug "Pointer resize requested", windowId = win.id(), edges = edges
-  msgQueue.add(Msg(kind: MsgKind.WlPointerResizeRequested,
-      resizeWinId: win.id(), resizeSeat: seat, resizeEdges: edges))
-
-proc on_window_show_menu_requested(data: pointer; win: ptr RiverWindowV1;
-    x: int32; y: int32) =
-  debug "Window menu requested", windowId = win.id(), x = x, y = y
-  msgQueue.add(Msg(kind: MsgKind.WlWindowMenuRequested,
-      menuWindowId: win.id(), menuX: x, menuY: y))
-
-proc on_window_maximize_requested(data: pointer; win: ptr RiverWindowV1) =
-  debug "Window maximize requested", windowId = win.id()
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].isMaximized = true
-    pendingWindows[win.id()].isMinimized = false
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-        maximizeRequestId: win.id()))
-
-proc on_window_unmaximize_requested(data: pointer; win: ptr RiverWindowV1) =
-  debug "Window unmaximize requested", windowId = win.id()
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].isMaximized = false
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowUnmaximizeRequested,
-        unmaximizeRequestId: win.id()))
-
-proc on_window_fullscreen_requested(data: pointer; win: ptr RiverWindowV1;
-    output: ptr RiverOutputV1) =
-  let requestedOutput = outputIdForPointer(output)
-  debug "Window fullscreen requested", windowId = win.id(),
-      outputId = requestedOutput
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].isFullscreen = true
-    pendingWindows[win.id()].fullscreenOutput = requestedOutput
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowFullscreenRequested,
-        fullscreenRequestId: win.id(), fullscreenOutputId: requestedOutput))
-
-proc on_window_exit_fullscreen_requested(data: pointer;
-    win: ptr RiverWindowV1) =
-  debug "Window exit fullscreen requested", windowId = win.id()
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].isFullscreen = false
-    pendingWindows[win.id()].fullscreenOutput = 0
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowExitFullscreenRequested,
-        exitFullscreenRequestId: win.id()))
-
-proc on_window_minimize_requested(data: pointer; win: ptr RiverWindowV1) =
-  debug "Window minimize requested", windowId = win.id()
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].isMinimized = true
-    pendingWindows[win.id()].isMaximized = false
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowMinimizeRequested,
-        minimizeRequestId: win.id()))
-
-proc on_window_unreliable_pid(data: pointer; win: ptr RiverWindowV1;
-    unreliablePid: int32) =
-  windowUnreliablePids[win.id()] = unreliablePid
-  trace "Window unreliable pid received", windowId = win.id(),
-      pid = unreliablePid
-
-proc on_window_presentation_hint(data: pointer; win: ptr RiverWindowV1;
-    hint: uint32) =
-  trace "Window presentation hint received", windowId = win.id(), hint = hint
-  if pendingWindows.hasKey(win.id()):
-    pendingWindows[win.id()].hasPresentationHint = true
-    pendingWindows[win.id()].presentationHint = hint
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowPresentationHint,
-        presentationWindowId: win.id(), presentationHint: hint))
-
-proc on_window_identifier(data: pointer; win: ptr RiverWindowV1;
-    identifier: cstring) =
-  let text = cstringOrEmpty(identifier)
-  let id = win.id()
-  trace "Window identifier received", windowId = id, identifier = text
-  if pendingWindows.hasKey(id):
-    pendingWindows[id].identifier = text
-  else:
-    msgQueue.add(Msg(kind: MsgKind.WlWindowIdentifier, identifierWindowId: id,
-        identifier: text))
-
-var window_listener = RiverWindowV1Listener(
-  closed: on_window_closed,
-  dimensionsHint: on_window_dimensions_hint,
-  dimensions: on_window_dimensions,
-  appId: on_window_app_id,
-  title: on_window_title,
-  parent: on_window_parent,
-  decorationHint: on_window_decoration_hint,
-  pointerMoveRequested: on_window_pointer_move_requested,
-  pointerResizeRequested: on_window_pointer_resize_requested,
-  showWindowMenuRequested: on_window_show_menu_requested,
-  maximizeRequested: on_window_maximize_requested,
-  unmaximizeRequested: on_window_unmaximize_requested,
-  fullscreenRequested: on_window_fullscreen_requested,
-  exitFullscreenRequested: on_window_exit_fullscreen_requested,
-  minimizeRequested: on_window_minimize_requested,
-  unreliablePid: on_window_unreliable_pid,
-  presentationHint: on_window_presentation_hint,
-  identifier: on_window_identifier
-)
-
 # --- Wayland Callbacks ---
 
 proc cleanupRiverObjects() =
   manageRequestPending = false
   manageRequestReason = ""
 
-  destroyAllProtocolSurfaces()
+  daemon.destroyAllProtocolSurfaces()
 
   var winIds: seq[WindowId] = @[]
   for id in windowPointers.keys:
     winIds.add(id)
   for id in winIds:
-    forgetWindow(id)
+    daemon.forgetWindow(id)
 
   var outputIds: seq[uint32] = @[]
   for id in outputPointers.keys:
@@ -1930,14 +1273,7 @@ proc on_render_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
 
 proc on_window(data: pointer; mgr: ptr RiverWindowManagerV1;
     win: ptr RiverWindowV1) =
-  let id = win.id()
-  info "Window discovered", windowId = id
-  windowPointers[id] = win
-  windowNodes[id] = win.getNode()
-  # Start tracking as pending until we get metadata or manage starts
-  pendingWindows[id] = runtime_values.WindowData(
-    id: id, appId: "unknown", title: "unknown")
-  discard win.addListener(window_listener.addr, nil)
+  daemon.trackWindow(win)
 
 proc on_output_dimensions(data: pointer; output: ptr RiverOutputV1;
     width: int32; height: int32) =
@@ -2002,7 +1338,11 @@ proc on_wl_output_scale(data: pointer; output: ptr Output; factor: int32) =
   discard
 
 proc on_wl_output_name(data: pointer; output: ptr Output; name: cstring) =
-  let globalName = uint32(cast[uint](data))
+  let listenerData = cast[ptr WlOutputListenerData](data)
+  if listenerData == nil or listenerData.daemon == nil:
+    warn "Ignoring wl_output name without daemon context"
+    return
+  let globalName = listenerData.globalName
   let outputName = $name
   outputGlobalNames[globalName] = outputName
   trace "wl_output name received", globalName = globalName,
@@ -2031,14 +1371,14 @@ proc on_output(data: pointer; mgr: ptr RiverWindowManagerV1;
   let id = output.id()
   info "Output discovered", outputId = id
   outputPointers[id] = output
-  discard output.addListener(output_listener.addr, nil)
+  discard output.addListener(output_listener.addr, daemonData(daemon))
   attachLayerOutput(id)
 
 proc on_seat(data: pointer; mgr: ptr RiverWindowManagerV1;
     seat: ptr RiverSeatV1) =
   info "Seat discovered", seatIndex = seatPointers.len
   seatPointers.add(seat)
-  discard seat.addListener(seat_listener.addr, nil)
+  discard seat.addListener(seat_listener.addr, daemonData(daemon))
   attachLayerSeat(seat)
   bindingsConfigured = false
   requestManage("seat discovered")
@@ -2058,15 +1398,15 @@ proc registry_handle_global(data: pointer; registry: ptr Registry; name: uint32;
       quit 1
     river_manager = cast[ptr RiverWindowManagerV1](registry.`bind`(name,
         river_window_manager_v1_interface.addr, 4'u32))
-    discard river_manager.addListener(manager_listener.addr, nil)
+    discard river_manager.addListener(manager_listener.addr, daemonData(daemon))
     info "Bound to river_window_manager_v1", name = name,
         advertisedVersion = version, boundVersion = 4
-    ensureOwnedShellSurface()
+    daemon.ensureOwnedShellSurface()
   elif interfaceName == "wl_compositor":
     compositor = cast[ptr Compositor](registry.`bind`(name,
         wl_compositor_interface.addr, min(version, 6'u32)))
     info "Bound to wl_compositor", name = name, advertisedVersion = version
-    ensureOwnedShellSurface()
+    daemon.ensureOwnedShellSurface()
   elif interfaceName == "wl_shm":
     shm = cast[ptr Shm](registry.`bind`(name,
         wl_core.wl_shm_interface.addr, min(version, 1'u32)))
@@ -2075,7 +1415,14 @@ proc registry_handle_global(data: pointer; registry: ptr Registry; name: uint32;
     let wlOutput = cast[ptr Output](registry.`bind`(name,
         wl_core.wl_output_interface.addr, min(version, 4'u32)))
     wlOutputPointers[name] = wlOutput
-    discard wlOutput.addListener(wl_output_listener.addr, cast[pointer](uint(name)))
+    let listenerData = WlOutputListenerData(
+      daemon: daemonFromData(daemonData(daemon)),
+      globalName: name)
+    wlOutputListenerData[name] = new(WlOutputListenerData)
+    wlOutputListenerData[name][] = listenerData
+    discard wlOutput.addListener(
+      wl_output_listener.addr,
+      cast[pointer](wlOutputListenerData[name]))
     debug "Bound to wl_output", name = name, advertisedVersion = version,
         boundVersion = min(version, 4'u32)
   elif interfaceName == "river_layer_shell_v1":
@@ -2109,6 +1456,7 @@ proc registry_handle_global_remove(data: pointer; registry: ptr Registry;
   if wlOutputPointers.hasKey(name):
     wlOutputPointers[name].release()
     wlOutputPointers.del(name)
+  wlOutputListenerData.del(name)
   outputGlobalNames.del(name)
   if outputGlobalOwners.hasKey(name):
     let outputId = outputGlobalOwners[name]
@@ -2275,7 +1623,7 @@ proc main() =
     quit 1
 
   registry = display.getRegistry()
-  discard registry.addListener(registry_listener.addr, nil)
+  discard registry.addListener(registry_listener.addr, daemonData(daemon))
 
   let roundtripResult = display.roundtrip()
   debug "Wayland registry roundtrip finished", result = roundtripResult
