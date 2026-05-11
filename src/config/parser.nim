@@ -418,7 +418,11 @@ proc loadConfig*(path: string): Config =
               let rawTag = child.args[0].kInt()
               if rawTag > 0: rule.defaultTag = uint32(rawTag)
             elif child.name == "open-floating" and child.args.len > 0:
+              rule.openFloatingSet = true
               rule.openFloating = child.args[0].kBool()
+            elif child.name == "open-focused" and child.args.len > 0:
+              rule.openFocusedSet = true
+              rule.openFocused = child.args[0].kBool()
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
             elif child.name == "forced-layout" and child.args.len > 0:

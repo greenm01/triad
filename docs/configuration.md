@@ -47,7 +47,7 @@ The supported KDL nodes are:
 - `workspaces`: default workspace floor.
 - `tag-rules`: tag names and default layouts.
 - `window-rule`: app/title matching, default tag, floating behavior,
-  shortcut inhibition, and forced layout.
+  focus behavior, shortcut inhibition, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, and inhibition policy.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -64,6 +64,27 @@ capability changes, update this guide and
 `docs/comp/config-command-matrix.md` in the same change. The configuration
 guide states Triad's naming policy; the comparison matrix shows how that policy
 maps against Mango and River.
+
+## Window Rules
+
+`window-rule` entries match windows by app id and/or title and apply launch
+policy:
+
+```kdl
+window-rule {
+  match app-id="pinentry"
+  open-floating #true
+  open-focused #false
+}
+```
+
+- `open-floating #true|#false`: explicitly opens matching windows floating or
+  tiled. Parented dialogs open floating by default unless this rule is set.
+- `open-focused #true|#false`: explicitly allows or prevents focusing matching
+  windows when they open. Parented dialogs use smart focus by default: they
+  focus only when they open on the active workspace.
+- `default-tag <n>`: opens matching windows on a tag. For parented dialogs,
+  this explicit tag overrides the parent workspace.
 
 ## Screenshots
 

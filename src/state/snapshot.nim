@@ -102,6 +102,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         tagOpt.get().focusedWindow == winId
     result.windows.add(ShellWindow(
       id: runtime_values.WindowId(uint32(win.externalId)),
+      parentId: runtime_values.WindowId(uint32(win.parentExternalId)),
       title: win.title,
       appId: win.appId,
       tagId: if pos.found: some(pos.slot) else: none(uint32),

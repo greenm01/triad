@@ -110,6 +110,27 @@ proc clearWindowViewportRetarget(model: var Model; winId: WindowId): bool =
     return false
   model.clearTagViewportRetarget(tagId)
 
+proc parentFloatingAllowed*(model: Model; winId: WindowId): bool =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  if ruleMatch.found and ruleMatch.rule.openFloatingSet:
+    return ruleMatch.rule.openFloating
+  true
+
+proc parentFocusAllowed*(model: Model; winId: WindowId;
+    parentExternalId: ExternalWindowId): bool =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  if ruleMatch.found and ruleMatch.rule.openFocusedSet:
+    return ruleMatch.rule.openFocused
+  model.parentWorkspaceSlot(parentExternalId) == model.activeSlot
+
 proc ensureFloatingAt*(model: var Model; winId: WindowId;
     geom: runtime_values.Rect): bool =
   let winOpt = model.windowData(winId)
@@ -125,10 +146,12 @@ proc applyParentFloatingPolicy*(model: var Model; winId: WindowId;
   if parentExternalId == NullExternalWindowId:
     return false
   result = model.moveWindowToParentWorkspace(winId, parentExternalId)
-  let geom = model.floatingGeomForWindow(winId, parentExternalId)
-  result = model.ensureFloatingAt(winId, geom) or result
+  if model.parentFloatingAllowed(winId):
+    let geom = model.floatingGeomForWindow(winId, parentExternalId)
+    result = model.ensureFloatingAt(winId, geom) or result
   result = model.clearWindowViewportRetarget(winId) or result
-  result = model.focusWindow(winId, retargetViewport = false) or result
+  if model.parentFocusAllowed(winId, parentExternalId):
+    result = model.focusWindow(winId, retargetViewport = false) or result
 
 proc applyFixedSizeFloatingPolicy*(model: var Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)

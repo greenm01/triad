@@ -86,6 +86,7 @@ var
   msgQueue: seq[Msg] = @[]
   pendingManageEffects: seq[Effect] = @[]
   desiredPlacements: Table[WindowId, Rect]
+  desiredPlacementOrder: seq[WindowId] = @[]
   lastPointerOpSeat: pointer
 
   # Mapping from logical IDs to Wayland pointers
@@ -974,16 +975,51 @@ proc queueWindowInteraction(target: WindowId) =
     return
   queueWindowFocus(target)
 
-proc orderedDesiredInstructions(): seq[RenderInstruction] =
-  var ids: seq[WindowId] = @[]
-  for id in desiredPlacements.keys:
-    ids.add(id)
-  ids.sort()
+proc isDescendantRiverWindow(child, ancestor: WindowId): bool =
+  if child == 0 or ancestor == 0 or child == ancestor:
+    return false
+  var current = child
+  var depth = 0
+  while current != 0 and depth < 64:
+    let winOpt = currentModel.windowDataForRiverId(current)
+    if winOpt.isNone:
+      return false
+    let parent = WindowId(uint32(winOpt.get().parentExternalId))
+    if parent == 0:
+      return false
+    if parent == ancestor:
+      return true
+    current = parent
+    inc depth
+  false
 
+proc logicalWindowSortKey(id: WindowId): uint32 =
+  let logicalId = currentModel.windowForRiverId(id)
+  if uint32(logicalId) != 0:
+    return uint32(logicalId)
+  uint32(id)
+
+proc desiredStackCmp(a, b: WindowId): int =
+  if isDescendantRiverWindow(a, b):
+    return 1
+  if isDescendantRiverWindow(b, a):
+    return -1
+  cmp(logicalWindowSortKey(a), logicalWindowSortKey(b))
+
+proc orderedDesiredIds(): seq[WindowId] =
+  for id in desiredPlacements.keys:
+    if desiredPlacementOrder.find(id) == -1:
+      result.add(id)
+  for id in desiredPlacementOrder:
+    if desiredPlacements.hasKey(id) and result.find(id) == -1:
+      result.add(id)
+  result.sort(desiredStackCmp)
+
+proc orderedDesiredInstructions(): seq[RenderInstruction] =
   let highlighted =
     if currentModel.overviewActive: currentModel.highlightRiverId()
     else: 0'u32
-  for id in ids:
+  for id in orderedDesiredIds():
     if id != highlighted:
       result.add(RenderInstruction(
         windowId: id,
@@ -1317,7 +1353,13 @@ proc placementNeedsCellClip(id: WindowId; geom: Rect): bool =
 
 proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
   desiredPlacements.clear()
+  desiredPlacementOrder.setLen(0)
   for instr in instructions:
+    if desiredPlacements.hasKey(instr.windowId):
+      let existingIdx = desiredPlacementOrder.find(instr.windowId)
+      if existingIdx != -1:
+        desiredPlacementOrder.delete(existingIdx)
+    desiredPlacementOrder.add(instr.windowId)
     desiredPlacements[instr.windowId] = instr.geom
     if windowPointers.hasKey(instr.windowId):
       var geom = instr.geom
@@ -1354,10 +1396,7 @@ proc renderDesiredPlacements() =
     let mode = currentModel.configuredPresentationMode()
     for output in outputPointers.values:
       output.setPresentationMode(mode)
-  var ids: seq[WindowId] = @[]
-  for id in desiredPlacements.keys:
-    ids.add(id)
-  ids.sort()
+  let ids = orderedDesiredIds()
 
   var visible = initTable[WindowId, bool]()
   var lastNode: ptr RiverNodeV1 = nil

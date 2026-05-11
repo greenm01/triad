@@ -1,9 +1,10 @@
-import options, tables
+import algorithm, options, tables
 import ../layouts/scroller
 import ../layouts/tiling
 import ../state/engine
 import ../types/core as core_types
 import ../types/layout_projection
+import ../types/model as model_types
 import ../types/runtime_values as rv
 import presentation_policy
 
@@ -39,6 +40,96 @@ proc activeFocus*(model: Model): core_types.WindowId =
   if tagOpt.isSome:
     return tagOpt.get().focusedWindow
   NullWindowId
+
+proc applyFloatingSizeHints(win: model_types.WindowData;
+    geom: rv.Rect): rv.Rect =
+  result = geom
+  if win.minWidth > 0:
+    result.w = max(result.w, win.minWidth)
+  if win.minHeight > 0:
+    result.h = max(result.h, win.minHeight)
+  if win.maxWidth > 0:
+    result.w = min(result.w, win.maxWidth)
+  if win.maxHeight > 0:
+    result.h = min(result.h, win.maxHeight)
+
+proc clampToScreen(geom, screen: rv.Rect): rv.Rect =
+  result = geom
+  result.w = max(0'i32, result.w)
+  result.h = max(0'i32, result.h)
+  if screen.w > 0:
+    result.w = min(result.w, screen.w)
+    result.x = clamp(result.x, screen.x, screen.x + screen.w - result.w)
+  if screen.h > 0:
+    result.h = min(result.h, screen.h)
+    result.y = clamp(result.y, screen.y, screen.y + screen.h - result.h)
+
+proc centeredIn(bounds, geom: rv.Rect): rv.Rect =
+  result = geom
+  result.x = bounds.x + (bounds.w - geom.w) div 2
+  result.y = bounds.y + (bounds.h - geom.h) div 2
+
+proc anchoredFloatingGeom(
+    win: model_types.WindowData; parentGeom, fallbackGeom,
+    screen: rv.Rect): rv.Rect =
+  result = win.applyFloatingSizeHints(fallbackGeom)
+  result = parentGeom.centeredIn(result)
+  result = result.clampToScreen(screen)
+
+proc isDescendantOf(model: Model; child, ancestor: core_types.WindowId): bool =
+  if child == NullWindowId or ancestor == NullWindowId or child == ancestor:
+    return false
+  var current = child
+  var depth = 0
+  while current != NullWindowId and depth < 64:
+    let winOpt = model.windowData(current)
+    if winOpt.isNone:
+      return false
+    let parentExternalId = winOpt.get().parentExternalId
+    if parentExternalId == NullExternalWindowId:
+      return false
+    let parent = model.windowForExternal(parentExternalId)
+    if parent == ancestor:
+      return true
+    current = parent
+    inc depth
+  false
+
+proc floatingStackCmp(
+    model: Model;
+    a, b: tuple[id: core_types.WindowId; win: model_types.WindowData]): int =
+  if model.isDescendantOf(a.id, b.id):
+    return 1
+  if model.isDescendantOf(b.id, a.id):
+    return -1
+  cmp(uint32(a.id), uint32(b.id))
+
+proc addFloatingInstructions(
+    model: Model; tagId: core_types.TagId; screen: rv.Rect;
+    instructions: var seq[rv.RenderInstruction]) =
+  var floating: seq[tuple[
+    id: core_types.WindowId; win: model_types.WindowData]] = @[]
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if win.isFloating and not win.isMinimized:
+      floating.add((id: winId, win: win))
+  floating.sort(proc(a, b: tuple[
+      id: core_types.WindowId; win: model_types.WindowData]):
+      int = model.floatingStackCmp(a, b))
+
+  var geomByWindow = initTable[rv.WindowId, rv.Rect]()
+  for instr in instructions:
+    geomByWindow[instr.windowId] = instr.geom
+
+  for item in floating:
+    var geom = item.win.floatingGeom
+    if item.win.parentExternalId != NullExternalWindowId:
+      let parentId = rv.WindowId(uint32(item.win.parentExternalId))
+      if geomByWindow.hasKey(parentId):
+        geom = item.win.anchoredFloatingGeom(
+          geomByWindow[parentId], item.win.floatingGeom, screen)
+    let externalId = model.externalWindowId(item.id)
+    instructions.add(rv.RenderInstruction(windowId: externalId, geom: geom))
+    geomByWindow[externalId] = geom
 
 proc runtimeWindowTable(
     model: Model): Table[rv.WindowId, rv.WindowData] =
@@ -167,11 +258,7 @@ proc activeFocusLayoutInstructions*(model: Model):
     retargetViewport and model.scrollerPreferCenter,
     if retargetViewport: model.centerFocusedColumn else: "never")
 
-  for winId, win in model.windowsOnTagWithId(model.activeTag):
-    if win.isFloating and not win.isMinimized:
-      result.add(rv.RenderInstruction(
-        windowId: model.externalWindowId(winId),
-        geom: win.floatingGeom))
+  model.addFloatingInstructions(model.activeTag, screen, result)
 
 proc upsertInstruction(
     instructions: var seq[rv.RenderInstruction]; instruction:
@@ -259,11 +346,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
   if overlayActive:
     model.preserveBackingPresentation(result.instructions, screen)
 
-  for winId, win in model.windowsOnTagWithId(model.activeTag):
-    if win.isFloating and not win.isMinimized:
-      result.instructions.add(rv.RenderInstruction(
-        windowId: model.externalWindowId(winId),
-        geom: win.floatingGeom))
+  model.addFloatingInstructions(model.activeTag, screen, result.instructions)
 
   let winId = model.activeScratchpadWindow()
   if winId != NullWindowId:

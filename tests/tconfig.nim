@@ -254,6 +254,7 @@ window-rule {
   match app-id="qemu"
   default-tag 3
   open-floating #true
+  open-focused #false
 }
 spawn-at-startup "notify-send" "triad"
 quickshell {
@@ -312,7 +313,10 @@ bindings {
     check config.tagRules[0].defaultLayout == LayoutMode.Grid
     check config.windowRules.len == 1
     check config.windowRules[0].defaultTag == 3
+    check config.windowRules[0].openFloatingSet
     check config.windowRules[0].openFloating
+    check config.windowRules[0].openFocusedSet
+    check not config.windowRules[0].openFocused
     check config.startupCommands == @[@["notify-send", "triad"]]
     check config.quickshell.theme == "noctalia"
     check config.terminal.command.len > 0

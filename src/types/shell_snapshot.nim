@@ -28,6 +28,7 @@ type
 
   ShellWindow* = object
     id*: WindowId
+    parentId*: WindowId
     title*: string
     appId*: string
     tagId*: Option[uint32]

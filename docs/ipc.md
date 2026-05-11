@@ -251,6 +251,7 @@ The reply contains the full native shell-facing state:
       "windows": [
         {
           "id": 10,
+          "parent_id": null,
           "app_id": "Alacritty",
           "tag_id": 1,
           "workspace_idx": 1,

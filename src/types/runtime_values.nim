@@ -89,7 +89,10 @@ type
     appIdMatch*: string
     titleMatch*: string
     defaultTag*: uint32
+    openFloatingSet*: bool
     openFloating*: bool
+    openFocusedSet*: bool
+    openFocused*: bool
     keyboardShortcutsInhibit*: bool
     forcedLayout*: int
 

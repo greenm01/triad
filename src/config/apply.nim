@@ -10,7 +10,10 @@ proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
     appIdMatch: rule.appIdMatch,
     titleMatch: rule.titleMatch,
     defaultSlot: rule.defaultTag,
+    openFloatingSet: rule.openFloatingSet or rule.openFloating,
     openFloating: rule.openFloating,
+    openFocusedSet: rule.openFocusedSet,
+    openFocused: rule.openFocused,
     keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
     forcedLayout: rule.forcedLayout
   )

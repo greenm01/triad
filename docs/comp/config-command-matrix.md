@@ -111,10 +111,11 @@ external window manager.
 | Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
 | Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=... }` | X | |
 | Window rules | Default tag | `windowrule tags` | WM policy | `window-rule default-tag` | X | |
-| Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | |
+| Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
+| Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
 | Window rules | Shortcut inhibition | `allow_shortcuts_inhibit` | client inhibit protocol/policy | `keyboard-shortcuts-inhibit`, `toggle-keyboard-shortcuts-inhibit` | X | |
-| Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | | | Not implemented. |
+| Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-tag` | X | `open-focused #false` covers open-silent; explicit `default-tag` is the tag placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `floating` defaults | | Triad has global floating defaults, not rule-specific size/offsets. |
 | Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `enable-animations`, `animation-speed` | | Triad has global animation config, not per-window visual rules. |
 | Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy | | | Not implemented. |

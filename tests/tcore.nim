@@ -470,6 +470,7 @@ suite "Core Runtime Logic":
     let childId = model.windowForExternal(ExternalWindowId(2))
     let child = model.windowData(childId).get()
     check child.parentExternalId == ExternalWindowId(1)
+    check model.snapshotWindow(2).parentId == 1
     check child.isFloating
     check child.floatingGeom.x ==
       parentGeom.x + (parentGeom.w - child.floatingGeom.w) div 2
@@ -507,6 +508,115 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
       it.triadEventName == "layout")
+
+  test "Parented inactive-workspace window stays on parent workspace silently":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+    let child = model.snapshotWindow(2)
+
+    check model.shellSnapshot().activeTag == 2
+    check child.tagId.isSome and child.tagId.get() == 1
+    check child.workspaceIdx == 1
+    check not effects.hasFocusEffect(2)
+    check model.instructionGeom(2).w == 0
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    let parentGeom = model.instructionGeom(1)
+    let childGeom = model.instructionGeom(2)
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
+  test "Parented floating window follows parent projection":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+
+    let beforeChildGeom = model.instructionGeom(2)
+    let parentId = model.windowForExternal(ExternalWindowId(1))
+    discard model.setWindowFloating(
+      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300))
+
+    let parentGeom = model.instructionGeom(1)
+    let childGeom = model.instructionGeom(2)
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+    check childGeom != beforeChildGeom
+
+  test "Parented floating stack keeps children and newer siblings above":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "First"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 3, createdParentWindowId: 1,
+      appId: "pinentry", title: "Second"))
+
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check order.find(1'u32) < order.find(2'u32)
+    check order.find(2'u32) < order.find(3'u32)
+
+  test "Parented window rules can suppress focus and floating":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(
+          appIdMatch: "pinentry",
+          openFloatingSet: true,
+          openFloating: false,
+          openFocusedSet: true,
+          openFocused: false)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+    let child = model.snapshotWindow(2)
+
+    check not child.isFloating
+    check model.focusedWindowId() == 1
+    check not effects.hasFocusEffect(2)
+
+  test "Explicit default-tag can override parent workspace":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(appIdMatch: "pinentry", defaultTag: 2)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+    let child = model.snapshotWindow(2)
+
+    check child.tagId.isSome and child.tagId.get() == 2
+    check child.workspaceIdx == 2
 
   test "Fixed-size hint opens normal window as floating":
     var model = cameraModel()

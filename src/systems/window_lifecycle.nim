@@ -272,6 +272,7 @@ proc createWindowForExternal*(model: var Model;
       hasRestoredTag = targetSlot != 0
 
   let ruleMatch = model.windowRuleFor(appId, title)
+  let ruleForcesSlot = ruleMatch.found and ruleMatch.rule.defaultSlot != 0
   if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and
       not hasRestoredTag:
     targetSlot =
@@ -281,22 +282,28 @@ proc createWindowForExternal*(model: var Model;
     else: 0
   let parentKnown = parentExternalId != NullExternalWindowId and
     model.windowForExternal(parentExternalId) != NullWindowId
+  let parentOpensFloating =
+    if ruleMatch.found and ruleMatch.rule.openFloatingSet:
+      ruleMatch.rule.openFloating
+    else:
+      true
   let parentSlot = model.parentWorkspaceSlot(parentExternalId)
-  if parentSlot != 0 and not hasRestoredTag:
+  if parentSlot != 0 and not hasRestoredTag and not ruleForcesSlot:
     targetSlot = parentSlot
 
   var isFloating = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
   if ruleMatch.found:
-    isFloating = ruleMatch.rule.openFloating
+    if ruleMatch.rule.openFloatingSet:
+      isFloating = ruleMatch.rule.openFloating
     if isFloating:
       floatingGeom = model.defaultFloatingGeom()
     shortcutInhibit = ruleMatch.rule.keyboardShortcutsInhibit
   if hasRestoredWindow:
     isFloating = restored.isFloating
     floatingGeom = restored.floatingGeom
-  elif parentKnown:
+  elif parentKnown and parentOpensFloating:
     isFloating = true
 
   result = model.windowForExternal(externalId)
@@ -351,7 +358,13 @@ proc createWindowForExternal*(model: var Model;
         model.newWindowColumnIndex(targetTag, isFloating))
       if not model.sessionLocked and not restoreFocusPending:
         if parentKnown:
-          discard model.focusWindow(result, retargetViewport = false)
+          let parentOpensFocused =
+            if ruleMatch.found and ruleMatch.rule.openFocusedSet:
+              ruleMatch.rule.openFocused
+            else:
+              targetSlot == model.activeWorkspaceSlot()
+          if parentOpensFocused:
+            discard model.focusWindow(result, retargetViewport = false)
         elif targetSlot == model.activeWorkspaceSlot():
           discard model.focusWindow(result)
         else:

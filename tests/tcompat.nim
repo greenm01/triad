@@ -69,6 +69,7 @@ proc snapshotForShell(): ShellSnapshot =
     windows: @[
       ShellWindow(
         id: 10,
+        parentId: 9,
         title: "Terminal",
         appId: "Alacritty",
         tagId: some(1'u32),
@@ -277,6 +278,7 @@ suite "Shell compatibility contracts":
     check state["layout"]["active_tag"].getInt() == 1
     check state["outputs"][0]["name"].getStr() == "triad-0"
     check state["windows"][0]["workspace_idx"].getInt() == 1
+    check state["windows"][0]["parent_id"].getInt() == 9
 
     let setLayout = handleTriadRequest(
       """{"triad":{"version":1,"request":"set-layout","layout":"deck","target":{"workspace_idx":2}}}""",

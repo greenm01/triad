@@ -82,6 +82,7 @@ proc triadOutputJson(output: ShellOutput): JsonNode =
 proc triadWindowJson(win: ShellWindow): JsonNode =
   %*{
     "id": win.id,
+    "parent_id": if win.parentId == 0: newJNull() else: %win.parentId,
     "title": nullableString(win.title),
     "app_id": nullableString(win.appId),
     "tag_id": if win.tagId.isSome: %win.tagId.get() else: newJNull(),
