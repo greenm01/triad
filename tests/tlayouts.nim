@@ -94,6 +94,31 @@ suite "Layout Algorithm Math":
     check instructions[1].geom.y > instructions[0].geom.y
     check instructions[2].geom.x > instructions[0].geom.x
 
+  test "tgmix uses tile for small sets and grid for larger sets":
+    var smallTag = TagState(tagId: 1, layoutMode: LayoutMode.TGMix,
+        masterCount: 1, masterSplitRatio: 0.6)
+    smallTag.columns.add(Column(windows: @[WindowId(101), 102, 103],
+        widthProportion: 1.0))
+
+    let small = layoutTGMix(smallTag, screen, outerGap, innerGap)
+
+    check small.len == 3
+    check small[0].windowId == 101
+    check small[1].geom.x > small[0].geom.x
+    check small[2].geom.x == small[1].geom.x
+    check small[2].geom.y > small[1].geom.y
+
+    var largeTag = TagState(tagId: 1, layoutMode: LayoutMode.TGMix,
+        masterCount: 1, masterSplitRatio: 0.6)
+    largeTag.columns.add(Column(windows: @[WindowId(101), 102, 103, 104],
+        widthProportion: 1.0))
+
+    let large = layoutTGMix(largeTag, screen, outerGap, innerGap)
+
+    check large.len == 4
+    check large[0].geom.y == large[1].geom.y
+    check large[2].geom.y > large[0].geom.y
+
   test "overview grid navigation follows row-major cells":
     check gridDimensions(5) == (cols: 3, rows: 2)
     check gridIndexByDelta(0, 5, 1, 0) == 1

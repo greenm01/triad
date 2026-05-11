@@ -223,6 +223,8 @@ proc layoutForTag(
     layoutVerticalGrid(tag, screen, outerGap, innerGap)
   of rv.LayoutMode.VerticalDeck:
     layoutVerticalDeck(tag, screen, outerGap, innerGap)
+  of rv.LayoutMode.TGMix:
+    layoutTGMix(tag, screen, outerGap, innerGap)
 
 proc activeFocusLayoutInstructions*(model: Model):
     seq[rv.RenderInstruction] =

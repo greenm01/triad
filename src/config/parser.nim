@@ -112,6 +112,7 @@ proc parseLayoutName(name: string; fallback: LayoutMode): LayoutMode =
   of "vertical-tile", "vertical_tile": LayoutMode.VerticalTile
   of "vertical-grid", "vertical_grid": LayoutMode.VerticalGrid
   of "vertical-deck", "vertical_deck": LayoutMode.VerticalDeck
+  of "tgmix", "tg_mix": LayoutMode.TGMix
   else: fallback
 
 proc forcedLayoutValue(name: string): int =
@@ -127,6 +128,7 @@ proc forcedLayoutValue(name: string): int =
   of "vertical-tile", "vertical_tile": ord(LayoutMode.VerticalTile) + 1
   of "vertical-grid", "vertical_grid": ord(LayoutMode.VerticalGrid) + 1
   of "vertical-deck", "vertical_deck": ord(LayoutMode.VerticalDeck) + 1
+  of "tgmix", "tg_mix": ord(LayoutMode.TGMix) + 1
   else: 0
 
 proc modifierValue(name: string): uint32 =

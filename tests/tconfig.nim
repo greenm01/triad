@@ -424,6 +424,7 @@ bindings {
     check config.layoutForBinding("v", Super + Ctrl) == LayoutMode.Deck
     check config.layoutForBinding("x", Super + Ctrl) == LayoutMode.Monocle
     check config.layoutForBinding("c", Super + Shift) == LayoutMode.RightTile
+    check parseTextCommand("layout-tgmix").get().newLayout == LayoutMode.TGMix
 
   test "config defaults clamp invalid runtime values":
     var model = Model()

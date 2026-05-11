@@ -24,7 +24,7 @@ layout {
     enable-animations #true
     animation-speed 0.15
     smart-gaps #false
-    layout-cycle "scroller" "tile" "grid" "deck" "monocle" "vertical-scroller" "center-tile" "right-tile" "vertical-grid"
+    layout-cycle "scroller" "tile" "grid" "deck" "monocle" "vertical-scroller" "center-tile" "right-tile" "vertical-grid" "tgmix"
 }
 
 scratchpad {
@@ -207,6 +207,7 @@ bindings {
     bind "Super+Ctrl+c" "layout-center-tile"
     bind "Super+Shift+c" "layout-right-tile"
     bind "Super+Ctrl+x" "layout-monocle"
+    bind "Super+Ctrl+g" "layout-tgmix"
 
     // Scroller movement and stack surgery.
     bind "Super+Ctrl+h" "move-column-left"

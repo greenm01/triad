@@ -91,7 +91,7 @@ external window manager.
 | Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
 | Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
 | Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window` | X | Triad has explicit groups and consume/expel commands. |
-| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, native `set-layout` | X | Triad supports scroller, tile, grid, monocle, deck, and variants. |
+| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, native `set-layout` | X | Triad supports scroller, tile, grid, monocle, deck, tgmix, and variants. |
 | Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order. |
 | Layouts | Layout defaults per tag | `tagrule layout_name` | WM policy | `tag-rules default-layout=...` | X | |
 | Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |
@@ -99,7 +99,7 @@ external window manager.
 | Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width` | X | Triad uses column/window width proportions. |
 | Layouts | Scroller focus centering | `scroller_focus_center`, `scroller_prefer_center` | WM policy | `scroller-focus-center`, `scroller-prefer-center` | X | |
 | Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | | | Not exposed by Triad. |
-| Layouts | TGMix layout | `tgmix` | WM policy | | | Not implemented. |
+| Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
@@ -310,7 +310,8 @@ Text IPC and bind commands:
 - Layout: `layout-scroller`, `layout-vertical-scroller`,
   `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`,
   `layout-center-tile`, `layout-right-tile`, `layout-vertical-tile`,
-  `layout-vertical-grid`, `layout-vertical-deck`, `switch-layout`,
+  `layout-vertical-grid`, `layout-vertical-deck`, `layout-tgmix`,
+  `switch-layout`,
   `master-count`, `adjust-master-count`, `master-ratio`,
   `adjust-master-ratio`, `resize-width`, `resize-height`,
   `set-column-width`, `adjust-gaps`, `toggle-gaps`, `zoom`.

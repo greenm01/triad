@@ -14,6 +14,7 @@ proc layoutModeId*(mode: LayoutMode): string =
   of LayoutMode.VerticalTile: "vertical-tile"
   of LayoutMode.VerticalGrid: "vertical-grid"
   of LayoutMode.VerticalDeck: "vertical-deck"
+  of LayoutMode.TGMix: "tgmix"
 
 proc parseLayoutModeId*(value: string): Option[LayoutMode] =
   case value
@@ -28,4 +29,5 @@ proc parseLayoutModeId*(value: string): Option[LayoutMode] =
   of "vertical-tile": some(LayoutMode.VerticalTile)
   of "vertical-grid": some(LayoutMode.VerticalGrid)
   of "vertical-deck": some(LayoutMode.VerticalDeck)
+  of "tgmix": some(LayoutMode.TGMix)
   else: none(LayoutMode)

@@ -138,6 +138,8 @@ proc parseTextCommand*(line: string): Option[Msg] =
       newLayout: LayoutMode.VerticalGrid))
   of "layout-vertical-deck": some(Msg(kind: MsgKind.CmdSetLayout,
       newLayout: LayoutMode.VerticalDeck))
+  of "layout-tgmix": some(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.TGMix))
   of "switch-layout": some(Msg(kind: MsgKind.CmdSwitchLayout))
   of "toggle-overview": some(Msg(kind: MsgKind.CmdToggleOverview))
   of "open-overview": some(Msg(kind: MsgKind.CmdOpenOverview))

@@ -354,3 +354,11 @@ proc layoutVerticalGrid*(tag: TagState, screen: Rect, outerGap,
         y: screen.y + safeOuterGap + row * (winH + safeInnerGap),
         w: winW,
         h: winH)))
+
+proc layoutTGMix*(tag: TagState, screen: Rect, outerGap,
+    innerGap: int32): seq[RenderInstruction] =
+  let n = tag.flattenTag().len
+  if n <= 3:
+    layoutMasterStack(tag, screen, outerGap, innerGap)
+  else:
+    layoutGrid(tag, screen, outerGap, innerGap)

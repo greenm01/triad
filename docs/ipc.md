@@ -44,6 +44,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `layout-vertical-tile`: Sets the active tag to a top master with horizontal stack below.
 *   `layout-vertical-grid`: Sets the active tag to a row-first grid.
 *   `layout-vertical-deck`: Sets the active tag to a top master with deck-stack below.
+*   `layout-tgmix`: Sets the active tag to tile mode for up to three windows,
+    then grid mode for larger sets.
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
 
 #### Manipulation
@@ -315,7 +317,7 @@ Canonical layout ids are:
 
 `scroller`, `vertical-scroller`, `tile`, `grid`, `monocle`, `deck`,
 `center-tile`, `right-tile`, `vertical-tile`, `vertical-grid`,
-`vertical-deck`.
+`vertical-deck`, `tgmix`.
 
 ### Layout Actions
 

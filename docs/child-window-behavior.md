@@ -139,7 +139,7 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 | Popup focus tree/history | Pass | Closing children and returning to a parent use popup-tree focus history. |
 | Newer or recently focused popups cover older ones | Pass | Popup stacking follows descendant order, then focus/open history. |
 | Deck background parent behavior | Pass | Deck projection uses the popup root as layout focus so the parent is visible first. |
-| TGMix behavior | TODO | Planned layout; add master/grid-zone child tests when TGMix lands. |
+| TGMix behavior | Pass | Popups anchor to the parent in both the tile-sized and grid-sized TGMix projections. |
 
 ---
 

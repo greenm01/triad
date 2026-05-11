@@ -1115,6 +1115,31 @@ suite "Core Runtime Logic":
     check childGeom.x + childGeom.w >= parentGeom.x
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
 
+  test "TGMix popup anchors in tile-sized parent zone":
+    var model = directionalModel(LayoutMode.TGMix, 3)
+    let parentGeom = model.instructionGeom(1)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+
+    let childGeom = model.instructionGeom(4)
+    check childGeom.w > 0
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
+  test "TGMix popup anchors in grid-sized parent zone":
+    var model = directionalModel(LayoutMode.TGMix, 4)
+    let parentGeom = model.instructionGeom(4)
+    model.focusExternal(4)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 5, createdParentWindowId: 4,
+      appId: "pinentry", title: "Passphrase"))
+
+    let childGeom = model.instructionGeom(5)
+    check childGeom.w > 0
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
   test "Parented window rules can suppress focus and floating":
     var model = initRuntimeStateFromConfig(Config(
       layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),

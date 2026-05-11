@@ -32,7 +32,8 @@ type
     RightTile,
     VerticalTile,
     VerticalGrid,
-    VerticalDeck
+    VerticalDeck,
+    TGMix
 
   Direction* {.pure.} = enum
     DirLeft,

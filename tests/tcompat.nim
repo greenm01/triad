@@ -289,6 +289,13 @@ suite "Shell compatibility contracts":
     check setLayout.messages[0].newLayout == LayoutMode.Deck
     check setLayout.messages[0].layoutTargetTag == 2
 
+    let setTGMix = handleTriadRequest(
+      """{"triad":{"version":1,"request":"set-layout","layout":"tgmix"}}""",
+      snapshot)
+    check parseJson(setTGMix.reply)["ok"].getBool()
+    check setTGMix.messages.len == 1
+    check setTGMix.messages[0].newLayout == LayoutMode.TGMix
+
   test "event streams start with current snapshot state":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())
     check niri.handled
