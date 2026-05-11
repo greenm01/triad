@@ -10,7 +10,7 @@ proc popupRoot*(model: Model; winId: WindowId): WindowId =
     if winOpt.isNone:
       return result
     let win = winOpt.get()
-    if not win.isFloating:
+    if not win.windowAdmitted() or not win.isFloating:
       return current
     let parentExternalId = win.parentExternalId
     if parentExternalId == NullExternalWindowId:
@@ -37,7 +37,8 @@ proc lastFocusedInPopupTree*(
     return NullWindowId
   for candidate in model.focusHistoryIdsReverse():
     let winOpt = model.windowData(candidate)
-    if winOpt.isNone or winOpt.get().isMinimized:
+    if winOpt.isNone or winOpt.get().isMinimized or
+        not winOpt.get().windowAdmitted():
       continue
     if tagId != NullTagId and
         model.placementForWindowOnTag(tagId, candidate).isNone:

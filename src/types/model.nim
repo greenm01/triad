@@ -6,6 +6,10 @@ from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,
   QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig
 
 type
+  WindowAdmissionState* {.pure.} = enum
+    Admitted,
+    PendingAdmission
+
   WindowData* = object
     id*: WindowId
     externalId*: ExternalWindowId
@@ -28,6 +32,8 @@ type
     presentationHint*: uint32
     floatingGeom*: Rect
     parentAutoFloating*: bool
+    admissionState*: WindowAdmissionState
+    focusAfterAdmission*: bool
     keyboardShortcutsInhibit*: bool
     keyboardShortcutsInhibitBypass*: bool
 

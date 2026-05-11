@@ -19,6 +19,8 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
     maxHeight = 0'i32; hasDecorationHint = false; decorationHint = 0'u32;
     hasPresentationHint = false; presentationHint = 0'u32;
     floatingGeom = Rect(); parentAutoFloating = false;
+    admissionState = WindowAdmissionState.Admitted;
+    focusAfterAdmission = false;
     keyboardShortcutsInhibit = false;
     keyboardShortcutsInhibitBypass = false): WindowId =
   if externalId != NullExternalWindowId and
@@ -52,6 +54,8 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
     presentationHint: presentationHint,
     floatingGeom: floatingGeom,
     parentAutoFloating: parentAutoFloating,
+    admissionState: admissionState,
+    focusAfterAdmission: focusAfterAdmission,
     keyboardShortcutsInhibit: keyboardShortcutsInhibit,
     keyboardShortcutsInhibitBypass: keyboardShortcutsInhibitBypass
   ))
@@ -64,8 +68,9 @@ proc setWindowCreatedState*(model: var Model; winId: WindowId;
     title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
     heightProportion = 1.0'f32; isFloating = false;
     floatingGeom = Rect(); parentAutoFloating = false;
-    parentExternalId = NullExternalWindowId; keyboardShortcutsInhibit = false):
-    bool =
+    admissionState = WindowAdmissionState.Admitted;
+    focusAfterAdmission = false; parentExternalId = NullExternalWindowId;
+    keyboardShortcutsInhibit = false): bool =
   if model.windows.entity(winId).isNone:
     return false
   let externalId = model.windows.mEntity(winId).externalId
@@ -80,6 +85,8 @@ proc setWindowCreatedState*(model: var Model; winId: WindowId;
     isFloating: isFloating,
     floatingGeom: floatingGeom,
     parentAutoFloating: parentAutoFloating,
+    admissionState: admissionState,
+    focusAfterAdmission: focusAfterAdmission,
     parentExternalId: parentExternalId,
     keyboardShortcutsInhibit: keyboardShortcutsInhibit
   )
@@ -177,6 +184,8 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).heightProportion = restored.heightProportion
   model.windows.mEntity(winId).isFloating = restored.isFloating
   model.windows.mEntity(winId).parentAutoFloating = false
+  model.windows.mEntity(winId).admissionState = WindowAdmissionState.Admitted
+  model.windows.mEntity(winId).focusAfterAdmission = false
   model.windows.mEntity(winId).isFullscreen = restored.isFullscreen
   model.windows.mEntity(winId).isMaximized = restored.isMaximized
   model.windows.mEntity(winId).isMinimized = restored.isMinimized
@@ -241,6 +250,16 @@ proc setWindowFloatingGeom*(
     return false
   model.windows.mEntity(winId).floatingGeom = floatingGeom
   model.windows.mEntity(winId).parentAutoFloating = false
+  true
+
+proc setWindowAdmission*(model: var Model; winId: WindowId;
+    admissionState: WindowAdmissionState; focusAfterAdmission = false): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  model.windows.mEntity(winId).admissionState = admissionState
+  model.windows.mEntity(winId).focusAfterAdmission =
+    admissionState == WindowAdmissionState.PendingAdmission and
+    focusAfterAdmission
   true
 
 proc setWindowFullscreen*(model: var Model; winId: WindowId;

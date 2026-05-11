@@ -41,7 +41,11 @@ proc updateWindowParentForExternal*(model: var Model;
     return false
   if winOpt.get().parentExternalId == parentExternalId:
     return false
+  let wasPending =
+    winOpt.get().admissionState == WindowAdmissionState.PendingAdmission
   result = true
+  if wasPending:
+    discard model.setWindowAdmission(winId, WindowAdmissionState.Admitted)
   discard model.setWindowParent(winId, parentExternalId)
   if parentExternalId != NullExternalWindowId:
     result = model.applyParentFloatingPolicy(winId, parentExternalId) or result
@@ -130,7 +134,7 @@ proc requestMinimizeForExternal*(
     if tag.focusedWindow == winId:
       var focused = NullWindowId
       for candidateId, candidate in model.windowsOnTagWithId(tagId):
-        if not candidate.isMinimized:
+        if not candidate.isMinimized and candidate.windowAdmitted():
           focused = candidateId
           break
       discard model.setTagFocus(tagId, focused)

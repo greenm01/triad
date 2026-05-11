@@ -225,7 +225,7 @@ proc newWindowColumnIndex(model: Model; tagId: TagId;
 
 proc createWindowForExternal*(model: var Model;
     externalId: ExternalWindowId; appId, title: string; identifier = "";
-    parentExternalId = NullExternalWindowId):
+    parentExternalId = NullExternalWindowId; deferAdmission = false):
     WindowId =
   if externalId == NullExternalWindowId:
     return NullWindowId
@@ -309,6 +309,9 @@ proc createWindowForExternal*(model: var Model;
   let parentAutoFloating = parentKnown and isFloating and
     not hasRestoredWindow and
     not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
+  let pendingAdmission = deferAdmission and not parentKnown and
+    not hasRestoredWindow
+  var focusAfterAdmission = false
 
   result = model.windowForExternal(externalId)
   if result == NullWindowId:
@@ -326,6 +329,10 @@ proc createWindowForExternal*(model: var Model;
     isFloating = isFloating,
     floatingGeom = floatingGeom,
     parentAutoFloating = parentAutoFloating,
+    admissionState =
+      if pendingAdmission: WindowAdmissionState.PendingAdmission
+      else: WindowAdmissionState.Admitted,
+    focusAfterAdmission = false,
     parentExternalId = parentExternalId,
     keyboardShortcutsInhibit = shortcutInhibit
   )
@@ -376,9 +383,13 @@ proc createWindowForExternal*(model: var Model;
               retargetViewport = not model.parentVisibleInProjection(
                 parentExternalId))
         elif targetSlot == model.activeWorkspaceSlot():
-          discard model.focusWindow(result)
+          if pendingAdmission:
+            focusAfterAdmission = true
+          else:
+            discard model.focusWindow(result)
         else:
-          discard model.setTagFocus(targetTag, result)
+          if not pendingAdmission:
+            discard model.setTagFocus(targetTag, result)
 
     if restoresFocusedWindow:
       let targetTag = model.tagForSlot(targetSlot)
@@ -401,6 +412,26 @@ proc createWindowForExternal*(model: var Model;
   model.syncRestoreOutputTags()
   discard model.clearSettledRestoreFocus()
   discard model.pruneDynamicWorkspaces()
+  if pendingAdmission and focusAfterAdmission:
+    discard model.setWindowAdmission(
+      result, WindowAdmissionState.PendingAdmission,
+      focusAfterAdmission = true)
+
+proc settleWindowAdmissionForExternal*(model: var Model;
+    externalId: ExternalWindowId): bool =
+  let winId = model.windowForExternal(externalId)
+  if winId == NullWindowId:
+    return false
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone or
+      winOpt.get().admissionState != WindowAdmissionState.PendingAdmission:
+    return false
+  let focusAfterAdmission = winOpt.get().focusAfterAdmission
+  result = model.setWindowAdmission(winId, WindowAdmissionState.Admitted)
+  if focusAfterAdmission and not model.sessionLocked:
+    let tagId = model.tagForWindow(winId)
+    if tagId != NullTagId and tagId == model.activeTag:
+      discard model.focusWindow(winId)
 
 proc updateWindowIdentifierAndRestoreForExternal*(model: var Model;
     externalId: ExternalWindowId; identifier: string): bool =

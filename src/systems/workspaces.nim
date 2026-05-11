@@ -124,7 +124,7 @@ proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
 
 proc tagHasFocusableWindow*(model: Model; tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
-    if not win.isMinimized:
+    if not win.isMinimized and win.windowAdmitted():
       return true
   false
 

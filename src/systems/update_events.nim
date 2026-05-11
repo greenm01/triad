@@ -74,7 +74,8 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       msg.appId,
       msg.title,
       msg.createdIdentifier,
-      msg.createdParentWindowId.externalWindowId())
+      msg.createdParentWindowId.externalWindowId(),
+      msg.deferAdmission)
     result.dirty = winId != NullWindowId
 
   of MsgKind.WlWindowDestroyed:
@@ -189,5 +190,8 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.WlWindowMinimizeRequested:
     result.dirty = model.requestMinimizeForExternal(
       msg.minimizeRequestId.externalWindowId())
+  of MsgKind.WlWindowAdmissionSettled:
+    result.dirty = model.settleWindowAdmissionForExternal(
+      msg.admissionWindowId.externalWindowId())
   else:
     discard

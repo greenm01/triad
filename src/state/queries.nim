@@ -21,6 +21,18 @@ proc tagData*(model: Model; tagId: TagId): Option[TagData] =
 proc windowData*(model: Model; winId: WindowId): Option[WindowData] =
   model.windows.entity(winId)
 
+proc windowAdmitted*(win: WindowData): bool =
+  win.admissionState == WindowAdmissionState.Admitted
+
+proc windowAdmitted*(model: Model; winId: WindowId): bool =
+  let winOpt = model.windowData(winId)
+  winOpt.isSome and winOpt.get().windowAdmitted()
+
+proc pendingAdmissionExternalIds*(model: Model): seq[ExternalWindowId] =
+  for _, win in model.windowsWithId():
+    if win.admissionState == WindowAdmissionState.PendingAdmission:
+      result.add(win.externalId)
+
 proc columnData*(model: Model; columnId: ColumnId): Option[ColumnData] =
   model.columns.entity(columnId)
 
@@ -50,8 +62,9 @@ proc sortedSlots*(model: Model): seq[uint32] =
   result.sort()
 
 proc tagHasLiveWindows*(model: Model; tagId: TagId): bool =
-  for _ in model.windowsOnTagWithId(tagId):
-    return true
+  for _, win in model.windowsOnTagWithId(tagId):
+    if win.windowAdmitted():
+      return true
   false
 
 proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
@@ -106,7 +119,8 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
     if tagId == NullTagId:
       continue
     for winId, win in model.windowsOnTagWithId(tagId):
-      if not win.isMinimized and result.find(winId) == -1:
+      if not win.isMinimized and win.windowAdmitted() and
+          result.find(winId) == -1:
         result.add(winId)
 
 proc initialOverviewWindow*(model: Model): WindowId =

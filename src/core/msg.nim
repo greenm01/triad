@@ -30,6 +30,7 @@ type
     WlWindowMaximizeRequested,
     WlWindowUnmaximizeRequested,
     WlWindowMinimizeRequested,
+    WlWindowAdmissionSettled,
     WlLayerFocusExclusive,
     WlLayerFocusNonExclusive,
     WlLayerFocusNone,
@@ -144,6 +145,7 @@ type
       appId*: string
       title*: string
       createdIdentifier*: string
+      deferAdmission*: bool
     of MsgKind.WlWindowDestroyed:
       destroyedId*: WindowId
     of MsgKind.WlFocusChanged:
@@ -187,6 +189,8 @@ type
       unmaximizeRequestId*: WindowId
     of MsgKind.WlWindowMinimizeRequested:
       minimizeRequestId*: WindowId
+    of MsgKind.WlWindowAdmissionSettled:
+      admissionWindowId*: WindowId
     of MsgKind.WlOutputDimensions:
       outputId*: uint32
       width*: int32

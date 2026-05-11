@@ -31,7 +31,8 @@ proc focusedOnActiveTag(model: Model): rv.WindowId =
   if model.placementForWindowOnTag(model.activeTag, winId).isNone:
     return 0'u32
   let winOpt = model.windowData(winId)
-  if winOpt.isNone or winOpt.get().isMinimized:
+  if winOpt.isNone or winOpt.get().isMinimized or
+      not winOpt.get().windowAdmitted():
     return 0'u32
   winOpt.get().runtimeWindowId()
 
@@ -152,6 +153,8 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       var restoredCol = rv.RestoredColumnState(
         widthProportion: colOpt.get().widthProportion)
       for winId in model.windowsForColumn(colId):
+        if not model.windowAdmitted(winId):
+          continue
         let external = model.externalWindowId(winId)
         if external == 0:
           continue
@@ -166,6 +169,8 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     if winOpt.isNone:
       continue
     let win = winOpt.get()
+    if not win.windowAdmitted():
+      continue
     let external = win.runtimeWindowId()
     if external == 0:
       continue

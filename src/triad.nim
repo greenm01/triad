@@ -1925,7 +1925,8 @@ proc on_manage_start(data: pointer; mgr: ptr RiverWindowManagerV1) =
     msgQueue.add(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
         createdParentWindowId: data.parentId,
         appId: data.appId, title: data.title,
-        createdIdentifier: data.identifier))
+        createdIdentifier: data.identifier,
+        deferAdmission: data.parentId == 0))
 
   for id, data in pendingWindows:
     if data.actualW > 0 or data.actualH > 0:
@@ -2217,6 +2218,10 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       let instructions = syncRuntimeLayoutProjection("render layout", msg)
       recordDesiredPlacements(instructions)
       renderDesiredPlacements()
+      for windowId in runtimeState.pendingAdmissionWindowIds():
+        msgQueue.add(Msg(
+          kind: MsgKind.WlWindowAdmissionSettled,
+          admissionWindowId: windowId))
       executeEffect(Effect(kind: EffectKind.EffRenderFinish))
       riverPhase = RiverPhase.RiverIdle
       continue

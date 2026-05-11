@@ -102,7 +102,7 @@ proc addFloatingInstructions(
   var floating: seq[tuple[
     id: core_types.WindowId; win: model_types.WindowData]] = @[]
   for winId, win in model.windowsOnTagWithId(tagId):
-    if win.isFloating and not win.isMinimized:
+    if win.windowAdmitted() and win.isFloating and not win.isMinimized:
       floating.add((id: winId, win: win))
   floating.sort(proc(a, b: tuple[
       id: core_types.WindowId; win: model_types.WindowData]):
@@ -182,7 +182,8 @@ proc projectedTag(model: Model; tagId: core_types.TagId):
   for _, column in model.columnsOnTagWithId(tagId):
     var windows: seq[rv.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(column.id):
-      if not win.isFloating and not win.isMinimized and
+      if win.windowAdmitted() and not win.isFloating and
+          not win.isMinimized and
           not model.windowHiddenByGroup(winId):
         windows.add(model.externalWindowId(winId))
     if windows.len > 0:
@@ -272,7 +273,8 @@ proc activeFocusIsOverlay(model: Model; focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
     return true
   let focusedOpt = model.windowData(focused)
-  focusedOpt.isSome and focusedOpt.get().isFloating
+  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and
+    focusedOpt.get().isFloating
 
 proc preserveBackingPresentation(
     model: Model; instructions: var seq[rv.RenderInstruction]; screen: rv.Rect;
@@ -283,7 +285,7 @@ proc preserveBackingPresentation(
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if scopedRoot != NullWindowId and winId != scopedRoot:
       continue
-    if not win.isFloating and not win.isMinimized and
+    if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
         (win.isFullscreen or (win.isMaximized and maxSupported)):
       instructions.upsertInstruction(rv.RenderInstruction(
         windowId: model.externalWindowId(winId),

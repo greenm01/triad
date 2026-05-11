@@ -23,13 +23,14 @@ proc focusedOnActiveTag*(model: Model): WindowId =
   let winOpt = model.windowData(focused)
   if focused != NullWindowId and winOpt.isSome and
       not winOpt.get().isMinimized and
+      winOpt.get().windowAdmitted() and
       model.windowOnTag(model.activeTag, focused):
     return focused
   NullWindowId
 
 proc firstFocusableWindow(model: Model; tagId: TagId): WindowId =
   for winId, win in model.windowsOnTagWithId(tagId):
-    if not win.isMinimized:
+    if not win.isMinimized and win.windowAdmitted():
       return winId
   NullWindowId
 
@@ -40,7 +41,8 @@ proc recomputeVisibleFocus*(model: var Model; tagId: TagId): WindowId =
   let focused = tagOpt.get().focusedWindow
   let winOpt = model.windowData(focused)
   if focused != NullWindowId and winOpt.isSome and
-      not winOpt.get().isMinimized and model.windowOnTag(tagId, focused):
+      not winOpt.get().isMinimized and winOpt.get().windowAdmitted() and
+      model.windowOnTag(tagId, focused):
     return focused
 
   result = model.firstFocusableWindow(tagId)
@@ -57,7 +59,8 @@ proc tagForWindow*(model: Model; winId: WindowId): TagId =
 
 proc isFocusableWindow*(model: Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)
-  winOpt.isSome and not winOpt.get().isMinimized
+  winOpt.isSome and not winOpt.get().isMinimized and
+    winOpt.get().windowAdmitted()
 
 proc popupFocusTarget(
     model: Model; winId: WindowId; tagId: TagId;
@@ -174,7 +177,7 @@ proc focusLast*(model: var Model): bool =
 
 proc focusableWindowsOnTag(model: Model; tagId: TagId): seq[WindowId] =
   for winId, win in model.windowsOnTagWithId(tagId):
-    if not win.isMinimized:
+    if not win.isMinimized and win.windowAdmitted():
       result.add(winId)
 
 proc focusOverviewByStep*(model: var Model; step: int): bool

@@ -21,8 +21,9 @@ proc shellColumns(model: Model; tagId: TagId): seq[ShellColumn] =
   for columnId, column in model.columnsOnTagWithId(tagId):
     inc idx
     var windows: seq[runtime_values.WindowId] = @[]
-    for winId, _ in model.windowsOnColumnWithId(columnId):
-      windows.add(model.externalWindowId(winId))
+    for winId, win in model.windowsOnColumnWithId(columnId):
+      if win.windowAdmitted():
+        windows.add(model.externalWindowId(winId))
     result.add(ShellColumn(
       idx: idx,
       widthProportion: column.widthProportion,
@@ -94,6 +95,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
 
   for winId in model.sortedWindowIdsByExternal():
     let win = model.windowData(winId).get()
+    if not win.windowAdmitted():
+      continue
     let pos = model.firstWindowPosition(winId)
     let tagOpt =
       if pos.found: model.tagData(pos.tagId) else: none(TagData)
