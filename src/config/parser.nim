@@ -338,6 +338,7 @@ proc loadConfig*(path: string): Config =
   result.floating.minWidth = DefaultFloatingMinWidth
   result.floating.minHeight = DefaultFloatingMinHeight
   result.quickshell.command = DefaultQuickshellCommand
+  result.hotkeyOverlay.skipAtStartup = true
   result.screenshot.directory = DefaultScreenshotDirectory
   result.screenshot.filenamePrefix = DefaultScreenshotFilenamePrefix
   result.screenshot.captureCommand = DefaultScreenshotCaptureCommand

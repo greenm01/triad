@@ -5,6 +5,12 @@ import ../core/xdg
 import ../types/runtime_values
 
 type
+  QuickshellReloadAction* {.pure.} = enum
+    Noop,
+    SpawnOnly,
+    AuthoritativeStop,
+    AuthoritativeRestart
+
   QuickshellCompatEnv* = object
     env*: StringTableRef
     niriSocketPath*: string
@@ -44,6 +50,27 @@ proc quickshellKillArgs*(config: QuickshellConfig): seq[string] =
   if not config.enabled or config.theme.strip().len == 0:
     return @[]
   @["kill", "-c", config.theme, "--any-display"]
+
+proc sameQuickshellConfig*(a, b: QuickshellConfig): bool =
+  a.enabled == b.enabled and
+    a.command == b.command and
+    a.theme == b.theme and
+    a.args == b.args
+
+proc quickshellStartupAction*(config: QuickshellConfig): QuickshellReloadAction =
+  if config.enabled and config.theme.strip().len > 0:
+    QuickshellReloadAction.SpawnOnly
+  else:
+    QuickshellReloadAction.Noop
+
+proc quickshellConfigReloadAction*(
+    previous, current: QuickshellConfig): QuickshellReloadAction =
+  if sameQuickshellConfig(previous, current):
+    return QuickshellReloadAction.Noop
+  if current.enabled and current.theme.strip().len > 0:
+    QuickshellReloadAction.AuthoritativeRestart
+  else:
+    QuickshellReloadAction.AuthoritativeStop
 
 proc defaultNiriCompatSocketPath*(): string =
   runtimeDir() / "triad-niri.sock"

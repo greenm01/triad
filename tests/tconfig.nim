@@ -408,6 +408,7 @@ bindings {
     let config = loadConfig(path)
     removeFile(path)
 
+    check config.hotkeyOverlay.skipAtStartup
     check config.msgKindForBinding("Slash", Super + Shift) ==
       MsgKind.CmdToggleHotkeyOverlay
 

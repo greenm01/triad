@@ -103,6 +103,8 @@ bindings {
 ```
 
 - `skip-at-startup`: prevents the helper from appearing on startup.
+  This is the default, so reloads never show the helper unless the user opens
+  it explicitly.
 - `hide-not-bound`: omits built-in helper rows that have no configured key.
 - `hotkey-overlay-title="..."`: shows a binding in the helper with the
   supplied label.

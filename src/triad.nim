@@ -251,20 +251,70 @@ proc spawnPendingStartupCommands(model: Model; reason: string) =
   info "Spawning startup commands", reason = reason
   spawnStartupCommands(model)
 
+proc quickshellBehaviorPayload(
+    config: QuickshellConfig; reason: string; extra: JsonNode = nil): JsonNode =
+  result = %*{
+    "reason": reason,
+    "enabled": config.enabled,
+    "command": config.command,
+    "theme": config.theme,
+    "args": config.args
+  }
+  if extra != nil and extra.kind == JObject:
+    for key, value in extra.pairs:
+      result[key] = value
+
+proc writeQuickshellBehaviorEvent(
+    eventName: string;
+    config: QuickshellConfig;
+    reason: string;
+    extra: JsonNode = nil) =
+  writeBehaviorEvent(eventName,
+    quickshellBehaviorPayload(config, reason, extra))
+
+proc pollProcessExitCode(p: Process; timeoutMs: int; pollMs = 25): int =
+  let deadline = epochTime() + float(timeoutMs) / 1000.0
+  result = p.peekExitCode()
+  while result == -1 and epochTime() < deadline:
+    let remainingMs = int(max(1.0, (deadline - epochTime()) * 1000.0))
+    sleep(min(pollMs, remainingMs))
+    result = p.peekExitCode()
+
 proc stopTrackedQuickshell(reason: string) =
   if quickshellProcess == nil:
+    writeBehaviorEvent("quickshell_tracked_stop_skipped", %*{
+      "reason": reason,
+      "tracked": false
+    })
     return
 
   let pid = quickshellProcess.processID
+  writeBehaviorEvent("quickshell_tracked_stop_requested", %*{
+    "reason": reason,
+    "tracked_pid": pid
+  })
   try:
     quickshellProcess.terminate()
-    let code = quickshellProcess.waitForExit(1000)
+    var code = quickshellProcess.pollProcessExitCode(1000)
+    var killed = false
     if code == -1:
       quickshellProcess.kill()
-      discard quickshellProcess.waitForExit(1000)
+      code = quickshellProcess.waitForExit()
+      killed = true
     info "Stopped Quickshell", pid = pid, reason = reason
+    writeBehaviorEvent("quickshell_tracked_stop_completed", %*{
+      "reason": reason,
+      "tracked_pid": pid,
+      "exit_code": code,
+      "killed": killed
+    })
   except CatchableError as e:
     warn "Failed to stop Quickshell", pid = pid, reason = reason, error = e.msg
+    writeBehaviorEvent("quickshell_tracked_stop_failed", %*{
+      "reason": reason,
+      "tracked_pid": pid,
+      "error": e.msg
+    })
 
   try:
     quickshellProcess.close()
@@ -274,6 +324,10 @@ proc stopTrackedQuickshell(reason: string) =
 
 proc releaseTrackedQuickshell(reason: string) =
   if quickshellProcess == nil:
+    writeBehaviorEvent("quickshell_release_skipped", %*{
+      "reason": reason,
+      "tracked": false
+    })
     return
 
   let pid = quickshellProcess.processID
@@ -281,37 +335,71 @@ proc releaseTrackedQuickshell(reason: string) =
     quickshellProcess.close()
     info "Released Quickshell for manager handoff", pid = pid,
         reason = reason
+    writeBehaviorEvent("quickshell_released", %*{
+      "reason": reason,
+      "tracked_pid": pid
+    })
   except CatchableError as e:
     warn "Failed to release Quickshell for manager handoff", pid = pid,
         reason = reason, error = e.msg
+    writeBehaviorEvent("quickshell_release_failed", %*{
+      "reason": reason,
+      "tracked_pid": pid,
+      "error": e.msg
+    })
   quickshellProcess = nil
 
 proc stopConfiguredQuickshell(model: Model; reason: string) =
   let args = quickshellKillArgs(model.quickshell)
   if args.len == 0 or model.quickshell.command.strip().len == 0:
+    writeQuickshellBehaviorEvent(
+      "quickshell_configured_stop_skipped",
+      model.quickshell,
+      reason)
     return
 
+  writeQuickshellBehaviorEvent(
+    "quickshell_configured_stop_requested",
+    model.quickshell,
+    reason,
+    %*{"kill_args": args})
   try:
-    let p = startProcess(model.quickshell.command, args = args, options = {poUsePath})
-    let code = p.waitForExit(1000)
+    let p = startProcess(model.quickshell.command, args = args,
+      options = {poUsePath})
+    let code = p.pollProcessExitCode(1000)
     if code == -1:
       p.kill()
-      discard p.waitForExit(1000)
+      discard p.waitForExit()
       warn "Timed out stopping configured Quickshell instance",
         command = model.quickshell.command,
         theme = model.quickshell.theme,
         reason = reason
+      writeQuickshellBehaviorEvent(
+        "quickshell_configured_stop_timed_out",
+        model.quickshell,
+        reason,
+        %*{"kill_args": args})
     elif code == 0:
       info "Stopped configured Quickshell instance",
         command = model.quickshell.command,
         theme = model.quickshell.theme,
         reason = reason
+      writeQuickshellBehaviorEvent(
+        "quickshell_configured_stop_completed",
+        model.quickshell,
+        reason,
+        %*{"kill_args": args, "exit_code": code})
     else:
       debug "Configured Quickshell instance was not running",
         command = model.quickshell.command,
         theme = model.quickshell.theme,
         reason = reason,
         exitCode = code
+      writeQuickshellBehaviorEvent(
+        "quickshell_configured_stop_not_running",
+        model.quickshell,
+        reason,
+        %*{"kill_args": args, "exit_code": code})
     p.close()
   except CatchableError as e:
     warn "Failed to stop configured Quickshell instance",
@@ -319,48 +407,105 @@ proc stopConfiguredQuickshell(model: Model; reason: string) =
       theme = model.quickshell.theme,
       reason = reason,
       error = e.msg
+    writeQuickshellBehaviorEvent(
+      "quickshell_configured_stop_failed",
+      model.quickshell,
+      reason,
+      %*{"kill_args": args, "error": e.msg})
 
 proc stopQuickshell(model: Model; reason: string; authoritative = false) =
+  writeQuickshellBehaviorEvent(
+    "quickshell_stop_requested",
+    model.quickshell,
+    reason,
+    %*{"authoritative": authoritative})
   stopTrackedQuickshell(reason)
   if authoritative:
     stopConfiguredQuickshell(model, reason)
 
-proc spawnQuickshell(model: Model; niriSocketPath: string) =
+proc spawnQuickshell(
+    model: Model; niriSocketPath: string; reason = "spawn"): bool =
   if model.quickshell.enabled and model.quickshell.theme != "":
     let args = quickshellLaunchArgs(model.quickshell)
+    writeQuickshellBehaviorEvent(
+      "quickshell_spawn_requested",
+      model.quickshell,
+      reason,
+      %*{"launch_args": args, "niri_socket": niriSocketPath})
 
     try:
       let compat = prepareQuickshellCompatEnv(niriSocketPath)
       if compat.warning.len > 0:
         warn "Quickshell compatibility environment is incomplete",
             warning = compat.warning
+        writeQuickshellBehaviorEvent(
+          "quickshell_compat_warning",
+          model.quickshell,
+          reason,
+          %*{"warning": compat.warning})
       let p = startProcess(model.quickshell.command, args = args,
           env = compat.env, options = {poUsePath})
-      quickshellProcess = p
-      info "Spawned Quickshell",
-        command = model.quickshell.command,
-        theme = model.quickshell.theme,
-        pid = p.processID,
-        niriSocket = compat.niriSocketPath,
-        shimReady = compat.shimReady,
-        overlayReady = compat.overlayReady,
-        xdgShare = compat.xdgSharePath
+      let childPid = p.processID
+      let earlyExitCode = p.pollProcessExitCode(250)
+      if earlyExitCode == -1:
+        quickshellProcess = p
+        info "Spawned Quickshell",
+          command = model.quickshell.command,
+          theme = model.quickshell.theme,
+          pid = childPid,
+          niriSocket = compat.niriSocketPath,
+          shimReady = compat.shimReady,
+          overlayReady = compat.overlayReady,
+          xdgShare = compat.xdgSharePath
+        writeQuickshellBehaviorEvent(
+          "quickshell_spawned",
+          model.quickshell,
+          reason,
+          %*{
+            "child_pid": childPid,
+            "launch_args": args,
+            "niri_socket": compat.niriSocketPath,
+            "shim_ready": compat.shimReady,
+            "overlay_ready": compat.overlayReady,
+            "xdg_share": compat.xdgSharePath
+          })
+        result = true
+      else:
+        info "Quickshell launch command exited immediately",
+          command = model.quickshell.command,
+          theme = model.quickshell.theme,
+          pid = childPid,
+          exitCode = earlyExitCode
+        writeQuickshellBehaviorEvent(
+          "quickshell_spawn_exited",
+          model.quickshell,
+          reason,
+          %*{
+            "child_pid": childPid,
+            "launch_args": args,
+            "exit_code": earlyExitCode
+          })
+        p.close()
     except CatchableError as e:
       warn "Failed to spawn Quickshell", command = model.quickshell.command,
           theme = model.quickshell.theme, error = e.msg
+      writeQuickshellBehaviorEvent(
+        "quickshell_spawn_failed",
+        model.quickshell,
+        reason,
+        %*{"launch_args": args, "error": e.msg})
+  else:
+    writeQuickshellBehaviorEvent(
+      "quickshell_spawn_skipped",
+      model.quickshell,
+      reason)
 
 proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
   stopQuickshell(model, reason, authoritative = true)
-  spawnQuickshell(model, niriSocketPath)
+  discard spawnQuickshell(model, niriSocketPath, reason)
 
 proc requestManage(reason: string)
 proc destroyBindings()
-
-proc sameQuickshellConfig(a, b: QuickshellConfig): bool =
-  a.enabled == b.enabled and
-    a.command == b.command and
-    a.theme == b.theme and
-    a.args == b.args
 
 proc broadcastNiriSnapshot(snapshot: ShellSnapshot) =
   for event in initialNiriEvents(snapshot):
@@ -377,11 +522,29 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   discard runtimeState.applyRuntimeConfig(loaded.config)
   quickshellSpawnPending = false
 
-  if not sameQuickshellConfig(previousModel.quickshell,
-      currentModel.quickshell):
+  let quickshellAction = quickshellConfigReloadAction(
+    previousModel.quickshell,
+    currentModel.quickshell)
+  writeBehaviorEvent("quickshell_config_reload_decision", %*{
+    "reason": "config reload",
+    "action": $quickshellAction,
+    "changed": quickshellAction != QuickshellReloadAction.Noop,
+    "previous": quickshellBehaviorPayload(
+      previousModel.quickshell,
+      "config reload"),
+    "current": quickshellBehaviorPayload(
+      currentModel.quickshell,
+      "config reload")
+  })
+
+  case quickshellAction
+  of QuickshellReloadAction.Noop, QuickshellReloadAction.SpawnOnly:
+    discard
+  of QuickshellReloadAction.AuthoritativeStop:
     stopQuickshell(previousModel, "config reload", authoritative = true)
-    if currentModel.quickshell.enabled:
-      spawnQuickshell(currentModel, niriSocketPath)
+  of QuickshellReloadAction.AuthoritativeRestart:
+    stopQuickshell(previousModel, "config reload", authoritative = true)
+    discard spawnQuickshell(currentModel, niriSocketPath, "config reload")
 
   destroyBindings()
   info "Config reloaded", path = configPath
@@ -398,7 +561,27 @@ proc spawnPendingQuickshell(
   if not quickshellSpawnPending:
     return
   quickshellSpawnPending = false
-  restartQuickshell(model, niriSocketPath, reason)
+  let action = quickshellStartupAction(model.quickshell)
+  writeQuickshellBehaviorEvent(
+    "quickshell_startup_decision",
+    model.quickshell,
+    reason,
+    %*{"action": $action})
+  case action
+  of QuickshellReloadAction.Noop:
+    discard
+  of QuickshellReloadAction.SpawnOnly:
+    if not spawnQuickshell(model, niriSocketPath, reason):
+      writeQuickshellBehaviorEvent(
+        "quickshell_startup_restart_required",
+        model.quickshell,
+        reason)
+      stopConfiguredQuickshell(model, reason & " stale instance")
+      discard spawnQuickshell(model, niriSocketPath, reason & " restart")
+  of QuickshellReloadAction.AuthoritativeStop:
+    stopQuickshell(model, reason, authoritative = true)
+  of QuickshellReloadAction.AuthoritativeRestart:
+    restartQuickshell(model, niriSocketPath, reason)
 
 proc spawnScreenLock(command: seq[string]) =
   if command.len == 0:
@@ -2511,7 +2694,6 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
           windows = windowPointers.len,
           seats = seatPointers.len
       spawnPendingStartupCommands(currentModel, "initial manage")
-      spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
       continue
 
     if msg.kind == MsgKind.WlRenderStart:
@@ -2706,11 +2888,17 @@ proc main() =
       return
     ipcStarted = true
     info "Starting Triad IPC server", path = triadSocket
+    writeBehaviorEvent("triad_ipc_server_starting", %*{
+      "path": triadSocket
+    })
     asyncCheck startIpcServer(
       triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
       info "Starting Niri-compatible IPC server", path = niriSocketPath
+      writeBehaviorEvent("niri_compat_ipc_server_starting", %*{
+        "path": niriSocketPath
+      })
       asyncCheck startIpcServer(
         niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
 
@@ -2743,6 +2931,7 @@ proc main() =
 
     if initialManageComplete:
       startIpcServers()
+      spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
 
     flushManageRequest()
 

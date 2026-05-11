@@ -372,6 +372,26 @@ suite "Shell compatibility contracts":
     check quickshellKillArgs(config) == @[
       "kill", "-c", "noctalia-shell", "--any-display"]
 
+  test "Quickshell lifecycle actions avoid reload handoff kills":
+    let noctalia = QuickshellConfig(
+      enabled: true,
+      command: "qs",
+      theme: "noctalia-shell",
+      args: @["--verbose"])
+    var changedTheme = noctalia
+    changedTheme.theme = "other-shell"
+    var disabled = noctalia
+    disabled.enabled = false
+
+    check quickshellStartupAction(noctalia) ==
+      QuickshellReloadAction.SpawnOnly
+    check quickshellConfigReloadAction(noctalia, noctalia) ==
+      QuickshellReloadAction.Noop
+    check quickshellConfigReloadAction(noctalia, changedTheme) ==
+      QuickshellReloadAction.AuthoritativeRestart
+    check quickshellConfigReloadAction(noctalia, disabled) ==
+      QuickshellReloadAction.AuthoritativeStop
+
   test "shell overlay is generated from terminal desktop metadata":
     let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())
     if dirExists(tmp):

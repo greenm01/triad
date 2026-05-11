@@ -1,7 +1,9 @@
-import asyncnet, asyncdispatch, os, nativesockets, chronicles, options, strutils
+import asyncnet, asyncdispatch, os, nativesockets, chronicles, json, options,
+    strutils
 import posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import ../core/msg
 import ../types/shell_snapshot
+import ../utils/behavior_log
 import commands, niri_compat, triad_native
 
 type
@@ -196,6 +198,10 @@ proc startIpcServer*(
                 await client.send(event & "\L")
               if niri.subscribe:
                 subscribers.add(client)
+                writeBehaviorEvent("niri_compat_event_stream_subscribed", %*{
+                  "path": path,
+                  "subscriber_count": subscribers.len
+                })
                 keepOpen = true
               break
 
@@ -205,6 +211,11 @@ proc startIpcServer*(
                   cap = MaxIpcSubscribers
               break
             subscribers.add(client)
+            writeBehaviorEvent("niri_compat_event_stream_subscribed", %*{
+              "path": path,
+              "subscriber_count": subscribers.len,
+              "legacy_request": true
+            })
             keepOpen = true
             break
           let parsed = parseTextCommand(line)
@@ -252,6 +263,9 @@ proc broadcastJson*(payload: string) {.async.} =
   while i < subscribers.len:
     let client = subscribers[i]
     if client == nil or client.isClosed:
+      writeBehaviorEvent("niri_compat_event_stream_disconnected", %*{
+        "reason": "closed"
+      })
       subscribers.delete(i)
     else:
       try:
@@ -259,6 +273,10 @@ proc broadcastJson*(payload: string) {.async.} =
         inc i
       except CatchableError as e:
         warn "Dropping failed IPC subscriber", error = e.msg
+        writeBehaviorEvent("niri_compat_event_stream_disconnected", %*{
+          "reason": "send failed",
+          "error": e.msg
+        })
         client.close()
         subscribers.delete(i)
 

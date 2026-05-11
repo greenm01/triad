@@ -284,7 +284,7 @@ KDL config nodes and fields:
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
 - `overview`: `outer-gap`, `inner-gap-multiplier`.
-- `hotkey-overlay`: `skip-at-startup`, `hide-not-bound`.
+- `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.
 - `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,
   `min-width`, `min-height`.
 - `screenshot`: `directory`, `filename-prefix`, `capture-command`,

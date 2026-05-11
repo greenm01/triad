@@ -58,10 +58,16 @@ For live reload, compositor, focus, session restore, or window-placement bugs:
    `${XDG_STATE_HOME:-$HOME/.local/state}/triad/behavior/triad-behavior-YYYY-MM-DD.jsonl`.
    These logs are outside the repo, roll daily, cap each day at 5 MiB, and keep
    seven days by default.
-4. Relevant behavior events include `live_restore_loaded`,
+4. Relevant live-restore behavior events include `live_restore_loaded`,
    `live_restore_applied`, `live_restore_committed`, and
-   `live_restore_snapshot_dumped`. Prefer citing these events when explaining a
-   live reload or focus bug.
+   `live_restore_snapshot_dumped`. Quickshell/Noctalia reload events include
+   `quickshell_startup_decision`, `quickshell_config_reload_decision`,
+   `quickshell_spawned`, `quickshell_released`, and
+   `quickshell_configured_stop_*`. Niri-compatible shell stream events include
+   `niri_compat_ipc_server_starting`,
+   `niri_compat_event_stream_subscribed`, and
+   `niri_compat_event_stream_disconnected`. Prefer citing these JSON events
+   when explaining a live reload, focus, or shell disappearance bug.
 5. To force or redirect behavior logging, use `TRIAD_BEHAVIOR_LOG=1`,
    `TRIAD_BEHAVIOR_LOG_DIR`, `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and
    `TRIAD_BEHAVIOR_LOG_KEEP_DAYS`. Keep generated logs out of git.

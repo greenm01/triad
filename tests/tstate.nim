@@ -47,6 +47,7 @@ proc baseConfig(): Config =
       TagRule(tagId: 1, name: "main", defaultLayout: LayoutMode.Scroller),
       TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid)
     ],
+    hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
     terminal: TerminalConfig(command: @["foot"]))
 
 proc sourceFiles(): seq[string] =
@@ -275,16 +276,16 @@ suite "Runtime state primitives":
     check snapshot.workspaces[0].name == "main"
     check snapshot.workspaces[1].layoutMode == LayoutMode.Grid
 
-  test "runtime init follows hotkey overlay startup setting":
-    let shown = initRuntimeStateFromConfig(baseConfig())
-    var skippedConfig = baseConfig()
-    skippedConfig.hotkeyOverlay.skipAtStartup = true
-    let skipped = initRuntimeStateFromConfig(skippedConfig)
+  test "runtime init keeps hotkey overlay hidden by default":
+    let hidden = initRuntimeStateFromConfig(baseConfig())
+    var shownConfig = baseConfig()
+    shownConfig.hotkeyOverlay.skipAtStartup = false
+    let shown = initRuntimeStateFromConfig(shownConfig)
 
+    check not hidden.model.hotkeyOverlayOpen
+    check not hidden.model.hotkeyOverlayShownOnce
     check shown.model.hotkeyOverlayOpen
     check shown.model.hotkeyOverlayShownOnce
-    check not skipped.model.hotkeyOverlayOpen
-    check not skipped.model.hotkeyOverlayShownOnce
 
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())
