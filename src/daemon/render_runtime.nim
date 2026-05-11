@@ -1,13 +1,10 @@
 import std/[algorithm, options, tables]
-import wayland/native/client
 import protocols/river/client as river
 import ../core/render_visibility
 import ../systems/[daemon_view, layout_projection]
 import ../types/[model, runtime_values]
 import ../utils/overview_hit_test
-import protocol_surface_runtime
-import protocol_surfaces
-import state
+import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
 
 const
   RiverEdgeBottom* = 2'u32
@@ -23,9 +20,6 @@ template surfaceTable(daemon: TriadDaemon): untyped =
 
 template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.ownedShellSurfaceId
-
-proc id(p: pointer): uint32 =
-  get_id(cast[ptr Proxy](p))
 
 proc applyBorder(
     daemon: TriadDaemon; win: ptr RiverWindowV1; focused: bool;

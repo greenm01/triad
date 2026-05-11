@@ -130,6 +130,13 @@ suite "Runtime state primitives":
     let source = readFile("src/triad.nim")
     check not source.contains("MsgKind.WlFocusChanged")
 
+  test "triad entrypoint stays thin":
+    let source = readFile("src/triad.nim")
+    check source.splitLines().len <= 30
+    check not source.contains("var daemon")
+    check not source.contains("template ")
+    check source.contains("import daemon/app")
+
   test "types modules stay data-only":
     for path in typeFiles():
       let lines = readFile(path).splitLines()

@@ -6,7 +6,7 @@ import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/hotkey_overlay
 import ../types/runtime_values
-import hotkey_overlay_render, protocol_surfaces, state
+import hotkey_overlay_render, protocol_surfaces, state, wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -26,9 +26,6 @@ template windowDecorationAbove(daemon: TriadDaemon): untyped =
 
 template windowDecorationBelow(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.windowDecorationBelow
-
-proc id(p: pointer): uint32 =
-  get_id(cast[ptr Proxy](p))
 
 proc premulColor*(value: uint32): tuple[r, g, b, a: uint32] =
   let r8 = (value shr 24) and 0xff

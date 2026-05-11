@@ -1,4 +1,4 @@
-import std/[options, tables]
+import std/[deques, options, tables]
 import fsnotify
 import wayland/native/client
 import protocols/river/client as river
@@ -37,7 +37,7 @@ type
     shmBufferCounter*: uint32
 
     runtimeState*: TriadRuntimeState
-    msgQueue*: seq[Msg]
+    msgQueue*: Deque[Msg]
     pendingManageEffects*: seq[Effect]
     desiredPlacements*: Table[WindowId, Rect]
     desiredPlacementOrder*: seq[WindowId]
@@ -88,7 +88,7 @@ type
 
 proc initTriadDaemon*(): TriadDaemon =
   result.riverPhase = RiverPhase.RiverIdle
-  result.msgQueue = @[]
+  result.msgQueue = initDeque[Msg]()
   result.pendingManageEffects = @[]
   result.desiredPlacementOrder = @[]
   result.seatPointers = @[]

@@ -1,6 +1,5 @@
 import std/[options, tables]
 import chronicles
-import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
@@ -9,11 +8,8 @@ import ../core/msg
 import ../ipc/commands
 import ../systems/[daemon_view, runtime]
 import ../types/runtime_values
-import manage_requests
-import protocol_surface_runtime
-import protocol_surfaces
-import render_runtime
-import state
+import manage_requests, message_queue, protocol_surface_runtime,
+  protocol_surfaces, render_runtime, state, wayland_helpers
 
 const
   RiverEdgeTop = 1'u32
@@ -29,9 +25,6 @@ template currentModel(daemon: TriadDaemon): untyped =
 
 template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.ownedShellSurfaceId
-
-proc id(p: pointer): uint32 =
-  get_id(cast[ptr Proxy](p))
 
 proc callbackDaemon(data: pointer; context: string): ptr TriadDaemon =
   result = daemonFromData(data)
@@ -54,7 +47,7 @@ proc removeSeatPointer(daemon: var TriadDaemon; seat: ptr RiverSeatV1) =
 proc queueWindowFocus(daemon: var TriadDaemon; target: WindowId) =
   if target == 0:
     return
-  daemon.msgQueue.add(Msg(kind: MsgKind.CmdFocusWindowById,
+  daemon.enqueue(Msg(kind: MsgKind.CmdFocusWindowById,
       focusWindowId: target))
 
 proc queueWindowInteraction(daemon: var TriadDaemon; target: WindowId) =
@@ -164,20 +157,20 @@ proc onSeatShellSurfaceInteraction(
     let id = shellSurface.id()
     daemon.shellSurfacePointers[id] = shellSurface
     trace "Seat shell surface interaction", shellSurfaceId = id
-    daemon.msgQueue.add(Msg(kind: MsgKind.WlShellSurfaceInteraction,
+    daemon.enqueue(Msg(kind: MsgKind.WlShellSurfaceInteraction,
         shellSurfaceId: id))
 
 proc onOpDelta(data: pointer; seat: ptr RiverSeatV1; dx: int32; dy: int32) =
   let daemon = callbackDaemon(data, "op delta")
   if daemon == nil:
     return
-  daemon.msgQueue.add(Msg(kind: MsgKind.WlPointerDelta, dx: dx, dy: dy))
+  daemon.enqueue(Msg(kind: MsgKind.WlPointerDelta, dx: dx, dy: dy))
 
 proc onOpRelease(data: pointer; seat: ptr RiverSeatV1) =
   let daemon = callbackDaemon(data, "op release")
   if daemon == nil:
     return
-  daemon.msgQueue.add(Msg(kind: MsgKind.WlPointerRelease))
+  daemon.enqueue(Msg(kind: MsgKind.WlPointerRelease))
 
 proc onSeatPointerPosition(
     data: pointer; seat: ptr RiverSeatV1; x: int32; y: int32) =
@@ -210,11 +203,11 @@ proc onXkbPressed(data: pointer; binding: ptr riverXkb.RiverXkbBindingV1) =
     return
   if daemon.xkbBindings.hasKey(id):
     let msg = daemon.xkbBindings[id]
-    daemon.msgQueue.add(msg)
+    daemon.enqueue(msg)
     if daemon[].currentModel.hotkeyOverlayOpen and
         msg.kind notin {MsgKind.CmdShowHotkeyOverlay,
           MsgKind.CmdToggleHotkeyOverlay, MsgKind.CmdHideHotkeyOverlay}:
-      daemon.msgQueue.add(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+      daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
 
 proc onXkbReleased(data: pointer; binding: ptr riverXkb.RiverXkbBindingV1) =
   let daemon = callbackDaemon(data, "xkb released")
@@ -257,7 +250,7 @@ proc onXkbSeatModifiersUpdate(
   if daemon == nil:
     return
   trace "XKB modifiers updated", xkbSeatId = seat.id(), old = old, new = new
-  daemon.msgQueue.add(Msg(kind: MsgKind.WlModifiersChanged,
+  daemon.enqueue(Msg(kind: MsgKind.WlModifiersChanged,
       oldModifiers: old, newModifiers: new))
 
 var xkbSeatListener* = riverXkb.RiverXkbBindingsSeatV1Listener(
@@ -288,10 +281,10 @@ proc onPointerBindingPressed(
       return
     case daemon.pointerBindingKinds[id]
     of PointerOpKind.OpMove:
-      daemon.msgQueue.add(Msg(kind: MsgKind.WlPointerMoveRequested,
+      daemon.enqueue(Msg(kind: MsgKind.WlPointerMoveRequested,
         moveWinId: target, moveSeat: seat))
     of PointerOpKind.OpResize:
-      daemon.msgQueue.add(Msg(kind: MsgKind.WlPointerResizeRequested,
+      daemon.enqueue(Msg(kind: MsgKind.WlPointerResizeRequested,
         resizeWinId: target, resizeSeat: seat,
         resizeEdges: RiverEdgeBottom or RiverEdgeRight))
     else:
@@ -301,33 +294,33 @@ proc onPointerBindingPressed(
     case msg.kind
     of MsgKind.CmdCloseWindow:
       if target != 0:
-        daemon.msgQueue.add(Msg(kind: MsgKind.CmdCloseWindowById,
+        daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById,
           closeWindowId: target))
       elif not daemon[].currentModel.overviewActive:
-        daemon.msgQueue.add(msg)
+        daemon.enqueue(msg)
     of MsgKind.CmdCloseWindowById:
       if target != 0 and daemon[].currentModel.overviewActive:
-        daemon.msgQueue.add(Msg(kind: MsgKind.CmdCloseWindowById,
+        daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById,
           closeWindowId: target))
       else:
-        daemon.msgQueue.add(msg)
+        daemon.enqueue(msg)
     of MsgKind.CmdSelectWindow:
       if daemon[].currentModel.overviewActive and target != 0:
         daemon[].queueWindowFocus(target)
-        daemon.msgQueue.add(msg)
+        daemon.enqueue(msg)
       elif not daemon[].currentModel.overviewActive:
-        daemon.msgQueue.add(msg)
+        daemon.enqueue(msg)
     of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
         MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
         MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
         MsgKind.CmdMoveFloating, MsgKind.CmdResizeFloating:
       if target != 0:
         daemon[].queueWindowFocus(target)
-        daemon.msgQueue.add(msg)
+        daemon.enqueue(msg)
       elif not daemon[].currentModel.overviewActive:
-        daemon.msgQueue.add(msg)
+        daemon.enqueue(msg)
     else:
-      daemon.msgQueue.add(msg)
+      daemon.enqueue(msg)
 
 proc onPointerBindingReleased(
     data: pointer; binding: ptr RiverPointerBindingV1) =
@@ -355,7 +348,7 @@ proc onLayerOutputNonExclusive(
   let layerId = layerOutput.id()
   if daemon.layerOutputOwners.hasKey(layerId):
     let outputId = daemon.layerOutputOwners[layerId]
-    daemon.msgQueue.add(Msg(kind: MsgKind.WlOutputUsable,
+    daemon.enqueue(Msg(kind: MsgKind.WlOutputUsable,
         usableOutputId: outputId, usableX: x, usableY: y, usableW: width,
         usableH: height))
 
@@ -369,7 +362,7 @@ proc onLayerSeatFocusExclusive(
   if daemon == nil:
     return
   trace "Layer shell focus exclusive"
-  daemon.msgQueue.add(Msg(kind: MsgKind.WlLayerFocusExclusive))
+  daemon.enqueue(Msg(kind: MsgKind.WlLayerFocusExclusive))
 
 proc onLayerSeatFocusNonExclusive(
     data: pointer; seat: ptr riverLayer.RiverLayerShellSeatV1) =
@@ -377,14 +370,14 @@ proc onLayerSeatFocusNonExclusive(
   if daemon == nil:
     return
   trace "Layer shell focus non-exclusive"
-  daemon.msgQueue.add(Msg(kind: MsgKind.WlLayerFocusNonExclusive))
+  daemon.enqueue(Msg(kind: MsgKind.WlLayerFocusNonExclusive))
 
 proc onLayerSeatFocusNone(
     data: pointer; seat: ptr riverLayer.RiverLayerShellSeatV1) =
   let daemon = callbackDaemon(data, "layer seat focus none")
   if daemon == nil:
     return
-  daemon.msgQueue.add(Msg(kind: MsgKind.WlLayerFocusNone))
+  daemon.enqueue(Msg(kind: MsgKind.WlLayerFocusNone))
   daemon[].requestManage("layer focus none")
 
 var layerSeatListener* = riverLayer.RiverLayerShellSeatV1Listener(
