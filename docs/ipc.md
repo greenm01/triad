@@ -51,9 +51,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
 
 #### Manipulation
-*   `move-to-tag <id>`: Moves the focused window to the specified tag.
-*   `move-to-workspace <index>`: Moves the focused window to the compact Niri-style workspace index.
-*   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent visible workspace, creating the next dynamic workspace when appropriate.
+*   `move-to-tag <id>`: Moves the focused window to the specified tag and focuses that tag.
+*   `move-to-workspace <index>`: Moves the focused window to the compact Niri-style workspace index and focuses that workspace.
+*   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent visible workspace and focuses it, creating the next dynamic workspace when appropriate.
 *   `move-to-scratchpad`: Moves the focused window to the scratchpad.
 *   `move-to-named-scratchpad <name>`: Moves the focused window to a named scratchpad.
 *   `close-window`: Politely requests that the focused window close.

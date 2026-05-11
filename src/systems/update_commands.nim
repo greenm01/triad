@@ -114,18 +114,18 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
         msg.focusWindowId.externalWindowId())
 
   of MsgKind.CmdMoveToTag:
-    result.dirty = model.moveFocusedWindowToSlot(msg.targetTag)
+    result.dirty = model.moveFocusedWindowToSlotAndFocus(msg.targetTag)
   of MsgKind.CmdSwapWindowToTag:
     result.dirty = model.swapFocusedWindowToSlot(msg.targetTagSwap)
   of MsgKind.CmdMoveToTagLeft:
-    result.dirty = model.moveFocusedWindowToSlot(
+    result.dirty = model.moveFocusedWindowToSlotAndFocus(
       model.nearestWorkspaceSlot(-1, false))
   of MsgKind.CmdMoveToTagRight:
-    result.dirty = model.moveFocusedWindowToSlot(
+    result.dirty = model.moveFocusedWindowToSlotAndFocus(
       model.nearestWorkspaceSlot(1, false))
   of MsgKind.CmdMoveToWorkspaceIndex:
     let slot = model.workspaceSlotForClampedIndex(msg.workspaceIndex)
-    result.dirty = slot != 0 and model.moveFocusedWindowToSlot(slot)
+    result.dirty = slot != 0 and model.moveFocusedWindowToSlotAndFocus(slot)
   of MsgKind.CmdMoveWindowLeft:
     result.dirty = model.moveFocusedWindowLeft()
   of MsgKind.CmdMoveWindowRight:

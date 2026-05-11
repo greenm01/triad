@@ -64,7 +64,7 @@ external window manager.
 | Output | Cursor theme/size | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size }` | X | Applied through River seat protocol. |
 | Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
-| Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad also has `move-to-workspace`. |
+| Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad follows the moved window and also has `move-to-workspace`. |
 | Tags | Toggle/multi-tag view | `toggletag`, `toggleview`, `comboview` | WM policy | | | Triad uses canonical tag masks internally but exposes single-target commands. |
 | Tags | Rename tags | | WM policy | `rename-tag`, `tag-rules { tag ... name=... }` | X | Runtime and config naming are supported. |
 | Tags | Tag rules | `tagrule` | WM policy | `tag-rules { tag ... }` | X | Triad supports tag name and default layout. |

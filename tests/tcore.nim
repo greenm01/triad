@@ -1328,18 +1328,13 @@ suite "Core Runtime Logic":
     check win["tag_id"].getInt() == 1
     check win["is_maximized"].getBool()
 
-  test "Moving focused window refocuses recent source window":
+  test "Moving focused window follows target and refocuses source":
     var model = cameraModel()
     model.seedCameraWindows(3)
 
     model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
       workspaceIndex: 2))
 
-    check model.activeWorkspaceFocusId() == 2
-    check model.focusedWindowId() == 2
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
     check model.activeWorkspaceFocusId() == 3
     check model.focusedWindowId() == 3
 
@@ -1348,18 +1343,32 @@ suite "Core Runtime Logic":
     check model.activeWorkspaceFocusId() == 2
     check model.focusedWindowId() == 2
 
-  test "Moving only source window leaves source focus empty":
+  test "Moving only source window follows target and leaves source empty":
     var model = cameraModel()
     model.seedCameraWindows(1)
 
     model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
       workspaceIndex: 2))
 
+    check model.activeWorkspaceFocusId() == 1
+    check model.focusedWindowId() == 1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 1))
     check model.activeWorkspaceFocusId() == 0
     check model.focusedWindowId() == 0
 
+  test "Adjacent tag move follows target":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToTagRight))
+
+    check model.activeWorkspaceFocusId() == 2
+    check model.focusedWindowId() == 2
+
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
+      workspaceIndex: 1))
     check model.activeWorkspaceFocusId() == 1
     check model.focusedWindowId() == 1
 
