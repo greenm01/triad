@@ -148,10 +148,23 @@ type
     theme*: string
     size*: uint32
 
+  HotkeyOverlayConfig* = object
+    skipAtStartup*: bool
+    hideNotBound*: bool
+
+  HotkeyOverlayRow* = object
+    key*: string
+    label*: string
+
   PointerOpKind* {.pure.} = enum
     OpNone,
     OpMove,
     OpResize
+
+  HotkeyOverlayTitleKind* {.pure.} = enum
+    HotkeyTitleDefault,
+    HotkeyTitleCustom,
+    HotkeyTitleHidden
 
   BindingMode* {.pure.} = enum
     BindAlways,
@@ -166,6 +179,8 @@ type
     hasLayoutOverride*: bool
     layoutOverride*: uint32
     bypassShortcutsInhibit*: bool
+    hotkeyOverlayTitleKind*: HotkeyOverlayTitleKind
+    hotkeyOverlayTitle*: string
 
   PointerBindingConfig* = object
     button*: uint32

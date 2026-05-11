@@ -10,6 +10,7 @@ import core/restore_state
 import core/niri_state
 import core/render_visibility
 import systems/daemon_view
+import systems/hotkey_overlay
 import systems/layout_projection
 import systems/runtime
 import systems/runtime_facade
@@ -31,7 +32,7 @@ import utils/session_env
 import utils/wayland_runtime
 from types/runtime_values import nil
 from types/runtime_values import BindingMode, KeyBindingConfig,
-  PointerBindingConfig, PointerOpKind, PresentationMode,
+  HotkeyOverlayRow, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
   ScreenshotConfig, TerminalConfig, WindowId
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet,
@@ -46,6 +47,7 @@ type
 
   ProtocolSurfaceKind {.pure.} = enum
     PskShell,
+    PskHotkeyOverlay,
     PskDecorationAbove,
     PskDecorationBelow
 
@@ -112,6 +114,7 @@ var
   pointerBindingPressed: Table[uint32, bool]
   shellSurfacePointers: Table[uint32, ptr RiverShellSurfaceV1]
   ownedShellSurfaceId: uint32
+  hotkeyOverlaySurfaceId: uint32
   protocolSurfaces: Table[uint32, OwnedProtocolSurface]
   windowDecorationAbove: Table[WindowId, uint32]
   windowDecorationBelow: Table[WindowId, uint32]
@@ -501,6 +504,7 @@ proc createProtocolBuffer(kind: ProtocolSurfaceKind): ptr Buffer =
   let alpha = if currentModel.protocolSurfaces.visibleDebug: 0x80000000'u32 else: 0'u32
   let color = case kind
     of ProtocolSurfaceKind.PskShell: 0x3aa5ff00'u32 or alpha
+    of ProtocolSurfaceKind.PskHotkeyOverlay: 0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskDecorationAbove: 0xffcc0000'u32 or alpha
     of ProtocolSurfaceKind.PskDecorationBelow: 0x2233cc00'u32 or alpha
   let rgba = premulColor(color)
@@ -546,6 +550,204 @@ proc createTransparentShmBuffer(width, height: int32): ptr Buffer =
       removeFile(path)
     except CatchableError:
       discard
+
+type PixelBuffer = object
+  width: int32
+  height: int32
+  pixels: seq[uint32]
+
+const
+  HotkeyBg = 0xdd111318'u32
+  HotkeyBorder = 0xff62a8ff'u32
+  HotkeyText = 0xfff4f7fb'u32
+  HotkeyMuted = 0xffaab3c2'u32
+  HotkeyKeyBg = 0xff262a33'u32
+  HotkeyTitle = 0xffffffff'u32
+  HotkeyFontScale = 3'i32
+  HotkeyPadding = 24'i32
+  HotkeyRowGap = 10'i32
+  HotkeyColumnGap = 28'i32
+
+proc initPixelBuffer(width, height: int32; color: uint32): PixelBuffer =
+  result.width = max(1'i32, width)
+  result.height = max(1'i32, height)
+  result.pixels = newSeq[uint32](int(result.width * result.height))
+  for i in 0 ..< result.pixels.len:
+    result.pixels[i] = color
+
+proc putPixel(buf: var PixelBuffer; x, y: int32; color: uint32) =
+  if x < 0 or y < 0 or x >= buf.width or y >= buf.height:
+    return
+  buf.pixels[int(y * buf.width + x)] = color
+
+proc fillRect(
+    buf: var PixelBuffer; x, y, w, h: int32; color: uint32) =
+  for py in y ..< y + h:
+    for px in x ..< x + w:
+      buf.putPixel(px, py, color)
+
+proc strokeRect(
+    buf: var PixelBuffer; x, y, w, h, thickness: int32; color: uint32) =
+  buf.fillRect(x, y, w, thickness, color)
+  buf.fillRect(x, y + h - thickness, w, thickness, color)
+  buf.fillRect(x, y, thickness, h, color)
+  buf.fillRect(x + w - thickness, y, thickness, h, color)
+
+proc glyphRows(ch: char): array[7, string] =
+  case ch
+  of 'A': ["01110", "10001", "10001", "11111", "10001", "10001", "10001"]
+  of 'B': ["11110", "10001", "10001", "11110", "10001", "10001", "11110"]
+  of 'C': ["01111", "10000", "10000", "10000", "10000", "10000", "01111"]
+  of 'D': ["11110", "10001", "10001", "10001", "10001", "10001", "11110"]
+  of 'E': ["11111", "10000", "10000", "11110", "10000", "10000", "11111"]
+  of 'F': ["11111", "10000", "10000", "11110", "10000", "10000", "10000"]
+  of 'G': ["01111", "10000", "10000", "10111", "10001", "10001", "01111"]
+  of 'H': ["10001", "10001", "10001", "11111", "10001", "10001", "10001"]
+  of 'I': ["11111", "00100", "00100", "00100", "00100", "00100", "11111"]
+  of 'J': ["00111", "00010", "00010", "00010", "10010", "10010", "01100"]
+  of 'K': ["10001", "10010", "10100", "11000", "10100", "10010", "10001"]
+  of 'L': ["10000", "10000", "10000", "10000", "10000", "10000", "11111"]
+  of 'M': ["10001", "11011", "10101", "10101", "10001", "10001", "10001"]
+  of 'N': ["10001", "11001", "10101", "10011", "10001", "10001", "10001"]
+  of 'O': ["01110", "10001", "10001", "10001", "10001", "10001", "01110"]
+  of 'P': ["11110", "10001", "10001", "11110", "10000", "10000", "10000"]
+  of 'Q': ["01110", "10001", "10001", "10001", "10101", "10010", "01101"]
+  of 'R': ["11110", "10001", "10001", "11110", "10100", "10010", "10001"]
+  of 'S': ["01111", "10000", "10000", "01110", "00001", "00001", "11110"]
+  of 'T': ["11111", "00100", "00100", "00100", "00100", "00100", "00100"]
+  of 'U': ["10001", "10001", "10001", "10001", "10001", "10001", "01110"]
+  of 'V': ["10001", "10001", "10001", "10001", "10001", "01010", "00100"]
+  of 'W': ["10001", "10001", "10001", "10101", "10101", "10101", "01010"]
+  of 'X': ["10001", "10001", "01010", "00100", "01010", "10001", "10001"]
+  of 'Y': ["10001", "10001", "01010", "00100", "00100", "00100", "00100"]
+  of 'Z': ["11111", "00001", "00010", "00100", "01000", "10000", "11111"]
+  of '0': ["01110", "10001", "10011", "10101", "11001", "10001", "01110"]
+  of '1': ["00100", "01100", "00100", "00100", "00100", "00100", "01110"]
+  of '2': ["01110", "10001", "00001", "00010", "00100", "01000", "11111"]
+  of '3': ["11110", "00001", "00001", "01110", "00001", "00001", "11110"]
+  of '4': ["00010", "00110", "01010", "10010", "11111", "00010", "00010"]
+  of '5': ["11111", "10000", "10000", "11110", "00001", "00001", "11110"]
+  of '6': ["01110", "10000", "10000", "11110", "10001", "10001", "01110"]
+  of '7': ["11111", "00001", "00010", "00100", "01000", "01000", "01000"]
+  of '8': ["01110", "10001", "10001", "01110", "10001", "10001", "01110"]
+  of '9': ["01110", "10001", "10001", "01111", "00001", "00001", "01110"]
+  of '+': ["00000", "00100", "00100", "11111", "00100", "00100", "00000"]
+  of '-': ["00000", "00000", "00000", "11111", "00000", "00000", "00000"]
+  of '/': ["00001", "00001", "00010", "00100", "01000", "10000", "10000"]
+  of '?': ["01110", "10001", "00001", "00010", "00100", "00000", "00100"]
+  of ':': ["00000", "00100", "00100", "00000", "00100", "00100", "00000"]
+  of '.': ["00000", "00000", "00000", "00000", "00000", "01100", "01100"]
+  of ',': ["00000", "00000", "00000", "00000", "00100", "00100", "01000"]
+  of '_': ["00000", "00000", "00000", "00000", "00000", "00000", "11111"]
+  of ' ': ["00000", "00000", "00000", "00000", "00000", "00000", "00000"]
+  else: ["01110", "10001", "00001", "00010", "00100", "00000", "00100"]
+
+proc drawChar(
+    buf: var PixelBuffer; x, y: int32; ch: char; color: uint32;
+    scale = HotkeyFontScale) =
+  let glyph = glyphRows(ch.toUpperAscii())
+  for gy, row in glyph:
+    for gx, bit in row:
+      if bit == '1':
+        buf.fillRect(x + int32(gx) * scale, y + int32(gy) * scale,
+          scale, scale, color)
+
+proc drawText(
+    buf: var PixelBuffer; x, y, maxW: int32; text: string; color: uint32;
+    scale = HotkeyFontScale) =
+  var dx = x
+  let advance = 6'i32 * scale
+  for ch in text:
+    if dx + 5'i32 * scale > x + maxW:
+      return
+    buf.drawChar(dx, y, ch, color, scale)
+    dx += advance
+
+proc textWidth(text: string; scale = HotkeyFontScale): int32 =
+  int32(text.len) * 6'i32 * scale
+
+proc argbBytes(pixels: seq[uint32]): string =
+  result = newString(pixels.len * 4)
+  var i = 0
+  for pixel in pixels:
+    result[i] = char(pixel and 0xff'u32)
+    result[i + 1] = char((pixel shr 8) and 0xff'u32)
+    result[i + 2] = char((pixel shr 16) and 0xff'u32)
+    result[i + 3] = char((pixel shr 24) and 0xff'u32)
+    i += 4
+
+proc createArgbShmBuffer(buf: PixelBuffer): ptr Buffer =
+  if shm == nil:
+    return nil
+  inc shmBufferCounter
+  let path = getTempDir() / (
+    "triad-hotkey-overlay-" & $getCurrentProcessId() & "-" &
+    $shmBufferCounter)
+  try:
+    writeFile(path, argbBytes(buf.pixels))
+    let fd = posix.open(path.cstring, posix.O_RDWR)
+    if fd < 0:
+      return nil
+    try:
+      let size = buf.width * buf.height * 4
+      let pool = shm.createPool(fd, size)
+      if pool == nil:
+        return nil
+      result = pool.createBuffer(
+        0,
+        buf.width,
+        buf.height,
+        buf.width * 4,
+        uint32(ShmFormat.format_argb8888))
+      pool.destroy()
+    finally:
+      discard posix.close(fd)
+  except CatchableError as e:
+    warn "Unable to create hotkey overlay shm buffer", path = path,
+      error = e.msg
+  finally:
+    try:
+      if fileExists(path):
+        removeFile(path)
+    except CatchableError:
+      discard
+
+proc renderHotkeyOverlayBuffer(
+    rows: seq[HotkeyOverlayRow]; screen: Rect): PixelBuffer =
+  let title = "Important Hotkeys"
+  let rowH = 7'i32 * HotkeyFontScale
+  var keyW = textWidth("(not bound)")
+  var labelW = 0'i32
+  for row in rows:
+    keyW = max(keyW, textWidth(row.key))
+    labelW = max(labelW, textWidth(row.label))
+  let maxW = max(360'i32, int32(float(screen.w) * 0.9))
+  let desiredW = HotkeyPadding * 2 + keyW + HotkeyColumnGap + labelW
+  let width = min(maxW, max(360'i32, desiredW))
+  let visibleRows =
+    if rows.len == 0: 1
+    else: min(rows.len, max(1, int((max(240'i32, screen.h - 120'i32) -
+      HotkeyPadding * 3 - rowH) div (rowH + HotkeyRowGap))))
+  let height = HotkeyPadding * 3 + rowH +
+    int32(visibleRows) * rowH + int32(max(0, visibleRows - 1)) * HotkeyRowGap
+  result = initPixelBuffer(width, height, HotkeyBg)
+  result.strokeRect(0, 0, width, height, 4, HotkeyBorder)
+  result.drawText((width - textWidth(title)) div 2, HotkeyPadding,
+    width - HotkeyPadding * 2, title, HotkeyTitle)
+  var y = HotkeyPadding * 2 + rowH
+  let labelX = HotkeyPadding + keyW + HotkeyColumnGap
+  let rowsToDraw =
+    if rows.len == 0:
+      @[HotkeyOverlayRow(key: "", label: "No hotkeys configured")]
+    else:
+      rows[0 ..< visibleRows]
+  for row in rowsToDraw:
+    result.fillRect(HotkeyPadding - 8, y - 5, keyW + 16,
+      rowH + 10, HotkeyKeyBg)
+    result.drawText(HotkeyPadding, y, keyW, row.key, HotkeyText)
+    result.drawText(labelX, y, width - labelX - HotkeyPadding,
+      row.label, HotkeyMuted)
+    y += rowH + HotkeyRowGap
 
 proc createProtocolWlSurface(kind: ProtocolSurfaceKind): OwnedProtocolSurface =
   result.kind = kind
@@ -630,6 +832,31 @@ proc ensureOwnedShellSurface() =
   protocolSurfaces[ownedShellSurfaceId] = surf
   debug "Created protocol shell surface", shellSurfaceId = ownedShellSurfaceId
 
+proc ensureHotkeyOverlaySurface() =
+  if not currentModel.protocolSurfaces.enabled:
+    return
+  if hotkeyOverlaySurfaceId != 0 and
+      protocolSurfaces.hasKey(hotkeyOverlaySurfaceId):
+    return
+  if river_manager == nil or compositor == nil:
+    return
+  var surf = createProtocolWlSurface(ProtocolSurfaceKind.PskHotkeyOverlay)
+  if surf.surface == nil:
+    warn "Unable to create hotkey overlay wl_surface"
+    return
+  surf.shellSurface = river_manager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create hotkey overlay shell surface"
+    destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  hotkeyOverlaySurfaceId = surf.shellSurface.id()
+  shellSurfacePointers[hotkeyOverlaySurfaceId] = surf.shellSurface
+  commitProtocolSurface(surf)
+  protocolSurfaces[hotkeyOverlaySurfaceId] = surf
+  debug "Created hotkey overlay shell surface",
+    shellSurfaceId = hotkeyOverlaySurfaceId
+
 proc syncOwnedShellSurface(screen: Rect) =
   if ownedShellSurfaceId == 0 or
       not protocolSurfaces.hasKey(ownedShellSurfaceId):
@@ -659,6 +886,46 @@ proc syncOwnedShellSurface(screen: Rect) =
     surf.inputH = 0
   commitProtocolSurface(surf)
   protocolSurfaces[ownedShellSurfaceId] = surf
+
+proc syncHotkeyOverlaySurface(screen: Rect) =
+  if not currentModel.hotkeyOverlayOpen:
+    if hotkeyOverlaySurfaceId != 0 and
+        protocolSurfaces.hasKey(hotkeyOverlaySurfaceId):
+      var surf = protocolSurfaces[hotkeyOverlaySurfaceId]
+      surf.inputW = 0
+      surf.inputH = 0
+      let buffer = createProtocolBuffer(ProtocolSurfaceKind.PskHotkeyOverlay)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, 1, 1)
+      if surf.node != nil:
+        surf.node.placeBottom()
+      commitProtocolSurface(surf)
+      protocolSurfaces[hotkeyOverlaySurfaceId] = surf
+    return
+
+  ensureHotkeyOverlaySurface()
+  if hotkeyOverlaySurfaceId == 0 or
+      not protocolSurfaces.hasKey(hotkeyOverlaySurfaceId):
+    return
+
+  let rows = currentModel.hotkeyOverlayRows()
+  let rendered = renderHotkeyOverlayBuffer(rows, screen)
+  var surf = protocolSurfaces[hotkeyOverlaySurfaceId]
+  let buffer = createArgbShmBuffer(rendered)
+  if buffer != nil:
+    surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+  else:
+    warn "Hotkey overlay buffer unavailable"
+    return
+  surf.inputW = surf.bufferW
+  surf.inputH = surf.bufferH
+  commitProtocolSurface(surf)
+  if surf.node != nil:
+    let x = screen.x + max(0'i32, (screen.w - surf.bufferW) div 2)
+    let y = screen.y + max(0'i32, (screen.h - surf.bufferH) div 2)
+    surf.node.setPosition(x, y)
+    surf.node.placeTop()
+  protocolSurfaces[hotkeyOverlaySurfaceId] = surf
 
 proc ensureDecorationSurface(windowId: WindowId;
     kind: ProtocolSurfaceKind): uint32 =
@@ -725,6 +992,7 @@ proc destroyAllProtocolSurfaces() =
     protocolSurfaces.del(id)
     destroyProtocolSurface(surf)
   ownedShellSurfaceId = 0
+  hotkeyOverlaySurfaceId = 0
   windowDecorationAbove.clear()
   windowDecorationBelow.clear()
 
@@ -1108,7 +1376,12 @@ proc on_xkb_pressed(data: pointer; binding: ptr river_xkb.RiverXkbBindingV1) =
   if xkbBindingModes.hasKey(id) and not bindingModeActive(xkbBindingModes[id]):
     return
   if xkbBindings.hasKey(id):
-    msgQueue.add(xkbBindings[id])
+    let msg = xkbBindings[id]
+    msgQueue.add(msg)
+    if currentModel.hotkeyOverlayOpen and
+        msg.kind notin {MsgKind.CmdShowHotkeyOverlay,
+          MsgKind.CmdToggleHotkeyOverlay, MsgKind.CmdHideHotkeyOverlay}:
+      msgQueue.add(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
 
 proc on_xkb_released(data: pointer; binding: ptr river_xkb.RiverXkbBindingV1) =
   xkbBindingPressed[binding.id()] = false
@@ -1497,6 +1770,8 @@ proc renderDesiredPlacements() =
         if firstNode != nil:
           shell.node.placeBelow(firstNode)
     protocolSurfaces[ownedShellSurfaceId] = shell
+
+  syncHotkeyOverlaySurface(screen)
 
 proc focusedWindowGeometry(): Rect =
   let focused = currentModel.activeFocusRiverId()

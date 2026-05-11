@@ -39,7 +39,7 @@ external window manager.
 | Session | Quit manager | `quit` | `river_window_manager_v1.stop` | `stop-manager` | X | Triad also has `exit-session` behind config. |
 | Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
-| Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, and inhibit policy. |
+| Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, inhibit policy, and hotkey overlay titles. |
 | Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. |
 | Bindings | HJKL/arrow mirroring | Manual binds | WM policy | `mirror-hjkl-arrows` | X | Triad can generate arrow equivalents for HJKL binds. |
 | Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
@@ -122,6 +122,7 @@ external window manager.
 | Window rules | Global keybinding | `globalkeybinding` | WM policy | | | Not implemented. |
 | Layer rules | Layer shell rules | `layerrule` | Layer shell protocols | | | Triad handles shell/layer focus but has no rule config. |
 | Shell | Shell integration | External bars/tools | Protocol/shell surfaces | `quickshell`, native state events | X | Triad has Quickshell launch/compat and native events. |
+| Shell | Hotkey helper overlay | | WM policy and shell surface | `hotkey-overlay`, `toggle-hotkey-overlay` | X | Native popup generated from configured bindings and per-bind titles; adds a free fallback key when needed. |
 | Shell | Window menu | `show_window_menu` request policy | River window menu request | `window-menu-command` | X | Capability is advertised only when configured. |
 | Screenshot | Screenshots | External binds to `spawn` | External tools | `screenshot`, `screenshot-screen`, `screenshot-window`, `screenshot` config | X | Triad wraps configured capture tools and emits Niri-compatible events. |
 | Portals | XDG portal setup | Portal config docs | External services | | | Not Triad config. |
@@ -276,12 +277,14 @@ KDL config nodes and fields:
   `open-floating`, `keyboard-shortcuts-inhibit`, `forced-layout`.
 - `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, plus
-  `layout`, `mode`, and `allow-inhibiting` properties.
+  `layout`, `mode`, `allow-inhibiting`, and `hotkey-overlay-title`
+  properties.
 - `quickshell`: `enabled`, `command`, `theme`, `args`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
 - `overview`: `outer-gap`, `inner-gap-multiplier`.
+- `hotkey-overlay`: `skip-at-startup`, `hide-not-bound`.
 - `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,
   `min-width`, `min-height`.
 - `screenshot`: `directory`, `filename-prefix`, `capture-command`,
@@ -306,7 +309,8 @@ Text IPC and bind commands:
   `cancel-eat-next-key`, `toggle-keyboard-shortcuts-inhibit`,
   `keyboard-shortcuts-inhibit`, `stop-manager`, `triad-reload`,
   `exit-session`, `config-reload`, `screenshot`, `screenshot-screen`,
-  `screenshot-window`.
+  `screenshot-window`, `show-hotkey-overlay`, `hide-hotkey-overlay`,
+  `toggle-hotkey-overlay`.
 - Layout: `layout-scroller`, `layout-vertical-scroller`,
   `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`,
   `layout-center-tile`, `layout-right-tile`, `layout-vertical-tile`,

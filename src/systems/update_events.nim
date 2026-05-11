@@ -133,6 +133,8 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
       result.effects.add(Effect(
         kind: EffectKind.EffFocusShellSurface,
         focusShellSurfaceId: msg.shellSurfaceId))
+    if model.hotkeyOverlayOpen:
+      result.dirty = model.setHotkeyOverlayOpen(false)
   of MsgKind.WlModifiersChanged:
     discard model.setActiveModifiers(msg.newModifiers)
   of MsgKind.WlLayerFocusExclusive:

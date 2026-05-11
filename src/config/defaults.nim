@@ -68,6 +68,7 @@ tag-rules {
 // intentionally configured outside this fallback.
 
 bindings {
+    bind "Super+Shift+Slash" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Super+q" "close-window"
     bind "Super+f" "toggle-fullscreen"
     bind "Super+m" "toggle-maximized"

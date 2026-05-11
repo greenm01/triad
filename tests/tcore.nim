@@ -6,6 +6,7 @@ import ../src/core/render_visibility
 import ../src/core/restore_state
 import ../src/state/engine
 import ../src/systems/layout_projection
+import ../src/systems/hotkey_overlay
 import ../src/systems/runtime_facade
 import ../src/systems/update
 import ../src/systems/window_lifecycle
@@ -265,6 +266,56 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastTriadJson and
       it.jsonPayload.contains("layout-state-changed"))
+
+  test "Hotkey overlay commands update runtime state":
+    var model = initRuntimeStateFromConfig(Config(
+      hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
+      workspaces: WorkspaceConfig(defaultCount: 3))).model
+
+    var effects = model.updateModel(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
+    check model.hotkeyOverlayOpen
+    check model.hotkeyOverlayShownOnce
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
+    check model.hotkeyOverlayOpen
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdToggleHotkeyOverlay))
+    check not model.hotkeyOverlayOpen
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+    check not model.hotkeyOverlayOpen
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Hotkey overlay rows honor custom and hidden binding titles":
+    var model = initRuntimeStateFromConfig(Config(
+      hotkeyOverlay: HotkeyOverlayConfig(hideNotBound: true),
+      keyBindings: @[
+        KeyBindingConfig(
+          key: "Slash",
+          modifiers: 65'u32,
+          command: "toggle-hotkey-overlay",
+          hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,
+          hotkeyOverlayTitle: "Show Important Hotkeys"),
+        KeyBindingConfig(
+          key: "q",
+          modifiers: 64'u32,
+          command: "close-window",
+          hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleHidden),
+        KeyBindingConfig(
+          key: "Return",
+          modifiers: 64'u32,
+          command: "spawn-terminal")
+      ])).model
+    let rows = model.hotkeyOverlayRows()
+
+    check rows.anyIt(it.key == "Super + Shift + /" and
+      it.label == "Show Important Hotkeys")
+    check not rows.anyIt(it.label == "Close Focused Window")
+    check rows.anyIt(it.key == "Super + Enter" and it.label == "Open Terminal")
+    check not rows.anyIt(it.key == "(not bound)")
 
   test "Grid directional focus follows rendered rows":
     var model = directionalModel(LayoutMode.Grid)

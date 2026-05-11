@@ -2,8 +2,9 @@ import sets, tables
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,
-  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
-  QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig
+  HotkeyOverlayConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
+  ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig,
+  TerminalConfig
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -180,6 +181,8 @@ type
     defaultWorkspaceCount*: uint32
     visibleSlots*: seq[uint32]
     overviewActive*: bool
+    hotkeyOverlayOpen*: bool
+    hotkeyOverlayShownOnce*: bool
     overviewSelectedWindow*: WindowId
     overviewViewportSnapshot*: Table[TagId, ViewportState]
     viewportRetargetTags*: HashSet[TagId]
@@ -221,6 +224,7 @@ type
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig
     cursor*: CursorConfig
+    hotkeyOverlay*: HotkeyOverlayConfig
     presentationMode*: PresentationMode
     protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]

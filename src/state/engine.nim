@@ -74,6 +74,17 @@ proc layoutCycle*(model: Model): seq[LayoutMode] =
     @[LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid,
         LayoutMode.Monocle, LayoutMode.VerticalScroller]
 
+proc setHotkeyOverlayOpen*(model: var Model; open: bool): bool =
+  if model.hotkeyOverlayOpen == open:
+    return false
+  model.hotkeyOverlayOpen = open
+  if open:
+    model.hotkeyOverlayShownOnce = true
+  true
+
+proc shouldShowHotkeyOverlayAtStartup*(model: Model): bool =
+  not model.hotkeyOverlay.skipAtStartup and not model.hotkeyOverlayShownOnce
+
 proc safeLayoutMode*(stored: int; fallback = LayoutMode.Scroller): LayoutMode =
   if stored >= ord(low(LayoutMode)) + 1 and
       stored <= ord(high(LayoutMode)) + 1:

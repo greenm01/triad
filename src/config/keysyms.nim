@@ -16,6 +16,9 @@ proc keySymForBinding*(key: string; modifiers: uint32 = 0): uint32 =
   of "tab": 0xff09'u32
   of "backspace": 0xff08'u32
   of "space": 0x20'u32
+  of "slash":
+    if (modifiers and ShiftModifier) != 0: 0x3f'u32 else: 0x2f'u32
+  of "question": 0x3f'u32
   of "left": 0xff51'u32
   of "up": 0xff52'u32
   of "right": 0xff53'u32

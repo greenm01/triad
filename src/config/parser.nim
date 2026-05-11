@@ -18,6 +18,7 @@ type
     windowMenu*: WindowMenuConfig
     scratchpad*: ScratchpadConfig
     cursor*: CursorConfig
+    hotkeyOverlay*: HotkeyOverlayConfig
     presentationMode*: PresentationMode
     allowExitSession*: bool
     protocolSurfaces*: ProtocolSurfacesConfig
@@ -179,9 +180,22 @@ proc parseKeySpec(value: string): tuple[key: string; modifiers: uint32] =
   let parts = value.split("+")
   if parts.len == 0:
     return ("", 0'u32)
-  result.key = parts[^1].strip()
+  let rawKey = parts[^1].strip()
+  result.key =
+    case rawKey
+    of "/": "Slash"
+    of "?": "Question"
+    else: rawKey
   if parts.len > 1:
     result.modifiers = parseModifiers(parts[0 .. ^2].join("+"))
+
+proc applyHotkeyOverlayTitle(
+    binding: var KeyBindingConfig; value: KdlVal) =
+  if value.kind == KNull:
+    binding.hotkeyOverlayTitleKind = HotkeyOverlayTitleKind.HotkeyTitleHidden
+  else:
+    binding.hotkeyOverlayTitleKind = HotkeyOverlayTitleKind.HotkeyTitleCustom
+    binding.hotkeyOverlayTitle = value.kString()
 
 proc parsePointerOp(value: string): PointerOpKind =
   case value
@@ -225,6 +239,34 @@ proc mirrorHjklArrowBindings(bindings: var seq[KeyBindingConfig]) =
     if not bindings.hasKeySlot(mirrored):
       bindings.add(mirrored)
 
+proc hotkeyOverlayFallbackBinding(): KeyBindingConfig =
+  KeyBindingConfig(
+    key: "Slash",
+    modifiers: 65'u32,
+    command: "toggle-hotkey-overlay",
+    bypassShortcutsInhibit: true,
+    hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,
+    hotkeyOverlayTitle: "Show Important Hotkeys")
+
+proc isHotkeyOverlayCommand(command: string): bool =
+  let parts = command.strip().splitWhitespace()
+  if parts.len == 0:
+    return false
+  parts[0] in ["show-hotkey-overlay", "hide-hotkey-overlay",
+      "toggle-hotkey-overlay"]
+
+proc hasHotkeyOverlayCommand(bindings: seq[KeyBindingConfig]): bool =
+  for binding in bindings:
+    if binding.command.isHotkeyOverlayCommand():
+      return true
+  false
+
+proc ensureHotkeyOverlayFallback(bindings: var seq[KeyBindingConfig]) =
+  let fallback = hotkeyOverlayFallbackBinding()
+  if not bindings.hasHotkeyOverlayCommand() and
+      not bindings.hasKeySlot(fallback):
+    bindings.add(fallback)
+
 proc parsePresentationMode(value: string): PresentationMode =
   case value
   of "vsync", "Vsync", "VSYNC": PresentationMode.PresentationVsync
@@ -233,6 +275,7 @@ proc parsePresentationMode(value: string): PresentationMode =
 
 proc defaultKeyBindings*(): seq[KeyBindingConfig] =
   @[
+    hotkeyOverlayFallbackBinding(),
     KeyBindingConfig(key: "q", modifiers: 64'u32, command: "close-window"),
     KeyBindingConfig(key: "f", modifiers: 64'u32, command: "toggle-fullscreen"),
     KeyBindingConfig(key: "m", modifiers: 64'u32, command: "toggle-maximized"),
@@ -476,6 +519,9 @@ proc loadConfig*(path: string): Config =
                 if child.props.hasKey("allow-inhibiting"):
                   binding.bypassShortcutsInhibit = not child.props[
                       "allow-inhibiting"].kBool()
+                if child.props.hasKey("hotkey-overlay-title"):
+                  binding.applyHotkeyOverlayTitle(
+                    child.props["hotkey-overlay-title"])
                 result.keyBindings.add(binding)
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
@@ -612,6 +658,20 @@ proc loadConfig*(path: string): Config =
           except CatchableError as e:
             warn "Ignoring invalid cursor field", field = child.name, error = e.msg
 
+      elif node.name == "hotkey-overlay":
+        for child in node.children:
+          try:
+            if child.name == "skip-at-startup":
+              result.hotkeyOverlay.skipAtStartup =
+                child.args.len == 0 or child.args[0].kBool()
+            elif child.name == "hide-not-bound":
+              result.hotkeyOverlay.hideNotBound =
+                child.args.len == 0 or child.args[0].kBool()
+          except CatchableError as e:
+            warn "Ignoring invalid hotkey-overlay field",
+              field = child.name,
+              error = e.msg
+
       elif node.name == "presentation-mode" and node.args.len > 0:
         try:
           result.presentationMode = parsePresentationMode(node.args[0].kString())
@@ -640,6 +700,8 @@ proc loadConfig*(path: string): Config =
 
   if result.keyBindings.len == 0:
     result.keyBindings = defaultKeyBindings()
+  else:
+    result.keyBindings.ensureHotkeyOverlayFallback()
   if result.pointerBindings.len == 0:
     result.pointerBindings = defaultPointerBindings()
 

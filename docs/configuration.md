@@ -49,12 +49,12 @@ The supported KDL nodes are:
 - `window-rule`: app/title matching, default tag, floating behavior,
   focus behavior, shortcut inhibition, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
-  binding mode, layout override, and inhibition policy.
+  binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
 - `scratchpad`, `overview`, `floating`, `screenshot`, `cursor`.
 - Top-level flags and settings: `presentation-mode`, `allow-exit-session`,
-  and `protocol-surfaces`.
+  `protocol-surfaces`, and `hotkey-overlay`.
 
 For command details, see `docs/ipc.md`. For the Mango/River/Triad comparison
 matrix, see `docs/comp/config-command-matrix.md`.
@@ -85,6 +85,32 @@ window-rule {
   focus only when they open on the active workspace.
 - `default-tag <n>`: opens matching windows on a tag. For parented dialogs,
   this explicit tag overrides the parent workspace.
+
+## Hotkey Overlay
+
+Triad can render a native keyboard helper popup from the active config:
+
+```kdl
+hotkey-overlay {
+  skip-at-startup
+  hide-not-bound
+}
+
+bindings {
+  bind "Super+Shift+Slash" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
+  bind "Super+Shift+Q" "close-window" hotkey-overlay-title=#null
+}
+```
+
+- `skip-at-startup`: prevents the helper from appearing on startup.
+- `hide-not-bound`: omits built-in helper rows that have no configured key.
+- `hotkey-overlay-title="..."`: shows a binding in the helper with the
+  supplied label.
+- `hotkey-overlay-title=#null`: hides that binding from the helper.
+
+Triad adds `Super+Shift+Slash` as a fallback `toggle-hotkey-overlay` binding
+when no overlay binding is configured and that key slot is free. `Slash`, `/`,
+`Question`, and `?` are accepted key names for slash/question bindings.
 
 ## Screenshots
 

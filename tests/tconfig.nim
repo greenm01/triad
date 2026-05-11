@@ -287,10 +287,16 @@ protocol-surfaces {
   enabled #true
   visible-debug #true
 }
+hotkey-overlay {
+  skip-at-startup
+  hide-not-bound
+}
 bindings {
   mirror-hjkl-arrows #true
   bind "Super+Return" "spawn-terminal"
   bind "SUPER+CTRL+c" "layout-center-tile" allow-inhibiting=#false
+  bind "Super+/" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
+  bind "Super+Shift+?" "focus-last" hotkey-overlay-title=#null
   bind "NONE+F12" "focus-last"
   pointer-bind "Super+left" "move"
   pointer-bind "Super+middle" "toggle-maximized"
@@ -333,12 +339,26 @@ bindings {
     check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
     check config.protocolSurfaces.enabled
+    check config.hotkeyOverlay.skipAtStartup
+    check config.hotkeyOverlay.hideNotBound
     check config.keyBindings.len > 0
     check config.commandForBinding("c", Super + Ctrl) == "layout-center-tile"
     let uppercaseBindings = config.keyBindings.filterIt(
       it.key == "c" and it.modifiers == Super + Ctrl)
     check uppercaseBindings.len == 1
     check uppercaseBindings[0].bypassShortcutsInhibit
+    check config.commandForBinding("Slash", Super) == "toggle-hotkey-overlay"
+    let titledBindings = config.keyBindings.filterIt(
+      it.key == "Slash" and it.modifiers == Super)
+    check titledBindings.len == 1
+    check titledBindings[0].hotkeyOverlayTitleKind ==
+      HotkeyOverlayTitleKind.HotkeyTitleCustom
+    check titledBindings[0].hotkeyOverlayTitle == "Show Important Hotkeys"
+    let hiddenBindings = config.keyBindings.filterIt(
+      it.key == "Question" and it.modifiers == Super + Shift)
+    check hiddenBindings.len == 1
+    check hiddenBindings[0].hotkeyOverlayTitleKind ==
+      HotkeyOverlayTitleKind.HotkeyTitleHidden
     check config.commandForBinding("F12", 0'u32) == "focus-last"
     check config.pointerBindings.len == 4
     check config.pointerBindings.anyIt(
@@ -378,6 +398,30 @@ bindings {
     check mirroredUp.len == 1
     check mirroredUp[0].bypassShortcutsInhibit
 
+  test "Config adds hotkey overlay fallback when key slot is free":
+    let path = getCurrentDir() / "test_config_hotkey_fallback.kdl"
+    writeFile(path, """
+bindings {
+  bind "Super+q" "close-window"
+}
+""")
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.msgKindForBinding("Slash", Super + Shift) ==
+      MsgKind.CmdToggleHotkeyOverlay
+
+    writeFile(path, """
+bindings {
+  bind "Super+Shift+Slash" "focus-last"
+}
+""")
+    let occupied = loadConfig(path)
+    removeFile(path)
+
+    check occupied.msgKindForBinding("Slash", Super + Shift) ==
+      MsgKind.CmdFocusLast
+
   test "Default bindings follow Niri-style movement and scratchpad chords":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
 
@@ -415,6 +459,8 @@ bindings {
     check config.commandForBinding("Print", Alt) == "screenshot-window"
     check config.commandForBinding("Print", Super) ==
       "screenshot --clipboard-only"
+    check config.msgKindForBinding("Slash", Super + Shift) ==
+      MsgKind.CmdToggleHotkeyOverlay
     for key in ["c", "v", "x"]:
       let bindings = config.keyBindings.filterIt(
         it.key == key and it.modifiers == Super)

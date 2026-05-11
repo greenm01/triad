@@ -267,6 +267,12 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdFocusShellUi:
     if not model.sessionLocked and not model.layerFocusExclusive:
       result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+  of MsgKind.CmdShowHotkeyOverlay:
+    result.dirty = model.setHotkeyOverlayOpen(true)
+  of MsgKind.CmdHideHotkeyOverlay:
+    result.dirty = model.setHotkeyOverlayOpen(false)
+  of MsgKind.CmdToggleHotkeyOverlay:
+    result.dirty = model.setHotkeyOverlayOpen(not model.hotkeyOverlayOpen)
   of MsgKind.CmdScreenshot:
     result.effects.add(Effect(
       kind: EffectKind.EffScreenshot,

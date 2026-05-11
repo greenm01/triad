@@ -188,6 +188,9 @@ proc parseTextCommand*(line: string): Option[Msg] =
   of "triad-reload": some(Msg(kind: MsgKind.CmdTriadReload))
   of "exit-session": some(Msg(kind: MsgKind.CmdExitSession))
   of "focus-shell-ui": some(Msg(kind: MsgKind.CmdFocusShellUi))
+  of "show-hotkey-overlay": some(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
+  of "hide-hotkey-overlay": some(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+  of "toggle-hotkey-overlay": some(Msg(kind: MsgKind.CmdToggleHotkeyOverlay))
   of "move-to-scratchpad": some(Msg(kind: MsgKind.CmdMoveToScratchpad))
   of "move-to-named-scratchpad":
     if parts.len >= 2: some(Msg(kind: MsgKind.CmdMoveToNamedScratchpad,

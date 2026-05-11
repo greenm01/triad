@@ -98,6 +98,10 @@ protocol-surfaces {
     visible-debug #false
 }
 
+hotkey-overlay {
+    hide-not-bound
+}
+
 spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
 spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
@@ -118,6 +122,7 @@ bindings {
     bind "Super+e" "spawn env GTK_THEME=Adwaita:dark thunar"
     bind "Super+Escape" "lock-session"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
+    bind "Super+Shift+Slash" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"

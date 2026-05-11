@@ -275,6 +275,17 @@ suite "Runtime state primitives":
     check snapshot.workspaces[0].name == "main"
     check snapshot.workspaces[1].layoutMode == LayoutMode.Grid
 
+  test "runtime init follows hotkey overlay startup setting":
+    let shown = initRuntimeStateFromConfig(baseConfig())
+    var skippedConfig = baseConfig()
+    skippedConfig.hotkeyOverlay.skipAtStartup = true
+    let skipped = initRuntimeStateFromConfig(skippedConfig)
+
+    check shown.model.hotkeyOverlayOpen
+    check shown.model.hotkeyOverlayShownOnce
+    check not skipped.model.hotkeyOverlayOpen
+    check not skipped.model.hotkeyOverlayShownOnce
+
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())
     let effects = state.applyRuntimeUpdate(Msg(

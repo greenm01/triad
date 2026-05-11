@@ -31,6 +31,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 *   `lock-session`: Launches the configured `screen-lock` command.
 *   `focus-shell-ui`: Focuses Triad's internal River shell surface when present.
+*   `show-hotkey-overlay`, `hide-hotkey-overlay`, `toggle-hotkey-overlay`:
+    Opens, closes, or toggles Triad's native keyboard helper popup.
 
 #### Layout Management
 *   `layout-scroller`: Sets the active tag to horizontal scrolling mode.
