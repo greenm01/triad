@@ -483,6 +483,29 @@ suite "Core Runtime Logic":
     check effects.hasFocusEffect(2)
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
+  test "Auto parented popup fits parent when default floating is wider":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.4,
+        defaultWindowWidth: 0.8,
+        defaultWindowHeight: 0.6),
+      workspaces: WorkspaceConfig(defaultCount: 3))).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "okular", title: "Document"))
+    let parentGeom = model.instructionGeom(1)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "xdg-desktop-portal-gtk", title: "Open Document"))
+
+    let childGeom = model.instructionGeom(2)
+    check childGeom.w == parentGeom.w
+    check childGeom.x == parentGeom.x
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
   test "Late parent event floats child without moving camera":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
@@ -561,10 +584,10 @@ suite "Core Runtime Logic":
     discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 2,
       appId: "pinentry", title: "Passphrase"))
-    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     let beforeChildGeom = model.instructionGeom(4)
 
-    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    model.setViewport(1, targetX = 500.0, currentX = 500.0)
 
     let parentGeom = model.instructionGeom(2)
     let childGeom = model.instructionGeom(4)
@@ -580,7 +603,7 @@ suite "Core Runtime Logic":
       appId: "pinentry", title: "Passphrase"))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
       focusWindowId: 1))
-    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let parentGeom = model.instructionGeom(2)
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
@@ -597,13 +620,13 @@ suite "Core Runtime Logic":
       appId: "pinentry", title: "Passphrase"))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
       focusWindowId: 1))
-    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     check not model.layoutProjection().instructions.mapIt(
       uint32(it.windowId)).contains(4'u32)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
       focusWindowId: 2))
-    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let parentGeom = model.instructionGeom(2)
     let childGeom = model.instructionGeom(4)
@@ -617,7 +640,7 @@ suite "Core Runtime Logic":
     discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 2,
       appId: "pinentry", title: "Passphrase"))
-    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let parentGeom = model.instructionGeom(2)
     let childGeom = model.instructionGeom(4)
@@ -637,7 +660,7 @@ suite "Core Runtime Logic":
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 6, createdParentWindowId: 4,
       appId: "pinentry", title: "Nested"))
-    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
     check model.focusedWindowId() == 6
@@ -743,7 +766,7 @@ suite "Core Runtime Logic":
     check not order.contains(2'u32)
     check not order.contains(3'u32)
 
-  test "Parented popup wider than parent stays centered and clamped":
+  test "Manual parented popup wider than parent stays centered and clamped":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
       width: 1000, height: 700))
@@ -767,6 +790,54 @@ suite "Core Runtime Logic":
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
     check childGeom.x <= parentGeom.x + parentGeom.w
     check childGeom.x + childGeom.w >= parentGeom.x
+
+  test "Size-forced parented popup can overhang parent":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    let parentGeom = model.instructionGeom(1)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Wide dialog"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: 2,
+      minWidth: parentGeom.w + 120,
+      minHeight: 140,
+      maxWidth: 0,
+      maxHeight: 0))
+
+    let childGeom = model.instructionGeom(2)
+    check childGeom.w == parentGeom.w + 120
+    check childGeom.x == 0
+    check childGeom.x <= parentGeom.x + parentGeom.w
+    check childGeom.x + childGeom.w >= parentGeom.x
+
+  test "Manual parented popup resize disables parent auto fit":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Dialog"))
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    check model.windowData(childId).get().parentAutoFloating
+    model.applyMsg(Msg(kind: MsgKind.CmdResizeFloating,
+      deltaFW: 120, deltaFH: 0))
+
+    let parentId = model.windowForExternal(ExternalWindowId(1))
+    discard model.setWindowFloating(
+      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300))
+
+    let child = model.windowData(childId).get()
+    let childGeom = model.instructionGeom(2)
+    check not child.parentAutoFloating
+    check childGeom.w == child.floatingGeom.w
+    check childGeom.w > model.instructionGeom(1).w
 
   test "Parented popup larger than screen shrinks to screen":
     var model = cameraModel()
@@ -797,7 +868,7 @@ suite "Core Runtime Logic":
     check order.contains(1'u32)
     check not order.contains(4'u32)
 
-  test "Parented popup remains when parent is partly visible":
+  test "Parented popup hides until partly visible parent is fully visible":
     var model = cameraModel()
     model.seedCameraWindows(3)
     discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
@@ -813,9 +884,16 @@ suite "Core Runtime Logic":
     let childGeom = model.instructionGeom(4)
     check parentGeom.x < 0
     check parentGeom.x + parentGeom.w > 0
-    check childGeom.w == 800
-    check childGeom.x == 0
-    check childGeom.x <= parentGeom.x + parentGeom.w
+    check childGeom.w == 0
+
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let visibleParentGeom = model.instructionGeom(1)
+    let visibleChildGeom = model.instructionGeom(4)
+    check visibleParentGeom.x >= 0
+    check visibleChildGeom.w == 800
+    check visibleChildGeom.x == 0
+    check visibleChildGeom.x <= visibleParentGeom.x + visibleParentGeom.w
 
   test "Parented floating stack keeps children and newer siblings above":
     var model = cameraModel()

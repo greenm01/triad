@@ -6,6 +6,7 @@ import ../types/core as core_types
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/runtime_values as rv
+import floating_geometry
 import presentation_policy
 import popup_tree
 
@@ -41,47 +42,6 @@ proc activeFocus*(model: Model): core_types.WindowId =
   if tagOpt.isSome:
     return tagOpt.get().focusedWindow
   NullWindowId
-
-proc applyFloatingSizeHints(win: model_types.WindowData;
-    geom: rv.Rect): rv.Rect =
-  result = geom
-  if win.minWidth > 0:
-    result.w = max(result.w, win.minWidth)
-  if win.minHeight > 0:
-    result.h = max(result.h, win.minHeight)
-  if win.maxWidth > 0:
-    result.w = min(result.w, win.maxWidth)
-  if win.maxHeight > 0:
-    result.h = min(result.h, win.maxHeight)
-
-proc clampToScreen(geom, screen: rv.Rect): rv.Rect =
-  result = geom
-  result.w = max(0'i32, result.w)
-  result.h = max(0'i32, result.h)
-  if screen.w > 0:
-    result.w = min(result.w, screen.w)
-    result.x = clamp(result.x, screen.x, screen.x + screen.w - result.w)
-  if screen.h > 0:
-    result.h = min(result.h, screen.h)
-    result.y = clamp(result.y, screen.y, screen.y + screen.h - result.h)
-
-proc intersects(a, b: rv.Rect): bool =
-  if a.w <= 0 or a.h <= 0 or b.w <= 0 or b.h <= 0:
-    return false
-  a.x < b.x + b.w and a.x + a.w > b.x and
-    a.y < b.y + b.h and a.y + a.h > b.y
-
-proc centeredIn(bounds, geom: rv.Rect): rv.Rect =
-  result = geom
-  result.x = bounds.x + (bounds.w - geom.w) div 2
-  result.y = bounds.y + (bounds.h - geom.h) div 2
-
-proc anchoredFloatingGeom(
-    win: model_types.WindowData; parentGeom, fallbackGeom,
-    screen: rv.Rect): rv.Rect =
-  result = win.applyFloatingSizeHints(fallbackGeom)
-  result = parentGeom.centeredIn(result)
-  result = result.clampToScreen(screen)
 
 proc isDescendantOf(model: Model; child, ancestor: core_types.WindowId): bool =
   if child == NullWindowId or ancestor == NullWindowId or child == ancestor:
@@ -161,7 +121,7 @@ proc addFloatingInstructions(
       if not geomByWindow.hasKey(parentId):
         continue
       let parentGeom = geomByWindow[parentId]
-      if not parentGeom.intersects(screen):
+      if not parentGeom.fullyWithin(screen):
         continue
       geom = item.win.anchoredFloatingGeom(
         parentGeom, item.win.floatingGeom, screen)

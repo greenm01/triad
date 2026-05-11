@@ -1,5 +1,6 @@
 import options
 import focus
+import floating_geometry
 import layout_projection
 import placement
 import ../state/engine
@@ -12,68 +13,6 @@ type
     Tile
 
 const LargeParentedRatio = 0.9'f32
-
-proc fixedSizeWidth(win: WindowData): int32 =
-  if win.minWidth > 0 and win.maxWidth == win.minWidth:
-    win.minWidth
-  else:
-    0'i32
-
-proc fixedSizeHeight(win: WindowData): int32 =
-  if win.minHeight > 0 and win.maxHeight == win.minHeight:
-    win.minHeight
-  else:
-    0'i32
-
-proc hasFixedSizeHint*(win: WindowData): bool =
-  win.minWidth > 0 and win.minHeight > 0 and
-    (win.fixedSizeWidth() > 0 or win.fixedSizeHeight() > 0)
-
-proc applySizeHints(model: Model; winId: WindowId;
-    geom: runtime_values.Rect): runtime_values.Rect =
-  result = geom
-  let winOpt = model.windowData(winId)
-  if winOpt.isNone:
-    return
-
-  let win = winOpt.get()
-  let fixedW = win.fixedSizeWidth()
-  let fixedH = win.fixedSizeHeight()
-  if fixedW > 0:
-    result.w = fixedW
-  elif win.minWidth > 0:
-    result.w = max(result.w, win.minWidth)
-  if fixedH > 0:
-    result.h = fixedH
-  elif win.minHeight > 0:
-    result.h = max(result.h, win.minHeight)
-
-  if win.maxWidth > 0:
-    result.w = min(result.w, win.maxWidth)
-  if win.maxHeight > 0:
-    result.h = min(result.h, win.maxHeight)
-
-proc clampToScreen(geom, screen: runtime_values.Rect): runtime_values.Rect =
-  result = geom
-  result.w = max(0'i32, result.w)
-  result.h = max(0'i32, result.h)
-  if screen.w > 0:
-    result.w = min(result.w, screen.w)
-    result.x = clamp(result.x, screen.x, screen.x + screen.w - result.w)
-  if screen.h > 0:
-    result.h = min(result.h, screen.h)
-    result.y = clamp(result.y, screen.y, screen.y + screen.h - result.h)
-
-proc intersects(a, b: runtime_values.Rect): bool =
-  if a.w <= 0 or a.h <= 0 or b.w <= 0 or b.h <= 0:
-    return false
-  a.x < b.x + b.w and a.x + a.w > b.x and
-    a.y < b.y + b.h and a.y + a.h > b.y
-
-proc centeredIn(bounds, geom: runtime_values.Rect): runtime_values.Rect =
-  result = geom
-  result.x = bounds.x + (bounds.w - geom.w) div 2
-  result.y = bounds.y + (bounds.h - geom.h) div 2
 
 proc parentRenderRect(model: Model; parentExternalId: ExternalWindowId):
     tuple[found: bool; rect: runtime_values.Rect] =
@@ -88,7 +27,7 @@ proc parentRenderRect(model: Model; parentExternalId: ExternalWindowId):
 proc parentVisibleInProjection*(model: Model;
     parentExternalId: ExternalWindowId): bool =
   let parent = model.parentRenderRect(parentExternalId)
-  parent.found and parent.rect.intersects(model.primaryScreen())
+  parent.found and parent.rect.fullyWithin(model.primaryScreen())
 
 proc parentWorkspaceSlot*(model: Model;
     parentExternalId: ExternalWindowId): uint32 =
@@ -103,11 +42,15 @@ proc parentWorkspaceSlot*(model: Model;
 proc floatingGeomForWindow*(model: Model; winId: WindowId;
     parentExternalId = NullExternalWindowId): runtime_values.Rect =
   let screen = model.primaryScreen()
-  result = model.applySizeHints(winId, model.defaultFloatingGeom())
+  result = model.defaultFloatingGeom()
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return result.clampToScreen(screen)
+  let win = winOpt.get()
   let parent = model.parentRenderRect(parentExternalId)
   if parent.found:
-    result = parent.rect.centeredIn(result)
-  result = result.clampToScreen(screen)
+    return win.anchoredFloatingGeom(parent.rect, result, screen)
+  result = win.applyFloatingSizeHints(result).clampToScreen(screen)
 
 proc nearSize(size, bounds: int32): bool =
   size > 0 and bounds > 0 and

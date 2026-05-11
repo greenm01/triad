@@ -240,6 +240,7 @@ proc setWindowFloatingGeom*(
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).floatingGeom = floatingGeom
+  model.windows.mEntity(winId).parentAutoFloating = false
   true
 
 proc setWindowFullscreen*(model: var Model; winId: WindowId;
