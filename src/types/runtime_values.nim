@@ -186,6 +186,7 @@ type
 
   RestoredWindowState* = object
     tagId*: uint32
+    parentId*: WindowId
     appId*: string
     title*: string
     identifier*: string

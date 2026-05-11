@@ -555,6 +555,114 @@ suite "Core Runtime Logic":
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
     check childGeom != beforeChildGeom
 
+  test "Parented floating window follows scroller camera":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+    let beforeChildGeom = model.instructionGeom(4)
+
+    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+
+    let parentGeom = model.instructionGeom(2)
+    let childGeom = model.instructionGeom(4)
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+    check childGeom != beforeChildGeom
+
+  test "Parented floating window hides with obscured maximized parent":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 3, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 1))
+
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check order.contains(1'u32)
+    check not order.contains(2'u32)
+    check not order.contains(3'u32)
+
+  test "Parented popup wider than parent stays centered and clamped":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Wide dialog"))
+    let parentId = model.windowForExternal(ExternalWindowId(1))
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    discard model.setWindowFloating(
+      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300))
+    discard model.setWindowFloating(
+      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500))
+
+    let parentGeom = model.instructionGeom(1)
+    let childGeom = model.instructionGeom(2)
+    check childGeom.w == 800
+    check childGeom.h == 500
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+    check childGeom.x <= parentGeom.x + parentGeom.w
+    check childGeom.x + childGeom.w >= parentGeom.x
+
+  test "Parented popup larger than screen shrinks to screen":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Oversized dialog"))
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    discard model.setWindowFloating(
+      childId, true, runtime_values.Rect(x: 0, y: 0, w: 1400, h: 900))
+
+    let childGeom = model.instructionGeom(2)
+    check childGeom == model.primaryScreen()
+
+  test "Parented popup hides when parent leaves camera":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+
+    model.setViewport(1, targetX = 900.0, currentX = 900.0)
+
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check order.contains(1'u32)
+    check not order.contains(4'u32)
+
+  test "Parented popup remains when parent is partly visible":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 1,
+      appId: "pinentry", title: "Wide dialog"))
+    let childId = model.windowForExternal(ExternalWindowId(4))
+    discard model.setWindowFloating(
+      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500))
+
+    model.setViewport(1, targetX = 350.0, currentX = 350.0)
+
+    let parentGeom = model.instructionGeom(1)
+    let childGeom = model.instructionGeom(4)
+    check parentGeom.x < 0
+    check parentGeom.x + parentGeom.w > 0
+    check childGeom.w == 800
+    check childGeom.x == 0
+    check childGeom.x <= parentGeom.x + parentGeom.w
+
   test "Parented floating stack keeps children and newer siblings above":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
@@ -702,6 +810,32 @@ suite "Core Runtime Logic":
     check win.kind == JObject
     check win["tag_id"].getInt() == 1
     check win["is_maximized"].getBool()
+
+  test "Live restore preserves popup parent relationship":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+
+    let win = model.restoreWindowJson(2)
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+
+    var restoredModel = cameraModel()
+    restoredModel.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    restoredModel.applyLiveRestore(restore.pendingRestoreState())
+    restoredModel.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    restoredModel.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+
+    check win["parent_id"].getInt() == 1
+    check restoredModel.snapshotWindow(2).parentId == 1
+    check restoredModel.instructionGeom(2).w > 0
 
   test "Live restore matches unique app id after title changes":
     var model = restoreMatchingModel()

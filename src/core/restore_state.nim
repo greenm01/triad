@@ -162,6 +162,10 @@ proc parseWindowState(
   elif state.tagByWindow.hasKey(externalId):
     win.tagId = state.tagByWindow[externalId]
 
+  if node.hasKey("parent_id"):
+    let parentId = uint32FromJson(node["parent_id"])
+    if parentId.isSome:
+      win.parentId = WindowId(parentId.get())
   if node.hasKey("app_id"):
     win.appId = stringFromJson(node["app_id"])
   if node.hasKey("title"):

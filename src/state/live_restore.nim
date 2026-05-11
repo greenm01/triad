@@ -39,6 +39,7 @@ proc restoredWindowData*(source: rv.RestoredWindowState):
     RestoredWindowData =
   RestoredWindowData(
     slot: source.tagId,
+    parentExternalId: ExternalWindowId(uint32(source.parentId)),
     appId: source.appId,
     title: source.title,
     identifier: source.identifier,
@@ -176,6 +177,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
 
     result.windows[external] = rv.RestoredWindowState(
       tagId: slot,
+      parentId: rv.WindowId(uint32(win.parentExternalId)),
       appId: win.appId,
       title: win.title,
       identifier: win.identifier,
@@ -233,6 +235,7 @@ proc windowStateJson(
   %*{
     "id": winId,
     "tag_id": win.tagId,
+    "parent_id": win.parentId,
     "app_id": win.appId,
     "title": win.title,
     "identifier": win.identifier,

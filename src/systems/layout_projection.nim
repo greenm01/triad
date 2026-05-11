@@ -64,6 +64,12 @@ proc clampToScreen(geom, screen: rv.Rect): rv.Rect =
     result.h = min(result.h, screen.h)
     result.y = clamp(result.y, screen.y, screen.y + screen.h - result.h)
 
+proc intersects(a, b: rv.Rect): bool =
+  if a.w <= 0 or a.h <= 0 or b.w <= 0 or b.h <= 0:
+    return false
+  a.x < b.x + b.w and a.x + a.w > b.x and
+    a.y < b.y + b.h and a.y + a.h > b.y
+
 proc centeredIn(bounds, geom: rv.Rect): rv.Rect =
   result = geom
   result.x = bounds.x + (bounds.w - geom.w) div 2
@@ -124,9 +130,13 @@ proc addFloatingInstructions(
     var geom = item.win.floatingGeom
     if item.win.parentExternalId != NullExternalWindowId:
       let parentId = rv.WindowId(uint32(item.win.parentExternalId))
-      if geomByWindow.hasKey(parentId):
-        geom = item.win.anchoredFloatingGeom(
-          geomByWindow[parentId], item.win.floatingGeom, screen)
+      if not geomByWindow.hasKey(parentId):
+        continue
+      let parentGeom = geomByWindow[parentId]
+      if not parentGeom.intersects(screen):
+        continue
+      geom = item.win.anchoredFloatingGeom(
+        parentGeom, item.win.floatingGeom, screen)
     let externalId = model.externalWindowId(item.id)
     instructions.add(rv.RenderInstruction(windowId: externalId, geom: geom))
     geomByWindow[externalId] = geom
@@ -345,6 +355,13 @@ proc layoutProjection*(model: Model): LayoutProjection =
   let overlayActive = model.activeFocusIsOverlay(focused)
   if overlayActive:
     model.preserveBackingPresentation(result.instructions, screen)
+  elif focusedOpt.isSome:
+    let win = focusedOpt.get()
+    let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()
+    if win.isFullscreen or (win.isMaximized and maxSupported):
+      result.instructions = @[rv.RenderInstruction(
+        windowId: model.externalWindowId(focused),
+        geom: screen)]
 
   model.addFloatingInstructions(model.activeTag, screen, result.instructions)
 
@@ -360,14 +377,6 @@ proc layoutProjection*(model: Model): LayoutProjection =
           y: screen.y + (screen.h - sh) div 2,
           w: sw,
           h: sh)))
-
-  if focusedOpt.isSome and not overlayActive:
-    let win = focusedOpt.get()
-    let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()
-    if win.isFullscreen or (win.isMaximized and maxSupported):
-      result.instructions = @[rv.RenderInstruction(
-        windowId: model.externalWindowId(focused),
-        geom: screen)]
 
 proc applyLayoutProjection*(model: var Model; projection: LayoutProjection) =
   for target in projection.viewportTargets:

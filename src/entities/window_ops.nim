@@ -177,6 +177,8 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).isMinimized = restored.isMinimized
   model.windows.mEntity(winId).fullscreenOutput = restored.fullscreenOutput
   model.windows.mEntity(winId).floatingGeom = restored.floatingGeom
+  if restored.parentExternalId != NullExternalWindowId:
+    model.windows.mEntity(winId).parentExternalId = restored.parentExternalId
   model.windows.mEntity(winId).actualW = restored.actualW
   model.windows.mEntity(winId).actualH = restored.actualH
   true

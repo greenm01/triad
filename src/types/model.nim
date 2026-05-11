@@ -87,6 +87,7 @@ type
 
   RestoredWindowData* = object
     slot*: uint32
+    parentExternalId*: ExternalWindowId
     appId*: string
     title*: string
     identifier*: string

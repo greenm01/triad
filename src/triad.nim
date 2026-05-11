@@ -1351,16 +1351,23 @@ proc placementNeedsCellClip(id: WindowId; geom: Rect): bool =
       return false
   win.needsCellClip(geom.w, geom.h)
 
-proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
+proc recordDesiredPlacement(instr: RenderInstruction) =
+  if desiredPlacements.hasKey(instr.windowId):
+    let existingIdx = desiredPlacementOrder.find(instr.windowId)
+    if existingIdx != -1:
+      desiredPlacementOrder.delete(existingIdx)
+  desiredPlacementOrder.add(instr.windowId)
+  desiredPlacements[instr.windowId] = instr.geom
+
+proc recordDesiredPlacements(instructions: seq[RenderInstruction]) =
   desiredPlacements.clear()
   desiredPlacementOrder.setLen(0)
   for instr in instructions:
-    if desiredPlacements.hasKey(instr.windowId):
-      let existingIdx = desiredPlacementOrder.find(instr.windowId)
-      if existingIdx != -1:
-        desiredPlacementOrder.delete(existingIdx)
-    desiredPlacementOrder.add(instr.windowId)
-    desiredPlacements[instr.windowId] = instr.geom
+    recordDesiredPlacement(instr)
+
+proc proposeDesiredDimensions(instructions: seq[RenderInstruction]) =
+  recordDesiredPlacements(instructions)
+  for instr in instructions:
     if windowPointers.hasKey(instr.windowId):
       var geom = instr.geom
       let proposal = currentModel.proposalDimensionsForRiverId(
@@ -1613,7 +1620,9 @@ proc executeEffect(eff: Effect) =
       if winOpt.isSome and winOpt.get().isFloating:
         node.placeTop()
     else:
-      desiredPlacements[eff.windowId] = Rect(x: eff.x, y: eff.y, w: eff.w, h: eff.h)
+      recordDesiredPlacement(RenderInstruction(
+        windowId: eff.windowId,
+        geom: Rect(x: eff.x, y: eff.y, w: eff.w, h: eff.h)))
       queueManageEffect(eff)
   else:
     discard
@@ -2205,10 +2214,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     if msg.kind == MsgKind.WlRenderStart:
       riverPhase = RiverPhase.RiverRender
-      if desiredPlacements.len == 0:
-        let instructions = syncRuntimeLayoutProjection("render layout", msg)
-        for instr in instructions:
-          desiredPlacements[instr.windowId] = instr.geom
+      let instructions = syncRuntimeLayoutProjection("render layout", msg)
+      recordDesiredPlacements(instructions)
       renderDesiredPlacements()
       executeEffect(Effect(kind: EffectKind.EffRenderFinish))
       riverPhase = RiverPhase.RiverIdle
