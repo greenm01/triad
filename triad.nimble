@@ -33,6 +33,13 @@ proc runUnitSuites() =
   ]:
     runTestSuite(path)
 
+proc runDaemonSuites() =
+  for path in [
+    "tests/tstate.nim",
+    "tests/thardening.nim"
+  ]:
+    runTestSuite(path)
+
 task tidy, "Remove local Nim build outputs and project cache artifacts":
   for path in [
     "triad",
@@ -88,6 +95,9 @@ task testCore, "Run core model/update tests":
 
 task testState, "Run runtime state tests":
   runTestSuite("tests/tstate.nim")
+
+task testDaemon, "Run daemon-facing runtime and hardening tests":
+  runDaemonSuites()
 
 task testHardening, "Run crash hardening tests":
   runTestSuite("tests/thardening.nim")
