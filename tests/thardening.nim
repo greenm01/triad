@@ -1,4 +1,4 @@
-import json, options, sequtils, tables, unittest
+import json, options, os, sequtils, tables, unittest
 import ../src/config/parser
 import ../src/core/effects
 import ../src/core/msg
@@ -151,6 +151,8 @@ suite "Crash hardening":
   test "native live restore parser rejects invalid or old payloads":
     check parseLiveRestoreJson("").isNone
     check parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""").isNone
+    check not liveRestorePayloadApplied(
+      """{"restore_status":"applied","active_tag":1}""")
     let parsed = parseLiveRestoreJson("""
 {
   "schema": "triad-live-restore-v2",
@@ -160,6 +162,32 @@ suite "Crash hardening":
 """)
     check parsed.isSome
     check parsed.get().activeTag == 1
+
+  test "live restore completion preserves applied diagnostic snapshot":
+    let path = getTempDir() / ("triad-live-restore-test-" &
+      $getCurrentProcessId() & ".json")
+    try:
+      writeFile(path, """
+{
+  "schema": "triad-live-restore-v2",
+  "restore_status": "pending",
+  "active_tag": 1,
+  "tags": [{"id": 1, "layout_mode": "scroller"}]
+}
+""")
+      check loadLiveRestoreState(path).isSome
+      check completeLiveRestoreState(path)
+      check fileExists(path)
+      check liveRestoreStateApplied(path)
+      check loadLiveRestoreState(path).isNone
+
+      let applied = parseJson(readFile(path))
+      check applied["restore_status"].getStr() == LiveRestoreStatusApplied
+      check applied.hasKey("applied_at_unix_ms")
+      check applied.hasKey("applied_by_pid")
+    finally:
+      if fileExists(path):
+        removeFile(path)
 
   test "layout functions handle nonnegative rectangles":
     let screen = Rect(x: 0, y: 0, w: 100, h: 80)

@@ -406,6 +406,7 @@ suite "Runtime state primitives":
     let restoreJson = parseJson(state.readRuntimeLiveRestoreJson())
     check snapshot.windows[0].id == 10
     check restoreJson["schema"].getStr() == LiveRestoreSchema
+    check restoreJson["restore_status"].getStr() == LiveRestoreStatusPending
     check restoreJson["windows"][0]["id"].getInt() == 10
 
   test "direct reducer keeps invariants over a short lifecycle":

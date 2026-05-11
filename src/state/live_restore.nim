@@ -334,6 +334,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
 
   $(%*{
     "schema": LiveRestoreSchema,
+    "restore_status": LiveRestoreStatusPending,
     "active_tag": state.activeTag,
     "focused_window": state.focusedWindow,
     "tags": tags,

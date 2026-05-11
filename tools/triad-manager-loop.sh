@@ -3,6 +3,7 @@ set -eu
 
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/triad"
 mkdir -p "$state_dir"
+export TRIAD_BEHAVIOR_LOG="${TRIAD_BEHAVIOR_LOG:-1}"
 
 while :; do
   stamp="$(date +%Y%m%d-%H%M%S)"

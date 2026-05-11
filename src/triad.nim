@@ -24,6 +24,7 @@ import ipc/socket
 import ipc/quickshell_compat
 import utils/terminal
 import utils/overview_hit_test
+import utils/behavior_log
 import utils/runtime_log
 import utils/screenshot_capture
 import utils/session_env
@@ -159,10 +160,26 @@ proc readModelSnapshot(): ShellSnapshot =
   runtimeState.readRuntimeSnapshot()
 
 proc readLiveRestoreJson(): string =
-  runtimeState.readRuntimeLiveRestoreJson()
+  result = runtimeState.readRuntimeLiveRestoreJson()
+  if behaviorLogEnabled():
+    let parsed = parseLiveRestoreJson(result)
+    if parsed.isSome:
+      writeLiveRestoreBehaviorEvent(
+        "live_restore_snapshot_dumped",
+        defaultLiveRestorePath(),
+        "ipc",
+        parsed.get())
 
 proc writeCurrentLiveRestoreState(): LiveRestoreWriteResult =
-  runtimeState.writeRuntimeLiveRestoreState()
+  result = runtimeState.writeRuntimeLiveRestoreState()
+  if result.ok and behaviorLogEnabled():
+    let parsed = parseLiveRestoreJson(runtimeState.readRuntimeLiveRestoreJson())
+    if parsed.isSome:
+      writeLiveRestoreBehaviorEvent(
+        "live_restore_snapshot_written",
+        result.path,
+        "runtime",
+        parsed.get())
 
 proc syncRuntimeLayoutProjection(
     context: string; msg: Msg): seq[RenderInstruction] =
@@ -173,6 +190,11 @@ proc applyPendingLiveRestore(context: string) =
     return
 
   let state = pendingLiveRestore.get()
+  writeLiveRestoreBehaviorEvent(
+    "live_restore_applied",
+    pendingLiveRestorePath,
+    context,
+    state)
   discard runtimeState.applyRuntimeLiveRestore(state)
   pendingLiveRestore = none(LiveRestoreState)
   liveRestoreCommitPending = pendingLiveRestorePath.len > 0
@@ -188,6 +210,10 @@ proc commitPendingLiveRestore() =
 
   if completeLiveRestoreState(pendingLiveRestorePath):
     info "Live restore snapshot committed", path = pendingLiveRestorePath
+    writeBehaviorEvent("live_restore_committed", %*{
+      "path": pendingLiveRestorePath,
+      "restore_status": LiveRestoreStatusApplied
+    })
     liveRestoreCommitPending = false
   else:
     warn "Live restore snapshot could not be committed",
@@ -2299,6 +2325,9 @@ proc main() =
 
   pendingLiveRestorePath = defaultLiveRestorePath()
   let hadRestoreSnapshot = fileExists(pendingLiveRestorePath)
+  if hadRestoreSnapshot and getEnv("TRIAD_BEHAVIOR_LOG", "").len == 0 and
+      not liveRestoreStateApplied(pendingLiveRestorePath):
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
 
   let sessionProblem = currentWaylandSessionProblem()
   if sessionProblem.len > 0:
@@ -2343,6 +2372,14 @@ proc main() =
       path = pendingLiveRestorePath,
       activeTag = state.activeTag,
       windows = state.tagByWindow.len
+    writeLiveRestoreBehaviorEvent(
+      "live_restore_loaded",
+      pendingLiveRestorePath,
+      "startup",
+      state)
+  elif hadRestoreSnapshot and liveRestoreStateApplied(pendingLiveRestorePath):
+    info "Applied live restore snapshot retained",
+      path = pendingLiveRestorePath
   elif hadRestoreSnapshot:
     if quarantineLiveRestoreState(pendingLiveRestorePath):
       warn "Invalid live restore snapshot quarantined",

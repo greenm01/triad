@@ -1,8 +1,11 @@
-import json, options, os, strutils, tables
+import json, options, os, strutils, tables, times
 import defaults
 import ../types/runtime_values
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
+const
+  LiveRestoreStatusPending* = "pending"
+  LiveRestoreStatusApplied* = "applied"
 
 type
   LiveRestoreState* = object
@@ -290,6 +293,31 @@ proc parseLiveRestoreJson*(payload: string): Option[LiveRestoreState] =
     return none(LiveRestoreState)
   parseNativeLiveRestore(root)
 
+proc liveRestoreStatus(root: JsonNode): string =
+  if root.kind == JObject and root.hasKey("restore_status") and
+      root["restore_status"].kind == JString:
+    root["restore_status"].getStr()
+  else:
+    ""
+
+proc liveRestorePayloadApplied*(payload: string): bool =
+  try:
+    let root = parseJson(payload)
+    root.kind == JObject and
+      root.hasKey("schema") and root["schema"].kind == JString and
+      root["schema"].getStr() == LiveRestoreSchema and
+      root.liveRestoreStatus() == LiveRestoreStatusApplied
+  except CatchableError:
+    false
+
+proc liveRestoreStateApplied*(path: string): bool =
+  if path.len == 0 or not fileExists(path):
+    return false
+  try:
+    readFile(path).liveRestorePayloadApplied()
+  except CatchableError:
+    false
+
 proc defaultLiveRestorePath*(): string =
   let configured = getEnv("TRIAD_LIVE_RESTORE_PATH", "")
   if configured.len > 0:
@@ -301,17 +329,19 @@ proc loadLiveRestoreState*(path: string): Option[LiveRestoreState] =
     return none(LiveRestoreState)
 
   try:
-    result = parseLiveRestoreJson(readFile(path))
+    let payload = readFile(path)
+    if payload.liveRestorePayloadApplied():
+      return none(LiveRestoreState)
+    result = parseLiveRestoreJson(payload)
   except CatchableError:
     result = none(LiveRestoreState)
 
+proc completeLiveRestoreState*(path: string): bool
+
 proc consumeLiveRestoreState*(path: string): Option[LiveRestoreState] =
   result = loadLiveRestoreState(path)
-  if path.len > 0 and fileExists(path):
-    try:
-      removeFile(path)
-    except CatchableError:
-      discard
+  if result.isSome:
+    discard completeLiveRestoreState(path)
 
 proc completeLiveRestoreState*(path: string): bool =
   if path.len == 0:
@@ -319,10 +349,26 @@ proc completeLiveRestoreState*(path: string): bool =
   if not fileExists(path):
     return true
 
+  let tmp = path & ".tmp." & $getCurrentProcessId()
   try:
-    removeFile(path)
+    let root = parseJson(readFile(path))
+    if root.kind != JObject:
+      return false
+    if not root.hasKey("schema") or root["schema"].kind != JString or
+        root["schema"].getStr() != LiveRestoreSchema:
+      return false
+    root["restore_status"] = %LiveRestoreStatusApplied
+    root["applied_at_unix_ms"] = %int64(epochTime() * 1000.0)
+    root["applied_by_pid"] = %getCurrentProcessId()
+    writeFile(tmp, $root & "\n")
+    moveFile(tmp, path)
     true
   except CatchableError:
+    try:
+      if fileExists(tmp):
+        removeFile(tmp)
+    except CatchableError:
+      discard
     false
 
 proc quarantineLiveRestoreState*(path: string): bool =

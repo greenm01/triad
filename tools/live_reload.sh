@@ -26,10 +26,16 @@ active_tag_from_snapshot() {
     head -n 1
 }
 
+restore_snapshot_applied() {
+  [ -e "$restore_path" ] &&
+    grep -q '"restore_status"[[:space:]]*:[[:space:]]*"applied"' \
+      "$restore_path"
+}
+
 wait_restore_ready() {
   i=0
   while [ "$i" -lt 100 ]; do
-    if [ ! -e "$restore_path" ] &&
+    if restore_snapshot_applied &&
         "$repo_dir/triad_niri" msg -j workspaces >/dev/null 2>&1; then
       current_snapshot="$(
         timeout 1 "$repo_dir/triad" msg dump-live-restore-state \

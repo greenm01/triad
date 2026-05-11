@@ -52,12 +52,20 @@ nimble liveReload
 ```
 
 `nimble liveReload` writes a native `triad-live-restore-v2` snapshot before it
-installs binaries and sends `triad-reload` to the live manager. The manager
-stops its River interface after writing its own restore snapshot; the normal
-session restart path starts the replacement manager. If that native snapshot
-cannot be captured, the reload aborts rather than falling back to the
+installs binaries and sends `triad-reload` to the live manager. The replacement
+manager rewrites that same snapshot with `restore_status: "applied"` after
+River accepts the restore manage pass, so the file remains available for
+postmortem debugging without being replayed on the next start. If that native
+snapshot cannot be captured, the reload aborts rather than falling back to the
 Niri-compatible state view, because that view cannot preserve camera offsets or
 full floating geometry.
+
+The development manager loop enables compact behavior JSONL logs by default.
+They are written outside the repository under
+`${XDG_STATE_HOME:-$HOME/.local/state}/triad/behavior`, roll daily, cap each
+day at 5 MiB, and keep seven days. Set `TRIAD_BEHAVIOR_LOG=0` to disable them,
+or override `TRIAD_BEHAVIOR_LOG_DIR`, `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and
+`TRIAD_BEHAVIOR_LOG_KEEP_DAYS` for a focused investigation.
 
 Expected startup milestones in `triad.log`:
 
