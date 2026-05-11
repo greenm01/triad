@@ -1,4 +1,4 @@
-import strutils
+import std/strutils
 
 const
   ShiftModifier* = 1'u32

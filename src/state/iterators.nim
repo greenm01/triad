@@ -1,7 +1,6 @@
-import options, tables
+import std/[options, tables]
 import entity_manager
-import ../types/core
-import ../types/model
+import ../types/[core, model]
 
 iterator tagSlots*(model: Model): uint32 =
   for slot in model.tagBySlot.keys:

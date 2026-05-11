@@ -1,9 +1,6 @@
-import options, sets, tables
-import iterators
-import entity_manager
-import id_gen
-import ../types/core
-import ../types/model
+import std/[options, sets, tables]
+import entity_manager, id_gen, iterators
+import ../types/[core, model]
 
 type
   InvariantError* = object

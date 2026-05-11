@@ -1,8 +1,6 @@
-import algorithm, options, sets, tables
-import iterators
-import entity_manager
-import ../types/core
-import ../types/model
+import std/[algorithm, options, sets, tables]
+import entity_manager, iterators
+import ../types/[core, model]
 
 proc tagForSlot*(model: Model; slot: uint32): TagId =
   model.tagBySlot.getOrDefault(slot, NullTagId)

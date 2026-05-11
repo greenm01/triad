@@ -1,4 +1,5 @@
-import chronicles, os, osproc, times
+import std/[os, osproc, times]
+import chronicles
 import ../types/model
 from ../types/runtime_values import WindowId
 import ../utils/terminal

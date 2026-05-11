@@ -1,8 +1,5 @@
-import json, options
-import ../core/effects
-import ../core/msg
-import ../core/niri_state
-import ../core/triad_state
+import std/[json, options]
+import ../core/[effects, msg, niri_state, triad_state]
 import ../state/engine
 import ../types/shell_snapshot
 from ../types/runtime_values import nil

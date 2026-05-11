@@ -1,4 +1,5 @@
-import kdl, os, chronicles, strutils
+import std/[os, strutils]
+import chronicles, kdl
 import defaults
 import ../types/runtime_values
 

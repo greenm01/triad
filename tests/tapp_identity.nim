@@ -1,4 +1,4 @@
-import unittest, os, options
+import std/[options, os, unittest]
 import ../src/core/app_identity
 
 proc writeDesktop(root, name, body: string) =

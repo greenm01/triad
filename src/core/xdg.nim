@@ -1,4 +1,4 @@
-import os, strutils, tables
+import std/[os, strutils, tables]
 
 proc addUnique(result: var seq[string]; seen: var Table[string, bool];
     path: string) =

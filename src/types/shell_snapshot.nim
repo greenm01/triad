@@ -1,4 +1,4 @@
-import options
+import std/options
 from runtime_values import LayoutMode, Rect, WindowId
 
 const TriadIpcVersion* = 1

@@ -1,15 +1,10 @@
-import options, os, sequtils, unittest
-import ../src/config/defaults
-import ../src/config/apply
-import ../src/config/parser
-import ../src/config/reload_policy
+import std/[options, os, sequtils, unittest]
+import ../src/config/[apply, defaults, parser, reload_policy]
 import ../src/core/msg
 import ../src/ipc/commands
-import ../src/state/invariants
-import ../src/state/snapshot
+import ../src/state/[invariants, snapshot]
 import ../src/systems/runtime_facade
-import ../src/types/model
-import ../src/types/runtime_values
+import ../src/types/[model, runtime_values]
 
 const
   Shift = 1'u32

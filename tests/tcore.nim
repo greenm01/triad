@@ -1,19 +1,13 @@
-import asyncdispatch, json, options, os, sequtils, strutils, tables, unittest
+import std/[asyncdispatch, json, options, os, sequtils, strutils, tables,
+  unittest]
 import ../src/config/parser
-import ../src/core/effects
-import ../src/core/msg
-import ../src/core/render_visibility
-import ../src/core/restore_state
+import ../src/core/[effects, msg, render_visibility, restore_state]
 import ../src/state/engine
-import ../src/systems/layout_projection
-import ../src/systems/hotkey_overlay
-import ../src/systems/runtime_facade
-import ../src/systems/update
-import ../src/systems/window_lifecycle
+import ../src/systems/[hotkey_overlay, layout_projection, runtime_facade,
+  update, window_lifecycle]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
-import ../src/utils/overview_hit_test
-import ../src/utils/screenshot_capture
+import ../src/utils/[overview_hit_test, screenshot_capture]
 import tag_semantics_checks
 
 proc configuredModel(): Model =

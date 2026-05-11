@@ -1,4 +1,4 @@
-import os, options, sequtils, strutils, tables
+import std/[options, os, sequtils, strutils, tables]
 import xdg
 
 type

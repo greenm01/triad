@@ -1,4 +1,4 @@
-import options, strutils
+import std/[options, strutils]
 import ../state/engine
 
 proc syncPrimaryOutput*(model: var Model) =

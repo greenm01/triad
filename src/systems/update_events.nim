@@ -1,6 +1,5 @@
-import options
-import ../core/effects
-import ../core/msg
+import std/options
+import ../core/[effects, msg]
 import ../state/engine
 import focus
 import outputs

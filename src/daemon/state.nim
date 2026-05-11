@@ -1,17 +1,14 @@
-import tables, fsnotify, options
+import std/[options, tables]
+import fsnotify
 import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
-import ../core/effects
-import ../core/msg
-import ../core/restore_state
+import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
-import ../types/runtime_state
-import ../types/runtime_values
-import protocol_surfaces
-import quickshell_runner
+import ../types/[runtime_state, runtime_values]
+import protocol_surfaces, quickshell_runner
 
 type
   RiverPhase* {.pure.} = enum

@@ -1,4 +1,4 @@
-import tables
+import std/tables
 import wayland/native/client
 import protocols/river/client as river
 from ../types/runtime_values import WindowId

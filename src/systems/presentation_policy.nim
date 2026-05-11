@@ -1,4 +1,4 @@
-import options
+import std/options
 import ../types/shell_snapshot
 from ../types/runtime_values import LayoutMode, WindowId
 

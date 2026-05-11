@@ -1,14 +1,8 @@
-import ../core/effects
-import ../core/msg
+import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import Direction
-import focus
-import placement
-import runtime
-import scratchpad
-import update_effects
-import window_state
-import workspaces
+import focus, placement, runtime, scratchpad, update_effects, window_state,
+  workspaces
 
 proc closeOverview(model: var Model): bool =
   let wasActive = model.overviewActive

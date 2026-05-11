@@ -1,4 +1,4 @@
-import algorithm, options
+import std/[algorithm, options]
 import ../state/engine
 from ../types/runtime_values import LayoutMode
 

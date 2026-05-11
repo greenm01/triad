@@ -1,8 +1,6 @@
-import options, tables
-import ../state/entity_manager
-import ../state/id_gen
-import ../types/core
-import ../types/model
+import std/[options, tables]
+import ../state/[entity_manager, id_gen]
+import ../types/[core, model]
 
 proc addColumn*(
     model: var Model; tagId: TagId; widthProportion = 1.0'f32): ColumnId =

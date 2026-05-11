@@ -1,8 +1,8 @@
-import os, tables, options, asyncdispatch, json, chronicles
+import std/[asyncdispatch, json, options, os, tables]
+import chronicles
 import ../core/msg
 import ../ipc/socket
-import ../systems/daemon_view
-import ../systems/layout_projection
+import ../systems/[daemon_view, layout_projection]
 import ../types/runtime_values
 import ../utils/screenshot_capture
 import state

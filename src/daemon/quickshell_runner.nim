@@ -1,4 +1,5 @@
-import chronicles, json, osproc, strutils
+import std/[json, osproc, strutils]
+import chronicles
 import process_runner
 import ../ipc/quickshell_compat
 import ../types/model

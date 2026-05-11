@@ -1,5 +1,4 @@
-import hashes
-import tables
+import std/[hashes, tables]
 
 type
   WindowId* = distinct uint32

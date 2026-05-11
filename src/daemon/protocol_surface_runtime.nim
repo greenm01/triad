@@ -1,13 +1,12 @@
-import os, tables, chronicles
+import std/[os, tables]
+import chronicles
 import wayland/native/client
 import protocols/river/client as river
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/hotkey_overlay
 import ../types/runtime_values
-import hotkey_overlay_render
-import protocol_surfaces
-import state
+import hotkey_overlay_render, protocol_surfaces, state
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =

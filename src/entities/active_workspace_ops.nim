@@ -1,7 +1,6 @@
-import options
+import std/options
 import ../state/entity_manager
-import ../types/core
-import ../types/model
+import ../types/[core, model]
 
 proc setActiveWorkspace*(model: var Model; tagId: TagId): bool =
   if tagId == NullTagId:

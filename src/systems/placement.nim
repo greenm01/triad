@@ -1,6 +1,5 @@
-import options
-import focus
-import workspaces
+import std/options
+import focus, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode
 

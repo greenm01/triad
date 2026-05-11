@@ -1,10 +1,5 @@
-import options, tables
-import focus
-import floating_policy
-import placement
-import popup_tree
-import scratchpad
-import workspaces
+import std/[options, tables]
+import floating_policy, focus, placement, popup_tree, scratchpad, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode
 

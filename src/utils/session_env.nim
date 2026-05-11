@@ -1,4 +1,4 @@
-import os, strutils
+import std/[os, strutils]
 
 proc waylandSessionProblem*(runtimeDir, waylandDisplay: string): string =
   if runtimeDir.strip().len == 0:

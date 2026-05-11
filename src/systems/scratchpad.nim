@@ -1,7 +1,5 @@
-import options, strutils
-import focus
-import placement
-import workspaces
+import std/[options, strutils]
+import focus, placement, workspaces
 import ../state/engine
 
 proc pruneScratchpads*(model: var Model) =

@@ -1,4 +1,4 @@
-import options, tables
+import std/[options, tables]
 import ../types/core
 
 proc len*[ID, T](manager: EntityManager[ID, T]): int =

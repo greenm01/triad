@@ -4,41 +4,22 @@ import protocols/river_layer_shell/client as river_layer
 import protocols/river_xkb_bindings/client as river_xkb
 import wayland/protocols/wayland/client as wl_core
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
-import core/effects
-import core/msg
-import core/restore_state
-import core/niri_state
-import systems/daemon_view
-import systems/runtime
-import systems/runtime_facade
-import types/model
-import types/shell_snapshot
-import config/parser
-import config/defaults
-import config/reload_policy
-import daemon/state
-import daemon/bindings_runtime
-import daemon/process_runner
-import daemon/protocol_surfaces
-import daemon/protocol_surface_runtime
-import daemon/quickshell_runner
-import daemon/manage_requests
-import daemon/river_windows
-import daemon/render_runtime
-import daemon/screenshot_runner
-import ipc/quickshell_compat
-import ipc/socket
-import utils/behavior_log
-import utils/runtime_log
-import utils/session_env
-import utils/wayland_runtime
-from types/runtime_values import nil
-from types/runtime_values import BindingMode, KeyBindingConfig,
+import core/[effects, msg, niri_state, restore_state]
+import systems/[daemon_view, runtime, runtime_facade]
+import types/[model, shell_snapshot]
+import config/[defaults, parser, reload_policy]
+import daemon/[bindings_runtime, manage_requests, process_runner,
+  protocol_surfaces, protocol_surface_runtime, quickshell_runner,
+  render_runtime, river_windows, screenshot_runner, state]
+import ipc/[quickshell_compat, socket]
+import utils/[behavior_log, runtime_log, session_env, wayland_runtime]
+from types/runtime_values import nil, BindingMode, KeyBindingConfig,
   PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
   TerminalConfig, WindowId
-import tables, os, fsnotify, asyncdispatch, chronicles, asyncnet,
-    nativesockets, strutils, options, times, json
+import std/[asyncdispatch, asyncnet, json, nativesockets, options, os,
+  strutils, tables, times]
+import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
 

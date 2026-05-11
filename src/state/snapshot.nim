@@ -1,10 +1,7 @@
-import options
-import iterators
-import queries
+import std/options
+import iterators, queries
 import ../core/defaults
-import ../types/core
-import ../types/model
-import ../types/shell_snapshot
+import ../types/[core, model, shell_snapshot]
 from ../types/runtime_values import nil
 
 proc externalWindowId(model: Model; winId: WindowId):

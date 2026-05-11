@@ -1,7 +1,5 @@
-import unittest, tables
-import ../src/layouts/grid_math
-import ../src/layouts/scroller
-import ../src/layouts/tiling
+import std/[tables, unittest]
+import ../src/layouts/[grid_math, scroller, tiling]
 import ../src/types/runtime_values
 
 suite "Layout Algorithm Math":

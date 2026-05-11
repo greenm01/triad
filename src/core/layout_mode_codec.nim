@@ -1,4 +1,4 @@
-import options
+import std/options
 from ../types/runtime_values import LayoutMode
 
 proc layoutModeId*(mode: LayoutMode): string =

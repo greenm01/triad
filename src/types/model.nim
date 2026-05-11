@@ -1,4 +1,4 @@
-import sets, tables
+import std/[sets, tables]
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,

@@ -1,7 +1,6 @@
-import options, sets, tables
+import std/[options, sets, tables]
 import ../state/entity_manager
-import ../types/model
-import ../types/core
+import ../types/[core, model]
 from ../types/runtime_values import PointerOpKind
 
 proc setOverviewActive*(model: var Model; active: bool): bool =

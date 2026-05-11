@@ -1,4 +1,4 @@
-import strutils
+import std/strutils
 from ../types/runtime_values import HotkeyOverlayRow, Rect
 
 type

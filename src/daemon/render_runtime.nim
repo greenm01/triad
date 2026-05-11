@@ -1,11 +1,9 @@
-import tables, algorithm, options
+import std/[algorithm, options, tables]
 import wayland/native/client
 import protocols/river/client as river
 import ../core/render_visibility
-import ../systems/daemon_view
-import ../systems/layout_projection
-import ../types/model
-import ../types/runtime_values
+import ../systems/[daemon_view, layout_projection]
+import ../types/[model, runtime_values]
 import ../utils/overview_hit_test
 import protocol_surface_runtime
 import protocol_surfaces

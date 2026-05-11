@@ -1,10 +1,7 @@
-import options, sets, tables
-import active_workspace_ops
-import history_ops
-import ../state/entity_manager
-import ../state/id_gen
-import ../types/core
-import ../types/model
+import std/[options, sets, tables]
+import active_workspace_ops, history_ops
+import ../state/[entity_manager, id_gen]
+import ../types/[core, model]
 from ../types/runtime_values import LayoutMode
 
 proc addTag*(

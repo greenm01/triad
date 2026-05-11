@@ -1,10 +1,6 @@
-import ../core/effects
-import ../core/msg
+import ../core/[effects, msg]
 import ../state/engine
-import update_commands
-import update_effects
-import update_events
-import update_maintenance
+import update_commands, update_effects, update_events, update_maintenance
 
 proc update*(model: Model; msg: Msg): (Model, seq[Effect]) =
   var next = model

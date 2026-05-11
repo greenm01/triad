@@ -1,6 +1,5 @@
-import options, tables
-import ../types/core
-import ../types/model
+import std/[options, tables]
+import ../types/[core, model]
 
 proc loadRestoreState*(model: var Model; state: PendingRestoreState):
     bool =

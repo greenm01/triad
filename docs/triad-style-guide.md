@@ -23,7 +23,60 @@ These conventions are drawn directly from the successful practices established i
 
 ---
 
-## 2. Pragmatic DOD and Uniform Function Call Syntax (UFCS)
+## 2. Import Organization
+
+Grouped imports are a hard requirement. When multiple imports come from the
+same module root, directory, or standard library set, combine them with Nim's
+bracket import syntax instead of repeating one import per line.
+
+### Required Patterns
+
+```nim
+# GOOD: grouped stdlib imports
+import std/[json, options, os, tables]
+
+# GOOD: grouped local modules
+import ../core/[effects, msg, restore_state]
+import ../systems/[layout_projection, runtime_facade, update]
+
+# GOOD: combine values from the same module
+from ../types/runtime_values import Direction, LayoutMode, WindowId
+```
+
+```nim
+# BAD: repeated imports from the same root
+import json
+import options
+import os
+import tables
+
+# BAD: repeated imports from the same local directory
+import ../core/effects
+import ../core/msg
+import ../core/restore_state
+
+# BAD: duplicate from-imports for one module
+from ../types/runtime_values import Direction
+from ../types/runtime_values import LayoutMode, WindowId
+```
+
+### Exceptions
+
+Keep imports separate when grouping would obscure semantics or is not valid:
+
+*   Imports with aliases: `import ../types/model as model_types`
+*   Imports with `except`: `import ../state/engine except WindowId`
+*   Narrow `from ... import ...` imports used to avoid symbol conflicts
+*   Third-party or generated protocol imports where explicit aliases document
+    the protocol namespace
+
+Within a file, keep import groups ordered from external/protocol dependencies
+to project modules, then local same-directory modules. Do not mix stdlib,
+third-party, and project imports in one bracket group.
+
+---
+
+## 3. Pragmatic DOD and Uniform Function Call Syntax (UFCS)
 
 Data-Oriented Design (DOD) strictly separates data (structs/entities) from logic (systems/functions). Philosophically, strict DOD practitioners often prefer functional call syntax (`system(data)`) to visually emphasize that data is passive and does not "own" behavior.
 
@@ -65,7 +118,7 @@ let name = model.shellOutputName(outputId)
 
 ---
 
-## 3. EntityManager Access and Performance
+## 4. EntityManager Access and Performance
 
 When querying the `EntityManager`, we must prioritize single-lookup performance. Using a "double lookup" pattern is strictly forbidden.
 

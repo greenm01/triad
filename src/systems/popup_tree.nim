@@ -1,4 +1,4 @@
-import options
+import std/options
 import ../state/engine
 
 proc popupRoot*(model: Model; winId: WindowId): WindowId =

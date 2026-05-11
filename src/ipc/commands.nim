@@ -1,4 +1,4 @@
-import options, strutils
+import std/[options, strutils]
 import ../core/msg
 import ../types/runtime_values
 

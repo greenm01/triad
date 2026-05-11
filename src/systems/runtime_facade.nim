@@ -1,17 +1,9 @@
-import ../config/apply
-import ../config/parser
-import ../core/effects
-import ../core/msg
-import ../core/restore_state
+import ../config/[apply, parser]
+import ../core/[effects, msg, restore_state]
 import ../state/engine
-import ../types/runtime_state
-import ../types/layout_projection
-import ../types/shell_snapshot
+import ../types/[layout_projection, runtime_state, shell_snapshot]
 import ../types/runtime_values as rv
-import layout_projection
-import update
-import window_lifecycle
-import workspaces
+import layout_projection, update, window_lifecycle, workspaces
 
 export runtime_state
 

@@ -1,7 +1,6 @@
-import options, tables
+import std/[options, tables]
 import ../state/entity_manager
-import ../types/core
-import ../types/model
+import ../types/[core, model]
 
 proc addScratchpadRef*(model: var Model; winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:

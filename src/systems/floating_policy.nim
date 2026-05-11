@@ -1,8 +1,5 @@
-import options
-import focus
-import floating_geometry
-import layout_projection
-import placement
+import std/options
+import floating_geometry, focus, layout_projection, placement
 import ../state/engine
 from ../types/runtime_values import nil
 

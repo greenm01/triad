@@ -1,6 +1,5 @@
-import asyncdispatch, os, osproc, strutils, times
-import ../core/defaults
-import ../core/msg
+import std/[asyncdispatch, os, osproc, strutils, times]
+import ../core/[defaults, msg]
 import ../types/runtime_values
 
 proc shellQuote*(value: string): string =

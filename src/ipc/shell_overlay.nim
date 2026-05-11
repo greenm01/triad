@@ -1,6 +1,5 @@
-import os, osproc, strutils, tables
-import ../core/app_identity
-import ../core/xdg
+import std/[os, osproc, strutils, tables]
+import ../core/[app_identity, xdg]
 
 type
   ShellOverlayResult* = object

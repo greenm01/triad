@@ -1,6 +1,5 @@
-import json, options, strutils
-import ../core/msg
-import ../core/niri_state
+import std/[json, options, strutils]
+import ../core/[msg, niri_state]
 import ../types/shell_snapshot
 from ../types/runtime_values import Direction, WindowId
 

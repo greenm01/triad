@@ -1,4 +1,4 @@
-import unittest, tables
+import std/[tables, unittest]
 import ../src/protocols/coverage
 
 suite "River protocol coverage":

@@ -1,16 +1,9 @@
-import options, strutils
-import entity_manager
-import id_gen
-import iterators
-import queries
-import invariants
-import snapshot
-import live_restore
+import std/[options, strutils]
+import entity_manager, id_gen, invariants, iterators, live_restore, queries,
+  snapshot
 import ../core/defaults
 import ../entities/ops
-import ../types/core
-import ../types/model
-import ../types/shell_snapshot
+import ../types/[core, model, shell_snapshot]
 from ../types/runtime_values import LayoutMode
 
 export defaults

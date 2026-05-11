@@ -1,4 +1,4 @@
-import json, options
+import std/[json, options]
 import app_identity
 import ../types/shell_snapshot
 

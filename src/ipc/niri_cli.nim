@@ -1,4 +1,4 @@
-import json, options, strutils
+import std/[json, options, strutils]
 
 type
   NiriCliKind* {.pure.} = enum

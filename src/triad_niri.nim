@@ -1,6 +1,5 @@
-import asyncdispatch, os
-import ipc/niri_cli
-import ipc/socket
+import std/[asyncdispatch, os]
+import ipc/[niri_cli, socket]
 
 proc socketPath(): string =
   let niriSocket = getEnv("NIRI_SOCKET", "")

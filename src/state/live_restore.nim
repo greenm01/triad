@@ -1,8 +1,6 @@
-import algorithm, json, options, os, tables
-import iterators
-import queries
-import ../core/defaults
-import ../core/restore_state
+import std/[algorithm, json, options, os, tables]
+import iterators, queries
+import ../core/[defaults, restore_state]
 import ../types/core as core_types
 import ../types/model
 import ../types/runtime_values as rv

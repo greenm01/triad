@@ -1,4 +1,4 @@
-import math
+import std/math
 
 proc gridDimensions*(count: int): tuple[cols, rows: int] =
   if count <= 0:

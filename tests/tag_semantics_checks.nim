@@ -1,9 +1,7 @@
-import json, options
+import std/[json, options]
 import ../src/ipc/niri_compat
 import ../src/state/snapshot
-import ../src/types/model
-import ../src/types/runtime_values
-import ../src/types/shell_snapshot
+import ../src/types/[model, runtime_values, shell_snapshot]
 
 proc fail(context, message: string) =
   raise newException(AssertionDefect, context & ": " & message)

@@ -1,14 +1,9 @@
-import json, options, os, sequtils, strtabs, strutils, unittest
+import std/[json, options, os, sequtils, strtabs, strutils, unittest]
 import ../src/core/app_identity
 import ../src/core/msg
-import ../src/ipc/commands
-import ../src/ipc/niri_cli
-import ../src/ipc/niri_compat
-import ../src/ipc/quickshell_compat
-import ../src/ipc/shell_overlay
-import ../src/ipc/triad_native
-import ../src/types/runtime_values
-import ../src/types/shell_snapshot
+import ../src/ipc/[commands, niri_cli, niri_compat, quickshell_compat,
+  shell_overlay, triad_native]
+import ../src/types/[runtime_values, shell_snapshot]
 
 proc installAppIdentityFixture() =
   let apps =

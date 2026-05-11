@@ -1,4 +1,5 @@
-import tables, chronicles
+import std/tables
+import chronicles
 import wayland/native/client
 import protocols/river/client as river
 import ../core/msg

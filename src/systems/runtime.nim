@@ -1,4 +1,4 @@
-import math, options
+import std/[math, options]
 import ../state/engine
 from ../types/runtime_values import PointerOpKind
 

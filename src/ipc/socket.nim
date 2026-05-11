@@ -1,6 +1,7 @@
-import asyncnet, asyncdispatch, os, nativesockets, chronicles, json, options,
-    strutils
-import posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
+import std/[asyncdispatch, asyncnet, json, nativesockets, options, os,
+  strutils]
+import std/posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
+import chronicles
 import ../core/msg
 import ../types/shell_snapshot
 import ../utils/behavior_log

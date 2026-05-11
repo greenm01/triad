@@ -1,4 +1,4 @@
-import tables
+import std/tables
 import ../types/runtime_values
 
 proc clampProportion(value: float32; lo = 0.05'f32; hi = 1.0'f32): float32 =

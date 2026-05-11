@@ -1,12 +1,9 @@
-import algorithm, os, strutils, unittest
+import std/[algorithm, os, strutils, unittest]
 import ../src/config/parser
 import ../src/core/msg
-import ../src/state/invariants
-import ../src/state/snapshot
-import ../src/systems/runtime_facade
-import ../src/systems/update
-import ../src/types/model
-import ../src/types/runtime_values
+import ../src/state/[invariants, snapshot]
+import ../src/systems/[runtime_facade, update]
+import ../src/types/[model, runtime_values]
 import tag_semantics_checks
 
 type

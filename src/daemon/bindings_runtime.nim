@@ -1,4 +1,5 @@
-import tables, options, chronicles
+import std/[options, tables]
+import chronicles
 import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -6,8 +7,7 @@ import protocols/river_xkb_bindings/client as riverXkb
 import ../config/keysyms
 import ../core/msg
 import ../ipc/commands
-import ../systems/daemon_view
-import ../systems/runtime
+import ../systems/[daemon_view, runtime]
 import ../types/runtime_values
 import manage_requests
 import protocol_surface_runtime

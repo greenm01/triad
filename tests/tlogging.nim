@@ -1,6 +1,6 @@
-import chronicles, json, options, os, strutils, times, unittest
-import ../src/utils/behavior_log
-import ../src/utils/runtime_log
+import std/[json, options, os, strutils, times, unittest]
+import chronicles
+import ../src/utils/[behavior_log, runtime_log]
 
 proc restoreEnv(name, value: string) =
   putEnv(name, value)

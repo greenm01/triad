@@ -1,4 +1,4 @@
-import json, options
+import std/[json, options]
 import layout_mode_codec
 import ../types/shell_snapshot
 from ../types/runtime_values import LayoutMode

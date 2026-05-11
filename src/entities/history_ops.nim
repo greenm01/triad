@@ -1,7 +1,6 @@
-import options, sequtils
+import std/[options, sequtils]
 import ../state/entity_manager
-import ../types/core
-import ../types/model
+import ../types/[core, model]
 
 const MaxHistoryEntries = 32
 

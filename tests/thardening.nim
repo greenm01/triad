@@ -1,19 +1,11 @@
-import json, options, os, sequtils, tables, unittest
+import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
-import ../src/core/effects
-import ../src/core/msg
-import ../src/core/restore_state
-import ../src/ipc/commands
-import ../src/ipc/niri_compat
-import ../src/layouts/scroller
-import ../src/layouts/tiling
-import ../src/state/invariants
-import ../src/state/snapshot
-import ../src/systems/daemon_view
-import ../src/systems/runtime_facade
-import ../src/systems/update
-import ../src/types/runtime_values
-import ../src/types/shell_snapshot
+import ../src/core/[effects, msg, restore_state]
+import ../src/ipc/[commands, niri_compat]
+import ../src/layouts/[scroller, tiling]
+import ../src/state/[invariants, snapshot]
+import ../src/systems/[daemon_view, runtime_facade, update]
+import ../src/types/[runtime_values, shell_snapshot]
 import ../src/utils/session_env
 
 proc baseSnapshot(): ShellSnapshot =

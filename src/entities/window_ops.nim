@@ -1,11 +1,6 @@
-import options, tables
-import group_ops
-import history_ops
-import placement_ops
-import scratchpad_ops
-import ../state/iterators
-import ../state/entity_manager
-import ../state/id_gen
+import std/[options, tables]
+import group_ops, history_ops, placement_ops, scratchpad_ops
+import ../state/[entity_manager, id_gen, iterators]
 import ../types/core except Rect
 import ../types/model
 from ../types/runtime_values import Rect

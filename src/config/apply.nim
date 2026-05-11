@@ -1,4 +1,4 @@
-import options, strutils
+import std/[options, strutils]
 import parser
 import defaults
 import ../state/engine

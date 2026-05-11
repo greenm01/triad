@@ -1,14 +1,11 @@
-import algorithm, options, tables
-import ../layouts/scroller
-import ../layouts/tiling
+import std/[algorithm, options, tables]
+import ../layouts/[scroller, tiling]
 import ../state/engine
 import ../types/core as core_types
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/runtime_values as rv
-import floating_geometry
-import presentation_policy
-import popup_tree
+import floating_geometry, presentation_policy, popup_tree
 
 proc externalWindowId(model: Model; winId: core_types.WindowId):
     rv.WindowId =

@@ -1,4 +1,4 @@
-import math
+import std/math
 import grid_math
 import ../types/runtime_values
 

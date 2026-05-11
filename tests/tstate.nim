@@ -1,17 +1,11 @@
-import json, options, os, sequtils, strutils, tables, unittest
+import std/[json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/parser
-import ../src/core/effects
-import ../src/core/msg
-import ../src/core/restore_state
+import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
 import ../src/state/engine except WindowId
-import ../src/state/invariants
-import ../src/state/snapshot
-import ../src/systems/layout_projection
-import ../src/systems/runtime_facade
-import ../src/systems/update
-import ../src/types/model
-import ../src/types/runtime_values
+import ../src/state/[invariants, snapshot]
+import ../src/systems/[layout_projection, runtime_facade, update]
+import ../src/types/[model, runtime_values]
 
 const DeletedRuntimeModules = [
   "src/types/legacy_model.nim",

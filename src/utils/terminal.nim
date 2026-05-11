@@ -1,4 +1,4 @@
-import os, strutils
+import std/[os, strutils]
 
 const CommonTerminalCommands* = [
   "kgx",

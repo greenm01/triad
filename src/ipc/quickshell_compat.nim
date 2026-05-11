@@ -1,6 +1,5 @@
-import os, posix, strtabs, strutils
-import shell_overlay
-import socket
+import std/[os, posix, strtabs, strutils]
+import shell_overlay, socket
 import ../core/xdg
 import ../types/runtime_values
 
