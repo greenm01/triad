@@ -40,3 +40,28 @@ When changing runtime, state, or systems code:
 4. Treat `Model.update(msg)` as the reducer boundary. If profiling shows event
    copying is expensive, prefer an in-place reducer design over adding side
    mutation paths.
+
+## Live debugging evidence
+
+For live reload, compositor, focus, session restore, or window-placement bugs:
+
+1. Do not delete `$XDG_RUNTIME_DIR/triad-live-restore.json` as cleanup. Live
+   restore preserves this handoff file and marks it with
+   `restore_status: "applied"` after a successful restore so stale state is not
+   replayed.
+2. Inspect the retained restore snapshot before and after `nimble liveReload`
+   when debugging reload behavior. It records active tag, focused window,
+   per-tag focus, window geometry, maximized/fullscreen state, and focus
+   history.
+3. Use the behavior JSONL logs for cross-session live debugging. The dev
+   default path is
+   `${XDG_STATE_HOME:-$HOME/.local/state}/triad/behavior/triad-behavior-YYYY-MM-DD.jsonl`.
+   These logs are outside the repo, roll daily, cap each day at 5 MiB, and keep
+   seven days by default.
+4. Relevant behavior events include `live_restore_loaded`,
+   `live_restore_applied`, `live_restore_committed`, and
+   `live_restore_snapshot_dumped`. Prefer citing these events when explaining a
+   live reload or focus bug.
+5. To force or redirect behavior logging, use `TRIAD_BEHAVIOR_LOG=1`,
+   `TRIAD_BEHAVIOR_LOG_DIR`, `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and
+   `TRIAD_BEHAVIOR_LOG_KEEP_DAYS`. Keep generated logs out of git.
