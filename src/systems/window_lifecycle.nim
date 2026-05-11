@@ -314,9 +314,10 @@ proc createWindowForExternal*(model: var Model;
   var focusAfterAdmission = false
 
   result = model.windowForExternal(externalId)
-  if result == NullWindowId:
+  let existingWindow = result != NullWindowId
+  if not existingWindow:
     result = model.addWindow(externalId)
-  else:
+  elif hasRestoredTag or hasRestoredWindow:
     discard model.removeWindowFromAllTagsAndRefreshFocus(result)
 
   discard model.setWindowCreatedState(
@@ -334,8 +335,20 @@ proc createWindowForExternal*(model: var Model;
       else: WindowAdmissionState.Admitted,
     focusAfterAdmission = false,
     parentExternalId = parentExternalId,
-    keyboardShortcutsInhibit = shortcutInhibit
+    keyboardShortcutsInhibit = shortcutInhibit,
+    preserveRuntimeState = existingWindow and not hasRestoredWindow
   )
+
+  if existingWindow and not hasRestoredTag and not hasRestoredWindow:
+    if pendingAdmission and focusAfterAdmission:
+      discard model.setWindowAdmission(
+        result, WindowAdmissionState.PendingAdmission,
+        focusAfterAdmission = true)
+    model.resolveRestoreHistories()
+    model.syncRestoreOutputTags()
+    discard model.clearSettledRestoreFocus()
+    discard model.pruneDynamicWorkspaces()
+    return
 
   if isFloating and not hasRestoredWindow:
     discard model.ensureFloatingAt(

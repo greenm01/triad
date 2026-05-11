@@ -90,6 +90,8 @@ proc removeWindowFromTag*(
     var mask = model.windowTags[winId]
     mask.excl(tagOpt.get().bit)
     model.windowTags[winId] = mask
+    if tagOpt.get().focusedWindow == winId:
+      model.tags.mEntity(tagId).focusedWindow = NullWindowId
   true
 
 proc moveWindowToColumn*(

@@ -1328,6 +1328,97 @@ suite "Core Runtime Logic":
     check win["tag_id"].getInt() == 1
     check win["is_maximized"].getBool()
 
+  test "Moving focused window refocuses recent source window":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+
+    check model.activeWorkspaceFocusId() == 2
+    check model.focusedWindowId() == 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    check model.activeWorkspaceFocusId() == 3
+    check model.focusedWindowId() == 3
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 1))
+    check model.activeWorkspaceFocusId() == 2
+    check model.focusedWindowId() == 2
+
+  test "Moving only source window leaves source focus empty":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+
+    check model.activeWorkspaceFocusId() == 0
+    check model.focusedWindowId() == 0
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    check model.activeWorkspaceFocusId() == 1
+    check model.focusedWindowId() == 1
+
+  test "Moving window preserves target column width":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let sourceTag = model.tagForSlot(1)
+    let sourceColumn = model.columnAt(sourceTag, 0)
+    discard model.setColumnWidth(sourceColumn, 0.42'f32)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+
+    let targetTag = model.tagForSlot(2)
+    let targetColumn = model.columnAt(targetTag, 0)
+    check model.columnData(targetColumn).get().widthProportion == 0.42'f32
+
+  test "Duplicate window create preserves moved window attributes":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10,
+      appId: "kitty", title: "Terminal"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensions,
+      dimensionsWindowId: 10, actualWidth: 640, actualHeight: 480))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: 10, minWidth: 200, minHeight: 100,
+      maxWidth: 1200, maxHeight: 900))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDecorationHint,
+      decorationWindowId: 10, decorationHint: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowPresentationHint,
+      presentationWindowId: 10, presentationHint: 3))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowFullscreenRequested,
+      fullscreenRequestId: 10, fullscreenOutputId: 0))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10,
+      appId: "kitty", title: "Terminal renamed"))
+
+    let winId = model.windowForExternal(ExternalWindowId(10))
+    let win = model.windowData(winId).get()
+
+    check model.placementForWindowOnTag(model.tagForSlot(1), winId).isNone
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isSome
+    check win.title == "Terminal renamed"
+    check win.isMaximized
+    check win.isFullscreen
+    check win.actualW == 640
+    check win.actualH == 480
+    check win.minWidth == 200
+    check win.maxWidth == 1200
+    check win.hasDecorationHint
+    check win.decorationHint == 2
+    check win.hasPresentationHint
+    check win.presentationHint == 3
+
   test "Live restore preserves popup parent relationship":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,

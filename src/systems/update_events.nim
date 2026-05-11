@@ -36,7 +36,7 @@ proc setExternalFocus(model: var Model;
 proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind
   of MsgKind.WlManageStart:
-    let focused = model.focusedWindow()
+    let focused = model.focusedOnActiveTag()
     if focused != NullWindowId:
       discard model.recordWorkspace(model.activeTag)
       discard model.recordFocus(focused)
@@ -145,7 +145,7 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.setSessionLocked(true)
   of MsgKind.WlSessionUnlocked:
     result.dirty = model.setSessionLocked(false)
-    let focused = model.focusedWindow()
+    let focused = model.focusedOnActiveTag()
     if focused != NullWindowId:
       let externalId = model.runtimeWindowId(focused)
       result.effects.add(broadcastWindowFocusChanged(externalId))

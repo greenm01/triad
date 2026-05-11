@@ -29,6 +29,15 @@ proc validateInvariants*(model: Model): InvariantReport =
     if tag.focusedWindow != NullWindowId and
         model.windows.entity(tag.focusedWindow).isNone:
       result.addError("tag focused window is missing: " & $tag.id)
+    if tag.focusedWindow != NullWindowId and
+        not model.placementByTagWindow.hasKey((tag.id, tag.focusedWindow)):
+      result.addError("tag focused window is not placed on tag: " & $tag.id)
+    if tag.focusedWindow != NullWindowId:
+      let focusedOpt = model.windows.entity(tag.focusedWindow)
+      if focusedOpt.isSome and
+          focusedOpt.get().admissionState ==
+          WindowAdmissionState.PendingAdmission:
+        result.addError("tag focused window is pending admission: " & $tag.id)
 
   if model.activeTag != NullTagId:
     let activeOpt = model.tags.entity(model.activeTag)

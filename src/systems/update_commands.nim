@@ -219,7 +219,7 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     if selected != NullWindowId:
       result.dirty = model.focusWindow(selected) or result.dirty
   of MsgKind.CmdCloseWindow:
-    let focused = model.focusedWindow()
+    let focused = model.focusedOnActiveTag()
     if focused != NullWindowId:
       result.effects.add(Effect(
         kind: EffectKind.EffCloseWindow,

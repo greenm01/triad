@@ -36,9 +36,20 @@ proc removeWindowFromAllTagsAndRefreshFocus*(
 
 proc addPlacedWindowColumn*(
     model: var Model; tagId: TagId; winId: WindowId;
-    index = high(int)): ColumnId =
-  result = model.insertColumn(tagId, index, model.defaultColumnWidth())
+    index = high(int); widthProportion = 0.0'f32): ColumnId =
+  let width =
+    if widthProportion > 0.0'f32: widthProportion
+    else: model.defaultColumnWidth()
+  result = model.insertColumn(tagId, index, width)
   discard model.moveWindowToColumn(tagId, winId, result, 0)
+
+proc sourceWorkspaceFallbackFocus(
+    model: var Model; tagId: TagId): WindowId =
+  if tagId == NullTagId:
+    return NullWindowId
+  if model.focusMostRecentWindowOnTag(tagId):
+    return model.focusedOnActiveTag()
+  model.recomputeVisibleFocus(tagId)
 
 proc setLayoutForSlot*(
     model: var Model; slot: uint32; mode: LayoutMode): bool =
@@ -149,9 +160,21 @@ proc moveFocusedWindowToSlot*(
   let targetTag = model.ensureWorkspaceSlot(targetSlot)
   if targetTag == NullTagId:
     return false
+  if targetTag == sourceTag:
+    return false
+
+  let sourcePlacement = model.placementForWindowOnTag(sourceTag, focused)
+  var sourceColumnWidth = model.defaultColumnWidth()
+  if sourcePlacement.isSome:
+    let sourceColumn = model.column(sourcePlacement.get().columnId)
+    if sourceColumn.isSome:
+      sourceColumnWidth = sourceColumn.get().widthProportion
 
   discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
-  discard model.addPlacedWindowColumn(targetTag, focused)
+  if not model.overviewActive:
+    discard model.sourceWorkspaceFallbackFocus(sourceTag)
+  discard model.addPlacedWindowColumn(
+    targetTag, focused, widthProportion = sourceColumnWidth)
   discard model.setTagFocus(targetTag, focused)
   if model.overviewActive:
     discard model.setActiveWorkspace(targetTag)

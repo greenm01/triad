@@ -70,25 +70,82 @@ proc setWindowCreatedState*(model: var Model; winId: WindowId;
     floatingGeom = Rect(); parentAutoFloating = false;
     admissionState = WindowAdmissionState.Admitted;
     focusAfterAdmission = false; parentExternalId = NullExternalWindowId;
-    keyboardShortcutsInhibit = false): bool =
-  if model.windows.entity(winId).isNone:
+    keyboardShortcutsInhibit = false;
+    preserveRuntimeState = false): bool =
+  let currentOpt = model.windows.entity(winId)
+  if currentOpt.isNone:
     return false
-  let externalId = model.windows.mEntity(winId).externalId
+  let current = currentOpt.get()
   model.windows.mEntity(winId) = WindowData(
     id: winId,
-    externalId: externalId,
+    externalId: current.externalId,
     title: title,
     appId: appId,
     identifier: identifier,
-    widthProportion: widthProportion,
-    heightProportion: heightProportion,
-    isFloating: isFloating,
-    floatingGeom: floatingGeom,
-    parentAutoFloating: parentAutoFloating,
+    widthProportion:
+      if preserveRuntimeState: current.widthProportion
+      else: widthProportion,
+    heightProportion:
+      if preserveRuntimeState: current.heightProportion
+      else: heightProportion,
+    isFloating:
+      if preserveRuntimeState: current.isFloating
+      else: isFloating,
+    isFullscreen:
+      if preserveRuntimeState: current.isFullscreen
+      else: false,
+    isMaximized:
+      if preserveRuntimeState: current.isMaximized
+      else: false,
+    isMinimized:
+      if preserveRuntimeState: current.isMinimized
+      else: false,
+    fullscreenOutput:
+      if preserveRuntimeState: current.fullscreenOutput
+      else: NullExternalOutputId,
+    actualW:
+      if preserveRuntimeState: current.actualW
+      else: 0'i32,
+    actualH:
+      if preserveRuntimeState: current.actualH
+      else: 0'i32,
+    minWidth:
+      if preserveRuntimeState: current.minWidth
+      else: 0'i32,
+    minHeight:
+      if preserveRuntimeState: current.minHeight
+      else: 0'i32,
+    maxWidth:
+      if preserveRuntimeState: current.maxWidth
+      else: 0'i32,
+    maxHeight:
+      if preserveRuntimeState: current.maxHeight
+      else: 0'i32,
+    hasDecorationHint:
+      if preserveRuntimeState: current.hasDecorationHint
+      else: false,
+    decorationHint:
+      if preserveRuntimeState: current.decorationHint
+      else: 0'u32,
+    hasPresentationHint:
+      if preserveRuntimeState: current.hasPresentationHint
+      else: false,
+    presentationHint:
+      if preserveRuntimeState: current.presentationHint
+      else: 0'u32,
+    floatingGeom:
+      if preserveRuntimeState: current.floatingGeom
+      else: floatingGeom,
+    parentAutoFloating:
+      if preserveRuntimeState: current.parentAutoFloating
+      else: parentAutoFloating,
     admissionState: admissionState,
     focusAfterAdmission: focusAfterAdmission,
     parentExternalId: parentExternalId,
-    keyboardShortcutsInhibit: keyboardShortcutsInhibit
+    keyboardShortcutsInhibit: keyboardShortcutsInhibit,
+    keyboardShortcutsInhibitBypass:
+      if preserveRuntimeState: current.keyboardShortcutsInhibitBypass
+      else: false
   )
   true
 

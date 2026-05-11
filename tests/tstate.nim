@@ -439,3 +439,26 @@ suite "Runtime state primitives":
     let snapshot = model.shellSnapshot()
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 2
+
+  test "invariants reject focused window not placed on tag":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    let (next, _) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
+      windowId: 1,
+      appId: "a",
+      title: "A"))
+    model = next
+
+    let (focusedNext, _) = model.update(Msg(
+      kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model = focusedNext
+
+    let tagTwo = model.tagForSlot(2)
+    discard model.setTagFocus(tagTwo, model.windowForExternal(
+      ExternalWindowId(1)))
+
+    let report = model.validateInvariants()
+    check not report.ok
+    check report.errors.anyIt(
+      it.message.contains("tag focused window is not placed on tag"))
