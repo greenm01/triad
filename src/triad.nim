@@ -20,10 +20,13 @@ import config/parser
 import config/defaults
 import config/keysyms
 import config/reload_policy
+import daemon/process_runner
+import daemon/hotkey_overlay_render
+import daemon/protocol_surfaces
+import daemon/quickshell_runner
 import ipc/commands
-import ipc/socket
 import ipc/quickshell_compat
-import utils/terminal
+import ipc/socket
 import utils/overview_hit_test
 import utils/behavior_log
 import utils/runtime_log
@@ -36,7 +39,7 @@ from types/runtime_values import BindingMode, KeyBindingConfig,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
   ScreenshotConfig, TerminalConfig, WindowId
 import tables, os, fsnotify, asyncdispatch, chronicles, algorithm, asyncnet,
-    nativesockets, osproc, strutils, options, times, json
+    nativesockets, strutils, options, times, json
 from std/posix import nil
 
 type
@@ -44,28 +47,6 @@ type
     RiverIdle,
     RiverManage,
     RiverRender
-
-  ProtocolSurfaceKind {.pure.} = enum
-    PskShell,
-    PskHotkeyOverlay,
-    PskDecorationAbove,
-    PskDecorationBelow
-
-  OwnedProtocolSurface = object
-    surface: ptr Surface
-    buffer: ptr Buffer
-    shellSurface: ptr RiverShellSurfaceV1
-    decoration: ptr RiverDecorationV1
-    node: ptr RiverNodeV1
-    bufferW: int32
-    bufferH: int32
-    inputW: int32
-    inputH: int32
-    windowId: WindowId
-    kind: ProtocolSurfaceKind
-    offsetX: int32
-    offsetY: int32
-    syncPending: bool
 
 # --- Global Engine State ---
 var
@@ -113,11 +94,7 @@ var
   pointerBindingPointers: seq[ptr RiverPointerBindingV1] = @[]
   pointerBindingPressed: Table[uint32, bool]
   shellSurfacePointers: Table[uint32, ptr RiverShellSurfaceV1]
-  ownedShellSurfaceId: uint32
-  hotkeyOverlaySurfaceId: uint32
-  protocolSurfaces: Table[uint32, OwnedProtocolSurface]
-  windowDecorationAbove: Table[WindowId, uint32]
-  windowDecorationBelow: Table[WindowId, uint32]
+  protocolSurfaceRuntime: ProtocolSurfaceRuntime
   outputWlNames: Table[uint32, uint32]
   outputGlobalOwners: Table[uint32, uint32]
   outputGlobalNames: Table[uint32, string]
@@ -132,8 +109,7 @@ var
   watcher: Watcher
   configReloadDebouncer: ConfigReloadDebouncer
   shouldExit = false
-  quickshellProcess: Process
-  quickshellSpawnPending = false
+  quickshellState: QuickshellRunner
   startupCommandsPending = false
   initialManageComplete = false
   pendingLiveRestorePath: string
@@ -142,6 +118,21 @@ var
 
 template currentModel: untyped =
   runtimeState.model
+
+template surfaceTable: untyped =
+  protocolSurfaceRuntime.surfaces
+
+template ownedShellSurfaceId: untyped =
+  protocolSurfaceRuntime.ownedShellSurfaceId
+
+template hotkeyOverlaySurfaceId: untyped =
+  protocolSurfaceRuntime.hotkeyOverlaySurfaceId
+
+template windowDecorationAbove: untyped =
+  protocolSurfaceRuntime.windowDecorationAbove
+
+template windowDecorationBelow: untyped =
+  protocolSurfaceRuntime.windowDecorationBelow
 
 proc id(p: pointer): uint32 =
   get_id(cast[ptr Proxy](p))
@@ -232,15 +223,6 @@ proc setupConfig() =
     writeFile(configPath, FallbackConfigContent)
     info "Created default config", path = configPath
 
-proc spawnStartupCommands(model: Model) =
-  for cmd in model.startupCommands:
-    if cmd.len > 0:
-      try:
-        let p = startProcess(cmd[0], args = cmd[1..^1], options = {poUsePath})
-        info "Spawned startup command", cmd = cmd[0], pid = p.processID
-      except CatchableError as e:
-        warn "Failed to spawn startup command", cmd = cmd[0], error = e.msg
-
 proc scheduleStartupCommands(model: Model) =
   startupCommandsPending = model.startupCommands.len > 0
 
@@ -250,259 +232,6 @@ proc spawnPendingStartupCommands(model: Model; reason: string) =
   startupCommandsPending = false
   info "Spawning startup commands", reason = reason
   spawnStartupCommands(model)
-
-proc quickshellBehaviorPayload(
-    config: QuickshellConfig; reason: string; extra: JsonNode = nil): JsonNode =
-  result = %*{
-    "reason": reason,
-    "enabled": config.enabled,
-    "command": config.command,
-    "theme": config.theme,
-    "args": config.args
-  }
-  if extra != nil and extra.kind == JObject:
-    for key, value in extra.pairs:
-      result[key] = value
-
-proc writeQuickshellBehaviorEvent(
-    eventName: string;
-    config: QuickshellConfig;
-    reason: string;
-    extra: JsonNode = nil) =
-  writeBehaviorEvent(eventName,
-    quickshellBehaviorPayload(config, reason, extra))
-
-proc pollProcessExitCode(p: Process; timeoutMs: int; pollMs = 25): int =
-  let deadline = epochTime() + float(timeoutMs) / 1000.0
-  result = p.peekExitCode()
-  while result == -1 and epochTime() < deadline:
-    let remainingMs = int(max(1.0, (deadline - epochTime()) * 1000.0))
-    sleep(min(pollMs, remainingMs))
-    result = p.peekExitCode()
-
-proc stopTrackedQuickshell(reason: string) =
-  if quickshellProcess == nil:
-    writeBehaviorEvent("quickshell_tracked_stop_skipped", %*{
-      "reason": reason,
-      "tracked": false
-    })
-    return
-
-  let pid = quickshellProcess.processID
-  writeBehaviorEvent("quickshell_tracked_stop_requested", %*{
-    "reason": reason,
-    "tracked_pid": pid
-  })
-  try:
-    quickshellProcess.terminate()
-    var code = quickshellProcess.pollProcessExitCode(1000)
-    var killed = false
-    if code == -1:
-      quickshellProcess.kill()
-      code = quickshellProcess.waitForExit()
-      killed = true
-    info "Stopped Quickshell", pid = pid, reason = reason
-    writeBehaviorEvent("quickshell_tracked_stop_completed", %*{
-      "reason": reason,
-      "tracked_pid": pid,
-      "exit_code": code,
-      "killed": killed
-    })
-  except CatchableError as e:
-    warn "Failed to stop Quickshell", pid = pid, reason = reason, error = e.msg
-    writeBehaviorEvent("quickshell_tracked_stop_failed", %*{
-      "reason": reason,
-      "tracked_pid": pid,
-      "error": e.msg
-    })
-
-  try:
-    quickshellProcess.close()
-  except CatchableError:
-    discard
-  quickshellProcess = nil
-
-proc releaseTrackedQuickshell(reason: string) =
-  if quickshellProcess == nil:
-    writeBehaviorEvent("quickshell_release_skipped", %*{
-      "reason": reason,
-      "tracked": false
-    })
-    return
-
-  let pid = quickshellProcess.processID
-  try:
-    quickshellProcess.close()
-    info "Released Quickshell for manager handoff", pid = pid,
-        reason = reason
-    writeBehaviorEvent("quickshell_released", %*{
-      "reason": reason,
-      "tracked_pid": pid
-    })
-  except CatchableError as e:
-    warn "Failed to release Quickshell for manager handoff", pid = pid,
-        reason = reason, error = e.msg
-    writeBehaviorEvent("quickshell_release_failed", %*{
-      "reason": reason,
-      "tracked_pid": pid,
-      "error": e.msg
-    })
-  quickshellProcess = nil
-
-proc stopConfiguredQuickshell(model: Model; reason: string) =
-  let args = quickshellKillArgs(model.quickshell)
-  if args.len == 0 or model.quickshell.command.strip().len == 0:
-    writeQuickshellBehaviorEvent(
-      "quickshell_configured_stop_skipped",
-      model.quickshell,
-      reason)
-    return
-
-  writeQuickshellBehaviorEvent(
-    "quickshell_configured_stop_requested",
-    model.quickshell,
-    reason,
-    %*{"kill_args": args})
-  try:
-    let p = startProcess(model.quickshell.command, args = args,
-      options = {poUsePath})
-    let code = p.pollProcessExitCode(1000)
-    if code == -1:
-      p.kill()
-      discard p.waitForExit()
-      warn "Timed out stopping configured Quickshell instance",
-        command = model.quickshell.command,
-        theme = model.quickshell.theme,
-        reason = reason
-      writeQuickshellBehaviorEvent(
-        "quickshell_configured_stop_timed_out",
-        model.quickshell,
-        reason,
-        %*{"kill_args": args})
-    elif code == 0:
-      info "Stopped configured Quickshell instance",
-        command = model.quickshell.command,
-        theme = model.quickshell.theme,
-        reason = reason
-      writeQuickshellBehaviorEvent(
-        "quickshell_configured_stop_completed",
-        model.quickshell,
-        reason,
-        %*{"kill_args": args, "exit_code": code})
-    else:
-      debug "Configured Quickshell instance was not running",
-        command = model.quickshell.command,
-        theme = model.quickshell.theme,
-        reason = reason,
-        exitCode = code
-      writeQuickshellBehaviorEvent(
-        "quickshell_configured_stop_not_running",
-        model.quickshell,
-        reason,
-        %*{"kill_args": args, "exit_code": code})
-    p.close()
-  except CatchableError as e:
-    warn "Failed to stop configured Quickshell instance",
-      command = model.quickshell.command,
-      theme = model.quickshell.theme,
-      reason = reason,
-      error = e.msg
-    writeQuickshellBehaviorEvent(
-      "quickshell_configured_stop_failed",
-      model.quickshell,
-      reason,
-      %*{"kill_args": args, "error": e.msg})
-
-proc stopQuickshell(model: Model; reason: string; authoritative = false) =
-  writeQuickshellBehaviorEvent(
-    "quickshell_stop_requested",
-    model.quickshell,
-    reason,
-    %*{"authoritative": authoritative})
-  stopTrackedQuickshell(reason)
-  if authoritative:
-    stopConfiguredQuickshell(model, reason)
-
-proc spawnQuickshell(
-    model: Model; niriSocketPath: string; reason = "spawn"): bool =
-  if model.quickshell.enabled and model.quickshell.theme != "":
-    let args = quickshellLaunchArgs(model.quickshell)
-    writeQuickshellBehaviorEvent(
-      "quickshell_spawn_requested",
-      model.quickshell,
-      reason,
-      %*{"launch_args": args, "niri_socket": niriSocketPath})
-
-    try:
-      let compat = prepareQuickshellCompatEnv(niriSocketPath)
-      if compat.warning.len > 0:
-        warn "Quickshell compatibility environment is incomplete",
-            warning = compat.warning
-        writeQuickshellBehaviorEvent(
-          "quickshell_compat_warning",
-          model.quickshell,
-          reason,
-          %*{"warning": compat.warning})
-      let p = startProcess(model.quickshell.command, args = args,
-          env = compat.env, options = {poUsePath})
-      let childPid = p.processID
-      let earlyExitCode = p.pollProcessExitCode(250)
-      if earlyExitCode == -1:
-        quickshellProcess = p
-        info "Spawned Quickshell",
-          command = model.quickshell.command,
-          theme = model.quickshell.theme,
-          pid = childPid,
-          niriSocket = compat.niriSocketPath,
-          shimReady = compat.shimReady,
-          overlayReady = compat.overlayReady,
-          xdgShare = compat.xdgSharePath
-        writeQuickshellBehaviorEvent(
-          "quickshell_spawned",
-          model.quickshell,
-          reason,
-          %*{
-            "child_pid": childPid,
-            "launch_args": args,
-            "niri_socket": compat.niriSocketPath,
-            "shim_ready": compat.shimReady,
-            "overlay_ready": compat.overlayReady,
-            "xdg_share": compat.xdgSharePath
-          })
-        result = true
-      else:
-        info "Quickshell launch command exited immediately",
-          command = model.quickshell.command,
-          theme = model.quickshell.theme,
-          pid = childPid,
-          exitCode = earlyExitCode
-        writeQuickshellBehaviorEvent(
-          "quickshell_spawn_exited",
-          model.quickshell,
-          reason,
-          %*{
-            "child_pid": childPid,
-            "launch_args": args,
-            "exit_code": earlyExitCode
-          })
-        p.close()
-    except CatchableError as e:
-      warn "Failed to spawn Quickshell", command = model.quickshell.command,
-          theme = model.quickshell.theme, error = e.msg
-      writeQuickshellBehaviorEvent(
-        "quickshell_spawn_failed",
-        model.quickshell,
-        reason,
-        %*{"launch_args": args, "error": e.msg})
-  else:
-    writeQuickshellBehaviorEvent(
-      "quickshell_spawn_skipped",
-      model.quickshell,
-      reason)
-
-proc restartQuickshell(model: Model; niriSocketPath, reason: string) =
-  stopQuickshell(model, reason, authoritative = true)
-  discard spawnQuickshell(model, niriSocketPath, reason)
 
 proc requestManage(reason: string)
 proc destroyBindings()
@@ -520,7 +249,7 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
 
   let previousModel = currentModel
   discard runtimeState.applyRuntimeConfig(loaded.config)
-  quickshellSpawnPending = false
+  quickshellState.spawnPending = false
 
   let quickshellAction = quickshellConfigReloadAction(
     previousModel.quickshell,
@@ -541,10 +270,13 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   of QuickshellReloadAction.Noop, QuickshellReloadAction.SpawnOnly:
     discard
   of QuickshellReloadAction.AuthoritativeStop:
-    stopQuickshell(previousModel, "config reload", authoritative = true)
+    quickshellState.stopQuickshell(
+      previousModel, "config reload", authoritative = true)
   of QuickshellReloadAction.AuthoritativeRestart:
-    stopQuickshell(previousModel, "config reload", authoritative = true)
-    discard spawnQuickshell(currentModel, niriSocketPath, "config reload")
+    quickshellState.stopQuickshell(
+      previousModel, "config reload", authoritative = true)
+    discard quickshellState.spawnQuickshell(
+      currentModel, niriSocketPath, "config reload")
 
   destroyBindings()
   info "Config reloaded", path = configPath
@@ -552,98 +284,6 @@ proc applyConfigReload(configPath, niriSocketPath: string): bool =
   broadcastNiriSnapshot(readModelSnapshot())
   true
 
-proc scheduleQuickshellSpawn(model: Model) =
-  quickshellSpawnPending = model.quickshell.enabled and
-      model.quickshell.theme.strip().len > 0
-
-proc spawnPendingQuickshell(
-    model: Model; niriSocketPath, reason: string) =
-  if not quickshellSpawnPending:
-    return
-  quickshellSpawnPending = false
-  let action = quickshellStartupAction(model.quickshell)
-  writeQuickshellBehaviorEvent(
-    "quickshell_startup_decision",
-    model.quickshell,
-    reason,
-    %*{"action": $action})
-  case action
-  of QuickshellReloadAction.Noop:
-    discard
-  of QuickshellReloadAction.SpawnOnly:
-    if not spawnQuickshell(model, niriSocketPath, reason):
-      writeQuickshellBehaviorEvent(
-        "quickshell_startup_restart_required",
-        model.quickshell,
-        reason)
-      stopConfiguredQuickshell(model, reason & " stale instance")
-      discard spawnQuickshell(model, niriSocketPath, reason & " restart")
-  of QuickshellReloadAction.AuthoritativeStop:
-    stopQuickshell(model, reason, authoritative = true)
-  of QuickshellReloadAction.AuthoritativeRestart:
-    restartQuickshell(model, niriSocketPath, reason)
-
-proc spawnScreenLock(command: seq[string]) =
-  if command.len == 0:
-    warn "Screen lock command is not configured"
-    return
-
-  var args: seq[string] = @[]
-  if command.len > 1:
-    args = command[1..^1]
-
-  try:
-    let p = startProcess(command[0], args = args, options = {poUsePath})
-    info "Spawned screen lock", cmd = command[0], pid = p.processID
-  except CatchableError as e:
-    warn "Failed to spawn screen lock", cmd = command[0], error = e.msg
-
-proc spawnWindowMenu(command: seq[string]; windowId: WindowId; x, y: int32) =
-  if command.len == 0:
-    warn "Window menu command is not configured"
-    return
-
-  var args: seq[string] = @[]
-  if command.len > 1:
-    args = command[1..^1]
-
-  try:
-    let p = startProcess(command[0], args = args, options = {poUsePath})
-    info "Spawned window menu", cmd = command[0], pid = p.processID,
-        windowId = windowId, x = x, y = y
-  except CatchableError as e:
-    warn "Failed to spawn window menu", cmd = command[0], windowId = windowId, error = e.msg
-
-proc spawnTerminal(model: Model) =
-  for command in terminalCandidates(model.terminal.command):
-    if command.len == 0 or not commandExists(command[0]):
-      continue
-    var args: seq[string] = @[]
-    if command.len > 1:
-      args = command[1..^1]
-    try:
-      let p = startProcess(command[0], args = args, options = {poUsePath})
-      info "Spawned terminal", terminal = command[0], pid = p.processID
-      return
-    except CatchableError as e:
-      trace "Terminal candidate failed", terminal = command[0], error = e.msg
-
-  warn "No terminal command could be spawned"
-
-proc spawnCommand(command: seq[string]) =
-  if command.len == 0:
-    warn "Spawn command is empty"
-    return
-
-  var args: seq[string] = @[]
-  if command.len > 1:
-    args = command[1..^1]
-
-  try:
-    let p = startProcess(command[0], args = args, options = {poUsePath})
-    info "Spawned command", cmd = command[0], pid = p.processID
-  except CatchableError as e:
-    warn "Failed to spawn command", cmd = command[0], error = e.msg
 
 const
   RiverEdgeTop = 1'u32
@@ -734,131 +374,6 @@ proc createTransparentShmBuffer(width, height: int32): ptr Buffer =
     except CatchableError:
       discard
 
-type PixelBuffer = object
-  width: int32
-  height: int32
-  pixels: seq[uint32]
-
-const
-  HotkeyBg = 0xdd111318'u32
-  HotkeyBorder = 0xff62a8ff'u32
-  HotkeyText = 0xfff4f7fb'u32
-  HotkeyMuted = 0xffaab3c2'u32
-  HotkeyKeyBg = 0xff262a33'u32
-  HotkeyTitle = 0xffffffff'u32
-  HotkeyFontScale = 3'i32
-  HotkeyPadding = 24'i32
-  HotkeyRowGap = 10'i32
-  HotkeyColumnGap = 28'i32
-
-proc initPixelBuffer(width, height: int32; color: uint32): PixelBuffer =
-  result.width = max(1'i32, width)
-  result.height = max(1'i32, height)
-  result.pixels = newSeq[uint32](int(result.width * result.height))
-  for i in 0 ..< result.pixels.len:
-    result.pixels[i] = color
-
-proc putPixel(buf: var PixelBuffer; x, y: int32; color: uint32) =
-  if x < 0 or y < 0 or x >= buf.width or y >= buf.height:
-    return
-  buf.pixels[int(y * buf.width + x)] = color
-
-proc fillRect(
-    buf: var PixelBuffer; x, y, w, h: int32; color: uint32) =
-  for py in y ..< y + h:
-    for px in x ..< x + w:
-      buf.putPixel(px, py, color)
-
-proc strokeRect(
-    buf: var PixelBuffer; x, y, w, h, thickness: int32; color: uint32) =
-  buf.fillRect(x, y, w, thickness, color)
-  buf.fillRect(x, y + h - thickness, w, thickness, color)
-  buf.fillRect(x, y, thickness, h, color)
-  buf.fillRect(x + w - thickness, y, thickness, h, color)
-
-proc glyphRows(ch: char): array[7, string] =
-  case ch
-  of 'A': ["01110", "10001", "10001", "11111", "10001", "10001", "10001"]
-  of 'B': ["11110", "10001", "10001", "11110", "10001", "10001", "11110"]
-  of 'C': ["01111", "10000", "10000", "10000", "10000", "10000", "01111"]
-  of 'D': ["11110", "10001", "10001", "10001", "10001", "10001", "11110"]
-  of 'E': ["11111", "10000", "10000", "11110", "10000", "10000", "11111"]
-  of 'F': ["11111", "10000", "10000", "11110", "10000", "10000", "10000"]
-  of 'G': ["01111", "10000", "10000", "10111", "10001", "10001", "01111"]
-  of 'H': ["10001", "10001", "10001", "11111", "10001", "10001", "10001"]
-  of 'I': ["11111", "00100", "00100", "00100", "00100", "00100", "11111"]
-  of 'J': ["00111", "00010", "00010", "00010", "10010", "10010", "01100"]
-  of 'K': ["10001", "10010", "10100", "11000", "10100", "10010", "10001"]
-  of 'L': ["10000", "10000", "10000", "10000", "10000", "10000", "11111"]
-  of 'M': ["10001", "11011", "10101", "10101", "10001", "10001", "10001"]
-  of 'N': ["10001", "11001", "10101", "10011", "10001", "10001", "10001"]
-  of 'O': ["01110", "10001", "10001", "10001", "10001", "10001", "01110"]
-  of 'P': ["11110", "10001", "10001", "11110", "10000", "10000", "10000"]
-  of 'Q': ["01110", "10001", "10001", "10001", "10101", "10010", "01101"]
-  of 'R': ["11110", "10001", "10001", "11110", "10100", "10010", "10001"]
-  of 'S': ["01111", "10000", "10000", "01110", "00001", "00001", "11110"]
-  of 'T': ["11111", "00100", "00100", "00100", "00100", "00100", "00100"]
-  of 'U': ["10001", "10001", "10001", "10001", "10001", "10001", "01110"]
-  of 'V': ["10001", "10001", "10001", "10001", "10001", "01010", "00100"]
-  of 'W': ["10001", "10001", "10001", "10101", "10101", "10101", "01010"]
-  of 'X': ["10001", "10001", "01010", "00100", "01010", "10001", "10001"]
-  of 'Y': ["10001", "10001", "01010", "00100", "00100", "00100", "00100"]
-  of 'Z': ["11111", "00001", "00010", "00100", "01000", "10000", "11111"]
-  of '0': ["01110", "10001", "10011", "10101", "11001", "10001", "01110"]
-  of '1': ["00100", "01100", "00100", "00100", "00100", "00100", "01110"]
-  of '2': ["01110", "10001", "00001", "00010", "00100", "01000", "11111"]
-  of '3': ["11110", "00001", "00001", "01110", "00001", "00001", "11110"]
-  of '4': ["00010", "00110", "01010", "10010", "11111", "00010", "00010"]
-  of '5': ["11111", "10000", "10000", "11110", "00001", "00001", "11110"]
-  of '6': ["01110", "10000", "10000", "11110", "10001", "10001", "01110"]
-  of '7': ["11111", "00001", "00010", "00100", "01000", "01000", "01000"]
-  of '8': ["01110", "10001", "10001", "01110", "10001", "10001", "01110"]
-  of '9': ["01110", "10001", "10001", "01111", "00001", "00001", "01110"]
-  of '+': ["00000", "00100", "00100", "11111", "00100", "00100", "00000"]
-  of '-': ["00000", "00000", "00000", "11111", "00000", "00000", "00000"]
-  of '/': ["00001", "00001", "00010", "00100", "01000", "10000", "10000"]
-  of '?': ["01110", "10001", "00001", "00010", "00100", "00000", "00100"]
-  of ':': ["00000", "00100", "00100", "00000", "00100", "00100", "00000"]
-  of '.': ["00000", "00000", "00000", "00000", "00000", "01100", "01100"]
-  of ',': ["00000", "00000", "00000", "00000", "00100", "00100", "01000"]
-  of '_': ["00000", "00000", "00000", "00000", "00000", "00000", "11111"]
-  of ' ': ["00000", "00000", "00000", "00000", "00000", "00000", "00000"]
-  else: ["01110", "10001", "00001", "00010", "00100", "00000", "00100"]
-
-proc drawChar(
-    buf: var PixelBuffer; x, y: int32; ch: char; color: uint32;
-    scale = HotkeyFontScale) =
-  let glyph = glyphRows(ch.toUpperAscii())
-  for gy, row in glyph:
-    for gx, bit in row:
-      if bit == '1':
-        buf.fillRect(x + int32(gx) * scale, y + int32(gy) * scale,
-          scale, scale, color)
-
-proc drawText(
-    buf: var PixelBuffer; x, y, maxW: int32; text: string; color: uint32;
-    scale = HotkeyFontScale) =
-  var dx = x
-  let advance = 6'i32 * scale
-  for ch in text:
-    if dx + 5'i32 * scale > x + maxW:
-      return
-    buf.drawChar(dx, y, ch, color, scale)
-    dx += advance
-
-proc textWidth(text: string; scale = HotkeyFontScale): int32 =
-  int32(text.len) * 6'i32 * scale
-
-proc argbBytes(pixels: seq[uint32]): string =
-  result = newString(pixels.len * 4)
-  var i = 0
-  for pixel in pixels:
-    result[i] = char(pixel and 0xff'u32)
-    result[i + 1] = char((pixel shr 8) and 0xff'u32)
-    result[i + 2] = char((pixel shr 16) and 0xff'u32)
-    result[i + 3] = char((pixel shr 24) and 0xff'u32)
-    i += 4
-
 proc createArgbShmBuffer(buf: PixelBuffer): ptr Buffer =
   if shm == nil:
     return nil
@@ -894,43 +409,6 @@ proc createArgbShmBuffer(buf: PixelBuffer): ptr Buffer =
         removeFile(path)
     except CatchableError:
       discard
-
-proc renderHotkeyOverlayBuffer(
-    rows: seq[HotkeyOverlayRow]; screen: Rect): PixelBuffer =
-  let title = "Important Hotkeys"
-  let rowH = 7'i32 * HotkeyFontScale
-  var keyW = textWidth("(not bound)")
-  var labelW = 0'i32
-  for row in rows:
-    keyW = max(keyW, textWidth(row.key))
-    labelW = max(labelW, textWidth(row.label))
-  let maxW = max(360'i32, int32(float(screen.w) * 0.9))
-  let desiredW = HotkeyPadding * 2 + keyW + HotkeyColumnGap + labelW
-  let width = min(maxW, max(360'i32, desiredW))
-  let visibleRows =
-    if rows.len == 0: 1
-    else: min(rows.len, max(1, int((max(240'i32, screen.h - 120'i32) -
-      HotkeyPadding * 3 - rowH) div (rowH + HotkeyRowGap))))
-  let height = HotkeyPadding * 3 + rowH +
-    int32(visibleRows) * rowH + int32(max(0, visibleRows - 1)) * HotkeyRowGap
-  result = initPixelBuffer(width, height, HotkeyBg)
-  result.strokeRect(0, 0, width, height, 4, HotkeyBorder)
-  result.drawText((width - textWidth(title)) div 2, HotkeyPadding,
-    width - HotkeyPadding * 2, title, HotkeyTitle)
-  var y = HotkeyPadding * 2 + rowH
-  let labelX = HotkeyPadding + keyW + HotkeyColumnGap
-  let rowsToDraw =
-    if rows.len == 0:
-      @[HotkeyOverlayRow(key: "", label: "No hotkeys configured")]
-    else:
-      rows[0 ..< visibleRows]
-  for row in rowsToDraw:
-    result.fillRect(HotkeyPadding - 8, y - 5, keyW + 16,
-      rowH + 10, HotkeyKeyBg)
-    result.drawText(HotkeyPadding, y, keyW, row.key, HotkeyText)
-    result.drawText(labelX, y, width - labelX - HotkeyPadding,
-      row.label, HotkeyMuted)
-    y += rowH + HotkeyRowGap
 
 proc createProtocolWlSurface(kind: ProtocolSurfaceKind): OwnedProtocolSurface =
   result.kind = kind
@@ -995,7 +473,7 @@ proc destroyProtocolSurface(surf: var OwnedProtocolSurface) =
 proc ensureOwnedShellSurface() =
   if not currentModel.protocolSurfaces.enabled:
     return
-  if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
+  if ownedShellSurfaceId != 0 and surfaceTable.hasKey(ownedShellSurfaceId):
     return
   if river_manager == nil or compositor == nil:
     return
@@ -1012,14 +490,14 @@ proc ensureOwnedShellSurface() =
   ownedShellSurfaceId = surf.shellSurface.id()
   shellSurfacePointers[ownedShellSurfaceId] = surf.shellSurface
   commitProtocolSurface(surf)
-  protocolSurfaces[ownedShellSurfaceId] = surf
+  surfaceTable[ownedShellSurfaceId] = surf
   debug "Created protocol shell surface", shellSurfaceId = ownedShellSurfaceId
 
 proc ensureHotkeyOverlaySurface() =
   if not currentModel.protocolSurfaces.enabled:
     return
   if hotkeyOverlaySurfaceId != 0 and
-      protocolSurfaces.hasKey(hotkeyOverlaySurfaceId):
+      surfaceTable.hasKey(hotkeyOverlaySurfaceId):
     return
   if river_manager == nil or compositor == nil:
     return
@@ -1036,16 +514,16 @@ proc ensureHotkeyOverlaySurface() =
   hotkeyOverlaySurfaceId = surf.shellSurface.id()
   shellSurfacePointers[hotkeyOverlaySurfaceId] = surf.shellSurface
   commitProtocolSurface(surf)
-  protocolSurfaces[hotkeyOverlaySurfaceId] = surf
+  surfaceTable[hotkeyOverlaySurfaceId] = surf
   debug "Created hotkey overlay shell surface",
     shellSurfaceId = hotkeyOverlaySurfaceId
 
 proc syncOwnedShellSurface(screen: Rect) =
   if ownedShellSurfaceId == 0 or
-      not protocolSurfaces.hasKey(ownedShellSurfaceId):
+      not surfaceTable.hasKey(ownedShellSurfaceId):
     return
 
-  var surf = protocolSurfaces[ownedShellSurfaceId]
+  var surf = surfaceTable[ownedShellSurfaceId]
   let wantsShield = currentModel.overviewActive and shm != nil
   let desiredW = if wantsShield: max(1'i32, screen.w) else: 1'i32
   let desiredH = if wantsShield: max(1'i32, screen.h) else: 1'i32
@@ -1068,13 +546,13 @@ proc syncOwnedShellSurface(screen: Rect) =
     surf.inputW = 0
     surf.inputH = 0
   commitProtocolSurface(surf)
-  protocolSurfaces[ownedShellSurfaceId] = surf
+  surfaceTable[ownedShellSurfaceId] = surf
 
 proc syncHotkeyOverlaySurface(screen: Rect) =
   if not currentModel.hotkeyOverlayOpen:
     if hotkeyOverlaySurfaceId != 0 and
-        protocolSurfaces.hasKey(hotkeyOverlaySurfaceId):
-      var surf = protocolSurfaces[hotkeyOverlaySurfaceId]
+        surfaceTable.hasKey(hotkeyOverlaySurfaceId):
+      var surf = surfaceTable[hotkeyOverlaySurfaceId]
       surf.inputW = 0
       surf.inputH = 0
       let buffer = createProtocolBuffer(ProtocolSurfaceKind.PskHotkeyOverlay)
@@ -1083,17 +561,17 @@ proc syncHotkeyOverlaySurface(screen: Rect) =
       if surf.node != nil:
         surf.node.placeBottom()
       commitProtocolSurface(surf)
-      protocolSurfaces[hotkeyOverlaySurfaceId] = surf
+      surfaceTable[hotkeyOverlaySurfaceId] = surf
     return
 
   ensureHotkeyOverlaySurface()
   if hotkeyOverlaySurfaceId == 0 or
-      not protocolSurfaces.hasKey(hotkeyOverlaySurfaceId):
+      not surfaceTable.hasKey(hotkeyOverlaySurfaceId):
     return
 
   let rows = currentModel.hotkeyOverlayRows()
   let rendered = renderHotkeyOverlayBuffer(rows, screen)
-  var surf = protocolSurfaces[hotkeyOverlaySurfaceId]
+  var surf = surfaceTable[hotkeyOverlaySurfaceId]
   let buffer = createArgbShmBuffer(rendered)
   if buffer != nil:
     surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
@@ -1108,7 +586,7 @@ proc syncHotkeyOverlaySurface(screen: Rect) =
     let y = screen.y + max(0'i32, (screen.h - surf.bufferH) div 2)
     surf.node.setPosition(x, y)
     surf.node.placeTop()
-  protocolSurfaces[hotkeyOverlaySurfaceId] = surf
+  surfaceTable[hotkeyOverlaySurfaceId] = surf
 
 proc ensureDecorationSurface(windowId: WindowId;
     kind: ProtocolSurfaceKind): uint32 =
@@ -1140,7 +618,7 @@ proc ensureDecorationSurface(windowId: WindowId;
   surf.decoration.setOffset(0, 0)
   commitProtocolSurface(surf)
   let id = surf.decoration.id()
-  protocolSurfaces[id] = surf
+  surfaceTable[id] = surf
   if kind == ProtocolSurfaceKind.PskDecorationAbove:
     windowDecorationAbove[windowId] = id
   elif kind == ProtocolSurfaceKind.PskDecorationBelow:
@@ -1154,25 +632,25 @@ proc destroyWindowProtocolSurfaces(windowId: WindowId) =
   if windowDecorationAbove.hasKey(windowId):
     let id = windowDecorationAbove[windowId]
     windowDecorationAbove.del(windowId)
-    if protocolSurfaces.hasKey(id):
-      var surf = protocolSurfaces[id]
-      protocolSurfaces.del(id)
+    if surfaceTable.hasKey(id):
+      var surf = surfaceTable[id]
+      surfaceTable.del(id)
       destroyProtocolSurface(surf)
   if windowDecorationBelow.hasKey(windowId):
     let id = windowDecorationBelow[windowId]
     windowDecorationBelow.del(windowId)
-    if protocolSurfaces.hasKey(id):
-      var surf = protocolSurfaces[id]
-      protocolSurfaces.del(id)
+    if surfaceTable.hasKey(id):
+      var surf = surfaceTable[id]
+      surfaceTable.del(id)
       destroyProtocolSurface(surf)
 
 proc destroyAllProtocolSurfaces() =
   var ids: seq[uint32] = @[]
-  for id in protocolSurfaces.keys:
+  for id in surfaceTable.keys:
     ids.add(id)
   for id in ids:
-    var surf = protocolSurfaces[id]
-    protocolSurfaces.del(id)
+    var surf = surfaceTable[id]
+    surfaceTable.del(id)
     destroyProtocolSurface(surf)
   ownedShellSurfaceId = 0
   hotkeyOverlaySurfaceId = 0
@@ -1941,9 +1419,9 @@ proc renderDesiredPlacements() =
       if isFloating or isScratchpad or id == highlighted:
         windowNodes[id].placeTop()
 
-  if ownedShellSurfaceId != 0 and protocolSurfaces.hasKey(ownedShellSurfaceId):
+  if ownedShellSurfaceId != 0 and surfaceTable.hasKey(ownedShellSurfaceId):
     syncOwnedShellSurface(screen)
-    var shell = protocolSurfaces[ownedShellSurfaceId]
+    var shell = surfaceTable[ownedShellSurfaceId]
     if shell.node != nil:
       shell.node.setPosition(screen.x, screen.y)
       if currentModel.overviewActive:
@@ -1952,7 +1430,7 @@ proc renderDesiredPlacements() =
         shell.node.placeBottom()
         if firstNode != nil:
           shell.node.placeBelow(firstNode)
-    protocolSurfaces[ownedShellSurfaceId] = shell
+    surfaceTable[ownedShellSurfaceId] = shell
 
   syncHotkeyOverlaySurface(screen)
 
@@ -2062,8 +1540,8 @@ proc executeEffect(eff: Effect) =
     for xkbSeat in xkbSeatPointers.values:
       xkbSeat.cancelEnsureNextKeyEaten()
   of EffectKind.EffStopManager:
-    quickshellSpawnPending = false
-    releaseTrackedQuickshell("manager stop")
+    quickshellState.spawnPending = false
+    quickshellState.releaseTrackedQuickshell("manager stop")
     if river_manager != nil:
       river_manager.stop()
   of EffectKind.EffTriadReload:
@@ -2073,8 +1551,8 @@ proc executeEffect(eff: Effect) =
         path = restore.path,
         error = restore.error
       return
-    quickshellSpawnPending = false
-    releaseTrackedQuickshell("triad reload")
+    quickshellState.spawnPending = false
+    quickshellState.releaseTrackedQuickshell("triad reload")
     if river_manager != nil:
       river_manager.stop()
   of EffectKind.EffExitSession:
@@ -2907,7 +2385,7 @@ proc main() =
 
   # Spawn startup commands after River accepts the initial manage pass.
   scheduleStartupCommands(currentModel)
-  scheduleQuickshellSpawn(currentModel)
+  quickshellState.scheduleQuickshellSpawn(currentModel)
 
   var running = true
   while running:
@@ -2931,7 +2409,8 @@ proc main() =
 
     if initialManageComplete:
       startIpcServers()
-      spawnPendingQuickshell(currentModel, niriSocketPath, "initial manage")
+      quickshellState.spawnPendingQuickshell(
+        currentModel, niriSocketPath, "initial manage")
 
     flushManageRequest()
 

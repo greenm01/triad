@@ -3,6 +3,7 @@ import ../src/config/parser
 import ../src/core/effects
 import ../src/core/msg
 import ../src/core/restore_state
+import ../src/daemon/hotkey_overlay_render
 import ../src/state/engine except WindowId
 import ../src/state/invariants
 import ../src/state/snapshot
@@ -286,6 +287,20 @@ suite "Runtime state primitives":
     check not hidden.model.hotkeyOverlayShownOnce
     check shown.model.hotkeyOverlayOpen
     check shown.model.hotkeyOverlayShownOnce
+
+  test "hotkey overlay renderer produces bounded ARGB buffers":
+    let screen = runtime_values.Rect(x: 0, y: 0, w: 800, h: 600)
+    let rows = @[
+      HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
+      HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys")
+    ]
+    let rendered = renderHotkeyOverlayBuffer(rows, screen)
+    let bytes = argbBytes(rendered.pixels)
+
+    check rendered.width >= 360
+    check rendered.width <= int32(float(screen.w) * 0.9)
+    check rendered.height > 0
+    check bytes.len == rendered.pixels.len * 4
 
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())
