@@ -297,12 +297,14 @@ proc activeFocusIsOverlay(model: Model; focused: core_types.WindowId): bool =
   focusedOpt.isSome and focusedOpt.get().isFloating
 
 proc preserveBackingPresentation(
-    model: Model; instructions: var seq[rv.RenderInstruction];
-    screen: rv.Rect) =
+    model: Model; instructions: var seq[rv.RenderInstruction]; screen: rv.Rect;
+    scopedRoot = NullWindowId) =
   let tagOpt = model.tagData(model.activeTag)
   let maxSupported = tagOpt.isSome and
     tagOpt.get().layoutMode.layoutSupportsMaximize()
   for winId, win in model.windowsOnTagWithId(model.activeTag):
+    if scopedRoot != NullWindowId and winId != scopedRoot:
+      continue
     if not win.isFloating and not win.isMinimized and
         (win.isFullscreen or (win.isMaximized and maxSupported)):
       instructions.upsertInstruction(rv.RenderInstruction(
@@ -368,7 +370,11 @@ proc layoutProjection*(model: Model): LayoutProjection =
   let focusedOpt = model.windowData(focused)
   let overlayActive = model.activeFocusIsOverlay(focused)
   if overlayActive:
-    model.preserveBackingPresentation(result.instructions, screen)
+    let root = model.popupRoot(focused)
+    model.preserveBackingPresentation(
+      result.instructions,
+      screen,
+      if root != focused: root else: NullWindowId)
   elif focusedOpt.isSome:
     let win = focusedOpt.get()
     let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()

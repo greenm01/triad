@@ -1233,6 +1233,58 @@ suite "Core Runtime Logic":
     check model.instructionGeom(3).w > 0
     check model.focusedWindowId() == 3
 
+  test "Parented popup ignores unrelated maximized backing window":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 3))
+
+    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "xdg-desktop-portal-gtk", title: "Open Document"))
+    let screen = model.primaryScreen()
+    discard model.layoutInstructions()
+    let viewportTarget = model.viewport(1).targetViewportXOffset
+    model.setViewport(1, targetX = viewportTarget, currentX = viewportTarget)
+    let parentGeom = model.instructionGeom(3)
+    let popupGeom = model.instructionGeom(4)
+
+    check popupEffects.hasMaximizedEffect(1, false)
+    check model.snapshotWindow(1).isMaximized
+    check model.instructionGeom(1) != screen
+    check parentGeom != screen
+    check popupGeom.x == parentGeom.x + (parentGeom.w - popupGeom.w) div 2
+    check popupGeom.y == parentGeom.y + (parentGeom.h - popupGeom.h) div 2
+    check model.focusedWindowId() == 4
+
+  test "Parented popup preserves maximized parent backing":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 3))
+    discard model.updateModel(Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 3))
+
+    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "xdg-desktop-portal-gtk", title: "Open Document"))
+    let screen = model.primaryScreen()
+    let popupGeom = model.instructionGeom(4)
+
+    check popupEffects.hasMaximizedEffect(1, false)
+    check not popupEffects.hasMaximizedEffect(3, false)
+    check model.instructionGeom(1) != screen
+    check model.instructionGeom(3) == screen
+    check popupGeom.w > 0
+    check model.focusedWindowId() == 4
+
   test "Floating popup preserves fullscreen presentation":
     var model = initRuntimeStateFromConfig(Config(
       layout: LayoutConfig(

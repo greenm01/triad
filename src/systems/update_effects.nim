@@ -441,11 +441,16 @@ proc addFullscreenPresentationSync(
   let afterFocus = after.focusedWindowId()
   let focusedWin = after.windowById(afterFocus)
   let overlayFocus = focusedWin.isSome and focusedWin.get().isFloating
+  let overlayRoot =
+    if overlayFocus: after.popupRoot(afterFocus)
+    else: 0'u32
   for win in after.windows:
     if win.isFullscreen:
       let present =
         if after.overviewActive:
           false
+        elif overlayFocus and overlayRoot != afterFocus:
+          win.id == overlayRoot
         elif overlayFocus:
           not win.isFloating and after.windowOnActiveWorkspace(win)
         else:

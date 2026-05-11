@@ -19,6 +19,21 @@ proc windowById*(snapshot: ShellSnapshot; winId: WindowId):
       return some(win)
   none(ShellWindow)
 
+proc popupRoot*(snapshot: ShellSnapshot; winId: WindowId): WindowId =
+  result = winId
+  var current = winId
+  var depth = 0
+  while current != 0'u32 and depth < 64:
+    let winOpt = snapshot.windowById(current)
+    if winOpt.isNone:
+      return result
+    let parent = winOpt.get().parentId
+    if parent == 0'u32:
+      return current
+    result = parent
+    current = parent
+    inc depth
+
 proc windowOnActiveWorkspace*(
     snapshot: ShellSnapshot; win: ShellWindow): bool =
   win.tagId.isSome and win.tagId.get() == snapshot.activeTag
@@ -40,6 +55,9 @@ proc effectiveMaximized*(
   let focusedWin = snapshot.windowById(focusedId)
   let overlayFocus = focusedWin.isSome and focusedWin.get().isFloating
   if overlayFocus:
-    snapshot.windowOnActiveWorkspace(win)
+    let root = snapshot.popupRoot(focusedId)
+    if root != focusedId:
+      return win.id == root
+    return snapshot.windowOnActiveWorkspace(win)
   else:
     win.id == focusedId
