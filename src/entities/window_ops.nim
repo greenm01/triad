@@ -18,7 +18,8 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
     actualH = 0'i32; minWidth = 0'i32; minHeight = 0'i32; maxWidth = 0'i32;
     maxHeight = 0'i32; hasDecorationHint = false; decorationHint = 0'u32;
     hasPresentationHint = false; presentationHint = 0'u32;
-    floatingGeom = Rect(); keyboardShortcutsInhibit = false;
+    floatingGeom = Rect(); parentAutoFloating = false;
+    keyboardShortcutsInhibit = false;
     keyboardShortcutsInhibitBypass = false): WindowId =
   if externalId != NullExternalWindowId and
       model.externalWindowIds.hasKey(externalId):
@@ -50,6 +51,7 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
     hasPresentationHint: hasPresentationHint,
     presentationHint: presentationHint,
     floatingGeom: floatingGeom,
+    parentAutoFloating: parentAutoFloating,
     keyboardShortcutsInhibit: keyboardShortcutsInhibit,
     keyboardShortcutsInhibitBypass: keyboardShortcutsInhibitBypass
   ))
@@ -61,8 +63,9 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
 proc setWindowCreatedState*(model: var Model; winId: WindowId;
     title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
     heightProportion = 1.0'f32; isFloating = false;
-    floatingGeom = Rect(); parentExternalId = NullExternalWindowId;
-    keyboardShortcutsInhibit = false): bool =
+    floatingGeom = Rect(); parentAutoFloating = false;
+    parentExternalId = NullExternalWindowId; keyboardShortcutsInhibit = false):
+    bool =
   if model.windows.entity(winId).isNone:
     return false
   let externalId = model.windows.mEntity(winId).externalId
@@ -76,6 +79,7 @@ proc setWindowCreatedState*(model: var Model; winId: WindowId;
     heightProportion: heightProportion,
     isFloating: isFloating,
     floatingGeom: floatingGeom,
+    parentAutoFloating: parentAutoFloating,
     parentExternalId: parentExternalId,
     keyboardShortcutsInhibit: keyboardShortcutsInhibit
   )
@@ -172,6 +176,7 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).widthProportion = restored.widthProportion
   model.windows.mEntity(winId).heightProportion = restored.heightProportion
   model.windows.mEntity(winId).isFloating = restored.isFloating
+  model.windows.mEntity(winId).parentAutoFloating = false
   model.windows.mEntity(winId).isFullscreen = restored.isFullscreen
   model.windows.mEntity(winId).isMaximized = restored.isMaximized
   model.windows.mEntity(winId).isMinimized = restored.isMinimized
@@ -220,10 +225,12 @@ proc setWindowPresentationHint*(
   true
 
 proc setWindowFloating*(model: var Model; winId: WindowId;
-    floating: bool; floatingGeom = Rect()): bool =
+    floating: bool; floatingGeom = Rect(); parentAutoFloating = false): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).isFloating = floating
+  model.windows.mEntity(winId).parentAutoFloating =
+    floating and parentAutoFloating
   if floating:
     model.windows.mEntity(winId).floatingGeom = floatingGeom
   true

@@ -7,6 +7,15 @@ proc flattenTag(tag: TagState): seq[WindowId] =
     for win in col.windows:
       result.add(win)
 
+proc focusedFirst(windows: seq[WindowId]; focused: WindowId): seq[WindowId] =
+  let focusedIdx = windows.find(focused)
+  if focusedIdx <= 0:
+    return windows
+  result.add(windows[focusedIdx])
+  for idx, win in windows:
+    if idx != focusedIdx:
+      result.add(win)
+
 proc layoutMasterStack*(tag: TagState, screen: Rect, outerGap,
     innerGap: int32): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
@@ -134,7 +143,7 @@ proc layoutMonocle*(tag: TagState, screen: Rect, outerGap: int32): seq[
 
 proc layoutDeck*(tag: TagState, screen: Rect, outerGap, innerGap: int32): seq[
     RenderInstruction] =
-  let allWindows = flattenTag(tag)
+  let allWindows = tag.flattenTag().focusedFirst(tag.focusedWindow)
   let n = allWindows.len
   if n == 0: return @[]
 
@@ -290,7 +299,7 @@ proc layoutVerticalMasterStack*(tag: TagState, screen: Rect, outerGap,
 
 proc layoutVerticalDeck*(tag: TagState, screen: Rect, outerGap,
     innerGap: int32): seq[RenderInstruction] =
-  let allWindows = flattenTag(tag)
+  let allWindows = tag.flattenTag().focusedFirst(tag.focusedWindow)
   let n = allWindows.len
   if n == 0: return @[]
 

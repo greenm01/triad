@@ -106,6 +106,14 @@ proc inActivePopupTree(
     model: Model; winId, activeRoot: core_types.WindowId): bool =
   activeRoot != NullWindowId and model.popupRoot(winId) == activeRoot
 
+proc popupStackRank(model: Model; winId: core_types.WindowId): int =
+  result = -1
+  var idx = 0
+  for candidate in model.focusHistoryIds():
+    if candidate == winId:
+      result = idx
+    inc idx
+
 proc floatingStackCmp(
     model: Model;
     a, b: tuple[id: core_types.WindowId; win: model_types.WindowData]): int =
@@ -113,7 +121,19 @@ proc floatingStackCmp(
     return 1
   if model.isDescendantOf(b.id, a.id):
     return -1
+  let rankA = model.popupStackRank(a.id)
+  let rankB = model.popupStackRank(b.id)
+  if rankA != rankB:
+    return cmp(rankA, rankB)
   cmp(uint32(a.id), uint32(b.id))
+
+proc applyPopupLayoutFocus(
+    model: Model; tag: var rv.TagState; active: core_types.WindowId) =
+  let layoutFocus = model.popupTreeLayoutFocus(active)
+  if layoutFocus != NullWindowId and layoutFocus != active:
+    tag.focusedWindow = model.externalWindowId(layoutFocus)
+  elif tag.layoutMode in {rv.LayoutMode.Deck, rv.LayoutMode.VerticalDeck}:
+    tag.focusedWindow = 0'u32
 
 proc addFloatingInstructions(
     model: Model; tagId: core_types.TagId; screen: rv.Rect;
@@ -266,9 +286,7 @@ proc activeFocusLayoutInstructions*(model: Model):
 
   let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
-  let layoutFocus = model.popupTreeLayoutFocus(model.activeFocus())
-  if layoutFocus != NullWindowId:
-    tagForLayout.focusedWindow = model.externalWindowId(layoutFocus)
+  model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
   result = layoutForTag(
     tagForLayout,
     windows,
@@ -348,9 +366,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
 
   let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
-  let layoutFocus = model.popupTreeLayoutFocus(model.activeFocus())
-  if layoutFocus != NullWindowId:
-    tagForLayout.focusedWindow = model.externalWindowId(layoutFocus)
+  model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
   result.instructions = layoutForTag(
     tagForLayout,
     windows,

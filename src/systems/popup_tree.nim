@@ -9,7 +9,10 @@ proc popupRoot*(model: Model; winId: WindowId): WindowId =
     let winOpt = model.windowData(current)
     if winOpt.isNone:
       return result
-    let parentExternalId = winOpt.get().parentExternalId
+    let win = winOpt.get()
+    if not win.isFloating:
+      return current
+    let parentExternalId = win.parentExternalId
     if parentExternalId == NullExternalWindowId:
       return current
     let parent = model.windowForExternal(parentExternalId)

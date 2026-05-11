@@ -39,7 +39,9 @@ proc updateWindowParentForExternal*(model: var Model;
   let winOpt = model.windowData(winId)
   if winOpt.isNone:
     return false
-  result = winOpt.get().parentExternalId != parentExternalId
+  if winOpt.get().parentExternalId == parentExternalId:
+    return false
+  result = true
   discard model.setWindowParent(winId, parentExternalId)
   if parentExternalId != NullExternalWindowId:
     result = model.applyParentFloatingPolicy(winId, parentExternalId) or result
@@ -76,7 +78,11 @@ proc updateWindowDimensionsHintForExternal*(model: var Model;
     return false
   result = model.setWindowDimensionsHint(
     winId, minWidth, minHeight, maxWidth, maxHeight)
-  result = model.applyFixedSizeFloatingPolicy(winId) or result
+  let winOpt = model.windowData(winId)
+  if winOpt.isSome and winOpt.get().parentExternalId != NullExternalWindowId:
+    result = model.reconcileParentedWindowPolicy(winId) or result
+  else:
+    result = model.applyFixedSizeFloatingPolicy(winId) or result
 
 proc requestFullscreenForExternal*(model: var Model;
     externalId: ExternalWindowId; requestedOutput: ExternalOutputId): bool =

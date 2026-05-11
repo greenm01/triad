@@ -306,6 +306,9 @@ proc createWindowForExternal*(model: var Model;
     floatingGeom = restored.floatingGeom
   elif parentKnown and parentOpensFloating:
     isFloating = true
+  let parentAutoFloating = parentKnown and isFloating and
+    not hasRestoredWindow and
+    not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
 
   result = model.windowForExternal(externalId)
   if result == NullWindowId:
@@ -322,13 +325,16 @@ proc createWindowForExternal*(model: var Model;
     heightProportion = model.defaultWindowHeight(),
     isFloating = isFloating,
     floatingGeom = floatingGeom,
+    parentAutoFloating = parentAutoFloating,
     parentExternalId = parentExternalId,
     keyboardShortcutsInhibit = shortcutInhibit
   )
 
   if isFloating and not hasRestoredWindow:
     discard model.ensureFloatingAt(
-      result, model.floatingGeomForWindow(result, parentExternalId))
+      result,
+      model.floatingGeomForWindow(result, parentExternalId),
+      parentAutoFloating = parentAutoFloating)
 
   if hasRestoredWindow:
     model.applyRestoredWindowState(result, restored)
@@ -365,7 +371,10 @@ proc createWindowForExternal*(model: var Model;
             else:
               targetSlot == model.activeWorkspaceSlot()
           if parentOpensFocused:
-            discard model.focusWindow(result, retargetViewport = false)
+            discard model.focusWindow(
+              result,
+              retargetViewport = not model.parentVisibleInProjection(
+                parentExternalId))
         elif targetSlot == model.activeWorkspaceSlot():
           discard model.focusWindow(result)
         else:

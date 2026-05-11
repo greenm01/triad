@@ -5,6 +5,14 @@ import placement
 import ../state/engine
 from ../types/runtime_values import nil
 
+type
+  ParentedWindowIntent* {.pure.} = enum
+    None,
+    Float,
+    Tile
+
+const LargeParentedRatio = 0.9'f32
+
 proc fixedSizeWidth(win: WindowData): int32 =
   if win.minWidth > 0 and win.maxWidth == win.minWidth:
     win.minWidth
@@ -56,6 +64,12 @@ proc clampToScreen(geom, screen: runtime_values.Rect): runtime_values.Rect =
     result.h = min(result.h, screen.h)
     result.y = clamp(result.y, screen.y, screen.y + screen.h - result.h)
 
+proc intersects(a, b: runtime_values.Rect): bool =
+  if a.w <= 0 or a.h <= 0 or b.w <= 0 or b.h <= 0:
+    return false
+  a.x < b.x + b.w and a.x + a.w > b.x and
+    a.y < b.y + b.h and a.y + a.h > b.y
+
 proc centeredIn(bounds, geom: runtime_values.Rect): runtime_values.Rect =
   result = geom
   result.x = bounds.x + (bounds.w - geom.w) div 2
@@ -70,6 +84,11 @@ proc parentRenderRect(model: Model; parentExternalId: ExternalWindowId):
     if ExternalWindowId(uint32(instr.windowId)) == parentExternalId:
       return (true, instr.geom)
   (false, runtime_values.Rect())
+
+proc parentVisibleInProjection*(model: Model;
+    parentExternalId: ExternalWindowId): bool =
+  let parent = model.parentRenderRect(parentExternalId)
+  parent.found and parent.rect.intersects(model.primaryScreen())
 
 proc parentWorkspaceSlot*(model: Model;
     parentExternalId: ExternalWindowId): uint32 =
@@ -89,6 +108,41 @@ proc floatingGeomForWindow*(model: Model; winId: WindowId;
   if parent.found:
     result = parent.rect.centeredIn(result)
   result = result.clampToScreen(screen)
+
+proc nearSize(size, bounds: int32): bool =
+  size > 0 and bounds > 0 and
+    float32(size) >= float32(bounds) * LargeParentedRatio
+
+proc parentedPrimarySurfaceIntent(
+    win: WindowData; parentRect: runtime_values.Rect): bool =
+  win.minWidth.nearSize(parentRect.w) and win.minHeight.nearSize(parentRect.h)
+
+proc parentFloatingRule(model: Model; win: WindowData):
+    tuple[set: bool; value: bool] =
+  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  if ruleMatch.found and ruleMatch.rule.openFloatingSet:
+    return (true, ruleMatch.rule.openFloating)
+  (false, false)
+
+proc parentedWindowIntent*(model: Model; winId: WindowId):
+    ParentedWindowIntent =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return ParentedWindowIntent.None
+  let win = winOpt.get()
+  if win.parentExternalId == NullExternalWindowId:
+    return ParentedWindowIntent.None
+
+  let rule = model.parentFloatingRule(win)
+  if rule.set:
+    if rule.value:
+      return ParentedWindowIntent.Float
+    return ParentedWindowIntent.Tile
+
+  let parent = model.parentRenderRect(win.parentExternalId)
+  if parent.found and win.parentedPrimarySurfaceIntent(parent.rect):
+    return ParentedWindowIntent.Tile
+  ParentedWindowIntent.Float
 
 proc moveWindowToParentWorkspace(model: var Model; winId: WindowId;
     parentExternalId: ExternalWindowId): bool =
@@ -111,14 +165,15 @@ proc clearWindowViewportRetarget(model: var Model; winId: WindowId): bool =
   model.clearTagViewportRetarget(tagId)
 
 proc parentFloatingAllowed*(model: Model; winId: WindowId): bool =
+  model.parentedWindowIntent(winId) == ParentedWindowIntent.Float
+
+proc parentWorkspaceAdoptionAllowed(model: Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   if winOpt.isNone:
     return false
   let win = winOpt.get()
   let ruleMatch = model.windowRuleFor(win.appId, win.title)
-  if ruleMatch.found and ruleMatch.rule.openFloatingSet:
-    return ruleMatch.rule.openFloating
-  true
+  not (ruleMatch.found and ruleMatch.rule.defaultSlot != 0)
 
 proc parentFocusAllowed*(model: Model; winId: WindowId;
     parentExternalId: ExternalWindowId): bool =
@@ -132,26 +187,57 @@ proc parentFocusAllowed*(model: Model; winId: WindowId;
   model.parentWorkspaceSlot(parentExternalId) == model.activeSlot
 
 proc ensureFloatingAt*(model: var Model; winId: WindowId;
-    geom: runtime_values.Rect): bool =
+    geom: runtime_values.Rect; parentAutoFloating = false): bool =
   let winOpt = model.windowData(winId)
   if winOpt.isNone:
     return false
   let win = winOpt.get()
-  if win.isFloating and win.floatingGeom == geom:
+  if win.isFloating and win.floatingGeom == geom and
+      win.parentAutoFloating == parentAutoFloating:
     return false
-  model.setWindowFloating(winId, true, geom)
+  model.setWindowFloating(winId, true, geom, parentAutoFloating)
+
+proc reconcileParentedWindowPolicy*(model: var Model; winId: WindowId;
+    allowFloatCreation = false): bool =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  if win.parentExternalId == NullExternalWindowId:
+    return false
+
+  let intent = model.parentedWindowIntent(winId)
+  let rule = model.parentFloatingRule(win)
+  case intent
+  of ParentedWindowIntent.None:
+    false
+  of ParentedWindowIntent.Tile:
+    if win.isFloating and (win.parentAutoFloating or
+        (rule.set and not rule.value)):
+      model.setWindowFloating(winId, false)
+    else:
+      false
+  of ParentedWindowIntent.Float:
+    if win.parentAutoFloating or (allowFloatCreation and not win.isFloating):
+      let geom = model.floatingGeomForWindow(winId, win.parentExternalId)
+      model.ensureFloatingAt(winId, geom, parentAutoFloating = not rule.set)
+    else:
+      false
 
 proc applyParentFloatingPolicy*(model: var Model; winId: WindowId;
     parentExternalId: ExternalWindowId): bool =
   if parentExternalId == NullExternalWindowId:
     return false
-  result = model.moveWindowToParentWorkspace(winId, parentExternalId)
-  if model.parentFloatingAllowed(winId):
-    let geom = model.floatingGeomForWindow(winId, parentExternalId)
-    result = model.ensureFloatingAt(winId, geom) or result
+  if model.parentWorkspaceAdoptionAllowed(winId):
+    result = model.moveWindowToParentWorkspace(winId, parentExternalId)
+  result = model.reconcileParentedWindowPolicy(
+    winId, allowFloatCreation = true) or result
   result = model.clearWindowViewportRetarget(winId) or result
   if model.parentFocusAllowed(winId, parentExternalId):
-    result = model.focusWindow(winId, retargetViewport = false) or result
+    result = model.focusWindow(
+      winId,
+      retargetViewport = not model.parentVisibleInProjection(parentExternalId)
+    ) or result
 
 proc applyFixedSizeFloatingPolicy*(model: var Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)

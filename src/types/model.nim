@@ -27,6 +27,7 @@ type
     hasPresentationHint*: bool
     presentationHint*: uint32
     floatingGeom*: Rect
+    parentAutoFloating*: bool
     keyboardShortcutsInhibit*: bool
     keyboardShortcutsInhibitBypass*: bool
 

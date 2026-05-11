@@ -834,6 +834,96 @@ suite "Core Runtime Logic":
     check order.find(1'u32) < order.find(2'u32)
     check order.find(2'u32) < order.find(3'u32)
 
+  test "Focused popup rises above newer sibling in stack history":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "First"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 3, createdParentWindowId: 1,
+      appId: "pinentry", title: "Second"))
+
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
+
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check order.find(3'u32) < order.find(2'u32)
+
+  test "Large parented primary surface tiles after size hint":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    let parentGeom = model.instructionGeom(1)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "editor", title: "Detached"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: 2,
+      minWidth: int32(float32(parentGeom.w) * 0.95'f32),
+      minHeight: int32(float32(parentGeom.h) * 0.95'f32),
+      maxWidth: 0,
+      maxHeight: 0))
+
+    let child = model.snapshotWindow(2)
+    check not child.isFloating
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    check model.focusedWindowId() == 1
+
+  test "Manual tiled parented child is not refloated by later hints":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    discard model.setWindowFloating(childId, false)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: 2, minWidth: 260, minHeight: 140,
+      maxWidth: 260, maxHeight: 140))
+
+    check not model.snapshotWindow(2).isFloating
+
+  test "Offscreen parented popup retargets scroller camera on open":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "pinentry", title: "Passphrase"))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 4
+    check model.viewport(1).targetViewportXOffset > 0.0'f32
+
+  test "Deck popup promotes background parent for anchoring":
+    var model = directionalModel(LayoutMode.Deck, 3)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    let beforeParentGeom = model.instructionGeom(3)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "pinentry", title: "Passphrase"))
+
+    let parentGeom = model.instructionGeom(3)
+    let childGeom = model.instructionGeom(4)
+    check beforeParentGeom.x > parentGeom.x
+    check childGeom.x <= parentGeom.x + parentGeom.w
+    check childGeom.x + childGeom.w >= parentGeom.x
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
   test "Parented window rules can suppress focus and floating":
     var model = initRuntimeStateFromConfig(Config(
       layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
@@ -879,6 +969,12 @@ suite "Core Runtime Logic":
 
     check child.tagId.isSome and child.tagId.get() == 2
     check child.workspaceIdx == 2
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowParent,
+      childWindowId: 2, parentWindowId: 1))
+    let afterParentEvent = model.snapshotWindow(2)
+    check afterParentEvent.tagId.isSome and afterParentEvent.tagId.get() == 2
+    check afterParentEvent.workspaceIdx == 2
 
   test "Fixed-size hint opens normal window as floating":
     var model = cameraModel()
