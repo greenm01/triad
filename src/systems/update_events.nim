@@ -20,7 +20,7 @@ proc setExternalFocus(model: var Model;
     discard model.restoreOverviewViewportSnapshot()
     discard model.setOverviewActive(false)
     discard model.clearOverviewSelection()
-    return model.focusWindow(winId)
+    return model.focusWindow(winId, restorePopupTree = false)
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
@@ -31,7 +31,7 @@ proc setExternalFocus(model: var Model;
   if winId == NullWindowId or
       model.placementForWindowOnTag(tagId, winId).isNone:
     return false
-  model.focusWindow(winId)
+  model.focusWindow(winId, restorePopupTree = false)
 
 proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
   case msg.kind

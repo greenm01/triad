@@ -7,6 +7,7 @@ import ../types/layout_projection
 import ../types/model as model_types
 import ../types/runtime_values as rv
 import presentation_policy
+import popup_tree
 
 proc externalWindowId(model: Model; winId: core_types.WindowId):
     rv.WindowId =
@@ -101,6 +102,10 @@ proc isDescendantOf(model: Model; child, ancestor: core_types.WindowId): bool =
     inc depth
   false
 
+proc inActivePopupTree(
+    model: Model; winId, activeRoot: core_types.WindowId): bool =
+  activeRoot != NullWindowId and model.popupRoot(winId) == activeRoot
+
 proc floatingStackCmp(
     model: Model;
     a, b: tuple[id: core_types.WindowId; win: model_types.WindowData]): int =
@@ -113,6 +118,7 @@ proc floatingStackCmp(
 proc addFloatingInstructions(
     model: Model; tagId: core_types.TagId; screen: rv.Rect;
     instructions: var seq[rv.RenderInstruction]) =
+  let activeRoot = model.popupRoot(model.activeFocus())
   var floating: seq[tuple[
     id: core_types.WindowId; win: model_types.WindowData]] = @[]
   for winId, win in model.windowsOnTagWithId(tagId):
@@ -129,6 +135,8 @@ proc addFloatingInstructions(
   for item in floating:
     var geom = item.win.floatingGeom
     if item.win.parentExternalId != NullExternalWindowId:
+      if not model.inActivePopupTree(item.id, activeRoot):
+        continue
       let parentId = rv.WindowId(uint32(item.win.parentExternalId))
       if not geomByWindow.hasKey(parentId):
         continue
@@ -258,6 +266,9 @@ proc activeFocusLayoutInstructions*(model: Model):
 
   let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
+  let layoutFocus = model.popupTreeLayoutFocus(model.activeFocus())
+  if layoutFocus != NullWindowId:
+    tagForLayout.focusedWindow = model.externalWindowId(layoutFocus)
   result = layoutForTag(
     tagForLayout,
     windows,
@@ -335,6 +346,9 @@ proc layoutProjection*(model: Model): LayoutProjection =
 
   let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
+  let layoutFocus = model.popupTreeLayoutFocus(model.activeFocus())
+  if layoutFocus != NullWindowId:
+    tagForLayout.focusedWindow = model.externalWindowId(layoutFocus)
   result.instructions = layoutForTag(
     tagForLayout,
     windows,

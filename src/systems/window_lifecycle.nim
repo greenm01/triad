@@ -2,6 +2,7 @@ import options, tables
 import focus
 import floating_policy
 import placement
+import popup_tree
 import scratchpad
 import workspaces
 import ../state/engine
@@ -417,6 +418,7 @@ proc destroyWindowForExternal*(
     return false
 
   let activeTag = model.activeTag
+  let closedRoot = model.popupRoot(winId)
   let closedWasFocused =
     model.focusedOnActiveTag() == winId or
     (model.tag(activeTag).isSome and
@@ -433,7 +435,20 @@ proc destroyWindowForExternal*(
       discard model.recomputeVisibleFocus(tagId)
 
   if closedWasFocused:
-    if model.tagHasFocusableWindow(activeTag):
+    var recoveredPopupFocus = false
+    if closedRoot != NullWindowId and closedRoot != winId:
+      let popupFocus = model.lastFocusedInPopupTree(closedRoot, activeTag)
+      if popupFocus != NullWindowId:
+        recoveredPopupFocus = model.focusWindow(
+          popupFocus, restorePopupTree = false)
+      elif model.windowData(closedRoot).isSome and
+          model.placementForWindowOnTag(activeTag, closedRoot).isSome:
+        recoveredPopupFocus = model.focusWindow(
+          closedRoot, restorePopupTree = false)
+
+    if recoveredPopupFocus:
+      discard
+    elif model.tagHasFocusableWindow(activeTag):
       if not model.focusMostRecentWindowOnTag(activeTag):
         let focused = model.recomputeVisibleFocus(activeTag)
         if focused != NullWindowId:

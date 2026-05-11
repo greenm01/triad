@@ -572,6 +572,160 @@ suite "Core Runtime Logic":
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
     check childGeom != beforeChildGeom
 
+  test "Parented popup hides when focus moves to visible unrelated window":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 1))
+    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+
+    let parentGeom = model.instructionGeom(2)
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check parentGeom.x < 1000
+    check parentGeom.x + parentGeom.w > 0
+    check order.contains(2'u32)
+    check not order.contains(4'u32)
+
+  test "Parented popup reappears when focus returns to parent":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 1))
+    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+    check not model.layoutProjection().instructions.mapIt(
+      uint32(it.windowId)).contains(4'u32)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+
+    let parentGeom = model.instructionGeom(2)
+    let childGeom = model.instructionGeom(4)
+    check childGeom.w > 0
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
+  test "Parented popup remains while focus is on child":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+
+    let parentGeom = model.instructionGeom(2)
+    let childGeom = model.instructionGeom(4)
+    check model.focusedWindowId() == 4
+    check childGeom.w > 0
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+
+  test "Parented popup tree remains while focus is on nested child":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "First"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 5, createdParentWindowId: 2,
+      appId: "pinentry", title: "Second"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 6, createdParentWindowId: 4,
+      appId: "pinentry", title: "Nested"))
+    model.setViewport(1, targetX = 300.0, currentX = 300.0)
+
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check model.focusedWindowId() == 6
+    check order.contains(4'u32)
+    check order.contains(5'u32)
+    check order.contains(6'u32)
+
+  test "Parented popup root restores explicitly focused parent":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "First"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 5, createdParentWindowId: 2,
+      appId: "pinentry", title: "Second"))
+
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
+    check model.focusedWindowId() == 2
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+
+    check model.focusedWindowId() == 2
+
+  test "Parented popup root restores last explicitly focused child":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "First"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 5, createdParentWindowId: 2,
+      appId: "pinentry", title: "Second"))
+
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 2))
+
+    check model.focusedWindowId() == 4
+
+  test "Closing focused popup falls back within popup tree":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "First"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 5, createdParentWindowId: 2,
+      appId: "pinentry", title: "Second"))
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
+
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
+      destroyedId: 4))
+
+    check model.focusedWindowId() == 5
+
+  test "Closing last focused popup falls back to parent":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
+
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
+      destroyedId: 4))
+
+    check model.focusedWindowId() == 2
+
+  test "Focused popup retargets scroller camera to parent":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 2,
+      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
+    discard model.layoutInstructions()
+    let parentTarget = model.viewport(1).targetViewportXOffset
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
+    discard model.layoutInstructions()
+
+    check model.focusedWindowId() == 4
+    check model.viewport(1).targetViewportXOffset == parentTarget
+
   test "Parented floating window hides with obscured maximized parent":
     var model = cameraModel()
     model.seedCameraWindows(2)

@@ -4,6 +4,7 @@ import ../layouts/grid_math
 import ../state/engine
 from ../types/runtime_values import Direction, RenderInstruction
 import layout_projection
+import popup_tree
 
 type
   FocusCandidate = object
@@ -58,25 +59,43 @@ proc isFocusableWindow*(model: Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   winOpt.isSome and not winOpt.get().isMinimized
 
+proc popupFocusTarget(
+    model: Model; winId: WindowId; tagId: TagId;
+    restorePopupTree: bool): WindowId =
+  if not restorePopupTree:
+    return winId
+  let root = model.popupRoot(winId)
+  if root == NullWindowId or root != winId:
+    return winId
+  let restored = model.lastFocusedInPopupTree(root, tagId)
+  if restored != NullWindowId:
+    return restored
+  winId
+
 proc focusWindow*(
-    model: var Model; winId: WindowId; retargetViewport = true): bool =
-  if model.windowData(winId).isNone:
+    model: var Model; winId: WindowId; retargetViewport = true;
+    restorePopupTree = true): bool =
+  var target = winId
+  if model.windowData(target).isNone:
     return false
-  let tagId = model.tagForWindow(winId)
+  let tagId = model.tagForWindow(target)
   if tagId == NullTagId:
     return false
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
+  target = model.popupFocusTarget(target, tagId, restorePopupTree)
+  if model.windowData(target).isNone:
+    return false
 
-  discard model.setWindowMinimized(winId, false)
+  discard model.setWindowMinimized(target, false)
   discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()
   discard model.recordWorkspace(tagId)
-  discard model.setTagFocus(tagId, winId)
+  discard model.setTagFocus(tagId, target)
   if retargetViewport:
     discard model.requestTagViewportRetarget(tagId)
-  discard model.recordFocus(winId)
+  discard model.recordFocus(target)
   true
 
 proc focusWorkspaceSlot*(model: var Model; slot: uint32): bool =
@@ -95,10 +114,12 @@ proc focusWorkspaceIndex*(model: var Model; index: uint32): bool =
   let slot = model.workspaceSlotForClampedIndex(index)
   slot != 0 and model.focusWorkspaceSlot(slot)
 
-proc focusExternalWindow*(model: var Model; externalId: ExternalWindowId):
-    bool =
+proc focusExternalWindow*(
+    model: var Model; externalId: ExternalWindowId;
+    restorePopupTree = true): bool =
   let winId = model.windowForExternal(externalId)
-  winId != NullWindowId and model.focusWindow(winId)
+  winId != NullWindowId and model.focusWindow(
+    winId, restorePopupTree = restorePopupTree)
 
 proc focusMostRecentWindow*(model: var Model): bool =
   var candidates: seq[WindowId] = @[]
