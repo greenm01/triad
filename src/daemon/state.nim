@@ -42,6 +42,7 @@ type
     desiredPlacements*: Table[WindowId, Rect]
     desiredPlacementOrder*: seq[WindowId]
     lastPointerOpSeat*: pointer
+    pendingMaximizedAcks*: Table[WindowId, bool]
 
     windowPointers*: Table[WindowId, ptr RiverWindowV1]
     windowNodes*: Table[WindowId, ptr RiverNodeV1]
@@ -105,3 +106,18 @@ proc daemonFromData*(data: pointer): ptr TriadDaemon =
     nil
   else:
     cast[ptr TriadDaemon](data)
+
+proc expectMaximizedAck*(
+    daemon: var TriadDaemon; id: WindowId; maximized: bool) =
+  if id == 0:
+    return
+  daemon.pendingMaximizedAcks[id] = maximized
+
+proc consumeMaximizedAck*(
+    daemon: var TriadDaemon; id: WindowId; maximized: bool): bool =
+  if not daemon.pendingMaximizedAcks.hasKey(id):
+    return false
+  if daemon.pendingMaximizedAcks[id] != maximized:
+    return false
+  daemon.pendingMaximizedAcks.del(id)
+  true

@@ -1,11 +1,16 @@
-import std/json
+import std/[json, options]
 import ../core/[effects, msg]
 import ../state/engine
+from ../types/runtime_values import nil
 import ../utils/behavior_log
 import update_commands, update_effects, update_events, update_maintenance
 
 proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
   kind in {
+    MsgKind.WlWindowMaximizeRequested,
+    MsgKind.WlWindowUnmaximizeRequested,
+    MsgKind.WlWindowMinimizeRequested,
+    MsgKind.WlFocusChanged,
     MsgKind.CmdFocusTag,
     MsgKind.CmdFocusTagLeft,
     MsgKind.CmdFocusTagRight,
@@ -17,7 +22,8 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
     MsgKind.CmdSetLayout,
-    MsgKind.CmdSwitchLayout}
+    MsgKind.CmdSwitchLayout,
+    MsgKind.CmdToggleMaximized}
 
 proc updateSnapshotSummary(snapshot: ShellSnapshot): JsonNode =
   %*{
@@ -28,19 +34,110 @@ proc updateSnapshotSummary(snapshot: ShellSnapshot): JsonNode =
     "windows": snapshot.windows.len
   }
 
+proc addTrackedWindowId(
+    ids: var seq[runtime_values.WindowId]; id: runtime_values.WindowId) =
+  if id == 0:
+    return
+  for existing in ids:
+    if existing == id:
+      return
+  ids.add(id)
+
+proc addMsgWindowId(ids: var seq[runtime_values.WindowId]; msg: Msg) =
+  case msg.kind
+  of MsgKind.WlFocusChanged:
+    ids.addTrackedWindowId(msg.newFocusedId)
+  of MsgKind.WlWindowMaximizeRequested:
+    ids.addTrackedWindowId(msg.maximizeRequestId)
+  of MsgKind.WlWindowUnmaximizeRequested:
+    ids.addTrackedWindowId(msg.unmaximizeRequestId)
+  of MsgKind.WlWindowMinimizeRequested:
+    ids.addTrackedWindowId(msg.minimizeRequestId)
+  else:
+    discard
+
+proc trackedRuntimeWindowIds(
+    msg: Msg; before, after: ShellSnapshot): seq[runtime_values.WindowId] =
+  result.addTrackedWindowId(before.focusedWindowId())
+  result.addTrackedWindowId(after.focusedWindowId())
+  result.addMsgWindowId(msg)
+
+proc compactWindowState(
+    snapshot: ShellSnapshot; id: runtime_values.WindowId): JsonNode =
+  for win in snapshot.windows:
+    if win.id != id:
+      continue
+    result = %*{
+      "id": win.id,
+      "workspace_idx": win.workspaceIdx,
+      "focused": win.isFocused,
+      "floating": win.isFloating,
+      "fullscreen": win.isFullscreen,
+      "maximized": win.isMaximized,
+      "minimized": win.isMinimized,
+      "app_id": win.appId,
+      "title": win.title
+    }
+    result["tag_id"] =
+      if win.tagId.isSome: %win.tagId.get()
+      else: newJNull()
+    return
+  result = newJNull()
+
+proc compactTrackedWindows(
+    snapshot: ShellSnapshot;
+    ids: seq[runtime_values.WindowId]): JsonNode =
+  result = newJArray()
+  for id in ids:
+    let node = snapshot.compactWindowState(id)
+    if node.kind != JNull:
+      result.add(node)
+
+proc compactRuntimeEffects(effects: seq[Effect]): JsonNode =
+  result = newJArray()
+  for effect in effects:
+    case effect.kind
+    of EffectKind.EffSetMaximized:
+      result.add(%*{
+        "kind": $effect.kind,
+        "window_id": effect.maxWinId,
+        "maximized": effect.isMaximized
+      })
+    of EffectKind.EffSetFullscreen:
+      result.add(%*{
+        "kind": $effect.kind,
+        "window_id": effect.fsWinId,
+        "fullscreen": effect.isFullscreen,
+        "output_id": effect.fsOutputId
+      })
+    of EffectKind.EffFocusWindow:
+      result.add(%*{
+        "kind": $effect.kind,
+        "window_id": effect.focusId
+      })
+    else:
+      discard
+
 proc writeRuntimeUpdateEvent(
-    kind: MsgKind; before, after: ShellSnapshot; dirty, collapsed,
-    pruned: bool; effectCount: int) =
+    msg: Msg; before, after: ShellSnapshot; dirty, collapsed,
+    pruned: bool; effects: seq[Effect]) =
+  let kind = msg.kind
   if not kind.shouldLogRuntimeUpdate():
     return
+  let trackedIds = trackedRuntimeWindowIds(msg, before, after)
   writeBehaviorEvent("runtime_update", %*{
     "kind": $kind,
     "dirty": dirty,
     "collapsed": collapsed,
     "pruned": pruned,
-    "effect_count": effectCount,
+    "effect_count": effects.len,
+    "effects": effects.compactRuntimeEffects(),
     "before": before.updateSnapshotSummary(),
-    "after": after.updateSnapshotSummary()
+    "after": after.updateSnapshotSummary(),
+    "tracked_windows": {
+      "before": before.compactTrackedWindows(trackedIds),
+      "after": after.compactTrackedWindows(trackedIds)
+    }
   })
 
 proc update*(model: Model; msg: Msg): (Model, seq[Effect]) =
@@ -67,8 +164,8 @@ proc update*(model: Model; msg: Msg): (Model, seq[Effect]) =
   let after = shellSnapshot(next)
   effects.addPostUpdateEffects(
     msg, before, after, dirty, maintenance.collapsed, maintenance.pruned)
-  msg.kind.writeRuntimeUpdateEvent(
-    before, after, dirty, maintenance.collapsed, maintenance.pruned,
-    effects.len)
+  writeRuntimeUpdateEvent(
+    msg, before, after, dirty, maintenance.collapsed, maintenance.pruned,
+    effects)
 
   (next, effects)

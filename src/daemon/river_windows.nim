@@ -22,6 +22,7 @@ proc outputIdForPointer(
 proc forgetWindow*(daemon: var TriadDaemon; id: WindowId) =
   daemon.destroyWindowProtocolSurfaces(id)
   daemon.desiredPlacements.del(id)
+  daemon.pendingMaximizedAcks.del(id)
   daemon.pendingWindows.del(id)
   daemon.windowUnreliablePids.del(id)
   if daemon.windowNodes.hasKey(id):
@@ -180,6 +181,9 @@ proc onWindowMaximizeRequested(data: pointer; win: ptr RiverWindowV1) =
   if daemon.pendingWindows.hasKey(win.id()):
     daemon.pendingWindows[win.id()].isMaximized = true
     daemon.pendingWindows[win.id()].isMinimized = false
+  elif daemon[].consumeMaximizedAck(win.id(), true):
+    trace "Consumed self-generated maximize acknowledgement",
+      windowId = win.id()
   else:
     daemon.enqueue(Msg(kind: MsgKind.WlWindowMaximizeRequested,
         maximizeRequestId: win.id()))
@@ -191,6 +195,9 @@ proc onWindowUnmaximizeRequested(data: pointer; win: ptr RiverWindowV1) =
   debug "Window unmaximize requested", windowId = win.id()
   if daemon.pendingWindows.hasKey(win.id()):
     daemon.pendingWindows[win.id()].isMaximized = false
+  elif daemon[].consumeMaximizedAck(win.id(), false):
+    trace "Consumed self-generated unmaximize acknowledgement",
+      windowId = win.id()
   else:
     daemon.enqueue(Msg(kind: MsgKind.WlWindowUnmaximizeRequested,
         unmaximizeRequestId: win.id()))

@@ -1410,6 +1410,54 @@ suite "Core Runtime Logic":
     let targetColumn = model.columnAt(targetTag, 0)
     check model.columnData(targetColumn).get().widthProportion == 0.42'f32
 
+  test "Moving normal window to empty grid workspace preserves source layout":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(defaultColumnWidth: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      tagRules: @[
+        TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
+        TagRule(tagId: 3, defaultLayout: LayoutMode.Grid)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
+      appId: "sublime_text", title: "Sublime Text"))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 3))
+    let targetTag = model.tagForSlot(3)
+    let screen = model.primaryScreen()
+    let geom = model.instructionGeom(6)
+
+    check model.tagData(targetTag).get().layoutMode == LayoutMode.Scroller
+    check not model.snapshotWindow(6).isMaximized
+    check geom.w < screen.w
+
+  test "Moving to occupied grid workspace keeps target layout":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(defaultColumnWidth: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      tagRules: @[
+        TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
+        TagRule(tagId: 3, defaultLayout: LayoutMode.Grid)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
+      appId: "files", title: "Files"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
+      appId: "sublime_text", title: "Sublime Text"))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 3))
+
+    check model.tagData(model.tagForSlot(3)).get().layoutMode ==
+      LayoutMode.Grid
+
   test "Moving fullscreen window through dynamic workspace preserves state":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
@@ -1522,6 +1570,38 @@ suite "Core Runtime Logic":
     check after.hasPresentationHint == before.hasPresentationHint
     check after.presentationHint == before.presentationHint
     check effects.hasFocusEffect(6)
+
+  test "Moving maximized window through grid preserves desired state":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.Grid))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
+      appId: "sublime_text", title: "Sublime Text"))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 6))
+
+    let toGridEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 3))
+    check model.activeTag == model.tagForSlot(3)
+    check model.tagData(model.activeTag).get().layoutMode ==
+      LayoutMode.Scroller
+    check model.snapshotWindow(6).isMaximized
+    check not toGridEffects.hasMaximizedEffect(6, false)
+
+    let toScrollerEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+    check model.activeTag == model.tagForSlot(2)
+    check model.snapshotWindow(6).isMaximized
+    check toScrollerEffects.hasMaximizedEffect(6, true)
+    check toScrollerEffects.hasFocusEffect(6)
 
   test "Targeted layout ignores missing empty dynamic workspace":
     var model = cameraModel()

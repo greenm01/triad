@@ -70,6 +70,7 @@ proc executeManageEffect*(daemon: var TriadDaemon; eff: Effect) =
         win.informNotFullscreen()
   of EffectKind.EffSetMaximized:
     if daemon.windowPointers.hasKey(eff.maxWinId):
+      daemon.expectMaximizedAck(eff.maxWinId, eff.isMaximized)
       if eff.isMaximized:
         daemon.windowPointers[eff.maxWinId].informMaximized()
       else:

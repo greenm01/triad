@@ -155,6 +155,27 @@ proc retargetMovedFocus(
   discard model.requestTagViewportRetarget(tagId)
   true
 
+proc preserveEmptyTargetLayoutContext(
+    model: var Model; sourceTag, targetTag: TagId; targetWasEmpty: bool):
+    bool =
+  if not targetWasEmpty:
+    return false
+  let source = model.tagData(sourceTag)
+  let target = model.tagData(targetTag)
+  if source.isNone or target.isNone:
+    return false
+  let sourceData = source.get()
+  let targetData = target.get()
+  result = false
+  if targetData.layoutMode != sourceData.layoutMode:
+    result = model.setTagLayout(targetTag, sourceData.layoutMode) or result
+  if targetData.masterCount != sourceData.masterCount:
+    result = model.setTagMasterCount(
+      targetTag, sourceData.masterCount) or result
+  if targetData.masterSplitRatio != sourceData.masterSplitRatio:
+    result = model.setTagMasterRatio(
+      targetTag, sourceData.masterSplitRatio) or result
+
 proc moveFocusedWindowToSlot*(
     model: var Model; targetSlot: uint32): bool =
   if targetSlot == 0:
@@ -169,6 +190,7 @@ proc moveFocusedWindowToSlot*(
     return false
   if targetTag == sourceTag:
     return false
+  let targetWasEmpty = not model.tagHasLiveWindows(targetTag)
 
   let sourcePlacement = model.placementForWindowOnTag(sourceTag, focused)
   var sourceColumnWidth = model.defaultColumnWidth()
@@ -180,6 +202,8 @@ proc moveFocusedWindowToSlot*(
   discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
   if not model.overviewActive:
     discard model.sourceWorkspaceFallbackFocus(sourceTag)
+  discard model.preserveEmptyTargetLayoutContext(
+    sourceTag, targetTag, targetWasEmpty)
   discard model.addPlacedWindowColumn(
     targetTag, focused, widthProportion = sourceColumnWidth)
   if sourceWindowState.isSome:

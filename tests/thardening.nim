@@ -1,6 +1,8 @@
 import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
+from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck,
+  initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
@@ -33,6 +35,14 @@ suite "Crash hardening":
     check waylandSessionProblem("/run/user/1000", "") ==
       "WAYLAND_DISPLAY is not set"
     check waylandSessionProblem("/run/user/1000", "wayland-1") == ""
+
+  test "daemon consumes only matching self-generated maximize acknowledgements":
+    var daemon = initTriadDaemon()
+
+    daemon.expectMaximizedAck(42, false)
+    check not daemon.consumeMaximizedAck(42, true)
+    check daemon.consumeMaximizedAck(42, false)
+    check not daemon.consumeMaximizedAck(42, false)
 
   test "duplicate window create keeps a single shell window":
     var model = initRuntimeStateFromConfig(Config(

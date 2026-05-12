@@ -100,6 +100,38 @@ suite "Runtime logging":
     check event["kind"].getStr() == "CmdFocusWorkspaceIndex"
     check event["after"]["active_tag"].getInt() == 2
 
+  test "runtime update behavior event records window state effects":
+    let dir = getTempDir() / ("triad-behavior-effects-" &
+      $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    var model = initRuntimeStateFromConfig(Config()).model
+    (model, _) = model.update(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 9,
+      appId: "sublime_text",
+      title: "Sublime Text"))
+    discard model.update(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 9))
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["event"].getStr() == "runtime_update"
+    check event["kind"].getStr() == "WlWindowMaximizeRequested"
+    check event["tracked_windows"]["after"][0]["id"].getInt() == 9
+    check event["tracked_windows"]["after"][0]["maximized"].getBool()
+    check event["effects"][0]["kind"].getStr() == "EffSetMaximized"
+    check event["effects"][0]["window_id"].getInt() == 9
+    check event["effects"][0]["maximized"].getBool()
+
   test "niri broadcast behavior event records active workspace":
     let dir = getTempDir() / ("triad-behavior-broadcast-" &
       $getCurrentProcessId())
