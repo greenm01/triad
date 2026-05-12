@@ -485,3 +485,42 @@ suite "Runtime state primitives":
     check not report.ok
     check report.errors.anyIt(
       it.message.contains("tag focused window is not placed on tag"))
+
+  test "invariants reject minimized focused window":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    let (next, _) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
+      windowId: 1,
+      appId: "a",
+      title: "A"))
+    model = next
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    discard model.setWindowMinimized(winId, true)
+
+    let report = model.validateInvariants()
+    check not report.ok
+    check report.errors.anyIt(
+      it.message.contains("tag focused window is minimized"))
+
+  test "invariants reject primary output tag drift":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    let (outputModel, _) = model.update(Msg(kind: MsgKind.WlOutputDimensions,
+      outputId: 1,
+      width: 1000,
+      height: 700))
+    model = outputModel
+    let (next, _) = model.update(Msg(
+      kind: MsgKind.WlWindowCreated,
+      windowId: 1,
+      appId: "a",
+      title: "A"))
+    model = next
+
+    let primary = model.primaryOutput
+    model.outputTags[primary] = model.tagForSlot(2)
+
+    let report = model.validateInvariants()
+    check not report.ok
+    check report.errors.anyIt(
+      it.message.contains("primary output tag does not match active tag"))

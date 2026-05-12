@@ -1342,6 +1342,18 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 2
     check model.outputTags[outputId] == model.tagForSlot(1)
 
+  test "Moving focused window to another workspace reasserts focus":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+
+    check model.activeTag == model.tagForSlot(2)
+    check model.snapshotWindow(1).workspaceIdx == 2
+    check model.focusedWindowId() == 1
+    check effects.hasFocusEffect(1)
+
   test "Focusing workspace updates primary output tag":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
@@ -1397,6 +1409,80 @@ suite "Core Runtime Logic":
     let targetTag = model.tagForSlot(2)
     let targetColumn = model.columnAt(targetTag, 0)
     check model.columnData(targetColumn).get().widthProportion == 0.42'f32
+
+  test "Moving fullscreen window through dynamic workspace preserves state":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "One"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowFullscreenRequested,
+      fullscreenRequestId: 1, fullscreenOutputId: 1))
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    let win = model.snapshotWindow(1)
+
+    check model.activeTag == model.tagForSlot(4)
+    check win.workspaceIdx == 4
+    check win.isFullscreen
+    check win.fullscreenOutput == 1
+    check effects.hasFocusEffect(1)
+    check effects.hasFullscreenEffect(1, true)
+
+  test "Dynamic layout changes preserve maximized intent":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+
+    let tgmixEffects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.TGMix))
+    check model.activeTag == model.tagForSlot(4)
+    check model.tagData(model.activeTag).get().layoutMode == LayoutMode.TGMix
+    check model.snapshotWindow(1).isMaximized
+    check tgmixEffects.hasMaximizedEffect(1, false)
+    check tgmixEffects.hasFocusEffect(1)
+
+    let scrollerEffects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.Scroller))
+    check model.snapshotWindow(1).isMaximized
+    check scrollerEffects.hasMaximizedEffect(1, true)
+    check scrollerEffects.hasFocusEffect(1)
+
+  test "Moving floating window through dynamic layouts preserves geometry":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+    let before = model.snapshotWindow(1).floatingGeom
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
+    discard model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.Grid))
+
+    let win = model.snapshotWindow(1)
+    check model.activeTag == model.tagForSlot(4)
+    check win.workspaceIdx == 4
+    check win.isFloating
+    check win.floatingGeom == before
+
+  test "Targeted layout ignores missing empty dynamic workspace":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+
+    let (nextModel, effects) =
+      model.update(Msg(kind: MsgKind.CmdSetLayout,
+        newLayout: LayoutMode.Deck,
+        layoutTargetTag: 4))
+
+    check nextModel.tagForSlot(4) == NullTagId
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Duplicate window create preserves moved window attributes":
     var model = cameraModel()

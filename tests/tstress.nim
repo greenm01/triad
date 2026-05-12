@@ -98,7 +98,7 @@ proc chooseLayout(rng: var FuzzRng): LayoutMode =
 
 proc generatedMsg(
     rng: var FuzzRng; model: Model; nextWindow: var WindowId): Msg =
-  case rng.pick(36)
+  case rng.pick(42)
   of 0:
     result = Msg(
       kind: MsgKind.WlWindowCreated,
@@ -191,6 +191,23 @@ proc generatedMsg(
     result = Msg(kind: MsgKind.CmdCloseOverview)
   of 34:
     result = Msg(kind: MsgKind.CmdSelectWindow)
+  of 35:
+    result = Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: rng.chooseWindow(model))
+  of 36:
+    result = Msg(kind: MsgKind.WlWindowUnmaximizeRequested,
+      unmaximizeRequestId: rng.chooseWindow(model))
+  of 37:
+    result = Msg(kind: MsgKind.WlWindowMinimizeRequested,
+      minimizeRequestId: rng.chooseWindow(model))
+  of 38:
+    result = Msg(kind: MsgKind.CmdToggleMaximized)
+  of 39:
+    result = Msg(kind: MsgKind.CmdToggleFullscreenById,
+      fullscreenWindowId: rng.chooseWindow(model))
+  of 40:
+    result = Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.TGMix,
+      layoutTargetTag: uint32(rng.pick(7)))
   else:
     result = Msg(kind: MsgKind.CmdTick)
 

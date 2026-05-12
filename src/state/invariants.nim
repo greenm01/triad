@@ -35,6 +35,8 @@ proc validateInvariants*(model: Model): InvariantReport =
           focusedOpt.get().admissionState ==
           WindowAdmissionState.PendingAdmission:
         result.addError("tag focused window is pending admission: " & $tag.id)
+      if focusedOpt.isSome and focusedOpt.get().isMinimized:
+        result.addError("tag focused window is minimized: " & $tag.id)
 
   if model.activeTag != NullTagId:
     let activeOpt = model.tags.entity(model.activeTag)
@@ -44,6 +46,21 @@ proc validateInvariants*(model: Model): InvariantReport =
       result.addError("active slot does not match active tag")
   elif model.activeSlot != 0 and not model.tagBySlot.hasKey(model.activeSlot):
     result.addError("active slot has no tag: " & $model.activeSlot)
+
+  for outputId, tagId in model.outputTags.pairs:
+    if model.outputs.entity(outputId).isNone:
+      result.addError("outputTags references missing output: " & $outputId)
+    if model.tags.entity(tagId).isNone:
+      result.addError("outputTags references missing tag: " & $tagId)
+
+  if model.primaryOutput != NullOutputId:
+    if model.outputs.entity(model.primaryOutput).isNone:
+      result.addError("primary output is missing: " & $model.primaryOutput)
+    elif model.activeTag != NullTagId:
+      if not model.outputTags.hasKey(model.primaryOutput):
+        result.addError("primary output has no active tag mapping")
+      elif model.outputTags[model.primaryOutput] != model.activeTag:
+        result.addError("primary output tag does not match active tag")
 
   for _, column in model.columnsWithId():
     if model.tags.entity(column.tagId).isNone:

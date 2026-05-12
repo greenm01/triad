@@ -53,8 +53,15 @@ proc sourceWorkspaceFallbackFocus(
 proc setLayoutForSlot*(
     model: var Model; slot: uint32; mode: LayoutMode): bool =
   let tagId =
-    if slot != 0: model.ensureWorkspaceSlot(slot)
-    else: model.ensureActiveWorkspace()
+    if slot == 0:
+      model.ensureActiveWorkspace()
+    else:
+      model.tagForSlot(slot)
+  if tagId == NullTagId:
+    return false
+  if slot > model.defaultWorkspaceCount() and
+      slot != model.activeWorkspaceSlot() and not model.tagHasLiveWindows(tagId):
+    return false
   tagId != NullTagId and model.setTagLayout(tagId, mode)
 
 proc switchLayout*(model: var Model): bool =
