@@ -70,8 +70,9 @@ tag-rules {
 bindings {
     bind "Super+Shift+Slash" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Super+q" "close-window"
-    bind "Super+f" "toggle-fullscreen"
-    bind "Super+m" "toggle-maximized"
+    bind "Super+f" "maximize-window-to-edges"
+    bind "Super+Shift+f" "fullscreen-window"
+    bind "Super+m" "maximize-column"
     bind "Super+i" "minimize"
     bind "Super+n" "switch-layout"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false

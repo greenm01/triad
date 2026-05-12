@@ -229,6 +229,27 @@ suite "Shell compatibility contracts":
     check closeWin.messages[0].kind == MsgKind.CmdCloseWindowById
     check closeWin.messages[0].closeWindowId == 10
 
+    let maximizeColumn =
+      handleNiriRequest("""{"Action":{"MaximizeColumn":{}}}""", snapshot)
+    check maximizeColumn.messages.len == 1
+    check maximizeColumn.messages[0].kind == MsgKind.CmdMaximizeColumn
+
+    let maximizeToEdges = handleNiriRequest(
+      """{"Action":{"MaximizeWindowToEdges":{}}}""", snapshot)
+    check maximizeToEdges.messages.len == 1
+    check maximizeToEdges.messages[0].kind ==
+      MsgKind.WlWindowMaximizeRequested
+    check maximizeToEdges.messages[0].maximizeRequestId == 10
+
+    var maximizedSnapshot = snapshot
+    maximizedSnapshot.windows[0].isMaximized = true
+    let unmaximizeToEdges = handleNiriRequest(
+      """{"Action":{"MaximizeWindowToEdges":{}}}""", maximizedSnapshot)
+    check unmaximizeToEdges.messages.len == 1
+    check unmaximizeToEdges.messages[0].kind ==
+      MsgKind.WlWindowUnmaximizeRequested
+    check unmaximizeToEdges.messages[0].unmaximizeRequestId == 10
+
     let screenshot = handleNiriRequest(
       """{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""",
       snapshot)
@@ -314,6 +335,13 @@ suite "Shell compatibility contracts":
     check forwarded.messages.len == 1
     check forwarded.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check forwarded.messages[0].workspaceIndex == 2
+
+    let maximizeColumn =
+      buildNiriCliRequest(@["msg", "action", "maximize-column"])
+    check maximizeColumn.kind == NiriCliKind.NckRequest
+    check handleNiriRequest(
+      maximizeColumn.socketPayload,
+      snapshotForShell()).messages[0].kind == MsgKind.CmdMaximizeColumn
 
     let screenshotScreen = buildNiriCliRequest(@[
       "msg", "action", "screenshot-screen", "--path",

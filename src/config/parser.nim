@@ -278,8 +278,12 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
   @[
     hotkeyOverlayFallbackBinding(),
     KeyBindingConfig(key: "q", modifiers: 64'u32, command: "close-window"),
-    KeyBindingConfig(key: "f", modifiers: 64'u32, command: "toggle-fullscreen"),
-    KeyBindingConfig(key: "m", modifiers: 64'u32, command: "toggle-maximized"),
+    KeyBindingConfig(
+      key: "f",
+      modifiers: 64'u32,
+      command: "maximize-window-to-edges"),
+    KeyBindingConfig(key: "f", modifiers: 65'u32, command: "fullscreen-window"),
+    KeyBindingConfig(key: "m", modifiers: 64'u32, command: "maximize-column"),
     KeyBindingConfig(key: "i", modifiers: 64'u32, command: "minimize"),
     KeyBindingConfig(key: "r", modifiers: 12'u32, command: "triad-reload",
         bypassShortcutsInhibit: true),

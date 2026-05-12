@@ -81,6 +81,24 @@ proc focusedWindow(snapshot: ShellSnapshot): WindowId =
       return win.id
   0'u32
 
+proc windowById(snapshot: ShellSnapshot; winId: WindowId):
+    Option[ShellWindow] =
+  for win in snapshot.windows:
+    if win.id == winId:
+      return some(win)
+  none(ShellWindow)
+
+proc toggleMaximizeMessage(
+    snapshot: ShellSnapshot; winId: WindowId): Option[Msg] =
+  if winId == 0'u32:
+    return none(Msg)
+  let win = snapshot.windowById(winId)
+  if win.isSome and win.get().isMaximized:
+    return some(Msg(kind: MsgKind.WlWindowUnmaximizeRequested,
+      unmaximizeRequestId: winId))
+  some(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+    maximizeRequestId: winId))
+
 proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
     handled: bool; messages: seq[Msg]] =
   if action.kind != JObject:
@@ -220,18 +238,22 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
   elif action.hasKey("FullscreenWindow"):
     return (true, @[Msg(kind: MsgKind.CmdToggleFullscreen)])
 
+  elif action.hasKey("MaximizeColumn"):
+    return (true, @[Msg(kind: MsgKind.CmdMaximizeColumn)])
+
   elif action.hasKey("MaximizeWindowToEdges"):
     let payload = action["MaximizeWindowToEdges"]
     if payload.kind == JObject and payload.hasKey("id") and payload[
         "id"].kind != JNull:
       let win = uintFromNode(payload["id"])
-      if win.isSome: return (true, @[Msg(
-          kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: WindowId(
-          win.get()))])
+      if win.isSome:
+        let msg = snapshot.toggleMaximizeMessage(WindowId(win.get()))
+        if msg.isSome:
+          return (true, @[msg.get()])
     let focused = snapshot.focusedWindow()
-    if focused != 0:
-      return (true, @[Msg(kind: MsgKind.WlWindowMaximizeRequested,
-          maximizeRequestId: focused)])
+    let msg = snapshot.toggleMaximizeMessage(focused)
+    if msg.isSome:
+      return (true, @[msg.get()])
     return (true, @[])
 
   elif action.hasKey("ToggleWindowFloating"):
@@ -281,7 +303,6 @@ proc actionMessages(action: JsonNode; snapshot: ShellSnapshot): tuple[
       action.hasKey("PowerOnMonitors") or
       action.hasKey("Quit") or
       action.hasKey("MoveWorkspaceToIndex") or
-      action.hasKey("MaximizeColumn") or
       action.hasKey("CenterColumn") or
       action.hasKey("CenterVisibleColumns") or
       action.hasKey("SwitchPresetColumnWidth") or

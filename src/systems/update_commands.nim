@@ -35,6 +35,8 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.setMasterRatio(msg.ratio)
   of MsgKind.CmdAdjustMasterRatio:
     result.dirty = model.adjustMasterRatio(msg.deltaMR)
+  of MsgKind.CmdMaximizeColumn:
+    result.dirty = model.toggleFocusedColumnFullWidth()
   of MsgKind.CmdResizeWidth:
     result.dirty = model.resizeWidth(msg.deltaW)
   of MsgKind.CmdResizeHeight:

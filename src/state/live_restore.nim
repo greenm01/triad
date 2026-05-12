@@ -68,7 +68,9 @@ proc restoredTagData*(source: rv.RestoredTagState): RestoredTagData =
     masterSplitRatio: source.masterSplitRatio
   )
   for col in source.columns:
-    var restoredCol = RestoredColumnData(widthProportion: col.widthProportion)
+    var restoredCol = RestoredColumnData(
+      widthProportion: col.widthProportion,
+      isFullWidth: col.isFullWidth)
     for winId in col.windows:
       restoredCol.windows.add(ExternalWindowId(uint32(winId)))
     result.columns.add(restoredCol)
@@ -149,7 +151,8 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       if colOpt.isNone:
         continue
       var restoredCol = rv.RestoredColumnState(
-        widthProportion: colOpt.get().widthProportion)
+        widthProportion: colOpt.get().widthProportion,
+        isFullWidth: colOpt.get().isFullWidth)
       for winId in model.windowsForColumn(colId):
         if not model.windowAdmitted(winId):
           continue
@@ -262,7 +265,8 @@ proc tagStateJson(tag: rv.RestoredTagState): JsonNode =
       windows.add(%winId)
     columns.add(%*{
       "windows": windows,
-      "width_proportion": col.widthProportion
+      "width_proportion": col.widthProportion,
+      "is_full_width": col.isFullWidth
     })
 
   %*{

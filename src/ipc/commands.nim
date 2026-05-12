@@ -145,7 +145,7 @@ proc parseTextCommand*(line: string): Option[Msg] =
   of "open-overview": some(Msg(kind: MsgKind.CmdOpenOverview))
   of "close-overview": some(Msg(kind: MsgKind.CmdCloseOverview))
   of "toggle-floating": some(Msg(kind: MsgKind.CmdToggleFloating))
-  of "toggle-fullscreen":
+  of "fullscreen-window", "toggle-fullscreen":
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome: some(Msg(kind: MsgKind.CmdToggleFullscreenById,
@@ -159,7 +159,7 @@ proc parseTextCommand*(line: string): Option[Msg] =
           fullscreenWindowId: WindowId(win.get()))) else: none(Msg)
     else:
       none(Msg)
-  of "toggle-maximized", "toggle-maximize": some(Msg(
+  of "maximize-window-to-edges", "toggle-maximized", "toggle-maximize": some(Msg(
       kind: MsgKind.CmdToggleMaximized))
   of "minimize", "minimize-window": some(Msg(kind: MsgKind.CmdMinimize))
   of "screenshot":
@@ -288,6 +288,7 @@ proc parseTextCommand*(line: string): Option[Msg] =
       if width.isSome: some(Msg(kind: MsgKind.CmdSetColumnWidth,
           targetWidth: width.get())) else: none(Msg)
     else: none(Msg)
+  of "maximize-column": some(Msg(kind: MsgKind.CmdMaximizeColumn))
   of "adjust-gaps":
     if parts.len >= 2:
       let delta = parseInt32Arg(parts[1])

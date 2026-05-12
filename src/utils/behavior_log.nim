@@ -149,11 +149,16 @@ proc compactLiveRestoreTags(state: LiveRestoreState): JsonNode =
 
   for tagId in tagIds:
     let tag = state.tags[tagId]
+    var fullWidthColumns = 0
+    for col in tag.columns:
+      if col.isFullWidth:
+        inc fullWidthColumns
     result.add(%*{
       "id": tag.tagId,
       "layout_mode": $tag.layoutMode,
       "focused_window": uint32(tag.focusedWindow),
-      "columns": tag.columns.len
+      "columns": tag.columns.len,
+      "full_width_columns": fullWidthColumns
     })
 
 proc liveRestoreSummary*(state: LiveRestoreState): JsonNode =

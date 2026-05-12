@@ -185,9 +185,9 @@ bindings {
 
     // Window state.
     bind "Super+q" "close-window"
-    bind "Super+f" "toggle-maximized"
-    bind "Super+Shift+f" "toggle-fullscreen"
-    bind "Super+m" "toggle-maximized"
+    bind "Super+f" "maximize-window-to-edges"
+    bind "Super+Shift+f" "fullscreen-window"
+    bind "Super+m" "maximize-column"
     bind "Super+t" "toggle-floating"
     bind "Super+Shift+t" "toggle-floating"
     bind "Super+Shift+b" "minimize"

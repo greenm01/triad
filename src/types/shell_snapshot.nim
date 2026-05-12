@@ -7,6 +7,7 @@ type
   ShellColumn* = object
     idx*: uint32
     widthProportion*: float32
+    isFullWidth*: bool
     windows*: seq[WindowId]
 
   ShellWorkspace* = object

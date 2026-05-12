@@ -95,6 +95,7 @@ type
     CmdSetMasterRatio,
     CmdAdjustMasterCount,
     CmdAdjustMasterRatio,
+    CmdMaximizeColumn,
     CmdResizeWidth,
     CmdResizeHeight,
     CmdSetColumnWidth,

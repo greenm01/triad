@@ -237,6 +237,7 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
       MsgKind.CmdSetMasterRatio,
       MsgKind.CmdAdjustMasterCount,
       MsgKind.CmdAdjustMasterRatio,
+      MsgKind.CmdMaximizeColumn,
       MsgKind.CmdResizeWidth,
       MsgKind.CmdResizeHeight,
       MsgKind.CmdSetColumnWidth,

@@ -24,6 +24,7 @@ proc shellColumns(model: Model; tagId: TagId): seq[ShellColumn] =
     result.add(ShellColumn(
       idx: idx,
       widthProportion: column.widthProportion,
+      isFullWidth: column.isFullWidth,
       windows: windows
     ))
 

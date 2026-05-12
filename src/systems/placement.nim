@@ -35,11 +35,12 @@ proc removeWindowFromAllTagsAndRefreshFocus*(
 
 proc addPlacedWindowColumn*(
     model: var Model; tagId: TagId; winId: WindowId;
-    index = high(int); widthProportion = 0.0'f32): ColumnId =
+    index = high(int); widthProportion = 0.0'f32;
+    isFullWidth = false): ColumnId =
   let width =
     if widthProportion > 0.0'f32: widthProportion
     else: model.defaultColumnWidth()
-  result = model.insertColumn(tagId, index, width)
+  result = model.insertColumn(tagId, index, width, isFullWidth)
   discard model.moveWindowToColumn(tagId, winId, result, 0)
 
 proc sourceWorkspaceFallbackFocus(
@@ -140,6 +141,17 @@ proc setFocusedColumnWidth*(model: var Model; width: float32): bool =
     return false
   model.setColumnWidth(pos.columnId, width)
 
+proc toggleFocusedColumnFullWidth*(model: var Model): bool =
+  let pos = model.focusedPosition()
+  if not pos.found:
+    return false
+  let tag = model.tagData(pos.tagId).get()
+  if tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+    return false
+  result = model.toggleColumnFullWidth(pos.columnId)
+  if result:
+    discard model.requestTagViewportRetarget(pos.tagId)
+
 proc preserveMovedFocus(
     model: var Model; tagId: TagId; winId: WindowId; moved: bool): bool =
   if not moved:
@@ -194,10 +206,12 @@ proc moveFocusedWindowToSlot*(
 
   let sourcePlacement = model.placementForWindowOnTag(sourceTag, focused)
   var sourceColumnWidth = model.defaultColumnWidth()
+  var sourceColumnFullWidth = false
   if sourcePlacement.isSome:
     let sourceColumn = model.column(sourcePlacement.get().columnId)
     if sourceColumn.isSome:
       sourceColumnWidth = sourceColumn.get().widthProportion
+      sourceColumnFullWidth = sourceColumn.get().isFullWidth
 
   discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
   if not model.overviewActive:
@@ -205,7 +219,8 @@ proc moveFocusedWindowToSlot*(
   discard model.preserveEmptyTargetLayoutContext(
     sourceTag, targetTag, targetWasEmpty)
   discard model.addPlacedWindowColumn(
-    targetTag, focused, widthProportion = sourceColumnWidth)
+    targetTag, focused, widthProportion = sourceColumnWidth,
+    isFullWidth = sourceColumnFullWidth)
   if sourceWindowState.isSome:
     discard model.preserveWindowRuntimeAttributes(
       focused, sourceWindowState.get())

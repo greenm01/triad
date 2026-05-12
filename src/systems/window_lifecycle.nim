@@ -58,7 +58,8 @@ proc materializeRestoredTarget(model: var Model; slot: uint32): TagId =
       masterSplitRatio = restored.masterSplitRatio
     )
     for col in restored.columns:
-      discard model.addColumn(result, col.widthProportion)
+      discard model.addColumn(
+        result, col.widthProportion, col.isFullWidth)
   else:
     result = model.ensureWorkspaceSlot(slot)
 
@@ -85,11 +86,16 @@ proc ensureRestoredColumn(model: var Model; tagId: TagId;
         restoredTag.columns[columnCount].widthProportion
       else:
         model.defaultColumnWidth()
-    discard model.addColumn(tagId, width)
+    let fullWidth =
+      columnCount < restoredTag.columns.len and
+        restoredTag.columns[columnCount].isFullWidth
+    discard model.addColumn(tagId, width, fullWidth)
   result = model.columnAt(tagId, colIdx)
   if colIdx < restoredTag.columns.len:
     discard model.setColumnWidth(
       result, restoredTag.columns[colIdx].widthProportion)
+    discard model.setColumnFullWidth(
+      result, restoredTag.columns[colIdx].isFullWidth)
 
 proc placeRestoredWindow(model: var Model; targetSlot: uint32;
     restoredExternalId, externalId: ExternalWindowId; winId: WindowId): bool =

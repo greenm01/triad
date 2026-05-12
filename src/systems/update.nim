@@ -23,6 +23,7 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
     MsgKind.CmdSetLayout,
     MsgKind.CmdSwitchLayout,
+    MsgKind.CmdMaximizeColumn,
     MsgKind.CmdToggleMaximized}
 
 proc updateSnapshotSummary(snapshot: ShellSnapshot): JsonNode =

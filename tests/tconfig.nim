@@ -187,6 +187,18 @@ suite "KDL Configuration Parser":
     check focusedToggle.isSome
     check focusedToggle.get().kind == MsgKind.CmdToggleFullscreen
 
+    let fullscreenWindow = parseTextCommand("fullscreen-window")
+    check fullscreenWindow.isSome
+    check fullscreenWindow.get().kind == MsgKind.CmdToggleFullscreen
+
+    let maximizeColumn = parseTextCommand("maximize-column")
+    check maximizeColumn.isSome
+    check maximizeColumn.get().kind == MsgKind.CmdMaximizeColumn
+
+    let maximizeToEdges = parseTextCommand("maximize-window-to-edges")
+    check maximizeToEdges.isSome
+    check maximizeToEdges.get().kind == MsgKind.CmdToggleMaximized
+
     let screenshot = parseTextCommand(
       "screenshot-screen --path /tmp/a.png --hide-pointer --no-clipboard")
     check screenshot.isSome

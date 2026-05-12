@@ -72,6 +72,7 @@ type
   Column* = object
     windows*: seq[WindowId]
     widthProportion*: float32
+    isFullWidth*: bool
 
   TagState* = object
     tagId*: uint32
@@ -219,6 +220,7 @@ type
   RestoredColumnState* = object
     windows*: seq[WindowId]
     widthProportion*: float32
+    isFullWidth*: bool
 
   RestoredTagState* = object
     tagId*: uint32

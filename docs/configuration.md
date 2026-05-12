@@ -18,7 +18,7 @@ Use the Niri style as the naming baseline:
   `master { split-ratio 0.55 }`.
 - Prefer complete words over abbreviations: `split-ratio`, not `mfact`.
 - Prefer positive names: `open-floating`, not `isfloating`.
-- Prefer action verbs for commands: `toggle-maximized`, `move-window-left`.
+- Prefer action verbs for commands: `maximize-column`, `move-window-left`.
 - Use KDL flags for simple booleans when omission means disabled:
   `allow-exit-session`.
 - Keep config names stable once shipped.
@@ -36,7 +36,7 @@ Examples:
 | `layout { smart-gaps #true }` | `smartgaps=1` |
 | `master { count 1; split-ratio 0.55 }` | `nmaster=1`, `mfact=0.55` |
 | `window-rule { open-floating #true }` | `isfloating:1` |
-| `toggle-maximized` | `togglemaximizescreen` |
+| `maximize-window-to-edges` | `togglemaximizescreen` |
 
 ## Current Config Surface
 
@@ -135,6 +135,9 @@ Default bindings are:
 - `Ctrl+Print`: `screenshot-screen`
 - `Alt+Print`: `screenshot-window`
 - `Super+Print`: `screenshot --clipboard-only`
+- `Super+F`: `maximize-window-to-edges`
+- `Super+Shift+F`: `fullscreen-window`
+- `Super+M`: `maximize-column`
 
 Screenshot commands save to disk and copy to the clipboard by default. Use
 `--no-clipboard` for disk-only capture or `--clipboard-only` for clipboard-only

@@ -186,7 +186,8 @@ proc projectedTag(model: Model; tagId: core_types.TagId):
     if windows.len > 0:
       result.tag.columns.add(rv.Column(
         windows: windows,
-        widthProportion: column.widthProportion))
+        widthProportion: column.widthProportion,
+        isFullWidth: column.isFullWidth))
 
 proc layoutForTag(
     tag: var rv.TagState;
@@ -299,7 +300,8 @@ proc layoutProjection*(model: Model): LayoutProjection =
     for winId in model.overviewWindowIds():
       overviewTag.columns.add(rv.Column(
         windows: @[model.externalWindowId(winId)],
-        widthProportion: 1.0))
+        widthProportion: 1.0,
+        isFullWidth: true))
     result.instructions = layoutGrid(
       overviewTag,
       screen,

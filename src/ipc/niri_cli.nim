@@ -120,6 +120,8 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
     return some(%*{"Action": {"ToggleKeyboardShortcutsInhibit": {}}})
   of "fullscreenwindow", "fullscreen-window":
     return some(%*{"Action": {"FullscreenWindow": {}}})
+  of "maximizecolumn", "maximize-column":
+    return some(%*{"Action": {"MaximizeColumn": {}}})
   of "maximizewindowtoedges", "maximize-window-to-edges":
     let id = optionValue(args, "--id")
     if id.isSome:

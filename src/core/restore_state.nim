@@ -134,6 +134,8 @@ proc parseTagState(
       if colNode.hasKey("width_proportion"):
         col.widthProportion =
           float32FromJson(colNode["width_proportion"], DefaultColumnWidth)
+      if colNode.hasKey("is_full_width"):
+        col.isFullWidth = boolFromJson(colNode["is_full_width"])
       if colNode.hasKey("windows") and colNode["windows"].kind == JArray:
         for winNode in colNode["windows"]:
           let winId = uint32FromJson(winNode)

@@ -61,12 +61,14 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `ungroup-window`: Dissolves the group, granting the focused window its independence.
 *   `focus-next-in-group`: Cycles focus through the windows of a tabbed group.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
-*   `toggle-fullscreen`: Commands the window to occupy the entire screen, as is its right.
+*   `fullscreen-window`, `toggle-fullscreen`: Commands the window to occupy the entire screen.
+*   `maximize-window-to-edges`, `toggle-maximized`: Toggles client-visible window maximize.
 *   `move-floating <dx> <dy>`: Displaces a floating window by the specified pixel deltas.
 *   `resize-floating <dw> <dh>`: Adjusts the physical dimensions of a floating window.
 *   `zoom`: Swaps the focused window with the primary window in the master position.
 *   `resize-width <delta>`: Adjusts the width proportion (e.g., `0.1` or `-0.1`).
 *   `resize-height <delta>`: Adjusts the height proportion.
+*   `maximize-column`: Toggles the focused column to full width while keeping gaps, borders, and client state unchanged.
 *   `set-column-width <proportion>`: Precisely dictates the width of the focused column (e.g., `0.5`, `1.0`).
 *   `adjust-gaps <delta>`: Increases or decreases the global gap size (e.g., `5` or `-5`).
 *   `toggle-gaps`: Instantly eliminates all gaps or restores them to their former glory.

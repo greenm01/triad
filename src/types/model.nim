@@ -56,6 +56,7 @@ type
     id*: ColumnId
     tagId*: TagId
     widthProportion*: float32
+    isFullWidth*: bool
 
   OutputData* = object
     id*: OutputId
@@ -112,6 +113,7 @@ type
   RestoredColumnData* = object
     windows*: seq[ExternalWindowId]
     widthProportion*: float32
+    isFullWidth*: bool
 
   RestoredTagData* = object
     slot*: uint32

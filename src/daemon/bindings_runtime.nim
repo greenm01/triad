@@ -311,9 +311,10 @@ proc onPointerBindingPressed(
       elif not daemon[].currentModel.overviewActive:
         daemon.enqueue(msg)
     of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
-        MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
-        MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
-        MsgKind.CmdMoveFloating, MsgKind.CmdResizeFloating:
+        MsgKind.CmdToggleMaximized, MsgKind.CmdMaximizeColumn,
+        MsgKind.CmdMinimize, MsgKind.CmdMoveToScratchpad,
+        MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdMoveFloating,
+        MsgKind.CmdResizeFloating:
       if target != 0:
         daemon[].queueWindowFocus(target)
         daemon.enqueue(msg)

@@ -1502,6 +1502,59 @@ suite "Core Runtime Logic":
     check scrollerEffects.hasMaximizedEffect(1, true)
     check scrollerEffects.hasFocusEffect(1)
 
+  test "Maximize column is separate from window maximize state":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+    let beforeGeom = model.instructionGeom(1)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    let afterColumn = model.columnData(columnId).get()
+    let afterGeom = model.instructionGeom(1)
+
+    check afterColumn.isFullWidth
+    check afterColumn.widthProportion == 0.7'f32
+    check not model.snapshotWindow(1).isMaximized
+    check not effects.hasMaximizedEffect(1, true)
+    check afterGeom.w > beforeGeom.w
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    check not model.columnData(columnId).get().isFullWidth
+
+  test "Column resize clears maximize column state":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    check model.columnData(columnId).get().isFullWidth
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdSetColumnWidth,
+      targetWidth: 0.5'f32))
+    check not model.columnData(columnId).get().isFullWidth
+    check model.columnData(columnId).get().widthProportion == 0.5'f32
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    discard model.updateModel(Msg(kind: MsgKind.CmdResizeWidth,
+      deltaW: 0.1'f32))
+    check not model.columnData(columnId).get().isFullWidth
+
+  test "Moving full-width column preserves column presentation":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+
+    let targetTag = model.tagForSlot(2)
+    let targetColumn = model.columnAt(targetTag, 0)
+    check model.activeTag == targetTag
+    check model.columnData(targetColumn).get().isFullWidth
+    check model.columnData(targetColumn).get().widthProportion == 0.7'f32
+
   test "Moving floating window through dynamic layouts preserves geometry":
     var model = cameraModel()
     model.seedCameraWindows(1)
@@ -2590,7 +2643,7 @@ suite "Core Runtime Logic":
   "focused_window": 10,
   "tags": [
     {"id": 2, "layout_mode": "Deck", "columns": [
-      {"windows": [10], "width_proportion": 0.6}
+      {"windows": [10], "width_proportion": 0.6, "is_full_width": true}
     ]}
   ],
   "windows": [{"id": 10, "tag_id": 2, "app_id": "term"}]
@@ -2599,6 +2652,7 @@ suite "Core Runtime Logic":
     check native.isSome
     check native.get().activeTag == 2
     check native.get().tags[2].layoutMode == LayoutMode.Deck
+    check native.get().tags[2].columns[0].isFullWidth
     check native.get().windows[10].appId == "term"
 
     let invalid = parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""")

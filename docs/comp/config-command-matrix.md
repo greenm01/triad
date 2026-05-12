@@ -80,9 +80,10 @@ external window manager.
 | Window lifecycle | Minimize | `minimized`, `restore_minimized` | minimize request/capability | `minimize`, `restore-scratchpad` | X | Triad minimize flows through scratchpad-like state. |
 | Window state | Toggle floating | `togglefloating` | `set_tiled` primitive | `toggle-floating` | X | |
 | Window state | Toggle all floating | `toggle_all_floating` | WM policy | | | Not exposed by Triad. |
-| Window state | Fullscreen | `togglefullscreen` | fullscreen requests and commands | `toggle-fullscreen`, `exit-fullscreen` | X | Optional id argument is supported. |
+| Window state | Fullscreen | `togglefullscreen` | fullscreen requests and commands | `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen` | X | Optional id argument is supported. |
 | Window state | Fake fullscreen | `togglefakefullscreen` | WM policy | | | No Triad equivalent. |
-| Window state | Maximize | `togglemaximizescreen` | maximize request/capability | `toggle-maximized`, `toggle-maximize` | X | |
+| Window state | Maximize column | `set_proportion 1.0` | WM policy | `maximize-column` | X | Full-width column; does not set client maximized state. |
+| Window state | Maximize to edges | `togglemaximizescreen` | maximize request/capability | `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize` | X | Client-visible maximized state. |
 | Window state | Sticky/global window | `toggleglobal`, `isglobal` | WM policy | | | Not exposed by Triad. |
 | Window state | Overlay/global unmanaged | `toggleoverlay`, `isoverlay`, `isunglobal` | Layer/shell primitives | | | Not exposed by Triad. |
 | Window state | Center floating window | `centerwin`, `no_force_center` | WM policy | `floating { x-ratio; y-ratio; ... }` | | Triad controls default floating placement but has no center command. |
@@ -303,8 +304,9 @@ Text IPC and bind commands:
   `focus-window-or-workspace-down`, `focus-window`,
   `focus-workspace`, `focus-tag`, `focus-shell-ui`.
 - Window and session: `close-window`, `toggle-floating`,
-  `toggle-fullscreen`, `exit-fullscreen`, `toggle-maximized`,
-  `toggle-maximize`, `minimize`, `minimize-window`, `spawn`,
+  `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen`,
+  `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize`,
+  `minimize`, `minimize-window`, `spawn`,
   `spawn-terminal`, `lock-session`, `warp-pointer`, `eat-next-key`,
   `cancel-eat-next-key`, `toggle-keyboard-shortcuts-inhibit`,
   `keyboard-shortcuts-inhibit`, `stop-manager`, `triad-reload`,
@@ -317,7 +319,7 @@ Text IPC and bind commands:
   `layout-vertical-grid`, `layout-vertical-deck`, `layout-tgmix`,
   `switch-layout`,
   `master-count`, `adjust-master-count`, `master-ratio`,
-  `adjust-master-ratio`, `resize-width`, `resize-height`,
+  `adjust-master-ratio`, `maximize-column`, `resize-width`, `resize-height`,
   `set-column-width`, `adjust-gaps`, `toggle-gaps`, `zoom`.
 - Tags, movement, and groups: `move-to-tag-left`, `move-to-tag-right`,
   `move-to-tag`, `move-to-workspace`, `swap-to-tag`, `rename-tag`,
