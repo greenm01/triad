@@ -14,10 +14,6 @@ proc syncPrimaryOutput*(model: var Model) =
   if primary.isSome and primary.get().w > 0 and primary.get().h > 0:
     discard model.setScreenSize(primary.get().w, primary.get().h)
 
-proc syncPrimaryOutputTag*(model: var Model) =
-  if model.primaryOutput != NullOutputId and model.activeTag != NullTagId:
-    discard model.setOutputTag(model.primaryOutput, model.activeTag)
-
 proc upsertOutputForExternal*(
     model: var Model; externalId: ExternalOutputId): OutputId =
   if externalId == NullExternalOutputId:
@@ -34,7 +30,7 @@ proc setOutputDimensionsForExternal*(
   let outputId = model.upsertOutputForExternal(externalId)
   result = model.setOutputDimensions(outputId, w, h)
   model.syncPrimaryOutput()
-  model.syncPrimaryOutputTag()
+  discard model.syncPrimaryOutputTag()
 
 proc setOutputNameForExternal*(
     model: var Model; externalId: ExternalOutputId; name: string): bool =
@@ -44,7 +40,7 @@ proc setOutputNameForExternal*(
   let outputId = model.upsertOutputForExternal(externalId)
   result = model.setOutputName(outputId, name.strip())
   model.syncPrimaryOutput()
-  model.syncPrimaryOutputTag()
+  discard model.syncPrimaryOutputTag()
 
 proc setOutputPositionForExternal*(
     model: var Model; externalId: ExternalOutputId; x, y: int32): bool =
@@ -54,7 +50,7 @@ proc setOutputPositionForExternal*(
   let outputId = model.upsertOutputForExternal(externalId)
   result = model.setOutputPosition(outputId, x, y)
   model.syncPrimaryOutput()
-  model.syncPrimaryOutputTag()
+  discard model.syncPrimaryOutputTag()
 
 proc setOutputUsableForExternal*(model: var Model;
     externalId: ExternalOutputId; x, y, w, h: int32): bool =
@@ -64,7 +60,7 @@ proc setOutputUsableForExternal*(model: var Model;
   let outputId = model.upsertOutputForExternal(externalId)
   result = model.setOutputUsable(outputId, x, y, w, h)
   model.syncPrimaryOutput()
-  model.syncPrimaryOutputTag()
+  discard model.syncPrimaryOutputTag()
 
 proc removeOutputForExternal*(
     model: var Model; externalId: ExternalOutputId): seq[WindowId] =
@@ -76,7 +72,7 @@ proc removeOutputForExternal*(
 
   discard model.destroyOutput(outputId)
   model.syncPrimaryOutput()
-  model.syncPrimaryOutputTag()
+  discard model.syncPrimaryOutputTag()
 
   for winId, win in model.windowsWithId():
     if win.isFullscreen and win.fullscreenOutput == externalId:

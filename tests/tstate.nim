@@ -348,7 +348,12 @@ suite "Runtime state primitives":
 
   test "runtime live restore applies to model":
     var state = initRuntimeStateFromConfig(baseConfig())
+    discard state.applyRuntimeUpdate(Msg(kind: MsgKind.WlOutputDimensions,
+      outputId: 1,
+      width: 1000,
+      height: 700))
     var restore = LiveRestoreState(activeTag: 2, focusedWindow: 50)
+    restore.outputTags[1] = 1
     restore.tags[2] = RestoredTagState(
       tagId: 2,
       name: "restored-web",
@@ -377,6 +382,8 @@ suite "Runtime state primitives":
 
     check state.applyRuntimeLiveRestore(restore)
     let restoredSnapshot = state.readRuntimeSnapshot()
+    check state.model.outputTags[state.model.primaryOutput] ==
+      state.model.activeTag
     check restoredSnapshot.activeTag == 2
     check restoredSnapshot.activeWorkspaceIdx == 2
     check restoredSnapshot.workspaces[1].isActive

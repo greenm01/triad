@@ -1,9 +1,10 @@
 import std/[json, options, os, sequtils, strtabs, strutils, unittest]
 import ../src/core/app_identity
 import ../src/core/msg
+import ../src/daemon/quickshell_runner
 import ../src/ipc/[commands, niri_cli, niri_compat, quickshell_compat,
   shell_overlay, triad_native]
-import ../src/types/[runtime_values, shell_snapshot]
+import ../src/types/[model, runtime_values, shell_snapshot]
 
 proc installAppIdentityFixture() =
   let apps =
@@ -386,6 +387,90 @@ suite "Shell compatibility contracts":
       QuickshellReloadAction.AuthoritativeRestart
     check quickshellConfigReloadAction(noctalia, disabled) ==
       QuickshellReloadAction.AuthoritativeStop
+
+  test "Quickshell spawn handoff does not kill configured shell":
+    let tmp = getTempDir() / ("triad-qs-handoff-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fakeQs = tmp / "qs"
+    let logPath = tmp / "calls.log"
+    writeFile(fakeQs, """
+#!/bin/sh
+printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
+if [ "$1" = "kill" ]; then
+  exit 0
+fi
+exit "${TRIAD_FAKE_QS_EXIT:-0}"
+""")
+    setFilePermissions(fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
+    let oldExit = getEnv("TRIAD_FAKE_QS_EXIT", "")
+    putEnv("TRIAD_FAKE_QS_LOG", logPath)
+    putEnv("TRIAD_FAKE_QS_EXIT", "0")
+    defer:
+      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
+      putEnv("TRIAD_FAKE_QS_EXIT", oldExit)
+
+    let config = QuickshellConfig(
+      enabled: true,
+      command: fakeQs,
+      theme: "noctalia-shell")
+    var runner = QuickshellRunner(spawnPending: true)
+    let model = Model(quickshell: config)
+
+    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+
+    let calls = readFile(logPath)
+    check calls.contains("-c noctalia-shell")
+    check not calls.contains("kill -c noctalia-shell --any-display")
+
+  test "Quickshell failed spawn kills stale configured shell":
+    let tmp = getTempDir() / ("triad-qs-failed-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fakeQs = tmp / "qs"
+    let logPath = tmp / "calls.log"
+    writeFile(fakeQs, """
+#!/bin/sh
+printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
+if [ "$1" = "kill" ]; then
+  exit 0
+fi
+exit "${TRIAD_FAKE_QS_EXIT:-9}"
+""")
+    setFilePermissions(fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
+    let oldExit = getEnv("TRIAD_FAKE_QS_EXIT", "")
+    putEnv("TRIAD_FAKE_QS_LOG", logPath)
+    putEnv("TRIAD_FAKE_QS_EXIT", "9")
+    defer:
+      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
+      putEnv("TRIAD_FAKE_QS_EXIT", oldExit)
+
+    let config = QuickshellConfig(
+      enabled: true,
+      command: fakeQs,
+      theme: "noctalia-shell")
+    var runner = QuickshellRunner(spawnPending: true)
+    let model = Model(quickshell: config)
+
+    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+
+    let calls = readFile(logPath)
+    check calls.contains("-c noctalia-shell")
+    check calls.contains("kill -c noctalia-shell --any-display")
 
   test "shell overlay is generated from terminal desktop metadata":
     let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())

@@ -7,9 +7,18 @@ from ../types/runtime_values import QuickshellConfig
 import ../utils/behavior_log
 
 type
+  QuickshellSpawnStatus* {.pure.} = enum
+    Skipped,
+    Running,
+    Handoff,
+    Failed
+
   QuickshellRunner* = object
     trackedProcess*: Process
     spawnPending*: bool
+
+proc succeeded(status: QuickshellSpawnStatus): bool =
+  status in {QuickshellSpawnStatus.Running, QuickshellSpawnStatus.Handoff}
 
 proc quickshellBehaviorPayload*(
     config: QuickshellConfig; reason: string; extra: JsonNode = nil): JsonNode =
@@ -179,8 +188,9 @@ proc stopQuickshell*(
 
 proc spawnQuickshell*(
     runner: var QuickshellRunner; model: Model; niriSocketPath: string;
-    reason = "spawn"): bool =
+    reason = "spawn"): QuickshellSpawnStatus =
   if model.quickshell.enabled and model.quickshell.theme != "":
+    result = QuickshellSpawnStatus.Failed
     let args = quickshellLaunchArgs(model.quickshell)
     writeQuickshellBehaviorEvent(
       "quickshell_spawn_requested",
@@ -224,7 +234,23 @@ proc spawnQuickshell*(
             "overlay_ready": compat.overlayReady,
             "xdg_share": compat.xdgSharePath
           })
-        result = true
+        result = QuickshellSpawnStatus.Running
+      elif earlyExitCode == 0:
+        info "Quickshell launch command handed off",
+          command = model.quickshell.command,
+          theme = model.quickshell.theme,
+          pid = childPid
+        writeQuickshellBehaviorEvent(
+          "quickshell_spawn_handoff",
+          model.quickshell,
+          reason,
+          %*{
+            "child_pid": childPid,
+            "launch_args": args,
+            "exit_code": earlyExitCode
+          })
+        p.close()
+        result = QuickshellSpawnStatus.Handoff
       else:
         info "Quickshell launch command exited immediately",
           command = model.quickshell.command,
@@ -254,6 +280,7 @@ proc spawnQuickshell*(
       "quickshell_spawn_skipped",
       model.quickshell,
       reason)
+    result = QuickshellSpawnStatus.Skipped
 
 proc restartQuickshell*(
     runner: var QuickshellRunner; model: Model; niriSocketPath,
@@ -281,7 +308,7 @@ proc spawnPendingQuickshell*(
   of QuickshellReloadAction.Noop:
     discard
   of QuickshellReloadAction.SpawnOnly:
-    if not runner.spawnQuickshell(model, niriSocketPath, reason):
+    if not runner.spawnQuickshell(model, niriSocketPath, reason).succeeded():
       writeQuickshellBehaviorEvent(
         "quickshell_startup_restart_required",
         model.quickshell,

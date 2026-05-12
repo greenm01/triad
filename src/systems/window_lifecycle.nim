@@ -29,7 +29,10 @@ proc syncRestoreOutputTags(model: var Model) =
     let outputId = model.outputForExternal(outputExt)
     let tagId = model.tagForSlot(slot)
     if outputId != NullOutputId and tagId != NullTagId:
-      discard model.setOutputTag(outputId, tagId)
+      if outputId == model.primaryOutput and model.activeTag != NullTagId:
+        discard model.syncPrimaryOutputTag()
+      else:
+        discard model.setOutputTag(outputId, tagId)
 
 proc materializeRestoredTarget(model: var Model; slot: uint32): TagId =
   if slot == 0:
@@ -187,9 +190,10 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
     if tagId != NullTagId:
       discard model.setActiveWorkspace(tagId)
       if model.primaryOutput != NullOutputId:
-        discard model.setOutputTag(model.primaryOutput, tagId)
+        discard model.syncPrimaryOutputTag()
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
+  discard model.syncPrimaryOutputTag()
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()
 

@@ -1324,18 +1324,36 @@ suite "Core Runtime Logic":
 
   test "Moving focused window follows target and refocuses source":
     var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
+      width: 1000, height: 700))
     model.seedCameraWindows(3)
+    let outputId = model.outputForExternal(ExternalOutputId(1))
 
     model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
       workspaceIndex: 2))
 
     check model.activeWorkspaceFocusId() == 3
     check model.focusedWindowId() == 3
+    check model.outputTags[outputId] == model.tagForSlot(2)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
       workspaceIndex: 1))
     check model.activeWorkspaceFocusId() == 2
     check model.focusedWindowId() == 2
+    check model.outputTags[outputId] == model.tagForSlot(1)
+
+  test "Focusing workspace updates primary output tag":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
+      width: 1000, height: 700))
+    let outputId = model.outputForExternal(ExternalOutputId(1))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+
+    check outputId != NullOutputId
+    check model.activeTag == model.tagForSlot(2)
+    check model.outputTags[outputId] == model.activeTag
 
   test "Moving only source window follows target and leaves source empty":
     var model = cameraModel()
