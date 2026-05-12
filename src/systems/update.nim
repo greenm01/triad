@@ -32,7 +32,8 @@ proc updateSnapshotSummary(snapshot: ShellSnapshot): JsonNode =
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
     "focused_window": uint32(snapshot.focusedWindowId()),
     "workspaces": snapshot.workspaces.len,
-    "windows": snapshot.windows.len
+    "windows": snapshot.windows.len,
+    "workspace_distribution": snapshot.compactWorkspaceDistribution()
   }
 
 proc addTrackedWindowId(
@@ -135,6 +136,10 @@ proc writeRuntimeUpdateEvent(
     "effects": effects.compactRuntimeEffects(),
     "before": before.updateSnapshotSummary(),
     "after": after.updateSnapshotSummary(),
+    "window_states": {
+      "before": before.compactSnapshotWindows(),
+      "after": after.compactSnapshotWindows()
+    },
     "tracked_windows": {
       "before": before.compactTrackedWindows(trackedIds),
       "after": after.compactTrackedWindows(trackedIds)

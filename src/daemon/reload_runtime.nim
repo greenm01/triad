@@ -1,4 +1,4 @@
-import std/[asyncdispatch, json, os]
+import std/[asyncdispatch, json, options, os, strutils, tables]
 import chronicles
 import ../config/[defaults, parser]
 import ../core/niri_state
@@ -34,17 +34,106 @@ proc broadcastNiriSnapshot*(snapshot: ShellSnapshot) =
   for event in initialNiriEvents(snapshot):
     asyncCheck broadcastJson(event)
 
+proc focusedWindowId(snapshot: ShellSnapshot): uint32 =
+  for win in snapshot.windows:
+    if win.isFocused:
+      return uint32(win.id)
+  0
+
+proc windowPreservationState(win: ShellWindow): string =
+  let tagId =
+    if win.tagId.isSome: $win.tagId.get()
+    else: "null"
+  [
+    $win.workspaceIdx,
+    tagId,
+    $win.isFloating,
+    $win.isFullscreen,
+    $win.isMaximized,
+    $win.isMinimized,
+    $win.fullscreenOutput,
+    $win.widthProportion,
+    $win.heightProportion,
+    $win.actualW,
+    $win.actualH,
+    $win.floatingGeom.x,
+    $win.floatingGeom.y,
+    $win.floatingGeom.w,
+    $win.floatingGeom.h
+  ].join("|")
+
+proc windowPreservationMap(snapshot: ShellSnapshot): Table[uint32, string] =
+  for win in snapshot.windows:
+    result[uint32(win.id)] = win.windowPreservationState()
+
+proc configReloadPreservationProblem(
+    before, after: ShellSnapshot): string =
+  if before.activeTag != after.activeTag:
+    return "active workspace changed"
+  if before.activeWorkspaceIdx != after.activeWorkspaceIdx:
+    return "active workspace index changed"
+  if before.focusedWindowId() != after.focusedWindowId():
+    return "focused window changed"
+  if before.windows.len != after.windows.len:
+    return "window count changed"
+
+  let beforeWindows = before.windowPreservationMap()
+  let afterWindows = after.windowPreservationMap()
+  for winId, state in beforeWindows.pairs:
+    if not afterWindows.hasKey(winId):
+      return "window disappeared during config reload"
+    if afterWindows[winId] != state:
+      return "window placement or attributes changed"
+  for winId in afterWindows.keys:
+    if not beforeWindows.hasKey(winId):
+      return "window appeared during config reload"
+  ""
+
 proc applyConfigReload*(
     daemon: var TriadDaemon; configPath, niriSocketPath: string): bool =
+  let beforeSnapshot = daemon.readModelSnapshot()
+  writeBehaviorEvent("config_reload_started", %*{
+    "path": configPath,
+    "before": beforeSnapshot.snapshotBehaviorPayload()
+  })
+
   let loaded = loadConfigStrict(configPath)
   if not loaded.ok:
     warn "Config reload rejected; keeping current config", path = configPath,
         error = loaded.error
+    writeBehaviorEvent("config_reload_rejected", %*{
+      "path": configPath,
+      "reason": "parse error",
+      "error": loaded.error,
+      "before": beforeSnapshot.snapshotBehaviorPayload()
+    })
     return false
 
   let previousModel = daemon.runtimeState.model
   discard daemon.runtimeState.applyRuntimeConfig(loaded.config)
+  let appliedSnapshot = daemon.readModelSnapshot()
+  let preservationProblem = beforeSnapshot.configReloadPreservationProblem(
+    appliedSnapshot)
+  if preservationProblem.len > 0:
+    daemon.runtimeState.model = previousModel
+    warn "Config reload rolled back; live state changed",
+      path = configPath,
+      reason = preservationProblem
+    writeBehaviorEvent("config_reload_rolled_back", %*{
+      "path": configPath,
+      "reason": preservationProblem,
+      "before": beforeSnapshot.snapshotBehaviorPayload(),
+      "candidate": appliedSnapshot.snapshotBehaviorPayload(),
+      "restored": daemon.readModelSnapshot().snapshotBehaviorPayload()
+    })
+    return false
+
   daemon.quickshellState.spawnPending = false
+  writeBehaviorEvent("config_reload_applied", %*{
+    "path": configPath,
+    "before": beforeSnapshot.snapshotBehaviorPayload(),
+    "after": appliedSnapshot.snapshotBehaviorPayload()
+  })
 
   let quickshellAction = quickshellConfigReloadAction(
     previousModel.quickshell,
@@ -76,5 +165,12 @@ proc applyConfigReload*(
   daemon.destroyBindings()
   info "Config reloaded", path = configPath
   daemon.requestManage("config reload")
+  daemon.postManageBroadcastPending = true
+  daemon.postManageBroadcastReason = "config reload"
   broadcastNiriSnapshot(daemon.readModelSnapshot())
+  writeBehaviorEvent("config_reload_broadcast", %*{
+    "path": configPath,
+    "phase": "pre-manage",
+    "snapshot": daemon.readModelSnapshot().snapshotBehaviorPayload()
+  })
   true

@@ -79,6 +79,16 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
           windows = daemon.windowPointers.len,
           seats = daemon.seatPointers.len
       daemon.spawnPendingStartupCommands(daemon.runtimeState.model, "initial manage")
+      if daemon.postManageBroadcastPending:
+        let reason = daemon.postManageBroadcastReason
+        daemon.postManageBroadcastPending = false
+        daemon.postManageBroadcastReason = ""
+        let snapshot = daemon.readModelSnapshot()
+        writeBehaviorEvent("niri_compat_post_manage_broadcast", %*{
+          "reason": reason,
+          "snapshot": snapshot.snapshotBehaviorPayload()
+        })
+        broadcastNiriSnapshot(snapshot)
       continue
 
     if msg.kind == MsgKind.WlRenderStart:

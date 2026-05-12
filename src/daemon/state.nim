@@ -83,6 +83,8 @@ type
     quickshellState*: QuickshellRunner
     startupCommandsPending*: bool
     initialManageComplete*: bool
+    postManageBroadcastPending*: bool
+    postManageBroadcastReason*: string
     pendingLiveRestorePath*: string
     pendingLiveRestore*: Option[LiveRestoreState]
     liveRestoreCommitPending*: bool

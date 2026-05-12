@@ -32,6 +32,60 @@ restore_snapshot_applied() {
       "$restore_path"
 }
 
+snapshot_suspicious_collapse() {
+  previous="$1"
+  candidate="$2"
+
+  [ "${TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE:-}" = "1" ] && return 1
+  [ -e "$previous" ] || return 1
+
+  python3 - "$previous" "$candidate" <<'PY'
+import json
+import sys
+
+def read_state(path):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return None
+    if data.get("schema") != "triad-live-restore-v2":
+        return None
+    return data
+
+def window_ids(state):
+    return sorted(
+        int(win["id"]) for win in state.get("windows", [])
+        if isinstance(win, dict) and isinstance(win.get("id"), int)
+    )
+
+def occupied_tags(state):
+    tags = set()
+    for win in state.get("windows", []):
+        if not isinstance(win, dict):
+            continue
+        tag = win.get("tag_id")
+        if isinstance(tag, int) and tag > 0:
+            tags.add(tag)
+    return tags
+
+previous = read_state(sys.argv[1])
+candidate = read_state(sys.argv[2])
+if previous is None or candidate is None:
+    sys.exit(1)
+
+same_windows = window_ids(previous) == window_ids(candidate)
+if (
+    same_windows and
+    len(window_ids(previous)) > 1 and
+    len(occupied_tags(previous)) > 1 and
+    len(occupied_tags(candidate)) == 1
+):
+    sys.exit(0)
+sys.exit(1)
+PY
+}
+
 wait_restore_ready() {
   i=0
   while [ "$i" -lt 100 ]; do
@@ -87,6 +141,10 @@ snapshot_restore_state() {
       mkdir -p "$restore_dir"
       tmp="$restore_path.tmp.$$"
       printf '%s\n' "$snapshot" > "$tmp"
+      if snapshot_suspicious_collapse "$restore_path" "$tmp"; then
+        rm -f "$tmp"
+        fail "native live restore snapshot collapsed existing workspaces; set TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE=1 to override"
+      fi
       mv -f "$tmp" "$restore_path"
       window_count="$(printf '%s\n' "$snapshot" | tr ',' '\n' | grep -c '"id"' || true)"
       printf '%s\n' "live-reload: snapshotted native state for $window_count item(s) to $restore_path"

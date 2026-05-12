@@ -1,4 +1,4 @@
-import std/[json, options, os, strutils, tables, times]
+import std/[algorithm, json, options, os, strutils, tables, times]
 import defaults
 import ../types/runtime_values
 
@@ -294,6 +294,49 @@ proc parseLiveRestoreJson*(payload: string): Option[LiveRestoreState] =
       root["schema"].getStr() != LiveRestoreSchema:
     return none(LiveRestoreState)
   parseNativeLiveRestore(root)
+
+proc readLiveRestoreState*(path: string): Option[LiveRestoreState] =
+  if path.len == 0 or not fileExists(path):
+    return none(LiveRestoreState)
+  try:
+    readFile(path).parseLiveRestoreJson()
+  except CatchableError:
+    none(LiveRestoreState)
+
+proc liveRestoreEnvFlagEnabled(value: string): bool =
+  case value.normalize()
+  of "1", "true", "yes", "on":
+    true
+  else:
+    false
+
+proc liveRestoreCollapseAllowed*(): bool =
+  getEnv("TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE", "").liveRestoreEnvFlagEnabled()
+
+proc sortedRestoreWindowIds(state: LiveRestoreState): seq[uint32] =
+  for winId in state.windows.keys:
+    result.add(uint32(winId))
+  result.sort()
+
+proc occupiedRestoreSlots(state: LiveRestoreState): seq[uint32] =
+  for _, win in state.windows.pairs:
+    if win.tagId != 0 and result.find(win.tagId) == -1:
+      result.add(win.tagId)
+  result.sort()
+
+proc sameRestoreWindowSet(
+    previous, candidate: LiveRestoreState): bool =
+  previous.sortedRestoreWindowIds() == candidate.sortedRestoreWindowIds()
+
+proc suspiciousLiveRestoreCollapse*(
+    previous, candidate: LiveRestoreState): bool =
+  let previousWindows = previous.sortedRestoreWindowIds()
+  if previousWindows.len < 2:
+    return false
+  if not previous.sameRestoreWindowSet(candidate):
+    return false
+  previous.occupiedRestoreSlots().len > 1 and
+    candidate.occupiedRestoreSlots().len == 1
 
 proc liveRestoreStatus(root: JsonNode): string =
   if root.kind == JObject and root.hasKey("restore_status") and

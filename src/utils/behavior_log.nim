@@ -1,5 +1,6 @@
-import std/[algorithm, json, os, strutils, tables, times]
+import std/[algorithm, json, options, os, strutils, tables, times]
 import ../core/restore_state
+import ../types/shell_snapshot
 import ../types/runtime_values
 
 const
@@ -115,6 +116,74 @@ proc writeBehaviorEvent*(eventName: string; payload: JsonNode = nil) =
     appendJsonLine(path, event)
   except CatchableError:
     discard
+
+proc compactWorkspaceDistribution*(snapshot: ShellSnapshot): JsonNode =
+  result = newJArray()
+  for workspace in snapshot.workspaces:
+    var maximized = 0
+    var fullscreen = 0
+    var floating = 0
+    for win in snapshot.windows:
+      if win.tagId.isNone or win.tagId.get() != workspace.tagId:
+        continue
+      if win.isMaximized:
+        inc maximized
+      if win.isFullscreen:
+        inc fullscreen
+      if win.isFloating:
+        inc floating
+    result.add(%*{
+      "tag_id": workspace.tagId,
+      "workspace_idx": workspace.workspaceIdx,
+      "name": workspace.name,
+      "active": workspace.isActive,
+      "occupied": workspace.occupied,
+      "focused_window": uint32(workspace.focusedWindow),
+      "columns": workspace.columns.len,
+      "maximized_windows": maximized,
+      "fullscreen_windows": fullscreen,
+      "floating_windows": floating
+    })
+
+proc compactSnapshotWindows*(snapshot: ShellSnapshot): JsonNode =
+  result = newJArray()
+  for win in snapshot.windows:
+    let node = %*{
+      "id": uint32(win.id),
+      "workspace_idx": win.workspaceIdx,
+      "focused": win.isFocused,
+      "floating": win.isFloating,
+      "fullscreen": win.isFullscreen,
+      "maximized": win.isMaximized,
+      "minimized": win.isMinimized,
+      "app_id": win.appId,
+      "title": win.title
+    }
+    node["tag_id"] =
+      if win.tagId.isSome: %win.tagId.get()
+      else: newJNull()
+    result.add(node)
+
+proc snapshotFocusedWindowId(snapshot: ShellSnapshot): WindowId =
+  for win in snapshot.windows:
+    if win.isFocused:
+      return win.id
+  0
+
+proc snapshotSummary*(snapshot: ShellSnapshot): JsonNode =
+  %*{
+    "active_tag": snapshot.activeTag,
+    "active_workspace_idx": snapshot.activeWorkspaceIdx,
+    "focused_window": uint32(snapshot.snapshotFocusedWindowId()),
+    "workspaces": snapshot.workspaces.len,
+    "windows": snapshot.windows.len,
+    "workspace_distribution": snapshot.compactWorkspaceDistribution()
+  }
+
+proc snapshotBehaviorPayload*(snapshot: ShellSnapshot): JsonNode =
+  let payload = snapshot.snapshotSummary()
+  payload["window_states"] = snapshot.compactSnapshotWindows()
+  payload
 
 proc compactFocusHistory(state: LiveRestoreState): JsonNode =
   result = newJArray()

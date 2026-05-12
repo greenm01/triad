@@ -273,7 +273,33 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
       if eventPayload.kind == JObject and
           eventPayload.hasKey("workspaces") and
           eventPayload["workspaces"].kind == JArray:
+        let distribution = newJArray()
+        var signatureParts: seq[string]
         for workspace in eventPayload["workspaces"]:
+          if workspace.kind != JObject:
+            continue
+          var entry = newJObject()
+          for key in ["id", "idx", "name", "is_active", "is_focused",
+              "occupied", "active_window_id"]:
+            if workspace.hasKey(key):
+              entry[key] = workspace[key]
+          distribution.add(entry)
+          let id =
+            if workspace.hasKey("id"): workspace["id"].getInt()
+            else: 0
+          let idx =
+            if workspace.hasKey("idx"): workspace["idx"].getInt()
+            else: 0
+          let active =
+            workspace.hasKey("is_active") and
+              workspace["is_active"].kind == JBool and
+              workspace["is_active"].getBool()
+          let occupied =
+            workspace.hasKey("occupied") and
+              workspace["occupied"].kind == JBool and
+              workspace["occupied"].getBool()
+          signatureParts.add($id & ":" & $idx & ":" & $active & ":" &
+            $occupied)
           if workspace.kind == JObject and
               workspace.hasKey("is_active") and
               workspace["is_active"].kind == JBool and
@@ -282,7 +308,8 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
               result["active_tag"] = workspace["id"]
             if workspace.hasKey("idx"):
               result["active_workspace_idx"] = workspace["idx"]
-            break
+        result["workspace_distribution"] = distribution
+        result["workspace_signature"] = %signatureParts.join("|")
       let activeTag =
         if result.hasKey("active_tag"): result["active_tag"].getInt()
         else: 0
@@ -291,7 +318,13 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
           result["active_workspace_idx"].getInt()
         else:
           0
-      let key = $subscriberCount & ":" & $activeTag & ":" & $activeIdx
+      let signature =
+        if result.hasKey("workspace_signature"):
+          result["workspace_signature"].getStr()
+        else:
+          ""
+      let key = $subscriberCount & ":" & $activeTag & ":" & $activeIdx &
+        ":" & signature
       if key == lastNiriWorkspaceBroadcastKey:
         return nil
       lastNiriWorkspaceBroadcastKey = key

@@ -191,6 +191,20 @@ suite "Crash hardening":
       if fileExists(path):
         removeFile(path)
 
+  test "live restore collapse guard detects same-window collapse":
+    var previous = LiveRestoreState(activeTag: 2)
+    previous.windows[WindowId(10)] = RestoredWindowState(tagId: 1)
+    previous.windows[WindowId(20)] = RestoredWindowState(tagId: 2)
+
+    var candidate = LiveRestoreState(activeTag: 1)
+    candidate.windows[WindowId(10)] = RestoredWindowState(tagId: 1)
+    candidate.windows[WindowId(20)] = RestoredWindowState(tagId: 1)
+
+    check previous.suspiciousLiveRestoreCollapse(candidate)
+
+    candidate.windows[WindowId(20)] = RestoredWindowState(tagId: 2)
+    check not previous.suspiciousLiveRestoreCollapse(candidate)
+
   test "layout functions handle nonnegative rectangles":
     let screen = Rect(x: 0, y: 0, w: 100, h: 80)
     var tag = TagState(

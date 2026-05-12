@@ -99,6 +99,8 @@ suite "Runtime logging":
     check event["event"].getStr() == "runtime_update"
     check event["kind"].getStr() == "CmdFocusWorkspaceIndex"
     check event["after"]["active_tag"].getInt() == 2
+    check event["after"].hasKey("workspace_distribution")
+    check event["window_states"]["after"].kind == JArray
 
   test "runtime update behavior event records window state effects":
     let dir = getTempDir() / ("triad-behavior-effects-" &
@@ -160,6 +162,8 @@ suite "Runtime logging":
     check event["event"].getStr() == "niri_compat_broadcast"
     check event["niri_event"].getStr() == "WorkspacesChanged"
     check event["active_tag"].getInt() == 2
+    check event.hasKey("workspace_distribution")
+    check event.hasKey("workspace_signature")
 
   test "behavior log rotates oversized day file and cleans old logs":
     let dir = getTempDir() / ("triad-behavior-rotate-" &
