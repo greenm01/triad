@@ -175,6 +175,62 @@ proc setWindowMinimized*(
   model.windows.mEntity(winId).isMinimized = minimized
   true
 
+proc preserveWindowRuntimeAttributes*(
+    model: var Model; winId: WindowId; source: WindowData): bool =
+  let currentOpt = model.windows.entity(winId)
+  if currentOpt.isNone:
+    return false
+  let current = currentOpt.get()
+  if current.widthProportion == source.widthProportion and
+      current.heightProportion == source.heightProportion and
+      current.isFloating == source.isFloating and
+      current.isFullscreen == source.isFullscreen and
+      current.isMaximized == source.isMaximized and
+      current.isMinimized == source.isMinimized and
+      current.fullscreenOutput == source.fullscreenOutput and
+      current.actualW == source.actualW and
+      current.actualH == source.actualH and
+      current.minWidth == source.minWidth and
+      current.minHeight == source.minHeight and
+      current.maxWidth == source.maxWidth and
+      current.maxHeight == source.maxHeight and
+      current.hasDecorationHint == source.hasDecorationHint and
+      current.decorationHint == source.decorationHint and
+      current.hasPresentationHint == source.hasPresentationHint and
+      current.presentationHint == source.presentationHint and
+      current.floatingGeom == source.floatingGeom and
+      current.parentAutoFloating == source.parentAutoFloating and
+      current.parentExternalId == source.parentExternalId and
+      current.keyboardShortcutsInhibit == source.keyboardShortcutsInhibit and
+      current.keyboardShortcutsInhibitBypass ==
+        source.keyboardShortcutsInhibitBypass:
+    return false
+
+  var win = model.windows.mEntity(winId)
+  win.widthProportion = source.widthProportion
+  win.heightProportion = source.heightProportion
+  win.isFloating = source.isFloating
+  win.isFullscreen = source.isFullscreen
+  win.isMaximized = source.isMaximized
+  win.isMinimized = source.isMinimized
+  win.fullscreenOutput = source.fullscreenOutput
+  win.actualW = source.actualW
+  win.actualH = source.actualH
+  win.minWidth = source.minWidth
+  win.minHeight = source.minHeight
+  win.maxWidth = source.maxWidth
+  win.maxHeight = source.maxHeight
+  win.hasDecorationHint = source.hasDecorationHint
+  win.decorationHint = source.decorationHint
+  win.hasPresentationHint = source.hasPresentationHint
+  win.presentationHint = source.presentationHint
+  win.floatingGeom = source.floatingGeom
+  win.parentAutoFloating = source.parentAutoFloating
+  win.parentExternalId = source.parentExternalId
+  win.keyboardShortcutsInhibit = source.keyboardShortcutsInhibit
+  win.keyboardShortcutsInhibitBypass = source.keyboardShortcutsInhibitBypass
+  true
+
 proc setWindowWidthProportion*(
     model: var Model; winId: WindowId; widthProportion: float32): bool =
   if model.windows.entity(winId).isNone:

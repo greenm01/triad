@@ -388,7 +388,7 @@ suite "Shell compatibility contracts":
     check quickshellConfigReloadAction(noctalia, disabled) ==
       QuickshellReloadAction.AuthoritativeStop
 
-  test "Quickshell spawn handoff does not kill configured shell":
+  test "Quickshell spawn handoff refreshes configured shell":
     let tmp = getTempDir() / ("triad-qs-handoff-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -428,7 +428,8 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
 
     let calls = readFile(logPath)
     check calls.contains("-c noctalia-shell")
-    check not calls.contains("kill -c noctalia-shell --any-display")
+    check calls.contains("kill -c noctalia-shell --any-display")
+    check calls.count("-c noctalia-shell") >= 2
 
   test "Quickshell failed spawn kills stale configured shell":
     let tmp = getTempDir() / ("triad-qs-failed-" & $getCurrentProcessId())

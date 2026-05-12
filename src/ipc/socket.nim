@@ -21,6 +21,7 @@ const
 
 var subscribers*: seq[AsyncSocket] = @[]
 var triadSubscribers*: seq[TriadSubscriber] = @[]
+var lastNiriWorkspaceBroadcastKey = ""
 
 proc runtimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
@@ -259,7 +260,50 @@ proc sendIpcRequest*(path: string; msg: string; timeoutMs = 3000): Future[
     raise
   client.close()
 
+proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
+  try:
+    let root = parseJson(payload)
+    if root.kind != JObject:
+      return
+    for eventName, eventPayload in root.pairs:
+      if eventName != "WorkspacesChanged":
+        return
+      result = %*{"subscriber_count": subscriberCount}
+      result["niri_event"] = %eventName
+      if eventPayload.kind == JObject and
+          eventPayload.hasKey("workspaces") and
+          eventPayload["workspaces"].kind == JArray:
+        for workspace in eventPayload["workspaces"]:
+          if workspace.kind == JObject and
+              workspace.hasKey("is_active") and
+              workspace["is_active"].kind == JBool and
+              workspace["is_active"].getBool():
+            if workspace.hasKey("id"):
+              result["active_tag"] = workspace["id"]
+            if workspace.hasKey("idx"):
+              result["active_workspace_idx"] = workspace["idx"]
+            break
+      let activeTag =
+        if result.hasKey("active_tag"): result["active_tag"].getInt()
+        else: 0
+      let activeIdx =
+        if result.hasKey("active_workspace_idx"):
+          result["active_workspace_idx"].getInt()
+        else:
+          0
+      let key = $subscriberCount & ":" & $activeTag & ":" & $activeIdx
+      if key == lastNiriWorkspaceBroadcastKey:
+        return nil
+      lastNiriWorkspaceBroadcastKey = key
+      break
+  except CatchableError as e:
+    result = %*{"subscriber_count": subscriberCount}
+    result["parse_error"] = %e.msg
+
 proc broadcastJson*(payload: string) {.async.} =
+  let logPayload = niriBroadcastLogPayload(payload, subscribers.len)
+  if logPayload != nil:
+    writeBehaviorEvent("niri_compat_broadcast", logPayload)
   var i = 0
   while i < subscribers.len:
     let client = subscribers[i]

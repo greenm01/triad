@@ -1472,6 +1472,57 @@ suite "Core Runtime Logic":
     check win.isFloating
     check win.floatingGeom == before
 
+  test "Moving editor from grid to scroller preserves runtime attributes":
+    var model = cameraModel()
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "kitty", title: "Terminal"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
+      appId: "sublime_text", title: "Sublime Text"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensions,
+      dimensionsWindowId: 6, actualWidth: 900, actualHeight: 600))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
+      hintWindowId: 6, minWidth: 300, minHeight: 200,
+      maxWidth: 1600, maxHeight: 1200))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDecorationHint,
+      decorationWindowId: 6, decorationHint: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowPresentationHint,
+      presentationWindowId: 6, presentationHint: 3))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: 6))
+
+    let before = model.windowData(
+      model.windowForExternal(ExternalWindowId(6))).get()
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
+      workspaceIndex: 2))
+    let winId = model.windowForExternal(ExternalWindowId(6))
+    let after = model.windowData(winId).get()
+    let snapshotWin = model.snapshotWindow(6)
+
+    check model.activeTag == model.tagForSlot(2)
+    check model.focusedWindowId() == 6
+    check snapshotWin.workspaceIdx == 2
+    check after.widthProportion == before.widthProportion
+    check after.heightProportion == before.heightProportion
+    check after.isMaximized == before.isMaximized
+    check after.isFullscreen == before.isFullscreen
+    check after.isFloating == before.isFloating
+    check after.isMinimized == before.isMinimized
+    check after.actualW == before.actualW
+    check after.actualH == before.actualH
+    check after.minWidth == before.minWidth
+    check after.maxWidth == before.maxWidth
+    check after.hasDecorationHint == before.hasDecorationHint
+    check after.decorationHint == before.decorationHint
+    check after.hasPresentationHint == before.hasPresentationHint
+    check after.presentationHint == before.presentationHint
+    check effects.hasFocusEffect(6)
+
   test "Targeted layout ignores missing empty dynamic workspace":
     var model = cameraModel()
     model.seedCameraWindows(1)

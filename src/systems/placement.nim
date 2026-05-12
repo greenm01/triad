@@ -163,6 +163,7 @@ proc moveFocusedWindowToSlot*(
   let focused = model.focusedOnActiveTag()
   if sourceTag == NullTagId or focused == NullWindowId:
     return false
+  let sourceWindowState = model.windowData(focused)
   let targetTag = model.ensureWorkspaceSlot(targetSlot)
   if targetTag == NullTagId:
     return false
@@ -181,6 +182,9 @@ proc moveFocusedWindowToSlot*(
     discard model.sourceWorkspaceFallbackFocus(sourceTag)
   discard model.addPlacedWindowColumn(
     targetTag, focused, widthProportion = sourceColumnWidth)
+  if sourceWindowState.isSome:
+    discard model.preserveWindowRuntimeAttributes(
+      focused, sourceWindowState.get())
   discard model.setTagFocus(targetTag, focused)
   if model.overviewActive:
     discard model.setActiveWorkspace(targetTag)

@@ -1,5 +1,10 @@
-import std/[json, options, os, strutils, times, unittest]
+import std/[asyncdispatch, json, options, os, strutils, times, unittest]
 import chronicles
+import ../src/config/parser
+import ../src/core/msg
+import ../src/ipc/socket
+import ../src/systems/[runtime_facade, update]
+import ../src/types/runtime_values
 import ../src/utils/[behavior_log, runtime_log]
 
 proc restoreEnv(name, value: string) =
@@ -69,6 +74,60 @@ suite "Runtime logging":
     check event["value"].getInt() == 7
     check event.hasKey("ts_unix_ms")
     check event.hasKey("pid")
+
+  test "runtime update behavior event records workspace transition":
+    let dir = getTempDir() / ("triad-behavior-runtime-" &
+      $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    let model = initRuntimeStateFromConfig(Config(
+      workspaces: WorkspaceConfig(defaultCount: 3))).model
+    discard model.update(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
+      workspaceIndex: 2))
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["event"].getStr() == "runtime_update"
+    check event["kind"].getStr() == "CmdFocusWorkspaceIndex"
+    check event["after"]["active_tag"].getInt() == 2
+
+  test "niri broadcast behavior event records active workspace":
+    let dir = getTempDir() / ("triad-behavior-broadcast-" &
+      $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    waitFor broadcastJson($(%*{
+      "WorkspacesChanged": {
+        "workspaces": [
+          {"id": 1, "idx": 1, "is_active": false},
+          {"id": 2, "idx": 2, "is_active": true}
+        ]
+      }
+    }))
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["event"].getStr() == "niri_compat_broadcast"
+    check event["niri_event"].getStr() == "WorkspacesChanged"
+    check event["active_tag"].getInt() == 2
 
   test "behavior log rotates oversized day file and cleans old logs":
     let dir = getTempDir() / ("triad-behavior-rotate-" &

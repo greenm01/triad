@@ -18,7 +18,7 @@ type
     spawnPending*: bool
 
 proc succeeded(status: QuickshellSpawnStatus): bool =
-  status in {QuickshellSpawnStatus.Running, QuickshellSpawnStatus.Handoff}
+  status == QuickshellSpawnStatus.Running
 
 proc quickshellBehaviorPayload*(
     config: QuickshellConfig; reason: string; extra: JsonNode = nil): JsonNode =
