@@ -409,6 +409,19 @@ suite "Core Runtime Logic":
     check model.focusDirection(Direction.DirRight) == 2
     check model.focusDirection(Direction.DirLeft) == 1
 
+  test "Scroller directional focus enters adjacent stacked column":
+    var model = directionalModel(LayoutMode.Scroller, 5)
+    let tagId = model.activeTag
+    let middleColumn = model.columnAt(tagId, 1)
+    let third = model.windowForExternal(ExternalWindowId(3))
+    discard model.moveWindowToColumn(tagId, third, middleColumn, 1)
+
+    model.focusExternal(1)
+    check model.focusDirection(Direction.DirRight) in [2'u32, 3'u32]
+
+    model.focusExternal(4)
+    check model.focusDirection(Direction.DirLeft) in [2'u32, 3'u32]
+
   test "Master layouts use visual directional focus":
     var tile = directionalModel(LayoutMode.MasterStack, 3)
     tile.focusExternal(1)

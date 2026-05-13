@@ -1,7 +1,7 @@
 import std/options
 import workspaces
 import ../state/engine
-from ../types/runtime_values import Direction, RenderInstruction
+from ../types/runtime_values import Direction, LayoutMode, RenderInstruction
 import layout_projection
 import popup_tree
 
@@ -240,6 +240,22 @@ proc centerX(rect: typeof(RenderInstruction().geom)): int64 =
 proc centerY(rect: typeof(RenderInstruction().geom)): int64 =
   int64(rect.y) * 2'i64 + int64(rect.h)
 
+proc intervalDistance(aStart, aLen, bStart, bLen: int64): int64 =
+  let aEnd = aStart + aLen
+  let bEnd = bStart + bLen
+  if aEnd < bStart:
+    bStart - aEnd
+  elif bEnd < aStart:
+    aStart - bEnd
+  else:
+    0'i64
+
+proc verticalDistance(a, b: typeof(RenderInstruction().geom)): int64 =
+  intervalDistance(int64(a.y), int64(a.h), int64(b.y), int64(b.h))
+
+proc horizontalDistance(a, b: typeof(RenderInstruction().geom)): int64 =
+  intervalDistance(int64(a.x), int64(a.w), int64(b.x), int64(b.w))
+
 proc sameRect(a, b: typeof(RenderInstruction().geom)): bool =
   a.x == b.x and a.y == b.y and a.w == b.w and a.h == b.h
 
@@ -286,6 +302,10 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
   let current = candidates[currentIdx]
   let currentCx = current.geom.centerX()
   let currentCy = current.geom.centerY()
+  let tagOpt = model.tagData(model.activeTag)
+  let useIntervalGeometry =
+    tagOpt.isSome and
+    tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
 
   var bestIdx = -1
   var bestPrimary = high(int64)
@@ -298,18 +318,47 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
 
     let cx = candidate.geom.centerX()
     let cy = candidate.geom.centerY()
-    let (primary, perp) =
+    var primary: int64
+    var perp: int64
+    if useIntervalGeometry:
       case direction
       of Direction.DirLeft:
-        (currentCx - cx, abs(currentCy - cy))
+        if cx >= currentCx:
+          continue
+        primary =
+          max(0'i64, int64(current.geom.x) - int64(candidate.geom.x + candidate.geom.w))
+        perp = current.geom.verticalDistance(candidate.geom)
       of Direction.DirRight:
-        (cx - currentCx, abs(currentCy - cy))
+        if cx <= currentCx:
+          continue
+        primary =
+          max(0'i64, int64(candidate.geom.x) - int64(current.geom.x + current.geom.w))
+        perp = current.geom.verticalDistance(candidate.geom)
       of Direction.DirUp:
-        (currentCy - cy, abs(currentCx - cx))
+        if cy >= currentCy:
+          continue
+        primary =
+          max(0'i64, int64(current.geom.y) - int64(candidate.geom.y + candidate.geom.h))
+        perp = current.geom.horizontalDistance(candidate.geom)
       of Direction.DirDown:
-        (cy - currentCy, abs(currentCx - cx))
-    if primary <= 0:
-      continue
+        if cy <= currentCy:
+          continue
+        primary =
+          max(0'i64, int64(candidate.geom.y) - int64(current.geom.y + current.geom.h))
+        perp = current.geom.horizontalDistance(candidate.geom)
+    else:
+      (primary, perp) =
+        case direction
+        of Direction.DirLeft:
+          (currentCx - cx, abs(currentCy - cy))
+        of Direction.DirRight:
+          (cx - currentCx, abs(currentCy - cy))
+        of Direction.DirUp:
+          (currentCy - cy, abs(currentCx - cx))
+        of Direction.DirDown:
+          (cy - currentCy, abs(currentCx - cx))
+      if primary <= 0:
+        continue
     if perp < bestPerp or (perp == bestPerp and primary < bestPrimary) or
         (perp == bestPerp and primary == bestPrimary and candidate.order < bestOrder):
       bestIdx = idx
