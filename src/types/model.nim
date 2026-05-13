@@ -193,6 +193,7 @@ type
     defaultWorkspaceCount*: uint32
     visibleSlots*: seq[uint32]
     overviewActive*: bool
+    overviewWorkspacePreviewsActive*: bool
     hotkeyOverlayOpen*: bool
     hotkeyOverlayShownOnce*: bool
     overviewSelectedWindow*: WindowId

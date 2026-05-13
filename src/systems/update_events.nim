@@ -20,6 +20,7 @@ proc setExternalFocus(model: var Model, externalId: ExternalWindowId): bool =
     if model.overviewStyle() == OverviewStyle.MangoGrid:
       discard model.restoreOverviewViewportSnapshot()
     discard model.setOverviewActive(false)
+    discard model.setOverviewWorkspacePreviewsActive(false)
     discard model.clearOverviewSelection()
     return model.focusWindow(winId, restorePopupTree = false)
   let tagId = model.activeTag

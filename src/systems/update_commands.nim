@@ -16,13 +16,18 @@ proc closeOverview(model: var Model): bool =
   let restoreViewport = model.mangoOverviewActive()
   result = model.setOverviewActive(false)
   result = model.clearOverviewSelection() or result
+  result = model.setOverviewWorkspacePreviewsActive(false) or result
   if wasActive and restoreViewport:
     result = model.restoreOverviewViewportSnapshot() or result
 
 proc openOverview(model: var Model): bool =
+  if model.overviewActive:
+    return false
+  let useWorkspacePreviews = model.overviewStyle() == OverviewStyle.NiriWorkspaces
+  discard model.setOverviewWorkspacePreviewsActive(useWorkspacePreviews)
   result = model.setOverviewActive(true)
   if result:
-    if model.overviewStyle() == OverviewStyle.MangoGrid:
+    if not useWorkspacePreviews:
       discard model.saveOverviewViewportSnapshot()
       discard model.setOverviewSelection(model.initialOverviewWindow())
       discard model.setOverviewScrollOffset(0.0)

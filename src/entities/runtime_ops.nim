@@ -9,6 +9,12 @@ proc setOverviewActive*(model: var Model, active: bool): bool =
   model.overviewActive = active
   true
 
+proc setOverviewWorkspacePreviewsActive*(model: var Model, active: bool): bool =
+  if model.overviewWorkspacePreviewsActive == active:
+    return false
+  model.overviewWorkspacePreviewsActive = active
+  true
+
 proc setOverviewSelection*(model: var Model, winId: WindowId): bool =
   if model.overviewSelectedWindow == winId:
     return false

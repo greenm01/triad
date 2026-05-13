@@ -40,7 +40,7 @@ external window manager.
 | Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
 | Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, inhibit policy, and hotkey overlay titles. |
-| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. |
+| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. Niri-style scroller overview adds unmodified Escape/Return/arrow fallback bindings only when those overview key slots are not configured. |
 | Bindings | HJKL/arrow mirroring | Manual binds | WM policy | `mirror-hjkl-arrows` | X | Triad can generate arrow equivalents for HJKL binds. |
 | Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
 | Bindings | Eat next key | | `ensure_next_key_eaten` | `eat-next-key`, `cancel-eat-next-key` | X | Useful for modal shell interactions. |

@@ -138,6 +138,7 @@ proc beginOverviewScroll*(model: var Model, x, y: int32): bool =
 
 proc closeOverviewFromPointer(model: var Model): bool =
   result = model.setOverviewActive(false)
+  result = model.setOverviewWorkspacePreviewsActive(false) or result
   result = model.clearOverviewSelection() or result
 
 proc overviewDragPastThreshold(op: PointerOpData): bool =
@@ -324,12 +325,23 @@ proc groupFocusedWindow*(model: var Model): bool =
   model.addGroup(@[focused], focused) != NullGroupId
 
 proc tickAnimations*(model: var Model): bool =
-  if not model.enableAnimations or model.overviewActive:
+  if not model.enableAnimations:
     return false
+  let tickOverviewPreviews = model.overviewUsesWorkspacePreviews()
+  if model.overviewActive and not tickOverviewPreviews:
+    return false
+  let previewSlots =
+    if tickOverviewPreviews:
+      model.previewSlots()
+    else:
+      @[]
   let speed = model.animationSpeed
   let epsilon = 0.5'f32
   for tagId, tag in model.tagsWithId():
-    if tagId != model.activeTag:
+    if tickOverviewPreviews:
+      if previewSlots.find(tag.slot) == -1:
+        continue
+    elif tagId != model.activeTag:
       continue
     var currentX = tag.currentViewportXOffset
     var currentY = tag.currentViewportYOffset

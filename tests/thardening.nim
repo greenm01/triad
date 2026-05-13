@@ -1,6 +1,7 @@
 import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
+import ../src/daemon/bindings_runtime
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
@@ -43,6 +44,38 @@ suite "Crash hardening":
     check not daemon.consumeMaximizedAck(42, true)
     check daemon.consumeMaximizedAck(42, false)
     check not daemon.consumeMaximizedAck(42, false)
+
+  test "Niri overview fallback keys preserve user overview bindings":
+    var model = initRuntimeStateFromConfig(Config()).model
+    model.keyBindings =
+      @[
+        KeyBindingConfig(
+          key: "Enter",
+          modifiers: 0'u32,
+          command: "custom-enter",
+          mode: BindingMode.BindAlways,
+        ),
+        KeyBindingConfig(
+          key: "Left",
+          modifiers: 0'u32,
+          command: "custom-left",
+          mode: BindingMode.BindOverview,
+        ),
+        KeyBindingConfig(
+          key: "Right",
+          modifiers: 0'u32,
+          command: "normal-right",
+          mode: BindingMode.BindNormal,
+        ),
+      ]
+
+    let fallbacks = model.overviewFallbackKeyBindings()
+
+    check overviewKeyBindingFallbacks().len == 6
+    check not fallbacks.anyIt(it.key == "Return")
+    check not fallbacks.anyIt(it.key == "Left")
+    check fallbacks.anyIt(it.key == "Right" and it.command == "focus-right")
+    check fallbacks.anyIt(it.key == "Escape")
 
   test "duplicate window create keeps a single shell window":
     var model = initRuntimeStateFromConfig(

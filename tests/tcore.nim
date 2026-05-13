@@ -3317,6 +3317,28 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
+  test "Niri scroller overview keeps preview style after navigating to grid workspace":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid, layoutTargetTag: 2)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.overviewStyle() == OverviewStyle.NiriWorkspaces
+    check model.overviewUsesWorkspacePreviews()
+
   test "Selecting overview window commits focus":
     var model = configuredModel()
     model.applyMsg(
@@ -3513,6 +3535,60 @@ suite "Core Runtime Logic":
       beforeViewport.currentViewportXOffset
     check model.viewport(1).targetViewportXOffset != beforeViewport.targetViewportXOffset
 
+  test "Niri overview camera retarget animates while overview is open":
+    var model = cameraModel()
+    model.seedCameraWindows()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.layoutInstructions()
+    let target = model.viewport(1).targetViewportXOffset
+
+    check model.overviewActive
+    check target != 0.0'f32
+    check model.viewport(1).currentViewportXOffset == 0.0'f32
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick))
+
+    check model.viewport(1).currentViewportXOffset != 0.0'f32
+    check model.viewport(1).currentViewportXOffset != target
+    let afterTick = model.viewport(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdCloseOverview))
+
+    check not model.overviewActive
+    check model.viewport(1) == afterTick
+
+  test "Niri overview ticks non-active preview workspace cameras":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    model.setViewport(2, targetX = 0.0, currentX = 0.0)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    discard model.layoutInstructions()
+    let target = model.viewport(2).targetViewportXOffset
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
+    check target != 0.0'f32
+    check model.viewport(2).currentViewportXOffset == 0.0'f32
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick))
+
+    check model.viewport(2).currentViewportXOffset != 0.0'f32
+    check model.viewport(2).currentViewportXOffset != target
+
   test "Overview select retargets target workspace camera":
     var model = cameraModel()
     model.seedCameraWindows(1)
@@ -3545,9 +3621,10 @@ suite "Core Runtime Logic":
     check model.viewport(2).targetViewportXOffset !=
       workspace2Viewport.targetViewportXOffset
 
-  test "Closing overview restores original camera":
+  test "Closing Mango overview restores original camera":
     var model = cameraModel()
     model.seedCameraWindows()
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
     model.setViewport(1, targetX = 300.0, currentX = 100.0)
     let beforeViewport = model.viewport(1)
 

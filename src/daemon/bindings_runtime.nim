@@ -7,7 +7,7 @@ import ../config/keysyms
 import ../core/msg
 import ../ipc/commands
 import ../systems/[daemon_view, overview_geometry, runtime]
-import ../types/runtime_values
+import ../types/[model, runtime_values]
 import
   manage_requests, message_queue, protocol_surface_runtime, protocol_surfaces,
   render_runtime, state, wayland_helpers
@@ -109,6 +109,65 @@ proc overviewScrollPointerBinding(): PointerBindingConfig =
     command: "overview-scroll",
     mode: BindingMode.BindOverview,
   )
+
+proc overviewKeyBindingFallbacks*(): seq[KeyBindingConfig] =
+  @[
+    KeyBindingConfig(
+      key: "Escape",
+      modifiers: 0'u32,
+      command: "toggle-overview",
+      mode: BindingMode.BindOverview,
+    ),
+    KeyBindingConfig(
+      key: "Return",
+      modifiers: 0'u32,
+      command: "toggle-overview",
+      mode: BindingMode.BindOverview,
+    ),
+    KeyBindingConfig(
+      key: "Left",
+      modifiers: 0'u32,
+      command: "focus-left",
+      mode: BindingMode.BindOverview,
+    ),
+    KeyBindingConfig(
+      key: "Right",
+      modifiers: 0'u32,
+      command: "focus-right",
+      mode: BindingMode.BindOverview,
+    ),
+    KeyBindingConfig(
+      key: "Up",
+      modifiers: 0'u32,
+      command: "focus-window-or-workspace-up",
+      mode: BindingMode.BindOverview,
+    ),
+    KeyBindingConfig(
+      key: "Down",
+      modifiers: 0'u32,
+      command: "focus-window-or-workspace-down",
+      mode: BindingMode.BindOverview,
+    ),
+  ]
+
+proc sameOverviewKeySlot(binding, candidate: KeyBindingConfig): bool =
+  if binding.mode notin {BindingMode.BindAlways, BindingMode.BindOverview}:
+    return false
+  binding.modifiers == candidate.modifiers and
+    keySymForBinding(binding.key, binding.modifiers) != 0 and
+    keySymForBinding(binding.key, binding.modifiers) ==
+    keySymForBinding(candidate.key, candidate.modifiers)
+
+proc hasOverviewKeyBinding*(model: Model, candidate: KeyBindingConfig): bool =
+  for binding in model.keyBindings:
+    if binding.sameOverviewKeySlot(candidate):
+      return true
+  false
+
+proc overviewFallbackKeyBindings*(model: Model): seq[KeyBindingConfig] =
+  for binding in overviewKeyBindingFallbacks():
+    if not model.hasOverviewKeyBinding(binding):
+      result.add(binding)
 
 proc onSeatRemoved(data: pointer, seat: ptr RiverSeatV1) =
   let daemon = callbackDaemon(data, "seat removed")
@@ -545,6 +604,12 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
       let sym = keySymForBinding(binding.key, binding.modifiers)
       if parsed.isSome and sym != 0:
         daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
+    if daemon.currentModel.overviewUsesWorkspacePreviews():
+      for binding in daemon.currentModel.overviewFallbackKeyBindings():
+        let parsed = parseTextCommand(binding.command)
+        let sym = keySymForBinding(binding.key, binding.modifiers)
+        if parsed.isSome and sym != 0:
+          daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
 
     for binding in daemon.currentModel.pointerBindings:
       if daemon.pointerBindingActive(binding):

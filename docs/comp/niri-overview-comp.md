@@ -44,7 +44,7 @@ Status values:
 | Hold-to-activate | Holding a dragged item over a workspace activates it and closes overview. | Partial | Behavior exists, but Triad timing is tick-based rather than Niri's 750 ms timer. |
 | DnD edge workspace switch | Dragging near the top or bottom overview edge scrolls the workspace stack. | Not Supported | Future runtime/input feature. |
 | Drop into new workspace or gap | Drag can create or move to a new workspace above, below, or between existing workspaces. | Partial | Dynamic gap targeting exists; add explicit regression coverage. |
-| Keyboard shortcuts | Normal keyboard shortcuts continue to work while overview is open. | Partial | Main workspace and focus actions work; hardcoded Niri overview key behavior is not fully mirrored. |
+| Keyboard shortcuts | Normal keyboard shortcuts continue to work while overview is open, with Escape/Return and arrow-key overview fallbacks. | Compliant | Triad keeps configured bindings active and adds Niri-style fallback keys for scroller overview when the user has not bound those key slots. |
 | Niri IPC workspace actions | `FocusWorkspace*` actions work while overview is open. | Compliant | Covered by compatibility tests. |
 | Hot corner | Default top-left hot corner toggles overview. | Not Supported | Triad has no hot-corner input feature. |
 | Multi-output overview | Niri renders and manages overview per output. | Partial | Triad remains primary-output oriented. |

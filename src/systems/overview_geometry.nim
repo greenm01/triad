@@ -27,6 +27,11 @@ proc effectiveOverviewZoom*(model: Model): float32 =
     DefaultOverviewZoom
 
 proc overviewStyle*(model: Model): OverviewStyle =
+  if model.overviewActive:
+    if model.overviewWorkspacePreviewsActive:
+      return OverviewStyle.NiriWorkspaces
+    return OverviewStyle.MangoGrid
+
   let tagOpt = model.tagData(model.activeTag)
   if tagOpt.isSome and
       tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
