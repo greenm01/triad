@@ -13,8 +13,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-next`: Shifts keyboard focus to the next window in the sequence.
 *   `focus-prev`: Shifts keyboard focus to the previous window.
 *   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus
-    spatially within the active tag. When overview is open, these move through
-    the visible overview grid.
+    spatially within the active tag. In Mango-style overview these move through
+    the visible overview grid; in Niri-style scroller overview they keep normal
+    scroller focus semantics.
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.
@@ -106,7 +107,7 @@ pointer-bind "right" "close-window" mode="overview"
 as normal Triad commands and target the window under the pointer when the
 command is window-specific. In the Niri-style scroller overview, unmodified
 left-drag moves a window preview to the hovered workspace, and unmodified
-right-drag scrolls the workspace preview stack; this overrides overview
+right-drag pans the hovered workspace camera; this overrides overview
 right-click close only for that scroller overview mode. Mouse-wheel and
 touchpad gesture bindings are not part of the current River input surface Triad
 receives.

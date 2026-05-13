@@ -339,7 +339,7 @@ proc layoutMangoOverview(model: Model, screen: rv.Rect): seq[rv.RenderInstructio
 
 proc layoutNiriOverview(
     model: Model, windows: Table[rv.WindowId, rv.WindowData], screen: rv.Rect
-): seq[rv.RenderInstruction] =
+): LayoutProjection =
   let slots = model.previewSlots()
   if slots.len == 0:
     return
@@ -354,31 +354,45 @@ proc layoutNiriOverview(
     if not projected.found:
       continue
     model.applyPopupLayoutFocus(projected.tag, model.activeFocus())
+    let retargetViewport = model.viewportRetargetRequested(tagId)
     var instructions = layoutForTag(
-      projected.tag, windows, workspaceScreen, model.outerGaps, model.innerGaps, false,
-      false, "never",
+      projected.tag,
+      windows,
+      workspaceScreen,
+      model.outerGaps,
+      model.innerGaps,
+      retargetViewport and model.scrollerFocusCenter,
+      retargetViewport and model.scrollerPreferCenter,
+      if retargetViewport: model.centerFocusedColumn else: "never",
     )
+    if projected.tag.columns.len > 0:
+      result.viewportTargets.add(
+        LayoutViewportTarget(
+          tagSlot: projected.tag.tagId,
+          targetX: projected.tag.targetViewportXOffset,
+          targetY: projected.tag.targetViewportYOffset,
+        )
+      )
     model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     let preview = model.workspacePreviewRect(screen, slots, idx)
     for instr in instructions:
-      result.add(
+      result.instructions.add(
         rv.RenderInstruction(
           windowId: instr.windowId,
           geom: scaledOverviewRect(workspaceScreen, preview, instr.geom, zoom),
         )
       )
-  model.applyOverviewDrag(result)
+  model.applyOverviewDrag(result.instructions)
 
 proc layoutProjection*(model: Model): LayoutProjection =
   let screen = model.primaryScreen()
   let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
-    result.instructions =
-      if model.overviewStyle() == OverviewStyle.NiriWorkspaces:
-        model.layoutNiriOverview(windows, screen)
-      else:
-        model.layoutMangoOverview(screen)
+    if model.overviewStyle() == OverviewStyle.NiriWorkspaces:
+      result = model.layoutNiriOverview(windows, screen)
+    else:
+      result.instructions = model.layoutMangoOverview(screen)
     return
 
   if model.activeTag == NullTagId:

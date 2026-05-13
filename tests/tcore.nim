@@ -3174,6 +3174,7 @@ suite "Core Runtime Logic":
 
   test "Overview direction selection follows visual grid":
     var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
     for id in 1'u32 .. 5'u32:
       model.applyMsg(
         Msg(
@@ -3255,6 +3256,7 @@ suite "Core Runtime Logic":
 
   test "Overview ignores workspace focus commands":
     var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
     for id in 1'u32 .. 5'u32:
       model.applyMsg(
         Msg(
@@ -3293,6 +3295,28 @@ suite "Core Runtime Logic":
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
     check downEffects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
+  test "Niri scroller overview keeps workspace navigation live":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.focusedWindowId() == 2
+    check model.overviewSelectedWindow == NullWindowId
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+
   test "Selecting overview window commits focus":
     var model = configuredModel()
     model.applyMsg(
@@ -3316,7 +3340,7 @@ suite "Core Runtime Logic":
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
 
-  test "Dragging Niri overview preview moves window to hovered workspace":
+  test "Dragging Niri overview preview moves window without closing":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3348,11 +3372,12 @@ suite "Core Runtime Logic":
     )
     model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
 
-    check not model.overviewActive
-    check model.activeTag == model.tagForSlot(2)
-    check model.activeWorkspaceFocusId() == 1
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
+    check model.activeWorkspaceFocusId() == 0
+    check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(2)
 
-  test "Right-dragging Niri overview scrolls workspace previews":
+  test "Right-dragging Niri overview pans hovered workspace camera":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3361,6 +3386,7 @@ suite "Core Runtime Logic":
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
     )
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    let beforeViewport = model.viewport(1)
 
     let start = model.instructionGeom(1).rectCenter()
     discard model.updateModel(
@@ -3370,11 +3396,14 @@ suite "Core Runtime Logic":
         overviewScrollY: start.y,
       )
     )
-    model.applyMsg(Msg(kind: MsgKind.WlPointerDelta, dx: 0, dy: 50))
+    model.applyMsg(Msg(kind: MsgKind.WlPointerDelta, dx: 50, dy: 0))
     model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
 
     check model.overviewActive
-    check model.overviewScrollOffset == 50.0'f32
+    check model.viewport(1).currentViewportXOffset ==
+      beforeViewport.currentViewportXOffset - 100.0'f32
+    check model.viewport(1).targetViewportXOffset ==
+      beforeViewport.targetViewportXOffset - 100.0'f32
     check model.pointerOp.kind == PointerOpKind.OpNone
 
   test "Holding Niri overview drag over workspace activates drop":
@@ -3434,6 +3463,37 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
+
+  test "Clicking blank Niri overview workspace activates workspace":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let slots = model.previewSlots()
+    let target = model.workspacePreviewRect(model.primaryScreen(), slots, 1)
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 0,
+        overviewDragX: target.x + 1,
+        overviewDragY: target.y + 1,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check not model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.focusedWindowId() == 2
 
   test "Overview select retargets same-workspace camera":
     var model = cameraModel()

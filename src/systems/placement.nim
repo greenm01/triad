@@ -185,14 +185,16 @@ proc preserveEmptyTargetLayoutContext(
   if targetData.masterSplitRatio != sourceData.masterSplitRatio:
     result = model.setTagMasterRatio(targetTag, sourceData.masterSplitRatio) or result
 
-proc moveFocusedWindowToSlot*(model: var Model, targetSlot: uint32): bool =
+proc moveWindowToSlot*(
+    model: var Model, winId: WindowId, targetSlot: uint32, activateInOverview = true
+): bool =
   if targetSlot == 0:
     return false
-  let sourceTag = model.activeTag
-  let focused = model.focusedOnActiveTag()
-  if sourceTag == NullTagId or focused == NullWindowId:
+  let position = model.firstWindowPosition(winId)
+  let sourceTag = position.tagId
+  if sourceTag == NullTagId or winId == NullWindowId:
     return false
-  let sourceWindowState = model.windowData(focused)
+  let sourceWindowState = model.windowData(winId)
   let targetTag = model.ensureWorkspaceSlot(targetSlot)
   if targetTag == NullTagId:
     return false
@@ -200,7 +202,7 @@ proc moveFocusedWindowToSlot*(model: var Model, targetSlot: uint32): bool =
     return false
   let targetWasEmpty = not model.tagHasLiveWindows(targetTag)
 
-  let sourcePlacement = model.placementForWindowOnTag(sourceTag, focused)
+  let sourcePlacement = model.placementForWindowOnTag(sourceTag, winId)
   var sourceColumnWidth = model.defaultColumnWidth()
   var sourceColumnFullWidth = false
   if sourcePlacement.isSome:
@@ -209,24 +211,27 @@ proc moveFocusedWindowToSlot*(model: var Model, targetSlot: uint32): bool =
       sourceColumnWidth = sourceColumn.get().widthProportion
       sourceColumnFullWidth = sourceColumn.get().isFullWidth
 
-  discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
+  discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
   if not model.overviewActive:
     discard model.sourceWorkspaceFallbackFocus(sourceTag)
   discard model.preserveEmptyTargetLayoutContext(sourceTag, targetTag, targetWasEmpty)
   discard model.addPlacedWindowColumn(
     targetTag,
-    focused,
+    winId,
     widthProportion = sourceColumnWidth,
     isFullWidth = sourceColumnFullWidth,
   )
   if sourceWindowState.isSome:
-    discard model.preserveWindowRuntimeAttributes(focused, sourceWindowState.get())
-  discard model.setTagFocus(targetTag, focused)
-  if model.overviewActive:
+    discard model.preserveWindowRuntimeAttributes(winId, sourceWindowState.get())
+  discard model.setTagFocus(targetTag, winId)
+  if model.overviewActive and activateInOverview:
     discard model.setActiveWorkspace(targetTag)
     discard model.recordWorkspace(targetTag)
   model.refreshVisibleWorkspaceSlots()
   true
+
+proc moveFocusedWindowToSlot*(model: var Model, targetSlot: uint32): bool =
+  model.moveWindowToSlot(model.focusedOnActiveTag(), targetSlot)
 
 proc moveFocusedWindowToSlotAndFocus*(model: var Model, targetSlot: uint32): bool =
   let focused = model.focusedOnActiveTag()

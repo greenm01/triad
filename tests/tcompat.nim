@@ -212,19 +212,21 @@ suite "Shell compatibility contracts":
     let overviewFocusNext =
       handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", overviewSnapshot)
     check overviewFocusNext.messages.len == 1
-    check overviewFocusNext.messages[0].kind == MsgKind.CmdFocusDirection
-    check overviewFocusNext.messages[0].direction == Direction.DirDown
+    check overviewFocusNext.messages[0].kind == MsgKind.CmdFocusTag
+    check overviewFocusNext.messages[0].focusTag == 2
 
     let overviewFocusPrevious =
       handleNiriRequest("""{"Action":{"FocusWorkspaceUp":{}}}""", overviewSnapshot)
     check overviewFocusPrevious.messages.len == 1
-    check overviewFocusPrevious.messages[0].kind == MsgKind.CmdFocusDirection
-    check overviewFocusPrevious.messages[0].direction == Direction.DirUp
+    check overviewFocusPrevious.messages[0].kind == MsgKind.CmdFocusTag
+    check overviewFocusPrevious.messages[0].focusTag == 1
 
     let overviewFocusWorkspace = handleNiriRequest(
       """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", overviewSnapshot
     )
-    check overviewFocusWorkspace.messages.len == 0
+    check overviewFocusWorkspace.messages.len == 1
+    check overviewFocusWorkspace.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
+    check overviewFocusWorkspace.messages[0].workspaceIndex == 2
 
     let closeWin =
       handleNiriRequest("""{"Action":{"CloseWindow":{"id":10}}}""", snapshot)

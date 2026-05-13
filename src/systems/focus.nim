@@ -3,7 +3,7 @@ import workspaces
 import ../layouts/grid_math
 import ../state/engine
 from ../types/runtime_values import Direction, RenderInstruction
-import layout_projection
+import layout_projection, overview_geometry
 import popup_tree
 
 type FocusCandidate = object
@@ -183,7 +183,7 @@ proc focusableWindowsOnTag(model: Model, tagId: TagId): seq[WindowId] =
 proc focusOverviewByStep*(model: var Model, step: int): bool
 
 proc focusCycle*(model: var Model, step: int): bool =
-  if model.overviewActive:
+  if model.overviewActive and model.overviewStyle() == OverviewStyle.MangoGrid:
     return model.focusOverviewByStep(step)
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
@@ -417,7 +417,7 @@ proc focusOverviewByDelta(model: var Model, deltaCol, deltaRow: int): bool =
   model.setOverviewSelection(windows[targetIdx])
 
 proc focusByDirection*(model: var Model, direction: Direction): bool =
-  if model.overviewActive:
+  if model.overviewActive and model.overviewStyle() == OverviewStyle.MangoGrid:
     case direction
     of Direction.DirLeft:
       return model.focusOverviewByDelta(-1, 0)

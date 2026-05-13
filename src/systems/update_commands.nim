@@ -2,22 +2,32 @@ import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import Direction
 import
-  dialog_focus, focus, placement, runtime, scratchpad, update_effects, window_state,
-  workspaces
+  dialog_focus, focus, overview_geometry, placement, runtime, scratchpad,
+  update_effects, window_state, workspaces
+
+proc niriOverviewActive(model: Model): bool =
+  model.overviewActive and model.overviewStyle() == OverviewStyle.NiriWorkspaces
+
+proc mangoOverviewActive(model: Model): bool =
+  model.overviewActive and model.overviewStyle() == OverviewStyle.MangoGrid
 
 proc closeOverview(model: var Model): bool =
   let wasActive = model.overviewActive
+  let restoreViewport = model.mangoOverviewActive()
   result = model.setOverviewActive(false)
   result = model.clearOverviewSelection() or result
-  if wasActive:
+  if wasActive and restoreViewport:
     result = model.restoreOverviewViewportSnapshot() or result
 
 proc openOverview(model: var Model): bool =
   result = model.setOverviewActive(true)
   if result:
-    discard model.saveOverviewViewportSnapshot()
-    discard model.setOverviewSelection(model.initialOverviewWindow())
-    discard model.setOverviewScrollOffset(0.0)
+    if model.overviewStyle() == OverviewStyle.MangoGrid:
+      discard model.saveOverviewViewportSnapshot()
+      discard model.setOverviewSelection(model.initialOverviewWindow())
+      discard model.setOverviewScrollOffset(0.0)
+    else:
+      discard model.clearOverviewSelection()
 
 proc recomputeAllTagFocus(model: var Model) =
   for tagId, _ in model.tagsWithId():
@@ -60,44 +70,44 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdFocusDirection:
     result.dirty = model.focusByDirection(msg.direction)
   of MsgKind.CmdFocusLast:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusLast()
   of MsgKind.CmdFocusTagLeft:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, false))
   of MsgKind.CmdFocusTagRight:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, false))
   of MsgKind.CmdFocusOccupiedTagLeft:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, true))
   of MsgKind.CmdFocusOccupiedTagRight:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, true))
   of MsgKind.CmdFocusColumnFirst:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusColumnAtEdge(true)
   of MsgKind.CmdFocusColumnLast:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusColumnAtEdge(false)
   of MsgKind.CmdFocusWindowOrWorkspaceUp:
-    if model.overviewActive:
+    if model.mangoOverviewActive():
       result.dirty = model.focusByDirection(Direction.DirUp)
     else:
       result.dirty = model.focusWindowOrWorkspace(-1)
   of MsgKind.CmdFocusWindowOrWorkspaceDown:
-    if model.overviewActive:
+    if model.mangoOverviewActive():
       result.dirty = model.focusByDirection(Direction.DirDown)
     else:
       result.dirty = model.focusWindowOrWorkspace(1)
   of MsgKind.CmdFocusTag:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusWorkspaceSlot(msg.focusTag)
   of MsgKind.CmdFocusWorkspaceIndex:
-    if not model.overviewActive:
+    if not model.overviewActive or model.niriOverviewActive():
       result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
   of MsgKind.CmdFocusWindowById:
-    if model.overviewActive:
+    if model.mangoOverviewActive():
       let winId = model.windowForExternal(msg.focusWindowId.externalWindowId())
       if model.overviewWindowIds().find(winId) != -1:
         result.dirty = model.setOverviewSelection(winId)

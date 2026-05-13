@@ -282,16 +282,15 @@ proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) 
   if daemon[].currentModel.overviewUsesWorkspacePreviews():
     if button == 0x110'u32:
       let target = daemon[].overviewWindowAtPointer(seat)
-      if target != 0:
-        daemon.enqueue(
-          Msg(
-            kind: MsgKind.WlOverviewPointerDragRequested,
-            overviewDragWinId: target,
-            overviewDragSeat: seat,
-            overviewDragX: point.x,
-            overviewDragY: point.y,
-          )
+      daemon.enqueue(
+        Msg(
+          kind: MsgKind.WlOverviewPointerDragRequested,
+          overviewDragWinId: target,
+          overviewDragSeat: seat,
+          overviewDragX: point.x,
+          overviewDragY: point.y,
         )
+      )
       return
     if button == 0x111'u32 or
         daemon.pointerBindingKinds.getOrDefault(id, PointerOpKind.OpNone) ==

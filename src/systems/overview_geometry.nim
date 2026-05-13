@@ -18,6 +18,7 @@ type
     slot*: uint32
 
 const OverviewDragThreshold* = 8'i32
+const NiriWorkspaceGapRatio = 0.1'f32
 
 proc effectiveOverviewZoom*(model: Model): float32 =
   if model.overviewZoom > 0:
@@ -53,6 +54,14 @@ proc previewSize*(model: Model, screen: rv.Rect): tuple[w, h: int32] =
     max(1'i32, int32(round(float32(max(1'i32, screen.h)) * zoom))),
   )
 
+proc workspacePreviewGap*(model: Model, screen: rv.Rect): int32 =
+  int32(
+    round(
+      float32(max(1'i32, screen.h)) * NiriWorkspaceGapRatio *
+        model.effectiveOverviewZoom()
+    )
+  )
+
 proc workspacePreviewRect*(
     model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
 ): rv.Rect =
@@ -61,15 +70,33 @@ proc workspacePreviewRect*(
   if activeIdx < 0 or idx < 0:
     return rv.Rect()
 
-  let gap = max(0'i32, model.overviewOuterGap)
+  let gap = model.workspacePreviewGap(screen)
   let baseX = screen.x + (screen.w - size.w) div 2
   let baseY = screen.y + (screen.h - size.h) div 2
-  let y =
-    baseY + int32(idx - activeIdx) * (size.h + gap) + int32(model.overviewScrollOffset)
+  let y = baseY + int32(idx - activeIdx) * (size.h + gap)
   rv.Rect(x: baseX, y: y, w: size.w, h: size.h)
 
 proc rectContains(rect: rv.Rect, x, y: int32): bool =
   x >= rect.x and y >= rect.y and x < rect.x + rect.w and y < rect.y + rect.h
+
+proc yContains(rect: rv.Rect, y: int32): bool =
+  y >= rect.y and y < rect.y + rect.h
+
+proc overviewWorkspaceSlotAt*(
+    model: Model, screen: rv.Rect, x, y: int32, extendedX = false
+): uint32 =
+  if not model.overviewUsesWorkspacePreviews():
+    return 0
+
+  let slots = model.previewSlots()
+  for idx, slot in slots:
+    let rect = model.workspacePreviewRect(screen, slots, idx)
+    if extendedX:
+      if x >= screen.x and x < screen.x + screen.w and rect.yContains(y):
+        return slot
+    elif rect.rectContains(x, y):
+      return slot
+  0
 
 proc nextDynamicDropSlot(model: Model): uint32 =
   let trailing = model.trailingWorkspaceSlot()
@@ -98,11 +125,11 @@ proc overviewDropTargetAt*(
     let rect = model.workspacePreviewRect(screen, slots, idx)
     minY = min(minY, rect.y)
     maxY = max(maxY, rect.y + rect.h)
-    if rect.rectContains(x, y):
+    if x >= screen.x and x < screen.x + screen.w and rect.yContains(y):
       return OverviewDropTarget(kind: OverviewDropKind.DropWorkspace, slot: slot)
 
-  if y >= minY - max(0'i32, model.overviewOuterGap) and
-      y <= maxY + max(0'i32, model.overviewOuterGap):
+  let gap = model.workspacePreviewGap(screen)
+  if x >= screen.x and x < screen.x + screen.w and y >= minY - gap and y <= maxY + gap:
     let slot = model.nextDynamicDropSlot()
     if slot != 0:
       return OverviewDropTarget(kind: OverviewDropKind.DropDynamicGap, slot: slot)
