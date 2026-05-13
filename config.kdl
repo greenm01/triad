@@ -15,11 +15,16 @@ scratchpad {
     height-ratio 0.9
 }
 
-tag-rules {
-    tag 1 default-layout="scroller"
-    tag 2 default-layout="tile"
-    tag 3 default-layout="grid"
-    tag 4 default-layout="monocle"
+workspaces {
+    default-count 3
+    default-layout "scroller"
+}
+
+workspace-rules {
+    workspace 1 name="main"
+    workspace 2 name="browser" default-layout="grid"
+    workspace 3 name="scratch"
+    workspace 4 name="chat" default-layout="deck"
 }
 
 quickshell {
@@ -53,10 +58,10 @@ bindings {
     bind "Alt+Right" "focus-right"
     bind "Alt+Up" "focus-up"
     bind "Alt+Down" "focus-down"
-    bind "Super+1" "focus-tag 1"
-    bind "Super+2" "focus-tag 2"
-    bind "Super+3" "focus-tag 3"
-    bind "Super+4" "focus-tag 4"
+    bind "Super+1" "focus-workspace 1"
+    bind "Super+2" "focus-workspace 2"
+    bind "Super+3" "focus-workspace 3"
+    bind "Super+4" "focus-workspace 4"
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
 }
@@ -65,12 +70,12 @@ bindings {
 
 window-rule {
     match app-id="firefox"
-    default-tag 2
+    default-workspace 2
 }
 
 window-rule {
     match app-id="alacritty"
-    default-tag 1
+    default-workspace 1
 }
 
 window-rule {

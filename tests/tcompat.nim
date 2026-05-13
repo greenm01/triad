@@ -408,6 +408,16 @@ suite "Shell compatibility contracts":
     check quickshellConfigReloadAction(noctalia, disabled) ==
       QuickshellReloadAction.AuthoritativeStop
 
+  test "Quickshell unchanged reload can recover untracked shell":
+    let noctalia =
+      QuickshellConfig(enabled: true, command: "qs", theme: "noctalia-shell")
+    var runner = QuickshellRunner()
+    check runner.needsQuickshellRecovery(Model(quickshell: noctalia))
+
+    var disabled = Model(quickshell: noctalia)
+    disabled.quickshell.enabled = false
+    check not runner.needsQuickshellRecovery(disabled)
+
   test "Quickshell spawn handoff refreshes configured shell":
     let tmp = getTempDir() / ("triad-qs-handoff-" & $getCurrentProcessId())
     if dirExists(tmp):

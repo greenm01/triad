@@ -48,18 +48,21 @@ floating {
 
 workspaces {
     default-count 3
+    default-layout "scroller"
 }
 
-tag-rules {
-    tag 1 name="term" default-layout="scroller"
-    tag 2 name="web" default-layout="scroller"
-    tag 3 name="files" default-layout="grid"
-    tag 4 name="chat" default-layout="deck"
-    tag 5 name="media" default-layout="monocle"
-    tag 6 name="code" default-layout="center-tile"
-    tag 7 name="vm" default-layout="right-tile"
-    tag 8 name="float" default-layout="grid"
-    tag 9 name="spare" default-layout="scroller"
+workspace-rules {
+    // Workspaces 1 and 3 inherit the global scroller default.
+    workspace 1 name="main"
+    workspace 2 name="browser" default-layout="grid"
+    workspace 3 name="scratch"
+
+    // Dynamic workspace templates can use specialized layouts.
+    workspace 4 name="chat" default-layout="deck"
+    workspace 5 name="media" default-layout="monocle"
+    workspace 6 name="studio" default-layout="center-tile"
+    workspace 7 name="vm" default-layout="right-tile"
+    workspace 8 name="float" default-layout="grid"
 }
 
 quickshell {

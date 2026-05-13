@@ -179,7 +179,16 @@ proc applyConfigReload*(
   )
 
   case quickshellAction
-  of QuickshellReloadAction.Noop, QuickshellReloadAction.SpawnOnly:
+  of QuickshellReloadAction.Noop:
+    if daemon.quickshellState.needsQuickshellRecovery(daemon.runtimeState.model):
+      writeQuickshellBehaviorEvent(
+        "quickshell_config_reload_recovery", daemon.runtimeState.model.quickshell,
+        "config reload",
+      )
+      discard daemon.quickshellState.spawnQuickshell(
+        daemon.runtimeState.model, niriSocketPath, "config reload recovery"
+      )
+  of QuickshellReloadAction.SpawnOnly:
     discard
   of QuickshellReloadAction.AuthoritativeStop:
     daemon.quickshellState.stopQuickshell(

@@ -20,6 +20,27 @@ type
 proc succeeded(status: QuickshellSpawnStatus): bool =
   status == QuickshellSpawnStatus.Running
 
+proc trackedQuickshellRunning*(runner: var QuickshellRunner): bool =
+  if runner.trackedProcess == nil:
+    return false
+  let code = runner.trackedProcess.pollProcessExitCode(0)
+  if code == -1:
+    return true
+  writeBehaviorEvent(
+    "quickshell_tracked_process_exited",
+    %*{"tracked_pid": runner.trackedProcess.processID, "exit_code": code},
+  )
+  try:
+    runner.trackedProcess.close()
+  except CatchableError:
+    discard
+  runner.trackedProcess = nil
+  false
+
+proc needsQuickshellRecovery*(runner: var QuickshellRunner, model: Model): bool =
+  model.quickshell.enabled and model.quickshell.theme.strip().len > 0 and
+    not runner.trackedQuickshellRunning()
+
 proc quickshellBehaviorPayload*(
     config: QuickshellConfig, reason: string, extra: JsonNode = nil
 ): JsonNode =
