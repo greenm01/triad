@@ -118,6 +118,12 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    openFullscreenSet*: bool
+    openFullscreen*: bool
+    openMaximizedSet*: bool
+    openMaximized*: bool
+    openMaximizedToEdgesSet*: bool
+    openMaximizedToEdges*: bool
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
     floating*: WindowRuleFloatingConfig

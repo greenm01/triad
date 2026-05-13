@@ -86,9 +86,9 @@ layout family.
 | Opening | `default-window-height` | Set initial tiled window height | `layout.default-window-height` | Partial | Triad only supports a global default. |
 | Opening | `open-on-output` | Open matching window on a named output | | Gap | |
 | Opening | `open-on-workspace` | Open matching window on a named workspace | `default-workspace <n>` | Pass | Triad uses numeric workspace slots. |
-| Opening | `open-maximized` | Open matching window maximized | | Gap | |
-| Opening | `open-maximized-to-edges` | Open matching window maximized to edges | | Gap | |
-| Opening | `open-fullscreen` | Open matching window fullscreen | | Gap | |
+| Opening | `open-maximized` | Open matching window maximized | `open-maximized #true/#false` | Pass | Maps to full-width column in scroller layouts, not client-visible maximize. |
+| Opening | `open-maximized-to-edges` | Open matching window maximized to edges | `open-maximized-to-edges #true/#false` | Pass | Uses Triad's client-visible maximized state. |
+| Opening | `open-fullscreen` | Open matching window fullscreen | `open-fullscreen #true/#false` | Pass | Fullscreen wins over other opening presentation states. |
 | Opening | `open-floating` | Force matching window to open floating or tiled | `open-floating #true/#false` | Pass | Explicit `#false` can override parented dialog floating defaults. |
 | Opening | `open-focused` | Allow or prevent initial focus | `open-focused #true/#false` | Pass | |
 | Opening | `default-column-display` | Set normal or tabbed column display | | Gap | Triad has no tabbed-column display mode. |
@@ -148,6 +148,9 @@ These are gap-analysis categories, not target config names.
   policy, paired with the runtime `toggle-keyboard-shortcuts-inhibit` command.
 - `forced-layout` is a Triad-specific rule that can select the workspace layout
   used for a matching new window.
+- Opening presentation states force tiled placement if they conflict with
+  `open-floating`. Fullscreen takes precedence over edge maximize, which takes
+  precedence over full-width column.
 - Fixed-size unparented windows can open floating by policy, similar to niri's
   fixed-height floating default.
 - Lead floating startup windows are handled by Triad policy: a focused

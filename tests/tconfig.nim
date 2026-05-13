@@ -301,6 +301,9 @@ window-rule {
   default-workspace 3
   open-floating #true
   open-focused #false
+  open-fullscreen #false
+  open-maximized #true
+  open-maximized-to-edges #false
   parented-role "tool"
   dialog-viewport-jump #true
   floating {
@@ -399,6 +402,12 @@ bindings {
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
     check not config.windowRules[0].openFocused
+    check config.windowRules[0].openFullscreenSet
+    check not config.windowRules[0].openFullscreen
+    check config.windowRules[0].openMaximizedSet
+    check config.windowRules[0].openMaximized
+    check config.windowRules[0].openMaximizedToEdgesSet
+    check not config.windowRules[0].openMaximizedToEdges
     check config.windowRules[0].parentedRoleSet
     check config.windowRules[0].parentedRole == ParentedRole.Tool
     check config.windowRules[0].dialogViewportJumpSet
@@ -649,6 +658,9 @@ cursor {
 window-rule {
   match app-id="demo"
   parented-role "dialog"
+  open-fullscreen #false
+  open-maximized #false
+  open-maximized-to-edges #false
   dialog-viewport-jump #false
   keyboard-shortcuts-inhibit #false
 }
@@ -660,6 +672,12 @@ window-rule {
     check config.windowRules.len == 1
     check config.windowRules[0].parentedRoleSet
     check config.windowRules[0].parentedRole == ParentedRole.Dialog
+    check config.windowRules[0].openFullscreenSet
+    check not config.windowRules[0].openFullscreen
+    check config.windowRules[0].openMaximizedSet
+    check not config.windowRules[0].openMaximized
+    check config.windowRules[0].openMaximizedToEdgesSet
+    check not config.windowRules[0].openMaximizedToEdges
     check config.windowRules[0].dialogViewportJumpSet
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet

@@ -91,6 +91,7 @@ window-rule {
   match app-id="gimp"
   exclude title="Private"
   default-workspace 4
+  open-maximized #true
 }
 
 window-rule {
@@ -111,6 +112,14 @@ window-rule {
 - `open-focused #true|#false`: explicitly allows or prevents focusing matching
   windows when they open. Parented dialogs use smart focus by default: they
   focus only when they open on the active workspace.
+- `open-fullscreen #true|#false`: opens matching windows fullscreen. This
+  forces tiled placement if it conflicts with `open-floating`.
+- `open-maximized #true|#false`: opens matching tiled windows as a full-width
+  column in scroller layouts. It does not set the client-visible maximized
+  state.
+- `open-maximized-to-edges #true|#false`: opens matching windows in Triad's
+  client-visible edge-maximized state. This forces tiled placement if it
+  conflicts with `open-floating`.
 - `parented-role "dialog"|"tool"|"plain"`: controls how a matching parented
   floating window participates in child-window policy. `dialog` is the default:
   it joins the popup tree, adopts the parent workspace unless `default-workspace`
@@ -136,6 +145,8 @@ window-rule {
 - Rule-level `floating` fields merge independently. A later matching rule can
   override only `width-ratio` while keeping `x-ratio` and `y-ratio` from an
   earlier broad rule.
+- When multiple opening states are true, fullscreen wins over edge maximize,
+  and edge maximize wins over full-width column.
 
 ## Cursor
 

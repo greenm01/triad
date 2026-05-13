@@ -1,7 +1,7 @@
 import std/[options, tables]
 import
   floating_geometry, floating_policy, focus, layout_projection, placement, popup_tree,
-  scratchpad, window_rules, workspaces
+  scratchpad, window_rules, window_state, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole
 
@@ -9,6 +9,18 @@ type LeadFloatingAnchor = object
   found: bool
   winId: WindowId
   columnId: ColumnId
+
+proc supportsOpenColumnMaximize(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and
+    tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+
+proc applyOpenColumnMaximize(model: var Model, tagId: TagId, columnId: ColumnId): bool =
+  if columnId == NullColumnId or not model.supportsOpenColumnMaximize(tagId):
+    return false
+  result = model.setColumnFullWidth(columnId, true)
+  if result and tagId == model.activeTag:
+    discard model.requestTagViewportRetarget(tagId)
 
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   model.windowForExternal(externalId)
@@ -378,6 +390,24 @@ proc createWindowForExternal*(
       parentedRole != ParentedRole.Plain:
     targetSlot = parentSlot
 
+  var isFullscreen = false
+  var isMaximized = false
+  var fullscreenOutput = NullExternalOutputId
+  var openColumnMaximized = false
+  if ruleMatch.found and not hasRestoredWindow:
+    if ruleMatch.rule.openFullscreenSet:
+      isFullscreen = ruleMatch.rule.openFullscreen
+    if ruleMatch.rule.openMaximizedToEdgesSet:
+      isMaximized = ruleMatch.rule.openMaximizedToEdges
+    if ruleMatch.rule.openMaximizedSet:
+      openColumnMaximized = ruleMatch.rule.openMaximized
+  if isFullscreen:
+    isMaximized = false
+    openColumnMaximized = false
+    fullscreenOutput = model.chooseFullscreenOutput(NullExternalOutputId)
+  elif isMaximized:
+    openColumnMaximized = false
+
   var isFloating = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
@@ -392,6 +422,9 @@ proc createWindowForExternal*(
     floatingGeom = restored.floatingGeom
   elif parentKnown and parentOpensFloating:
     isFloating = true
+  if isFullscreen or isMaximized or openColumnMaximized:
+    isFloating = false
+    floatingGeom = GeometryRect()
   let parentAutoFloating =
     parentKnown and isFloating and parentedRole == ParentedRole.Dialog and
     not hasRestoredWindow and not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
@@ -413,6 +446,9 @@ proc createWindowForExternal*(
     widthProportion = model.defaultWindowWidth(),
     heightProportion = model.defaultWindowHeight(),
     isFloating = isFloating,
+    isFullscreen = isFullscreen,
+    isMaximized = isMaximized,
+    fullscreenOutput = fullscreenOutput,
     floatingGeom = floatingGeom,
     parentAutoFloating = parentAutoFloating,
     admissionState =
@@ -467,10 +503,12 @@ proc createWindowForExternal*(
         discard model.setTagLayout(
           targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)
         )
+      var placedColumn = NullColumnId
       let leadAnchor = model.leadFloatingAnchorFor(
         targetTag, result, appId, isFloating, parentExternalId, pendingAdmission
       )
       if leadAnchor.found:
+        placedColumn = leadAnchor.columnId
         discard model.moveWindowToColumn(
           targetTag,
           result,
@@ -479,9 +517,11 @@ proc createWindowForExternal*(
         )
         discard model.recenterLeadFloatingAnchor(leadAnchor, result)
       else:
-        discard model.addPlacedWindowColumn(
+        placedColumn = model.addPlacedWindowColumn(
           targetTag, result, model.newWindowColumnIndex(targetTag, isFloating)
         )
+      if openColumnMaximized:
+        discard model.applyOpenColumnMaximize(targetTag, placedColumn)
       if not model.sessionLocked and not restoreFocusPending:
         if parentKnown:
           let parentOpensFocused =

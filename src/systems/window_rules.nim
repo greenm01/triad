@@ -47,6 +47,15 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.openFocusedSet:
     result.openFocusedSet = true
     result.openFocused = rule.openFocused
+  if rule.openFullscreenSet:
+    result.openFullscreenSet = true
+    result.openFullscreen = rule.openFullscreen
+  if rule.openMaximizedSet:
+    result.openMaximizedSet = true
+    result.openMaximized = rule.openMaximized
+  if rule.openMaximizedToEdgesSet:
+    result.openMaximizedToEdgesSet = true
+    result.openMaximizedToEdges = rule.openMaximizedToEdges
   if rule.parentedRoleSet:
     result.parentedRole = rule.parentedRole
   result.floating.mergeFloatingRule(rule.floating)

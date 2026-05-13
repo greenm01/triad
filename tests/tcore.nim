@@ -1974,6 +1974,9 @@ suite "Core Runtime Logic":
             WindowRule(
               appIdMatch: "pinentry",
               openFloating: true,
+              openFullscreen: true,
+              openMaximized: true,
+              openMaximizedToEdges: true,
               parentedRole: ParentedRole.Tool,
               dialogViewportJump: true,
               keyboardShortcutsInhibit: true,
@@ -1983,6 +1986,12 @@ suite "Core Runtime Logic":
               titleMatch: "Passphrase",
               openFloatingSet: true,
               openFloating: false,
+              openFullscreenSet: true,
+              openFullscreen: false,
+              openMaximizedSet: true,
+              openMaximized: false,
+              openMaximizedToEdgesSet: true,
+              openMaximizedToEdges: false,
               parentedRoleSet: true,
               parentedRole: ParentedRole.Dialog,
               dialogViewportJumpSet: true,
@@ -1998,6 +2007,12 @@ suite "Core Runtime Logic":
     check rule.found
     check rule.rule.openFloatingSet
     check not rule.rule.openFloating
+    check rule.rule.openFullscreenSet
+    check not rule.rule.openFullscreen
+    check rule.rule.openMaximizedSet
+    check not rule.rule.openMaximized
+    check rule.rule.openMaximizedToEdgesSet
+    check not rule.rule.openMaximizedToEdges
     check rule.rule.parentedRole == ParentedRole.Dialog
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
@@ -3391,6 +3406,198 @@ suite "Core Runtime Logic":
       check model.activeWorkspaceFocusId() == 1
       check snapshot.workspaces[1].focusedWindow == 2
       check not effects.hasFocusEffect(2)
+
+  test "Open-fullscreen window rule creates tiled fullscreen window":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "video",
+              openFloatingSet: true,
+              openFloating: true,
+              openFullscreenSet: true,
+              openFullscreen: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "video", title: "Movie")
+    )
+    let win = model.snapshotWindow(2)
+
+    check win.isFullscreen
+    check win.fullscreenOutput == 1
+    check not win.isFloating
+    check effects.hasFullscreenEffect(2, true)
+
+  test "Open-maximized-to-edges window rule creates tiled edge-maximized window":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "editor",
+              openFloatingSet: true,
+              openFloating: true,
+              openMaximizedToEdgesSet: true,
+              openMaximizedToEdges: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "editor", title: "Main")
+    )
+    let win = model.snapshotWindow(2)
+
+    check win.isMaximized
+    check not win.isFloating
+    check effects.hasMaximizedEffect(2, true)
+    check model.instructionGeom(2) == model.primaryScreen()
+
+  test "Open-maximized window rule opens full-width scroller column":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "docs",
+              openFloatingSet: true,
+              openFloating: true,
+              openMaximizedSet: true,
+              openMaximized: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "docs", title: "Manual")
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(2)))
+    let win = model.snapshotWindow(2)
+
+    check placement.found
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+    check model.columnData(columnId).get().isFullWidth
+    check not win.isMaximized
+    check not win.isFloating
+    check not effects.hasMaximizedEffect(2, true)
+
+  test "Open-maximized window rule is ignored outside scroller layouts":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Grid),
+        windowRules:
+          @[WindowRule(appIdMatch: "docs", openMaximizedSet: true, openMaximized: true)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "docs", title: "Manual")
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(2)))
+
+    check placement.found
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+    check not model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(2).isMaximized
+
+  test "Open state rule precedence chooses fullscreen then edges then column":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "conflict",
+              openFloatingSet: true,
+              openFloating: true,
+              openFullscreenSet: true,
+              openFullscreen: true,
+              openMaximizedSet: true,
+              openMaximized: true,
+              openMaximizedToEdgesSet: true,
+              openMaximizedToEdges: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "conflict", title: "Main")
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(2)))
+    let win = model.snapshotWindow(2)
+
+    check win.isFullscreen
+    check not win.isMaximized
+    check not win.isFloating
+    check placement.found
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+    check not model.columnData(columnId).get().isFullWidth
+
+  test "Live restore state wins over open state rules":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "generic-app",
+              openFullscreenSet: true,
+              openFullscreen: true,
+              openFloatingSet: true,
+              openFloating: true,
+            )
+          ],
+      )
+    ).model
+    var restore = PendingRestoreState(activeSlot: 1)
+    restore.addRestoredWindow(
+      ExternalWindowId(50), 1, "generic-app", "Old title", isMaximized = true
+    )
+    model.applyLiveRestore(restore)
+
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 50,
+        appId: "generic-app",
+        title: "Old title",
+      )
+    )
+    let win = model.snapshotWindow(50)
+
+    check win.isMaximized
+    check not win.isFullscreen
+    check not win.isFloating
+    check not effects.hasFullscreenEffect(50, true)
 
   test "Fullscreen presentation follows active focus":
     var model = cameraModel()

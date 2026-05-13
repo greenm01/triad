@@ -561,6 +561,15 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-focused" and child.args.len > 0:
               rule.openFocusedSet = true
               rule.openFocused = child.args[0].kBool()
+            elif child.name == "open-fullscreen" and child.args.len > 0:
+              rule.openFullscreenSet = true
+              rule.openFullscreen = child.args[0].kBool()
+            elif child.name == "open-maximized" and child.args.len > 0:
+              rule.openMaximizedSet = true
+              rule.openMaximized = child.args[0].kBool()
+            elif child.name == "open-maximized-to-edges" and child.args.len > 0:
+              rule.openMaximizedToEdgesSet = true
+              rule.openMaximizedToEdges = child.args[0].kBool()
             elif child.name == "parented-role" and child.args.len > 0:
               rule.parentedRoleSet = true
               rule.parentedRole = parseParentedRole(child.args[0].kString())
