@@ -133,6 +133,14 @@ proc forcedLayoutValue(name: string): int =
   of "tgmix", "tg_mix": ord(LayoutMode.TGMix) + 1
   else: 0
 
+proc parseParentedRole(name: string): ParentedRole =
+  case name.toLowerAscii()
+  of "dialog": ParentedRole.Dialog
+  of "tool": ParentedRole.Tool
+  of "plain": ParentedRole.Plain
+  else:
+    raise newException(ValueError, "invalid parented-role: " & name)
+
 proc modifierValue(name: string): uint32 =
   case name
   of "Shift", "shift", "SHIFT": 1'u32
@@ -474,12 +482,37 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-focused" and child.args.len > 0:
               rule.openFocusedSet = true
               rule.openFocused = child.args[0].kBool()
+            elif child.name == "parented-role" and child.args.len > 0:
+              rule.parentedRole =
+                parseParentedRole(child.args[0].kString())
             elif child.name == "dialog-viewport-jump" and child.args.len > 0:
               rule.dialogViewportJump = child.args[0].kBool()
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
             elif child.name == "forced-layout" and child.args.len > 0:
               rule.forcedLayout = forcedLayoutValue(child.args[0].kString())
+            elif child.name == "floating":
+              for floatingChild in child.children:
+                if floatingChild.name == "x-ratio" and
+                    floatingChild.args.len > 0:
+                  rule.floating.xRatioSet = true
+                  rule.floating.xRatio = clampF32(
+                    float32(floatingChild.args[0].kFloat()), 0.0, 1.0)
+                elif floatingChild.name == "y-ratio" and
+                    floatingChild.args.len > 0:
+                  rule.floating.yRatioSet = true
+                  rule.floating.yRatio = clampF32(
+                    float32(floatingChild.args[0].kFloat()), 0.0, 1.0)
+                elif floatingChild.name == "width-ratio" and
+                    floatingChild.args.len > 0:
+                  rule.floating.widthRatioSet = true
+                  rule.floating.widthRatio = clampF32(
+                    float32(floatingChild.args[0].kFloat()), 0.05, 1.0)
+                elif floatingChild.name == "height-ratio" and
+                    floatingChild.args.len > 0:
+                  rule.floating.heightRatioSet = true
+                  rule.floating.heightRatio = clampF32(
+                    float32(floatingChild.args[0].kFloat()), 0.05, 1.0)
           except CatchableError as e:
             warn "Ignoring invalid window rule field", field = child.name, error = e.msg
         result.windowRules.add(rule)

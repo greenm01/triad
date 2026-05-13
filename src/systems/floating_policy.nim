@@ -36,6 +36,25 @@ proc parentWorkspaceSlot*(model: Model;
     return position.slot
   0'u32
 
+proc floatingGeomFromRule(model: Model; win: WindowData):
+    runtime_values.Rect =
+  let screenW = max(0'i32, model.screenWidth)
+  let screenH = max(0'i32, model.screenHeight)
+  result = model.defaultFloatingGeom()
+  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  if ruleMatch.found:
+    let floating = ruleMatch.rule.floating
+    if floating.xRatioSet:
+      result.x = int32(float32(screenW) * floating.xRatio)
+    if floating.yRatioSet:
+      result.y = int32(float32(screenH) * floating.yRatio)
+    if floating.widthRatioSet:
+      result.w = max(model.effectiveFloatingMinWidth(),
+        int32(float32(screenW) * floating.widthRatio))
+    if floating.heightRatioSet:
+      result.h = max(model.effectiveFloatingMinHeight(),
+        int32(float32(screenH) * floating.heightRatio))
+
 proc floatingGeomForWindow*(model: Model; winId: WindowId;
     parentExternalId = NullExternalWindowId): runtime_values.Rect =
   let screen = model.primaryScreen()
@@ -44,8 +63,9 @@ proc floatingGeomForWindow*(model: Model; winId: WindowId;
   if winOpt.isNone:
     return result.clampToScreen(screen)
   let win = winOpt.get()
+  result = model.floatingGeomFromRule(win)
   let parent = model.parentRenderRect(parentExternalId)
-  if parent.found:
+  if parent.found and model.parentedRoleFor(win) == runtime_values.ParentedRole.Dialog:
     return win.anchoredFloatingGeom(parent.rect, result, screen)
   result = win.applyFloatingSizeHints(result).clampToScreen(screen)
 
@@ -78,6 +98,11 @@ proc parentedWindowIntent*(model: Model; winId: WindowId):
     if rule.value:
       return ParentedWindowIntent.Float
     return ParentedWindowIntent.Tile
+
+  let role = model.parentedRoleFor(win)
+  if role in {runtime_values.ParentedRole.Tool,
+      runtime_values.ParentedRole.Plain}:
+    return ParentedWindowIntent.Float
 
   let parent = model.parentRenderRect(win.parentExternalId)
   if parent.found and win.parentedPrimarySurfaceIntent(parent.rect):
@@ -113,7 +138,8 @@ proc parentWorkspaceAdoptionAllowed(model: Model; winId: WindowId): bool =
     return false
   let win = winOpt.get()
   let ruleMatch = model.windowRuleFor(win.appId, win.title)
-  not (ruleMatch.found and ruleMatch.rule.defaultSlot != 0)
+  model.parentedRoleFor(win) != runtime_values.ParentedRole.Plain and
+    not (ruleMatch.found and ruleMatch.rule.defaultSlot != 0)
 
 proc parentFocusAllowed*(model: Model; winId: WindowId;
     parentExternalId: ExternalWindowId): bool =
@@ -124,6 +150,9 @@ proc parentFocusAllowed*(model: Model; winId: WindowId;
   let ruleMatch = model.windowRuleFor(win.appId, win.title)
   if ruleMatch.found and ruleMatch.rule.openFocusedSet:
     return ruleMatch.rule.openFocused
+  if model.parentedRoleFor(win) == runtime_values.ParentedRole.Plain:
+    let tagId = model.tagForWindow(winId)
+    return tagId != NullTagId and tagId == model.activeTag
   model.parentWorkspaceSlot(parentExternalId) == model.activeSlot
 
 proc parentDialogViewportJump*(
@@ -157,6 +186,16 @@ proc parentReadyForDialogFocus*(
 proc applyParentFocusPolicy*(
     model: var Model; winId: WindowId;
     parentExternalId: ExternalWindowId): bool =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let role = model.parentedRoleFor(winOpt.get())
+  if role != runtime_values.ParentedRole.Dialog:
+    discard model.clearPendingDialogFocus(winId)
+    if model.parentFocusAllowed(winId, parentExternalId):
+      return model.focusWindow(winId, retargetViewport = false)
+    return false
+
   if not model.parentFocusAllowed(winId, parentExternalId):
     discard model.clearPendingDialogFocus(winId)
     return false
@@ -206,9 +245,11 @@ proc reconcileParentedWindowPolicy*(model: var Model; winId: WindowId;
     else:
       false
   of ParentedWindowIntent.Float:
+    let autoFloat = not rule.set and
+      model.parentedRoleFor(win) == runtime_values.ParentedRole.Dialog
     if win.parentAutoFloating or (allowFloatCreation and not win.isFloating):
       let geom = model.floatingGeomForWindow(winId, win.parentExternalId)
-      model.ensureFloatingAt(winId, geom, parentAutoFloating = not rule.set)
+      model.ensureFloatingAt(winId, geom, parentAutoFloating = autoFloat)
     else:
       false
 

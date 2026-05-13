@@ -2,9 +2,9 @@ import std/[sets, tables]
 from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
   ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,
-  HotkeyOverlayConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
-  ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig,
-  TerminalConfig
+  HotkeyOverlayConfig, ParentedRole, PointerBindingConfig, PointerOpKind,
+  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, Rect,
+  ScreenshotConfig, TerminalConfig, WindowRuleFloatingConfig
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -86,6 +86,8 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    parentedRole*: ParentedRole
+    floating*: WindowRuleFloatingConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     forcedLayout*: int

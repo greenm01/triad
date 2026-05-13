@@ -3,8 +3,8 @@ import std/[asyncdispatch, json, options, os, sequtils, strutils, tables,
 import ../src/config/parser
 import ../src/core/[effects, msg, render_visibility, restore_state]
 import ../src/state/engine
-import ../src/systems/[hotkey_overlay, layout_projection, runtime_facade,
-  update, window_lifecycle]
+import ../src/systems/[hotkey_overlay, layout_projection, popup_tree,
+  runtime_facade, update, window_lifecycle]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
 import ../src/utils/[overview_hit_test, screenshot_capture]
@@ -1360,6 +1360,151 @@ suite "Core Runtime Logic":
     check not child.isFloating
     check model.focusedWindowId() == 1
     check not effects.hasFocusEffect(2)
+
+  test "Parented tool role stays visible outside popup focus tree":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(
+          appIdMatch: "gimp-tool",
+          parentedRole: ParentedRole.Tool,
+          openFocusedSet: true,
+          openFocused: false)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "gimp", title: "Image"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "gimp-tool", title: "Toolbox"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
+      appId: "terminal", title: "Shell"))
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
+    check model.windowData(childId).get().isFloating
+    check model.popupRoot(childId) == childId
+    check order.contains(2'u32)
+    check model.focusedWindowId() == 3
+
+  test "Parented tool role uses rule geometry and preserves manual moves":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(
+          appIdMatch: "gimp-tool",
+          parentedRole: ParentedRole.Tool,
+          floating: WindowRuleFloatingConfig(
+            xRatioSet: true,
+            xRatio: 0.02,
+            yRatioSet: true,
+            yRatio: 0.08,
+            widthRatioSet: true,
+            widthRatio: 0.22,
+            heightRatioSet: true,
+            heightRatio: 0.84))
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "gimp", title: "Image"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "gimp-tool", title: "Toolbox"))
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let initial = model.windowData(childId).get().floatingGeom
+    check initial == runtime_values.Rect(x: 20, y: 56, w: 220, h: 588)
+    check model.instructionGeom(2) == initial
+    check not model.windowData(childId).get().parentAutoFloating
+    check model.focusedWindowId() == 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveFloating,
+      moveDX: 10, moveDY: 20))
+    let moved = model.windowData(childId).get().floatingGeom
+    check moved.x == initial.x + 10
+    check moved.y == initial.y + 20
+    check model.instructionGeom(2) == moved
+
+  test "Plain parented float ignores parent workspace and anchoring":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(
+          appIdMatch: "utility",
+          parentedRole: ParentedRole.Plain)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "utility", title: "Detached"))
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let child = model.snapshotWindow(2)
+    check child.isFloating
+    check child.tagId.isSome and child.tagId.get() == 1
+    check child.workspaceIdx == 1
+    check model.popupRoot(childId) == childId
+    check model.instructionGeom(2) ==
+      model.windowData(childId).get().floatingGeom
+
+  test "Open-floating false overrides parented tool role":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(
+          appIdMatch: "gimp-tool",
+          parentedRole: ParentedRole.Tool,
+          openFloatingSet: true,
+          openFloating: false)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "gimp", title: "Image"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "gimp-tool", title: "Toolbox"))
+
+    check not model.snapshotWindow(2).isFloating
+
+  test "Dialog rule size preserves parent centered anchoring":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(
+          appIdMatch: "pinentry",
+          floating: WindowRuleFloatingConfig(
+            widthRatioSet: true,
+            widthRatio: 0.2,
+            heightRatioSet: true,
+            heightRatio: 0.2))
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Parent"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 2, createdParentWindowId: 1,
+      appId: "pinentry", title: "Passphrase"))
+
+    let parentGeom = model.instructionGeom(1)
+    let childGeom = model.instructionGeom(2)
+    check childGeom.w == 200
+    check childGeom.h == 140
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
 
   test "Explicit default-tag can override parent workspace":
     var model = initRuntimeStateFromConfig(Config(

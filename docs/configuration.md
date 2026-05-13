@@ -82,6 +82,18 @@ window-rule {
   match app-id="keepassxc"
   dialog-viewport-jump #true
 }
+
+window-rule {
+  match app-id="gimp" title="Toolbox"
+  parented-role "tool"
+  open-focused #false
+  floating {
+    x-ratio 0.02
+    y-ratio 0.08
+    width-ratio 0.22
+    height-ratio 0.84
+  }
+}
 ```
 
 - `open-floating #true|#false`: explicitly opens matching windows floating or
@@ -89,11 +101,25 @@ window-rule {
 - `open-focused #true|#false`: explicitly allows or prevents focusing matching
   windows when they open. Parented dialogs use smart focus by default: they
   focus only when they open on the active workspace.
+- `parented-role "dialog"|"tool"|"plain"`: controls how a matching parented
+  floating window participates in child-window policy. `dialog` is the default:
+  it joins the popup tree, adopts the parent workspace unless `default-tag`
+  overrides it, anchors to the parent, and may defer focus while the parent is
+  hidden. `tool` adopts the parent workspace but behaves as a persistent normal
+  float instead of a transient popup. `plain` treats the window as an ordinary
+  float even when it has a parent; it does not adopt the parent workspace,
+  anchor to the parent, or join popup focus hiding. `open-floating #false`
+  still tiles the window regardless of role.
 - `dialog-viewport-jump #true|#false`: when set on a parent app rule, its
   child dialogs may immediately retarget/snap the viewport instead of waiting
   until the parent is visible. The default is `#false`.
 - `default-tag <n>`: opens matching windows on a tag. For parented dialogs,
   this explicit tag overrides the parent workspace.
+- `floating { x-ratio; y-ratio; width-ratio; height-ratio }`: overrides the
+  global floating defaults for this window rule. `x-ratio` and `y-ratio` place
+  tool, plain, and unparented floats. Dialogs still center on the parent, but
+  `width-ratio` and `height-ratio` can set their desired size before clamping.
+  Missing fields fall back to the top-level `floating` defaults.
 
 ## Hotkey Overlay
 

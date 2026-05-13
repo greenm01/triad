@@ -8,6 +8,8 @@ The right discriminator for float vs. tile is the **semantic type of the child w
 |---|---|---|
 | `xdg_popup` | — | Always float, anchor to parent |
 | `xdg_toplevel` + `set_parent` | Dialog/utility intent, or no type with small size | Float, center on parent |
+| `xdg_toplevel` + `set_parent` | Matched `parented-role "tool"` | Persistent float, rule geometry |
+| `xdg_toplevel` + `set_parent` | Matched `parented-role "plain"` | Ordinary float, no parent policy |
 | `xdg_toplevel` + `set_parent` | `NORMAL` or large size hint | Tile as normal surface |
 | `xdg_toplevel`, no parent | Any | Tile as normal surface |
 
@@ -46,6 +48,17 @@ Floating every window that sets `set_parent` is too broad. Some toplevels set a 
 
 In Triad's River client, semantic window types such as `xdg_dialog` and XWayland EWMH atoms are not exposed today. Triad can currently use the parent relationship, size hints, app id, title, and window rules; explicit dialog protocol/type signals should be treated as future input if River exposes them.
 
+`window-rule parented-role` is Triad's explicit policy override when those
+signals are not enough:
+
+| Role | Behavior |
+|---|---|
+| `dialog` | Default for parented floats; joins popup-tree focus hiding, adopts the parent workspace unless `default-tag` overrides it, anchors to the parent, and defers focus when the parent is not ready. |
+| `tool` | Persistent parent-associated float; adopts the parent workspace but does not join popup-tree hiding and does not anchor to the parent. Use rule `floating` geometry for panels and palettes. |
+| `plain` | Ordinary float despite having a parent; no parent workspace adoption, popup-tree hiding, parent anchoring, or deferred dialog focus. |
+
+`open-floating #false` overrides all roles and tiles the window.
+
 ## Edge Case: Persistent Tool Windows
 
 Some apps set a parent but intend the child as a persistent, sizeable workspace (GIMP tool panels, detached DevTools, secondary editor windows). Signals to watch for:
@@ -54,7 +67,12 @@ Some apps set a parent but intend the child as a persistent, sizeable workspace 
 - `_NET_WM_WINDOW_TYPE_UTILITY` vs `_NET_WM_WINDOW_TYPE_DIALOG` (XWayland)
 - A substantial `min_size` hint
 
-For these, consider "float but persist position/size" or allow user promotion to a tile column. `_NET_WM_WINDOW_TYPE_UTILITY` in particular sits in a gray zone — treat it as float by default but expose a window rule override for apps like GIMP where the user may prefer tiling.
+For these, use `parented-role "tool"` with rule-level `floating` geometry when
+the desired behavior is a persistent panel. Use `parented-role "plain"` when
+the window should keep no parent policy except its protocol parent reference,
+or `open-floating #false` when it should tile. `_NET_WM_WINDOW_TYPE_UTILITY`
+in particular sits in a gray zone; until River exposes that semantic type,
+app/title rules are the explicit escape hatch.
 
 ## Summary
 
@@ -62,10 +80,18 @@ For these, consider "float but persist position/size" or allow user promotion to
 
 1. `xdg_popup` → always float
 2. `xdg_toplevel` + `set_parent` + dialog/utility/small intent → float, centered on parent
-3. `xdg_toplevel` + `set_parent` + primary-surface intent (NORMAL type, large size) → tile
-4. `xdg_toplevel`, no parent → tile
+3. `xdg_toplevel` + `set_parent` + `parented-role "tool"` → persistent float using rule/default floating geometry
+4. `xdg_toplevel` + `set_parent` + `parented-role "plain"` → ordinary float using rule/default floating geometry
+5. `xdg_toplevel` + `set_parent` + primary-surface intent (NORMAL type, large size) → tile
+6. `xdg_toplevel`, no parent → tile
 
 The parent's layout state (maximized, tiled, fullscreen) is irrelevant to this decision. What matters is whether the child signals transient dialog intent or primary workspace intent. The per-layout table below governs where floats are anchored and what edge cases apply per layout; the float/tile decision itself is made upstream of layout entirely.
+
+Rule-level `floating` geometry is a placement escape hatch. For `tool`,
+`plain`, and unparented floats, `x-ratio` and `y-ratio` set the initial
+position and `width-ratio` and `height-ratio` set the initial size. For
+dialogs, `width-ratio` and `height-ratio` can set desired size, but placement
+still centers on the parent.
 
 ---
 
@@ -132,6 +158,9 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 | Normal/large parented toplevel tiles | Pass | Large parented primary surfaces tile via River dimensions hints; window rules remain explicit overrides. |
 | Unparented toplevels tile | Partial | Normal unparented windows tile; fixed-size unparented utility windows intentionally float. |
 | Child centered on parent geometry | Pass | Floating children anchor to the parent's projected render rectangle. |
+| Persistent parented tool role | Pass | `window-rule parented-role "tool"` keeps parented tool windows visible as normal floats with rule/default geometry. |
+| Plain parented float role | Pass | `window-rule parented-role "plain"` disables parent adoption, anchoring, popup-tree hiding, and deferred dialog focus. |
+| Rule-level floating geometry | Pass | `window-rule floating` supports per-rule position and size ratios with fallback to global floating defaults. |
 | Larger/wider child behavior | Pass | Wider children remain centered and clamped; screen-sized children shrink to screen. |
 | Child stays in parent workspace/view | Pass | Parented children default to the parent workspace unless an explicit rule overrides it. |
 | Scroller parent visibility | Pass | Focused-parent children use normal retargeting; background off-screen children defer focus instead of hijacking the camera. |
@@ -146,11 +175,6 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 ---
 
 ## Future Gaps
-
-Persistent tool windows are not failed dialogs. GIMP panels, detached DevTools,
-and similar parent-related surfaces may need a separate policy from transient
-dialogs: visible while working in the parent app, position/size persistence, and
-rules that can promote them to tile, plain float, or a future tool role.
 
 Overlay, global/sticky, and unmanaged-global behavior should remain separate if
 Triad exposes Mango-like modes later. Overlay means always on top within the

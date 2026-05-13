@@ -1,7 +1,7 @@
 import std/[options, tables]
 import floating_policy, focus, placement, popup_tree, scratchpad, workspaces
 import ../state/engine
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import LayoutMode, ParentedRole
 
 proc restoredWindowId(model: Model; externalId: ExternalWindowId):
     WindowId =
@@ -278,6 +278,9 @@ proc createWindowForExternal*(model: var Model;
       hasRestoredTag = targetSlot != 0
 
   let ruleMatch = model.windowRuleFor(appId, title)
+  let parentedRole =
+    if ruleMatch.found: ruleMatch.rule.parentedRole
+    else: ParentedRole.Dialog
   let ruleForcesSlot = ruleMatch.found and ruleMatch.rule.defaultSlot != 0
   if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and
       not hasRestoredTag:
@@ -294,7 +297,8 @@ proc createWindowForExternal*(model: var Model;
     else:
       true
   let parentSlot = model.parentWorkspaceSlot(parentExternalId)
-  if parentSlot != 0 and not hasRestoredTag and not ruleForcesSlot:
+  if parentSlot != 0 and not hasRestoredTag and not ruleForcesSlot and
+      parentedRole != ParentedRole.Plain:
     targetSlot = parentSlot
 
   var isFloating = false
@@ -312,6 +316,7 @@ proc createWindowForExternal*(model: var Model;
   elif parentKnown and parentOpensFloating:
     isFloating = true
   let parentAutoFloating = parentKnown and isFloating and
+    parentedRole == ParentedRole.Dialog and
     not hasRestoredWindow and
     not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
   let pendingAdmission = deferAdmission and not parentKnown and

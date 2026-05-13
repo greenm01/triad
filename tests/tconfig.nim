@@ -262,7 +262,14 @@ window-rule {
   default-tag 3
   open-floating #true
   open-focused #false
+  parented-role "tool"
   dialog-viewport-jump #true
+  floating {
+    x-ratio 0.02
+    y-ratio 0.08
+    width-ratio 0.22
+    height-ratio 0.84
+  }
 }
 spawn-at-startup "notify-send" "triad"
 quickshell {
@@ -331,7 +338,16 @@ bindings {
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
     check not config.windowRules[0].openFocused
+    check config.windowRules[0].parentedRole == ParentedRole.Tool
     check config.windowRules[0].dialogViewportJump
+    check config.windowRules[0].floating.xRatioSet
+    check config.windowRules[0].floating.xRatio == 0.02'f32
+    check config.windowRules[0].floating.yRatioSet
+    check config.windowRules[0].floating.yRatio == 0.08'f32
+    check config.windowRules[0].floating.widthRatioSet
+    check config.windowRules[0].floating.widthRatio == 0.22'f32
+    check config.windowRules[0].floating.heightRatioSet
+    check config.windowRules[0].floating.heightRatio == 0.84'f32
     check config.startupCommands == @[@["notify-send", "triad"]]
     check config.quickshell.theme == "noctalia"
     check config.terminal.command.len > 0

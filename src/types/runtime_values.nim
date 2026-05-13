@@ -41,6 +41,21 @@ type
     DirUp,
     DirDown
 
+  ParentedRole* {.pure.} = enum
+    Dialog,
+    Tool,
+    Plain
+
+  WindowRuleFloatingConfig* = object
+    xRatioSet*: bool
+    xRatio*: float32
+    yRatioSet*: bool
+    yRatio*: float32
+    widthRatioSet*: bool
+    widthRatio*: float32
+    heightRatioSet*: bool
+    heightRatio*: float32
+
   WindowData* = object
     id*: WindowId
     title*: string
@@ -95,6 +110,8 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    parentedRole*: ParentedRole
+    floating*: WindowRuleFloatingConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     forcedLayout*: int

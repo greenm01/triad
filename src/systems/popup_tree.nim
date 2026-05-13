@@ -1,5 +1,6 @@
 import std/options
 import ../state/engine
+from ../types/runtime_values import ParentedRole
 
 proc popupRoot*(model: Model; winId: WindowId): WindowId =
   result = winId
@@ -10,7 +11,8 @@ proc popupRoot*(model: Model; winId: WindowId): WindowId =
     if winOpt.isNone:
       return result
     let win = winOpt.get()
-    if not win.windowAdmitted() or not win.isFloating:
+    if not win.windowAdmitted() or not win.isFloating or
+        model.parentedRoleFor(win) != ParentedRole.Dialog:
       return current
     let parentExternalId = win.parentExternalId
     if parentExternalId == NullExternalWindowId:

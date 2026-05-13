@@ -111,7 +111,8 @@ proc addFloatingInstructions(
 
   for item in floating:
     var geom = item.win.floatingGeom
-    if item.win.parentExternalId != NullExternalWindowId:
+    if item.win.parentExternalId != NullExternalWindowId and
+        model.parentedRoleFor(item.win) == rv.ParentedRole.Dialog:
       if not model.inActivePopupTree(item.id, activeRoot):
         continue
       let parentId = rv.WindowId(uint32(item.win.parentExternalId))
