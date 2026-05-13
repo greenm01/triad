@@ -105,7 +105,7 @@ type
   WindowRule* = object
     appIdMatch*: string
     titleMatch*: string
-    defaultTag*: uint32
+    defaultWorkspace*: uint32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool
@@ -119,10 +119,12 @@ type
   TagRule* = object
     tagId*: uint32
     name*: string
+    defaultLayoutSet*: bool
     defaultLayout*: LayoutMode
 
   WorkspaceConfig* = object
     defaultCount*: uint32
+    defaultLayout*: LayoutMode
 
   QuickshellConfig* = object
     enabled*: bool

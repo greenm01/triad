@@ -70,8 +70,8 @@ Layouts are decoupled from the core Wayland event loop. They are simply mathemat
 Triad uses KDL for robust, hot-reloadable configuration.
 *   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
 *   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, one trailing empty creation workspace is advertised after the last occupied workspace, and stale empty workspaces are pruned.
-*   **Tag Rules:** Provides lazy name/layout templates for tags when they are created (e.g., `tag 1 default-layout="scroller"`).
-*   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific tag assignments.
+*   **Workspace Rule Templates:** Provides lazy name/layout templates for workspace slots when internal tags are created (e.g., `workspace 1 default-layout="scroller"`).
+*   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific workspace assignments.
 
 Config names follow the policy in `docs/configuration.md`: Niri-style KDL
 clarity is the naming baseline, while Mango remains a feature reference for

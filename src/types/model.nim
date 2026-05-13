@@ -98,6 +98,7 @@ type
   TagRuleData* = object
     slot*: uint32
     name*: string
+    defaultLayoutSet*: bool
     defaultLayout*: LayoutMode
 
   RestoredWindowData* = object
@@ -194,6 +195,7 @@ type
     activeSlot*: uint32
     primaryOutput*: OutputId
     defaultWorkspaceCount*: uint32
+    defaultWorkspaceLayout*: LayoutMode
     visibleSlots*: seq[uint32]
     overviewActive*: bool
     overviewWorkspacePreviewsActive*: bool

@@ -66,8 +66,8 @@ external window manager.
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
 | Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad follows the moved window and also has `move-to-workspace`. |
 | Tags | Toggle/multi-tag view | `toggletag`, `toggleview`, `comboview` | WM policy | | | Triad uses canonical tag masks internally but exposes single-target commands. |
-| Tags | Rename tags | | WM policy | `rename-tag`, `tag-rules { tag ... name=... }` | X | Runtime and config naming are supported. |
-| Tags | Tag rules | `tagrule` | WM policy | `tag-rules { tag ... }` | X | Triad supports tag name and default layout. |
+| Tags | Rename tags | | WM policy | `rename-tag`, `workspace-rules { workspace ... name=... }` | X | Runtime commands use tags; config uses workspace language. |
+| Tags | Tag rules | `tagrule` | WM policy | `workspace-rules { workspace ... }` | X | Triad supports workspace name and default layout rules backed by internal tags. |
 | Monitor focus | Focus monitor | `focusmon` | WM policy | | | Triad is currently single-seat/output-oriented in command surface. |
 | Monitor focus | Move window to monitor | `tagmon`, `tagcrossmon`, `viewcrossmon` | WM policy | | | No Triad config command. |
 | Focus | Directional focus | `focusdir` | `river_seat_v1.focus_window` primitive | `focus-left/right/up/down` | X | Triad maps to model focus commands. |
@@ -94,7 +94,7 @@ external window manager.
 | Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window` | X | Triad has explicit groups and consume/expel commands. |
 | Layouts | Set layout | `setlayout` | WM policy | `layout-*`, native `set-layout` | X | Triad supports scroller, tile, grid, monocle, deck, tgmix, and variants. |
 | Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order. |
-| Layouts | Layout defaults per tag | `tagrule layout_name` | WM policy | `tag-rules default-layout=...` | X | |
+| Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | |
 | Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |
 | Layouts | Master ratio | `setmfact`, `default_mfact`, `mfact` | WM policy | `master-ratio`, `adjust-master-ratio`, `layout.master.split-ratio` | X | |
 | Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width` | X | Triad uses column/window width proportions. |
@@ -111,14 +111,14 @@ external window manager.
 | Scratchpad | Named scratchpad | `toggle_named_scratchpad`, `isnamedscratchpad` | WM policy | `move-to-named-scratchpad`, `toggle-named-scratchpad` | X | Triad names scratchpads directly. |
 | Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
 | Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=... }` | X | |
-| Window rules | Default tag | `windowrule tags` | WM policy | `window-rule default-tag` | X | |
+| Window rules | Default workspace | `windowrule tags` | WM policy | `window-rule default-workspace` | X | |
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Parented float role | `isfloating`, `isoverlay`, app rules | WM policy | `window-rule parented-role` | X | `dialog`, `tool`, and `plain` separate transient dialogs from persistent parented floats without using overlay/global state. |
 | Window rules | Dialog viewport jump | Window rule/policy-specific | WM policy | `window-rule dialog-viewport-jump` | X | Matches the parent app rule; opts specific apps out of hide-until-visible dialog focus. |
 | Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
 | Window rules | Shortcut inhibition | `allow_shortcuts_inhibit` | client inhibit protocol/policy | `keyboard-shortcuts-inhibit`, `toggle-keyboard-shortcuts-inhibit` | X | |
-| Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-tag` | X | `open-focused #false` covers open-silent; explicit `default-tag` is the tag placement escape hatch. |
+| Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-workspace` | X | `open-focused #false` covers open-silent; explicit `default-workspace` is the workspace placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `window-rule floating` | X | Rule-level floating ratios override global defaults for initial float position and size. |
 | Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `enable-animations`, `animation-speed` | | Triad has global animation config, not per-window visual rules. |
 | Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy | | | Not implemented. |
@@ -274,9 +274,9 @@ KDL config nodes and fields:
   `border.inactive-color`, `scroller-focus-center`,
   `scroller-prefer-center`, `enable-animations`, `animation-speed`,
   `smart-gaps`, `layout-cycle`.
-- `workspaces`: `default-count`.
-- `tag-rules`: `tag <id> name=... default-layout=...`.
-- `window-rule`: `match app-id=... title=...`, `default-tag`,
+- `workspaces`: `default-count`, `default-layout`.
+- `workspace-rules`: `workspace <id> name=... default-layout=...`.
+- `window-rule`: `match app-id=... title=...`, `default-workspace`,
   `open-floating`, `open-focused`, `parented-role`,
   `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `forced-layout`,
   nested `floating`.

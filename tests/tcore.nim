@@ -171,7 +171,7 @@ proc restoreMatchingModel(): Model =
   initRuntimeStateFromConfig(
     Config(
       workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[WindowRule(appIdMatch: "generic-app", defaultTag: 2)],
+      windowRules: @[WindowRule(appIdMatch: "generic-app", defaultWorkspace: 2)],
     )
   ).model
 
@@ -2136,12 +2136,12 @@ suite "Core Runtime Logic":
     check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
 
-  test "Explicit default-tag can override parent workspace":
+  test "Explicit default-workspace can override parent workspace":
     var model = initRuntimeStateFromConfig(
       Config(
         layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules: @[WindowRule(appIdMatch: "pinentry", defaultTag: 2)],
+        windowRules: @[WindowRule(appIdMatch: "pinentry", defaultWorkspace: 2)],
       )
     ).model
     model.applyMsg(
@@ -2361,8 +2361,10 @@ suite "Core Runtime Logic":
         workspaces: WorkspaceConfig(defaultCount: 3),
         tagRules:
           @[
-            TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
-            TagRule(tagId: 3, defaultLayout: LayoutMode.Grid),
+            TagRule(
+              tagId: 2, defaultLayoutSet: true, defaultLayout: LayoutMode.Scroller
+            ),
+            TagRule(tagId: 3, defaultLayoutSet: true, defaultLayout: LayoutMode.Grid),
           ],
       )
     ).model
@@ -2395,8 +2397,10 @@ suite "Core Runtime Logic":
         workspaces: WorkspaceConfig(defaultCount: 3),
         tagRules:
           @[
-            TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
-            TagRule(tagId: 3, defaultLayout: LayoutMode.Grid),
+            TagRule(
+              tagId: 2, defaultLayoutSet: true, defaultLayout: LayoutMode.Scroller
+            ),
+            TagRule(tagId: 3, defaultLayoutSet: true, defaultLayout: LayoutMode.Grid),
           ],
       )
     ).model
@@ -2968,7 +2972,7 @@ suite "Core Runtime Logic":
           animationSpeed: 0.5,
         ),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules: @[WindowRule(appIdMatch: "chat", defaultTag: 2)],
+        windowRules: @[WindowRule(appIdMatch: "chat", defaultWorkspace: 2)],
       )
     ).model
     model.applyMsg(

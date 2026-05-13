@@ -3,7 +3,7 @@ import ../src/config/[apply, defaults, parser, reload_policy]
 import ../src/core/msg
 import ../src/ipc/commands
 import ../src/state/[engine, invariants, snapshot]
-import ../src/systems/[overview_hot_corners, runtime_facade]
+import ../src/systems/[overview_hot_corners, runtime_facade, workspaces]
 import ../src/types/[model, runtime_values]
 
 const
@@ -90,11 +90,16 @@ suite "KDL Configuration Parser":
         smartGaps: true,
         layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid],
       ),
-      workspaces: WorkspaceConfig(defaultCount: 4),
+      workspaces: WorkspaceConfig(defaultCount: 4, defaultLayout: LayoutMode.Scroller),
       tagRules:
         @[
-          TagRule(tagId: 1, name: "term", defaultLayout: LayoutMode.Scroller),
-          TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid),
+          TagRule(tagId: 1, name: "term"),
+          TagRule(
+            tagId: 2,
+            name: "web",
+            defaultLayoutSet: true,
+            defaultLayout: LayoutMode.Grid,
+          ),
         ],
       windowRules: @[WindowRule(appIdMatch: "brave", keyboardShortcutsInhibit: true)],
       startupCommands: @[@["notify-send", "triad"]],
@@ -266,13 +271,17 @@ layout {
   smart-gaps #true
   layout-cycle "scroller" "deck" "vertical-grid"
 }
-workspaces { default-count 4 }
-tag-rules {
-  tag 2 name="web" default-layout="grid"
+workspaces {
+  default-count 4
+  default-layout "scroller"
+}
+workspace-rules {
+  workspace 1 name="term"
+  workspace 2 name="web" default-layout="grid"
 }
 window-rule {
   match app-id="qemu"
-  default-tag 3
+  default-workspace 3
   open-floating #true
   open-focused #false
   parented-role "tool"
@@ -354,11 +363,16 @@ bindings {
     check config.layout.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
-    check config.tagRules.len == 1
-    check config.tagRules[0].tagId == 2
-    check config.tagRules[0].defaultLayout == LayoutMode.Grid
+    check config.workspaces.defaultLayout == LayoutMode.Scroller
+    check config.tagRules.len == 2
+    check config.tagRules[0].tagId == 1
+    check config.tagRules[0].name == "term"
+    check not config.tagRules[0].defaultLayoutSet
+    check config.tagRules[1].tagId == 2
+    check config.tagRules[1].defaultLayoutSet
+    check config.tagRules[1].defaultLayout == LayoutMode.Grid
     check config.windowRules.len == 1
-    check config.windowRules[0].defaultTag == 3
+    check config.windowRules[0].defaultWorkspace == 3
     check config.windowRules[0].openFloatingSet
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
@@ -564,11 +578,63 @@ bindings {
     check model.defaultMasterRatio == 0.95'f32
     check model.animationSpeed == 1.0'f32
     check model.defaultWorkspaceCount == DefaultWorkspaceCount
+    check model.defaultWorkspaceLayout == LayoutMode.Scroller
     check model.overviewOuterGap == DefaultOverviewOuterGap
     check model.overviewZoom == 0.75'f32
     check model.overviewHotCorners.size == 1000
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32
+
+  test "workspace config uses global default layout and explicit overrides":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2, defaultLayout: LayoutMode.Deck),
+        tagRules:
+          @[
+            TagRule(
+              tagId: 1,
+              name: "term",
+              defaultLayoutSet: true,
+              defaultLayout: LayoutMode.Grid,
+            ),
+            TagRule(tagId: 3, name: "dynamic"),
+          ],
+      )
+    ).model
+
+    var snapshot = model.shellSnapshot()
+    check snapshot.workspaces[0].name == "term"
+    check snapshot.workspaces[0].layoutMode == LayoutMode.Grid
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+
+    let dynamicTag = model.ensureWorkspaceSlot(3)
+    check dynamicTag != NullTagId
+    let dynamic = model.tagData(dynamicTag)
+    check dynamic.isSome
+    check dynamic.get().name == "dynamic"
+    check dynamic.get().layoutMode == LayoutMode.Deck
+
+  test "legacy tag config names are not accepted":
+    let path = getTempDir() / "triad-legacy-tag-config.kdl"
+    writeFile(
+      path,
+      """
+workspaces { default-count 3 }
+tag-rules {
+  tag 2 name="web" default-layout="grid"
+}
+window-rule {
+  match app-id="qemu"
+  default-tag 3
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.tagRules.len == 0
+    check config.windowRules.len == 1
+    check config.windowRules[0].defaultWorkspace == 0
 
   test "overview hot corner geometry follows output bounds":
     var model = initRuntimeStateFromConfig(

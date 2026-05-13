@@ -53,7 +53,7 @@ signals are not enough:
 
 | Role | Behavior |
 |---|---|
-| `dialog` | Default for parented floats; joins popup-tree focus hiding, adopts the parent workspace unless `default-tag` overrides it, anchors to the parent, and defers focus when the parent is not ready. |
+| `dialog` | Default for parented floats; joins popup-tree focus hiding, adopts the parent workspace unless `default-workspace` overrides it, anchors to the parent, and defers focus when the parent is not ready. |
 | `tool` | Persistent parent-associated float; adopts the parent workspace but does not join popup-tree hiding and does not anchor to the parent. Use rule `floating` geometry for panels and palettes. |
 | `plain` | Ordinary float despite having a parent; no parent workspace adoption, popup-tree hiding, parent anchoring, or deferred dialog focus. |
 

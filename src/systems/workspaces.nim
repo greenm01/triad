@@ -1,6 +1,5 @@
 import std/[algorithm, options]
 import ../state/engine
-from ../types/runtime_values import LayoutMode
 
 proc activeWorkspaceSlot*(model: Model): uint32 =
   let tagOpt = model.tagData(model.activeTag)
@@ -24,10 +23,10 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
   let layoutMode =
     if forcedLayout != 0:
       safeLayoutMode(forcedLayout)
-    elif tagRule.found:
+    elif tagRule.found and tagRule.rule.defaultLayoutSet:
       tagRule.rule.defaultLayout
     else:
-      LayoutMode.Scroller
+      model.defaultWorkspaceLayout
   let name = if tagRule.found: tagRule.rule.name else: ""
   result = model.addTag(
     slot = slot,

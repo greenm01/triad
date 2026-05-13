@@ -45,9 +45,9 @@ The supported KDL nodes are:
 
 - `layout`: gaps, column/window proportions, master settings, borders,
   scroller centering, animation settings, smart gaps, and layout cycle.
-- `workspaces`: default workspace floor.
-- `tag-rules`: tag names and default layouts.
-- `window-rule`: app/title matching, default tag, floating behavior,
+- `workspaces`: default workspace floor and fallback default layout.
+- `workspace-rules`: workspace names and explicit default layouts.
+- `window-rule`: app/title matching, default workspace, floating behavior,
   focus behavior, parented-dialog viewport jump behavior, shortcut
   inhibition, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
@@ -104,7 +104,7 @@ window-rule {
   focus only when they open on the active workspace.
 - `parented-role "dialog"|"tool"|"plain"`: controls how a matching parented
   floating window participates in child-window policy. `dialog` is the default:
-  it joins the popup tree, adopts the parent workspace unless `default-tag`
+  it joins the popup tree, adopts the parent workspace unless `default-workspace`
   overrides it, anchors to the parent, and may defer focus while the parent is
   hidden. `tool` adopts the parent workspace but behaves as a persistent normal
   float instead of a transient popup. `plain` treats the window as an ordinary
@@ -114,13 +114,43 @@ window-rule {
 - `dialog-viewport-jump #true|#false`: when set on a parent app rule, its
   child dialogs may immediately retarget/snap the viewport instead of waiting
   until the parent is visible. The default is `#false`.
-- `default-tag <n>`: opens matching windows on a tag. For parented dialogs,
-  this explicit tag overrides the parent workspace.
+- `default-workspace <n>`: opens matching windows on a workspace. For parented
+  dialogs, this explicit workspace overrides the parent workspace.
 - `floating { x-ratio; y-ratio; width-ratio; height-ratio }`: overrides the
   global floating defaults for this window rule. `x-ratio` and `y-ratio` place
   tool, plain, and unparented floats. Dialogs still center on the parent, but
   `width-ratio` and `height-ratio` can set their desired size before clamping.
   Missing fields fall back to the top-level `floating` defaults.
+
+## Workspaces
+
+Workspace config uses user-facing workspace language. Internally Triad still
+stores workspace membership as DOD tags and masks, but config should describe
+the workflow rather than the storage model.
+
+```kdl
+workspaces {
+  default-count 3
+  default-layout "scroller"
+}
+
+workspace-rules {
+  workspace 1 name="term"
+  workspace 2 name="web"
+  workspace 3 name="files"
+  workspace 4 name="chat" default-layout="deck"
+}
+```
+
+- `default-count <n>`: sets the minimum workspace floor. Values are normalized
+  to the runtime workspace limits.
+- `default-layout "<layout>"`: sets the fallback layout for default workspaces
+  and dynamic workspaces without an explicit workspace rule layout.
+- `workspace <n> name="..."`: names a workspace slot without forcing a layout.
+- `workspace <n> default-layout="..."`: gives that workspace slot an explicit
+  layout default. Explicit workspace-rule layouts override
+  `workspaces.default-layout`.
+- Workspace rules beyond `default-count` are valid dynamic workspace templates.
 
 ## Hotkey Overlay
 

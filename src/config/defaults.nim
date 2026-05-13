@@ -47,6 +47,7 @@ floating {
 
 workspaces {
     default-count 3
+    default-layout "scroller"
 }
 
 screenshot {
@@ -58,11 +59,11 @@ screenshot {
     show-pointer #false
 }
 
-tag-rules {
-    tag 1 default-layout="scroller"
-    tag 2 default-layout="tile"
-    tag 3 default-layout="grid"
-    tag 4 default-layout="monocle"
+workspace-rules {
+    workspace 1 name="term"
+    workspace 2 name="web"
+    workspace 3 name="files"
+    workspace 4 name="chat" default-layout="monocle"
 }
 
 // Shells, bars, launchers, lock screens, startup services, and app rules are

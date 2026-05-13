@@ -34,8 +34,10 @@ proc baseConfig(): Config =
     workspaces: WorkspaceConfig(defaultCount: 3),
     tagRules:
       @[
-        TagRule(tagId: 1, name: "main", defaultLayout: LayoutMode.Scroller),
-        TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid),
+        TagRule(tagId: 1, name: "main"),
+        TagRule(
+          tagId: 2, name: "web", defaultLayoutSet: true, defaultLayout: LayoutMode.Grid
+        ),
       ],
     hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
     terminal: TerminalConfig(command: @["foot"]),
@@ -394,7 +396,15 @@ suite "Runtime state primitives":
       layout:
         LayoutConfig(gaps: 30, layoutCycle: @[LayoutMode.Monocle, LayoutMode.Deck]),
       workspaces: WorkspaceConfig(defaultCount: 4),
-      tagRules: @[TagRule(tagId: 1, name: "renamed", defaultLayout: LayoutMode.Monocle)],
+      tagRules:
+        @[
+          TagRule(
+            tagId: 1,
+            name: "renamed",
+            defaultLayoutSet: true,
+            defaultLayout: LayoutMode.Monocle,
+          )
+        ],
     )
     check state.applyRuntimeConfig(reloaded)
 
@@ -404,7 +414,7 @@ suite "Runtime state primitives":
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 42
     check snapshot.workspaces[0].name == "renamed"
-    check snapshot.workspaces[0].layoutMode == LayoutMode.Monocle
+    check snapshot.workspaces[0].layoutMode == LayoutMode.Scroller
 
   test "runtime live restore applies to model":
     var state = initRuntimeStateFromConfig(baseConfig())

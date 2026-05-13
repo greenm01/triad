@@ -9,7 +9,7 @@ proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
   WindowRuleData(
     appIdMatch: rule.appIdMatch,
     titleMatch: rule.titleMatch,
-    defaultSlot: rule.defaultTag,
+    defaultSlot: rule.defaultWorkspace,
     openFloatingSet: rule.openFloatingSet or rule.openFloating,
     openFloating: rule.openFloating,
     openFocusedSet: rule.openFocusedSet,
@@ -22,7 +22,12 @@ proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
   )
 
 proc tagRuleData(rule: rv.TagRule): TagRuleData =
-  TagRuleData(slot: rule.tagId, name: rule.name, defaultLayout: rule.defaultLayout)
+  TagRuleData(
+    slot: rule.tagId,
+    name: rule.name,
+    defaultLayoutSet: rule.defaultLayoutSet,
+    defaultLayout: rule.defaultLayout,
+  )
 
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
@@ -45,6 +50,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.animationSpeed = configClampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.smartGaps = config.layout.smartGaps
   model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
+  model.defaultWorkspaceLayout = config.workspaces.defaultLayout
 
   model.tagRules = @[]
   for rule in config.tagRules:
@@ -120,9 +126,20 @@ proc applyConfig*(model: var Model, config: Config) =
       discard model.setTagMasterCount(tagId, model.defaultMasterCount)
       discard model.setTagMasterRatio(tagId, model.defaultMasterRatio)
     let tagRule = model.tagRuleForSlot(slot)
-    if tagId != NullTagId and tagRule.found:
-      discard model.setTagLayout(tagId, tagRule.rule.defaultLayout)
-      discard model.setTagName(tagId, tagRule.rule.name)
+    if tagId != NullTagId:
+      let emptyWorkspace =
+        tagOpt.isSome and tagOpt.get().focusedWindow == NullWindowId and
+        model.columnCountForTag(tagId) == 0 and not model.tagHasLiveWindows(tagId)
+      if emptyWorkspace:
+        discard model.setTagLayout(
+          tagId,
+          if tagRule.found and tagRule.rule.defaultLayoutSet:
+            tagRule.rule.defaultLayout
+          else:
+            model.defaultWorkspaceLayout,
+        )
+      if tagRule.found:
+        discard model.setTagName(tagId, tagRule.rule.name)
 
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()

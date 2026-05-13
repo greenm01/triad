@@ -367,6 +367,7 @@ proc loadConfig*(path: string): Config =
       LayoutMode.VerticalScroller,
     ]
   result.workspaces.defaultCount = DefaultWorkspaceCount
+  result.workspaces.defaultLayout = LayoutMode.Scroller
   result.scratchpad.widthRatio = DefaultScratchpadWidthRatio
   result.scratchpad.heightRatio = DefaultScratchpadHeightRatio
   result.overview.outerGap = DefaultOverviewOuterGap
@@ -470,29 +471,40 @@ proc loadConfig*(path: string): Config =
             if child.name == "default-count" and child.args.len > 0:
               let count = child.args[0].kInt()
               result.workspaces.defaultCount = normalizeWorkspaceCountFromConfig(count)
+            elif child.name == "default-layout" and child.args.len > 0:
+              result.workspaces.defaultLayout = parseLayoutName(
+                child.args[0].kString(), result.workspaces.defaultLayout
+              )
           except CatchableError as e:
             warn "Ignoring invalid workspace config field",
               field = child.name, error = e.msg
-      elif node.name == "tag-rules":
+      elif node.name == "workspace-rules":
         for child in node.children:
-          if child.name == "tag" and child.args.len > 0:
+          if child.name == "workspace" and child.args.len > 0:
             try:
               let rawId = child.args[0].kInt()
               if rawId <= 0:
                 continue
               let id = uint32(rawId)
-              var layout = LayoutMode.Scroller
+              var layout = result.workspaces.defaultLayout
+              var layoutSet = false
               var tagName = ""
               if child.props.hasKey("name"):
                 tagName = child.props["name"].kString()
               if child.props.hasKey("default-layout"):
+                layoutSet = true
                 layout =
                   parseLayoutName(child.props["default-layout"].kString(), layout)
               result.tagRules.add(
-                TagRule(tagId: id, defaultLayout: layout, name: tagName)
+                TagRule(
+                  tagId: id,
+                  defaultLayoutSet: layoutSet,
+                  defaultLayout: layout,
+                  name: tagName,
+                )
               )
             except CatchableError as e:
-              warn "Ignoring invalid tag rule", error = e.msg
+              warn "Ignoring invalid workspace rule", error = e.msg
       elif node.name == "window-rule":
         var rule = WindowRule()
         for child in node.children:
@@ -502,10 +514,10 @@ proc loadConfig*(path: string): Config =
                 rule.appIdMatch = child.props["app-id"].kString()
               if child.props.hasKey("title"):
                 rule.titleMatch = child.props["title"].kString()
-            elif child.name == "default-tag" and child.args.len > 0:
-              let rawTag = child.args[0].kInt()
-              if rawTag > 0:
-                rule.defaultTag = uint32(rawTag)
+            elif child.name == "default-workspace" and child.args.len > 0:
+              let rawWorkspace = child.args[0].kInt()
+              if rawWorkspace > 0:
+                rule.defaultWorkspace = uint32(rawWorkspace)
             elif child.name == "open-floating" and child.args.len > 0:
               rule.openFloatingSet = true
               rule.openFloating = child.args[0].kBool()
