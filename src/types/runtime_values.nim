@@ -144,6 +144,7 @@ type
   OverviewConfig* = object
     outerGap*: int32
     innerGapMultiplier*: float32
+    zoom*: float32
 
   FloatingConfig* = object
     xRatio*: float32
@@ -179,6 +180,8 @@ type
     OpNone
     OpMove
     OpResize
+    OpOverviewDrag
+    OpOverviewScroll
 
   HotkeyOverlayTitleKind* {.pure.} = enum
     HotkeyTitleDefault

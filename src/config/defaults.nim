@@ -33,6 +33,7 @@ scratchpad {
 overview {
     outer-gap 64
     inner-gap-multiplier 2.0
+    zoom 0.5
 }
 
 floating {

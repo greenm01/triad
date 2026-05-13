@@ -45,6 +45,8 @@ type
     WlRenderStart
     WlPointerMoveRequested
     WlPointerResizeRequested
+    WlOverviewPointerDragRequested
+    WlOverviewPointerScrollRequested
     WlPointerDelta
     WlPointerRelease
     WlShellSurfaceInteraction
@@ -221,6 +223,13 @@ type
       resizeWinId*: WindowId
       resizeSeat*: pointer # ptr RiverSeatV1
       resizeEdges*: uint32
+    of MsgKind.WlOverviewPointerDragRequested:
+      overviewDragWinId*: WindowId
+      overviewDragSeat*: pointer # ptr RiverSeatV1
+      overviewDragX*, overviewDragY*: int32
+    of MsgKind.WlOverviewPointerScrollRequested:
+      overviewScrollSeat*: pointer # ptr RiverSeatV1
+      overviewScrollX*, overviewScrollY*: int32
     of MsgKind.WlPointerDelta:
       dx*, dy*: int32
     of MsgKind.WlShellSurfaceInteraction:

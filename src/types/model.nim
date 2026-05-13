@@ -137,6 +137,12 @@ type
     windowId*: WindowId
     initialGeom*: Rect
     edges*: uint32
+    startX*, startY*: int32
+    currentX*, currentY*: int32
+    totalDX*, totalDY*: int32
+    startScrollOffset*: float32
+    hoverSlot*: uint32
+    hoverTicks*: int
 
   ViewportState* = object
     targetViewportXOffset*: float32
@@ -209,6 +215,8 @@ type
     unfocusedBorderColor*: uint32
     overviewOuterGap*: int32
     overviewInnerGapMultiplier*: float32
+    overviewZoom*: float32
+    overviewScrollOffset*: float32
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string

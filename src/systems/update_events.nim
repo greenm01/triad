@@ -1,6 +1,7 @@
 import std/options
 import ../core/[effects, msg]
 import ../state/engine
+from ../types/runtime_values import PointerOpKind
 import focus
 import outputs
 import runtime
@@ -168,9 +169,24 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       result.effects.add(
         Effect(kind: EffectKind.EffOpStartPointer, opSeat: msg.resizeSeat)
       )
+  of MsgKind.WlOverviewPointerDragRequested:
+    if model.beginOverviewDrag(
+      msg.overviewDragWinId.externalWindowId(), msg.overviewDragX, msg.overviewDragY
+    ):
+      result.dirty = true
+      result.effects.add(
+        Effect(kind: EffectKind.EffOpStartPointer, opSeat: msg.overviewDragSeat)
+      )
+  of MsgKind.WlOverviewPointerScrollRequested:
+    if model.beginOverviewScroll(msg.overviewScrollX, msg.overviewScrollY):
+      result.dirty = true
+      result.effects.add(
+        Effect(kind: EffectKind.EffOpStartPointer, opSeat: msg.overviewScrollSeat)
+      )
   of MsgKind.WlPointerDelta:
     result.dirty = model.applyPointerDelta(msg.dx, msg.dy)
   of MsgKind.WlPointerRelease:
+    result.dirty = model.pointerOp.kind != PointerOpKind.OpNone
     let resized = model.finishPointerOp()
     if resized != NullWindowId:
       result.effects.add(

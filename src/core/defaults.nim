@@ -14,6 +14,7 @@ const
   DefaultScratchpadHeightRatio* = 0.9'f32
   DefaultOverviewOuterGap* = 64'i32
   DefaultOverviewInnerGapMultiplier* = 2.0'f32
+  DefaultOverviewZoom* = 0.5'f32
   DefaultFloatingXRatio* = 0.25'f32
   DefaultFloatingYRatio* = 0.25'f32
   DefaultFloatingWidthRatio* = 0.5'f32

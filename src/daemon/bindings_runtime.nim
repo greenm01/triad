@@ -6,7 +6,7 @@ import protocols/river_xkb_bindings/client as riverXkb
 import ../config/keysyms
 import ../core/msg
 import ../ipc/commands
-import ../systems/[daemon_view, runtime]
+import ../systems/[daemon_view, overview_geometry, runtime]
 import ../types/runtime_values
 import
   manage_requests, message_queue, protocol_surface_runtime, protocol_surfaces,
@@ -85,12 +85,28 @@ proc hasOverviewLeftClickBinding(daemon: TriadDaemon): bool =
       return true
   false
 
+proc hasOverviewRightClickBinding(daemon: TriadDaemon): bool =
+  for binding in daemon.currentModel.pointerBindings:
+    if binding.button == 0x111'u32 and binding.modifiers == 0'u32 and
+        binding.mode in {BindingMode.BindAlways, BindingMode.BindOverview}:
+      return true
+  false
+
 proc overviewSelectPointerBinding(): PointerBindingConfig =
   PointerBindingConfig(
     button: 0x110'u32,
     modifiers: 0'u32,
     op: PointerOpKind.OpNone,
     command: "select-window",
+    mode: BindingMode.BindOverview,
+  )
+
+proc overviewScrollPointerBinding(): PointerBindingConfig =
+  PointerBindingConfig(
+    button: 0x111'u32,
+    modifiers: 0'u32,
+    op: PointerOpKind.OpOverviewScroll,
+    command: "overview-scroll",
     mode: BindingMode.BindOverview,
   )
 
@@ -261,6 +277,34 @@ proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) 
   if not daemon.pointerBindingSeats.hasKey(id):
     return
   let seat = daemon.pointerBindingSeats[id]
+  let button = daemon.pointerBindingButtons.getOrDefault(id, 0'u32)
+  let point = daemon.pointerPositionBySeat.getOrDefault(seat.id(), Rect())
+  if daemon[].currentModel.overviewUsesWorkspacePreviews():
+    if button == 0x110'u32:
+      let target = daemon[].overviewWindowAtPointer(seat)
+      if target != 0:
+        daemon.enqueue(
+          Msg(
+            kind: MsgKind.WlOverviewPointerDragRequested,
+            overviewDragWinId: target,
+            overviewDragSeat: seat,
+            overviewDragX: point.x,
+            overviewDragY: point.y,
+          )
+        )
+      return
+    if button == 0x111'u32 or
+        daemon.pointerBindingKinds.getOrDefault(id, PointerOpKind.OpNone) ==
+        PointerOpKind.OpOverviewScroll:
+      daemon.enqueue(
+        Msg(
+          kind: MsgKind.WlOverviewPointerScrollRequested,
+          overviewScrollSeat: seat,
+          overviewScrollX: point.x,
+          overviewScrollY: point.y,
+        )
+      )
+      return
   let focused = daemon[].currentModel.activeFocusRiverId()
   let target =
     if daemon[].currentModel.overviewActive:
@@ -286,7 +330,8 @@ proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) 
           resizeEdges: RiverEdgeBottom or RiverEdgeRight,
         )
       )
-    else:
+    of PointerOpKind.OpNone, PointerOpKind.OpOverviewDrag,
+        PointerOpKind.OpOverviewScroll:
       discard
   elif daemon.pointerBindings.hasKey(id):
     let msg = daemon.pointerBindings[id]
@@ -436,6 +481,7 @@ proc destroyBindings*(daemon: var TriadDaemon) =
   daemon.pointerBindings.clear()
   daemon.pointerBindingKinds.clear()
   daemon.pointerBindingSeats.clear()
+  daemon.pointerBindingButtons.clear()
   daemon.pointerBindingPressed.clear()
   daemon.bindingsConfigured = false
 
@@ -478,6 +524,7 @@ proc addPointerBinding(
   else:
     daemon.pointerBindings[binding.id()] = msg.get()
   daemon.pointerBindingSeats[binding.id()] = seat
+  daemon.pointerBindingButtons[binding.id()] = bindingConfig.button
   discard binding.addListener(pointerBindingListener.addr, daemonData(daemon))
   binding.enable()
 
@@ -505,6 +552,9 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
         daemon.addPointerBinding(seat, binding)
     if daemon.currentModel.overviewActive and not daemon.hasOverviewLeftClickBinding():
       daemon.addPointerBinding(seat, overviewSelectPointerBinding())
+    if daemon.currentModel.overviewUsesWorkspacePreviews() and
+        not daemon.hasOverviewRightClickBinding():
+      daemon.addPointerBinding(seat, overviewScrollPointerBinding())
 
   daemon.bindingsConfigured = true
 

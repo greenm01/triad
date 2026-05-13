@@ -1,11 +1,11 @@
-import std/[algorithm, options, tables]
+import std/[algorithm, math, options, tables]
 import ../layouts/[scroller, tiling]
 import ../state/engine
 import ../types/core as core_types
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/runtime_values as rv
-import floating_geometry, presentation_policy, popup_tree
+import floating_geometry, overview_geometry, presentation_policy, popup_tree
 
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
   let winOpt = model.windowData(winId)
@@ -299,26 +299,86 @@ proc preserveBackingPresentation(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: screen)
       )
 
+proc scaledOverviewRect(source, dest, geom: rv.Rect, zoom: float32): rv.Rect =
+  rv.Rect(
+    x: dest.x + int32(round(float32(geom.x - source.x) * zoom)),
+    y: dest.y + int32(round(float32(geom.y - source.y) * zoom)),
+    w: max(1'i32, int32(round(float32(max(1'i32, geom.w)) * zoom))),
+    h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * zoom))),
+  )
+
+proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]) =
+  let op = model.pointerOp
+  if op.kind != rv.PointerOpKind.OpOverviewDrag:
+    return
+  if abs(op.totalDX) < OverviewDragThreshold and abs(op.totalDY) < OverviewDragThreshold:
+    return
+  let externalId = model.externalWindowId(op.windowId)
+  for instr in instructions.mitems:
+    if instr.windowId == externalId:
+      instr.geom.x += op.totalDX
+      instr.geom.y += op.totalDY
+      return
+
+proc layoutMangoOverview(model: Model, screen: rv.Rect): seq[rv.RenderInstruction] =
+  var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.LayoutMode.Grid)
+  for winId in model.overviewWindowIds():
+    overviewTag.columns.add(
+      rv.Column(
+        windows: @[model.externalWindowId(winId)],
+        widthProportion: 1.0,
+        isFullWidth: true,
+      )
+    )
+  layoutGrid(
+    overviewTag,
+    screen,
+    max(0'i32, model.overviewOuterGap),
+    max(0'i32, int32(float32(model.innerGaps) * model.overviewInnerGapMultiplier)),
+  )
+
+proc layoutNiriOverview(
+    model: Model, windows: Table[rv.WindowId, rv.WindowData], screen: rv.Rect
+): seq[rv.RenderInstruction] =
+  let slots = model.previewSlots()
+  if slots.len == 0:
+    return
+
+  let zoom = model.effectiveOverviewZoom()
+  let workspaceScreen = rv.Rect(x: screen.x, y: screen.y, w: screen.w, h: screen.h)
+  for idx, slot in slots:
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    var projected = model.projectedTag(tagId)
+    if not projected.found:
+      continue
+    model.applyPopupLayoutFocus(projected.tag, model.activeFocus())
+    var instructions = layoutForTag(
+      projected.tag, windows, workspaceScreen, model.outerGaps, model.innerGaps, false,
+      false, "never",
+    )
+    model.addFloatingInstructions(tagId, workspaceScreen, instructions)
+    let preview = model.workspacePreviewRect(screen, slots, idx)
+    for instr in instructions:
+      result.add(
+        rv.RenderInstruction(
+          windowId: instr.windowId,
+          geom: scaledOverviewRect(workspaceScreen, preview, instr.geom, zoom),
+        )
+      )
+  model.applyOverviewDrag(result)
+
 proc layoutProjection*(model: Model): LayoutProjection =
   let screen = model.primaryScreen()
   let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
-    var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.LayoutMode.Grid)
-    for winId in model.overviewWindowIds():
-      overviewTag.columns.add(
-        rv.Column(
-          windows: @[model.externalWindowId(winId)],
-          widthProportion: 1.0,
-          isFullWidth: true,
-        )
-      )
-    result.instructions = layoutGrid(
-      overviewTag,
-      screen,
-      max(0'i32, model.overviewOuterGap),
-      max(0'i32, int32(float32(model.innerGaps) * model.overviewInnerGapMultiplier)),
-    )
+    result.instructions =
+      if model.overviewStyle() == OverviewStyle.NiriWorkspaces:
+        model.layoutNiriOverview(windows, screen)
+      else:
+        model.layoutMangoOverview(screen)
     return
 
   if model.activeTag == NullTagId:

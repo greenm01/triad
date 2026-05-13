@@ -4,8 +4,8 @@ import ../src/core/[effects, msg, render_visibility, restore_state]
 import ../src/state/engine
 import
   ../src/systems/[
-    hotkey_overlay, layout_projection, popup_tree, runtime_facade, update,
-    window_lifecycle,
+    hotkey_overlay, layout_projection, overview_geometry, popup_tree, runtime_facade,
+    update, window_lifecycle,
   ]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
@@ -98,6 +98,9 @@ proc instructionGeom(model: Model, id: uint32): runtime_values.Rect =
     if uint32(instr.windowId) == id:
       return instr.geom
   runtime_values.Rect()
+
+proc rectCenter(rect: runtime_values.Rect): tuple[x, y: int32] =
+  (rect.x + rect.w div 2, rect.y + rect.h div 2)
 
 proc snapshotWindow(model: Model, id: uint32): ShellWindow =
   for win in model.shellSnapshot().windows:
@@ -3115,6 +3118,60 @@ suite "Core Runtime Logic":
     check overviewHitTest(instructions, 220, 70) == 3
     check overviewHitTest(instructions, 400, 400) == 0
 
+  test "Scroller overview projects workspace previews":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let projection = model.layoutProjection()
+    let one = projection.instructions.filterIt(uint32(it.windowId) == 1)[0].geom
+    let two = projection.instructions.filterIt(uint32(it.windowId) == 2)[0].geom
+    let activePreview = model.workspacePreviewRect(screen, slots, 0)
+    let secondPreview = model.workspacePreviewRect(screen, slots, 1)
+
+    check model.overviewStyle() == OverviewStyle.NiriWorkspaces
+    check one.x >= activePreview.x
+    check one.y >= activePreview.y
+    check one.x + one.w <= activePreview.x + activePreview.w
+    check one.y + one.h <= activePreview.y + activePreview.h
+    check two.x >= secondPreview.x
+    check two.y >= secondPreview.y
+    check two.x + two.w <= secondPreview.x + secondPreview.w
+    check two.y + two.h <= secondPreview.y + secondPreview.h
+
+  test "Non-scroller overview keeps Mango grid projection":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let projection = model.layoutProjection()
+    let screen = model.primaryScreen()
+
+    check model.overviewStyle() == OverviewStyle.MangoGrid
+    check projection.instructions.len == 2
+    check projection.instructions.allIt(it.geom.w > screen.w div 3)
+
   test "Overview direction selection follows visual grid":
     var model = configuredModel()
     for id in 1'u32 .. 5'u32:
@@ -3258,6 +3315,104 @@ suite "Core Runtime Logic":
     check effects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
+
+  test "Dragging Niri overview preview moves window to hovered workspace":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let start = model.instructionGeom(1).rectCenter()
+    let slots = model.previewSlots()
+    let target =
+      model.workspacePreviewRect(model.primaryScreen(), slots, 1).rectCenter()
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 1,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlPointerDelta, dx: target.x - start.x, dy: target.y - start.y)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check not model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.activeWorkspaceFocusId() == 1
+
+  test "Right-dragging Niri overview scrolls workspace previews":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let start = model.instructionGeom(1).rectCenter()
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlOverviewPointerScrollRequested,
+        overviewScrollX: start.x,
+        overviewScrollY: start.y,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerDelta, dx: 0, dy: 50))
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check model.overviewActive
+    check model.overviewScrollOffset == 50.0'f32
+    check model.pointerOp.kind == PointerOpKind.OpNone
+
+  test "Holding Niri overview drag over workspace activates drop":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let start = model.instructionGeom(1).rectCenter()
+    let slots = model.previewSlots()
+    let target =
+      model.workspacePreviewRect(model.primaryScreen(), slots, 1).rectCenter()
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 1,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlPointerDelta, dx: target.x - start.x, dy: target.y - start.y)
+    )
+    for _ in 0 ..< 47:
+      model.applyMsg(Msg(kind: MsgKind.CmdTick))
+
+    check not model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.activeWorkspaceFocusId() == 1
 
   test "Clicking overview window commits focus":
     var model = configuredModel()

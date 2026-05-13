@@ -368,6 +368,7 @@ proc loadConfig*(path: string): Config =
   result.scratchpad.heightRatio = DefaultScratchpadHeightRatio
   result.overview.outerGap = DefaultOverviewOuterGap
   result.overview.innerGapMultiplier = DefaultOverviewInnerGapMultiplier
+  result.overview.zoom = DefaultOverviewZoom
   result.floating.xRatio = DefaultFloatingXRatio
   result.floating.yRatio = DefaultFloatingYRatio
   result.floating.widthRatio = DefaultFloatingWidthRatio
@@ -657,6 +658,9 @@ proc loadConfig*(path: string): Config =
             elif child.name == "inner-gap-multiplier" and child.args.len > 0:
               result.overview.innerGapMultiplier =
                 clampF32(float32(child.args[0].kFloat()), 0.0, 8.0)
+            elif child.name == "zoom" and child.args.len > 0:
+              result.overview.zoom =
+                clampF32(float32(child.args[0].kFloat()), 0.0001, 0.75)
           except CatchableError as e:
             warn "Ignoring invalid overview field", field = child.name, error = e.msg
       elif node.name == "floating":

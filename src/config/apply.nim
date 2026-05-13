@@ -78,6 +78,11 @@ proc applyConfig*(model: var Model, config: Config) =
   if model.overviewOuterGap < 0:
     model.overviewOuterGap = DefaultOverviewOuterGap
   model.overviewInnerGapMultiplier = config.overview.innerGapMultiplier
+  model.overviewZoom =
+    if config.overview.zoom > 0:
+      configClampF32(config.overview.zoom, 0.0001, 0.75)
+    else:
+      DefaultOverviewZoom
   model.floatingXRatio = config.floating.xRatio
   model.floatingYRatio = config.floating.yRatio
   model.floatingWidthRatio = config.floating.widthRatio

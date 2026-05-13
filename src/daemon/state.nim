@@ -61,6 +61,7 @@ type
     pointerBindings*: Table[uint32, Msg]
     pointerBindingKinds*: Table[uint32, PointerOpKind]
     pointerBindingSeats*: Table[uint32, ptr RiverSeatV1]
+    pointerBindingButtons*: Table[uint32, uint32]
     pointerBindingPointers*: seq[ptr RiverPointerBindingV1]
     pointerBindingPressed*: Table[uint32, bool]
     shellSurfacePointers*: Table[uint32, ptr RiverShellSurfaceV1]

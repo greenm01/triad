@@ -22,7 +22,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-occupied-tag-left`, `focus-occupied-tag-right`: Moves to the adjacent non-empty tag.
 *   `focus-column-first`, `focus-column-last`: Focuses the first or last visible column on the active tag.
 *   `focus-window-or-workspace-up`, `focus-window-or-workspace-down`: Moves vertically within the focused column, or switches to the adjacent tag at the edge.
-*   `toggle-overview`: Activates or deactivates the global window grid.
+*   `toggle-overview`: Activates or deactivates the overview. Scroller
+    layouts show Niri-style workspace previews; other layouts show the
+    Mango-style global window grid.
 *   `open-overview`, `close-overview`: Idempotently opens or closes the overview.
 *   `toggle-scratchpad`: Shows the most recent scratchpad window as a centered overlay, or hides it.
 *   `toggle-named-scratchpad <name>`: Shows or hides a named scratchpad; if the name is new, the focused window is assigned to it.
@@ -102,8 +104,12 @@ pointer-bind "right" "close-window" mode="overview"
 
 `move` and `resize` start River pointer operations. Other commands are parsed
 as normal Triad commands and target the window under the pointer when the
-command is window-specific. Mouse-wheel and touchpad gesture bindings are not
-part of the current River input surface Triad receives.
+command is window-specific. In the Niri-style scroller overview, unmodified
+left-drag moves a window preview to the hovered workspace, and unmodified
+right-drag scrolls the workspace preview stack; this overrides overview
+right-click close only for that scroller overview mode. Mouse-wheel and
+touchpad gesture bindings are not part of the current River input surface Triad
+receives.
 
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.

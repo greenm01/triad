@@ -33,6 +33,7 @@ Examples:
 | Prefer | Avoid |
 | :--- | :--- |
 | `overview { outer-gap 64 }` | `overviewgappo=64` |
+| `overview { zoom 0.5 }` | `ov_scale=0.5` |
 | `layout { smart-gaps #true }` | `smartgaps=1` |
 | `master { count 1; split-ratio 0.55 }` | `nmaster=1`, `mfact=0.55` |
 | `window-rule { open-floating #true }` | `isfloating:1` |
@@ -53,7 +54,7 @@ The supported KDL nodes are:
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
-- `scratchpad`, `overview`, `floating`, `screenshot`, `cursor`.
+- `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`, `cursor`.
 - Top-level flags and settings: `presentation-mode`, `allow-exit-session`,
   `protocol-surfaces`, and `hotkey-overlay`.
 

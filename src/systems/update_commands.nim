@@ -17,6 +17,7 @@ proc openOverview(model: var Model): bool =
   if result:
     discard model.saveOverviewViewportSnapshot()
     discard model.setOverviewSelection(model.initialOverviewWindow())
+    discard model.setOverviewScrollOffset(0.0)
 
 proc recomputeAllTagFocus(model: var Model) =
   for tagId, _ in model.tagsWithId():
@@ -222,6 +223,7 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
       )
   of MsgKind.CmdTick:
     result.dirty = model.tickAnimations()
+    result.dirty = model.tickOverviewPointerHold() or result.dirty
     result.dirty = model.flushPendingDialogFocus() or result.dirty
   of MsgKind.CmdLockSession:
     if model.screenLockCommand.len > 0:

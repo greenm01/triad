@@ -18,6 +18,12 @@ proc setOverviewSelection*(model: var Model, winId: WindowId): bool =
 proc clearOverviewSelection*(model: var Model): bool =
   model.setOverviewSelection(NullWindowId)
 
+proc setOverviewScrollOffset*(model: var Model, offset: float32): bool =
+  if model.overviewScrollOffset == offset:
+    return false
+  model.overviewScrollOffset = offset
+  true
+
 proc saveOverviewViewportSnapshot*(model: var Model): bool =
   model.overviewViewportSnapshot.clear()
   for tag in model.tags.entities:

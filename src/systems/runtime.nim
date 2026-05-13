@@ -1,6 +1,10 @@
 import std/[math, options]
 import ../state/engine
+import ../types/runtime_values as rv
 from ../types/runtime_values import PointerOpKind
+import focus, overview_geometry, placement
+
+const OverviewHoldTicks = 47
 
 proc keyboardShortcutsInhibited*(model: Model): bool =
   if model.sessionLocked or model.layerFocusExclusive:
@@ -53,10 +57,112 @@ proc beginPointerResize*(
     )
   )
 
+proc overviewScreen(model: Model): rv.Rect =
+  if model.primaryOutput != NullOutputId:
+    let outputOpt = model.outputData(model.primaryOutput)
+    if outputOpt.isSome:
+      let output = outputOpt.get()
+      if output.hasUsable and output.usableW > 0 and output.usableH > 0:
+        return rv.Rect(
+          x: output.usableX, y: output.usableY, w: output.usableW, h: output.usableH
+        )
+      return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+  rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
+
+proc updateOverviewDragHover(model: var Model, op: var PointerOpData): bool =
+  let target =
+    model.overviewDropTargetAt(model.overviewScreen(), op.currentX, op.currentY)
+  let slot =
+    if target.kind in {OverviewDropKind.DropWorkspace, OverviewDropKind.DropDynamicGap}:
+      target.slot
+    else:
+      0'u32
+  if op.hoverSlot == slot:
+    inc op.hoverTicks
+  else:
+    op.hoverSlot = slot
+    op.hoverTicks = 0
+  model.setPointerOpState(op)
+
+proc beginOverviewDrag*(
+    model: var Model, externalId: ExternalWindowId, x, y: int32
+): bool =
+  if not model.overviewUsesWorkspacePreviews():
+    return false
+  let winId = model.windowForExternal(externalId)
+  if winId == NullWindowId or model.overviewWindowIds().find(winId) == -1:
+    return false
+  discard model.setOverviewSelection(winId)
+  var op = PointerOpData(
+    kind: PointerOpKind.OpOverviewDrag,
+    windowId: winId,
+    startX: x,
+    startY: y,
+    currentX: x,
+    currentY: y,
+  )
+  discard model.updateOverviewDragHover(op)
+  true
+
+proc beginOverviewScroll*(model: var Model, x, y: int32): bool =
+  if not model.overviewUsesWorkspacePreviews():
+    return false
+  model.setPointerOpState(
+    PointerOpData(
+      kind: PointerOpKind.OpOverviewScroll,
+      startX: x,
+      startY: y,
+      currentX: x,
+      currentY: y,
+      startScrollOffset: model.overviewScrollOffset,
+    )
+  )
+
+proc closeOverviewFromPointer(model: var Model): bool =
+  result = model.setOverviewActive(false)
+  result = model.clearOverviewSelection() or result
+  result = model.restoreOverviewViewportSnapshot() or result
+
+proc overviewDragPastThreshold(op: PointerOpData): bool =
+  abs(op.totalDX) >= OverviewDragThreshold or abs(op.totalDY) >= OverviewDragThreshold
+
+proc commitOverviewDrag(model: var Model, op: PointerOpData): bool =
+  if op.windowId == NullWindowId:
+    return false
+
+  let target =
+    model.overviewDropTargetAt(model.overviewScreen(), op.currentX, op.currentY)
+  if op.overviewDragPastThreshold() and
+      target.kind in {OverviewDropKind.DropWorkspace, OverviewDropKind.DropDynamicGap} and
+      target.slot != 0:
+    discard model.focusWindow(op.windowId, retargetViewport = false)
+    result = model.moveFocusedWindowToSlotAndFocus(target.slot)
+    if not result:
+      result = model.focusWindow(op.windowId)
+  else:
+    result = model.focusWindow(op.windowId)
+  result = model.closeOverviewFromPointer() or result
+
 proc applyPointerDelta*(model: var Model, dx, dy: int32): bool =
   let op = model.pointerOp
   if op.kind == PointerOpKind.OpNone:
     return false
+  if op.kind == PointerOpKind.OpOverviewDrag:
+    var next = op
+    next.totalDX = dx
+    next.totalDY = dy
+    next.currentX = op.startX + dx
+    next.currentY = op.startY + dy
+    return model.updateOverviewDragHover(next)
+  if op.kind == PointerOpKind.OpOverviewScroll:
+    var next = op
+    next.totalDX = dx
+    next.totalDY = dy
+    next.currentX = op.startX + dx
+    next.currentY = op.startY + dy
+    discard model.setPointerOpState(next)
+    return model.setOverviewScrollOffset(op.startScrollOffset + float32(dy))
+
   let winOpt = model.windowData(op.windowId)
   if winOpt.isNone:
     return false
@@ -79,15 +185,32 @@ proc applyPointerDelta*(model: var Model, dx, dy: int32): bool =
       geom.w = max(model.effectiveFloatingMinWidth(), op.initialGeom.w + dx)
   of PointerOpKind.OpNone:
     return false
+  of PointerOpKind.OpOverviewDrag, PointerOpKind.OpOverviewScroll:
+    return false
 
   model.setWindowFloatingGeom(op.windowId, geom)
 
-proc finishPointerOp*(model: var Model): WindowId =
-  result =
-    if model.pointerOp.kind == PointerOpKind.OpResize:
-      model.pointerOp.windowId
-    else:
-      NullWindowId
+proc finishPointerOp*(model: var Model): core.WindowId =
+  let op = model.pointerOp
+  if op.kind == PointerOpKind.OpOverviewDrag:
+    discard model.commitOverviewDrag(op)
+    discard model.clearPointerOp()
+    return NullWindowId
+  if op.kind == PointerOpKind.OpOverviewScroll:
+    discard model.clearPointerOp()
+    return NullWindowId
+  result = if op.kind == PointerOpKind.OpResize: op.windowId else: NullWindowId
+  discard model.clearPointerOp()
+
+proc tickOverviewPointerHold*(model: var Model): bool =
+  var op = model.pointerOp
+  if op.kind != PointerOpKind.OpOverviewDrag or not op.overviewDragPastThreshold():
+    return false
+  discard model.updateOverviewDragHover(op)
+  op = model.pointerOp
+  if op.hoverSlot == 0 or op.hoverTicks < OverviewHoldTicks:
+    return false
+  result = model.commitOverviewDrag(op)
   discard model.clearPointerOp()
 
 proc moveFloatingFocused*(model: var Model, dx, dy: int32): bool =

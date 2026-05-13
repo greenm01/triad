@@ -101,7 +101,7 @@ suite "KDL Configuration Parser":
       quickshell: QuickshellConfig(enabled: true, theme: "noctalia"),
       terminal: TerminalConfig(command: @["kitty"]),
       screenshot: ScreenshotConfig(showPointer: true),
-      overview: OverviewConfig(outerGap: -1, innerGapMultiplier: 1.5),
+      overview: OverviewConfig(outerGap: -1, innerGapMultiplier: 1.5, zoom: 0.25),
       floating: FloatingConfig(
         xRatio: 0.2,
         yRatio: 0.3,
@@ -146,6 +146,7 @@ suite "KDL Configuration Parser":
     check state.model.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check state.model.terminal.command == @["kitty"]
+    check state.model.overviewZoom == 0.25'f32
     check state.model.keyBindings.len == 1
 
     let snapshot = state.model.shellSnapshot()
@@ -304,6 +305,11 @@ scratchpad {
   width-ratio 0.7
   height-ratio 0.6
 }
+overview {
+  outer-gap 80
+  inner-gap-multiplier 1.75
+  zoom 0.25
+}
 cursor {
   theme "Bibata"
   size 32
@@ -373,6 +379,9 @@ bindings {
     check config.screenLock.command == @["swaylock"]
     check config.windowMenu.command == @["bemenu"]
     check config.scratchpad.widthRatio == 0.7'f32
+    check config.overview.outerGap == 80
+    check config.overview.innerGapMultiplier == 1.75'f32
+    check config.overview.zoom == 0.25'f32
     check config.cursor.theme == "Bibata"
     check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
@@ -526,7 +535,7 @@ bindings {
           animationSpeed: 5.0,
         ),
         workspaces: WorkspaceConfig(defaultCount: 0),
-        overview: OverviewConfig(outerGap: -1),
+        overview: OverviewConfig(outerGap: -1, zoom: 99.0),
         scratchpad: ScratchpadConfig(widthRatio: 4.0, heightRatio: 0.0),
       )
     )
@@ -541,5 +550,6 @@ bindings {
     check model.animationSpeed == 1.0'f32
     check model.defaultWorkspaceCount == DefaultWorkspaceCount
     check model.overviewOuterGap == DefaultOverviewOuterGap
+    check model.overviewZoom == 0.75'f32
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32
