@@ -47,6 +47,7 @@ type
     singlePixelManager*: ptr singlepixel.WpSinglePixelBufferManagerV1
     riverPhase*: RiverPhase
     bindingsConfigured*: bool
+    bindingsReconfigurePending*: bool
     manageRequestPending*: bool
     manageRequestReason*: string
     screenshotCaptureActive*: bool

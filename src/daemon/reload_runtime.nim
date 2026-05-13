@@ -6,9 +6,7 @@ import ../ipc/[quickshell_compat, socket]
 import ../systems/runtime_facade
 import ../types/[model, shell_snapshot]
 import ../utils/behavior_log
-import
-  bindings_runtime, live_restore_runtime, manage_requests, process_runner,
-  quickshell_runner, state
+import bindings_runtime, live_restore_runtime, process_runner, quickshell_runner, state
 
 proc setupConfig*(daemon: var TriadDaemon) =
   daemon.configPath = defaultConfigPath()
@@ -117,6 +115,22 @@ proc applyConfigReload*(
     )
     return false
 
+  let restore = daemon.writeCurrentLiveRestoreState()
+  if not restore.ok:
+    warn "Config reload rejected; live restore snapshot could not be written",
+      path = restore.path, error = restore.error
+    writeBehaviorEvent(
+      "config_reload_rejected",
+      %*{
+        "path": configPath,
+        "reason": "live restore snapshot rejected",
+        "error": restore.error,
+        "before": beforeSnapshot.snapshotBehaviorPayload(),
+      },
+    )
+    return false
+  daemon.liveRestoreCommitPending = true
+
   let previousModel = daemon.runtimeState.model
   discard daemon.runtimeState.applyRuntimeConfig(loaded.config)
   let appliedSnapshot = daemon.readModelSnapshot()
@@ -124,6 +138,7 @@ proc applyConfigReload*(
     beforeSnapshot.configReloadPreservationProblem(appliedSnapshot)
   if preservationProblem.len > 0:
     daemon.runtimeState.model = previousModel
+    daemon.commitPendingLiveRestore()
     warn "Config reload rolled back; live state changed",
       path = configPath, reason = preservationProblem
     writeBehaviorEvent(
@@ -178,9 +193,8 @@ proc applyConfigReload*(
       daemon.runtimeState.model, niriSocketPath, "config reload"
     )
 
-  daemon.destroyBindings()
+  daemon.requestBindingReconfigure("config reload")
   info "Config reloaded", path = configPath
-  daemon.requestManage("config reload")
   daemon.postManageBroadcastPending = true
   daemon.postManageBroadcastReason = "config reload"
   broadcastNiriSnapshot(daemon.readModelSnapshot())

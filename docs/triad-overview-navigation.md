@@ -162,9 +162,9 @@ Both call the same `cross_to_adjacent` as boundary-triggered crossing.
 Workspace crossing behavior is identical regardless of how it was triggered.
 PgUp/PgDn are a **speed layer** on the spatial model, not a separate mode.
 
-Keyboard traversal skips empty default workspaces. It includes visible dynamic
-empty workspaces, including the trailing dynamic creation preview, because those
-previews are actionable overview destinations.
+Keyboard traversal visits every visible workspace preview. That includes empty
+default workspaces, active dynamic empty workspaces, and the trailing dynamic
+creation preview because each preview is an actionable overview destination.
 
 ---
 

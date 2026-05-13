@@ -3463,8 +3463,8 @@ suite "Core Runtime Logic":
 
     let downEffects =
       model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-    check model.activeTag == model.tagForSlot(1)
-    check model.selectedOverviewWindow() == WindowId(1)
+    check model.activeTag == model.tagForSlot(3)
+    check model.selectedOverviewWindow() == NullWindowId
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview workspace crossing updates shell workspaces":
@@ -3491,7 +3491,7 @@ suite "Core Runtime Logic":
     )
 
     let navEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-    check model.activeTag == model.tagForSlot(1)
+    check model.activeTag == model.tagForSlot(3)
     check navEffects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspaceActivated")
@@ -3520,7 +3520,7 @@ suite "Core Runtime Logic":
     check model.selectedOverviewWindow() == WindowId(1)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
-  test "Unified overview workspace navigation skips empty defaults and wraps dynamics":
+  test "Unified overview workspace navigation visits visible previews and wraps":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
@@ -3531,6 +3531,10 @@ suite "Core Runtime Logic":
     )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    check model.activeTag == model.tagForSlot(2)
+    check model.activeWorkspaceFocusId() == 0
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
     check model.activeTag == model.tagForSlot(3)
@@ -3606,17 +3610,12 @@ suite "Core Runtime Logic":
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
     check model.overviewActive
-    check model.activeTag == model.tagForSlot(3)
-    check model.activeWorkspaceFocusId() == 3
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
-    check model.overviewActive
-    check model.activeTag == model.tagForSlot(4)
+    check model.activeTag == model.tagForSlot(2)
     check model.selectedOverviewWindow() == NullWindowId
 
     let effects = model.updateModel(Msg(kind: MsgKind.CmdSelectWindow))
     check not model.overviewActive
-    check model.activeTag == model.tagForSlot(4)
+    check model.activeTag == model.tagForSlot(2)
     check model.focusedWindowId() == 0
     check model.activeWorkspaceFocusId() == 0
     check not effects.anyIt(it.kind == EffectKind.EffFocusWindow)

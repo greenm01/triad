@@ -148,10 +148,7 @@ proc overviewWorkspaceStepSlot*(model: Model, direction: int): uint32 =
     let slot = slots[idx]
     if slot == active:
       continue
-    let tagId = model.tagForSlot(slot)
-    if slot > model.defaultWorkspaceCount() or
-        (tagId != NullTagId and model.tagHasLiveWindows(tagId)):
-      return slot
+    return slot
   0
 
 proc nearestWorkspaceSlot*(model: Model, direction: int, occupiedOnly: bool): uint32 =

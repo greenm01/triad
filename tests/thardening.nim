@@ -1,7 +1,7 @@
 import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
-import ../src/daemon/bindings_runtime
+import ../src/daemon/[bindings_runtime, reload_runtime]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
@@ -74,6 +74,40 @@ suite "Crash hardening":
     daemon.runtimeState.model.overviewActive = true
 
     check not daemon.updateOverviewHotCornerState(1, 0, 0)
+
+  test "config reload defers binding reconfigure to manage":
+    let base = getTempDir() / "triad-config-reload-" & $getCurrentProcessId()
+    let configPath = base & ".kdl"
+    let restorePath = base & ".json"
+    writeFile(
+      configPath,
+      """
+workspaces {
+  default-count 3
+}
+""",
+    )
+
+    var daemon = initTriadDaemon()
+    daemon.pendingLiveRestorePath = restorePath
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(workspaces: WorkspaceConfig(defaultCount: 3)))
+    discard daemon.runtimeState.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    daemon.bindingsConfigured = true
+
+    check daemon.applyConfigReload(configPath, "")
+    check daemon.bindingsConfigured
+    check daemon.bindingsReconfigurePending
+    check daemon.liveRestoreCommitPending
+    check fileExists(restorePath)
+    check not liveRestoreStateApplied(restorePath)
+
+    if fileExists(configPath):
+      removeFile(configPath)
+    if fileExists(restorePath):
+      removeFile(restorePath)
 
   test "Niri overview fallback keys preserve user overview bindings":
     var model = initRuntimeStateFromConfig(Config()).model

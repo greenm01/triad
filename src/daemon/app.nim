@@ -64,8 +64,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
         previousSessionLocked != daemon.runtimeState.model.sessionLocked or
         previousShortcutsInhibited !=
         daemon.runtimeState.model.keyboardShortcutsInhibited():
-      daemon.destroyBindings()
-      daemon.requestManage("binding profile changed")
+      daemon.requestBindingReconfigure("binding profile changed")
 
     if msg.kind == MsgKind.WlManageStart:
       daemon.riverPhase = RiverPhase.RiverManage

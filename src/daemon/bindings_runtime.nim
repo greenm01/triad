@@ -42,6 +42,7 @@ proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
 proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc destroyBindings*(daemon: var TriadDaemon)
+proc requestBindingReconfigure*(daemon: var TriadDaemon, reason: string)
 
 proc removeSeatPointer(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   var i = 0
@@ -811,6 +812,10 @@ proc destroyBindings*(daemon: var TriadDaemon) =
   daemon.pointerBindingPressed.clear()
   daemon.bindingsConfigured = false
 
+proc requestBindingReconfigure*(daemon: var TriadDaemon, reason: string) =
+  daemon.bindingsReconfigurePending = true
+  daemon.requestManage(reason)
+
 proc destroyXkbSeats*(daemon: var TriadDaemon) =
   for xkbSeat in daemon.xkbSeatPointers.values:
     xkbSeat.destroy()
@@ -891,6 +896,9 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
   daemon.bindingsConfigured = true
 
 proc applyManageState*(daemon: var TriadDaemon) =
+  if daemon.bindingsReconfigurePending:
+    daemon.destroyBindings()
+    daemon.bindingsReconfigurePending = false
   daemon.setupDefaultBindings()
   if daemon.currentModel.protocolSurfaces.enabled:
     daemon.ensureOwnedShellSurface()

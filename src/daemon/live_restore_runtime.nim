@@ -40,7 +40,8 @@ proc writeCurrentLiveRestoreState*(daemon: var TriadDaemon): LiveRestoreWriteRes
       error: "refusing suspicious live restore collapse",
     )
 
-  result = daemon.runtimeState.writeRuntimeLiveRestoreState()
+  result =
+    daemon.runtimeState.writeRuntimeLiveRestoreState(daemon.pendingLiveRestorePath)
   if result.ok and behaviorLogEnabled():
     if candidate.isSome:
       writeLiveRestoreBehaviorEvent(
