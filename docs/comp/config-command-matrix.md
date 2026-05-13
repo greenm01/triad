@@ -61,7 +61,7 @@ external window manager.
 | Output | Monitor rules | `monitorrule` | Init script or external tools | | | Triad tracks River outputs but has no monitor layout config. |
 | Output | Monitor power | `disable_monitor`, `enable_monitor`, `toggle_monitor` | External output management | | | Not exposed by Triad. |
 | Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports vsync/async presentation mode. |
-| Output | Cursor theme/size | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size }` | X | Applied through River seat protocol. |
+| Output | Cursor theme/size/find | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size; shake-to-find }` | X | Applied through River seat protocol. Shake-to-find temporarily reapplies the configured theme at a larger size. |
 | Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
 | Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad follows the moved window and also has `move-to-workspace`. |
@@ -294,7 +294,7 @@ KDL config nodes and fields:
   `min-width`, `min-height`.
 - `screenshot`: `directory`, `filename-prefix`, `capture-command`,
   `region-selector-command`, `clipboard-command`, `show-pointer`.
-- `cursor`: `theme`, `size`.
+- `cursor`: `theme`, `size`, `shake-to-find`.
 - Top-level: `presentation-mode`, `allow-exit-session`,
   `protocol-surfaces.enabled`, `protocol-surfaces.visible-debug`.
 

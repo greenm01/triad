@@ -8,7 +8,7 @@ import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
 import ../types/[runtime_state, runtime_values]
-import protocol_surfaces, quickshell_runner
+import cursor_shake, protocol_surfaces, quickshell_runner
 
 type
   RiverPhase* {.pure.} = enum
@@ -99,6 +99,7 @@ type
     pointerWindowBySeat*: Table[uint32, WindowId]
     pointerPositionBySeat*: Table[uint32, Rect]
     pointerHotCornerInsideBySeat*: Table[uint32, bool]
+    cursorShakeBySeat*: Table[uint32, CursorShakeState]
     windowUnreliablePids*: Table[WindowId, int32]
     pendingWindows*: Table[WindowId, WindowData]
 

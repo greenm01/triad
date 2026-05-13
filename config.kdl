@@ -44,6 +44,7 @@ protocol-surfaces {
 // cursor {
 //     theme "default"
 //     size 24
+//     shake-to-find #true
 // }
 
 bindings {

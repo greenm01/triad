@@ -1,4 +1,4 @@
-import std/[options, tables]
+import std/[options, tables, times]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -10,8 +10,8 @@ import ../ipc/commands
 import ../systems/[daemon_view, overview_geometry, overview_hot_corners, runtime]
 import ../types/[model, runtime_values]
 import
-  manage_requests, message_queue, protocol_surface_runtime, protocol_surfaces,
-  render_runtime, state, wayland_helpers
+  cursor_shake, manage_requests, message_queue, protocol_surface_runtime,
+  protocol_surfaces, render_runtime, state, wayland_helpers
 
 const
   RiverEdgeTop = 1'u32
@@ -95,6 +95,64 @@ proc wheelTicks(total120: int32, discrete: int32, remainder: var int32): int32 =
 
 proc clearWlPointerFrame(daemon: var TriadDaemon, pointerId: uint32) =
   daemon.wlPointerWheelFrames[pointerId] = WlPointerWheelFrame()
+
+proc nowMs(): int64 =
+  int64(epochTime() * 1000.0)
+
+proc applyCursorSize(seat: ptr RiverSeatV1, theme: string, size: uint32) =
+  if seat == nil or theme.len == 0:
+    return
+  seat.setXcursorTheme(cstring(theme), size)
+
+proc applyCurrentCursorSize(daemon: TriadDaemon, seat: ptr RiverSeatV1, size: uint32) =
+  seat.applyCursorSize(daemon.currentModel.cursor.theme, size)
+
+proc restoreCursorSize(daemon: TriadDaemon, seat: ptr RiverSeatV1, seatId: uint32) =
+  var theme = daemon.currentModel.cursor.theme
+  var size = daemon.currentModel.cursor.cursorBaseSize()
+  if theme.len == 0 and daemon.cursorShakeBySeat.hasKey(seatId):
+    let state = daemon.cursorShakeBySeat[seatId]
+    theme = state.restoreTheme
+    if state.restoreSize > 0:
+      size = state.restoreSize
+  seat.applyCursorSize(theme, size)
+
+proc configuredCursorSize(daemon: TriadDaemon, seatId: uint32): uint32 =
+  result = daemon.currentModel.cursor.cursorBaseSize()
+  if daemon.currentModel.cursor.cursorShakeEnabled() and
+      daemon.cursorShakeBySeat.hasKey(seatId) and
+      daemon.cursorShakeBySeat[seatId].enlarged:
+    result = daemon.currentModel.cursor.cursorShakeSize()
+
+proc applyCursorShakeMotion(
+    daemon: var TriadDaemon, seat: ptr RiverSeatV1, x, y: int32
+) =
+  if seat == nil:
+    return
+  let seatId = seat.id()
+  let action = daemon.cursorShakeBySeat
+    .mgetOrPut(seatId, CursorShakeState())
+    .observeCursorMotion(daemon.currentModel.cursor, x, y, nowMs())
+  case action
+  of CursorShakeAction.None:
+    discard
+  of CursorShakeAction.Enlarge:
+    daemon.applyCurrentCursorSize(seat, daemon.currentModel.cursor.cursorShakeSize())
+  of CursorShakeAction.Restore:
+    daemon.restoreCursorSize(seat, seatId)
+
+proc tickCursorShake*(daemon: var TriadDaemon) =
+  if daemon.cursorShakeBySeat.len == 0:
+    return
+  let now = nowMs()
+  for seat in daemon.seatPointers:
+    let seatId = seat.id()
+    if daemon.cursorShakeBySeat.hasKey(seatId):
+      let action = daemon.cursorShakeBySeat[seatId].tickCursorShake(
+        daemon.currentModel.cursor, now
+      )
+      if action == CursorShakeAction.Restore:
+        daemon.restoreCursorSize(seat, seatId)
 
 proc queueWindowFocus(daemon: var TriadDaemon, target: WindowId) =
   if target == 0:
@@ -263,6 +321,7 @@ proc onSeatRemoved(data: pointer, seat: ptr RiverSeatV1) =
   daemon.pointerWindowBySeat.del(seatId)
   daemon.pointerPositionBySeat.del(seatId)
   daemon.pointerHotCornerInsideBySeat.del(seatId)
+  daemon.cursorShakeBySeat.del(seatId)
   if daemon.xkbSeatPointers.hasKey(seatId):
     daemon.xkbSeatPointers[seatId].destroy()
     daemon.xkbSeatPointers.del(seatId)
@@ -335,6 +394,7 @@ proc onSeatPointerPosition(data: pointer, seat: ptr RiverSeatV1, x: int32, y: in
   if daemon == nil:
     return
   daemon.pointerPositionBySeat[seat.id()] = Rect(x: x, y: y, w: 0, h: 0)
+  daemon[].applyCursorShakeMotion(seat, x, y)
   if daemon[].updateOverviewHotCornerState(seat.id(), x, y):
     daemon.enqueue(Msg(kind: MsgKind.CmdOpenOverview))
   trace "Seat pointer position", seatId = seat.id(), x = x, y = y
@@ -927,12 +987,10 @@ proc applyManageState*(daemon: var TriadDaemon) =
   let focused = daemon.currentModel.activeFocusRiverId()
   for seat in daemon.seatPointers:
     if daemon.currentModel.cursor.theme.len > 0:
-      let cursorSize =
-        if daemon.currentModel.cursor.size == 0:
-          24'u32
-        else:
-          daemon.currentModel.cursor.size
-      seat.setXcursorTheme(cstring(daemon.currentModel.cursor.theme), cursorSize)
+      seat.setXcursorTheme(
+        cstring(daemon.currentModel.cursor.theme),
+        daemon.configuredCursorSize(seat.id()),
+      )
     if daemon.currentModel.layerFocusExclusive or daemon.currentModel.sessionLocked:
       seat.clearFocus()
     elif daemon.currentModel.overviewActive and daemon.ownedShellSurfaceId != 0 and

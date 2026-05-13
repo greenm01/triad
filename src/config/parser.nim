@@ -745,6 +745,8 @@ proc loadConfig*(path: string): Config =
               let size = child.args[0].kInt()
               if size > 0:
                 result.cursor.size = uint32(min(size, 512))
+            elif child.name == "shake-to-find":
+              result.cursor.shakeToFind = child.childFlagEnabled()
           except CatchableError as e:
             warn "Ignoring invalid cursor field", field = child.name, error = e.msg
       elif node.name == "hotkey-overlay":

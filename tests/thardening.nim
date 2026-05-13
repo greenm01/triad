@@ -1,7 +1,7 @@
 import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
-import ../src/daemon/[bindings_runtime, reload_runtime]
+import ../src/daemon/[bindings_runtime, cursor_shake, reload_runtime]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
@@ -74,6 +74,44 @@ suite "Crash hardening":
     daemon.runtimeState.model.overviewActive = true
 
     check not daemon.updateOverviewHotCornerState(1, 0, 0)
+
+  test "cursor shake ignores normal movement":
+    var state = CursorShakeState()
+    let config = CursorConfig(theme: "default", size: 24, shakeToFind: true)
+
+    check state.observeCursorMotion(config, 0, 0, 0) == CursorShakeAction.None
+    check state.observeCursorMotion(config, 30, 0, 40) == CursorShakeAction.None
+    check state.observeCursorMotion(config, 60, 0, 80) == CursorShakeAction.None
+    check not state.enlarged
+
+  test "cursor shake enlarges on rapid alternating motion":
+    var state = CursorShakeState()
+    let config = CursorConfig(theme: "default", size: 24, shakeToFind: true)
+
+    check state.observeCursorMotion(config, 0, 0, 0) == CursorShakeAction.None
+    check state.observeCursorMotion(config, 30, 0, 40) == CursorShakeAction.None
+    check state.observeCursorMotion(config, -30, 0, 80) == CursorShakeAction.None
+    check state.observeCursorMotion(config, 30, 0, 120) == CursorShakeAction.None
+    check state.observeCursorMotion(config, -30, 0, 160) == CursorShakeAction.Enlarge
+    check state.enlarged
+    check config.cursorShakeSize() == 48'u32
+
+  test "cursor shake restores after idle":
+    var state = CursorShakeState(enlarged: true, restoreDueMs: 1000)
+    let config = CursorConfig(theme: "default", size: 24, shakeToFind: true)
+
+    check state.tickCursorShake(config, 999) == CursorShakeAction.None
+    check state.tickCursorShake(config, 1000) == CursorShakeAction.Restore
+    check not state.enlarged
+
+  test "cursor shake respects disabled config and size clamp":
+    var state = CursorShakeState(enlarged: true, restoreDueMs: 1000)
+    let disabled = CursorConfig(theme: "default", size: 24)
+    let large = CursorConfig(theme: "default", size: 500, shakeToFind: true)
+
+    check state.observeCursorMotion(disabled, 20, 0, 10) == CursorShakeAction.Restore
+    check not state.enlarged
+    check large.cursorShakeSize() == 512'u32
 
   test "config reload defers binding reconfigure to manage":
     let base = getTempDir() / "triad-config-reload-" & $getCurrentProcessId()

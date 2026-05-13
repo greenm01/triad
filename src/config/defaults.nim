@@ -66,6 +66,12 @@ workspace-rules {
     workspace 4 name="chat" default-layout="monocle"
 }
 
+// cursor {
+//     theme "default"
+//     size 24
+//     shake-to-find #true
+// }
+
 // Shells, bars, launchers, lock screens, startup services, and app rules are
 // intentionally configured outside this fallback.
 

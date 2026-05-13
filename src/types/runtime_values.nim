@@ -177,6 +177,7 @@ type
   CursorConfig* = object
     theme*: string
     size*: uint32
+    shakeToFind*: bool
 
   HotkeyOverlayConfig* = object
     skipAtStartup*: bool

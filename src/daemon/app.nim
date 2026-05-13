@@ -55,6 +55,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       discard daemon.applyConfigReload(configPath, niriSocketPath)
       continue
 
+    if msg.kind == MsgKind.CmdTick:
+      daemon.tickCursorShake()
+
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
     let previousShortcutsInhibited =

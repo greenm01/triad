@@ -122,6 +122,22 @@ window-rule {
   `width-ratio` and `height-ratio` can set their desired size before clamping.
   Missing fields fall back to the top-level `floating` defaults.
 
+## Cursor
+
+```kdl
+cursor {
+  theme "default"
+  size 24
+  shake-to-find #true
+}
+```
+
+- `theme "<name>"`: sets the compositor cursor theme through River.
+- `size <px>`: sets the base compositor cursor size.
+- `shake-to-find #true|#false`: when enabled, rapid back-and-forth pointer
+  motion temporarily enlarges the compositor cursor and restores it after idle.
+  The default is `#false`.
+
 ## Workspaces
 
 Workspace config uses user-facing workspace language. Internally Triad still

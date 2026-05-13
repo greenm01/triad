@@ -328,6 +328,7 @@ overview {
 cursor {
   theme "Bibata"
   size 32
+  shake-to-find
 }
 presentation-mode "async"
 allow-exit-session #true
@@ -408,6 +409,7 @@ bindings {
     check not config.overview.hotCorners.bottomLeft
     check config.overview.hotCorners.bottomRight
     check config.cursor.theme == "Bibata"
+    check config.cursor.shakeToFind
     check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
     check config.protocolSurfaces.enabled
@@ -507,6 +509,37 @@ bindings {
     removeFile(path)
 
     check occupied.msgKindForBinding("Slash", Super + Shift) == MsgKind.CmdFocusLast
+
+  test "cursor shake-to-find defaults off and supports explicit false":
+    let path = getCurrentDir() / "test_config_cursor_shake.kdl"
+    writeFile(
+      path,
+      """
+cursor {
+  theme "default"
+  size 24
+}
+""",
+    )
+    let defaultOff = loadConfig(path)
+    removeFile(path)
+
+    check not defaultOff.cursor.shakeToFind
+
+    writeFile(
+      path,
+      """
+cursor {
+  theme "default"
+  size 24
+  shake-to-find #false
+}
+""",
+    )
+    let explicitFalse = loadConfig(path)
+    removeFile(path)
+
+    check not explicitFalse.cursor.shakeToFind
 
   test "Default bindings follow Niri-style movement and scratchpad chords":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
