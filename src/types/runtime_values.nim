@@ -244,6 +244,7 @@ type
     isMinimized*: bool
     fullscreenOutput*: uint32
     floatingGeom*: Rect
+    manualFloatingPosition*: bool
     actualW*, actualH*: int32
 
   RestoredColumnState* = object

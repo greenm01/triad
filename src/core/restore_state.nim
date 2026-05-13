@@ -204,6 +204,8 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
       win.fullscreenOutput = output.get()
   if node.hasKey("floating_geom"):
     win.floatingGeom = rectFromJson(node["floating_geom"])
+  if node.hasKey("manual_floating_position"):
+    win.manualFloatingPosition = boolFromJson(node["manual_floating_position"])
   if node.hasKey("actual_w"):
     win.actualW = max(0'i32, int32FromJson(node["actual_w"]))
   if node.hasKey("actual_h"):

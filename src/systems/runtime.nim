@@ -280,7 +280,10 @@ proc applyPointerDelta*(model: var Model, dx, dy: int32): bool =
   of PointerOpKind.OpOverviewDrag, PointerOpKind.OpOverviewScroll:
     return false
 
-  model.setWindowFloatingGeom(op.windowId, geom)
+  if op.kind == PointerOpKind.OpMove:
+    model.setWindowManualFloatingGeom(op.windowId, geom)
+  else:
+    model.setWindowFloatingGeom(op.windowId, geom)
 
 proc finishPointerOp*(model: var Model): core.WindowId =
   let op = model.pointerOp
@@ -316,7 +319,7 @@ proc moveFloatingFocused*(model: var Model, dx, dy: int32): bool =
   var geom = winOpt.get().floatingGeom
   geom.x += dx
   geom.y += dy
-  model.setWindowFloatingGeom(winId, geom)
+  model.setWindowManualFloatingGeom(winId, geom)
 
 proc resizeFloatingFocused*(model: var Model, dw, dh: int32): bool =
   let tagOpt = model.tagData(model.activeTag)

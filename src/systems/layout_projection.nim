@@ -121,7 +121,11 @@ proc addFloatingInstructions(
       let parentGeom = geomByWindow[parentId]
       if not parentGeom.fullyWithin(screen):
         continue
-      geom = item.win.anchoredFloatingGeom(parentGeom, item.win.floatingGeom, screen)
+      if item.win.manualFloatingPosition:
+        geom =
+          item.win.applyFloatingSizeHints(item.win.floatingGeom).clampToScreen(screen)
+      else:
+        geom = item.win.anchoredFloatingGeom(parentGeom, item.win.floatingGeom, screen)
     let externalId = model.externalWindowId(item.id)
     instructions.add(rv.RenderInstruction(windowId: externalId, geom: geom))
     geomByWindow[externalId] = geom

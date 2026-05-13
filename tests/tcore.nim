@@ -1299,8 +1299,48 @@ suite "Core Runtime Logic":
     let child = model.windowData(childId).get()
     let childGeom = model.instructionGeom(2)
     check not child.parentAutoFloating
+    check not child.manualFloatingPosition
     check childGeom.w == child.floatingGeom.w
     check childGeom.w > model.instructionGeom(1).w
+    let parentGeom = model.instructionGeom(1)
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
+  test "Manual parented popup move uses free position":
+    var model = cameraModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Dialog",
+      )
+    )
+
+    let parentGeom = model.instructionGeom(1)
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let initial = model.windowData(childId).get()
+    let initialGeom = model.instructionGeom(2)
+    check not initial.manualFloatingPosition
+    check initialGeom.x == parentGeom.x + (parentGeom.w - initialGeom.w) div 2
+    check initialGeom.y == parentGeom.y + (parentGeom.h - initialGeom.h) div 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveFloating, moveDX: 90, moveDY: 40))
+
+    let moved = model.windowData(childId).get()
+    let movedGeom = model.instructionGeom(2)
+    check moved.manualFloatingPosition
+    check moved.floatingGeom.x == initial.floatingGeom.x + 90
+    check moved.floatingGeom.y == initial.floatingGeom.y + 40
+    check movedGeom == moved.floatingGeom
+    check restoreWindowJson(model, 2)["manual_floating_position"].getBool()
 
   test "Parented popup larger than screen shrinks to screen":
     var model = cameraModel()
@@ -4345,7 +4385,10 @@ suite "Core Runtime Logic":
       {"windows": [10], "width_proportion": 0.6, "is_full_width": true}
     ]}
   ],
-  "windows": [{"id": 10, "tag_id": 2, "app_id": "term"}]
+  "windows": [
+    {"id": 10, "tag_id": 2, "app_id": "term", "manual_floating_position": true},
+    {"id": 11, "tag_id": 2, "app_id": "old-term"}
+  ]
 }
 """
     )
@@ -4354,6 +4397,8 @@ suite "Core Runtime Logic":
     check native.get().tags[2].layoutMode == LayoutMode.Deck
     check native.get().tags[2].columns[0].isFullWidth
     check native.get().windows[10].appId == "term"
+    check native.get().windows[10].manualFloatingPosition
+    check not native.get().windows[11].manualFloatingPosition
 
     let invalid = parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""")
     check invalid.isNone

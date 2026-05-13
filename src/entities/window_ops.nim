@@ -31,6 +31,7 @@ proc addWindow*(
     presentationHint = 0'u32,
     floatingGeom = Rect(),
     parentAutoFloating = false,
+    manualFloatingPosition = false,
     admissionState = WindowAdmissionState.Admitted,
     focusAfterAdmission = false,
     keyboardShortcutsInhibit = false,
@@ -67,6 +68,7 @@ proc addWindow*(
       presentationHint: presentationHint,
       floatingGeom: floatingGeom,
       parentAutoFloating: parentAutoFloating,
+      manualFloatingPosition: manualFloatingPosition,
       admissionState: admissionState,
       focusAfterAdmission: focusAfterAdmission,
       keyboardShortcutsInhibit: keyboardShortcutsInhibit,
@@ -130,6 +132,7 @@ proc setWindowCreatedState*(
     isFloating = false,
     floatingGeom = Rect(),
     parentAutoFloating = false,
+    manualFloatingPosition = false,
     admissionState = WindowAdmissionState.Admitted,
     focusAfterAdmission = false,
     parentExternalId = NullExternalWindowId,
@@ -170,6 +173,11 @@ proc setWindowCreatedState*(
     floatingGeom: if preserveRuntimeState: current.floatingGeom else: floatingGeom,
     parentAutoFloating:
       if preserveRuntimeState: current.parentAutoFloating else: parentAutoFloating,
+    manualFloatingPosition:
+      if preserveRuntimeState:
+        current.manualFloatingPosition
+      else:
+        manualFloatingPosition,
     admissionState: admissionState,
     focusAfterAdmission: focusAfterAdmission,
     parentExternalId: parentExternalId,
@@ -235,6 +243,7 @@ proc preserveWindowRuntimeAttributes*(
       current.presentationHint == source.presentationHint and
       current.floatingGeom == source.floatingGeom and
       current.parentAutoFloating == source.parentAutoFloating and
+      current.manualFloatingPosition == source.manualFloatingPosition and
       current.parentExternalId == source.parentExternalId and
       current.keyboardShortcutsInhibit == source.keyboardShortcutsInhibit and
       current.keyboardShortcutsInhibitBypass == source.keyboardShortcutsInhibitBypass:
@@ -260,6 +269,7 @@ proc preserveWindowRuntimeAttributes*(
   win.presentationHint = source.presentationHint
   win.floatingGeom = source.floatingGeom
   win.parentAutoFloating = source.parentAutoFloating
+  win.manualFloatingPosition = source.manualFloatingPosition
   win.parentExternalId = source.parentExternalId
   win.keyboardShortcutsInhibit = source.keyboardShortcutsInhibit
   win.keyboardShortcutsInhibitBypass = source.keyboardShortcutsInhibitBypass
@@ -328,6 +338,7 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).heightProportion = restored.heightProportion
   model.windows.mEntity(winId).isFloating = restored.isFloating
   model.windows.mEntity(winId).parentAutoFloating = false
+  model.windows.mEntity(winId).manualFloatingPosition = restored.manualFloatingPosition
   model.windows.mEntity(winId).admissionState = WindowAdmissionState.Admitted
   model.windows.mEntity(winId).focusAfterAdmission = false
   model.windows.mEntity(winId).isFullscreen = restored.isFullscreen
@@ -389,6 +400,7 @@ proc setWindowFloating*(
     discard model.clearPendingDialogFocus(winId)
   model.windows.mEntity(winId).isFloating = floating
   model.windows.mEntity(winId).parentAutoFloating = floating and parentAutoFloating
+  model.windows.mEntity(winId).manualFloatingPosition = false
   if floating:
     model.windows.mEntity(winId).floatingGeom = floatingGeom
   true
@@ -400,6 +412,14 @@ proc setWindowFloatingGeom*(
     return false
   model.windows.mEntity(winId).floatingGeom = floatingGeom
   model.windows.mEntity(winId).parentAutoFloating = false
+  true
+
+proc setWindowManualFloatingGeom*(
+    model: var Model, winId: WindowId, floatingGeom: Rect
+): bool =
+  if not model.setWindowFloatingGeom(winId, floatingGeom):
+    return false
+  model.windows.mEntity(winId).manualFloatingPosition = true
   true
 
 proc setWindowAdmission*(

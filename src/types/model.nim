@@ -35,6 +35,7 @@ type
     presentationHint*: uint32
     floatingGeom*: Rect
     parentAutoFloating*: bool
+    manualFloatingPosition*: bool
     admissionState*: WindowAdmissionState
     focusAfterAdmission*: bool
     keyboardShortcutsInhibit*: bool
@@ -113,6 +114,7 @@ type
     isMinimized*: bool
     fullscreenOutput*: ExternalOutputId
     floatingGeom*: Rect
+    manualFloatingPosition*: bool
     actualW*, actualH*: int32
 
   RestoredColumnData* = object

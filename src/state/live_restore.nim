@@ -47,6 +47,7 @@ proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
     isMinimized: source.isMinimized,
     fullscreenOutput: ExternalOutputId(source.fullscreenOutput),
     floatingGeom: source.floatingGeom,
+    manualFloatingPosition: source.manualFloatingPosition,
     actualW: source.actualW,
     actualH: source.actualH,
   )
@@ -192,6 +193,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       isMinimized: win.isMinimized,
       fullscreenOutput: uint32(win.fullscreenOutput),
       floatingGeom: win.floatingGeom,
+      manualFloatingPosition: win.manualFloatingPosition,
       actualW: win.actualW,
       actualH: win.actualH,
     )
@@ -248,6 +250,7 @@ proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode 
     "is_minimized": win.isMinimized,
     "fullscreen_output": win.fullscreenOutput,
     "floating_geom": rectJson(win.floatingGeom),
+    "manual_floating_position": win.manualFloatingPosition,
     "actual_w": win.actualW,
     "actual_h": win.actualH,
   }

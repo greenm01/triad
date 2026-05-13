@@ -90,8 +90,9 @@ The parent's layout state (maximized, tiled, fullscreen) is irrelevant to this d
 Rule-level `floating` geometry is a placement escape hatch. For `tool`,
 `plain`, and unparented floats, `x-ratio` and `y-ratio` set the initial
 position and `width-ratio` and `height-ratio` set the initial size. For
-dialogs, `width-ratio` and `height-ratio` can set desired size, but placement
-still centers on the parent.
+dialogs, `width-ratio` and `height-ratio` can set desired size, but default
+placement still centers on the parent. Manually dragging a dialog switches it
+to a free screen position while keeping popup-tree and parent-workspace policy.
 
 ---
 

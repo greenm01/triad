@@ -439,6 +439,7 @@ suite "Runtime state primitives":
       heightProportion: 0.8,
       isFloating: true,
       floatingGeom: runtime_values.Rect(x: 100, y: 80, w: 640, h: 480),
+      manualFloatingPosition: true,
     )
     restore.tagByWindow[50] = 2
 
@@ -477,6 +478,8 @@ suite "Runtime state primitives":
     check snapshot.windows[0].isFloating
     check snapshot.windows[0].floatingGeom ==
       runtime_values.Rect(x: 100, y: 80, w: 640, h: 480)
+    let restoredWinId = state.model.windowForExternal(ExternalWindowId(50))
+    check state.model.windowData(restoredWinId).get().manualFloatingPosition
 
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())
