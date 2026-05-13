@@ -3112,6 +3112,65 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
     check effects.hasFullscreenEffect(1, false)
 
+  test "Overview shows edge-maximized scroller window like full-width column":
+    var edgeModel = cameraModel()
+    edgeModel.seedCameraWindows(1)
+    discard edgeModel.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard edgeModel.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    var columnModel = cameraModel()
+    columnModel.seedCameraWindows(1)
+    discard columnModel.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    discard columnModel.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let tagId = edgeModel.activeTag
+    let columnId = edgeModel.columnAt(tagId, 0)
+    check not edgeModel.columnData(columnId).get().isFullWidth
+    check edgeModel.instructionGeom(1) == columnModel.instructionGeom(1)
+
+  test "Overview shows edge-maximized vertical scroller window like full-width column":
+    var edgeModel = cameraModel()
+    edgeModel.seedCameraWindows(1)
+    discard edgeModel.updateModel(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    discard edgeModel.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard edgeModel.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    var columnModel = cameraModel()
+    columnModel.seedCameraWindows(1)
+    discard columnModel.updateModel(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    discard columnModel.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    discard columnModel.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    check edgeModel.instructionGeom(1) == columnModel.instructionGeom(1)
+
+  test "Overview does not apply scroller maximize sizing to grid":
+    var normalModel = cameraModel()
+    normalModel.seedCameraWindows(2)
+    discard normalModel.updateModel(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid)
+    )
+    discard normalModel.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    var maximizedModel = cameraModel()
+    maximizedModel.seedCameraWindows(2)
+    discard maximizedModel.updateModel(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid)
+    )
+    discard maximizedModel.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 2)
+    )
+    discard maximizedModel.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    check maximizedModel.instructionGeom(2) == normalModel.instructionGeom(2)
+
   test "Targeted fullscreen IPC can repair a non-focused window":
     var model = cameraModel()
     model.seedCameraWindows(2)

@@ -324,6 +324,23 @@ proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]
       instr.geom.y += op.totalDY
       return
 
+proc columnHasMaximizedWindow(
+    col: rv.Column, windows: Table[rv.WindowId, rv.WindowData]
+): bool =
+  for winId in col.windows:
+    if windows.hasKey(winId) and windows[winId].isMaximized:
+      return true
+  false
+
+proc applyOverviewMaximizedColumnSizing(
+    tag: var rv.TagState, windows: Table[rv.WindowId, rv.WindowData]
+) =
+  if not tag.layoutMode.layoutSupportsMaximize():
+    return
+  for col in tag.columns.mitems:
+    if col.columnHasMaximizedWindow(windows):
+      col.isFullWidth = true
+
 proc layoutWorkspaceStripOverview(
     model: Model, windows: Table[rv.WindowId, rv.WindowData], screen: rv.Rect
 ): LayoutProjection =
@@ -341,6 +358,7 @@ proc layoutWorkspaceStripOverview(
     if not projected.found:
       continue
     model.applyPopupLayoutFocus(projected.tag, model.activeFocus())
+    projected.tag.applyOverviewMaximizedColumnSizing(windows)
     let retargetViewport = model.viewportRetargetRequested(tagId)
     var instructions = layoutForTag(
       projected.tag,
