@@ -3284,6 +3284,29 @@ suite "Core Runtime Logic":
     check model.activeTag == model.tagForSlot(3)
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
+  test "Unified overview fallback up key stays inside grid before workspace edge":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    for id in 1'u32 .. 4'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(3)
+    check model.selectedOverviewWindow() == WindowId(1)
+    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+
   test "Unified overview keeps workspace navigation live":
     var model = configuredModel()
     model.applyMsg(

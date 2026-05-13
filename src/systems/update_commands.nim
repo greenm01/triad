@@ -1,5 +1,6 @@
 import ../core/[effects, msg]
 import ../state/engine
+from ../types/runtime_values import Direction
 import
   dialog_focus, focus, placement, runtime, scratchpad, update_effects, window_state,
   workspaces
@@ -72,9 +73,17 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdFocusColumnLast:
     result.dirty = model.focusColumnAtEdge(false)
   of MsgKind.CmdFocusWindowOrWorkspaceUp:
-    result.dirty = model.focusWindowOrWorkspace(-1)
+    result.dirty =
+      if model.overviewActive:
+        model.focusByDirection(Direction.DirUp)
+      else:
+        model.focusWindowOrWorkspace(-1)
   of MsgKind.CmdFocusWindowOrWorkspaceDown:
-    result.dirty = model.focusWindowOrWorkspace(1)
+    result.dirty =
+      if model.overviewActive:
+        model.focusByDirection(Direction.DirDown)
+      else:
+        model.focusWindowOrWorkspace(1)
   of MsgKind.CmdFocusTag:
     result.dirty = model.focusWorkspaceSlot(msg.focusTag)
   of MsgKind.CmdFocusWorkspaceIndex:
