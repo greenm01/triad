@@ -51,11 +51,22 @@ proc broadcastWorkspaceActivated*(snapshot: ShellSnapshot): Effect =
   let workspace = snapshot.activeWorkspace()
   Effect(
     kind: EffectKind.EffBroadcastJson,
+    jsonPayload: $(%*{"WorkspaceActivated": {"id": workspace.tagId, "focused": true}}),
+  )
+
+proc broadcastWorkspaceActiveWindowChanged*(workspace: ShellWorkspace): Effect =
+  let activeWindow =
+    if workspace.focusedWindow == 0:
+      newJNull()
+    else:
+      %workspace.focusedWindow
+  Effect(
+    kind: EffectKind.EffBroadcastJson,
     jsonPayload:
       $(
         %*{
-          "WorkspaceActivated":
-            {"id": workspace.tagId, "name": workspace.name, "focused": true}
+          "WorkspaceActiveWindowChanged":
+            {"workspace_id": workspace.tagId, "active_window_id": activeWindow}
         }
       ),
   )
@@ -154,6 +165,29 @@ proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
   else:
     false
 
+proc shouldBroadcastNiriWindowsChanged*(kind: MsgKind): bool =
+  case kind
+  of MsgKind.WlWindowDestroyed, MsgKind.WlWindowParent,
+      MsgKind.WlWindowFullscreenRequested, MsgKind.WlWindowExitFullscreenRequested,
+      MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
+      MsgKind.WlWindowMinimizeRequested, MsgKind.CmdMoveToTagLeft,
+      MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindow,
+      MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp,
+      MsgKind.CmdMoveWindowDown, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdMoveColumnLeft,
+      MsgKind.CmdMoveColumnRight, MsgKind.CmdMoveColumnToFirst,
+      MsgKind.CmdMoveColumnToLast, MsgKind.CmdSwapWindowUp, MsgKind.CmdSwapWindowDown,
+      MsgKind.CmdConsumeWindow, MsgKind.CmdExpelWindow, MsgKind.CmdMoveToTag,
+      MsgKind.CmdSwapWindowToTag, MsgKind.CmdMoveToScratchpad,
+      MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleScratchpad,
+      MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
+      MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
+      MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById,
+      MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize:
+    true
+  else:
+    false
+
 proc shouldBroadcastOutputsChanged*(kind: MsgKind): bool =
   case kind
   of MsgKind.WlOutputDimensions, MsgKind.WlOutputName, MsgKind.WlOutputPosition,
@@ -195,6 +229,32 @@ proc shouldBroadcastTriadStateChanged*(kind: MsgKind): bool =
     kind.shouldBroadcastOutputsChanged() or
     kind in
     {MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview}
+
+proc workspaceByTag(snapshot: ShellSnapshot, tagId: uint32): Option[ShellWorkspace] =
+  for workspace in snapshot.workspaces:
+    if workspace.tagId == tagId:
+      return some(workspace)
+  none(ShellWorkspace)
+
+proc workspaceSnapshotChanged*(before, after: ShellSnapshot): bool =
+  if before.workspaces.len != after.workspaces.len:
+    return true
+
+  for workspace in before.workspaces:
+    if after.workspaceByTag(workspace.tagId).isNone:
+      return true
+
+  for workspace in after.workspaces:
+    let beforeWorkspace = before.workspaceByTag(workspace.tagId)
+    if beforeWorkspace.isNone:
+      return true
+    let previous = beforeWorkspace.get()
+    if previous.workspaceIdx != workspace.workspaceIdx or previous.name != workspace.name or
+        previous.outputName != workspace.outputName or
+        previous.occupied != workspace.occupied:
+      return true
+
+  false
 
 proc isFocusChangingCommand*(kind: MsgKind): bool =
   kind in {
@@ -406,9 +466,16 @@ proc addPostUpdateEffects*(
   let afterFocus = after.focusedWindowId()
   let overviewPreview = after.overviewActive and msg.kind.isOverviewPreviewCommand()
   let overviewWorkspaceChanged = overviewPreview and before.activeTag != after.activeTag
+  let workspaceSnapshotChanged =
+    collapsed or pruned or before.workspaceSnapshotChanged(after)
 
   if before.activeTag != after.activeTag and after.activeTag != 0:
     effects.add(broadcastWorkspaceActivated(after))
+  for workspace in after.workspaces:
+    let beforeWorkspace = before.workspaceByTag(workspace.tagId)
+    if beforeWorkspace.isSome and
+        beforeWorkspace.get().focusedWindow != workspace.focusedWindow:
+      effects.add(broadcastWorkspaceActiveWindowChanged(workspace))
   if beforeFocus != afterFocus:
     effects.add(broadcastWindowFocusChanged(afterFocus))
     if afterFocus != 0 and after.overviewActive:
@@ -451,13 +518,14 @@ proc addPostUpdateEffects*(
       if msg.kind.shouldBroadcastOutputsChanged():
         effects.add(after.broadcastOutputsChanged())
         effects.add(after.broadcastWorkspacesChanged())
-        effects.add(after.broadcastWindowsChanged())
-      elif msg.kind.shouldBroadcastWindowsChanged() or overviewWorkspaceChanged:
-        effects.add(after.broadcastWorkspacesChanged())
-        if msg.kind.shouldBroadcastWindowsChanged():
+        if msg.kind.shouldBroadcastNiriWindowsChanged():
           effects.add(after.broadcastWindowsChanged())
-      elif collapsed or pruned:
+      elif workspaceSnapshotChanged:
         effects.add(after.broadcastWorkspacesChanged())
+        if msg.kind.shouldBroadcastNiriWindowsChanged():
+          effects.add(after.broadcastWindowsChanged())
+      elif msg.kind.shouldBroadcastNiriWindowsChanged():
+        effects.add(after.broadcastWindowsChanged())
 
       if msg.kind.shouldBroadcastTriadLayoutChanged() or overviewWorkspaceChanged or
           collapsed or pruned:

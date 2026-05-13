@@ -161,7 +161,7 @@ suite "Runtime logging":
     check unlocked["before"]["session_locked"].getBool()
     check not unlocked["after"]["session_locked"].getBool()
 
-  test "niri broadcast behavior event records active workspace":
+  test "niri broadcast behavior event records compact shell events":
     let dir = getTempDir() / ("triad-behavior-broadcast-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
@@ -185,15 +185,35 @@ suite "Runtime logging":
         }
       )
     )
+    waitFor broadcastJson($(%*{"WorkspaceActivated": {"id": 2, "focused": true}}))
+    waitFor broadcastJson(
+      $(%*{"WorkspaceActiveWindowChanged": {"workspace_id": 2, "active_window_id": 20}})
+    )
+    waitFor broadcastJson($(%*{"WindowFocusChanged": {"id": 20}}))
+    waitFor broadcastJson($(%*{"WindowFocusChanged": {"id": 20}}))
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
-    check lines.len == 1
-    let event = parseJson(lines[0])
-    check event["event"].getStr() == "niri_compat_broadcast"
-    check event["niri_event"].getStr() == "WorkspacesChanged"
-    check event["active_tag"].getInt() == 2
-    check event.hasKey("workspace_distribution")
-    check event.hasKey("workspace_signature")
+    check lines.len == 4
+    let workspacesEvent = parseJson(lines[0])
+    check workspacesEvent["event"].getStr() == "niri_compat_broadcast"
+    check workspacesEvent["niri_event"].getStr() == "WorkspacesChanged"
+    check workspacesEvent["active_tag"].getInt() == 2
+    check workspacesEvent.hasKey("workspace_distribution")
+    check workspacesEvent.hasKey("workspace_signature")
+
+    let activatedEvent = parseJson(lines[1])
+    check activatedEvent["niri_event"].getStr() == "WorkspaceActivated"
+    check activatedEvent["id"].getInt() == 2
+    check activatedEvent["focused"].getBool()
+
+    let activeWindowEvent = parseJson(lines[2])
+    check activeWindowEvent["niri_event"].getStr() == "WorkspaceActiveWindowChanged"
+    check activeWindowEvent["workspace_id"].getInt() == 2
+    check activeWindowEvent["active_window_id"].getInt() == 20
+
+    let focusEvent = parseJson(lines[3])
+    check focusEvent["niri_event"].getStr() == "WindowFocusChanged"
+    check focusEvent["window_id"].getInt() == 20
 
   test "behavior log rotates oversized day file and cleans old logs":
     let dir = getTempDir() / ("triad-behavior-rotate-" & $getCurrentProcessId())

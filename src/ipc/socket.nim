@@ -21,7 +21,9 @@ const
 
 var subscribers*: seq[AsyncSocket] = @[]
 var triadSubscribers*: seq[TriadSubscriber] = @[]
+var lastNiriBroadcastPayload = ""
 var lastNiriWorkspaceBroadcastKey = ""
+var lastNiriCompactBroadcastKey = ""
 
 proc runtimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
@@ -280,75 +282,102 @@ proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
     if root.kind != JObject:
       return
     for eventName, eventPayload in root.pairs:
-      if eventName != "WorkspacesChanged":
-        return
       result = %*{"subscriber_count": subscriberCount}
       result["niri_event"] = %eventName
-      if eventPayload.kind == JObject and eventPayload.hasKey("workspaces") and
-          eventPayload["workspaces"].kind == JArray:
-        let distribution = newJArray()
-        var signatureParts: seq[string]
-        for workspace in eventPayload["workspaces"]:
-          if workspace.kind != JObject:
-            continue
-          var entry = newJObject()
-          for key in [
-            "id", "idx", "name", "is_active", "is_focused", "occupied",
-            "active_window_id",
-          ]:
-            if workspace.hasKey(key):
-              entry[key] = workspace[key]
-          distribution.add(entry)
-          let id =
-            if workspace.hasKey("id"):
-              workspace["id"].getInt()
-            else:
-              0
-          let idx =
-            if workspace.hasKey("idx"):
-              workspace["idx"].getInt()
-            else:
-              0
-          let active =
-            workspace.hasKey("is_active") and workspace["is_active"].kind == JBool and
-            workspace["is_active"].getBool()
-          let occupied =
-            workspace.hasKey("occupied") and workspace["occupied"].kind == JBool and
-            workspace["occupied"].getBool()
-          signatureParts.add($id & ":" & $idx & ":" & $active & ":" & $occupied)
-          if workspace.kind == JObject and workspace.hasKey("is_active") and
-              workspace["is_active"].kind == JBool and workspace["is_active"].getBool():
-            if workspace.hasKey("id"):
-              result["active_tag"] = workspace["id"]
-            if workspace.hasKey("idx"):
-              result["active_workspace_idx"] = workspace["idx"]
-        result["workspace_distribution"] = distribution
-        result["workspace_signature"] = %signatureParts.join("|")
-      let activeTag =
-        if result.hasKey("active_tag"):
-          result["active_tag"].getInt()
-        else:
-          0
-      let activeIdx =
-        if result.hasKey("active_workspace_idx"):
-          result["active_workspace_idx"].getInt()
-        else:
-          0
-      let signature =
-        if result.hasKey("workspace_signature"):
-          result["workspace_signature"].getStr()
-        else:
-          ""
-      let key = $subscriberCount & ":" & $activeTag & ":" & $activeIdx & ":" & signature
-      if key == lastNiriWorkspaceBroadcastKey:
+
+      case eventName
+      of "WorkspacesChanged":
+        if eventPayload.kind == JObject and eventPayload.hasKey("workspaces") and
+            eventPayload["workspaces"].kind == JArray:
+          let distribution = newJArray()
+          var signatureParts: seq[string]
+          for workspace in eventPayload["workspaces"]:
+            if workspace.kind != JObject:
+              continue
+            var entry = newJObject()
+            for key in [
+              "id", "idx", "name", "is_active", "is_focused", "occupied",
+              "active_window_id",
+            ]:
+              if workspace.hasKey(key):
+                entry[key] = workspace[key]
+            distribution.add(entry)
+            let id =
+              if workspace.hasKey("id"):
+                workspace["id"].getInt()
+              else:
+                0
+            let idx =
+              if workspace.hasKey("idx"):
+                workspace["idx"].getInt()
+              else:
+                0
+            let active =
+              workspace.hasKey("is_active") and workspace["is_active"].kind == JBool and
+              workspace["is_active"].getBool()
+            let occupied =
+              workspace.hasKey("occupied") and workspace["occupied"].kind == JBool and
+              workspace["occupied"].getBool()
+            signatureParts.add($id & ":" & $idx & ":" & $active & ":" & $occupied)
+            if workspace.kind == JObject and workspace.hasKey("is_active") and
+                workspace["is_active"].kind == JBool and workspace["is_active"].getBool():
+              if workspace.hasKey("id"):
+                result["active_tag"] = workspace["id"]
+              if workspace.hasKey("idx"):
+                result["active_workspace_idx"] = workspace["idx"]
+          result["workspace_distribution"] = distribution
+          result["workspace_signature"] = %signatureParts.join("|")
+        let activeTag =
+          if result.hasKey("active_tag"):
+            result["active_tag"].getInt()
+          else:
+            0
+        let activeIdx =
+          if result.hasKey("active_workspace_idx"):
+            result["active_workspace_idx"].getInt()
+          else:
+            0
+        let signature =
+          if result.hasKey("workspace_signature"):
+            result["workspace_signature"].getStr()
+          else:
+            ""
+        let key =
+          $subscriberCount & ":" & $activeTag & ":" & $activeIdx & ":" & signature
+        if key == lastNiriWorkspaceBroadcastKey:
+          return nil
+        lastNiriWorkspaceBroadcastKey = key
+        lastNiriCompactBroadcastKey = ""
+      of "WorkspaceActivated":
+        if eventPayload.kind == JObject:
+          for key in ["id", "focused"]:
+            if eventPayload.hasKey(key):
+              result[key] = eventPayload[key]
+      of "WorkspaceActiveWindowChanged":
+        if eventPayload.kind == JObject:
+          for key in ["workspace_id", "active_window_id"]:
+            if eventPayload.hasKey(key):
+              result[key] = eventPayload[key]
+      of "WindowFocusChanged":
+        if eventPayload.kind == JObject and eventPayload.hasKey("id"):
+          result["window_id"] = eventPayload["id"]
+      else:
         return nil
-      lastNiriWorkspaceBroadcastKey = key
+      if eventName != "WorkspacesChanged":
+        let key = $subscriberCount & ":" & eventName & ":" & $result
+        if key == lastNiriCompactBroadcastKey:
+          return nil
+        lastNiriCompactBroadcastKey = key
       break
   except CatchableError as e:
     result = %*{"subscriber_count": subscriberCount}
     result["parse_error"] = %e.msg
 
 proc broadcastJson*(payload: string) {.async.} =
+  if payload == lastNiriBroadcastPayload:
+    return
+  lastNiriBroadcastPayload = payload
+
   let logPayload = niriBroadcastLogPayload(payload, subscribers.len)
   if logPayload != nil:
     writeBehaviorEvent("niri_compat_broadcast", logPayload)

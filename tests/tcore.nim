@@ -3487,14 +3487,14 @@ suite "Core Runtime Logic":
     check model.activeTag == model.tagForSlot(2)
     check windowEffects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
-        it.jsonPayload.contains("WorkspacesChanged")
+        it.jsonPayload.contains("WorkspaceActivated")
     )
 
     let navEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
     check model.activeTag == model.tagForSlot(1)
     check navEffects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
-        it.jsonPayload.contains("WorkspacesChanged")
+        it.jsonPayload.contains("WorkspaceActivated")
     )
 
   test "Unified overview fallback up key stays inside grid before workspace edge":
@@ -3745,7 +3745,7 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
-        it.jsonPayload.contains("WorkspacesChanged")
+        it.jsonPayload.contains("WorkspaceActivated")
     )
 
   test "Wheel over unified overview focuses columns horizontally":
@@ -4128,7 +4128,35 @@ suite "Core Runtime Logic":
     check activeFocused[0].tagId.get() == 2
     model.requireTagShellSemantics("active workspace focus scenario")
 
-  test "Workspace focus broadcasts workspace and window snapshots":
+  test "Window focus broadcasts active window change":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    let activeWindowEvent = effects.filterIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspaceActiveWindowChanged")
+    )
+    check activeWindowEvent.len == 1
+    let payload = parseJson(activeWindowEvent[0].jsonPayload)
+    check payload["WorkspaceActiveWindowChanged"]["workspace_id"].getInt() == 1
+    check payload["WorkspaceActiveWindowChanged"]["active_window_id"].getInt() == 1
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowFocusChanged")
+    )
+    check not effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+
+  test "Workspace focus broadcasts activation and window snapshot":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
@@ -4142,9 +4170,13 @@ suite "Core Runtime Logic":
       model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspaceActivated")
+    )
+    check not effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspacesChanged")
     )
-    check effects.anyIt(
+    check not effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WindowsChanged")
     )
@@ -4163,10 +4195,15 @@ suite "Core Runtime Logic":
     check snapshot.workspaces.anyIt(it.tagId == 4)
     model.requireTagShellSemantics("empty dynamic active scenario")
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    let pruneEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
     snapshot = model.shellSnapshot()
     check snapshot.activeTag == 2
     check not snapshot.workspaces.anyIt(it.tagId == 4)
+    check pruneEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
     model.requireTagShellSemantics("empty dynamic pruned scenario")
 
   test "Scratchpad restore returns window to active tag":
@@ -4341,3 +4378,22 @@ suite "Core Runtime Logic":
     check win["id"].getInt() == 120
     check win["workspace_id"].getInt() == 1
     check win["is_focused"].getBool()
+
+  test "Niri window title update stays incremental":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 120, appId: "alacritty", title: "A")
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 120, updatedTitle: "B")
+    )
+
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowOpenedOrChanged")
+    )
+    check not effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowsChanged")
+    )
