@@ -11,6 +11,14 @@
 
 - (done) Native Triad IPC action surface completed. Logical IDs remain
   internal; external IDs are the stable public projection.
+- Add a niri-style composable window-rule resolver that merges broad app rules
+  with specific title rules in order.
+- Add future multi-workspace window-rule placement backed by the DOD tag mask
+  model, while keeping public config workspace-oriented.
+- Evaluate Mango-informed window-rule gaps for Triad-native equivalents:
+  sticky/global windows, unmanaged-global windows, overlay windows, named app
+  scratchpad rules, terminal swallowing, per-window tearing/performance policy,
+  and layout-family size hints.
 - If Triad exposes Mango-like floating modes, keep overlay, global/sticky, and
   unmanaged-global behavior separate instead of collapsing them into one flag.
 - Revisit target-viewport layout projection only if compositor-owned animation
