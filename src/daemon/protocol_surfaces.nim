@@ -24,6 +24,7 @@ type
     kind*: ProtocolSurfaceKind
     offsetX*: int32
     offsetY*: int32
+    bufferCacheKey*: string
     syncPending*: bool
 
   ProtocolSurfaceRuntime* = object

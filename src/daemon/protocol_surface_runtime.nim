@@ -6,7 +6,9 @@ import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/hotkey_overlay
 import ../types/runtime_values
-import hotkey_overlay_render, protocol_surfaces, state, wayland_helpers
+import
+  hotkey_overlay_render, overview_overlay_render, protocol_surfaces, state,
+  wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -56,52 +58,13 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
   let rgba = premulColor(color)
   daemon.singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
 
-proc createTransparentShmBuffer(
-    daemon: var TriadDaemon, width, height: int32
-): ptr Buffer =
-  if daemon.shm == nil:
-    return nil
-  let w = max(1'i32, width)
-  let h = max(1'i32, height)
-  let stride = w * 4
-  let size = stride * h
-  inc daemon.shmBufferCounter
-  let path =
-    getTempDir() /
-    ("triad-overview-shield-" & $getCurrentProcessId() & "-" & $daemon.shmBufferCounter)
-  let fd = posix.open(
-    path.cstring,
-    posix.O_RDWR or posix.O_CREAT or posix.O_EXCL,
-    posix.S_IRUSR or posix.S_IWUSR,
-  )
-  if fd < 0:
-    warn "Unable to create overview shield shm file", path = path
-    return nil
-
-  try:
-    if posix.ftruncate(fd, posix.Off(size)) != 0:
-      warn "Unable to size overview shield shm file", path = path
-      return nil
-    let pool = daemon.shm.createPool(fd, size)
-    if pool == nil:
-      warn "Unable to create overview shield shm pool"
-      return nil
-    result = pool.createBuffer(0, w, h, stride, uint32(ShmFormat.format_argb8888))
-    pool.destroy()
-  finally:
-    discard posix.close(fd)
-    try:
-      removeFile(path)
-    except CatchableError:
-      discard
-
 proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
   if daemon.shm == nil:
     return nil
   inc daemon.shmBufferCounter
   let path =
     getTempDir() /
-    ("triad-hotkey-overlay-" & $getCurrentProcessId() & "-" & $daemon.shmBufferCounter)
+    ("triad-argb-overlay-" & $getCurrentProcessId() & "-" & $daemon.shmBufferCounter)
   try:
     writeFile(path, argbBytes(buf.pixels))
     let fd = posix.open(path.cstring, posix.O_RDWR)
@@ -119,7 +82,7 @@ proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer 
     finally:
       discard posix.close(fd)
   except CatchableError as e:
-    warn "Unable to create hotkey overlay shm buffer", path = path, error = e.msg
+    warn "Unable to create ARGB overlay shm buffer", path = path, error = e.msg
   finally:
     try:
       if fileExists(path):
@@ -255,14 +218,23 @@ proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
       max(1'i32, screen.h)
     else:
       1'i32
-  if surf.buffer == nil or surf.bufferW != desiredW or surf.bufferH != desiredH:
+  let overlayKey =
+    if wantsShield:
+      daemon.currentModel.overviewOverlayCacheKey(screen)
+    else:
+      ""
+  if surf.buffer == nil or surf.bufferW != desiredW or surf.bufferH != desiredH or
+      surf.bufferCacheKey != overlayKey:
     let buffer =
       if wantsShield:
-        daemon.createTransparentShmBuffer(desiredW, desiredH)
+        daemon.createArgbShmBuffer(
+          daemon.currentModel.renderOverviewOverlayBuffer(screen)
+        )
       else:
         daemon.createProtocolBuffer(ProtocolSurfaceKind.PskShell)
     if buffer != nil:
       surf.setProtocolSurfaceBuffer(buffer, desiredW, desiredH)
+      surf.bufferCacheKey = overlayKey
     elif wantsShield:
       warn "Overview input shield unavailable; previews may receive pointer"
 

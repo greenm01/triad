@@ -2,9 +2,10 @@ import std/[json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
+import ../src/daemon/overview_overlay_render
 import ../src/state/engine except WindowId
 import ../src/state/[invariants, snapshot]
-import ../src/systems/[layout_projection, runtime_facade, update]
+import ../src/systems/[layout_projection, overview_geometry, runtime_facade, update]
 import ../src/types/[model, runtime_values]
 
 const DeletedRuntimeModules = [
@@ -67,6 +68,18 @@ proc isAllowedTypeInterop(path, line: string): bool =
   if path != "src/types/core.nim":
     return false
   line.contains("{.borrow.}") or line.startsWith("proc hash*(")
+
+proc testArgb(value: uint32): uint32 =
+  let r = (value shr 24) and 0xff
+  let g = (value shr 16) and 0xff
+  let b = (value shr 8) and 0xff
+  let a = value and 0xff
+  (a shl 24) or (r shl 16) or (g shl 8) or b
+
+proc pixelAt(buf: PixelBuffer, x, y: int32): uint32 =
+  if x < 0 or y < 0 or x >= buf.width or y >= buf.height:
+    return 0
+  buf.pixels[int(y * buf.width + x)]
 
 proc isTopLevelBehavior(line: string): bool =
   for prefix in ["proc ", "func ", "iterator ", "template ", "macro ", "converter "]:
@@ -275,6 +288,75 @@ suite "Runtime state primitives":
     check rendered.width <= int32(float(screen.w) * 0.9)
     check rendered.height > 0
     check bytes.len == rendered.pixels.len * 4
+
+  test "overview overlay frames empty workspace previews":
+    var config = baseConfig()
+    config.layout.borderWidth = 4
+    config.layout.focusedBorderColor = 0x112233ff'u32
+    config.layout.unfocusedBorderColor = 0x445566ff'u32
+    var model = initRuntimeStateFromConfig(config).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 800, height: 600),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.CmdOpenOverview),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let occupiedPreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let emptyPreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
+    let rendered = model.renderOverviewOverlayBuffer(screen)
+
+    check rendered.pixelAt(occupiedPreview.x, occupiedPreview.y) == 0
+    check rendered.pixelAt(emptyPreview.x, emptyPreview.y) ==
+      testArgb(config.layout.unfocusedBorderColor)
+
+  test "overview overlay frames trailing dynamic empty workspace":
+    var config = baseConfig()
+    config.layout.borderWidth = 4
+    config.layout.unfocusedBorderColor = 0x667788ff'u32
+    var model = initRuntimeStateFromConfig(config).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 800, height: 600),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three"),
+      Msg(kind: MsgKind.CmdOpenOverview),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let trailingPreview = model.workspacePreviewRect(screen, slots, slots.find(4'u32))
+    let rendered = model.renderOverviewOverlayBuffer(screen)
+
+    check slots.find(4'u32) != -1
+    check rendered.pixelAt(trailingPreview.x, trailingPreview.y) ==
+      testArgb(config.layout.unfocusedBorderColor)
+
+  test "overview overlay uses focused color for active empty workspace":
+    var config = baseConfig()
+    config.layout.borderWidth = 4
+    config.layout.focusedBorderColor = 0x99aabbff'u32
+    var model = initRuntimeStateFromConfig(config).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 800, height: 600),
+      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2),
+      Msg(kind: MsgKind.CmdOpenOverview),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let activePreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
+    let rendered = model.renderOverviewOverlayBuffer(screen)
+
+    check rendered.pixelAt(activePreview.x, activePreview.y) ==
+      testArgb(config.layout.focusedBorderColor)
 
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())
