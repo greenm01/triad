@@ -8,21 +8,13 @@ import ../src/systems/[layout_projection, runtime_facade, update]
 import ../src/types/[model, runtime_values]
 
 const DeletedRuntimeModules = [
-  "src/types/legacy_model.nim",
-  "src/core/model.nim",
-  "src/core/model_utils.nim",
-  "src/core/update.nim",
-  "src/core/shell_state.nim",
-  "src/config/legacy_apply.nim",
-  "src/systems/layout_state.nim",
-  "src/state/dod_adapter.nim",
-  "src/systems/runtime_update_sync.nim",
-  "src/systems/layout_projection_sync.nim",
-  "src/systems/state_application_sync.nim",
-  "src/systems/projection_read_sync.nim",
-  "src/systems/dod_shadow_runtime.nim",
-  "src/systems/dod_shadow_health.nim",
-  "src/types/dod_shadow_health.nim"
+  "src/types/legacy_model.nim", "src/core/model.nim", "src/core/model_utils.nim",
+  "src/core/update.nim", "src/core/shell_state.nim", "src/config/legacy_apply.nim",
+  "src/systems/layout_state.nim", "src/state/dod_adapter.nim",
+  "src/systems/runtime_update_sync.nim", "src/systems/layout_projection_sync.nim",
+  "src/systems/state_application_sync.nim", "src/systems/projection_read_sync.nim",
+  "src/systems/dod_shadow_runtime.nim", "src/systems/dod_shadow_health.nim",
+  "src/types/dod_shadow_health.nim",
 ]
 
 const MaxKnownOverlongLines = 108
@@ -36,14 +28,17 @@ proc baseConfig(): Config =
       defaultWindowHeight: 0.7,
       defaultMasterCount: 2,
       defaultMasterRatio: 0.55,
-      layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid]),
+      layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid],
+    ),
     workspaces: WorkspaceConfig(defaultCount: 3),
-    tagRules: @[
-      TagRule(tagId: 1, name: "main", defaultLayout: LayoutMode.Scroller),
-      TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid)
-    ],
+    tagRules:
+      @[
+        TagRule(tagId: 1, name: "main", defaultLayout: LayoutMode.Scroller),
+        TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid),
+      ],
     hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
-    terminal: TerminalConfig(command: @["foot"]))
+    terminal: TerminalConfig(command: @["foot"]),
+  )
 
 proc sourceFiles(): seq[string] =
   for path in walkDirRec("src"):
@@ -62,8 +57,7 @@ proc styleSourceFiles(): seq[string] =
           not path.startsWith("src/protocols/"):
         result.add(path)
 
-proc sourceLineFailures(
-    checkLine: proc(path, line: string): bool): seq[string] =
+proc sourceLineFailures(checkLine: proc(path, line: string): bool): seq[string] =
   for path in styleSourceFiles():
     var lineNo = 0
     for line in lines(path):
@@ -77,9 +71,7 @@ proc isAllowedTypeInterop(path, line: string): bool =
   line.contains("{.borrow.}") or line.startsWith("proc hash*(")
 
 proc isTopLevelBehavior(line: string): bool =
-  for prefix in [
-    "proc ", "func ", "iterator ", "template ", "macro ", "converter "
-  ]:
+  for prefix in ["proc ", "func ", "iterator ", "template ", "macro ", "converter "]:
     if line.startsWith(prefix):
       return true
   false
@@ -101,21 +93,11 @@ suite "Runtime state primitives":
 
   test "production source has no imports of deleted runtime modules":
     let blocked = [
-      "legacy_model",
-      "core/model",
-      "core/model_utils",
-      "core/update",
-      "core/shell_state",
-      "legacy_apply",
-      "layout_state",
-      "dod_adapter",
-      "runtime_update_sync",
-      "layout_projection_sync",
-      "state_application_sync",
-      "projection_read_sync",
-      "dod_shadow_runtime",
+      "legacy_model", "core/model", "core/model_utils", "core/update",
+      "core/shell_state", "legacy_apply", "layout_state", "dod_adapter",
+      "runtime_update_sync", "layout_projection_sync", "state_application_sync",
+      "projection_read_sync", "dod_shadow_runtime", "dod_shadow_health",
       "dod_shadow_health",
-      "dod_shadow_health"
     ]
     for path in sourceFiles():
       let source = readFile(path)
@@ -150,61 +132,54 @@ suite "Runtime state primitives":
   test "source follows enforceable style rules":
     let tabFailures = sourceLineFailures(
       proc(path, line: string): bool =
-        line.contains("\t"))
+        line.contains("\t")
+    )
     check tabFailures.len == 0
 
     let enumFailures = sourceLineFailures(
       proc(path, line: string): bool =
-        line.contains("= enum") and "{.pure.}" notin line)
+        line.contains("= enum") and "{.pure.}" notin line
+    )
     check enumFailures.len == 0
 
     let getterFailures = sourceLineFailures(
       proc(path, line: string): bool =
         let trimmed = line.strip()
-        result = trimmed.startsWith("proc get") or
-          trimmed.startsWith("func get"))
+        result = trimmed.startsWith("proc get") or trimmed.startsWith("func get")
+    )
     check getterFailures.len == 0
 
     let entityStorageFailures = sourceLineFailures(
       proc(path, line: string): bool =
-        path != "src/state/entity_manager.nim" and
-          path != "tests/tstate.nim" and
-          (".data" in line or ".index" in line))
+        path != "src/state/entity_manager.nim" and path != "tests/tstate.nim" and
+          (".data" in line or ".index" in line)
+    )
     check entityStorageFailures.len == 0
 
     let overlongFailures = sourceLineFailures(
       proc(path, line: string): bool =
-        line.len > 80)
+        line.len > 80
+    )
     check overlongFailures.len <= MaxKnownOverlongLines
 
   test "systems read state through facade queries":
     let blockedStateImports = sourceLineFailures(
       proc(path, line: string): bool =
         path.startsWith("src/systems/") and
-          (line.contains("import ../state/") or
-            line.contains("from ../state/")) and
-          not line.contains("../state/engine"))
+          (line.contains("import ../state/") or line.contains("from ../state/")) and
+          not line.contains("../state/engine")
+    )
     check blockedStateImports.len == 0
 
     let blockedRelationReads = [
-      "model.scratchpadWindows",
-      "model.namedScratchpads",
-      "model.visibleScratchpad",
-      "model.isScratchpadVisible",
-      "model.focusHistory",
-      "model.workspaceHistory",
-      "model.restoreActiveSlot",
-      "model.restoreFocusedWindow",
-      "model.restoreTagByWindow",
-      "model.restoreWindows",
-      "model.restoreTags",
-      "model.restoreOutputTags",
-      "model.restoreScratchpadWindows",
-      "model.restoreNamedScratchpads",
-      "model.restoreVisibleScratchpad",
-      "model.restoreIsScratchpadVisible",
-      "model.restoreFocusHistory",
-      "model.restoreWorkspaceHistory"
+      "model.scratchpadWindows", "model.namedScratchpads", "model.visibleScratchpad",
+      "model.isScratchpadVisible", "model.focusHistory", "model.workspaceHistory",
+      "model.restoreActiveSlot", "model.restoreFocusedWindow",
+      "model.restoreTagByWindow", "model.restoreWindows", "model.restoreTags",
+      "model.restoreOutputTags", "model.restoreScratchpadWindows",
+      "model.restoreNamedScratchpads", "model.restoreVisibleScratchpad",
+      "model.restoreIsScratchpadVisible", "model.restoreFocusHistory",
+      "model.restoreWorkspaceHistory",
     ]
     let directRelationReads = sourceLineFailures(
       proc(path, line: string): bool =
@@ -213,15 +188,17 @@ suite "Runtime state primitives":
         for field in blockedRelationReads:
           if line.containsFieldRead(field):
             return true
-        false)
+        false
+    )
     check directRelationReads.len == 0
 
     let allocatingQueryReads = sourceLineFailures(
       proc(path, line: string): bool =
-        path.startsWith("src/systems/") and
-          (line.contains(".columnsForTag(") or
-            line.contains(".windowsForColumn(") or
-            line.contains(".windowsForTag(")))
+        path.startsWith("src/systems/") and (
+          line.contains(".columnsForTag(") or line.contains(".windowsForColumn(") or
+          line.contains(".windowsForTag(")
+        )
+    )
     check allocatingQueryReads.len == 0
 
   test "state query helpers cover indexed relation reads":
@@ -253,11 +230,14 @@ suite "Runtime state primitives":
     check toSeq(model.focusHistoryIdsReverse()) == @[winId]
     check toSeq(model.workspaceHistoryIds()) == @[tagId]
 
-    discard model.loadRestoreState(PendingRestoreState(
-      focusedWindow: ExternalWindowId(100),
-      focusHistory: @[ExternalWindowId(100)],
-      workspaceHistory: @[1'u32],
-      scratchpadWindows: @[ExternalWindowId(100)]))
+    discard model.loadRestoreState(
+      PendingRestoreState(
+        focusedWindow: ExternalWindowId(100),
+        focusHistory: @[ExternalWindowId(100)],
+        workspaceHistory: @[1'u32],
+        scratchpadWindows: @[ExternalWindowId(100)],
+      )
+    )
     check model.restoreFocusedWindowPending()
     check model.restoreFocusedWindowId() == ExternalWindowId(100)
     check model.restoredScratchpadContains(ExternalWindowId(100))
@@ -271,8 +251,8 @@ suite "Runtime state primitives":
     check initialized.model.validateInvariants().ok
     check initialized.model.defaultWorkspaceCount == 3
     check initialized.model.outerGaps == 12
-    check initialized.model.layoutCycle == @[LayoutMode.Scroller,
-        LayoutMode.Deck, LayoutMode.Grid]
+    check initialized.model.layoutCycle ==
+      @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid]
     check snapshot.activeTag == 1
     check snapshot.workspaces.len == 3
     check snapshot.workspaces[0].name == "main"
@@ -291,10 +271,11 @@ suite "Runtime state primitives":
 
   test "hotkey overlay renderer produces bounded ARGB buffers":
     let screen = runtime_values.Rect(x: 0, y: 0, w: 800, h: 600)
-    let rows = @[
-      HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
-      HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys")
-    ]
+    let rows =
+      @[
+        HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
+        HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys"),
+      ]
     let rendered = renderHotkeyOverlayBuffer(rows, screen)
     let bytes = argbBytes(rendered.pixels)
 
@@ -305,17 +286,16 @@ suite "Runtime state primitives":
 
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())
-    let effects = state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 42,
-      appId: "term",
-      title: "Terminal"))
+    let effects = state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 42, appId: "term", title: "Terminal")
+    )
     let snapshot = state.readRuntimeSnapshot()
 
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WindowOpenedOrChanged"))
+        it.jsonPayload.contains("WindowOpenedOrChanged")
+    )
     check state.model.validateInvariants().ok
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 42
@@ -323,19 +303,16 @@ suite "Runtime state primitives":
 
   test "runtime config reload preserves live state":
     var state = initRuntimeStateFromConfig(baseConfig())
-    discard state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 42,
-      appId: "term",
-      title: "Terminal"))
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 42, appId: "term", title: "Terminal")
+    )
 
     let reloaded = Config(
-      layout: LayoutConfig(gaps: 30, layoutCycle: @[LayoutMode.Monocle,
-          LayoutMode.Deck]),
+      layout:
+        LayoutConfig(gaps: 30, layoutCycle: @[LayoutMode.Monocle, LayoutMode.Deck]),
       workspaces: WorkspaceConfig(defaultCount: 4),
-      tagRules: @[
-        TagRule(tagId: 1, name: "renamed", defaultLayout: LayoutMode.Monocle)
-      ])
+      tagRules: @[TagRule(tagId: 1, name: "renamed", defaultLayout: LayoutMode.Monocle)],
+    )
     check state.applyRuntimeConfig(reloaded)
 
     let snapshot = state.readRuntimeSnapshot()
@@ -348,10 +325,9 @@ suite "Runtime state primitives":
 
   test "runtime live restore applies to model":
     var state = initRuntimeStateFromConfig(baseConfig())
-    discard state.applyRuntimeUpdate(Msg(kind: MsgKind.WlOutputDimensions,
-      outputId: 1,
-      width: 1000,
-      height: 700))
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
     var restore = LiveRestoreState(activeTag: 2, focusedWindow: 50)
     restore.outputTags[1] = 1
     restore.tags[2] = RestoredTagState(
@@ -363,14 +339,15 @@ suite "Runtime state primitives":
       currentViewportXOffset: 280.0,
       targetViewportYOffset: 40.0,
       currentViewportYOffset: 20.0,
-      columns: @[
-        RestoredColumnState(
-          windows: @[WindowId(50)],
-          widthProportion: 0.75,
-          isFullWidth: true)
-      ],
+      columns:
+        @[
+          RestoredColumnState(
+            windows: @[WindowId(50)], widthProportion: 0.75, isFullWidth: true
+          )
+        ],
       masterCount: 1,
-      masterSplitRatio: 0.5)
+      masterSplitRatio: 0.5,
+    )
     restore.windows[50] = RestoredWindowState(
       tagId: 2,
       appId: "browser",
@@ -378,13 +355,13 @@ suite "Runtime state primitives":
       widthProportion: 0.75,
       heightProportion: 0.8,
       isFloating: true,
-      floatingGeom: runtime_values.Rect(x: 100, y: 80, w: 640, h: 480))
+      floatingGeom: runtime_values.Rect(x: 100, y: 80, w: 640, h: 480),
+    )
     restore.tagByWindow[50] = 2
 
     check state.applyRuntimeLiveRestore(restore)
     let restoredSnapshot = state.readRuntimeSnapshot()
-    check state.model.outputTags[state.model.primaryOutput] ==
-      state.model.activeTag
+    check state.model.outputTags[state.model.primaryOutput] == state.model.activeTag
     check restoredSnapshot.activeTag == 2
     check restoredSnapshot.activeWorkspaceIdx == 2
     check restoredSnapshot.workspaces[1].isActive
@@ -394,11 +371,11 @@ suite "Runtime state primitives":
     check restoredSnapshot.workspaces[1].targetViewportYOffset == 40.0'f32
     check restoredSnapshot.workspaces[1].currentViewportYOffset == 20.0'f32
 
-    discard state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 50,
-      appId: "browser",
-      title: "Browser"))
+    discard state.applyRuntimeUpdate(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 50, appId: "browser", title: "Browser"
+      )
+    )
     discard state.applyRuntimeLayoutProjection()
 
     let snapshot = state.readRuntimeSnapshot()
@@ -420,11 +397,9 @@ suite "Runtime state primitives":
 
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())
-    discard state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 10,
-      appId: "term",
-      title: "Terminal"))
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "Terminal")
+    )
     let projection = state.applyRuntimeLayoutProjection()
 
     check projection.instructions.len == 1
@@ -433,11 +408,9 @@ suite "Runtime state primitives":
 
   test "snapshot and live restore reads come from state":
     var state = initRuntimeStateFromConfig(baseConfig())
-    discard state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 10,
-      appId: "term",
-      title: "Terminal"))
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "Terminal")
+    )
 
     let snapshot = state.readRuntimeSnapshot()
     let restoreJson = parseJson(state.readRuntimeLiveRestoreJson())
@@ -455,7 +428,7 @@ suite "Runtime state primitives":
       Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2),
       Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2),
       Msg(kind: MsgKind.CmdToggleFloating),
-      Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 1)
+      Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 1),
     ]:
       let (next, _) = model.update(msg)
       model = next
@@ -467,34 +440,29 @@ suite "Runtime state primitives":
 
   test "invariants reject focused window not placed on tag":
     var model = initRuntimeStateFromConfig(baseConfig()).model
-    let (next, _) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 1,
-      appId: "a",
-      title: "A"))
+    let (next, _) = model.update(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "a", title: "A")
+    )
     model = next
 
-    let (focusedNext, _) = model.update(Msg(
-      kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
+    let (focusedNext, _) =
+      model.update(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
     model = focusedNext
 
     let tagTwo = model.tagForSlot(2)
-    discard model.setTagFocus(tagTwo, model.windowForExternal(
-      ExternalWindowId(1)))
+    discard model.setTagFocus(tagTwo, model.windowForExternal(ExternalWindowId(1)))
 
     let report = model.validateInvariants()
     check not report.ok
     check report.errors.anyIt(
-      it.message.contains("tag focused window is not placed on tag"))
+      it.message.contains("tag focused window is not placed on tag")
+    )
 
   test "invariants reject minimized focused window":
     var model = initRuntimeStateFromConfig(baseConfig()).model
-    let (next, _) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 1,
-      appId: "a",
-      title: "A"))
+    let (next, _) = model.update(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "a", title: "A")
+    )
     model = next
 
     let winId = model.windowForExternal(ExternalWindowId(1))
@@ -502,21 +470,17 @@ suite "Runtime state primitives":
 
     let report = model.validateInvariants()
     check not report.ok
-    check report.errors.anyIt(
-      it.message.contains("tag focused window is minimized"))
+    check report.errors.anyIt(it.message.contains("tag focused window is minimized"))
 
   test "invariants reject primary output tag drift":
     var model = initRuntimeStateFromConfig(baseConfig()).model
-    let (outputModel, _) = model.update(Msg(kind: MsgKind.WlOutputDimensions,
-      outputId: 1,
-      width: 1000,
-      height: 700))
+    let (outputModel, _) = model.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
     model = outputModel
-    let (next, _) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 1,
-      appId: "a",
-      title: "A"))
+    let (next, _) = model.update(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "a", title: "A")
+    )
     model = next
 
     let primary = model.primaryOutput
@@ -525,4 +489,5 @@ suite "Runtime state primitives":
     let report = model.validateInvariants()
     check not report.ok
     check report.errors.anyIt(
-      it.message.contains("primary output tag does not match active tag"))
+      it.message.contains("primary output tag does not match active tag")
+    )

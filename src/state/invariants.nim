@@ -10,7 +10,7 @@ type
     ok*: bool
     errors*: seq[InvariantError]
 
-proc addError(report: var InvariantReport; message: string) =
+proc addError(report: var InvariantReport, message: string) =
   report.ok = false
   report.errors.add(InvariantError(message: message))
 
@@ -20,8 +20,7 @@ proc validateInvariants*(model: Model): InvariantReport =
   for _, tag in model.tagsWithId():
     if tag.slot == 0:
       result.addError("tag has zero slot: " & $tag.id)
-    if not model.tagBySlot.hasKey(tag.slot) or
-        model.tagBySlot[tag.slot] != tag.id:
+    if not model.tagBySlot.hasKey(tag.slot) or model.tagBySlot[tag.slot] != tag.id:
       result.addError("tag slot index mismatch: " & $tag.id)
     if tag.focusedWindow != NullWindowId and
         model.windows.entity(tag.focusedWindow).isNone:
@@ -32,8 +31,7 @@ proc validateInvariants*(model: Model): InvariantReport =
     if tag.focusedWindow != NullWindowId:
       let focusedOpt = model.windows.entity(tag.focusedWindow)
       if focusedOpt.isSome and
-          focusedOpt.get().admissionState ==
-          WindowAdmissionState.PendingAdmission:
+          focusedOpt.get().admissionState == WindowAdmissionState.PendingAdmission:
         result.addError("tag focused window is pending admission: " & $tag.id)
       if focusedOpt.isSome and focusedOpt.get().isMinimized:
         result.addError("tag focused window is minimized: " & $tag.id)
@@ -79,8 +77,7 @@ proc validateInvariants*(model: Model): InvariantReport =
       result.addError("group has no members: " & $groupId)
     if group.id != groupId:
       result.addError("group id index mismatch: " & $groupId)
-    if group.activeWindow == NullWindowId or
-        group.windows.find(group.activeWindow) == -1:
+    if group.activeWindow == NullWindowId or group.windows.find(group.activeWindow) == -1:
       result.addError("group active window is not a member: " & $groupId)
 
     var seen = initHashSet[WindowId]()
@@ -115,8 +112,8 @@ proc validateInvariants*(model: Model): InvariantReport =
   if model.visibleScratchpad != NullWindowId and
       model.windows.entity(model.visibleScratchpad).isNone:
     result.addError(
-      "visible scratchpad references missing window: " &
-      $model.visibleScratchpad)
+      "visible scratchpad references missing window: " & $model.visibleScratchpad
+    )
 
   for tagId, columns in model.columnsByTag.pairs:
     if model.tags.entity(tagId).isNone:
@@ -130,8 +127,7 @@ proc validateInvariants*(model: Model): InvariantReport =
       if columnOpt.isNone:
         result.addError("columnsByTag references missing column: " & $columnId)
       elif columnOpt.get().tagId != tagId:
-        result.addError(
-          "columnsByTag column belongs to another tag: " & $columnId)
+        result.addError("columnsByTag column belongs to another tag: " & $columnId)
 
   for tagId, windows in model.windowsByTag.pairs:
     let tagOpt = model.tags.entity(tagId)
@@ -177,13 +173,11 @@ proc validateInvariants*(model: Model): InvariantReport =
       result.addError("placement references missing window: " & $winId)
     let columnOpt = model.columns.entity(placement.columnId)
     if columnOpt.isNone:
-      result.addError(
-        "placement references missing column: " & $placement.columnId)
+      result.addError("placement references missing column: " & $placement.columnId)
     elif columnOpt.get().tagId != tagId:
       result.addError("placement column belongs to another tag: " & $winId)
     if model.windowsByTag.getOrDefault(tagId, @[]).find(winId) == -1:
       result.addError("placement missing windowsByTag row: " & $winId)
-    let columnWindows = model.windowsByColumn.getOrDefault(
-      placement.columnId, @[])
+    let columnWindows = model.windowsByColumn.getOrDefault(placement.columnId, @[])
     if columnWindows.find(winId) == -1:
       result.addError("placement missing windowsByColumn row: " & $winId)

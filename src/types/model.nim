@@ -1,14 +1,15 @@
 import std/[sets, tables]
-from core import ColumnId, EmptyTagMask, EntityManager, ExternalOutputId,
-  ExternalWindowId, GroupId, IdCounters, OutputId, TagId, TagMask, WindowId
-from runtime_values import CursorConfig, KeyBindingConfig, LayoutMode,
-  HotkeyOverlayConfig, ParentedRole, PointerBindingConfig, PointerOpKind,
-  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, Rect,
-  ScreenshotConfig, TerminalConfig, WindowRuleFloatingConfig
+from core import
+  ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
+  IdCounters, OutputId, TagId, TagMask, WindowId
+from runtime_values import
+  CursorConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
+  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
+  QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig, WindowRuleFloatingConfig
 
 type
   WindowAdmissionState* {.pure.} = enum
-    Admitted,
+    Admitted
     PendingAdmission
 
   WindowData* = object

@@ -49,5 +49,4 @@ proc configureLogging*() =
   else:
     setLogLevel(DefaultLogLevel)
     warn "Invalid TRIAD_LOG_LEVEL; using default",
-      value = rawLevel,
-      default = DefaultLogLevel.logLevelName()
+      value = rawLevel, default = DefaultLogLevel.logLevelName()

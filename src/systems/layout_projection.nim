@@ -7,8 +7,7 @@ import ../types/model as model_types
 import ../types/runtime_values as rv
 import floating_geometry, presentation_policy, popup_tree
 
-proc externalWindowId(model: Model; winId: core_types.WindowId):
-    rv.WindowId =
+proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     return rv.WindowId(uint32(winOpt.get().externalId))
@@ -21,10 +20,8 @@ proc primaryScreen*(model: Model): rv.Rect =
       let output = outputOpt.get()
       if output.hasUsable and output.usableW > 0 and output.usableH > 0:
         return rv.Rect(
-          x: output.usableX,
-          y: output.usableY,
-          w: output.usableW,
-          h: output.usableH)
+          x: output.usableX, y: output.usableY, w: output.usableW, h: output.usableH
+        )
       return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
 
   rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
@@ -40,7 +37,7 @@ proc activeFocus*(model: Model): core_types.WindowId =
     return tagOpt.get().focusedWindow
   NullWindowId
 
-proc isDescendantOf(model: Model; child, ancestor: core_types.WindowId): bool =
+proc isDescendantOf(model: Model, child, ancestor: core_types.WindowId): bool =
   if child == NullWindowId or ancestor == NullWindowId or child == ancestor:
     return false
   var current = child
@@ -59,11 +56,10 @@ proc isDescendantOf(model: Model; child, ancestor: core_types.WindowId): bool =
     inc depth
   false
 
-proc inActivePopupTree(
-    model: Model; winId, activeRoot: core_types.WindowId): bool =
+proc inActivePopupTree(model: Model, winId, activeRoot: core_types.WindowId): bool =
   activeRoot != NullWindowId and model.popupRoot(winId) == activeRoot
 
-proc popupStackRank(model: Model; winId: core_types.WindowId): int =
+proc popupStackRank(model: Model, winId: core_types.WindowId): int =
   result = -1
   var idx = 0
   for candidate in model.focusHistoryIds():
@@ -72,8 +68,8 @@ proc popupStackRank(model: Model; winId: core_types.WindowId): int =
     inc idx
 
 proc floatingStackCmp(
-    model: Model;
-    a, b: tuple[id: core_types.WindowId; win: model_types.WindowData]): int =
+    model: Model, a, b: tuple[id: core_types.WindowId, win: model_types.WindowData]
+): int =
   if model.isDescendantOf(a.id, b.id):
     return 1
   if model.isDescendantOf(b.id, a.id):
@@ -85,7 +81,8 @@ proc floatingStackCmp(
   cmp(uint32(a.id), uint32(b.id))
 
 proc applyPopupLayoutFocus(
-    model: Model; tag: var rv.TagState; active: core_types.WindowId) =
+    model: Model, tag: var rv.TagState, active: core_types.WindowId
+) =
   let layoutFocus = model.popupTreeLayoutFocus(active)
   if layoutFocus != NullWindowId and layoutFocus != active:
     tag.focusedWindow = model.externalWindowId(layoutFocus)
@@ -93,17 +90,20 @@ proc applyPopupLayoutFocus(
     tag.focusedWindow = 0'u32
 
 proc addFloatingInstructions(
-    model: Model; tagId: core_types.TagId; screen: rv.Rect;
-    instructions: var seq[rv.RenderInstruction]) =
+    model: Model,
+    tagId: core_types.TagId,
+    screen: rv.Rect,
+    instructions: var seq[rv.RenderInstruction],
+) =
   let activeRoot = model.popupRoot(model.activeFocus())
-  var floating: seq[tuple[
-    id: core_types.WindowId; win: model_types.WindowData]] = @[]
+  var floating: seq[tuple[id: core_types.WindowId, win: model_types.WindowData]] = @[]
   for winId, win in model.windowsOnTagWithId(tagId):
     if win.windowAdmitted() and win.isFloating and not win.isMinimized:
       floating.add((id: winId, win: win))
-  floating.sort(proc(a, b: tuple[
-      id: core_types.WindowId; win: model_types.WindowData]):
-      int = model.floatingStackCmp(a, b))
+  floating.sort(
+    proc(a, b: tuple[id: core_types.WindowId, win: model_types.WindowData]): int =
+      model.floatingStackCmp(a, b)
+  )
 
   var geomByWindow = initTable[rv.WindowId, rv.Rect]()
   for instr in instructions:
@@ -121,14 +121,12 @@ proc addFloatingInstructions(
       let parentGeom = geomByWindow[parentId]
       if not parentGeom.fullyWithin(screen):
         continue
-      geom = item.win.anchoredFloatingGeom(
-        parentGeom, item.win.floatingGeom, screen)
+      geom = item.win.anchoredFloatingGeom(parentGeom, item.win.floatingGeom, screen)
     let externalId = model.externalWindowId(item.id)
     instructions.add(rv.RenderInstruction(windowId: externalId, geom: geom))
     geomByWindow[externalId] = geom
 
-proc runtimeWindowTable(
-    model: Model): Table[rv.WindowId, rv.WindowData] =
+proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
   for winId, win in model.windowsWithId():
     result[model.externalWindowId(winId)] = rv.WindowData(
       id: model.externalWindowId(winId),
@@ -155,10 +153,12 @@ proc runtimeWindowTable(
       presentationHint: win.presentationHint,
       floatingGeom: win.floatingGeom,
       keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
-      keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass)
+      keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass,
+    )
 
-proc projectedTag(model: Model; tagId: core_types.TagId):
-    tuple[found: bool; tag: rv.TagState] =
+proc projectedTag(
+    model: Model, tagId: core_types.TagId
+): tuple[found: bool, tag: rv.TagState] =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return (false, rv.TagState())
@@ -175,35 +175,41 @@ proc projectedTag(model: Model; tagId: core_types.TagId):
     targetViewportYOffset: tag.targetViewportYOffset,
     currentViewportYOffset: tag.currentViewportYOffset,
     masterCount: tag.masterCount,
-    masterSplitRatio: tag.masterSplitRatio)
+    masterSplitRatio: tag.masterSplitRatio,
+  )
 
   for _, column in model.columnsOnTagWithId(tagId):
     var windows: seq[rv.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(column.id):
-      if win.windowAdmitted() and not win.isFloating and
-          not win.isMinimized and
+      if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
           not model.windowHiddenByGroup(winId):
         windows.add(model.externalWindowId(winId))
     if windows.len > 0:
-      result.tag.columns.add(rv.Column(
-        windows: windows,
-        widthProportion: column.widthProportion,
-        isFullWidth: column.isFullWidth))
+      result.tag.columns.add(
+        rv.Column(
+          windows: windows,
+          widthProportion: column.widthProportion,
+          isFullWidth: column.isFullWidth,
+        )
+      )
 
 proc layoutForTag(
-    tag: var rv.TagState;
-    windows: Table[rv.WindowId, rv.WindowData]; screen: rv.Rect;
-    outerGap, innerGap: int32; focusCenter, preferCenter: bool;
-    centerMode: string): seq[rv.RenderInstruction] =
+    tag: var rv.TagState,
+    windows: Table[rv.WindowId, rv.WindowData],
+    screen: rv.Rect,
+    outerGap, innerGap: int32,
+    focusCenter, preferCenter: bool,
+    centerMode: string,
+): seq[rv.RenderInstruction] =
   case tag.layoutMode
   of rv.LayoutMode.Scroller:
     layoutScroller(
-      tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter,
-      centerMode)
+      tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter, centerMode
+    )
   of rv.LayoutMode.VerticalScroller:
     layoutVerticalScroller(
-      tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter,
-      centerMode)
+      tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter, centerMode
+    )
   of rv.LayoutMode.MasterStack:
     layoutMasterStack(tag, screen, outerGap, innerGap)
   of rv.LayoutMode.Grid:
@@ -225,8 +231,7 @@ proc layoutForTag(
   of rv.LayoutMode.TGMix:
     layoutTGMix(tag, screen, outerGap, innerGap)
 
-proc activeFocusLayoutInstructions*(model: Model):
-    seq[rv.RenderInstruction] =
+proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   if model.activeTag == NullTagId:
     return
 
@@ -257,40 +262,42 @@ proc activeFocusLayoutInstructions*(model: Model):
     currentInnerGap,
     retargetViewport and model.scrollerFocusCenter,
     retargetViewport and model.scrollerPreferCenter,
-    if retargetViewport: model.centerFocusedColumn else: "never")
+    if retargetViewport: model.centerFocusedColumn else: "never",
+  )
 
   model.addFloatingInstructions(model.activeTag, screen, result)
 
 proc upsertInstruction(
-    instructions: var seq[rv.RenderInstruction]; instruction:
-    rv.RenderInstruction) =
+    instructions: var seq[rv.RenderInstruction], instruction: rv.RenderInstruction
+) =
   for idx, existing in instructions.mpairs:
     if existing.windowId == instruction.windowId:
       instructions[idx] = instruction
       return
   instructions.add(instruction)
 
-proc activeFocusIsOverlay(model: Model; focused: core_types.WindowId): bool =
+proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
     return true
   let focusedOpt = model.windowData(focused)
-  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and
-    focusedOpt.get().isFloating
+  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and focusedOpt.get().isFloating
 
 proc preserveBackingPresentation(
-    model: Model; instructions: var seq[rv.RenderInstruction]; screen: rv.Rect;
-    scopedRoot = NullWindowId) =
+    model: Model,
+    instructions: var seq[rv.RenderInstruction],
+    screen: rv.Rect,
+    scopedRoot = NullWindowId,
+) =
   let tagOpt = model.tagData(model.activeTag)
-  let maxSupported = tagOpt.isSome and
-    tagOpt.get().layoutMode.layoutSupportsMaximize()
+  let maxSupported = tagOpt.isSome and tagOpt.get().layoutMode.layoutSupportsMaximize()
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if scopedRoot != NullWindowId and winId != scopedRoot:
       continue
     if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
         (win.isFullscreen or (win.isMaximized and maxSupported)):
-      instructions.upsertInstruction(rv.RenderInstruction(
-        windowId: model.externalWindowId(winId),
-        geom: screen))
+      instructions.upsertInstruction(
+        rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: screen)
+      )
 
 proc layoutProjection*(model: Model): LayoutProjection =
   let screen = model.primaryScreen()
@@ -299,16 +306,19 @@ proc layoutProjection*(model: Model): LayoutProjection =
   if model.overviewActive:
     var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.LayoutMode.Grid)
     for winId in model.overviewWindowIds():
-      overviewTag.columns.add(rv.Column(
-        windows: @[model.externalWindowId(winId)],
-        widthProportion: 1.0,
-        isFullWidth: true))
+      overviewTag.columns.add(
+        rv.Column(
+          windows: @[model.externalWindowId(winId)],
+          widthProportion: 1.0,
+          isFullWidth: true,
+        )
+      )
     result.instructions = layoutGrid(
       overviewTag,
       screen,
       max(0'i32, model.overviewOuterGap),
-      max(0'i32, int32(float32(model.innerGaps) *
-        model.overviewInnerGapMultiplier)))
+      max(0'i32, int32(float32(model.innerGaps) * model.overviewInnerGapMultiplier)),
+    )
     return
 
   if model.activeTag == NullTagId:
@@ -339,12 +349,16 @@ proc layoutProjection*(model: Model): LayoutProjection =
     currentInnerGap,
     retargetViewport and model.scrollerFocusCenter,
     retargetViewport and model.scrollerPreferCenter,
-    if retargetViewport: model.centerFocusedColumn else: "never")
+    if retargetViewport: model.centerFocusedColumn else: "never",
+  )
   if tagForLayout.columns.len > 0:
-    result.viewportTargets.add(LayoutViewportTarget(
-      tagSlot: projected.tag.tagId,
-      targetX: tagForLayout.targetViewportXOffset,
-      targetY: tagForLayout.targetViewportYOffset))
+    result.viewportTargets.add(
+      LayoutViewportTarget(
+        tagSlot: projected.tag.tagId,
+        targetX: tagForLayout.targetViewportXOffset,
+        targetY: tagForLayout.targetViewportYOffset,
+      )
+    )
 
   let focused = model.activeFocus()
   let focusedOpt = model.windowData(focused)
@@ -352,16 +366,14 @@ proc layoutProjection*(model: Model): LayoutProjection =
   if overlayActive:
     let root = model.popupRoot(focused)
     model.preserveBackingPresentation(
-      result.instructions,
-      screen,
-      if root != focused: root else: NullWindowId)
+      result.instructions, screen, if root != focused: root else: NullWindowId
+    )
   elif focusedOpt.isSome:
     let win = focusedOpt.get()
     let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()
     if win.isFullscreen or (win.isMaximized and maxSupported):
-      result.instructions = @[rv.RenderInstruction(
-        windowId: model.externalWindowId(focused),
-        geom: screen)]
+      result.instructions =
+        @[rv.RenderInstruction(windowId: model.externalWindowId(focused), geom: screen)]
 
   model.addFloatingInstructions(model.activeTag, screen, result.instructions)
 
@@ -370,27 +382,29 @@ proc layoutProjection*(model: Model): LayoutProjection =
     if model.windowData(winId).isSome:
       let sw = int32(float32(screen.w) * model.effectiveScratchpadWidthRatio())
       let sh = int32(float32(screen.h) * model.effectiveScratchpadHeightRatio())
-      result.instructions.add(rv.RenderInstruction(
-        windowId: model.externalWindowId(winId),
-        geom: rv.Rect(
-          x: screen.x + (screen.w - sw) div 2,
-          y: screen.y + (screen.h - sh) div 2,
-          w: sw,
-          h: sh)))
+      result.instructions.add(
+        rv.RenderInstruction(
+          windowId: model.externalWindowId(winId),
+          geom: rv.Rect(
+            x: screen.x + (screen.w - sw) div 2,
+            y: screen.y + (screen.h - sh) div 2,
+            w: sw,
+            h: sh,
+          ),
+        )
+      )
 
-proc applyLayoutProjection*(model: var Model; projection: LayoutProjection) =
+proc applyLayoutProjection*(model: var Model, projection: LayoutProjection) =
   for target in projection.viewportTargets:
     let tagId = model.tagForSlot(target.tagSlot)
     if tagId != NullTagId:
       discard model.setTagViewportTarget(tagId, target.targetX, target.targetY)
       if model.viewportSnapRequested(tagId):
-        discard model.setTagViewportCurrent(
-          tagId, target.targetX, target.targetY)
+        discard model.setTagViewportCurrent(tagId, target.targetX, target.targetY)
       discard model.clearTagViewportRetarget(tagId)
       discard model.clearTagViewportSnap(tagId)
 
-proc layoutInstructions*(model: var Model):
-    seq[rv.RenderInstruction] =
+proc layoutInstructions*(model: var Model): seq[rv.RenderInstruction] =
   let projection = model.layoutProjection()
   model.applyLayoutProjection(projection)
   projection.instructions

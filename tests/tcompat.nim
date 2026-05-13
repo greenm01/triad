@@ -2,24 +2,27 @@ import std/[json, options, os, sequtils, strtabs, strutils, unittest]
 import ../src/core/app_identity
 import ../src/core/msg
 import ../src/daemon/quickshell_runner
-import ../src/ipc/[commands, niri_cli, niri_compat, quickshell_compat,
-  shell_overlay, triad_native]
+import
+  ../src/ipc/
+    [commands, niri_cli, niri_compat, quickshell_compat, shell_overlay, triad_native]
 import ../src/types/[model, runtime_values, shell_snapshot]
 
 proc installAppIdentityFixture() =
   let apps =
-    getTempDir() / ("triad-compat-apps-" & $getCurrentProcessId()) /
-      "applications"
+    getTempDir() / ("triad-compat-apps-" & $getCurrentProcessId()) / "applications"
   if dirExists(apps.parentDir()):
     removeDir(apps.parentDir())
   createDir(apps)
-  writeFile(apps / "Alacritty.desktop", """
+  writeFile(
+    apps / "Alacritty.desktop",
+    """
 [Desktop Entry]
 Name=Alacritty
 Exec=alacritty
 Icon=Alacritty
 Categories=System;TerminalEmulator;
-""")
+""",
+  )
   putEnv("XDG_DATA_HOME", apps.parentDir())
   putEnv("XDG_DATA_DIRS", "")
 
@@ -29,67 +32,67 @@ proc snapshotForShell(): ShellSnapshot =
     activeTag: 1,
     activeWorkspaceIdx: 1,
     layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid, LayoutMode.Monocle],
-    workspaces: @[
-      ShellWorkspace(
-        tagId: 1,
-        workspaceIdx: 1,
-        name: "main",
-        layoutMode: LayoutMode.Scroller,
-        isActive: true,
-        focusedWindow: 10,
-        occupied: true,
-        outputName: "triad-0",
-        columns: @[ShellColumn(
-          idx: 1,
+    workspaces:
+      @[
+        ShellWorkspace(
+          tagId: 1,
+          workspaceIdx: 1,
+          name: "main",
+          layoutMode: LayoutMode.Scroller,
+          isActive: true,
+          focusedWindow: 10,
+          occupied: true,
+          outputName: "triad-0",
+          columns:
+            @[ShellColumn(idx: 1, widthProportion: 0.5, windows: @[WindowId(10)])],
+          masterCount: 1,
+          masterSplitRatio: 0.5,
+        ),
+        ShellWorkspace(
+          tagId: 2,
+          workspaceIdx: 2,
+          name: "web",
+          layoutMode: LayoutMode.Grid,
+          outputName: "triad-0",
+          masterCount: 1,
+          masterSplitRatio: 0.5,
+        ),
+        ShellWorkspace(
+          tagId: 3,
+          workspaceIdx: 3,
+          name: "",
+          layoutMode: LayoutMode.Scroller,
+          outputName: "triad-0",
+          masterCount: 1,
+          masterSplitRatio: 0.5,
+        ),
+      ],
+    windows:
+      @[
+        ShellWindow(
+          id: 10,
+          parentId: 9,
+          title: "Terminal",
+          appId: "Alacritty",
+          tagId: some(1'u32),
+          workspaceIdx: 1,
+          outputName: "triad-0",
+          colIdx: 1,
+          winIdx: 1,
+          isFocused: true,
           widthProportion: 0.5,
-          windows: @[WindowId(10)])],
-        masterCount: 1,
-        masterSplitRatio: 0.5),
-      ShellWorkspace(
-        tagId: 2,
-        workspaceIdx: 2,
-        name: "web",
-        layoutMode: LayoutMode.Grid,
-        outputName: "triad-0",
-        masterCount: 1,
-        masterSplitRatio: 0.5),
-      ShellWorkspace(
-        tagId: 3,
-        workspaceIdx: 3,
-        name: "",
-        layoutMode: LayoutMode.Scroller,
-        outputName: "triad-0",
-        masterCount: 1,
-        masterSplitRatio: 0.5)
-    ],
-    windows: @[
-      ShellWindow(
-        id: 10,
-        parentId: 9,
-        title: "Terminal",
-        appId: "Alacritty",
-        tagId: some(1'u32),
-        workspaceIdx: 1,
-        outputName: "triad-0",
-        colIdx: 1,
-        winIdx: 1,
-        isFocused: true,
-        widthProportion: 0.5,
-        heightProportion: 1.0,
-        actualW: 777,
-        actualH: 555)
-    ],
-    outputs: @[
-      ShellOutput(id: 0, name: "triad-0", w: 1920, h: 1080, isPrimary: true)
-    ]
+          heightProportion: 1.0,
+          actualW: 777,
+          actualH: 555,
+        )
+      ],
+    outputs: @[ShellOutput(id: 0, name: "triad-0", w: 1920, h: 1080, isPrimary: true)],
   )
 
-proc handleNiriRequest(
-    line: string; snapshot: ShellSnapshot): NiriIpcResult =
+proc handleNiriRequest(line: string, snapshot: ShellSnapshot): NiriIpcResult =
   niri_compat.handleNiriRequest(line, snapshot)
 
-proc handleTriadRequest(
-    line: string; snapshot: ShellSnapshot): TriadIpcResult =
+proc handleTriadRequest(line: string, snapshot: ShellSnapshot): TriadIpcResult =
   triad_native.handleTriadRequest(line, snapshot)
 
 suite "Shell compatibility contracts":
@@ -99,8 +102,7 @@ suite "Shell compatibility contracts":
   test "Niri workspace, window, and output reads use shell snapshots":
     let snapshot = snapshotForShell()
     let workspaces =
-      parseJson(handleNiriRequest("\"Workspaces\"", snapshot).reply)["Ok"][
-        "Workspaces"]
+      parseJson(handleNiriRequest("\"Workspaces\"", snapshot).reply)["Ok"]["Workspaces"]
     check workspaces.len == 3
     check workspaces[0]["id"].getInt() == 1
     check workspaces[0]["idx"].getInt() == 1
@@ -109,8 +111,7 @@ suite "Shell compatibility contracts":
     check workspaces[0]["active_window_id"].getInt() == 10
 
     let windows =
-      parseJson(handleNiriRequest("\"Windows\"", snapshot).reply)["Ok"][
-        "Windows"]
+      parseJson(handleNiriRequest("\"Windows\"", snapshot).reply)["Ok"]["Windows"]
     check windows.len == 1
     check windows[0]["id"].getInt() == 10
     check windows[0]["app_id"].getStr() == "triad-alacritty"
@@ -119,8 +120,7 @@ suite "Shell compatibility contracts":
     check windows[0]["layout"]["window_size"][1].getInt() == 555
 
     let outputs =
-      parseJson(handleNiriRequest("\"Outputs\"", snapshot).reply)["Ok"][
-        "Outputs"]
+      parseJson(handleNiriRequest("\"Outputs\"", snapshot).reply)["Ok"]["Outputs"]
     check outputs.hasKey("triad-0")
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
@@ -134,23 +134,26 @@ suite "Shell compatibility contracts":
     snapshot.workspaces[0].focusedWindow = 10
     snapshot.workspaces[1].focusedWindow = 20
     snapshot.windows[0].isFocused = false
-    snapshot.windows.add(ShellWindow(
-      id: 20,
-      title: "Browser",
-      appId: "brave-browser",
-      tagId: some(2'u32),
-      workspaceIdx: 2,
-      outputName: "triad-0",
-      colIdx: 1,
-      winIdx: 1,
-      widthProportion: 0.5,
-      heightProportion: 1.0,
-      actualW: 800,
-      actualH: 600))
+    snapshot.windows.add(
+      ShellWindow(
+        id: 20,
+        title: "Browser",
+        appId: "brave-browser",
+        tagId: some(2'u32),
+        workspaceIdx: 2,
+        outputName: "triad-0",
+        colIdx: 1,
+        winIdx: 1,
+        widthProportion: 0.5,
+        heightProportion: 1.0,
+        actualW: 800,
+        actualH: 600,
+      )
+    )
 
-    let focused =
-      parseJson(handleNiriRequest("\"FocusedWindow\"", snapshot).reply)[
-        "Ok"]["FocusedWindow"]
+    let focused = parseJson(handleNiriRequest("\"FocusedWindow\"", snapshot).reply)[
+      "Ok"
+    ]["FocusedWindow"]
     check focused["id"].getInt() == 20
     check focused["workspace_id"].getInt() == 2
 
@@ -163,24 +166,26 @@ suite "Shell compatibility contracts":
     snapshot.workspaces[0].focusedWindow = 10
     snapshot.workspaces[1].focusedWindow = 20
     snapshot.windows[0].isFocused = false
-    snapshot.windows.add(ShellWindow(
-      id: 20,
-      title: "Browser",
-      appId: "brave-browser",
-      tagId: some(2'u32),
-      workspaceIdx: 2,
-      outputName: "triad-0",
-      colIdx: 1,
-      winIdx: 1,
-      isFocused: true,
-      widthProportion: 0.5,
-      heightProportion: 1.0,
-      actualW: 800,
-      actualH: 600))
+    snapshot.windows.add(
+      ShellWindow(
+        id: 20,
+        title: "Browser",
+        appId: "brave-browser",
+        tagId: some(2'u32),
+        workspaceIdx: 2,
+        outputName: "triad-0",
+        colIdx: 1,
+        winIdx: 1,
+        isFocused: true,
+        widthProportion: 0.5,
+        heightProportion: 1.0,
+        actualW: 800,
+        actualH: 600,
+      )
+    )
 
     let niri = handleNiriRequest("\"EventStream\"", snapshot)
-    let windows =
-      parseJson(niri.initialEvents[1])["WindowsChanged"]["windows"]
+    let windows = parseJson(niri.initialEvents[1])["WindowsChanged"]["windows"]
     check windows.filterIt(it["is_focused"].getBool()).len == 1
     check windows[1]["id"].getInt() == 20
     check windows[1]["workspace_id"].getInt() == 2
@@ -188,8 +193,8 @@ suite "Shell compatibility contracts":
   test "Niri actions map to Triad messages":
     let snapshot = snapshotForShell()
     let focusWs = handleNiriRequest(
-      """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""",
-      snapshot)
+      """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", snapshot
+    )
     check focusWs.messages.len == 1
     check focusWs.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check focusWs.messages[0].workspaceIndex == 2
@@ -205,22 +210,20 @@ suite "Shell compatibility contracts":
     overviewSnapshot.overviewSelectedWindow = 10
 
     let overviewFocusNext =
-      handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""",
-        overviewSnapshot)
+      handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", overviewSnapshot)
     check overviewFocusNext.messages.len == 1
     check overviewFocusNext.messages[0].kind == MsgKind.CmdFocusDirection
     check overviewFocusNext.messages[0].direction == Direction.DirDown
 
     let overviewFocusPrevious =
-      handleNiriRequest("""{"Action":{"FocusWorkspaceUp":{}}}""",
-        overviewSnapshot)
+      handleNiriRequest("""{"Action":{"FocusWorkspaceUp":{}}}""", overviewSnapshot)
     check overviewFocusPrevious.messages.len == 1
     check overviewFocusPrevious.messages[0].kind == MsgKind.CmdFocusDirection
     check overviewFocusPrevious.messages[0].direction == Direction.DirUp
 
     let overviewFocusWorkspace = handleNiriRequest(
-      """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""",
-      overviewSnapshot)
+      """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", overviewSnapshot
+    )
     check overviewFocusWorkspace.messages.len == 0
 
     let closeWin =
@@ -234,25 +237,24 @@ suite "Shell compatibility contracts":
     check maximizeColumn.messages.len == 1
     check maximizeColumn.messages[0].kind == MsgKind.CmdMaximizeColumn
 
-    let maximizeToEdges = handleNiriRequest(
-      """{"Action":{"MaximizeWindowToEdges":{}}}""", snapshot)
+    let maximizeToEdges =
+      handleNiriRequest("""{"Action":{"MaximizeWindowToEdges":{}}}""", snapshot)
     check maximizeToEdges.messages.len == 1
-    check maximizeToEdges.messages[0].kind ==
-      MsgKind.WlWindowMaximizeRequested
+    check maximizeToEdges.messages[0].kind == MsgKind.WlWindowMaximizeRequested
     check maximizeToEdges.messages[0].maximizeRequestId == 10
 
     var maximizedSnapshot = snapshot
     maximizedSnapshot.windows[0].isMaximized = true
     let unmaximizeToEdges = handleNiriRequest(
-      """{"Action":{"MaximizeWindowToEdges":{}}}""", maximizedSnapshot)
+      """{"Action":{"MaximizeWindowToEdges":{}}}""", maximizedSnapshot
+    )
     check unmaximizeToEdges.messages.len == 1
-    check unmaximizeToEdges.messages[0].kind ==
-      MsgKind.WlWindowUnmaximizeRequested
+    check unmaximizeToEdges.messages[0].kind == MsgKind.WlWindowUnmaximizeRequested
     check unmaximizeToEdges.messages[0].unmaximizeRequestId == 10
 
     let screenshot = handleNiriRequest(
-      """{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""",
-      snapshot)
+      """{"Action":{"Screenshot":{"path":"/tmp/triad-shot.png"}}}""", snapshot
+    )
     check screenshot.messages.len == 1
     check screenshot.messages[0].kind == MsgKind.CmdScreenshot
     check screenshot.messages[0].screenshotKind == ScreenshotKind.ShotRegion
@@ -263,22 +265,19 @@ suite "Shell compatibility contracts":
     check screenshot.messages[0].screenshotCopyToClipboard
 
     let screenshotClipboardOnly = handleNiriRequest(
-      """{"Action":{"ScreenshotScreen":{"write-to-disk":false}}}""",
-      snapshot)
+      """{"Action":{"ScreenshotScreen":{"write-to-disk":false}}}""", snapshot
+    )
     check screenshotClipboardOnly.messages.len == 1
-    check screenshotClipboardOnly.messages[0].screenshotKind ==
-      ScreenshotKind.ShotScreen
+    check screenshotClipboardOnly.messages[0].screenshotKind == ScreenshotKind.ShotScreen
     check not screenshotClipboardOnly.messages[0].screenshotWriteToDisk
     check screenshotClipboardOnly.messages[0].screenshotCopyToClipboard
     check screenshotClipboardOnly.messages[0].screenshotPointerMode ==
       ScreenshotPointerMode.PointerShow
 
-    let screenshotWindow = handleNiriRequest(
-      """{"Action":{"ScreenshotWindow":{}}}""",
-      snapshot)
+    let screenshotWindow =
+      handleNiriRequest("""{"Action":{"ScreenshotWindow":{}}}""", snapshot)
     check screenshotWindow.messages.len == 1
-    check screenshotWindow.messages[0].screenshotKind ==
-      ScreenshotKind.ShotWindow
+    check screenshotWindow.messages[0].screenshotKind == ScreenshotKind.ShotWindow
     check screenshotWindow.messages[0].screenshotPointerMode ==
       ScreenshotPointerMode.PointerHide
 
@@ -287,8 +286,7 @@ suite "Shell compatibility contracts":
     snapshot.overviewActive = true
 
     let stateReply =
-      handleTriadRequest("""{"triad":{"version":1,"request":"state"}}""",
-        snapshot)
+      handleTriadRequest("""{"triad":{"version":1,"request":"state"}}""", snapshot)
     check stateReply.handled
     let state = parseJson(stateReply.reply)["triad"]["state"]
     check state["overview"]["is_open"].getBool()
@@ -299,7 +297,8 @@ suite "Shell compatibility contracts":
 
     let setLayout = handleTriadRequest(
       """{"triad":{"version":1,"request":"set-layout","layout":"deck","target":{"workspace_idx":2}}}""",
-      snapshot)
+      snapshot,
+    )
     check parseJson(setLayout.reply)["ok"].getBool()
     check setLayout.messages.len == 1
     check setLayout.messages[0].kind == MsgKind.CmdSetLayout
@@ -307,8 +306,8 @@ suite "Shell compatibility contracts":
     check setLayout.messages[0].layoutTargetTag == 2
 
     let setTGMix = handleTriadRequest(
-      """{"triad":{"version":1,"request":"set-layout","layout":"tgmix"}}""",
-      snapshot)
+      """{"triad":{"version":1,"request":"set-layout","layout":"tgmix"}}""", snapshot
+    )
     check parseJson(setTGMix.reply)["ok"].getBool()
     check setTGMix.messages.len == 1
     check setTGMix.messages[0].newLayout == LayoutMode.TGMix
@@ -322,36 +321,37 @@ suite "Shell compatibility contracts":
 
     let triad = handleTriadRequest(
       """{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}""",
-      snapshotForShell())
+      snapshotForShell(),
+    )
     check triad.subscribeLayout
     check triad.subscribeState
     check triad.initialEvents.len == 2
 
   test "triad_niri shim parses shell commands":
-    let action =
-      buildNiriCliRequest(@["msg", "action", "focus-workspace", "2"])
+    let action = buildNiriCliRequest(@["msg", "action", "focus-workspace", "2"])
     check action.kind == NiriCliKind.NckRequest
     let forwarded = handleNiriRequest(action.socketPayload, snapshotForShell())
     check forwarded.messages.len == 1
     check forwarded.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check forwarded.messages[0].workspaceIndex == 2
 
-    let maximizeColumn =
-      buildNiriCliRequest(@["msg", "action", "maximize-column"])
+    let maximizeColumn = buildNiriCliRequest(@["msg", "action", "maximize-column"])
     check maximizeColumn.kind == NiriCliKind.NckRequest
-    check handleNiriRequest(
-      maximizeColumn.socketPayload,
-      snapshotForShell()).messages[0].kind == MsgKind.CmdMaximizeColumn
+    check handleNiriRequest(maximizeColumn.socketPayload, snapshotForShell()).messages[
+      0
+    ].kind == MsgKind.CmdMaximizeColumn
 
-    let screenshotScreen = buildNiriCliRequest(@[
-      "msg", "action", "screenshot-screen", "--path",
-      "/tmp/triad-screen.png", "--show-pointer"])
+    let screenshotScreen = buildNiriCliRequest(
+      @[
+        "msg", "action", "screenshot-screen", "--path", "/tmp/triad-screen.png",
+        "--show-pointer",
+      ]
+    )
     check screenshotScreen.kind == NiriCliKind.NckRequest
     let screenshotForwarded =
       handleNiriRequest(screenshotScreen.socketPayload, snapshotForShell())
     check screenshotForwarded.messages[0].kind == MsgKind.CmdScreenshot
-    check screenshotForwarded.messages[0].screenshotKind ==
-        ScreenshotKind.ShotScreen
+    check screenshotForwarded.messages[0].screenshotKind == ScreenshotKind.ShotScreen
     check screenshotForwarded.messages[0].screenshotPointerMode ==
       ScreenshotPointerMode.PointerShow
     check screenshotForwarded.messages[0].screenshotWriteToDisk
@@ -374,8 +374,7 @@ suite "Shell compatibility contracts":
     defer:
       putEnv("XDG_DATA_DIRS", oldDataDirs)
 
-    let compat =
-      prepareQuickshellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri)
+    let compat = prepareQuickshellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri)
     check compat.env["NIRI_SOCKET"] == tmp / "niri.sock"
     check compat.env["TRIAD_SOCKET"] == tmp / "triad.sock"
     check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
@@ -386,31 +385,24 @@ suite "Shell compatibility contracts":
 
   test "Quickshell launch and kill commands target configured theme":
     let config = QuickshellConfig(
-      enabled: true,
-      command: "qs",
-      theme: "noctalia-shell",
-      args: @["--verbose"])
+      enabled: true, command: "qs", theme: "noctalia-shell", args: @["--verbose"]
+    )
 
-    check quickshellLaunchArgs(config) == @[
-      "-c", "noctalia-shell", "--verbose"]
-    check quickshellKillArgs(config) == @[
-      "kill", "-c", "noctalia-shell", "--any-display"]
+    check quickshellLaunchArgs(config) == @["-c", "noctalia-shell", "--verbose"]
+    check quickshellKillArgs(config) ==
+      @["kill", "-c", "noctalia-shell", "--any-display"]
 
   test "Quickshell lifecycle actions avoid reload handoff kills":
     let noctalia = QuickshellConfig(
-      enabled: true,
-      command: "qs",
-      theme: "noctalia-shell",
-      args: @["--verbose"])
+      enabled: true, command: "qs", theme: "noctalia-shell", args: @["--verbose"]
+    )
     var changedTheme = noctalia
     changedTheme.theme = "other-shell"
     var disabled = noctalia
     disabled.enabled = false
 
-    check quickshellStartupAction(noctalia) ==
-      QuickshellReloadAction.SpawnOnly
-    check quickshellConfigReloadAction(noctalia, noctalia) ==
-      QuickshellReloadAction.Noop
+    check quickshellStartupAction(noctalia) == QuickshellReloadAction.SpawnOnly
+    check quickshellConfigReloadAction(noctalia, noctalia) == QuickshellReloadAction.Noop
     check quickshellConfigReloadAction(noctalia, changedTheme) ==
       QuickshellReloadAction.AuthoritativeRestart
     check quickshellConfigReloadAction(noctalia, disabled) ==
@@ -427,14 +419,17 @@ suite "Shell compatibility contracts":
 
     let fakeQs = tmp / "qs"
     let logPath = tmp / "calls.log"
-    writeFile(fakeQs, """
+    writeFile(
+      fakeQs,
+      """
 #!/bin/sh
 printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
 if [ "$1" = "kill" ]; then
   exit 0
 fi
 exit "${TRIAD_FAKE_QS_EXIT:-0}"
-""")
+""",
+    )
     setFilePermissions(fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
 
     let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
@@ -445,10 +440,8 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
       putEnv("TRIAD_FAKE_QS_LOG", oldLog)
       putEnv("TRIAD_FAKE_QS_EXIT", oldExit)
 
-    let config = QuickshellConfig(
-      enabled: true,
-      command: fakeQs,
-      theme: "noctalia-shell")
+    let config =
+      QuickshellConfig(enabled: true, command: fakeQs, theme: "noctalia-shell")
     var runner = QuickshellRunner(spawnPending: true)
     let model = Model(quickshell: config)
 
@@ -470,14 +463,17 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
 
     let fakeQs = tmp / "qs"
     let logPath = tmp / "calls.log"
-    writeFile(fakeQs, """
+    writeFile(
+      fakeQs,
+      """
 #!/bin/sh
 printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
 if [ "$1" = "kill" ]; then
   exit 0
 fi
 exit "${TRIAD_FAKE_QS_EXIT:-9}"
-""")
+""",
+    )
     setFilePermissions(fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
 
     let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
@@ -488,10 +484,8 @@ exit "${TRIAD_FAKE_QS_EXIT:-9}"
       putEnv("TRIAD_FAKE_QS_LOG", oldLog)
       putEnv("TRIAD_FAKE_QS_EXIT", oldExit)
 
-    let config = QuickshellConfig(
-      enabled: true,
-      command: fakeQs,
-      theme: "noctalia-shell")
+    let config =
+      QuickshellConfig(enabled: true, command: fakeQs, theme: "noctalia-shell")
     var runner = QuickshellRunner(spawnPending: true)
     let model = Model(quickshell: config)
 
@@ -512,7 +506,9 @@ exit "${TRIAD_FAKE_QS_EXIT:-9}"
 
     let appRoot = tmp / "apps"
     createDir(appRoot)
-    writeFile(appRoot / "DemoTerm.desktop", """
+    writeFile(
+      appRoot / "DemoTerm.desktop",
+      """
 [Desktop Entry]
 Type=Application
 Name=Demo Term
@@ -520,13 +516,14 @@ Exec=demo-term --new-window
 Icon=demo-term
 StartupWMClass=DemoTerm
 Categories=System;TerminalEmulator;
-""")
+""",
+    )
     let iconRoot = tmp / "iconsrc"
     createDir(iconRoot / "icons" / "hicolor" / "scalable" / "apps")
     writeFile(
-      iconRoot / "icons" / "hicolor" / "scalable" / "apps" /
-        "demo-term.svg",
-      """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"/>""")
+      iconRoot / "icons" / "hicolor" / "scalable" / "apps" / "demo-term.svg",
+      """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"/>""",
+    )
 
     let oldDataHome = getEnv("XDG_DATA_HOME", "")
     let oldDataDirs = getEnv("XDG_DATA_DIRS", "")
@@ -539,8 +536,7 @@ Categories=System;TerminalEmulator;
     let index = buildAppIdentityIndex([appRoot])
     let overlay = installShellOverlay(tmp / "runtime", index)
     check overlay.ok
-    let generatedApp =
-      overlay.sharePath / "applications" / "triad-demoterm.desktop"
+    let generatedApp = overlay.sharePath / "applications" / "triad-demoterm.desktop"
     check fileExists(generatedApp)
     check readFile(generatedApp).contains("Exec=demo-term --new-window")
 

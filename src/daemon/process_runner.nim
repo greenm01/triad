@@ -6,11 +6,11 @@ import ../utils/terminal
 
 proc commandArgs(command: seq[string]): seq[string] =
   if command.len > 1:
-    command[1..^1]
+    command[1 ..^ 1]
   else:
     @[]
 
-proc pollProcessExitCode*(p: Process; timeoutMs: int; pollMs = 25): int =
+proc pollProcessExitCode*(p: Process, timeoutMs: int, pollMs = 25): int =
   let deadline = epochTime() + float(timeoutMs) / 1000.0
   result = p.peekExitCode()
   while result == -1 and epochTime() < deadline:
@@ -22,8 +22,7 @@ proc spawnStartupCommands*(model: Model) =
   for cmd in model.startupCommands:
     if cmd.len > 0:
       try:
-        let p = startProcess(cmd[0], args = cmd.commandArgs(),
-          options = {poUsePath})
+        let p = startProcess(cmd[0], args = cmd.commandArgs(), options = {poUsePath})
         info "Spawned startup command", cmd = cmd[0], pid = p.processID
       except CatchableError as e:
         warn "Failed to spawn startup command", cmd = cmd[0], error = e.msg
@@ -34,34 +33,33 @@ proc spawnScreenLock*(command: seq[string]) =
     return
 
   try:
-    let p = startProcess(command[0], args = command.commandArgs(),
-      options = {poUsePath})
+    let p =
+      startProcess(command[0], args = command.commandArgs(), options = {poUsePath})
     info "Spawned screen lock", cmd = command[0], pid = p.processID
   except CatchableError as e:
     warn "Failed to spawn screen lock", cmd = command[0], error = e.msg
 
-proc spawnWindowMenu*(
-    command: seq[string]; windowId: WindowId; x, y: int32) =
+proc spawnWindowMenu*(command: seq[string], windowId: WindowId, x, y: int32) =
   if command.len == 0:
     warn "Window menu command is not configured"
     return
 
   try:
-    let p = startProcess(command[0], args = command.commandArgs(),
-      options = {poUsePath})
-    info "Spawned window menu", cmd = command[0], pid = p.processID,
-        windowId = windowId, x = x, y = y
+    let p =
+      startProcess(command[0], args = command.commandArgs(), options = {poUsePath})
+    info "Spawned window menu",
+      cmd = command[0], pid = p.processID, windowId = windowId, x = x, y = y
   except CatchableError as e:
-    warn "Failed to spawn window menu", cmd = command[0],
-      windowId = windowId, error = e.msg
+    warn "Failed to spawn window menu",
+      cmd = command[0], windowId = windowId, error = e.msg
 
 proc spawnTerminal*(model: Model) =
   for command in terminalCandidates(model.terminal.command):
     if command.len == 0 or not commandExists(command[0]):
       continue
     try:
-      let p = startProcess(command[0], args = command.commandArgs(),
-        options = {poUsePath})
+      let p =
+        startProcess(command[0], args = command.commandArgs(), options = {poUsePath})
       info "Spawned terminal", terminal = command[0], pid = p.processID
       return
     except CatchableError as e:
@@ -75,8 +73,8 @@ proc spawnCommand*(command: seq[string]) =
     return
 
   try:
-    let p = startProcess(command[0], args = command.commandArgs(),
-      options = {poUsePath})
+    let p =
+      startProcess(command[0], args = command.commandArgs(), options = {poUsePath})
     info "Spawned command", cmd = command[0], pid = p.processID
   except CatchableError as e:
     warn "Failed to spawn command", cmd = command[0], error = e.msg

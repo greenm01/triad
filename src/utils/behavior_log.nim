@@ -11,18 +11,13 @@ const
 
 proc envFlagEnabled(value: string): bool =
   case value.normalize()
-  of "1", "true", "yes", "on":
-    true
-  else:
-    false
+  of "1", "true", "yes", "on": true
+  else: false
 
-proc parsePositiveInt(value: string; fallback: int): int =
+proc parsePositiveInt(value: string, fallback: int): int =
   try:
     let parsed = parseInt(value)
-    if parsed > 0:
-      parsed
-    else:
-      fallback
+    if parsed > 0: parsed else: fallback
   except ValueError:
     fallback
 
@@ -38,17 +33,15 @@ proc defaultBehaviorLogDir*(): string =
   stateHome / "triad" / "behavior"
 
 proc behaviorLogMaxBytes*(): int =
-  parsePositiveInt(getEnv("TRIAD_BEHAVIOR_LOG_MAX_BYTES", ""),
-    DefaultMaxBytes)
+  parsePositiveInt(getEnv("TRIAD_BEHAVIOR_LOG_MAX_BYTES", ""), DefaultMaxBytes)
 
 proc behaviorLogKeepDays*(): int =
-  parsePositiveInt(getEnv("TRIAD_BEHAVIOR_LOG_KEEP_DAYS", ""),
-    DefaultKeepDays)
+  parsePositiveInt(getEnv("TRIAD_BEHAVIOR_LOG_KEEP_DAYS", ""), DefaultKeepDays)
 
 proc behaviorLogPath*(day = now().format("yyyy-MM-dd")): string =
   defaultBehaviorLogDir() / (BehaviorLogPrefix & day & BehaviorLogSuffix)
 
-proc cleanupBehaviorLogs(dir: string; keepDays: int) =
+proc cleanupBehaviorLogs(dir: string, keepDays: int) =
   if keepDays <= 0 or not dirExists(dir):
     return
 
@@ -57,8 +50,7 @@ proc cleanupBehaviorLogs(dir: string; keepDays: int) =
     if kind != pcFile:
       continue
     let name = path.extractFilename()
-    if not name.startsWith(BehaviorLogPrefix) or
-        not name.endsWith(BehaviorLogSuffix):
+    if not name.startsWith(BehaviorLogPrefix) or not name.endsWith(BehaviorLogSuffix):
       continue
     try:
       if getLastModificationTime(path).toUnix().float < cutoff:
@@ -66,7 +58,7 @@ proc cleanupBehaviorLogs(dir: string; keepDays: int) =
     except CatchableError:
       discard
 
-proc rotateOversizeLog(path: string; maxBytes: int) =
+proc rotateOversizeLog(path: string, maxBytes: int) =
   if maxBytes <= 0 or not fileExists(path):
     return
 
@@ -75,16 +67,18 @@ proc rotateOversizeLog(path: string; maxBytes: int) =
       return
 
     let split = path.splitFile()
-    var rotated = split.dir / (split.name & "-" & now().format("HHmmss") &
-      split.ext)
+    var rotated = split.dir / (split.name & "-" & now().format("HHmmss") & split.ext)
     if fileExists(rotated):
-      rotated = split.dir / (split.name & "-" & now().format("HHmmss") &
-        "-" & $getCurrentProcessId() & split.ext)
+      rotated =
+        split.dir / (
+          split.name & "-" & now().format("HHmmss") & "-" & $getCurrentProcessId() &
+          split.ext
+        )
     moveFile(path, rotated)
   except CatchableError:
     discard
 
-proc appendJsonLine(path: string; node: JsonNode) =
+proc appendJsonLine(path: string, node: JsonNode) =
   var file: File
   if file.open(path, fmAppend):
     try:
@@ -98,7 +92,7 @@ proc behaviorEventRoot(eventName: string): JsonNode =
   result["event"] = %eventName
   result["pid"] = %getCurrentProcessId()
 
-proc writeBehaviorEvent*(eventName: string; payload: JsonNode = nil) =
+proc writeBehaviorEvent*(eventName: string, payload: JsonNode = nil) =
   if not behaviorLogEnabled():
     return
 
@@ -132,36 +126,41 @@ proc compactWorkspaceDistribution*(snapshot: ShellSnapshot): JsonNode =
         inc fullscreen
       if win.isFloating:
         inc floating
-    result.add(%*{
-      "tag_id": workspace.tagId,
-      "workspace_idx": workspace.workspaceIdx,
-      "name": workspace.name,
-      "active": workspace.isActive,
-      "occupied": workspace.occupied,
-      "focused_window": uint32(workspace.focusedWindow),
-      "columns": workspace.columns.len,
-      "maximized_windows": maximized,
-      "fullscreen_windows": fullscreen,
-      "floating_windows": floating
-    })
+    result.add(
+      %*{
+        "tag_id": workspace.tagId,
+        "workspace_idx": workspace.workspaceIdx,
+        "name": workspace.name,
+        "active": workspace.isActive,
+        "occupied": workspace.occupied,
+        "focused_window": uint32(workspace.focusedWindow),
+        "columns": workspace.columns.len,
+        "maximized_windows": maximized,
+        "fullscreen_windows": fullscreen,
+        "floating_windows": floating,
+      }
+    )
 
 proc compactSnapshotWindows*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for win in snapshot.windows:
-    let node = %*{
-      "id": uint32(win.id),
-      "workspace_idx": win.workspaceIdx,
-      "focused": win.isFocused,
-      "floating": win.isFloating,
-      "fullscreen": win.isFullscreen,
-      "maximized": win.isMaximized,
-      "minimized": win.isMinimized,
-      "app_id": win.appId,
-      "title": win.title
-    }
+    let node =
+      %*{
+        "id": uint32(win.id),
+        "workspace_idx": win.workspaceIdx,
+        "focused": win.isFocused,
+        "floating": win.isFloating,
+        "fullscreen": win.isFullscreen,
+        "maximized": win.isMaximized,
+        "minimized": win.isMinimized,
+        "app_id": win.appId,
+        "title": win.title,
+      }
     node["tag_id"] =
-      if win.tagId.isSome: %win.tagId.get()
-      else: newJNull()
+      if win.tagId.isSome:
+        %win.tagId.get()
+      else:
+        newJNull()
     result.add(node)
 
 proc snapshotFocusedWindowId(snapshot: ShellSnapshot): WindowId =
@@ -177,7 +176,7 @@ proc snapshotSummary*(snapshot: ShellSnapshot): JsonNode =
     "focused_window": uint32(snapshot.snapshotFocusedWindowId()),
     "workspaces": snapshot.workspaces.len,
     "windows": snapshot.windows.len,
-    "workspace_distribution": snapshot.compactWorkspaceDistribution()
+    "workspace_distribution": snapshot.compactWorkspaceDistribution(),
   }
 
 proc snapshotBehaviorPayload*(snapshot: ShellSnapshot): JsonNode =
@@ -199,15 +198,17 @@ proc compactLiveRestoreWindows(state: LiveRestoreState): JsonNode =
 
   for winId in winIds:
     let win = state.windows[winId]
-    result.add(%*{
-      "id": uint32(winId),
-      "tag_id": win.tagId,
-      "app_id": win.appId,
-      "title": win.title,
-      "is_floating": win.isFloating,
-      "is_fullscreen": win.isFullscreen,
-      "is_maximized": win.isMaximized
-    })
+    result.add(
+      %*{
+        "id": uint32(winId),
+        "tag_id": win.tagId,
+        "app_id": win.appId,
+        "title": win.title,
+        "is_floating": win.isFloating,
+        "is_fullscreen": win.isFullscreen,
+        "is_maximized": win.isMaximized,
+      }
+    )
 
 proc compactLiveRestoreTags(state: LiveRestoreState): JsonNode =
   result = newJArray()
@@ -222,13 +223,15 @@ proc compactLiveRestoreTags(state: LiveRestoreState): JsonNode =
     for col in tag.columns:
       if col.isFullWidth:
         inc fullWidthColumns
-    result.add(%*{
-      "id": tag.tagId,
-      "layout_mode": $tag.layoutMode,
-      "focused_window": uint32(tag.focusedWindow),
-      "columns": tag.columns.len,
-      "full_width_columns": fullWidthColumns
-    })
+    result.add(
+      %*{
+        "id": tag.tagId,
+        "layout_mode": $tag.layoutMode,
+        "focused_window": uint32(tag.focusedWindow),
+        "columns": tag.columns.len,
+        "full_width_columns": fullWidthColumns,
+      }
+    )
 
 proc liveRestoreSummary*(state: LiveRestoreState): JsonNode =
   %*{
@@ -236,11 +239,12 @@ proc liveRestoreSummary*(state: LiveRestoreState): JsonNode =
     "focused_window": uint32(state.focusedWindow),
     "windows": compactLiveRestoreWindows(state),
     "tags": compactLiveRestoreTags(state),
-    "focus_history": compactFocusHistory(state)
+    "focus_history": compactFocusHistory(state),
   }
 
 proc writeLiveRestoreBehaviorEvent*(
-    eventName, path, context: string; state: LiveRestoreState) =
+    eventName, path, context: string, state: LiveRestoreState
+) =
   let payload = liveRestoreSummary(state)
   payload["path"] = %path
   if context.len > 0:

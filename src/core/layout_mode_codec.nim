@@ -18,16 +18,29 @@ proc layoutModeId*(mode: LayoutMode): string =
 
 proc parseLayoutModeId*(value: string): Option[LayoutMode] =
   case value
-  of "scroller": some(LayoutMode.Scroller)
-  of "vertical-scroller": some(LayoutMode.VerticalScroller)
-  of "tile": some(LayoutMode.MasterStack)
-  of "grid": some(LayoutMode.Grid)
-  of "monocle": some(LayoutMode.Monocle)
-  of "deck": some(LayoutMode.Deck)
-  of "center-tile": some(LayoutMode.CenterTile)
-  of "right-tile": some(LayoutMode.RightTile)
-  of "vertical-tile": some(LayoutMode.VerticalTile)
-  of "vertical-grid": some(LayoutMode.VerticalGrid)
-  of "vertical-deck": some(LayoutMode.VerticalDeck)
-  of "tgmix": some(LayoutMode.TGMix)
-  else: none(LayoutMode)
+  of "scroller":
+    some(LayoutMode.Scroller)
+  of "vertical-scroller":
+    some(LayoutMode.VerticalScroller)
+  of "tile":
+    some(LayoutMode.MasterStack)
+  of "grid":
+    some(LayoutMode.Grid)
+  of "monocle":
+    some(LayoutMode.Monocle)
+  of "deck":
+    some(LayoutMode.Deck)
+  of "center-tile":
+    some(LayoutMode.CenterTile)
+  of "right-tile":
+    some(LayoutMode.RightTile)
+  of "vertical-tile":
+    some(LayoutMode.VerticalTile)
+  of "vertical-grid":
+    some(LayoutMode.VerticalGrid)
+  of "vertical-deck":
+    some(LayoutMode.VerticalDeck)
+  of "tgmix":
+    some(LayoutMode.TGMix)
+  else:
+    none(LayoutMode)

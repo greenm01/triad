@@ -2,27 +2,25 @@ import std/[algorithm, options, sets, tables]
 import entity_manager, iterators
 import ../types/[core, model]
 
-proc tagForSlot*(model: Model; slot: uint32): TagId =
+proc tagForSlot*(model: Model, slot: uint32): TagId =
   model.tagBySlot.getOrDefault(slot, NullTagId)
 
-proc windowForExternal*(
-    model: Model; externalId: ExternalWindowId): WindowId =
+proc windowForExternal*(model: Model, externalId: ExternalWindowId): WindowId =
   model.externalWindowIds.getOrDefault(externalId, NullWindowId)
 
-proc outputForExternal*(
-    model: Model; externalId: ExternalOutputId): OutputId =
+proc outputForExternal*(model: Model, externalId: ExternalOutputId): OutputId =
   model.externalOutputIds.getOrDefault(externalId, NullOutputId)
 
-proc tagData*(model: Model; tagId: TagId): Option[TagData] =
+proc tagData*(model: Model, tagId: TagId): Option[TagData] =
   model.tags.entity(tagId)
 
-proc windowData*(model: Model; winId: WindowId): Option[WindowData] =
+proc windowData*(model: Model, winId: WindowId): Option[WindowData] =
   model.windows.entity(winId)
 
 proc windowAdmitted*(win: WindowData): bool =
   win.admissionState == WindowAdmissionState.Admitted
 
-proc windowAdmitted*(model: Model; winId: WindowId): bool =
+proc windowAdmitted*(model: Model, winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   winOpt.isSome and winOpt.get().windowAdmitted()
 
@@ -31,19 +29,19 @@ proc pendingAdmissionExternalIds*(model: Model): seq[ExternalWindowId] =
     if win.admissionState == WindowAdmissionState.PendingAdmission:
       result.add(win.externalId)
 
-proc columnData*(model: Model; columnId: ColumnId): Option[ColumnData] =
+proc columnData*(model: Model, columnId: ColumnId): Option[ColumnData] =
   model.columns.entity(columnId)
 
-proc outputData*(model: Model; outputId: OutputId): Option[OutputData] =
+proc outputData*(model: Model, outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
 
-proc groupData*(model: Model; groupId: GroupId): Option[GroupData] =
+proc groupData*(model: Model, groupId: GroupId): Option[GroupData] =
   model.groups.entity(groupId)
 
-proc groupForWindow*(model: Model; winId: WindowId): GroupId =
+proc groupForWindow*(model: Model, winId: WindowId): GroupId =
   model.groupByWindow.getOrDefault(winId, NullGroupId)
 
-proc windowHiddenByGroup*(model: Model; winId: WindowId): bool =
+proc windowHiddenByGroup*(model: Model, winId: WindowId): bool =
   let groupId = model.groupForWindow(winId)
   if groupId == NullGroupId:
     return false
@@ -59,7 +57,7 @@ proc sortedSlots*(model: Model): seq[uint32] =
     result.add(slot)
   result.sort()
 
-proc tagHasLiveWindows*(model: Model; tagId: TagId): bool =
+proc tagHasLiveWindows*(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
     if win.windowAdmitted():
       return true
@@ -89,25 +87,24 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if result.len > 0:
     let last = result[^1]
     let lastTag = model.tagForSlot(last)
-    if last < MaxTagBits and lastTag != NullTagId and
-        model.tagHasLiveWindows(lastTag):
+    if last < MaxTagBits and lastTag != NullTagId and model.tagHasLiveWindows(lastTag):
       result.add(last + 1)
 
-proc workspaceIndexForSlot*(model: Model; slot: uint32): uint32 =
+proc workspaceIndexForSlot*(model: Model, slot: uint32): uint32 =
   for idx, candidate in model.visibleWorkspaceSlots():
     if candidate == slot:
       return uint32(idx + 1)
   0
 
-proc columnsForTag*(model: Model; tagId: TagId): seq[ColumnId] =
+proc columnsForTag*(model: Model, tagId: TagId): seq[ColumnId] =
   for columnId, _ in model.columnsOnTagWithId(tagId):
     result.add(columnId)
 
-proc windowsForColumn*(model: Model; columnId: ColumnId): seq[WindowId] =
+proc windowsForColumn*(model: Model, columnId: ColumnId): seq[WindowId] =
   for winId, _ in model.windowsOnColumnWithId(columnId):
     result.add(winId)
 
-proc windowsForTag*(model: Model; tagId: TagId): seq[WindowId] =
+proc windowsForTag*(model: Model, tagId: TagId): seq[WindowId] =
   for winId, _ in model.windowsOnTagWithId(tagId):
     result.add(winId)
 
@@ -117,8 +114,7 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
     if tagId == NullTagId:
       continue
     for winId, win in model.windowsOnTagWithId(tagId):
-      if not win.isMinimized and win.windowAdmitted() and
-          result.find(winId) == -1:
+      if not win.isMinimized and win.windowAdmitted() and result.find(winId) == -1:
         result.add(winId)
 
 proc initialOverviewWindow*(model: Model): WindowId =
@@ -146,38 +142,37 @@ proc selectedOverviewWindow*(model: Model): WindowId =
     return model.overviewSelectedWindow
   model.initialOverviewWindow()
 
-proc columnCountForTag*(model: Model; tagId: TagId): int =
+proc columnCountForTag*(model: Model, tagId: TagId): int =
   if model.columnsByTag.hasKey(tagId):
     model.columnsByTag[tagId].len
   else:
     0
 
-proc windowCountForColumn*(model: Model; columnId: ColumnId): int =
+proc windowCountForColumn*(model: Model, columnId: ColumnId): int =
   if model.windowsByColumn.hasKey(columnId):
     model.windowsByColumn[columnId].len
   else:
     0
 
-proc windowCountForTag*(model: Model; tagId: TagId): int =
+proc windowCountForTag*(model: Model, tagId: TagId): int =
   if model.windowsByTag.hasKey(tagId):
     model.windowsByTag[tagId].len
   else:
     0
 
-proc columnAt*(model: Model; tagId: TagId; idx: int): ColumnId =
+proc columnAt*(model: Model, tagId: TagId, idx: int): ColumnId =
   if idx < 0 or not model.columnsByTag.hasKey(tagId) or
       idx >= model.columnsByTag[tagId].len:
     return NullColumnId
   model.columnsByTag[tagId][idx]
 
-proc windowAt*(model: Model; columnId: ColumnId; idx: int): WindowId =
+proc windowAt*(model: Model, columnId: ColumnId, idx: int): WindowId =
   if idx < 0 or not model.windowsByColumn.hasKey(columnId) or
       idx >= model.windowsByColumn[columnId].len:
     return NullWindowId
   model.windowsByColumn[columnId][idx]
 
-proc columnIndexForTag*(
-    model: Model; tagId: TagId; columnId: ColumnId): uint32 =
+proc columnIndexForTag*(model: Model, tagId: TagId, columnId: ColumnId): uint32 =
   if not model.columnsByTag.hasKey(tagId):
     return 0
   for idx, candidate in model.columnsByTag[tagId]:
@@ -186,14 +181,13 @@ proc columnIndexForTag*(
   0
 
 proc placementForWindowOnTag*(
-    model: Model; tagId: TagId; winId: WindowId): Option[WindowPlacement] =
+    model: Model, tagId: TagId, winId: WindowId
+): Option[WindowPlacement] =
   let key = (tagId, winId)
   let placement = model.placementByTagWindow.getOrDefault(
     key,
-    WindowPlacement(
-      tagId: NullTagId,
-      windowId: NullWindowId,
-      columnId: NullColumnId))
+    WindowPlacement(tagId: NullTagId, windowId: NullWindowId, columnId: NullColumnId),
+  )
   if placement.windowId == NullWindowId:
     return none(WindowPlacement)
   some(placement)
@@ -219,7 +213,7 @@ proc activeScratchpadWindow*(model: Model): WindowId =
 proc scratchpadWindowCount*(model: Model): int =
   model.scratchpadWindows.len
 
-proc namedScratchpadWindow*(model: Model; name: string): WindowId =
+proc namedScratchpadWindow*(model: Model, name: string): WindowId =
   model.namedScratchpads.getOrDefault(name, NullWindowId)
 
 proc restoreFocusedWindowId*(model: Model): ExternalWindowId =
@@ -231,19 +225,19 @@ proc restoreFocusedWindowPending*(model: Model): bool =
 proc restoreWindowCount*(model: Model): int =
   model.restoreWindows.len
 
-proc restoreTag*(model: Model; slot: uint32): Option[RestoredTagData] =
+proc restoreTag*(model: Model, slot: uint32): Option[RestoredTagData] =
   if not model.restoreTags.hasKey(slot):
     return none(RestoredTagData)
   some(model.restoreTags[slot])
 
 proc restoreWindow*(
-    model: Model; externalId: ExternalWindowId): Option[RestoredWindowData] =
+    model: Model, externalId: ExternalWindowId
+): Option[RestoredWindowData] =
   if not model.restoreWindows.hasKey(externalId):
     return none(RestoredWindowData)
   some(model.restoreWindows[externalId])
 
-proc restoredScratchpadContains*(
-    model: Model; externalId: ExternalWindowId): bool =
+proc restoredScratchpadContains*(model: Model, externalId: ExternalWindowId): bool =
   if model.restoreScratchpadWindows.find(externalId) != -1:
     return true
   for _, scratchpadWin in model.restoreNamedScratchpadsWithId():
@@ -258,7 +252,8 @@ proc restoreScratchpadVisible*(model: Model): bool =
   model.restoreIsScratchpadVisible
 
 proc findRestoredWindowByIdentity*(
-    model: Model; appId, title, identifier: string): ExternalWindowId =
+    model: Model, appId, title, identifier: string
+): ExternalWindowId =
   if identifier.len > 0:
     for externalId, restored in model.restoreWindowsWithId():
       if restored.identifier.len > 0 and restored.identifier == identifier:
@@ -268,8 +263,8 @@ proc findRestoredWindowByIdentity*(
   var matches = 0
   if appId.len > 0 and title.len > 0:
     for externalId, restored in model.restoreWindowsWithId():
-      if restored.appId.len > 0 and restored.title.len > 0 and
-          restored.appId == appId and restored.title == title:
+      if restored.appId.len > 0 and restored.title.len > 0 and restored.appId == appId and
+          restored.title == title:
         matched = externalId
         inc matches
     if matches == 1:
@@ -291,18 +286,22 @@ proc sortedWindowIdsByExternal*(model: Model): seq[WindowId] =
   for winId, win in model.windowsWithId():
     result.add(winId)
     externalByWindow[winId] = win.externalId
-  result.sort(proc(a, b: WindowId): int =
-    cmp(uint32(externalByWindow[a]), uint32(externalByWindow[b])))
+  result.sort(
+    proc(a, b: WindowId): int =
+      cmp(uint32(externalByWindow[a]), uint32(externalByWindow[b]))
+  )
 
 proc sortedOutputIdsByExternal*(model: Model): seq[OutputId] =
   var externalByOutput: Table[OutputId, ExternalOutputId]
   for outputId, output in model.outputsWithId():
     result.add(outputId)
     externalByOutput[outputId] = output.externalId
-  result.sort(proc(a, b: OutputId): int =
-    cmp(uint32(externalByOutput[a]), uint32(externalByOutput[b])))
+  result.sort(
+    proc(a, b: OutputId): int =
+      cmp(uint32(externalByOutput[a]), uint32(externalByOutput[b]))
+  )
 
-proc shellOutputName*(model: Model; outputId: OutputId): string =
+proc shellOutputName*(model: Model, outputId: OutputId): string =
   if outputId != NullOutputId:
     let outputOpt = model.outputData(outputId)
     if outputOpt.isNone:
@@ -314,23 +313,24 @@ proc shellOutputName*(model: Model; outputId: OutputId): string =
       return "river-" & $uint32(output.externalId)
   "triad-0"
 
-proc workspaceOutput*(model: Model; tagId: TagId): OutputId =
+proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
   result = model.primaryOutput
   for outputId, outputTag in model.outputTagsWithId():
     if outputTag == tagId:
       return outputId
 
-proc shellWorkspaceOutputName*(model: Model; tagId: TagId): string =
+proc shellWorkspaceOutputName*(model: Model, tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))
 
-proc viewportRetargetRequested*(model: Model; tagId: TagId): bool =
+proc viewportRetargetRequested*(model: Model, tagId: TagId): bool =
   model.viewportRetargetTags.contains(tagId)
 
-proc viewportSnapRequested*(model: Model; tagId: TagId): bool =
+proc viewportSnapRequested*(model: Model, tagId: TagId): bool =
   model.viewportSnapTags.contains(tagId)
 
-proc windowPositionOnTag*(model: Model; tagId: TagId; winId: WindowId):
-    tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =
+proc windowPositionOnTag*(
+    model: Model, tagId: TagId, winId: WindowId
+): tuple[found: bool, tagId: TagId, slot, colIdx, winIdx: uint32] =
   if tagId == NullTagId:
     return (false, NullTagId, 0'u32, 0'u32, 0'u32)
   let tagOpt = model.tagData(tagId)
@@ -347,11 +347,12 @@ proc windowPositionOnTag*(model: Model; tagId: TagId; winId: WindowId):
     tagId,
     tagOpt.get().slot,
     model.columnIndexForTag(tagId, placement.columnId),
-    placement.windowIdx
+    placement.windowIdx,
   )
 
-proc firstWindowPosition*(model: Model; winId: WindowId):
-    tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =
+proc firstWindowPosition*(
+    model: Model, winId: WindowId
+): tuple[found: bool, tagId: TagId, slot, colIdx, winIdx: uint32] =
   let activePosition = model.windowPositionOnTag(model.activeTag, winId)
   if activePosition.found:
     return activePosition

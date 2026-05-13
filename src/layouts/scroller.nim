@@ -1,18 +1,21 @@
 import std/tables
 import ../types/runtime_values
 
-proc clampProportion(value: float32; lo = 0.05'f32; hi = 1.0'f32): float32 =
+proc clampProportion(value: float32, lo = 0.05'f32, hi = 1.0'f32): float32 =
   clamp(value, lo, hi)
 
 proc effectiveColumnProportion(col: Column): float32 =
-  if col.isFullWidth:
-    1.0'f32
-  else:
-    col.widthProportion
+  if col.isFullWidth: 1.0'f32 else: col.widthProportion
 
-proc layoutScroller*(tag: var TagState; windows: Table[WindowId, WindowData]; screen: Rect; outerGap, innerGap: int32;
-                    focusCenter: bool; preferCenter: bool;
-                        centerMode: string): seq[RenderInstruction] =
+proc layoutScroller*(
+    tag: var TagState,
+    windows: Table[WindowId, WindowData],
+    screen: Rect,
+    outerGap, innerGap: int32,
+    focusCenter: bool,
+    preferCenter: bool,
+    centerMode: string,
+): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
 
   if tag.columns.len == 0:
@@ -32,16 +35,16 @@ proc layoutScroller*(tag: var TagState; windows: Table[WindowId, WindowData]; sc
     if col.windows.contains(tag.focusedWindow):
       focusedColIdx = i
 
-    let colWidth = int32(float32(usableWidth) * clampProportion(
-        col.effectiveColumnProportion()))
+    let colWidth =
+      int32(float32(usableWidth) * clampProportion(col.effectiveColumnProportion()))
     virtualX.add(totalVirtualWidth)
     totalVirtualWidth += colWidth
 
   # Calculate target offset for centering
   if focusedColIdx != -1:
     let col = tag.columns[focusedColIdx]
-    let colWidth = int32(float32(usableWidth) * clampProportion(
-        col.effectiveColumnProportion()))
+    let colWidth =
+      int32(float32(usableWidth) * clampProportion(col.effectiveColumnProportion()))
     let colCenterX = virtualX[focusedColIdx] + (colWidth div 2)
     let screenCenterX = usableWidth div 2
 
@@ -59,8 +62,11 @@ proc layoutScroller*(tag: var TagState; windows: Table[WindowId, WindowData]; sc
 
   # Final coordinate mapping
   for i, col in tag.columns:
-    let colWidth = max(0'i32, int32(float32(usableWidth) * clampProportion(
-        col.effectiveColumnProportion())) - safeInnerGap)
+    let colWidth = max(
+      0'i32,
+      int32(float32(usableWidth) * clampProportion(col.effectiveColumnProportion())) -
+        safeInnerGap,
+    )
     let currentX = screen.x + safeOuterGap + virtualX[i] - int32(renderOffset)
 
     if col.windows.len == 0:
@@ -84,28 +90,34 @@ proc layoutScroller*(tag: var TagState; windows: Table[WindowId, WindowData]; sc
 
     for winId in col.windows:
       # Vertical stacking within the column
-      let winProp = if windows.hasKey(winId): clampProportion(windows[
-          winId].heightProportion) else: 1.0'f32
-      let winHeight = max(0'i32, int32(float32(usableColHeight) * (winProp /
-          totalHeightProp)))
+      let winProp =
+        if windows.hasKey(winId):
+          clampProportion(windows[winId].heightProportion)
+        else:
+          1.0'f32
+      let winHeight =
+        max(0'i32, int32(float32(usableColHeight) * (winProp / totalHeightProp)))
 
-      instructions.add(RenderInstruction(
-        windowId: winId,
-        geom: Rect(
-          x: currentX,
-          y: currentY,
-          w: colWidth,
-          h: winHeight
+      instructions.add(
+        RenderInstruction(
+          windowId: winId,
+          geom: Rect(x: currentX, y: currentY, w: colWidth, h: winHeight),
         )
-      ))
+      )
 
       currentY += winHeight + safeInnerGap
 
   return instructions
 
-proc layoutVerticalScroller*(tag: var TagState; windows: Table[WindowId, WindowData]; screen: Rect; outerGap, innerGap: int32;
-                            focusCenter: bool; preferCenter: bool;
-                                centerMode: string): seq[RenderInstruction] =
+proc layoutVerticalScroller*(
+    tag: var TagState,
+    windows: Table[WindowId, WindowData],
+    screen: Rect,
+    outerGap, innerGap: int32,
+    focusCenter: bool,
+    preferCenter: bool,
+    centerMode: string,
+): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
 
   if tag.columns.len == 0:
@@ -125,15 +137,17 @@ proc layoutVerticalScroller*(tag: var TagState; windows: Table[WindowId, WindowD
     if col.windows.contains(tag.focusedWindow):
       focusedColIdx = i
 
-    let colHeight = int32(float32(usableHeight) * clampProportion(
-        col.effectiveColumnProportion()))
+    let colHeight =
+      int32(float32(usableHeight) * clampProportion(col.effectiveColumnProportion()))
     virtualY.add(totalVirtualHeight)
     totalVirtualHeight += colHeight + safeInnerGap
 
   # Calculate target offset for centering
   if focusedColIdx != -1:
-    let colHeight = int32(float32(usableHeight) * clampProportion(
-        tag.columns[focusedColIdx].effectiveColumnProportion()))
+    let colHeight = int32(
+      float32(usableHeight) *
+        clampProportion(tag.columns[focusedColIdx].effectiveColumnProportion())
+    )
     let colCenterY = virtualY[focusedColIdx] + (colHeight div 2)
     let screenCenterY = usableHeight div 2
 
@@ -150,8 +164,11 @@ proc layoutVerticalScroller*(tag: var TagState; windows: Table[WindowId, WindowD
 
   # Final coordinate mapping
   for i, col in tag.columns:
-    let colHeight = max(0'i32, int32(float32(usableHeight) * clampProportion(
-        col.effectiveColumnProportion())) - safeInnerGap)
+    let colHeight = max(
+      0'i32,
+      int32(float32(usableHeight) * clampProportion(col.effectiveColumnProportion())) -
+        safeInnerGap,
+    )
     let currentY = screen.y + safeOuterGap + virtualY[i] - int32(renderOffset)
 
     if col.windows.len == 0:
@@ -175,20 +192,20 @@ proc layoutVerticalScroller*(tag: var TagState; windows: Table[WindowId, WindowD
 
     for winId in col.windows:
       # Horizontal stacking within the row
-      let winProp = if windows.hasKey(winId): clampProportion(windows[
-          winId].widthProportion) else: 1.0'f32
-      let winWidth = max(0'i32, int32(float32(usableColWidth) * (winProp /
-          totalWidthProp)))
+      let winProp =
+        if windows.hasKey(winId):
+          clampProportion(windows[winId].widthProportion)
+        else:
+          1.0'f32
+      let winWidth =
+        max(0'i32, int32(float32(usableColWidth) * (winProp / totalWidthProp)))
 
-      instructions.add(RenderInstruction(
-        windowId: winId,
-        geom: Rect(
-          x: currentX,
-          y: currentY,
-          w: winWidth,
-          h: colHeight
+      instructions.add(
+        RenderInstruction(
+          windowId: winId,
+          geom: Rect(x: currentX, y: currentY, w: winWidth, h: colHeight),
         )
-      ))
+      )
 
       currentX += winWidth + safeInnerGap
 

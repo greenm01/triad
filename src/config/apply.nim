@@ -18,17 +18,13 @@ proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
     floating: rule.floating,
     dialogViewportJump: rule.dialogViewportJump,
     keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
-    forcedLayout: rule.forcedLayout
+    forcedLayout: rule.forcedLayout,
   )
 
 proc tagRuleData(rule: rv.TagRule): TagRuleData =
-  TagRuleData(
-    slot: rule.tagId,
-    name: rule.name,
-    defaultLayout: rule.defaultLayout
-  )
+  TagRuleData(slot: rule.tagId, name: rule.name, defaultLayout: rule.defaultLayout)
 
-proc applyConfig*(model: var Model; config: Config) =
+proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
   model.focusedBorderColor = config.layout.focusedBorderColor
@@ -38,21 +34,17 @@ proc applyConfig*(model: var Model; config: Config) =
   model.innerGaps = model.outerGaps div 2
   model.centerFocusedColumn =
     runtimeCenterFocusedColumn(config.layout.centerFocusedColumn)
-  model.defaultColumnWidth =
-    configClampF32(config.layout.defaultColumnWidth, 0.05, 1.0)
-  model.defaultWindowWidth =
-    configClampF32(config.layout.defaultWindowWidth, 0.05, 1.0)
+  model.defaultColumnWidth = configClampF32(config.layout.defaultColumnWidth, 0.05, 1.0)
+  model.defaultWindowWidth = configClampF32(config.layout.defaultWindowWidth, 0.05, 1.0)
   model.defaultWindowHeight =
     configClampF32(config.layout.defaultWindowHeight, 0.05, 1.0)
   model.defaultMasterCount = max(1, config.layout.defaultMasterCount)
   model.defaultMasterRatio =
     configClampF32(config.layout.defaultMasterRatio, 0.05, 0.95)
   model.enableAnimations = config.layout.enableAnimations
-  model.animationSpeed =
-    configClampF32(config.layout.animationSpeed, 0.0, 1.0)
+  model.animationSpeed = configClampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.smartGaps = config.layout.smartGaps
-  model.defaultWorkspaceCount =
-    runtimeWorkspaceCount(config.workspaces.defaultCount)
+  model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
 
   model.tagRules = @[]
   for rule in config.tagRules:
@@ -62,8 +54,7 @@ proc applyConfig*(model: var Model; config: Config) =
     model.windowRules.add(rule.windowRuleData())
 
   for winId, win in model.windowsWithId():
-    let inhibited =
-      model.windowKeyboardShortcutsInhibit(win.appId, win.title)
+    let inhibited = model.windowKeyboardShortcutsInhibit(win.appId, win.title)
     discard model.setWindowKeyboardShortcutsInhibit(winId, inhibited, false)
 
   model.startupCommands = config.startupCommands
@@ -79,8 +70,7 @@ proc applyConfig*(model: var Model; config: Config) =
   if model.screenshot.captureCommand.strip().len == 0:
     model.screenshot.captureCommand = DefaultScreenshotCaptureCommand
   if model.screenshot.regionSelectorCommand.strip().len == 0:
-    model.screenshot.regionSelectorCommand =
-      DefaultScreenshotRegionSelectorCommand
+    model.screenshot.regionSelectorCommand = DefaultScreenshotRegionSelectorCommand
   if model.screenshot.clipboardCommand.strip().len == 0:
     model.screenshot.clipboardCommand = DefaultScreenshotClipboardCommand
 
@@ -96,10 +86,8 @@ proc applyConfig*(model: var Model; config: Config) =
   model.floatingMinHeight = config.floating.minHeight
   model.screenLockCommand = config.screenLock.command
   model.windowMenuCommand = config.windowMenu.command
-  model.scratchpadWidthRatio =
-    configClampF32(config.scratchpad.widthRatio, 0.1, 1.0)
-  model.scratchpadHeightRatio =
-    configClampF32(config.scratchpad.heightRatio, 0.1, 1.0)
+  model.scratchpadWidthRatio = configClampF32(config.scratchpad.widthRatio, 0.1, 1.0)
+  model.scratchpadHeightRatio = configClampF32(config.scratchpad.heightRatio, 0.1, 1.0)
   model.cursor = config.cursor
   model.hotkeyOverlay = config.hotkeyOverlay
   model.presentationMode = config.presentationMode
@@ -117,8 +105,7 @@ proc applyConfig*(model: var Model; config: Config) =
     let tagOpt = model.tagData(tagId)
     if tagOpt.isSome and slot <= model.defaultWorkspaceCount and
         tagOpt.get().focusedWindow == NullWindowId and
-        model.columnCountForTag(tagId) == 0 and
-        not model.tagHasLiveWindows(tagId):
+        model.columnCountForTag(tagId) == 0 and not model.tagHasLiveWindows(tagId):
       discard model.setTagMasterCount(tagId, model.defaultMasterCount)
       discard model.setTagMasterRatio(tagId, model.defaultMasterRatio)
     let tagRule = model.tagRuleForSlot(slot)

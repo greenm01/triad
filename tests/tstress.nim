@@ -26,15 +26,15 @@ proc next(rng: var FuzzRng): uint64 =
   rng.state = x
   x
 
-proc pick(rng: var FuzzRng; upperExclusive: int): int =
+proc pick(rng: var FuzzRng, upperExclusive: int): int =
   if upperExclusive <= 0:
     return 0
   int(rng.next() mod uint64(upperExclusive))
 
-proc chance(rng: var FuzzRng; numerator, denominator: int): bool =
+proc chance(rng: var FuzzRng, numerator, denominator: int): bool =
   rng.pick(denominator) < numerator
 
-proc parseUIntEnv(name: string; fallback: uint64): uint64 =
+proc parseUIntEnv(name: string, fallback: uint64): uint64 =
   let value = getEnv(name, "")
   if value.len == 0:
     return fallback
@@ -47,34 +47,35 @@ proc parseUIntEnv(name: string; fallback: uint64): uint64 =
   fallback
 
 proc baseModel(): Model =
-  initRuntimeStateFromConfig(Config(
-    layout: LayoutConfig(
-      gaps: 10,
-      defaultColumnWidth: 0.6,
-      defaultWindowWidth: 0.8,
-      defaultWindowHeight: 0.7,
-      enableAnimations: true,
-      animationSpeed: 0.2,
-      layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid, LayoutMode.Deck,
-          LayoutMode.Monocle]),
-    workspaces: WorkspaceConfig(defaultCount: 4))).model
+  initRuntimeStateFromConfig(
+    Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.6,
+        defaultWindowWidth: 0.8,
+        defaultWindowHeight: 0.7,
+        enableAnimations: true,
+        animationSpeed: 0.2,
+        layoutCycle:
+          @[LayoutMode.Scroller, LayoutMode.Grid, LayoutMode.Deck, LayoutMode.Monocle],
+      ),
+      workspaces: WorkspaceConfig(defaultCount: 4),
+    )
+  ).model
 
 proc modelSummary(model: Model): string =
   let snapshot = model.shellSnapshot()
-  "activeTag=" & $snapshot.activeTag &
-    " workspaces=" & $snapshot.workspaces.len &
-    " windows=" & $snapshot.windows.len &
-    " overview=" & $snapshot.overviewActive
+  "activeTag=" & $snapshot.activeTag & " workspaces=" & $snapshot.workspaces.len &
+    " windows=" & $snapshot.windows.len & " overview=" & $snapshot.overviewActive
 
-proc fail(ctx: FuzzContext; model: Model; msg: string) =
-  raise newException(AssertionDefect,
-    "stress failure: " & msg &
-    " seed=" & $ctx.seed &
-    " step=" & $ctx.step &
-    " op=" & ctx.op &
-    " " & model.modelSummary())
+proc fail(ctx: FuzzContext, model: Model, msg: string) =
+  raise newException(
+    AssertionDefect,
+    "stress failure: " & msg & " seed=" & $ctx.seed & " step=" & $ctx.step & " op=" &
+      ctx.op & " " & model.modelSummary(),
+  )
 
-proc require(ctx: FuzzContext; model: Model; cond: bool; msg: string) =
+proc require(ctx: FuzzContext, model: Model, cond: bool, msg: string) =
   if not cond:
     fail(ctx, model, msg)
 
@@ -83,56 +84,62 @@ proc existingWindows(model: Model): seq[WindowId] =
     result.add(win.id)
   result.sort()
 
-proc chooseWindow(rng: var FuzzRng; model: Model): WindowId =
+proc chooseWindow(rng: var FuzzRng, model: Model): WindowId =
   let wins = model.existingWindows()
   if wins.len > 0 and rng.chance(3, 4):
     wins[rng.pick(wins.len)]
   else:
     WindowId(1 + rng.pick(96))
 
-proc chooseDelta(rng: var FuzzRng; magnitude = 40): int32 =
+proc chooseDelta(rng: var FuzzRng, magnitude = 40): int32 =
   int32(rng.pick(magnitude * 2 + 1) - magnitude)
 
 proc chooseLayout(rng: var FuzzRng): LayoutMode =
   LayoutMode(rng.pick(ord(high(LayoutMode)) + 1))
 
-proc generatedMsg(
-    rng: var FuzzRng; model: Model; nextWindow: var WindowId): Msg =
+proc generatedMsg(rng: var FuzzRng, model: Model, nextWindow: var WindowId): Msg =
   case rng.pick(42)
   of 0:
     result = Msg(
       kind: MsgKind.WlWindowCreated,
       windowId: nextWindow,
       appId: "app-" & $nextWindow,
-      title: "window-" & $nextWindow)
+      title: "window-" & $nextWindow,
+    )
     inc nextWindow
   of 1:
-    result = Msg(kind: MsgKind.WlWindowDestroyed,
-      destroyedId: rng.chooseWindow(model))
+    result = Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: rng.chooseWindow(model))
   of 2:
-    result = Msg(kind: MsgKind.WlFocusChanged,
-      newFocusedId: rng.chooseWindow(model))
+    result = Msg(kind: MsgKind.WlFocusChanged, newFocusedId: rng.chooseWindow(model))
   of 3:
-    result = Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: uint32(1 + rng.pick(6)))
+    result =
+      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: uint32(1 + rng.pick(6)))
   of 4:
-    result = Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: uint32(1 + rng.pick(6)))
+    result = Msg(
+      kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: uint32(1 + rng.pick(6))
+    )
   of 5:
-    result = Msg(kind: MsgKind.CmdSetLayout, newLayout: rng.chooseLayout(),
-      layoutTargetTag: uint32(rng.pick(5)))
+    result = Msg(
+      kind: MsgKind.CmdSetLayout,
+      newLayout: rng.chooseLayout(),
+      layoutTargetTag: uint32(rng.pick(5)),
+    )
   of 6:
     result = Msg(kind: MsgKind.CmdToggleFloating)
   of 7:
     result = Msg(kind: MsgKind.CmdToggleFullscreen)
   of 8:
-    result = Msg(kind: MsgKind.CmdMoveFloating,
+    result = Msg(
+      kind: MsgKind.CmdMoveFloating,
       moveDX: rng.chooseDelta(),
-      moveDY: rng.chooseDelta())
+      moveDY: rng.chooseDelta(),
+    )
   of 9:
-    result = Msg(kind: MsgKind.CmdResizeFloating,
+    result = Msg(
+      kind: MsgKind.CmdResizeFloating,
       deltaFW: rng.chooseDelta(),
-      deltaFH: rng.chooseDelta())
+      deltaFH: rng.chooseDelta(),
+    )
   of 10:
     result = Msg(kind: MsgKind.CmdMoveWindowLeft)
   of 11:
@@ -150,18 +157,22 @@ proc generatedMsg(
   of 17:
     result = Msg(kind: MsgKind.CmdAdjustGaps, deltaG: rng.chooseDelta(8))
   of 18:
-    result = Msg(kind: MsgKind.WlOutputDimensions,
+    result = Msg(
+      kind: MsgKind.WlOutputDimensions,
       outputId: uint32(1 + rng.pick(3)),
       width: int32(640 + rng.pick(1920)),
-      height: int32(480 + rng.pick(1080)))
+      height: int32(480 + rng.pick(1080)),
+    )
   of 19:
-    result = Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: uint32(1 +
-        rng.pick(3)))
+    result =
+      Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: uint32(1 + rng.pick(3)))
   of 20:
-    result = Msg(kind: MsgKind.WlWindowDimensions,
+    result = Msg(
+      kind: MsgKind.WlWindowDimensions,
       dimensionsWindowId: rng.chooseWindow(model),
       actualWidth: int32(rng.pick(2000)),
-      actualHeight: int32(rng.pick(1200)))
+      actualHeight: int32(rng.pick(1200)),
+    )
   of 21:
     result = Msg(kind: MsgKind.CmdFocusNext)
   of 22:
@@ -183,8 +194,8 @@ proc generatedMsg(
   of 30:
     result = Msg(kind: MsgKind.CmdMoveWindowDownOrToWorkspaceDown)
   of 31:
-    result = Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: rng.chooseWindow(model))
+    result =
+      Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: rng.chooseWindow(model))
   of 32:
     result = Msg(kind: MsgKind.CmdOpenOverview)
   of 33:
@@ -192,26 +203,36 @@ proc generatedMsg(
   of 34:
     result = Msg(kind: MsgKind.CmdSelectWindow)
   of 35:
-    result = Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: rng.chooseWindow(model))
+    result = Msg(
+      kind: MsgKind.WlWindowMaximizeRequested,
+      maximizeRequestId: rng.chooseWindow(model),
+    )
   of 36:
-    result = Msg(kind: MsgKind.WlWindowUnmaximizeRequested,
-      unmaximizeRequestId: rng.chooseWindow(model))
+    result = Msg(
+      kind: MsgKind.WlWindowUnmaximizeRequested,
+      unmaximizeRequestId: rng.chooseWindow(model),
+    )
   of 37:
-    result = Msg(kind: MsgKind.WlWindowMinimizeRequested,
-      minimizeRequestId: rng.chooseWindow(model))
+    result = Msg(
+      kind: MsgKind.WlWindowMinimizeRequested,
+      minimizeRequestId: rng.chooseWindow(model),
+    )
   of 38:
     result = Msg(kind: MsgKind.CmdToggleMaximized)
   of 39:
-    result = Msg(kind: MsgKind.CmdToggleFullscreenById,
-      fullscreenWindowId: rng.chooseWindow(model))
+    result = Msg(
+      kind: MsgKind.CmdToggleFullscreenById, fullscreenWindowId: rng.chooseWindow(model)
+    )
   of 40:
-    result = Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.TGMix,
-      layoutTargetTag: uint32(rng.pick(7)))
+    result = Msg(
+      kind: MsgKind.CmdSetLayout,
+      newLayout: LayoutMode.TGMix,
+      layoutTargetTag: uint32(rng.pick(7)),
+    )
   else:
     result = Msg(kind: MsgKind.CmdTick)
 
-proc checkInvariants(ctx: FuzzContext; model: Model) =
+proc checkInvariants(ctx: FuzzContext, model: Model) =
   let report = model.validateInvariants()
   if not report.ok:
     var errors: seq[string]
@@ -221,7 +242,8 @@ proc checkInvariants(ctx: FuzzContext; model: Model) =
 
   try:
     model.requireTagShellSemantics(
-      "stress seed=" & $ctx.seed & " step=" & $ctx.step & " op=" & ctx.op)
+      "stress seed=" & $ctx.seed & " step=" & $ctx.step & " op=" & ctx.op
+    )
   except AssertionDefect as e:
     fail(ctx, model, e.msg)
 

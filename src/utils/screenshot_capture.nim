@@ -17,8 +17,7 @@ proc expandUserPath*(path: string): string =
     return homeDirPath() / path[2 .. ^1]
   path
 
-proc screenshotPathOrDefault*(path: string;
-    config: ScreenshotConfig): string =
+proc screenshotPathOrDefault*(path: string, config: ScreenshotConfig): string =
   if path.len > 0:
     return expandUserPath(path)
   let dir =
@@ -42,22 +41,23 @@ proc screenshotTempPath*(config: ScreenshotConfig): string =
   getTempDir() / (prefix & "-clipboard-" & $getTime().toUnix() & ".png")
 
 proc geometryArg*(rect: Rect): string =
-  $rect.x & "," & $rect.y & " " & $max(1'i32, rect.w) & "x" &
-    $max(1'i32, rect.h)
+  $rect.x & "," & $rect.y & " " & $max(1'i32, rect.w) & "x" & $max(1'i32, rect.h)
 
-proc screenshotPointerEnabled*(mode: ScreenshotPointerMode;
-    config: ScreenshotConfig): bool =
+proc screenshotPointerEnabled*(
+    mode: ScreenshotPointerMode, config: ScreenshotConfig
+): bool =
   case mode
-  of ScreenshotPointerMode.PointerShow:
-    true
-  of ScreenshotPointerMode.PointerHide:
-    false
-  of ScreenshotPointerMode.PointerDefault:
-    config.showPointer
+  of ScreenshotPointerMode.PointerShow: true
+  of ScreenshotPointerMode.PointerHide: false
+  of ScreenshotPointerMode.PointerDefault: config.showPointer
 
-proc screenshotCaptureCommand*(kind: ScreenshotKind; path: string;
-    config: ScreenshotConfig; screenRect, windowRect: Rect;
-    pointerMode: ScreenshotPointerMode): string =
+proc screenshotCaptureCommand*(
+    kind: ScreenshotKind,
+    path: string,
+    config: ScreenshotConfig,
+    screenRect, windowRect: Rect,
+    pointerMode: ScreenshotPointerMode,
+): string =
   let captureCommand =
     if config.captureCommand.strip().len > 0:
       config.captureCommand.strip()
@@ -68,22 +68,20 @@ proc screenshotCaptureCommand*(kind: ScreenshotKind; path: string;
       config.regionSelectorCommand.strip()
     else:
       DefaultScreenshotRegionSelectorCommand
-  let pointerFlag =
-    if screenshotPointerEnabled(pointerMode, config): " -c" else: ""
+  let pointerFlag = if screenshotPointerEnabled(pointerMode, config): " -c" else: ""
 
   case kind
   of ScreenshotKind.ShotRegion:
-    captureCommand & pointerFlag & " -g \"$(" & regionSelectorCommand &
-      ")\" " & shellQuote(path)
+    captureCommand & pointerFlag & " -g \"$(" & regionSelectorCommand & ")\" " &
+      shellQuote(path)
   of ScreenshotKind.ShotScreen:
-    captureCommand & pointerFlag & " -g " & shellQuote(geometryArg(
-      screenRect)) & " " & shellQuote(path)
+    captureCommand & pointerFlag & " -g " & shellQuote(geometryArg(screenRect)) & " " &
+      shellQuote(path)
   of ScreenshotKind.ShotWindow:
-    captureCommand & pointerFlag & " -g " & shellQuote(geometryArg(
-      windowRect)) & " " & shellQuote(path)
+    captureCommand & pointerFlag & " -g " & shellQuote(geometryArg(windowRect)) & " " &
+      shellQuote(path)
 
-proc screenshotClipboardCommand*(path: string;
-    config: ScreenshotConfig): string =
+proc screenshotClipboardCommand*(path: string, config: ScreenshotConfig): string =
   let clipboardCommand =
     if config.clipboardCommand.strip().len > 0:
       config.clipboardCommand.strip()
@@ -91,15 +89,13 @@ proc screenshotClipboardCommand*(path: string;
       DefaultScreenshotClipboardCommand
   clipboardCommand & " < " & shellQuote(path)
 
-proc runShellCommandAsync*(command: string; pollMs = 50): Future[int]
-    {.async.} =
+proc runShellCommandAsync*(command: string, pollMs = 50): Future[int] {.async.} =
   var process: Process
   var finished = false
   try:
     process = startProcess(
-      "sh",
-      args = @["-c", command],
-      options = {poUsePath, poParentStreams})
+      "sh", args = @["-c", command], options = {poUsePath, poParentStreams}
+    )
     while true:
       let code = process.peekExitCode()
       if code != -1:

@@ -2,28 +2,24 @@ import std/[options, tables]
 import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
 
-proc syncGroupCounter(model: var Model; groupId: GroupId) =
+proc syncGroupCounter(model: var Model, groupId: GroupId) =
   let rawId = uint32(groupId)
   model.nextGroupId = max(model.nextGroupId, rawId)
   model.counters.nextGroupId = max(model.counters.nextGroupId, rawId)
 
 proc allocateGroupId(model: var Model): GroupId =
-  model.counters.nextGroupId = max(
-    model.counters.nextGroupId,
-    model.nextGroupId)
+  model.counters.nextGroupId = max(model.counters.nextGroupId, model.nextGroupId)
   result = model.counters.generateGroupId()
   model.syncGroupCounter(result)
 
-proc normalizedGroupMembers(
-    model: Model; windows: openArray[WindowId]): seq[WindowId] =
+proc normalizedGroupMembers(model: Model, windows: openArray[WindowId]): seq[WindowId] =
   for winId in windows:
     if winId == NullWindowId or model.windows.entity(winId).isNone:
       continue
     if result.find(winId) == -1:
       result.add(winId)
 
-proc removeWindowFromGroup*(
-    model: var Model; groupId: GroupId; winId: WindowId): bool =
+proc removeWindowFromGroup*(model: var Model, groupId: GroupId, winId: WindowId): bool =
   let groupOpt = model.groups.entity(groupId)
   if groupOpt.isNone:
     return false
@@ -51,7 +47,7 @@ proc removeWindowFromGroup*(
     group.activeWindow = group.windows[0]
   model.groups.mEntity(groupId) = group
 
-proc removeWindowFromGroups*(model: var Model; winId: WindowId): bool =
+proc removeWindowFromGroups*(model: var Model, winId: WindowId): bool =
   let indexedGroup = model.groupByWindow.getOrDefault(winId, NullGroupId)
   if indexedGroup != NullGroupId:
     result = model.removeWindowFromGroup(indexedGroup, winId)
@@ -64,15 +60,21 @@ proc removeWindowFromGroups*(model: var Model; winId: WindowId): bool =
     if model.removeWindowFromGroup(groupId, winId):
       result = true
 
-proc addGroupWithId*(model: var Model; groupId: GroupId;
-    windows: openArray[WindowId]; activeWindow = NullWindowId): GroupId =
+proc addGroupWithId*(
+    model: var Model,
+    groupId: GroupId,
+    windows: openArray[WindowId],
+    activeWindow = NullWindowId,
+): GroupId =
   let members = model.normalizedGroupMembers(windows)
   if members.len == 0:
     return NullGroupId
 
   result =
-    if groupId == NullGroupId: model.allocateGroupId()
-    else: groupId
+    if groupId == NullGroupId:
+      model.allocateGroupId()
+    else:
+      groupId
 
   if model.groups.entity(result).isSome:
     let existing = model.groups.entity(result).get()
@@ -89,10 +91,7 @@ proc addGroupWithId*(model: var Model; groupId: GroupId;
   if active == NullWindowId or members.find(active) == -1:
     active = members[0]
 
-  let group = GroupData(
-    id: result,
-    windows: members,
-    activeWindow: active)
+  let group = GroupData(id: result, windows: members, activeWindow: active)
   if model.groups.entity(result).isSome:
     model.groups.mEntity(result) = group
   else:
@@ -103,6 +102,7 @@ proc addGroupWithId*(model: var Model; groupId: GroupId;
 
   model.syncGroupCounter(result)
 
-proc addGroup*(model: var Model; windows: openArray[WindowId];
-    activeWindow = NullWindowId): GroupId =
+proc addGroup*(
+    model: var Model, windows: openArray[WindowId], activeWindow = NullWindowId
+): GroupId =
   model.addGroupWithId(NullGroupId, windows, activeWindow)

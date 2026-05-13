@@ -1,5 +1,4 @@
-import std/[asyncdispatch, asyncnet, json, nativesockets, options, os,
-  strutils]
+import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, strutils]
 import std/posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import chronicles
 import ../core/msg
@@ -10,6 +9,7 @@ import commands, niri_compat, triad_native
 type
   IpcServer* = object
     socketPath*: string
+
   TriadSubscriber* = object
     client*: AsyncSocket
     layout*: bool
@@ -73,8 +73,9 @@ proc prepareUnixSocketPath(path: string): Future[bool] {.async.} =
     error "Failed to remove stale IPC socket", path = path, error = e.msg
     false
 
-proc recvLineLimited(client: AsyncSocket; maxBytes = MaxIpcLineBytes): Future[
-    string] {.async.} =
+proc recvLineLimited(
+    client: AsyncSocket, maxBytes = MaxIpcLineBytes
+): Future[string] {.async.} =
   var line = ""
   while line.len <= maxBytes:
     let chunk = await client.recv(1)
@@ -114,10 +115,11 @@ proc canSubscribeTriad(): bool =
   triadSubscribers.len < MaxIpcSubscribers
 
 proc startIpcServer*(
-    path: string;
-    onMsg: proc(msg: Msg) {.gcsafe.};
-    getSnapshot: proc(): ShellSnapshot {.gcsafe.} = nil;
-    getLiveRestoreJson: proc(): string {.gcsafe.} = nil) {.async.} =
+    path: string,
+    onMsg: proc(msg: Msg) {.gcsafe.},
+    getSnapshot: proc(): ShellSnapshot {.gcsafe.} = nil,
+    getLiveRestoreJson: proc(): string {.gcsafe.} = nil,
+) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     if not await prepareUnixSocketPath(path):
@@ -149,90 +151,101 @@ proc startIpcServer*(
       continue
 
     let acceptedClient = client
-    asyncCheck (proc() {.async.} =
-      let client = acceptedClient
-      var keepOpen = false
-      try:
-        while client != nil and not client.isClosed:
-          let line = await recvLineLimited(client)
-          if line == "": break
-
-          if getSnapshot != nil:
-            if line.strip() == "dump-live-restore-state":
-              if getLiveRestoreJson != nil:
-                await client.send(getLiveRestoreJson() & "\L")
-              else:
-                await client.send("""{"error":"live restore unavailable"}""" & "\L")
+    asyncCheck (
+      proc() {.async.} =
+        let client = acceptedClient
+        var keepOpen = false
+        try:
+          while client != nil and not client.isClosed:
+            let line = await recvLineLimited(client)
+            if line == "":
               break
 
-            let snapshot = getSnapshot()
-            let triad = handleTriadRequest(line, snapshot)
-            if triad.handled:
-              if (triad.subscribeLayout or triad.subscribeState) and
-                  not canSubscribeTriad():
-                await client.send("""{"ok":false,"error":"too many event-stream subscribers"}""" & "\L")
+            if getSnapshot != nil:
+              if line.strip() == "dump-live-restore-state":
+                if getLiveRestoreJson != nil:
+                  await client.send(getLiveRestoreJson() & "\L")
+                else:
+                  await client.send("""{"error":"live restore unavailable"}""" & "\L")
                 break
-              if triad.reply.len > 0:
-                await client.send(triad.reply & "\L")
-              for msg in triad.messages:
-                onMsg(msg)
-              for event in triad.initialEvents:
-                await client.send(event & "\L")
-              if triad.subscribeLayout or triad.subscribeState:
-                triadSubscribers.add(TriadSubscriber(
-                  client: client,
-                  layout: triad.subscribeLayout,
-                  state: triad.subscribeState
-                ))
-                keepOpen = true
-              break
 
-            let niri = handleNiriRequest(line, snapshot)
-            if niri.handled:
-              if niri.subscribe and not canSubscribe():
-                await client.send("""{"Err":"too many event-stream subscribers"}""" & "\L")
+              let snapshot = getSnapshot()
+              let triad = handleTriadRequest(line, snapshot)
+              if triad.handled:
+                if (triad.subscribeLayout or triad.subscribeState) and
+                    not canSubscribeTriad():
+                  await client.send(
+                    """{"ok":false,"error":"too many event-stream subscribers"}""" & "\L"
+                  )
+                  break
+                if triad.reply.len > 0:
+                  await client.send(triad.reply & "\L")
+                for msg in triad.messages:
+                  onMsg(msg)
+                for event in triad.initialEvents:
+                  await client.send(event & "\L")
+                if triad.subscribeLayout or triad.subscribeState:
+                  triadSubscribers.add(
+                    TriadSubscriber(
+                      client: client,
+                      layout: triad.subscribeLayout,
+                      state: triad.subscribeState,
+                    )
+                  )
+                  keepOpen = true
                 break
-              if niri.reply.len > 0:
-                await client.send(niri.reply & "\L")
-              for msg in niri.messages:
-                onMsg(msg)
-              for event in niri.initialEvents:
-                await client.send(event & "\L")
-              if niri.subscribe:
-                subscribers.add(client)
-                writeBehaviorEvent("niri_compat_event_stream_subscribed", %*{
-                  "path": path,
-                  "subscriber_count": subscribers.len
-                })
-                keepOpen = true
-              break
 
-          if line.strip() == "event-stream":
-            if not canSubscribe():
-              warn "Rejecting event-stream subscriber; subscriber cap reached",
+              let niri = handleNiriRequest(line, snapshot)
+              if niri.handled:
+                if niri.subscribe and not canSubscribe():
+                  await client.send(
+                    """{"Err":"too many event-stream subscribers"}""" & "\L"
+                  )
+                  break
+                if niri.reply.len > 0:
+                  await client.send(niri.reply & "\L")
+                for msg in niri.messages:
+                  onMsg(msg)
+                for event in niri.initialEvents:
+                  await client.send(event & "\L")
+                if niri.subscribe:
+                  subscribers.add(client)
+                  writeBehaviorEvent(
+                    "niri_compat_event_stream_subscribed",
+                    %*{"path": path, "subscriber_count": subscribers.len},
+                  )
+                  keepOpen = true
+                break
+
+            if line.strip() == "event-stream":
+              if not canSubscribe():
+                warn "Rejecting event-stream subscriber; subscriber cap reached",
                   cap = MaxIpcSubscribers
+                break
+              subscribers.add(client)
+              writeBehaviorEvent(
+                "niri_compat_event_stream_subscribed",
+                %*{
+                  "path": path,
+                  "subscriber_count": subscribers.len,
+                  "legacy_request": true,
+                },
+              )
+              keepOpen = true
               break
-            subscribers.add(client)
-            writeBehaviorEvent("niri_compat_event_stream_subscribed", %*{
-              "path": path,
-              "subscriber_count": subscribers.len,
-              "legacy_request": true
-            })
-            keepOpen = true
-            break
-          let parsed = parseTextCommand(line)
-          if parsed.isSome:
-            onMsg(parsed.get())
-          else:
-            warn "Unknown or invalid IPC command", command = line
-      except CatchableError as e:
-        warn "IPC client error", path = path, error = e.msg
+            let parsed = parseTextCommand(line)
+            if parsed.isSome:
+              onMsg(parsed.get())
+            else:
+              warn "Unknown or invalid IPC command", command = line
+        except CatchableError as e:
+          warn "IPC client error", path = path, error = e.msg
 
-      if client != nil and not keepOpen and not client.isClosed:
-        client.close()
+        if client != nil and not keepOpen and not client.isClosed:
+          client.close()
     )()
 
-proc sendIpcMsg*(path: string; msg: string) {.async.} =
+proc sendIpcMsg*(path: string, msg: string) {.async.} =
   let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     await client.connectUnix(path)
@@ -243,8 +256,9 @@ proc sendIpcMsg*(path: string; msg: string) {.async.} =
     raise
   client.close()
 
-proc sendIpcRequest*(path: string; msg: string; timeoutMs = 3000): Future[
-    string] {.async.} =
+proc sendIpcRequest*(
+    path: string, msg: string, timeoutMs = 3000
+): Future[string] {.async.} =
   let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     await client.connectUnix(path)
@@ -260,7 +274,7 @@ proc sendIpcRequest*(path: string; msg: string; timeoutMs = 3000): Future[
     raise
   client.close()
 
-proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
+proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
   try:
     let root = parseJson(payload)
     if root.kind != JObject:
@@ -270,8 +284,7 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
         return
       result = %*{"subscriber_count": subscriberCount}
       result["niri_event"] = %eventName
-      if eventPayload.kind == JObject and
-          eventPayload.hasKey("workspaces") and
+      if eventPayload.kind == JObject and eventPayload.hasKey("workspaces") and
           eventPayload["workspaces"].kind == JArray:
         let distribution = newJArray()
         var signatureParts: seq[string]
@@ -279,31 +292,32 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
           if workspace.kind != JObject:
             continue
           var entry = newJObject()
-          for key in ["id", "idx", "name", "is_active", "is_focused",
-              "occupied", "active_window_id"]:
+          for key in [
+            "id", "idx", "name", "is_active", "is_focused", "occupied",
+            "active_window_id",
+          ]:
             if workspace.hasKey(key):
               entry[key] = workspace[key]
           distribution.add(entry)
           let id =
-            if workspace.hasKey("id"): workspace["id"].getInt()
-            else: 0
+            if workspace.hasKey("id"):
+              workspace["id"].getInt()
+            else:
+              0
           let idx =
-            if workspace.hasKey("idx"): workspace["idx"].getInt()
-            else: 0
+            if workspace.hasKey("idx"):
+              workspace["idx"].getInt()
+            else:
+              0
           let active =
-            workspace.hasKey("is_active") and
-              workspace["is_active"].kind == JBool and
-              workspace["is_active"].getBool()
+            workspace.hasKey("is_active") and workspace["is_active"].kind == JBool and
+            workspace["is_active"].getBool()
           let occupied =
-            workspace.hasKey("occupied") and
-              workspace["occupied"].kind == JBool and
-              workspace["occupied"].getBool()
-          signatureParts.add($id & ":" & $idx & ":" & $active & ":" &
-            $occupied)
-          if workspace.kind == JObject and
-              workspace.hasKey("is_active") and
-              workspace["is_active"].kind == JBool and
-              workspace["is_active"].getBool():
+            workspace.hasKey("occupied") and workspace["occupied"].kind == JBool and
+            workspace["occupied"].getBool()
+          signatureParts.add($id & ":" & $idx & ":" & $active & ":" & $occupied)
+          if workspace.kind == JObject and workspace.hasKey("is_active") and
+              workspace["is_active"].kind == JBool and workspace["is_active"].getBool():
             if workspace.hasKey("id"):
               result["active_tag"] = workspace["id"]
             if workspace.hasKey("idx"):
@@ -311,8 +325,10 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
         result["workspace_distribution"] = distribution
         result["workspace_signature"] = %signatureParts.join("|")
       let activeTag =
-        if result.hasKey("active_tag"): result["active_tag"].getInt()
-        else: 0
+        if result.hasKey("active_tag"):
+          result["active_tag"].getInt()
+        else:
+          0
       let activeIdx =
         if result.hasKey("active_workspace_idx"):
           result["active_workspace_idx"].getInt()
@@ -323,8 +339,7 @@ proc niriBroadcastLogPayload(payload: string; subscriberCount: int): JsonNode =
           result["workspace_signature"].getStr()
         else:
           ""
-      let key = $subscriberCount & ":" & $activeTag & ":" & $activeIdx &
-        ":" & signature
+      let key = $subscriberCount & ":" & $activeTag & ":" & $activeIdx & ":" & signature
       if key == lastNiriWorkspaceBroadcastKey:
         return nil
       lastNiriWorkspaceBroadcastKey = key
@@ -341,9 +356,9 @@ proc broadcastJson*(payload: string) {.async.} =
   while i < subscribers.len:
     let client = subscribers[i]
     if client == nil or client.isClosed:
-      writeBehaviorEvent("niri_compat_event_stream_disconnected", %*{
-        "reason": "closed"
-      })
+      writeBehaviorEvent(
+        "niri_compat_event_stream_disconnected", %*{"reason": "closed"}
+      )
       subscribers.delete(i)
     else:
       try:
@@ -351,14 +366,14 @@ proc broadcastJson*(payload: string) {.async.} =
         inc i
       except CatchableError as e:
         warn "Dropping failed IPC subscriber", error = e.msg
-        writeBehaviorEvent("niri_compat_event_stream_disconnected", %*{
-          "reason": "send failed",
-          "error": e.msg
-        })
+        writeBehaviorEvent(
+          "niri_compat_event_stream_disconnected",
+          %*{"reason": "send failed", "error": e.msg},
+        )
         client.close()
         subscribers.delete(i)
 
-proc broadcastTriadJson*(payload: string; eventName: string) {.async.} =
+proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
   var i = 0
   while i < triadSubscribers.len:
     let subscriber = triadSubscribers[i]

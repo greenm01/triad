@@ -19,11 +19,13 @@ suite "River protocol coverage":
       seen[entry.event] = true
 
   test "client-facing request coverage matches advertised support":
-    check coverageFor("river_window_v1.show_window_menu_requested").state == pcsImplemented
+    check coverageFor("river_window_v1.show_window_menu_requested").state ==
+      pcsImplemented
     check coverageFor("river_window_v1.maximize_requested").state == pcsImplemented
     check coverageFor("river_window_v1.minimize_requested").state == pcsImplemented
     check coverageFor("river_window_v1.get_decoration_above").state == pcsImplemented
-    check coverageFor("river_xkb_bindings_seat_v1.ensure_next_key_eaten").state == pcsImplemented
+    check coverageFor("river_xkb_bindings_seat_v1.ensure_next_key_eaten").state ==
+      pcsImplemented
 
   test "strict protocol coverage has no request or active event gaps":
     for request in KnownRiverClientRequests:

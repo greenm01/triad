@@ -1,5 +1,4 @@
 import model
 
-type
-  TriadRuntimeState* = object
-    model*: Model
+type TriadRuntimeState* = object
+  model*: Model

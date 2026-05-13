@@ -6,11 +6,11 @@ import ../core/effects
 import ../ipc/socket
 import ../systems/daemon_view
 import ../types/runtime_values
-import live_restore_runtime, manage_requests, process_runner,
-  protocol_surface_runtime, quickshell_runner, render_runtime,
-  screenshot_runner, state
+import
+  live_restore_runtime, manage_requests, process_runner, protocol_surface_runtime,
+  quickshell_runner, render_runtime, screenshot_runner, state
 
-proc executeManageEffect*(daemon: var TriadDaemon; eff: Effect) =
+proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
   case eff.kind
   of EffectKind.EffOpStartPointer:
     if eff.opSeat != nil:
@@ -24,8 +24,8 @@ proc executeManageEffect*(daemon: var TriadDaemon; eff: Effect) =
   of EffectKind.EffSetPosition:
     if daemon.windowPointers.hasKey(eff.windowId):
       daemon.windowPointers[eff.windowId].proposeDimensions(
-        max(0'i32, eff.w),
-        max(0'i32, eff.h))
+        max(0'i32, eff.w), max(0'i32, eff.h)
+      )
   of EffectKind.EffFocusWindow:
     if not daemon.runtimeState.model.sessionLocked and
         not daemon.runtimeState.model.layerFocusExclusive and
@@ -80,7 +80,7 @@ proc executeManageEffect*(daemon: var TriadDaemon; eff: Effect) =
   else:
     discard
 
-proc queueManageEffect*(daemon: var TriadDaemon; eff: Effect) =
+proc queueManageEffect*(daemon: var TriadDaemon, eff: Effect) =
   if daemon.riverPhase == RiverPhase.RiverManage:
     daemon.executeManageEffect(eff)
   else:
@@ -95,7 +95,7 @@ proc flushPendingManageEffects*(daemon: var TriadDaemon) =
   for eff in effects:
     daemon.executeManageEffect(eff)
 
-proc executeEffect*(daemon: var TriadDaemon; eff: Effect) =
+proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   case eff.kind
   of EffectKind.EffLog:
     info "log", msg = eff.msg
@@ -115,8 +115,9 @@ proc executeEffect*(daemon: var TriadDaemon; eff: Effect) =
   of EffectKind.EffSpawnScreenLock:
     spawnScreenLock(eff.screenLockCommand)
   of EffectKind.EffSpawnWindowMenu:
-    spawnWindowMenu(eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX,
-        eff.windowMenuY)
+    spawnWindowMenu(
+      eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX, eff.windowMenuY
+    )
   of EffectKind.EffSpawn:
     spawnCommand(eff.spawnCommand)
   of EffectKind.EffPointerWarp:
@@ -137,8 +138,7 @@ proc executeEffect*(daemon: var TriadDaemon; eff: Effect) =
     let restore = daemon.writeCurrentLiveRestoreState()
     if not restore.ok:
       warn "Triad reload rejected; live restore snapshot could not be written",
-        path = restore.path,
-        error = restore.error
+        path = restore.path, error = restore.error
       return
     daemon.quickshellState.spawnPending = false
     daemon.quickshellState.releaseTrackedQuickshell("triad reload")
@@ -151,19 +151,22 @@ proc executeEffect*(daemon: var TriadDaemon; eff: Effect) =
     daemon.ensureOwnedShellSurface()
     let surfaceId = daemon.protocolSurfaceRuntime.ownedShellSurfaceId
     if surfaceId != 0:
-      daemon.queueManageEffect(Effect(
-        kind: EffectKind.EffFocusShellSurface,
-        focusShellSurfaceId: surfaceId))
+      daemon.queueManageEffect(
+        Effect(kind: EffectKind.EffFocusShellSurface, focusShellSurfaceId: surfaceId)
+      )
   of EffectKind.EffScreenshot:
     asyncCheck runScreenshotCapture(
-        addr daemon, eff.screenshotKind, eff.screenshotPath,
-        eff.screenshotPointerMode, eff.screenshotWriteToDisk,
-        eff.screenshotCopyToClipboard)
-  of EffectKind.EffOpStartPointer, EffectKind.EffOpEnd,
-      EffectKind.EffFocusWindow, EffectKind.EffFocusShellSurface,
-      EffectKind.EffCloseWindow, EffectKind.EffSetFullscreen,
-      EffectKind.EffSetMaximized, EffectKind.EffInformResizeStart,
-      EffectKind.EffInformResizeEnd:
+      addr daemon,
+      eff.screenshotKind,
+      eff.screenshotPath,
+      eff.screenshotPointerMode,
+      eff.screenshotWriteToDisk,
+      eff.screenshotCopyToClipboard,
+    )
+  of EffectKind.EffOpStartPointer, EffectKind.EffOpEnd, EffectKind.EffFocusWindow,
+      EffectKind.EffFocusShellSurface, EffectKind.EffCloseWindow,
+      EffectKind.EffSetFullscreen, EffectKind.EffSetMaximized,
+      EffectKind.EffInformResizeStart, EffectKind.EffInformResizeEnd:
     daemon.queueManageEffect(eff)
   of EffectKind.EffSetPosition:
     if daemon.riverPhase == RiverPhase.RiverRender and
@@ -175,9 +178,11 @@ proc executeEffect*(daemon: var TriadDaemon; eff: Effect) =
       if winOpt.isSome and winOpt.get().isFloating:
         node.placeTop()
     else:
-      daemon.recordDesiredPlacement(RenderInstruction(
-        windowId: eff.windowId,
-        geom: Rect(x: eff.x, y: eff.y, w: eff.w, h: eff.h)))
+      daemon.recordDesiredPlacement(
+        RenderInstruction(
+          windowId: eff.windowId, geom: Rect(x: eff.x, y: eff.y, w: eff.w, h: eff.h)
+        )
+      )
       daemon.queueManageEffect(eff)
   else:
     discard

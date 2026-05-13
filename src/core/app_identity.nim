@@ -24,7 +24,7 @@ const TerminalAliases = {
   "footclient": "foot.desktop",
   "ghostty": "com.mitchellh.ghostty.desktop",
   "kitty": "kitty.desktop",
-  "wezterm": "org.wezfurlong.wezterm.desktop"
+  "wezterm": "org.wezfurlong.wezterm.desktop",
 }.toTable
 
 var defaultIndex: Option[AppIdentityIndex]
@@ -164,8 +164,7 @@ proc parseDesktopEntry*(path, root: string): Option[DesktopEntry] =
     of "StartupWMClass":
       entry.startupWmClass = value
     of "Categories":
-      entry.categories = value.split(';').filterIt(it.strip().len > 0).mapIt(
-          it.strip())
+      entry.categories = value.split(';').filterIt(it.strip().len > 0).mapIt(it.strip())
     of "Hidden":
       hidden = value.normalizeKey() == "true"
     else:
@@ -176,23 +175,21 @@ proc parseDesktopEntry*(path, root: string): Option[DesktopEntry] =
   else:
     some(entry)
 
-proc addIfMissing(table: var Table[string, int]; key: string; idx: int) =
+proc addIfMissing(table: var Table[string, int], key: string, idx: int) =
   let normalized = key.normalizeKey()
   if normalized.len > 0 and not table.hasKey(normalized):
     table[normalized] = idx
 
-proc addEntry*(index: var AppIdentityIndex; entry: DesktopEntry) =
+proc addEntry*(index: var AppIdentityIndex, entry: DesktopEntry) =
   let idx = index.entries.len
   index.entries.add(entry)
   index.byDesktopId.addIfMissing(entry.id, idx)
   if entry.id.endsWith(".desktop"):
-    index.byDesktopId.addIfMissing(entry.id[0 ..< entry.id.len -
-        ".desktop".len], idx)
+    index.byDesktopId.addIfMissing(entry.id[0 ..< entry.id.len - ".desktop".len], idx)
   index.byExecBase.addIfMissing(entry.execBase, idx)
   index.byStartupWmClass.addIfMissing(entry.startupWmClass, idx)
 
-proc buildAppIdentityIndex*(applicationDirs: openArray[
-    string]): AppIdentityIndex =
+proc buildAppIdentityIndex*(applicationDirs: openArray[string]): AppIdentityIndex =
   for dir in applicationDirs:
     if not dirExists(dir):
       continue
@@ -214,7 +211,7 @@ proc defaultAppIdentityIndex*(): AppIdentityIndex =
     defaultIndex = some(buildAppIdentityIndex(xdgApplicationDirs()))
   defaultIndex.get()
 
-proc compatAppId*(rawAppId: string; index: AppIdentityIndex): string =
+proc compatAppId*(rawAppId: string, index: AppIdentityIndex): string =
   let raw = rawAppId.strip()
   if raw.len == 0:
     return ""

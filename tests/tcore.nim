@@ -1,41 +1,52 @@
-import std/[asyncdispatch, json, options, os, sequtils, strutils, tables,
-  unittest]
+import std/[asyncdispatch, json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, render_visibility, restore_state]
 import ../src/state/engine
-import ../src/systems/[hotkey_overlay, layout_projection, popup_tree,
-  runtime_facade, update, window_lifecycle]
+import
+  ../src/systems/[
+    hotkey_overlay, layout_projection, popup_tree, runtime_facade, update,
+    window_lifecycle,
+  ]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
 import ../src/utils/[overview_hit_test, screenshot_capture]
 import tag_semantics_checks
 
 proc configuredModel(): Model =
-  initRuntimeStateFromConfig(Config(
-    layout: LayoutConfig(
-      gaps: 10,
-      defaultColumnWidth: 0.7,
-      defaultWindowWidth: 0.8,
-      defaultWindowHeight: 0.6,
-      defaultMasterCount: 2,
-      defaultMasterRatio: 0.65),
-    workspaces: WorkspaceConfig(defaultCount: 3),
-    windowRules: @[
-      WindowRule(appIdMatch: "float-me", openFloating: true),
-      WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true)
-    ])).model
+  initRuntimeStateFromConfig(
+    Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        defaultWindowWidth: 0.8,
+        defaultWindowHeight: 0.6,
+        defaultMasterCount: 2,
+        defaultMasterRatio: 0.65,
+      ),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules:
+        @[
+          WindowRule(appIdMatch: "float-me", openFloating: true),
+          WindowRule(appIdMatch: "qemu", keyboardShortcutsInhibit: true),
+        ],
+    )
+  ).model
 
 proc cameraModel(): Model =
-  initRuntimeStateFromConfig(Config(
-    layout: LayoutConfig(
-      gaps: 10,
-      defaultColumnWidth: 0.7,
-      centerFocusedColumn: "always",
-      enableAnimations: true,
-      animationSpeed: 0.5),
-    workspaces: WorkspaceConfig(defaultCount: 3))).model
+  initRuntimeStateFromConfig(
+    Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        centerFocusedColumn: "always",
+        enableAnimations: true,
+        animationSpeed: 0.5,
+      ),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+    )
+  ).model
 
-proc applyMsg(model: var Model; msg: Msg) =
+proc applyMsg(model: var Model, msg: Msg) =
   let (nextModel, _) = model.update(msg)
   model = nextModel
 
@@ -51,55 +62,57 @@ proc activeWorkspaceFocusId(model: Model): uint32 =
       return uint32(workspace.focusedWindow)
   0'u32
 
-proc updateModel(model: var Model; msg: Msg): seq[Effect] =
+proc updateModel(model: var Model, msg: Msg): seq[Effect] =
   let (nextModel, effects) = model.update(msg)
   model = nextModel
   effects
 
-proc hasFocusEffect(effects: seq[Effect]; id: uint32): bool =
-  effects.anyIt(it.kind == EffectKind.EffFocusWindow and
-    uint32(it.focusId) == id)
+proc hasFocusEffect(effects: seq[Effect], id: uint32): bool =
+  effects.anyIt(it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == id)
 
-proc hasFullscreenEffect(
-    effects: seq[Effect]; id: uint32; fullscreen: bool): bool =
-  effects.anyIt(it.kind == EffectKind.EffSetFullscreen and
-    uint32(it.fsWinId) == id and it.isFullscreen == fullscreen)
+proc hasFullscreenEffect(effects: seq[Effect], id: uint32, fullscreen: bool): bool =
+  effects.anyIt(
+    it.kind == EffectKind.EffSetFullscreen and uint32(it.fsWinId) == id and
+      it.isFullscreen == fullscreen
+  )
 
-proc hasMaximizedEffect(
-    effects: seq[Effect]; id: uint32; maximized: bool): bool =
-  effects.anyIt(it.kind == EffectKind.EffSetMaximized and
-    uint32(it.maxWinId) == id and it.isMaximized == maximized)
+proc hasMaximizedEffect(effects: seq[Effect], id: uint32, maximized: bool): bool =
+  effects.anyIt(
+    it.kind == EffectKind.EffSetMaximized and uint32(it.maxWinId) == id and
+      it.isMaximized == maximized
+  )
 
-proc viewport(model: Model; slot: uint32): ViewportState =
+proc viewport(model: Model, slot: uint32): ViewportState =
   let tagId = model.tagForSlot(slot)
   let tag = model.tagData(tagId).get()
   ViewportState(
     targetViewportXOffset: tag.targetViewportXOffset,
     currentViewportXOffset: tag.currentViewportXOffset,
     targetViewportYOffset: tag.targetViewportYOffset,
-    currentViewportYOffset: tag.currentViewportYOffset)
+    currentViewportYOffset: tag.currentViewportYOffset,
+  )
 
-proc instructionGeom(model: Model; id: uint32): runtime_values.Rect =
+proc instructionGeom(model: Model, id: uint32): runtime_values.Rect =
   let projection = model.layoutProjection()
   for instr in projection.instructions:
     if uint32(instr.windowId) == id:
       return instr.geom
   runtime_values.Rect()
 
-proc snapshotWindow(model: Model; id: uint32): ShellWindow =
+proc snapshotWindow(model: Model, id: uint32): ShellWindow =
   for win in model.shellSnapshot().windows:
     if uint32(win.id) == id:
       return win
   ShellWindow()
 
-proc restoreWindowJson(model: Model; id: uint32): JsonNode =
+proc restoreWindowJson(model: Model, id: uint32): JsonNode =
   let root = parseJson(model.liveRestoreJson())
   for node in root["windows"]:
     if node["id"].getInt() == int(id):
       return node
   newJNull()
 
-proc columnHeads(model: Model; slot: uint32): seq[uint32] =
+proc columnHeads(model: Model, slot: uint32): seq[uint32] =
   let tagId = model.tagForSlot(slot)
   for columnId, _ in model.columnsOnTagWithId(tagId):
     for winId, _ in model.windowsOnColumnWithId(columnId):
@@ -107,43 +120,59 @@ proc columnHeads(model: Model; slot: uint32): seq[uint32] =
       break
 
 proc setViewport(
-    model: var Model; slot: uint32; targetX, currentX: float32;
-    targetY = 0.0'f32; currentY = 0.0'f32) =
+    model: var Model,
+    slot: uint32,
+    targetX, currentX: float32,
+    targetY = 0.0'f32,
+    currentY = 0.0'f32,
+) =
   let tagId = model.tagForSlot(slot)
   discard model.setTagViewportTarget(tagId, targetX, targetY)
   discard model.setTagViewportCurrent(tagId, currentX, currentY)
   discard model.clearTagViewportRetarget(tagId)
 
-proc seedCameraWindows(model: var Model; count = 3'u32) =
-  model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-    width: 1000, height: 700))
+proc seedCameraWindows(model: var Model, count = 3'u32) =
+  model.applyMsg(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+  )
   for id in 1'u32 .. count:
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: id,
-      appId: "app", title: "Window " & $id))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: id,
+        appId: "app",
+        title: "Window " & $id,
+      )
+    )
 
-proc directionalModel(mode: LayoutMode; count = 5'u32): Model =
+proc directionalModel(mode: LayoutMode, count = 5'u32): Model =
   result = cameraModel()
   result.seedCameraWindows(count)
   result.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: mode))
 
-proc focusExternal(model: var Model; id: uint32) =
+proc focusExternal(model: var Model, id: uint32) =
   model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: id))
 
-proc focusDirection(model: var Model; direction: Direction): uint32 =
+proc focusDirection(model: var Model, direction: Direction): uint32 =
   model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: direction))
   model.focusedWindowId()
 
 proc restoreMatchingModel(): Model =
-  initRuntimeStateFromConfig(Config(
-    workspaces: WorkspaceConfig(defaultCount: 3),
-    windowRules: @[
-      WindowRule(appIdMatch: "generic-app", defaultTag: 2)
-    ])).model
+  initRuntimeStateFromConfig(
+    Config(
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[WindowRule(appIdMatch: "generic-app", defaultTag: 2)],
+    )
+  ).model
 
 proc addRestoredWindow(
-    restore: var PendingRestoreState; externalId: ExternalWindowId;
-    slot: uint32; appId, title: string; isMaximized = false;
-    identifier = "") =
+    restore: var PendingRestoreState,
+    externalId: ExternalWindowId,
+    slot: uint32,
+    appId, title: string,
+    isMaximized = false,
+    identifier = "",
+) =
   restore.windows[externalId] = RestoredWindowData(
     slot: slot,
     appId: appId,
@@ -151,19 +180,17 @@ proc addRestoredWindow(
     identifier: identifier,
     widthProportion: 0.8,
     heightProportion: 0.6,
-    isMaximized: isMaximized)
+    isMaximized: isMaximized,
+  )
   restore.tagByWindow[externalId] = slot
   restore.tags[slot] = RestoredTagData(
     slot: slot,
     layoutMode: LayoutMode.Scroller,
     focusedWindow: externalId,
-    columns: @[
-      RestoredColumnData(
-        windows: @[externalId],
-        widthProportion: 0.7)
-    ],
+    columns: @[RestoredColumnData(windows: @[externalId], widthProportion: 0.7)],
     masterCount: 1,
-    masterSplitRatio: 0.5)
+    masterSplitRatio: 0.5,
+  )
 
 suite "Core Runtime Logic":
   test "Triad reload command emits restart effect":
@@ -182,9 +209,8 @@ suite "Core Runtime Logic":
     check model.sessionLocked
     check model.layerFocusExclusive
 
-    let lockedEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 1))
+    let lockedEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     check model.focusedWindowId() == 2
     check lockedEffects.len == 0
 
@@ -196,20 +222,22 @@ suite "Core Runtime Logic":
 
   test "Screenshot command emits explicit capture effect":
     var model = Model()
-    let (_, effects) = model.update(Msg(
-      kind: MsgKind.CmdScreenshot,
-      screenshotKind: ScreenshotKind.ShotWindow,
-      screenshotPath: "/tmp/window.png",
-      screenshotPointerMode: ScreenshotPointerMode.PointerShow,
-      screenshotWriteToDisk: true,
-      screenshotCopyToClipboard: false))
+    let (_, effects) = model.update(
+      Msg(
+        kind: MsgKind.CmdScreenshot,
+        screenshotKind: ScreenshotKind.ShotWindow,
+        screenshotPath: "/tmp/window.png",
+        screenshotPointerMode: ScreenshotPointerMode.PointerShow,
+        screenshotWriteToDisk: true,
+        screenshotCopyToClipboard: false,
+      )
+    )
 
     check effects.len == 1
     check effects[0].kind == EffectKind.EffScreenshot
     check effects[0].screenshotKind == ScreenshotKind.ShotWindow
     check effects[0].screenshotPath == "/tmp/window.png"
-    check effects[0].screenshotPointerMode ==
-      ScreenshotPointerMode.PointerShow
+    check effects[0].screenshotPointerMode == ScreenshotPointerMode.PointerShow
     check effects[0].screenshotWriteToDisk
     check not effects[0].screenshotCopyToClipboard
 
@@ -217,40 +245,38 @@ suite "Core Runtime Logic":
     let config = ScreenshotConfig(
       captureCommand: "grim -t png",
       regionSelectorCommand: "slurp -d",
-      clipboardCommand: "wl-copy --type image/png")
+      clipboardCommand: "wl-copy --type image/png",
+    )
     let screen = runtime_values.Rect(x: 0, y: 0, w: 1920, h: 1080)
     let win = runtime_values.Rect(x: 40, y: 50, w: 800, h: 600)
 
-    check screenshotCaptureCommand(ScreenshotKind.ShotRegion,
-      "/tmp/region shot.png", config, screen, win,
-      ScreenshotPointerMode.PointerDefault) ==
-        "grim -t png -g \"$(slurp -d)\" '/tmp/region shot.png'"
-    check screenshotCaptureCommand(ScreenshotKind.ShotScreen,
-      "/tmp/screen.png", config, screen, win,
-      ScreenshotPointerMode.PointerShow) ==
-        "grim -t png -c -g '0,0 1920x1080' '/tmp/screen.png'"
-    check screenshotCaptureCommand(ScreenshotKind.ShotWindow,
-      "/tmp/window.png", config, screen, win,
-      ScreenshotPointerMode.PointerHide) ==
-        "grim -t png -g '40,50 800x600' '/tmp/window.png'"
+    check screenshotCaptureCommand(
+      ScreenshotKind.ShotRegion, "/tmp/region shot.png", config, screen, win,
+      ScreenshotPointerMode.PointerDefault,
+    ) == "grim -t png -g \"$(slurp -d)\" '/tmp/region shot.png'"
+    check screenshotCaptureCommand(
+      ScreenshotKind.ShotScreen, "/tmp/screen.png", config, screen, win,
+      ScreenshotPointerMode.PointerShow,
+    ) == "grim -t png -c -g '0,0 1920x1080' '/tmp/screen.png'"
+    check screenshotCaptureCommand(
+      ScreenshotKind.ShotWindow, "/tmp/window.png", config, screen, win,
+      ScreenshotPointerMode.PointerHide,
+    ) == "grim -t png -g '40,50 800x600' '/tmp/window.png'"
     check screenshotClipboardCommand("/tmp/window.png", config) ==
       "wl-copy --type image/png < '/tmp/window.png'"
 
   test "Screenshot paths expand home directory absolutely":
-    let home = getHomeDir().strip(leading = false, trailing = true,
-      chars = {'/'})
+    let home = getHomeDir().strip(leading = false, trailing = true, chars = {'/'})
     let config = ScreenshotConfig(
-      directory: "~/Pictures/Screenshots",
-      filenamePrefix: "screenshot")
+      directory: "~/Pictures/Screenshots", filenamePrefix: "screenshot"
+    )
     let path = screenshotPathOrDefault("", config)
 
     check expandUserPath("~") == home
     check expandUserPath("~/") == home
-    check expandUserPath("~/Pictures/Screenshots") ==
-      home / "Pictures" / "Screenshots"
+    check expandUserPath("~/Pictures/Screenshots") == home / "Pictures" / "Screenshots"
     check expandUserPath("/tmp/shot.png") == "/tmp/shot.png"
-    check path.startsWith(home / "Pictures" / "Screenshots" /
-      "screenshot-")
+    check path.startsWith(home / "Pictures" / "Screenshots" / "screenshot-")
     check not path.startsWith("home/")
 
   test "Async shell command runner yields while process runs":
@@ -270,9 +296,9 @@ suite "Core Runtime Logic":
 
   test "Targeted layout command updates requested slot only":
     var model = configuredModel()
-    let (nextModel, effects) =
-      model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck,
-        layoutTargetTag: 2))
+    let (nextModel, effects) = model.update(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck, layoutTargetTag: 2)
+    )
     let snapshot = nextModel.shellSnapshot()
 
     check snapshot.activeTag == 1
@@ -281,12 +307,16 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastTriadJson and
-      it.jsonPayload.contains("layout-state-changed"))
+        it.jsonPayload.contains("layout-state-changed")
+    )
 
   test "Hotkey overlay commands update runtime state":
-    var model = initRuntimeStateFromConfig(Config(
-      hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
+    var model = initRuntimeStateFromConfig(
+      Config(
+        hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
 
     var effects = model.updateModel(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
     check model.hotkeyOverlayOpen
@@ -306,29 +336,35 @@ suite "Core Runtime Logic":
     check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Hotkey overlay rows honor custom and hidden binding titles":
-    var model = initRuntimeStateFromConfig(Config(
-      hotkeyOverlay: HotkeyOverlayConfig(hideNotBound: true),
-      keyBindings: @[
-        KeyBindingConfig(
-          key: "Slash",
-          modifiers: 65'u32,
-          command: "toggle-hotkey-overlay",
-          hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,
-          hotkeyOverlayTitle: "Show Important Hotkeys"),
-        KeyBindingConfig(
-          key: "q",
-          modifiers: 64'u32,
-          command: "close-window",
-          hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleHidden),
-        KeyBindingConfig(
-          key: "Return",
-          modifiers: 64'u32,
-          command: "spawn-terminal")
-      ])).model
+    var model = initRuntimeStateFromConfig(
+      Config(
+        hotkeyOverlay: HotkeyOverlayConfig(hideNotBound: true),
+        keyBindings:
+          @[
+            KeyBindingConfig(
+              key: "Slash",
+              modifiers: 65'u32,
+              command: "toggle-hotkey-overlay",
+              hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,
+              hotkeyOverlayTitle: "Show Important Hotkeys",
+            ),
+            KeyBindingConfig(
+              key: "q",
+              modifiers: 64'u32,
+              command: "close-window",
+              hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleHidden,
+            ),
+            KeyBindingConfig(
+              key: "Return", modifiers: 64'u32, command: "spawn-terminal"
+            ),
+          ],
+      )
+    ).model
     let rows = model.hotkeyOverlayRows()
 
-    check rows.anyIt(it.key == "Super + Shift + /" and
-      it.label == "Show Important Hotkeys")
+    check rows.anyIt(
+      it.key == "Super + Shift + /" and it.label == "Show Important Hotkeys"
+    )
     check not rows.anyIt(it.label == "Close Focused Window")
     check rows.anyIt(it.key == "Super + Enter" and it.label == "Open Terminal")
     check not rows.anyIt(it.key == "(not bound)")
@@ -409,15 +445,14 @@ suite "Core Runtime Logic":
   test "Render visibility suppresses clipped scroller border rails":
     let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
 
-    let full = renderVisibility(
-      runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+    let full =
+      renderVisibility(runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
     check full.visible
     check not full.clipped
     check full.borderEdges == RenderAllEdges
 
     let leftClip =
-      renderVisibility(
-        runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+      renderVisibility(runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
     check leftClip.visible
     check leftClip.clipped
     check (leftClip.borderEdges and RenderEdgeLeft) == 0
@@ -433,15 +468,14 @@ suite "Core Runtime Logic":
     check leftClips.windowH == 36
 
     let sliver =
-      renderVisibility(
-        runtime_values.Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
+      renderVisibility(runtime_values.Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
     check not sliver.visible
     check sliver.borderEdges == 0
 
   test "Forced cell clipping preserves border space":
     let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
-    let cell = renderVisibility(
-      runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+    let cell =
+      renderVisibility(runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
 
     let clips = cell.renderClipBoxes(3)
     check clips.contentX == 0
@@ -453,8 +487,8 @@ suite "Core Runtime Logic":
     check clips.windowW == 46
     check clips.windowH == 36
 
-    let clipped = renderVisibility(
-      runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+    let clipped =
+      renderVisibility(runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
     let clippedBoxes = clipped.renderClipBoxes(3)
     check clippedBoxes.contentX == 20
     check clippedBoxes.contentW == 40
@@ -465,11 +499,14 @@ suite "Core Runtime Logic":
 
   test "Window lifecycle mutates state and emits shell updates":
     var model = configuredModel()
-    let (nextModel, effects) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 100,
-      appId: "firefox",
-      title: "Mozilla Firefox"))
+    let (nextModel, effects) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 100,
+        appId: "firefox",
+        title: "Mozilla Firefox",
+      )
+    )
     let snapshot = nextModel.shellSnapshot()
 
     check snapshot.windows.len == 1
@@ -479,19 +516,23 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WindowOpenedOrChanged"))
+        it.jsonPayload.contains("WindowOpenedOrChanged")
+    )
 
   test "New active-tag window focuses and retargets camera":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, appId: "app", title: "Two"))
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     discard model.layoutInstructions()
 
     check model.focusedWindowId() == 2
@@ -502,16 +543,19 @@ suite "Core Runtime Logic":
 
   test "New active-tag window records focus under layer focus":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
     discard model.updateModel(Msg(kind: MsgKind.WlLayerFocusExclusive))
 
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, appId: "app", title: "Two"))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     discard model.updateModel(Msg(kind: MsgKind.WlLayerFocusNone))
     discard model.layoutInstructions()
 
@@ -521,51 +565,65 @@ suite "Core Runtime Logic":
 
   test "Deferred admission hides unparented River window until settled":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2,
-      appId: "app",
-      title: "Two",
-      deferAdmission: true))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "app",
+        title: "Two",
+        deferAdmission: true,
+      )
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     check model.windowData(childId).get().admissionState ==
       WindowAdmissionState.PendingAdmission
     check model.focusedWindowId() == 1
-    check not model.layoutProjection().instructions.mapIt(
-      uint32(it.windowId)).contains(2'u32)
+    check not model.layoutProjection().instructions.mapIt(uint32(it.windowId)).contains(
+      2'u32
+    )
     check model.snapshotWindow(2).id == 0'u32
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowAdmissionSettled,
-      admissionWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: 2))
 
-    check model.windowData(childId).get().admissionState ==
-      WindowAdmissionState.Admitted
+    check model.windowData(childId).get().admissionState == WindowAdmissionState.Admitted
     check model.focusedWindowId() == 2
-    check model.layoutProjection().instructions.mapIt(
-      uint32(it.windowId)).contains(2'u32)
+    check model.layoutProjection().instructions.mapIt(uint32(it.windowId)).contains(
+      2'u32
+    )
 
   test "Late parent admits deferred child directly as floating popup":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2,
-      appId: "xdg-desktop-portal-gtk",
-      title: "Open Document",
-      deferAdmission: true))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+        deferAdmission: true,
+      )
+    )
 
-    check not model.layoutProjection().instructions.mapIt(
-      uint32(it.windowId)).contains(2'u32)
+    check not model.layoutProjection().instructions.mapIt(uint32(it.windowId)).contains(
+      2'u32
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowParent,
-      childWindowId: 2, parentWindowId: 1))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowParent, childWindowId: 2, parentWindowId: 1)
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     let child = model.windowData(childId).get()
@@ -579,26 +637,39 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 2
 
   test "Late parented Okular picker fits parent after deferred admission":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.4,
-        defaultWindowWidth: 0.8,
-        defaultWindowHeight: 0.6),
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "okular", title: "Document"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.4,
+          defaultWindowWidth: 0.8,
+          defaultWindowHeight: 0.6,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 1, appId: "okular", title: "Document"
+      )
+    )
     let parentGeom = model.instructionGeom(1)
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2,
-      appId: "xdg-desktop-portal-gtk",
-      title: "Open Document",
-      deferAdmission: true))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowParent,
-      childWindowId: 2, parentWindowId: 1))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+        deferAdmission: true,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowParent, childWindowId: 2, parentWindowId: 1)
+    )
 
     let childGeom = model.instructionGeom(2)
     check childGeom.w == parentGeom.w
@@ -607,22 +678,29 @@ suite "Core Runtime Logic":
 
   test "Late parent reclassifies admitted child as floating popup":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2,
-      appId: "xdg-desktop-portal-gtk",
-      title: "Open Document",
-      deferAdmission: true))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowAdmissionSettled,
-      admissionWindowId: 2))
-    check model.layoutProjection().instructions.mapIt(
-      uint32(it.windowId)).contains(2'u32)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+        deferAdmission: true,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: 2))
+    check model.layoutProjection().instructions.mapIt(uint32(it.windowId)).contains(
+      2'u32
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowParent,
-      childWindowId: 2, parentWindowId: 1))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowParent, childWindowId: 2, parentWindowId: 1)
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     let child = model.windowData(childId).get()
@@ -634,17 +712,25 @@ suite "Core Runtime Logic":
 
   test "Parented window opens floating over parent without moving camera":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
     let parentGeom = model.instructionGeom(1)
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     discard model.layoutInstructions()
 
     let childId = model.windowForExternal(ExternalWindowId(2))
@@ -664,22 +750,36 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Auto parented popup fits parent when default floating is wider":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.4,
-        defaultWindowWidth: 0.8,
-        defaultWindowHeight: 0.6),
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "okular", title: "Document"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.4,
+          defaultWindowWidth: 0.8,
+          defaultWindowHeight: 0.6,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 1, appId: "okular", title: "Document"
+      )
+    )
     let parentGeom = model.instructionGeom(1)
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "xdg-desktop-portal-gtk", title: "Open Document"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+      )
+    )
 
     let childGeom = model.instructionGeom(2)
     check childGeom.w == parentGeom.w
@@ -688,17 +788,26 @@ suite "Core Runtime Logic":
 
   test "Late parent event floats child without moving camera":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowParent,
-      childWindowId: 2, parentWindowId: 1))
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowParent, childWindowId: 2, parentWindowId: 1)
+    )
     discard model.layoutInstructions()
 
     let childId = model.windowForExternal(ExternalWindowId(2))
@@ -709,20 +818,29 @@ suite "Core Runtime Logic":
     check model.viewport(1).targetViewportXOffset == 0.0'f32
     check not model.viewportRetargetRequested(model.activeTag)
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
-    check effects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
-      it.triadEventName == "layout")
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and it.triadEventName == "layout"
+    )
 
   test "Parented inactive-workspace window stays on parent workspace silently":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     let child = model.snapshotWindow(2)
 
     check model.shellSnapshot().activeTag == 2
@@ -739,18 +857,27 @@ suite "Core Runtime Logic":
 
   test "Parented floating window follows parent projection":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     let beforeChildGeom = model.instructionGeom(2)
     let parentId = model.windowForExternal(ExternalWindowId(1))
     discard model.setWindowFloating(
-      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300))
+      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300)
+    )
 
     let parentGeom = model.instructionGeom(1)
     let childGeom = model.instructionGeom(2)
@@ -762,9 +889,15 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(3)
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     let beforeChildGeom = model.instructionGeom(4)
 
     model.setViewport(1, targetX = 500.0, currentX = 500.0)
@@ -778,11 +911,16 @@ suite "Core Runtime Logic":
   test "Parented popup hides when focus moves to visible unrelated window":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 1))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let parentGeom = model.instructionGeom(2)
@@ -795,17 +933,22 @@ suite "Core Runtime Logic":
   test "Parented popup reappears when focus returns to parent":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 1))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
-    check not model.layoutProjection().instructions.mapIt(
-      uint32(it.windowId)).contains(4'u32)
+    check not model.layoutProjection().instructions.mapIt(uint32(it.windowId)).contains(
+      4'u32
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let parentGeom = model.instructionGeom(2)
@@ -818,9 +961,15 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(3)
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     let parentGeom = model.instructionGeom(2)
     let childGeom = model.instructionGeom(4)
@@ -832,15 +981,33 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(3)
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "First"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 5, createdParentWindowId: 2,
-      appId: "pinentry", title: "Second"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 6, createdParentWindowId: 4,
-      appId: "pinentry", title: "Nested"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "First",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Second",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 6,
+        createdParentWindowId: 4,
+        appId: "pinentry",
+        title: "Nested",
+      )
+    )
 
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
     check model.focusedWindowId() == 6
@@ -851,35 +1018,57 @@ suite "Core Runtime Logic":
   test "Parented popup root restores explicitly focused parent":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "First"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 5, createdParentWindowId: 2,
-      appId: "pinentry", title: "Second"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "First",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Second",
+      )
+    )
 
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
     check model.focusedWindowId() == 2
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
 
     check model.focusedWindowId() == 2
 
   test "Parented popup root restores last explicitly focused child":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "First"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 5, createdParentWindowId: 2,
-      appId: "pinentry", title: "Second"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "First",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Second",
+      )
+    )
 
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
 
     check model.focusedWindowId() == 4
 
@@ -887,38 +1076,60 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(3)
     model.setViewport(1, targetX = 400.0, currentX = 400.0)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "First"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 5, createdParentWindowId: 2,
-      appId: "pinentry", title: "Second"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "First",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Second",
+      )
+    )
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
 
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
-      destroyedId: 4))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 4))
 
     check model.focusedWindowId() == 5
 
   test "Closing last focused popup falls back to parent":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 4))
 
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
-      destroyedId: 4))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 4))
 
     check model.focusedWindowId() == 2
 
   test "Focused popup retargets scroller camera to parent":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
     discard model.layoutInstructions()
     let parentTarget = model.viewport(1).targetViewportXOffset
@@ -933,14 +1144,20 @@ suite "Core Runtime Logic":
   test "Parented floating window hides with obscured maximized parent":
     var model = cameraModel()
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 3, createdParentWindowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        createdParentWindowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
-    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 1))
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
 
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
     check order.contains(1'u32)
@@ -949,19 +1166,29 @@ suite "Core Runtime Logic":
 
   test "Manual parented popup wider than parent stays centered and clamped":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Wide dialog"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Wide dialog",
+      )
+    )
     let parentId = model.windowForExternal(ExternalWindowId(1))
     let childId = model.windowForExternal(ExternalWindowId(2))
     discard model.setWindowFloating(
-      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300))
+      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300)
+    )
     discard model.setWindowFloating(
-      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500))
+      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500)
+    )
 
     let parentGeom = model.instructionGeom(1)
     let childGeom = model.instructionGeom(2)
@@ -974,20 +1201,32 @@ suite "Core Runtime Logic":
 
   test "Size-forced parented popup can overhang parent":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
     let parentGeom = model.instructionGeom(1)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Wide dialog"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 2,
-      minWidth: parentGeom.w + 120,
-      minHeight: 140,
-      maxWidth: 0,
-      maxHeight: 0))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Wide dialog",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 2,
+        minWidth: parentGeom.w + 120,
+        minHeight: 140,
+        maxWidth: 0,
+        maxHeight: 0,
+      )
+    )
 
     let childGeom = model.instructionGeom(2)
     check childGeom.w == parentGeom.w + 120
@@ -997,22 +1236,30 @@ suite "Core Runtime Logic":
 
   test "Manual parented popup resize disables parent auto fit":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Dialog"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Dialog",
+      )
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     check model.windowData(childId).get().parentAutoFloating
-    model.applyMsg(Msg(kind: MsgKind.CmdResizeFloating,
-      deltaFW: 120, deltaFH: 0))
+    model.applyMsg(Msg(kind: MsgKind.CmdResizeFloating, deltaFW: 120, deltaFH: 0))
 
     let parentId = model.windowForExternal(ExternalWindowId(1))
     discard model.setWindowFloating(
-      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300))
+      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300)
+    )
 
     let child = model.windowData(childId).get()
     let childGeom = model.instructionGeom(2)
@@ -1022,16 +1269,25 @@ suite "Core Runtime Logic":
 
   test "Parented popup larger than screen shrinks to screen":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Oversized dialog"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Oversized dialog",
+      )
+    )
     let childId = model.windowForExternal(ExternalWindowId(2))
     discard model.setWindowFloating(
-      childId, true, runtime_values.Rect(x: 0, y: 0, w: 1400, h: 900))
+      childId, true, runtime_values.Rect(x: 0, y: 0, w: 1400, h: 900)
+    )
 
     let childGeom = model.instructionGeom(2)
     check childGeom == model.primaryScreen()
@@ -1039,9 +1295,15 @@ suite "Core Runtime Logic":
   test "Parented popup hides when parent leaves camera":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     model.setViewport(1, targetX = 900.0, currentX = 900.0)
 
@@ -1052,12 +1314,19 @@ suite "Core Runtime Logic":
   test "Parented popup hides until partly visible parent is fully visible":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 1,
-      appId: "pinentry", title: "Wide dialog"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Wide dialog",
+      )
+    )
     let childId = model.windowForExternal(ExternalWindowId(4))
     discard model.setWindowFloating(
-      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500))
+      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500)
+    )
 
     model.setViewport(1, targetX = 350.0, currentX = 350.0)
 
@@ -1078,16 +1347,30 @@ suite "Core Runtime Logic":
 
   test "Parented floating stack keeps children and newer siblings above":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "First"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 3, createdParentWindowId: 1,
-      appId: "pinentry", title: "Second"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "First",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Second",
+      )
+    )
 
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
     check order.find(1'u32) < order.find(2'u32)
@@ -1095,16 +1378,30 @@ suite "Core Runtime Logic":
 
   test "Focused popup rises above newer sibling in stack history":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "First"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 3, createdParentWindowId: 1,
-      appId: "pinentry", title: "Second"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "First",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Second",
+      )
+    )
 
     model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
 
@@ -1113,20 +1410,32 @@ suite "Core Runtime Logic":
 
   test "Large parented primary surface tiles after size hint":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
     let parentGeom = model.instructionGeom(1)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "editor", title: "Detached"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 2,
-      minWidth: int32(float32(parentGeom.w) * 0.95'f32),
-      minHeight: int32(float32(parentGeom.h) * 0.95'f32),
-      maxWidth: 0,
-      maxHeight: 0))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "editor",
+        title: "Detached",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 2,
+        minWidth: int32(float32(parentGeom.w) * 0.95'f32),
+        minHeight: int32(float32(parentGeom.h) * 0.95'f32),
+        maxWidth: 0,
+        maxHeight: 0,
+      )
+    )
 
     let child = model.snapshotWindow(2)
     check not child.isFloating
@@ -1136,19 +1445,34 @@ suite "Core Runtime Logic":
 
   test "Manual tiled parented child is not refloated by later hints":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     let childId = model.windowForExternal(ExternalWindowId(2))
     discard model.setWindowFloating(childId, false)
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 2, minWidth: 260, minHeight: 140,
-      maxWidth: 260, maxHeight: 140))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 2,
+        minWidth: 260,
+        minHeight: 140,
+        maxWidth: 260,
+        maxHeight: 140,
+      )
+    )
 
     check not model.snapshotWindow(2).isFloating
 
@@ -1159,9 +1483,15 @@ suite "Core Runtime Logic":
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "pinentry", title: "Passphrase"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 3,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     discard model.layoutInstructions()
 
     check not effects.hasFocusEffect(4)
@@ -1176,7 +1506,8 @@ suite "Core Runtime Logic":
     model.setViewport(
       1,
       targetX = parentViewport.targetViewportXOffset,
-      currentX = parentViewport.targetViewportXOffset)
+      currentX = parentViewport.targetViewportXOffset,
+    )
     let flushEffects = model.updateModel(Msg(kind: MsgKind.CmdTick))
 
     check flushEffects.hasFocusEffect(4)
@@ -1184,32 +1515,49 @@ suite "Core Runtime Logic":
     check model.pendingDialogFocusWindows.len == 0
 
   test "Parented popup viewport jump rule focuses and snaps":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.7,
-        centerFocusedColumn: "always",
-        enableAnimations: true,
-        animationSpeed: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Window 1"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Window 2"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
-      appId: "keepassxc", title: "KeePassXC"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          centerFocusedColumn: "always",
+          enableAnimations: true,
+          animationSpeed: 0.5,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Window 1")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Window 2")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        appId: "keepassxc",
+        title: "KeePassXC",
+      )
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "pinentry", title: "Passphrase"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 3,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     discard model.layoutInstructions()
 
     check effects.hasFocusEffect(4)
@@ -1220,34 +1568,53 @@ suite "Core Runtime Logic":
       model.viewport(1).targetViewportXOffset
 
   test "Parented popup open-focused false suppresses viewport jump":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.7,
-        centerFocusedColumn: "always",
-        enableAnimations: true,
-        animationSpeed: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true),
-        WindowRule(appIdMatch: "pinentry", openFocusedSet: true,
-          openFocused: false)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Window 1"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Window 2"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
-      appId: "keepassxc", title: "KeePassXC"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          centerFocusedColumn: "always",
+          enableAnimations: true,
+          animationSpeed: 0.5,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true),
+            WindowRule(appIdMatch: "pinentry", openFocusedSet: true, openFocused: false),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Window 1")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Window 2")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        appId: "keepassxc",
+        title: "KeePassXC",
+      )
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "pinentry", title: "Passphrase"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 3,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     discard model.layoutInstructions()
 
     check not effects.hasFocusEffect(4)
@@ -1261,9 +1628,15 @@ suite "Core Runtime Logic":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 3,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     check model.pendingDialogFocusWindows.len == 1
 
@@ -1277,9 +1650,15 @@ suite "Core Runtime Logic":
       model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
       let beforeParentGeom = model.instructionGeom(3)
 
-      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-        windowId: 4, createdParentWindowId: 3,
-        appId: "pinentry", title: "Passphrase"))
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: 4,
+          createdParentWindowId: 3,
+          appId: "pinentry",
+          title: "Passphrase",
+        )
+      )
 
       var parentGeom = model.instructionGeom(3)
       var childGeom = model.instructionGeom(4)
@@ -1313,9 +1692,15 @@ suite "Core Runtime Logic":
   test "TGMix popup anchors in tile-sized parent zone":
     var model = directionalModel(LayoutMode.TGMix, 3)
     let parentGeom = model.instructionGeom(1)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     let childGeom = model.instructionGeom(4)
     check childGeom.w > 0
@@ -1326,9 +1711,15 @@ suite "Core Runtime Logic":
     var model = directionalModel(LayoutMode.TGMix, 4)
     let parentGeom = model.instructionGeom(4)
     model.focusExternal(4)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 5, createdParentWindowId: 4,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        createdParentWindowId: 4,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     let childGeom = model.instructionGeom(5)
     check childGeom.w > 0
@@ -1336,25 +1727,38 @@ suite "Core Runtime Logic":
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
 
   test "Parented window rules can suppress focus and floating":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(
-          appIdMatch: "pinentry",
-          openFloatingSet: true,
-          openFloating: false,
-          openFocusedSet: true,
-          openFocused: false)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "pinentry",
+              openFloatingSet: true,
+              openFloating: false,
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     let child = model.snapshotWindow(2)
 
     check not child.isFloating
@@ -1362,25 +1766,39 @@ suite "Core Runtime Logic":
     check not effects.hasFocusEffect(2)
 
   test "Parented tool role stays visible outside popup focus tree":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(
-          appIdMatch: "gimp-tool",
-          parentedRole: ParentedRole.Tool,
-          openFocusedSet: true,
-          openFocused: false)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "gimp", title: "Image"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "gimp-tool", title: "Toolbox"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
-      appId: "terminal", title: "Shell"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "gimp-tool",
+              parentedRole: ParentedRole.Tool,
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "gimp", title: "Image")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "gimp-tool",
+        title: "Toolbox",
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "terminal", title: "Shell")
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
@@ -1390,30 +1808,44 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 3
 
   test "Parented tool role uses rule geometry and preserves manual moves":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(
-          appIdMatch: "gimp-tool",
-          parentedRole: ParentedRole.Tool,
-          floating: WindowRuleFloatingConfig(
-            xRatioSet: true,
-            xRatio: 0.02,
-            yRatioSet: true,
-            yRatio: 0.08,
-            widthRatioSet: true,
-            widthRatio: 0.22,
-            heightRatioSet: true,
-            heightRatio: 0.84))
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "gimp", title: "Image"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "gimp-tool", title: "Toolbox"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "gimp-tool",
+              parentedRole: ParentedRole.Tool,
+              floating: WindowRuleFloatingConfig(
+                xRatioSet: true,
+                xRatio: 0.02,
+                yRatioSet: true,
+                yRatio: 0.08,
+                widthRatioSet: true,
+                widthRatio: 0.22,
+                heightRatioSet: true,
+                heightRatio: 0.84,
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "gimp", title: "Image")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "gimp-tool",
+        title: "Toolbox",
+      )
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     let initial = model.windowData(childId).get().floatingGeom
@@ -1422,31 +1854,38 @@ suite "Core Runtime Logic":
     check not model.windowData(childId).get().parentAutoFloating
     check model.focusedWindowId() == 2
 
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveFloating,
-      moveDX: 10, moveDY: 20))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveFloating, moveDX: 10, moveDY: 20))
     let moved = model.windowData(childId).get().floatingGeom
     check moved.x == initial.x + 10
     check moved.y == initial.y + 20
     check model.instructionGeom(2) == moved
 
   test "Plain parented float ignores parent workspace and anchoring":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(
-          appIdMatch: "utility",
-          parentedRole: ParentedRole.Plain)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[WindowRule(appIdMatch: "utility", parentedRole: ParentedRole.Plain)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "utility", title: "Detached"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "utility",
+        title: "Detached",
+      )
+    )
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     let child = model.snapshotWindow(2)
@@ -1454,50 +1893,76 @@ suite "Core Runtime Logic":
     check child.tagId.isSome and child.tagId.get() == 1
     check child.workspaceIdx == 1
     check model.popupRoot(childId) == childId
-    check model.instructionGeom(2) ==
-      model.windowData(childId).get().floatingGeom
+    check model.instructionGeom(2) == model.windowData(childId).get().floatingGeom
 
   test "Open-floating false overrides parented tool role":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(
-          appIdMatch: "gimp-tool",
-          parentedRole: ParentedRole.Tool,
-          openFloatingSet: true,
-          openFloating: false)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "gimp", title: "Image"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "gimp-tool", title: "Toolbox"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "gimp-tool",
+              parentedRole: ParentedRole.Tool,
+              openFloatingSet: true,
+              openFloating: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "gimp", title: "Image")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "gimp-tool",
+        title: "Toolbox",
+      )
+    )
 
     check not model.snapshotWindow(2).isFloating
 
   test "Dialog rule size preserves parent centered anchoring":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(
-          appIdMatch: "pinentry",
-          floating: WindowRuleFloatingConfig(
-            widthRatioSet: true,
-            widthRatio: 0.2,
-            heightRatioSet: true,
-            heightRatio: 0.2))
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "pinentry",
+              floating: WindowRuleFloatingConfig(
+                widthRatioSet: true,
+                widthRatio: 0.2,
+                heightRatioSet: true,
+                heightRatio: 0.2,
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     let parentGeom = model.instructionGeom(1)
     let childGeom = model.instructionGeom(2)
@@ -1507,41 +1972,60 @@ suite "Core Runtime Logic":
     check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
 
   test "Explicit default-tag can override parent workspace":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(appIdMatch: "pinentry", defaultTag: 2)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "pinentry", defaultTag: 2)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
 
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
     let child = model.snapshotWindow(2)
 
     check child.tagId.isSome and child.tagId.get() == 2
     check child.workspaceIdx == 2
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowParent,
-      childWindowId: 2, parentWindowId: 1))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowParent, childWindowId: 2, parentWindowId: 1)
+    )
     let afterParentEvent = model.snapshotWindow(2)
     check afterParentEvent.tagId.isSome and afterParentEvent.tagId.get() == 2
     check afterParentEvent.workspaceIdx == 2
 
   test "Fixed-size hint opens normal window as floating":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "dialog", title: "Tool"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "dialog", title: "Tool")
+    )
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 1, minWidth: 260, minHeight: 140,
-      maxWidth: 260, maxHeight: 140))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 1,
+        minWidth: 260,
+        minHeight: 140,
+        maxWidth: 260,
+        maxHeight: 140,
+      )
+    )
     discard model.layoutInstructions()
 
     let winId = model.windowForExternal(ExternalWindowId(1))
@@ -1551,32 +2035,34 @@ suite "Core Runtime Logic":
     check win.floatingGeom.h == 140
     check not model.viewportRetargetRequested(model.activeTag)
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
-    check effects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
-      it.triadEventName == "layout")
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and it.triadEventName == "layout"
+    )
 
   test "New active-tag window focuses after live restore settles":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
     var restore = PendingRestoreState(
       activeSlot: 1,
       focusedWindow: ExternalWindowId(1),
-      focusHistory: @[ExternalWindowId(1)])
+      focusHistory: @[ExternalWindowId(1)],
+    )
     restore.windows[ExternalWindowId(1)] = RestoredWindowData(
-      slot: 1,
-      appId: "app",
-      title: "One",
-      widthProportion: 0.5,
-      heightProportion: 1.0)
+      slot: 1, appId: "app", title: "One", widthProportion: 0.5, heightProportion: 1.0
+    )
     restore.tagByWindow[ExternalWindowId(1)] = 1
     model.applyLiveRestore(restore)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     check not model.restoreFocusedWindowPending()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, appId: "app", title: "Two"))
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     discard model.layoutInstructions()
 
     check model.focusedWindowId() == 2
@@ -1587,12 +2073,12 @@ suite "Core Runtime Logic":
   test "New scroller window opens beside focused window":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, appId: "app", title: "Window 4"))
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 4, appId: "app", title: "Window 4")
+    )
     discard model.layoutInstructions()
 
     check model.columnHeads(1) == @[1'u32, 2, 4, 3]
@@ -1602,14 +2088,17 @@ suite "Core Runtime Logic":
 
   test "Live restore JSON records moved maximized window":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10,
-      appId: "generic-app", title: "Window"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 10))
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 10,
+        appId: "generic-app",
+        title: "Window",
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 1))
 
     let win = model.restoreWindowJson(10)
 
@@ -1619,20 +2108,19 @@ suite "Core Runtime Logic":
 
   test "Moving focused window follows target and refocuses source":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
-      width: 1000, height: 700))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
     model.seedCameraWindows(3)
     let outputId = model.outputForExternal(ExternalOutputId(1))
 
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
 
     check model.activeWorkspaceFocusId() == 3
     check model.focusedWindowId() == 3
     check model.outputTags[outputId] == model.tagForSlot(2)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     check model.activeWorkspaceFocusId() == 2
     check model.focusedWindowId() == 2
     check model.outputTags[outputId] == model.tagForSlot(1)
@@ -1641,8 +2129,8 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(1)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
 
     check model.activeTag == model.tagForSlot(2)
     check model.snapshotWindow(1).workspaceIdx == 2
@@ -1651,12 +2139,12 @@ suite "Core Runtime Logic":
 
   test "Focusing workspace updates primary output tag":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
-      width: 1000, height: 700))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
     let outputId = model.outputForExternal(ExternalOutputId(1))
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
 
     check outputId != NullOutputId
     check model.activeTag == model.tagForSlot(2)
@@ -1666,14 +2154,12 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(1)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
 
     check model.activeWorkspaceFocusId() == 1
     check model.focusedWindowId() == 1
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     check model.activeWorkspaceFocusId() == 0
     check model.focusedWindowId() == 0
 
@@ -1686,8 +2172,7 @@ suite "Core Runtime Logic":
     check model.activeWorkspaceFocusId() == 2
     check model.focusedWindowId() == 2
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     check model.activeWorkspaceFocusId() == 1
     check model.focusedWindowId() == 1
 
@@ -1698,30 +2183,38 @@ suite "Core Runtime Logic":
     let sourceColumn = model.columnAt(sourceTag, 0)
     discard model.setColumnWidth(sourceColumn, 0.42'f32)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
 
     let targetTag = model.tagForSlot(2)
     let targetColumn = model.columnAt(targetTag, 0)
     check model.columnData(targetColumn).get().widthProportion == 0.42'f32
 
   test "Moving normal window to empty grid workspace preserves source layout":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(defaultColumnWidth: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      tagRules: @[
-        TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
-        TagRule(tagId: 3, defaultLayout: LayoutMode.Grid)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
-      appId: "sublime_text", title: "Sublime Text"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(defaultColumnWidth: 0.5),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules:
+          @[
+            TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
+            TagRule(tagId: 3, defaultLayout: LayoutMode.Grid),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 6,
+        appId: "sublime_text",
+        title: "Sublime Text",
+      )
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 3))
     let targetTag = model.tagForSlot(3)
     let screen = model.primaryScreen()
     let geom = model.instructionGeom(6)
@@ -1731,36 +2224,50 @@ suite "Core Runtime Logic":
     check geom.w < screen.w
 
   test "Moving to occupied grid workspace keeps target layout":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(defaultColumnWidth: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      tagRules: @[
-        TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
-        TagRule(tagId: 3, defaultLayout: LayoutMode.Grid)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 3))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
-      appId: "files", title: "Files"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
-      appId: "sublime_text", title: "Sublime Text"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(defaultColumnWidth: 0.5),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules:
+          @[
+            TagRule(tagId: 2, defaultLayout: LayoutMode.Scroller),
+            TagRule(tagId: 3, defaultLayout: LayoutMode.Grid),
+          ],
+      )
+    ).model
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "files", title: "Files")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 6,
+        appId: "sublime_text",
+        title: "Sublime Text",
+      )
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 3))
 
-    check model.tagData(model.tagForSlot(3)).get().layoutMode ==
-      LayoutMode.Grid
+    check model.tagData(model.tagForSlot(3)).get().layoutMode == LayoutMode.Grid
 
   test "Moving fullscreen window through dynamic workspace preserves state":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowFullscreenRequested,
-      fullscreenRequestId: 1, fullscreenOutputId: 1))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 1,
+        fullscreenOutputId: 1,
+      )
+    )
 
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
@@ -1777,22 +2284,21 @@ suite "Core Runtime Logic":
   test "Dynamic layout changes preserve maximized intent":
     var model = cameraModel()
     model.seedCameraWindows(1)
-    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 1))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1))
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
 
-    let tgmixEffects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.TGMix))
+    let tgmixEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.TGMix))
     check model.activeTag == model.tagForSlot(4)
     check model.tagData(model.activeTag).get().layoutMode == LayoutMode.TGMix
     check model.snapshotWindow(1).isMaximized
     check tgmixEffects.hasMaximizedEffect(1, false)
     check tgmixEffects.hasFocusEffect(1)
 
-    let scrollerEffects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.Scroller))
+    let scrollerEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Scroller))
     check model.snapshotWindow(1).isMaximized
     check scrollerEffects.hasMaximizedEffect(1, true)
     check scrollerEffects.hasFocusEffect(1)
@@ -1826,14 +2332,13 @@ suite "Core Runtime Logic":
     discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
     check model.columnData(columnId).get().isFullWidth
 
-    discard model.updateModel(Msg(kind: MsgKind.CmdSetColumnWidth,
-      targetWidth: 0.5'f32))
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdSetColumnWidth, targetWidth: 0.5'f32))
     check not model.columnData(columnId).get().isFullWidth
     check model.columnData(columnId).get().widthProportion == 0.5'f32
 
     discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
-    discard model.updateModel(Msg(kind: MsgKind.CmdResizeWidth,
-      deltaW: 0.1'f32))
+    discard model.updateModel(Msg(kind: MsgKind.CmdResizeWidth, deltaW: 0.1'f32))
     check not model.columnData(columnId).get().isFullWidth
 
   test "Moving full-width column preserves column presentation":
@@ -1841,8 +2346,8 @@ suite "Core Runtime Logic":
     model.seedCameraWindows(1)
 
     discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
-    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
 
     let targetTag = model.tagForSlot(2)
     let targetColumn = model.columnAt(targetTag, 0)
@@ -1859,8 +2364,8 @@ suite "Core Runtime Logic":
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
     discard model.updateModel(Msg(kind: MsgKind.CmdMoveToTagRight))
-    discard model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.Grid))
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
 
     let win = model.snapshotWindow(1)
     check model.activeTag == model.tagForSlot(4)
@@ -1870,32 +2375,57 @@ suite "Core Runtime Logic":
 
   test "Moving editor from grid to scroller preserves runtime attributes":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "kitty", title: "Terminal"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 3))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
-      appId: "sublime_text", title: "Sublime Text"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensions,
-      dimensionsWindowId: 6, actualWidth: 900, actualHeight: 600))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 6, minWidth: 300, minHeight: 200,
-      maxWidth: 1600, maxHeight: 1200))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDecorationHint,
-      decorationWindowId: 6, decorationHint: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowPresentationHint,
-      presentationWindowId: 6, presentationHint: 3))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 6))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "kitty", title: "Terminal")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 6,
+        appId: "sublime_text",
+        title: "Sublime Text",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 6,
+        actualWidth: 900,
+        actualHeight: 600,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 6,
+        minWidth: 300,
+        minHeight: 200,
+        maxWidth: 1600,
+        maxHeight: 1200,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDecorationHint, decorationWindowId: 6, decorationHint: 2
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowPresentationHint,
+        presentationWindowId: 6,
+        presentationHint: 3,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 6))
 
-    let before = model.windowData(
-      model.windowForExternal(ExternalWindowId(6))).get()
-    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    let before = model.windowData(model.windowForExternal(ExternalWindowId(6))).get()
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
     let winId = model.windowForExternal(ExternalWindowId(6))
     let after = model.windowData(winId).get()
     let snapshotWin = model.snapshotWindow(6)
@@ -1921,31 +2451,33 @@ suite "Core Runtime Logic":
 
   test "Moving maximized window through grid preserves desired state":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 1,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 3))
-    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.Grid))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 6,
-      appId: "sublime_text", title: "Sublime Text"))
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 6))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 6,
+        appId: "sublime_text",
+        title: "Sublime Text",
+      )
+    )
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 6)
+    )
 
-    let toGridEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 3))
+    let toGridEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 3))
     check model.activeTag == model.tagForSlot(3)
-    check model.tagData(model.activeTag).get().layoutMode ==
-      LayoutMode.Scroller
+    check model.tagData(model.activeTag).get().layoutMode == LayoutMode.Scroller
     check model.snapshotWindow(6).isMaximized
     check not toGridEffects.hasMaximizedEffect(6, false)
 
-    let toScrollerEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    let toScrollerEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
     check model.activeTag == model.tagForSlot(2)
     check model.snapshotWindow(6).isMaximized
     check toScrollerEffects.hasMaximizedEffect(6, true)
@@ -1955,38 +2487,71 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(1)
 
-    let (nextModel, effects) =
-      model.update(Msg(kind: MsgKind.CmdSetLayout,
-        newLayout: LayoutMode.Deck,
-        layoutTargetTag: 4))
+    let (nextModel, effects) = model.update(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck, layoutTargetTag: 4)
+    )
 
     check nextModel.tagForSlot(4) == NullTagId
     check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Duplicate window create preserves moved window attributes":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10,
-      appId: "kitty", title: "Terminal"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensions,
-      dimensionsWindowId: 10, actualWidth: 640, actualHeight: 480))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 10, minWidth: 200, minHeight: 100,
-      maxWidth: 1200, maxHeight: 900))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowDecorationHint,
-      decorationWindowId: 10, decorationHint: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowPresentationHint,
-      presentationWindowId: 10, presentationHint: 3))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 10))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowFullscreenRequested,
-      fullscreenRequestId: 10, fullscreenOutputId: 0))
-    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 10, appId: "kitty", title: "Terminal"
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 10,
+        actualWidth: 640,
+        actualHeight: 480,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 10,
+        minWidth: 200,
+        minHeight: 100,
+        maxWidth: 1200,
+        maxHeight: 900,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDecorationHint, decorationWindowId: 10, decorationHint: 2
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowPresentationHint,
+        presentationWindowId: 10,
+        presentationHint: 3,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 10))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 10,
+        fullscreenOutputId: 0,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10,
-      appId: "kitty", title: "Terminal renamed"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 10,
+        appId: "kitty",
+        title: "Terminal renamed",
+      )
+    )
 
     let winId = model.windowForExternal(ExternalWindowId(10))
     let win = model.windowData(winId).get()
@@ -2007,25 +2572,41 @@ suite "Core Runtime Logic":
 
   test "Live restore preserves popup parent relationship":
     var model = cameraModel()
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, createdParentWindowId: 1,
-      appId: "pinentry", title: "Passphrase"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     let win = model.restoreWindowJson(2)
     let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
 
     var restoredModel = cameraModel()
-    restoredModel.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
     restoredModel.applyLiveRestore(restore.pendingRestoreState())
-    restoredModel.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "Parent"))
-    restoredModel.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "pinentry", title: "Passphrase"))
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    restoredModel.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
 
     check win["parent_id"].getInt() == 1
     check restoredModel.snapshotWindow(2).parentId == 1
@@ -2033,19 +2614,21 @@ suite "Core Runtime Logic":
 
   test "Live restore matches unique app id after title changes":
     var model = restoreMatchingModel()
-    var restore = PendingRestoreState(
-      activeSlot: 1,
-      focusedWindow: ExternalWindowId(50))
+    var restore =
+      PendingRestoreState(activeSlot: 1, focusedWindow: ExternalWindowId(50))
     restore.addRestoredWindow(
-      ExternalWindowId(50),
-      1,
-      "generic-app",
-      "Old title",
-      isMaximized = true)
+      ExternalWindowId(50), 1, "generic-app", "Old title", isMaximized = true
+    )
     model.applyLiveRestore(restore)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 70, appId: "generic-app", title: "New title"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 70,
+        appId: "generic-app",
+        title: "New title",
+      )
+    )
     let win = model.snapshotWindow(70)
 
     check win.id == 70
@@ -2057,21 +2640,21 @@ suite "Core Runtime Logic":
     var model = restoreMatchingModel()
     var restore = PendingRestoreState(activeSlot: 1)
     restore.addRestoredWindow(
-      ExternalWindowId(50),
-      1,
-      "generic-app",
-      "Old title A",
-      isMaximized = true)
+      ExternalWindowId(50), 1, "generic-app", "Old title A", isMaximized = true
+    )
     restore.addRestoredWindow(
-      ExternalWindowId(51),
-      3,
-      "generic-app",
-      "Old title B",
-      isMaximized = true)
+      ExternalWindowId(51), 3, "generic-app", "Old title B", isMaximized = true
+    )
     model.applyLiveRestore(restore)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 70, appId: "generic-app", title: "New title"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 70,
+        appId: "generic-app",
+        title: "New title",
+      )
+    )
     let win = model.snapshotWindow(70)
 
     check win.id == 70
@@ -2088,21 +2671,30 @@ suite "Core Runtime Logic":
       "generic-app",
       "Old title A",
       isMaximized = true,
-      identifier = "stable-target")
+      identifier = "stable-target",
+    )
     restore.addRestoredWindow(
-      ExternalWindowId(51),
-      3,
-      "generic-app",
-      "Old title B",
-      identifier = "stable-other")
+      ExternalWindowId(51), 3, "generic-app", "Old title B", identifier = "stable-other"
+    )
     model.applyLiveRestore(restore)
 
-    discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 70, appId: "generic-app", title: "New title"))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 70,
+        appId: "generic-app",
+        title: "New title",
+      )
+    )
     check model.snapshotWindow(70).workspaceIdx == 2
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowIdentifier,
-      identifierWindowId: 70, identifier: "stable-target"))
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowIdentifier,
+        identifierWindowId: 70,
+        identifier: "stable-target",
+      )
+    )
     let win = model.snapshotWindow(70)
 
     check win.workspaceIdx == 1
@@ -2110,27 +2702,32 @@ suite "Core Runtime Logic":
     check effects.hasMaximizedEffect(70, true)
 
   test "Rule-placed new window does not steal active camera":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.7,
-        centerFocusedColumn: "always",
-        enableAnimations: true,
-        animationSpeed: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(appIdMatch: "chat", defaultTag: 2)
-      ])).model
-    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
-      width: 1000, height: 700))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          centerFocusedColumn: "always",
+          enableAnimations: true,
+          animationSpeed: 0.5,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "chat", defaultTag: 2)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
     let beforeViewport = model.viewport(1)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 2, appId: "chat", title: "Chat"))
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "chat", title: "Chat")
+    )
     discard model.layoutInstructions()
     let snapshot = model.shellSnapshot()
 
@@ -2145,31 +2742,32 @@ suite "Core Runtime Logic":
     var model = cameraModel()
     model.seedCameraWindows(2)
 
-    let fullscreenEffects = model.updateModel(Msg(
-      kind: MsgKind.WlWindowFullscreenRequested,
-      fullscreenRequestId: 2,
-      fullscreenOutputId: 0))
+    let fullscreenEffects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 2,
+        fullscreenOutputId: 0,
+      )
+    )
     check fullscreenEffects.hasFullscreenEffect(2, true)
 
-    let leaveEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 1))
+    let leaveEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     check leaveEffects.hasFullscreenEffect(2, false)
 
-    let returnEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
+    let returnEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
     check returnEffects.hasFullscreenEffect(2, true)
 
   test "Grid suspends maximized presentation without clearing state":
     var model = cameraModel()
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 2))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 2)
+    )
 
-    let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.Grid))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
     let screen = model.primaryScreen()
     let win = model.snapshotWindow(2)
     let geom = model.instructionGeom(2)
@@ -2182,14 +2780,14 @@ suite "Core Runtime Logic":
   test "Scroller restores suspended maximized presentation":
     var model = cameraModel()
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 2))
-    discard model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.Grid))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 2)
+    )
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
 
-    let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-      newLayout: LayoutMode.Scroller))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Scroller))
     let screen = model.primaryScreen()
 
     check model.snapshotWindow(2).isMaximized
@@ -2199,14 +2797,12 @@ suite "Core Runtime Logic":
   test "Non-scroller layouts do not present maximized windows":
     var model = cameraModel()
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 2))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 2)
+    )
 
-    for mode in [LayoutMode.MasterStack, LayoutMode.Deck,
-        LayoutMode.Monocle]:
-      let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout,
-        newLayout: mode))
+    for mode in [LayoutMode.MasterStack, LayoutMode.Deck, LayoutMode.Monocle]:
+      let effects = model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: mode))
       check model.snapshotWindow(2).isMaximized
       check effects.hasMaximizedEffect(2, false)
       check model.instructionGeom(2) != model.primaryScreen()
@@ -2214,9 +2810,9 @@ suite "Core Runtime Logic":
   test "Minimize preserves desired maximized state":
     var model = cameraModel()
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 2))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 2)
+    )
 
     let minimizeEffects = model.updateModel(Msg(kind: MsgKind.CmdMinimize))
     let minimized = model.snapshotWindow(2)
@@ -2225,9 +2821,8 @@ suite "Core Runtime Logic":
     check minimized.isMinimized
     check minimizeEffects.hasMaximizedEffect(2, false)
 
-    let restoreEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
+    let restoreEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
     let restored = model.snapshotWindow(2)
 
     check restored.isMaximized
@@ -2235,34 +2830,38 @@ suite "Core Runtime Logic":
     check restoreEffects.hasMaximizedEffect(2, true)
 
   test "Floating popup preserves maximized backing windows":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.7,
-        centerFocusedColumn: "always",
-        enableAnimations: true,
-        animationSpeed: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(appIdMatch: "pinentry", openFloating: true)
-      ])).model
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          centerFocusedColumn: "always",
+          enableAnimations: true,
+          animationSpeed: 0.5,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "pinentry", openFloating: true)],
+      )
+    ).model
     model.seedCameraWindows(2)
 
-    let firstMaxEffects = model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 1))
-    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
-    let secondMaxEffects = model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 2))
+    let firstMaxEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    let secondMaxEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 2)
+    )
 
     check model.snapshotWindow(1).isMaximized
     check firstMaxEffects.hasMaximizedEffect(1, false)
     check secondMaxEffects.hasMaximizedEffect(2, true)
 
-    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 3, appId: "pinentry", title: "Password"))
+    let popupEffects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 3, appId: "pinentry", title: "Password"
+      )
+    )
     let screen = model.primaryScreen()
 
     check not popupEffects.hasMaximizedEffect(1, false)
@@ -2276,15 +2875,20 @@ suite "Core Runtime Logic":
   test "Parented popup ignores unrelated maximized backing window":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 1))
-    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 3))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
 
-    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "xdg-desktop-portal-gtk", title: "Open Document"))
+    let popupEffects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 3,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+      )
+    )
     let screen = model.primaryScreen()
     discard model.layoutInstructions()
     let viewportTarget = model.viewport(1).targetViewportXOffset
@@ -2303,18 +2907,23 @@ suite "Core Runtime Logic":
   test "Parented popup preserves maximized parent backing":
     var model = cameraModel()
     model.seedCameraWindows(3)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 1))
-    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 3))
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 3))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 3)
+    )
 
-    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "xdg-desktop-portal-gtk", title: "Open Document"))
+    let popupEffects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        createdParentWindowId: 3,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+      )
+    )
     let screen = model.primaryScreen()
     let popupGeom = model.instructionGeom(4)
 
@@ -2326,25 +2935,33 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 4
 
   test "Floating popup preserves fullscreen presentation":
-    var model = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 10,
-        defaultColumnWidth: 0.7,
-        centerFocusedColumn: "always",
-        enableAnimations: true,
-        animationSpeed: 0.5),
-      workspaces: WorkspaceConfig(defaultCount: 3),
-      windowRules: @[
-        WindowRule(appIdMatch: "pinentry", openFloating: true)
-      ])).model
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          centerFocusedColumn: "always",
+          enableAnimations: true,
+          animationSpeed: 0.5,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "pinentry", openFloating: true)],
+      )
+    ).model
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowFullscreenRequested,
-      fullscreenRequestId: 2,
-      fullscreenOutputId: 0))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 2,
+        fullscreenOutputId: 0,
+      )
+    )
 
-    let popupEffects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 3, appId: "pinentry", title: "Password"))
+    let popupEffects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 3, appId: "pinentry", title: "Password"
+      )
+    )
     let screen = model.primaryScreen()
 
     check not popupEffects.hasFullscreenEffect(2, false)
@@ -2355,10 +2972,13 @@ suite "Core Runtime Logic":
   test "Overview suspends fullscreen presentation":
     var model = cameraModel()
     model.seedCameraWindows(1)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowFullscreenRequested,
-      fullscreenRequestId: 1,
-      fullscreenOutputId: 0))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 1,
+        fullscreenOutputId: 0,
+      )
+    )
 
     let effects = model.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
 
@@ -2369,16 +2989,17 @@ suite "Core Runtime Logic":
   test "Targeted fullscreen IPC can repair a non-focused window":
     var model = cameraModel()
     model.seedCameraWindows(2)
-    discard model.updateModel(Msg(
-      kind: MsgKind.WlWindowFullscreenRequested,
-      fullscreenRequestId: 2,
-      fullscreenOutputId: 0))
-    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 1))
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 2,
+        fullscreenOutputId: 0,
+      )
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
 
-    let effects = model.updateModel(Msg(
-      kind: MsgKind.CmdExitFullscreenById,
-      fullscreenWindowId: 2))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdExitFullscreenById, fullscreenWindowId: 2))
     let winId = model.windowForExternal(ExternalWindowId(2))
 
     check winId != NullWindowId
@@ -2401,10 +3022,12 @@ suite "Core Runtime Logic":
 
   test "Moving focused stacked window preserves focus":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Two"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
 
     let tagId = model.tagForSlot(1)
     let firstColumn = model.columnAt(tagId, 0)
@@ -2446,8 +3069,9 @@ suite "Core Runtime Logic":
 
   test "Opening overview initializes visible selection":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
 
     let effects = model.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
 
@@ -2459,12 +3083,12 @@ suite "Core Runtime Logic":
 
   test "Overview shell focus clear preserves selected window":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged,
-      newFocusedId: 0))
+    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 0))
 
     check model.overviewActive
     check model.selectedOverviewWindow() == WindowId(1)
@@ -2473,17 +3097,18 @@ suite "Core Runtime Logic":
     check effects.len == 0
 
   test "Overview hit testing uses topmost preview under pointer":
-    let instructions = @[
-      RenderInstruction(
-        windowId: 1,
-        geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)),
-      RenderInstruction(
-        windowId: 2,
-        geom: runtime_values.Rect(x: 50, y: 50, w: 100, h: 100)),
-      RenderInstruction(
-        windowId: 3,
-        geom: runtime_values.Rect(x: 200, y: 50, w: 100, h: 100))
-    ]
+    let instructions =
+      @[
+        RenderInstruction(
+          windowId: 1, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
+        ),
+        RenderInstruction(
+          windowId: 2, geom: runtime_values.Rect(x: 50, y: 50, w: 100, h: 100)
+        ),
+        RenderInstruction(
+          windowId: 3, geom: runtime_values.Rect(x: 200, y: 50, w: 100, h: 100)
+        ),
+      ]
 
     check overviewHitTest(instructions, 10, 10) == 1
     check overviewHitTest(instructions, 60, 60) == 2
@@ -2493,11 +3118,14 @@ suite "Core Runtime Logic":
   test "Overview direction selection follows visual grid":
     var model = configuredModel()
     for id in 1'u32 .. 5'u32:
-      model.applyMsg(Msg(
-        kind: MsgKind.WlWindowCreated,
-        windowId: id,
-        appId: "app",
-        title: "Window " & $id))
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     let activeTag = model.activeTag
@@ -2506,8 +3134,9 @@ suite "Core Runtime Logic":
     let workspaceHistory = model.workspaceHistory
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
-    let rightEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusDirection,
-      direction: Direction.DirRight))
+    let rightEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+    )
     check model.selectedOverviewWindow() == WindowId(2)
     check model.activeWorkspaceFocusId() == activeFocus
     let previewSnapshot = model.shellSnapshot()
@@ -2515,35 +3144,37 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == activeFocus
     check rightEffects.anyIt(it.kind == EffectKind.EffFocusShellUi)
     check not rightEffects.anyIt(it.kind == EffectKind.EffFocusWindow)
-    check not rightEffects.anyIt(it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WindowFocusChanged"))
-    check not rightEffects.anyIt(it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WorkspacesChanged"))
-    check not rightEffects.anyIt(it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WindowsChanged"))
-    check rightEffects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson and
-      it.triadEventName == "state")
+    check not rightEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowFocusChanged")
+    )
+    check not rightEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+    check not rightEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowsChanged")
+    )
+    check rightEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and it.triadEventName == "state"
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
-      direction: Direction.DirLeft))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
     check model.selectedOverviewWindow() == WindowId(1)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
-      direction: Direction.DirDown))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
     check model.selectedOverviewWindow() == WindowId(5)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
-      direction: Direction.DirUp))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp))
     check model.selectedOverviewWindow() == WindowId(2)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
-      direction: Direction.DirDown))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
     check model.selectedOverviewWindow() == WindowId(5)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection,
-      direction: Direction.DirRight))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
     check model.selectedOverviewWindow() == WindowId(5)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
@@ -2561,17 +3192,21 @@ suite "Core Runtime Logic":
     check not model.overviewActive
     check model.overviewSelectedWindow == NullWindowId
     check model.activeWorkspaceFocusId() == activeFocus
-    check closeEffects.anyIt(it.kind == EffectKind.EffFocusWindow and
-      uint32(it.focusId) == activeFocus)
+    check closeEffects.anyIt(
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == activeFocus
+    )
 
   test "Overview ignores workspace focus commands":
     var model = configuredModel()
     for id in 1'u32 .. 5'u32:
-      model.applyMsg(Msg(
-        kind: MsgKind.WlWindowCreated,
-        windowId: id,
-        appId: "app",
-        title: "Window " & $id))
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     let activeTag = model.activeTag
@@ -2580,10 +3215,10 @@ suite "Core Runtime Logic":
     let workspaceHistory = model.workspaceHistory
 
     check model.selectedOverviewWindow() == WindowId(5)
-    check model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2)).len == 0
-    check model.updateModel(Msg(kind: MsgKind.CmdFocusTag,
-      focusTag: 2)).len == 0
+    check model.updateModel(
+      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2)
+    ).len == 0
+    check model.updateModel(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2)).len == 0
     check model.updateModel(Msg(kind: MsgKind.CmdFocusOccupiedTagRight)).len == 0
     check model.updateModel(Msg(kind: MsgKind.CmdFocusTagRight)).len == 0
 
@@ -2594,8 +3229,8 @@ suite "Core Runtime Logic":
     check model.workspaceHistory == workspaceHistory
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
-    let downEffects = model.updateModel(Msg(
-      kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
+    let downEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
     check model.selectedOverviewWindow() == WindowId(5)
     check model.activeTag == activeTag
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
@@ -2603,11 +3238,13 @@ suite "Core Runtime Logic":
 
   test "Selecting overview window commits focus":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Two"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
@@ -2618,27 +3255,30 @@ suite "Core Runtime Logic":
     check model.overviewSelectedWindow == NullWindowId
     check model.activeWorkspaceFocusId() == 2
     check model.activeTag == model.tagForSlot(2)
-    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
-      uint32(it.focusId) == 2)
+    check effects.anyIt(
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
+    )
 
   test "Clicking overview window commits focus":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Two"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged,
-      newFocusedId: 2))
+    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 2))
 
     check not model.overviewActive
     check model.activeTag == model.tagForSlot(2)
     check model.focusedWindowId() == 2
-    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
-      uint32(it.focusId) == 2)
+    check effects.anyIt(
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
+    )
 
   test "Overview select retargets same-workspace camera":
     var model = cameraModel()
@@ -2656,23 +3296,22 @@ suite "Core Runtime Logic":
     discard model.layoutInstructions()
     check model.viewport(1).currentViewportXOffset ==
       beforeViewport.currentViewportXOffset
-    check model.viewport(1).targetViewportXOffset !=
-      beforeViewport.targetViewportXOffset
+    check model.viewport(1).targetViewportXOffset != beforeViewport.targetViewportXOffset
 
   test "Overview select retargets target workspace camera":
     var model = cameraModel()
     model.seedCameraWindows(1)
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Two"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
-      appId: "app", title: "Three"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
     model.setViewport(2, targetX = 250.0, currentX = 175.0)
     let workspace2Viewport = model.viewport(2)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     model.setViewport(1, targetX = 80.0, currentX = 80.0)
     let workspace1Viewport = model.viewport(1)
 
@@ -2709,17 +3348,16 @@ suite "Core Runtime Logic":
     model.setViewport(1, targetX = 300.0, currentX = 0.0)
     let workspace1Viewport = model.viewport(1)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "app", title: "Two"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     model.setViewport(2, targetX = 75.0, currentX = 75.0)
     let workspace2Viewport = model.viewport(2)
 
     for _ in 0 ..< 4:
       discard model.updateModel(Msg(kind: MsgKind.CmdTick))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
 
     check model.viewport(1) == workspace1Viewport
     check model.viewport(2) == workspace2Viewport
@@ -2741,24 +3379,25 @@ suite "Core Runtime Logic":
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged,
-      newFocusedId: 1))
+    let effects = model.updateModel(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
     discard model.layoutInstructions()
 
     check model.focusedWindowId() == 1
-    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and
-      uint32(it.focusId) == 1)
+    check effects.anyIt(
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 1
+    )
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check model.viewport(1).targetViewportXOffset != 0.0'f32
 
   test "Shell snapshot exposes active workspace focus globally":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "term", title: "One"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "browser", title: "Two"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "browser", title: "Two")
+    )
 
     var snapshot = model.shellSnapshot()
     let focused = snapshot.windows.filterIt(it.isFocused)
@@ -2785,27 +3424,32 @@ suite "Core Runtime Logic":
 
   test "Workspace focus broadcasts workspace and window snapshots":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "term", title: "One"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "browser", title: "Two"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "browser", title: "Two")
+    )
 
-    let effects = model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
-    check effects.anyIt(it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WorkspacesChanged"))
-    check effects.anyIt(it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WindowsChanged"))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowsChanged")
+    )
     model.requireTagShellSemantics("workspace focus broadcast scenario")
 
   test "Empty dynamic workspaces prune after focus leaves":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "term", title: "One"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
 
     var snapshot = model.shellSnapshot()
@@ -2813,8 +3457,7 @@ suite "Core Runtime Logic":
     check snapshot.workspaces.anyIt(it.tagId == 4)
     model.requireTagShellSemantics("empty dynamic active scenario")
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
     snapshot = model.shellSnapshot()
     check snapshot.activeTag == 2
     check not snapshot.workspaces.anyIt(it.tagId == 4)
@@ -2822,13 +3465,13 @@ suite "Core Runtime Logic":
 
   test "Scratchpad restore returns window to active tag":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "term", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
     model.requireTagShellSemantics("scratchpad hidden scenario")
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
     model.applyMsg(Msg(kind: MsgKind.CmdRestoreScratchpad))
 
     let snapshot = model.shellSnapshot()
@@ -2840,26 +3483,39 @@ suite "Core Runtime Logic":
 
   test "Closing transient window keeps focus on active workspace":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "brave", title: "Browser"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "thunar", title: "Pictures"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
-      appId: "kitty", title: "Terminal A"))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 4,
-      appId: "kitty", title: "Terminal B"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "brave", title: "Browser")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 2, appId: "thunar", title: "Pictures"
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 3, appId: "kitty", title: "Terminal A"
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 4, appId: "kitty", title: "Terminal B"
+      )
+    )
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 1))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById,
-      focusWindowId: 2))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 5,
-      appId: "image-viewer", title: "Screenshot"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        appId: "image-viewer",
+        title: "Screenshot",
+      )
+    )
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
-      destroyedId: 5))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 5))
 
     check model.shellSnapshot().activeTag == 1
     check model.activeWorkspaceFocusId() == 2
@@ -2871,16 +3527,17 @@ suite "Core Runtime Logic":
 
   test "Closing last dynamic workspace window still collapses workspace":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "term", title: "One"))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
-      appId: "term", title: "Dynamic"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Dynamic")
+    )
 
-    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed,
-      destroyedId: 2))
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
     let snapshot = model.shellSnapshot()
 
     check snapshot.activeTag == 3
@@ -2890,8 +3547,9 @@ suite "Core Runtime Logic":
 
   test "Overview order deduplicates multi-tag windows":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
-      appId: "app", title: "One"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
     let tag2 = model.tagForSlot(2)
     let col2 = model.addColumn(tag2)
     model.placeWindow(tag2, col2, WindowId(1))
@@ -2903,11 +3561,11 @@ suite "Core Runtime Logic":
 
   test "Configured defaults place floating windows":
     var model = configuredModel()
-    let (nextModel, _) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 130,
-      appId: "float-me",
-      title: "Tool"))
+    let (nextModel, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 130, appId: "float-me", title: "Tool"
+      )
+    )
     let snapshot = nextModel.shellSnapshot()
 
     check snapshot.windows.len == 1
@@ -2920,18 +3578,22 @@ suite "Core Runtime Logic":
 
   test "Window rule marks matching windows as shortcut-inhibiting":
     var model = configuredModel()
-    let (nextModel, _) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 140,
-      appId: "qemu-system-x86_64",
-      title: "Void"))
+    let (nextModel, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 140,
+        appId: "qemu-system-x86_64",
+        title: "Void",
+      )
+    )
     let snapshot = nextModel.shellSnapshot()
 
     check snapshot.windows.len == 1
     check snapshot.windows[0].keyboardShortcutsInhibit
 
   test "Live restore parser accepts native schema only":
-    let native = parseLiveRestoreJson("""
+    let native = parseLiveRestoreJson(
+      """
 {
   "schema": "triad-live-restore-v2",
   "active_tag": 2,
@@ -2943,7 +3605,8 @@ suite "Core Runtime Logic":
   ],
   "windows": [{"id": 10, "tag_id": 2, "app_id": "term"}]
 }
-""")
+"""
+    )
     check native.isSome
     check native.get().activeTag == 2
     check native.get().tags[2].layoutMode == LayoutMode.Deck
@@ -2955,14 +3618,18 @@ suite "Core Runtime Logic":
 
   test "Niri window event includes focused workspace state":
     var model = configuredModel()
-    let (_, effects) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 120,
-      appId: "alacritty",
-      title: "Alacritty"))
+    let (_, effects) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 120,
+        appId: "alacritty",
+        title: "Alacritty",
+      )
+    )
     let event = effects.filterIt(
       it.kind == EffectKind.EffBroadcastJson and
-      it.jsonPayload.contains("WindowOpenedOrChanged"))[0]
+        it.jsonPayload.contains("WindowOpenedOrChanged")
+    )[0]
     let win = parseJson(event.jsonPayload)["WindowOpenedOrChanged"]["window"]
 
     check win["id"].getInt() == 120

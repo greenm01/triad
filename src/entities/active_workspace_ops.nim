@@ -11,7 +11,7 @@ proc syncPrimaryOutputTag*(model: var Model): bool =
   model.outputTags[model.primaryOutput] = model.activeTag
   true
 
-proc setActiveWorkspace*(model: var Model; tagId: TagId): bool =
+proc setActiveWorkspace*(model: var Model, tagId: TagId): bool =
   if tagId == NullTagId:
     return false
   let tagOpt = model.tags.entity(tagId)
@@ -22,14 +22,13 @@ proc setActiveWorkspace*(model: var Model; tagId: TagId): bool =
   discard model.syncPrimaryOutputTag()
   true
 
-proc clearActiveWorkspaceIfTag*(model: var Model; tagId: TagId): bool =
+proc clearActiveWorkspaceIfTag*(model: var Model, tagId: TagId): bool =
   if tagId == NullTagId or model.activeTag != tagId:
     return false
   model.activeTag = NullTagId
   model.activeSlot = 0
   true
 
-proc replaceVisibleWorkspaceSlots*(
-    model: var Model; slots: seq[uint32]): bool =
+proc replaceVisibleWorkspaceSlots*(model: var Model, slots: seq[uint32]): bool =
   model.visibleSlots = slots
   true

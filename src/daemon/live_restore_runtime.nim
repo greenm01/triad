@@ -15,49 +15,46 @@ proc readLiveRestoreJson*(daemon: TriadDaemon): string =
     let parsed = parseLiveRestoreJson(result)
     if parsed.isSome:
       writeLiveRestoreBehaviorEvent(
-        "live_restore_snapshot_dumped",
-        defaultLiveRestorePath(),
-        "ipc",
-        parsed.get())
+        "live_restore_snapshot_dumped", defaultLiveRestorePath(), "ipc", parsed.get()
+      )
 
-proc writeCurrentLiveRestoreState*(
-    daemon: var TriadDaemon): LiveRestoreWriteResult =
+proc writeCurrentLiveRestoreState*(daemon: var TriadDaemon): LiveRestoreWriteResult =
   let payload = daemon.runtimeState.readRuntimeLiveRestoreJson()
   let candidate = parseLiveRestoreJson(payload)
   let previous = readLiveRestoreState(daemon.pendingLiveRestorePath)
   if candidate.isSome and previous.isSome and
       previous.get().suspiciousLiveRestoreCollapse(candidate.get()) and
       not liveRestoreCollapseAllowed():
-    writeBehaviorEvent("live_restore_snapshot_rejected", %*{
-      "path": daemon.pendingLiveRestorePath,
-      "context": "runtime suspicious collapse",
-      "previous": previous.get().liveRestoreSummary(),
-      "candidate": candidate.get().liveRestoreSummary()
-    })
+    writeBehaviorEvent(
+      "live_restore_snapshot_rejected",
+      %*{
+        "path": daemon.pendingLiveRestorePath,
+        "context": "runtime suspicious collapse",
+        "previous": previous.get().liveRestoreSummary(),
+        "candidate": candidate.get().liveRestoreSummary(),
+      },
+    )
     return LiveRestoreWriteResult(
       ok: false,
       path: daemon.pendingLiveRestorePath,
-      error: "refusing suspicious live restore collapse")
+      error: "refusing suspicious live restore collapse",
+    )
 
   result = daemon.runtimeState.writeRuntimeLiveRestoreState()
   if result.ok and behaviorLogEnabled():
     if candidate.isSome:
       writeLiveRestoreBehaviorEvent(
-        "live_restore_snapshot_written",
-        result.path,
-        "runtime",
-        candidate.get())
+        "live_restore_snapshot_written", result.path, "runtime", candidate.get()
+      )
 
-proc applyPendingLiveRestore*(daemon: var TriadDaemon; context: string) =
+proc applyPendingLiveRestore*(daemon: var TriadDaemon, context: string) =
   if daemon.pendingLiveRestore.isNone:
     return
 
   let state = daemon.pendingLiveRestore.get()
   writeLiveRestoreBehaviorEvent(
-    "live_restore_applied",
-    daemon.pendingLiveRestorePath,
-    context,
-    state)
+    "live_restore_applied", daemon.pendingLiveRestorePath, context, state
+  )
   discard daemon.runtimeState.applyRuntimeLiveRestore(state)
   daemon.pendingLiveRestore = none(LiveRestoreState)
   daemon.liveRestoreCommitPending = daemon.pendingLiveRestorePath.len > 0
@@ -73,11 +70,14 @@ proc commitPendingLiveRestore*(daemon: var TriadDaemon) =
 
   if completeLiveRestoreState(daemon.pendingLiveRestorePath):
     info "Live restore snapshot committed", path = daemon.pendingLiveRestorePath
-    writeBehaviorEvent("live_restore_committed", %*{
-      "path": daemon.pendingLiveRestorePath,
-      "restore_status": LiveRestoreStatusApplied
-    })
+    writeBehaviorEvent(
+      "live_restore_committed",
+      %*{
+        "path": daemon.pendingLiveRestorePath,
+        "restore_status": LiveRestoreStatusApplied,
+      },
+    )
     daemon.liveRestoreCommitPending = false
   else:
     warn "Live restore snapshot could not be committed",
-        path = daemon.pendingLiveRestorePath
+      path = daemon.pendingLiveRestorePath

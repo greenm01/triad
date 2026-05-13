@@ -16,11 +16,14 @@ this file adds the operational details an agent needs to act safely.
    run them before finishing when feasible. For runtime, compositor, reload, or
    session-behavior changes, run `nimble liveReload` as the final verification
    step after automated tests/build checks pass.
-5. **DRY First Principles**: Minimize duplication of logic. Centralize common patterns.
-6. **Data-Oriented Design (DOD)**: Prioritize data layout and transformations (following Yehonathan Sharvit's principles). Keep data separate from logic. Refer to `docs/dod-architecture.md`.
-7. **Lean & Mean Source Files**: Keep files small and focused. If a file grows too large, split it by domain.
-8. **Manageable Submodules**: Organize code into submodules by domain (e.g., `core`, `layouts`, `config`) to maintain a clean architecture.
-9. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md`, `docs/dod-architecture.md`, and `docs/configuration.md` when touching config or command surfaces. Keep `docs/comp/config-command-matrix.md` updated alongside config or command changes. These are foundational mandates. To maintain perfect consistency, you must re-read the style and DOD documents upon every context compaction or session initialization.
+5. Format Nim-family files with `nph`. Run `nph` on touched `.nim`,
+   `.nims`, and `.nimble` files before verification, and use `nph --check`
+   when validating formatting without writing changes.
+6. **DRY First Principles**: Minimize duplication of logic. Centralize common patterns.
+7. **Data-Oriented Design (DOD)**: Prioritize data layout and transformations (following Yehonathan Sharvit's principles). Keep data separate from logic. Refer to `docs/dod-architecture.md`.
+8. **Lean & Mean Source Files**: Keep files small and focused. If a file grows too large, split it by domain.
+9. **Manageable Submodules**: Organize code into submodules by domain (e.g., `core`, `layouts`, `config`) to maintain a clean architecture.
+10. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md`, `docs/dod-architecture.md`, and `docs/configuration.md` when touching config or command surfaces. Keep `docs/comp/config-command-matrix.md` updated alongside config or command changes. These are foundational mandates. To maintain perfect consistency, you must re-read the style and DOD documents upon every context compaction or session initialization.
 
 ## DOD runtime direction
 

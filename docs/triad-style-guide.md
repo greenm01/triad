@@ -21,6 +21,21 @@ These conventions are drawn directly from the successful practices established i
 *   **Setters:** Setters should use the property name with a setter signature.
     *   `proc `entity=`(...)`
 
+### Formatting Tool
+
+`nph` is the required mechanical formatter for Nim-family files in this
+repository. Run it on every touched `.nim`, `.nims`, and `.nimble` file before
+the normal verification pass.
+
+```sh
+nph src/path/to/file.nim
+nph --check src/path/to/file.nim
+```
+
+Use `nph --check` when validating formatting without writing changes. The style
+guide remains the semantic source of truth; `nph` handles mechanical layout.
+Do not hand-format code in a way that fights the formatter.
+
 ---
 
 ## 2. Import Organization

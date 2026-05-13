@@ -3,34 +3,34 @@ import ../types/runtime_values
 
 type
   EffectKind* {.pure.} = enum
-    EffNone,
-    EffManageFinish,
-    EffRenderFinish,
-    EffProposeDimensions,
-    EffSetPosition,
-    EffFocusWindow,
-    EffFocusShellSurface,
-    EffCloseWindow,
-    EffManageDirty,
-    EffBroadcastJson,
-    EffBroadcastTriadJson,
-    EffOpStartPointer,
-    EffOpEnd,
-    EffSetFullscreen,
-    EffSetMaximized,
-    EffInformResizeStart,
-    EffInformResizeEnd,
-    EffSpawnScreenLock,
-    EffSpawnWindowMenu,
-    EffSpawn,
-    EffPointerWarp,
-    EffEnsureNextKeyEaten,
-    EffCancelEnsureNextKeyEaten,
-    EffStopManager,
-    EffTriadReload,
-    EffExitSession,
-    EffFocusShellUi,
-    EffScreenshot,
+    EffNone
+    EffManageFinish
+    EffRenderFinish
+    EffProposeDimensions
+    EffSetPosition
+    EffFocusWindow
+    EffFocusShellSurface
+    EffCloseWindow
+    EffManageDirty
+    EffBroadcastJson
+    EffBroadcastTriadJson
+    EffOpStartPointer
+    EffOpEnd
+    EffSetFullscreen
+    EffSetMaximized
+    EffInformResizeStart
+    EffInformResizeEnd
+    EffSpawnScreenLock
+    EffSpawnWindowMenu
+    EffSpawn
+    EffPointerWarp
+    EffEnsureNextKeyEaten
+    EffCancelEnsureNextKeyEaten
+    EffStopManager
+    EffTriadReload
+    EffExitSession
+    EffFocusShellUi
+    EffScreenshot
     EffLog
 
   Effect* = object

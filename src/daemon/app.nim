@@ -5,15 +5,17 @@ import ../types/[model, shell_snapshot]
 import ../config/[parser, reload_policy]
 import ../ipc/[quickshell_compat, socket]
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
-import bindings_runtime, effects_runtime, live_restore_runtime,
-  manage_requests, message_queue, process_runner, quickshell_runner,
-  registry_runtime, reload_runtime, render_runtime, state
-from ../types/runtime_values import nil, BindingMode, KeyBindingConfig,
-  PointerBindingConfig, PointerOpKind, PresentationMode,
-  ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
+import
+  bindings_runtime, effects_runtime, live_restore_runtime, manage_requests,
+  message_queue, process_runner, quickshell_runner, registry_runtime, reload_runtime,
+  render_runtime, state
+from ../types/runtime_values import
+  nil, BindingMode, KeyBindingConfig, PointerBindingConfig, PointerOpKind,
+  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
   TerminalConfig, WindowId
-import std/[asyncdispatch, asyncnet, json, nativesockets, options, os,
-  strutils, tables, times]
+import
+  std/
+    [asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, tables, times]
 import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
@@ -22,11 +24,10 @@ proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
 
-proc syncRuntimeUpdate(context: string; msg: Msg): seq[Effect] =
+proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
   daemon.runtimeState.applyRuntimeUpdate(msg)
 
-proc syncRuntimeLayoutProjection(
-    context: string; msg: Msg): seq[RenderInstruction] =
+proc syncRuntimeLayoutProjection(context: string, msg: Msg): seq[RenderInstruction] =
   daemon.runtimeState.applyRuntimeLayoutProjection().instructions
 
 proc startAnimationLoop() {.async.} =
@@ -42,8 +43,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
     if msg.kind == MsgKind.WlPointerRelease:
       if daemon.runtimeState.model.pointerOp.kind != PointerOpKind.OpNone:
         if daemon.lastPointerOpSeat != nil:
-          daemon.executeEffect(Effect(kind: EffectKind.EffOpEnd,
-              endSeat: daemon.lastPointerOpSeat))
+          daemon.executeEffect(
+            Effect(kind: EffectKind.EffOpEnd, endSeat: daemon.lastPointerOpSeat)
+          )
 
     if msg.kind == MsgKind.CmdSpawnTerminal:
       spawnTerminal(daemon.runtimeState.model)
@@ -55,11 +57,13 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
 
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
-    let previousShortcutsInhibited = daemon.runtimeState.model.keyboardShortcutsInhibited()
+    let previousShortcutsInhibited =
+      daemon.runtimeState.model.keyboardShortcutsInhibited()
     let effects = syncRuntimeUpdate("message", msg)
     if previousOverview != daemon.runtimeState.model.overviewActive or
         previousSessionLocked != daemon.runtimeState.model.sessionLocked or
-        previousShortcutsInhibited != daemon.runtimeState.model.keyboardShortcutsInhibited():
+        previousShortcutsInhibited !=
+        daemon.runtimeState.model.keyboardShortcutsInhibited():
       daemon.destroyBindings()
       daemon.requestManage("binding profile changed")
 
@@ -86,10 +90,10 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
         daemon.postManageBroadcastPending = false
         daemon.postManageBroadcastReason = ""
         let snapshot = daemon.readModelSnapshot()
-        writeBehaviorEvent("niri_compat_post_manage_broadcast", %*{
-          "reason": reason,
-          "snapshot": snapshot.snapshotBehaviorPayload()
-        })
+        writeBehaviorEvent(
+          "niri_compat_post_manage_broadcast",
+          %*{"reason": reason, "snapshot": snapshot.snapshotBehaviorPayload()},
+        )
         broadcastNiriSnapshot(snapshot)
       continue
 
@@ -99,9 +103,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       daemon.recordDesiredPlacements(instructions)
       daemon.renderDesiredPlacements()
       for windowId in daemon.runtimeState.pendingAdmissionWindowIds():
-        daemon.enqueue(Msg(
-          kind: MsgKind.WlWindowAdmissionSettled,
-          admissionWindowId: windowId))
+        daemon.enqueue(
+          Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: windowId)
+        )
       daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
       daemon.riverPhase = RiverPhase.RiverIdle
       continue
@@ -126,8 +130,7 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
       return true
 
     discard daemon.display.flush()
-    let remainingMs = max(1, min(16,
-      int((deadline - epochTime()) * 1000.0)))
+    let remainingMs = max(1, min(16, int((deadline - epochTime()) * 1000.0)))
     if waitForWaylandEvents(daemon.display, remainingMs):
       if daemon.display.read_events() == -1:
         return false
@@ -151,7 +154,8 @@ proc main*() =
         waitFor client.send("event-stream\L")
         while not client.isClosed:
           let line = waitFor client.recvLine()
-          if line != "": echo line
+          if line != "":
+            echo line
       except CatchableError as e:
         if not client.isClosed:
           client.close()
@@ -160,7 +164,8 @@ proc main*() =
 
     var cmd = ""
     for i in 2 .. paramCount():
-      if i > 2: cmd.add(" ")
+      if i > 2:
+        cmd.add(" ")
       cmd.add(paramStr(i))
     try:
       if cmd == "dump-live-restore-state":
@@ -227,20 +232,17 @@ proc main*() =
       activeTag = state.activeTag,
       windows = state.tagByWindow.len
     writeLiveRestoreBehaviorEvent(
-      "live_restore_loaded",
-      daemon.pendingLiveRestorePath,
-      "startup",
-      state)
+      "live_restore_loaded", daemon.pendingLiveRestorePath, "startup", state
+    )
   elif hadRestoreSnapshot and liveRestoreStateApplied(daemon.pendingLiveRestorePath):
-    info "Applied live restore snapshot retained",
-      path = daemon.pendingLiveRestorePath
+    info "Applied live restore snapshot retained", path = daemon.pendingLiveRestorePath
   elif hadRestoreSnapshot:
     if quarantineLiveRestoreState(daemon.pendingLiveRestorePath):
       warn "Invalid live restore snapshot quarantined",
-          path = daemon.pendingLiveRestorePath
+        path = daemon.pendingLiveRestorePath
     else:
       warn "Invalid live restore snapshot could not be quarantined",
-          path = daemon.pendingLiveRestorePath
+        path = daemon.pendingLiveRestorePath
 
   if daemon.pendingLiveRestore.isSome and not hasInitialRiverState():
     info "Live restore handoff waiting for initial River state",
@@ -250,8 +252,8 @@ proc main*() =
         path = daemon.pendingLiveRestorePath
       quit 0
 
-  info "Triad connected to River", outputs = daemon.outputPointers.len,
-      seats = daemon.seatPointers.len
+  info "Triad connected to River",
+    outputs = daemon.outputPointers.len, seats = daemon.seatPointers.len
 
   daemon.applyPendingLiveRestore("startup")
 
@@ -285,19 +287,17 @@ proc main*() =
       return
     ipcStarted = true
     info "Starting Triad IPC server", path = triadSocket
-    writeBehaviorEvent("triad_ipc_server_starting", %*{
-      "path": triadSocket
-    })
+    writeBehaviorEvent("triad_ipc_server_starting", %*{"path": triadSocket})
     asyncCheck startIpcServer(
-      triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson)
+      triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson
+    )
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
       info "Starting Niri-compatible IPC server", path = niriSocketPath
-      writeBehaviorEvent("niri_compat_ipc_server_starting", %*{
-        "path": niriSocketPath
-      })
+      writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
-        niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson)
+        niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson
+      )
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()
@@ -329,7 +329,8 @@ proc main*() =
     if daemon.initialManageComplete:
       startIpcServers()
       daemon.quickshellState.spawnPendingQuickshell(
-        daemon.runtimeState.model, niriSocketPath, "initial manage")
+        daemon.runtimeState.model, niriSocketPath, "initial manage"
+      )
 
     daemon.flushManageRequest()
 

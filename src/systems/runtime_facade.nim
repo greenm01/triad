@@ -8,7 +8,8 @@ import layout_projection, update, window_lifecycle, workspaces
 export runtime_state
 
 proc initRuntimeStateFromConfig*(
-    config: Config; activeTag: uint32 = 1): TriadRuntimeState =
+    config: Config, activeTag: uint32 = 1
+): TriadRuntimeState =
   var model = Model(activeSlot: activeTag)
   model.applyConfig(config)
   discard model.ensureActiveWorkspace()
@@ -16,26 +17,22 @@ proc initRuntimeStateFromConfig*(
     discard model.setHotkeyOverlayOpen(true)
   TriadRuntimeState(model: model)
 
-proc applyRuntimeUpdate*(
-    state: var TriadRuntimeState; msg: Msg): seq[Effect] =
+proc applyRuntimeUpdate*(state: var TriadRuntimeState, msg: Msg): seq[Effect] =
   let (next, effects) = state.model.update(msg)
   state.model = next
   effects
 
-proc applyRuntimeLayoutProjection*(
-    state: var TriadRuntimeState): LayoutProjection =
+proc applyRuntimeLayoutProjection*(state: var TriadRuntimeState): LayoutProjection =
   result = state.model.layoutProjection()
   state.model.applyLayoutProjection(result)
 
-proc applyRuntimeConfig*(
-    state: var TriadRuntimeState;
-    config: Config): bool =
+proc applyRuntimeConfig*(state: var TriadRuntimeState, config: Config): bool =
   state.model.applyConfig(config)
   true
 
 proc applyRuntimeLiveRestore*(
-    state: var TriadRuntimeState;
-    restoreState: LiveRestoreState): bool =
+    state: var TriadRuntimeState, restoreState: LiveRestoreState
+): bool =
   state.model.applyLiveRestore(restoreState.pendingRestoreState())
   true
 
@@ -50,6 +47,6 @@ proc pendingAdmissionWindowIds*(state: TriadRuntimeState): seq[rv.WindowId] =
     result.add(rv.WindowId(uint32(externalId)))
 
 proc writeRuntimeLiveRestoreState*(
-    state: TriadRuntimeState;
-    path = defaultLiveRestorePath()): LiveRestoreWriteResult =
+    state: TriadRuntimeState, path = defaultLiveRestorePath()
+): LiveRestoreWriteResult =
   state.model.writeLiveRestoreState(path)

@@ -3,12 +3,12 @@ import floating_policy
 import ../state/engine
 
 proc chooseFullscreenOutput*(
-    model: Model; requested: ExternalOutputId): ExternalOutputId =
+    model: Model, requested: ExternalOutputId
+): ExternalOutputId =
   if requested != NullExternalOutputId and
       model.outputForExternal(requested) != NullOutputId:
     return requested
-  if model.primaryOutput != NullOutputId and model.hasOutput(
-      model.primaryOutput):
+  if model.primaryOutput != NullOutputId and model.hasOutput(model.primaryOutput):
     let output = model.output(model.primaryOutput)
     if output.isSome:
       return output.get().externalId
@@ -17,22 +17,26 @@ proc chooseFullscreenOutput*(
   NullExternalOutputId
 
 proc updateWindowDimensionsForExternal*(
-    model: var Model; externalId: ExternalWindowId; w, h: int32): bool =
+    model: var Model, externalId: ExternalWindowId, w, h: int32
+): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowDimensions(winId, w, h)
 
 proc updateWindowDecorationHintForExternal*(
-    model: var Model; externalId: ExternalWindowId; hint: uint32): bool =
+    model: var Model, externalId: ExternalWindowId, hint: uint32
+): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowDecorationHint(winId, hint)
 
 proc updateWindowPresentationHintForExternal*(
-    model: var Model; externalId: ExternalWindowId; hint: uint32): bool =
+    model: var Model, externalId: ExternalWindowId, hint: uint32
+): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowPresentationHint(winId, hint)
 
-proc updateWindowParentForExternal*(model: var Model;
-    externalId: ExternalWindowId; parentExternalId: ExternalWindowId): bool =
+proc updateWindowParentForExternal*(
+    model: var Model, externalId: ExternalWindowId, parentExternalId: ExternalWindowId
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -41,8 +45,7 @@ proc updateWindowParentForExternal*(model: var Model;
     return false
   if winOpt.get().parentExternalId == parentExternalId:
     return false
-  let wasPending =
-    winOpt.get().admissionState == WindowAdmissionState.PendingAdmission
+  let wasPending = winOpt.get().admissionState == WindowAdmissionState.PendingAdmission
   result = true
   if wasPending:
     discard model.setWindowAdmission(winId, WindowAdmissionState.Admitted)
@@ -51,13 +54,14 @@ proc updateWindowParentForExternal*(model: var Model;
     result = model.applyParentFloatingPolicy(winId, parentExternalId) or result
 
 proc updateWindowIdentifierForExternal*(
-    model: var Model; externalId: ExternalWindowId; identifier: string):
-    bool =
+    model: var Model, externalId: ExternalWindowId, identifier: string
+): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowIdentifier(winId, identifier)
 
 proc updateWindowAppIdForExternal*(
-    model: var Model; externalId: ExternalWindowId; appId: string): bool =
+    model: var Model, externalId: ExternalWindowId, appId: string
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -66,7 +70,8 @@ proc updateWindowAppIdForExternal*(
   true
 
 proc updateWindowTitleForExternal*(
-    model: var Model; externalId: ExternalWindowId; title: string): bool =
+    model: var Model, externalId: ExternalWindowId, title: string
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -74,35 +79,37 @@ proc updateWindowTitleForExternal*(
   discard model.setWindowKeyboardShortcutsInhibit(winId, false, false)
   true
 
-proc updateWindowDimensionsHintForExternal*(model: var Model;
-    externalId: ExternalWindowId; minWidth, minHeight, maxWidth,
-    maxHeight: int32): bool =
+proc updateWindowDimensionsHintForExternal*(
+    model: var Model,
+    externalId: ExternalWindowId,
+    minWidth, minHeight, maxWidth, maxHeight: int32,
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
-  result = model.setWindowDimensionsHint(
-    winId, minWidth, minHeight, maxWidth, maxHeight)
+  result =
+    model.setWindowDimensionsHint(winId, minWidth, minHeight, maxWidth, maxHeight)
   let winOpt = model.windowData(winId)
   if winOpt.isSome and winOpt.get().parentExternalId != NullExternalWindowId:
     result = model.reconcileParentedWindowPolicy(winId) or result
   else:
     result = model.applyFixedSizeFloatingPolicy(winId) or result
 
-proc requestFullscreenForExternal*(model: var Model;
-    externalId: ExternalWindowId; requestedOutput: ExternalOutputId): bool =
+proc requestFullscreenForExternal*(
+    model: var Model, externalId: ExternalWindowId, requestedOutput: ExternalOutputId
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
-  model.setWindowFullscreen(
-    winId, true, model.chooseFullscreenOutput(requestedOutput))
+  model.setWindowFullscreen(winId, true, model.chooseFullscreenOutput(requestedOutput))
 
-proc exitFullscreenForExternal*(
-    model: var Model; externalId: ExternalWindowId): bool =
+proc exitFullscreenForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowFullscreen(winId, false)
 
 proc toggleFullscreenForExternal*(
-    model: var Model; externalId: ExternalWindowId): bool =
+    model: var Model, externalId: ExternalWindowId
+): bool =
   let winId = model.windowForExternal(externalId)
   let win = model.window(winId)
   if win.isNone:
@@ -111,21 +118,23 @@ proc toggleFullscreenForExternal*(
   model.setWindowFullscreen(
     winId,
     nextFullscreen,
-    if nextFullscreen: model.chooseFullscreenOutput(NullExternalOutputId)
-    else: NullExternalOutputId)
+    if nextFullscreen:
+      model.chooseFullscreenOutput(NullExternalOutputId)
+    else:
+      NullExternalOutputId,
+  )
 
-proc requestMaximizeForExternal*(
-    model: var Model; externalId: ExternalWindowId): bool =
+proc requestMaximizeForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowMaximized(winId, true)
 
 proc requestUnmaximizeForExternal*(
-    model: var Model; externalId: ExternalWindowId): bool =
+    model: var Model, externalId: ExternalWindowId
+): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.setWindowMaximized(winId, false)
 
-proc requestMinimizeForExternal*(
-    model: var Model; externalId: ExternalWindowId): bool =
+proc requestMinimizeForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId or not model.setWindowMinimized(winId, true):
     return false
@@ -153,8 +162,13 @@ proc toggleFloatingFocused*(model: var Model): bool =
     return false
   let nextFloating = not win.get().isFloating
   model.setWindowFloating(
-    winId, nextFloating,
-    if nextFloating: model.defaultFloatingGeom() else: GeometryRect())
+    winId,
+    nextFloating,
+    if nextFloating:
+      model.defaultFloatingGeom()
+    else:
+      GeometryRect(),
+  )
 
 proc toggleFullscreenFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
@@ -163,9 +177,13 @@ proc toggleFullscreenFocused*(model: var Model): bool =
     return false
   let nextFullscreen = not win.get().isFullscreen
   model.setWindowFullscreen(
-    winId, nextFullscreen,
-    if nextFullscreen: model.chooseFullscreenOutput(NullExternalOutputId)
-    else: NullExternalOutputId)
+    winId,
+    nextFullscreen,
+    if nextFullscreen:
+      model.chooseFullscreenOutput(NullExternalOutputId)
+    else:
+      NullExternalOutputId,
+  )
 
 proc toggleMaximizedFocused*(model: var Model): bool =
   let winId = model.focusedWindow()

@@ -3,8 +3,7 @@ import floating_policy, focus, placement, popup_tree, scratchpad, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole
 
-proc restoredWindowId(model: Model; externalId: ExternalWindowId):
-    WindowId =
+proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   model.windowForExternal(externalId)
 
 proc resolveRestoreHistories(model: var Model) =
@@ -34,7 +33,7 @@ proc syncRestoreOutputTags(model: var Model) =
       else:
         discard model.setOutputTag(outputId, tagId)
 
-proc materializeRestoredTarget(model: var Model; slot: uint32): TagId =
+proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
   if slot == 0:
     return NullTagId
 
@@ -55,30 +54,24 @@ proc materializeRestoredTarget(model: var Model; slot: uint32): TagId =
       targetViewportYOffset = restored.targetViewportYOffset,
       currentViewportYOffset = restored.currentViewportYOffset,
       masterCount = restored.masterCount,
-      masterSplitRatio = restored.masterSplitRatio
+      masterSplitRatio = restored.masterSplitRatio,
     )
     for col in restored.columns:
-      discard model.addColumn(
-        result, col.widthProportion, col.isFullWidth)
+      discard model.addColumn(result, col.widthProportion, col.isFullWidth)
   else:
     result = model.ensureWorkspaceSlot(slot)
 
   if result != NullTagId and restoredTag.isSome:
     let restored = restoredTag.get()
     discard model.setTagRestoredState(
-      result,
-      restored.name,
-      restored.layoutMode,
-      restored.targetViewportXOffset,
-      restored.currentViewportXOffset,
-      restored.targetViewportYOffset,
-      restored.currentViewportYOffset,
-      restored.masterCount,
-      restored.masterSplitRatio
+      result, restored.name, restored.layoutMode, restored.targetViewportXOffset,
+      restored.currentViewportXOffset, restored.targetViewportYOffset,
+      restored.currentViewportYOffset, restored.masterCount, restored.masterSplitRatio,
     )
 
-proc ensureRestoredColumn(model: var Model; tagId: TagId;
-    restoredTag: RestoredTagData; colIdx: int): ColumnId =
+proc ensureRestoredColumn(
+    model: var Model, tagId: TagId, restoredTag: RestoredTagData, colIdx: int
+): ColumnId =
   while model.columnCountForTag(tagId) <= colIdx:
     let columnCount = model.columnCountForTag(tagId)
     let width =
@@ -88,17 +81,19 @@ proc ensureRestoredColumn(model: var Model; tagId: TagId;
         model.defaultColumnWidth()
     let fullWidth =
       columnCount < restoredTag.columns.len and
-        restoredTag.columns[columnCount].isFullWidth
+      restoredTag.columns[columnCount].isFullWidth
     discard model.addColumn(tagId, width, fullWidth)
   result = model.columnAt(tagId, colIdx)
   if colIdx < restoredTag.columns.len:
-    discard model.setColumnWidth(
-      result, restoredTag.columns[colIdx].widthProportion)
-    discard model.setColumnFullWidth(
-      result, restoredTag.columns[colIdx].isFullWidth)
+    discard model.setColumnWidth(result, restoredTag.columns[colIdx].widthProportion)
+    discard model.setColumnFullWidth(result, restoredTag.columns[colIdx].isFullWidth)
 
-proc placeRestoredWindow(model: var Model; targetSlot: uint32;
-    restoredExternalId, externalId: ExternalWindowId; winId: WindowId): bool =
+proc placeRestoredWindow(
+    model: var Model,
+    targetSlot: uint32,
+    restoredExternalId, externalId: ExternalWindowId,
+    winId: WindowId,
+): bool =
   let tagId = model.materializeRestoredTarget(targetSlot)
   if tagId == NullTagId:
     return false
@@ -111,10 +106,10 @@ proc placeRestoredWindow(model: var Model; targetSlot: uint32;
     var inserted = false
     for colIdx, restoredCol in restoredTag.columns:
       if restoredCol.windows.find(restoredExternalId) != -1:
-        let columnId = model.ensureRestoredColumn(
-          tagId, restoredTag, colIdx)
+        let columnId = model.ensureRestoredColumn(tagId, restoredTag, colIdx)
         discard model.moveWindowToColumn(
-          tagId, winId, columnId, model.windowCountForColumn(columnId))
+          tagId, winId, columnId, model.windowCountForColumn(columnId)
+        )
         inserted = true
         break
     if not inserted:
@@ -130,12 +125,16 @@ proc placeRestoredWindow(model: var Model; targetSlot: uint32;
     discard model.addPlacedWindowColumn(tagId, winId)
   true
 
-proc applyRestoredWindowState(model: var Model; winId: WindowId;
-    restored: RestoredWindowData) =
+proc applyRestoredWindowState(
+    model: var Model, winId: WindowId, restored: RestoredWindowData
+) =
   discard model.setWindowRestoredState(winId, restored)
 
-proc applyPendingRestore(model: var Model; externalId,
-    restoredExternalId: ExternalWindowId; restored: RestoredWindowData): bool =
+proc applyPendingRestore(
+    model: var Model,
+    externalId, restoredExternalId: ExternalWindowId,
+    restored: RestoredWindowData,
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId or restoredExternalId == NullExternalWindowId:
     return false
@@ -160,8 +159,7 @@ proc applyPendingRestore(model: var Model; externalId,
     restored.slot == 0 and model.restoredScratchpadContains(restoredExternalId)
   if not restoredScratchpad and targetSlot != 0:
     discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
-    discard model.placeRestoredWindow(
-      targetSlot, restoredExternalId, externalId, winId)
+    discard model.placeRestoredWindow(targetSlot, restoredExternalId, externalId, winId)
     if restoresFocusedWindow:
       let tagId = model.tagForSlot(targetSlot)
       if tagId != NullTagId:
@@ -178,7 +176,7 @@ proc applyPendingRestore(model: var Model; externalId,
   model.syncRestoreOutputTags()
   true
 
-proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
+proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
   discard model.loadRestoreState(state)
   var targetSlot = state.activeSlot
   if targetSlot != 0:
@@ -187,8 +185,7 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
       if slot == targetSlot:
         activeHasRestoredWindow = true
         break
-    if not activeHasRestoredWindow and
-        targetSlot > model.defaultWorkspaceCount():
+    if not activeHasRestoredWindow and targetSlot > model.defaultWorkspaceCount():
       let fallback = model.lowerWorkspaceFallback(targetSlot)
       if fallback != 0 and fallback != targetSlot:
         targetSlot = fallback
@@ -203,8 +200,7 @@ proc applyLiveRestore*(model: var Model; state: PendingRestoreState) =
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()
 
-proc newWindowColumnIndex(model: Model; tagId: TagId;
-    isFloating: bool): int =
+proc newWindowColumnIndex(model: Model, tagId: TagId, isFloating: bool): int =
   result = high(int)
   if isFloating or tagId == NullTagId or tagId != model.activeTag:
     return
@@ -215,8 +211,7 @@ proc newWindowColumnIndex(model: Model; tagId: TagId;
 
   let focused = tagOpt.get().focusedWindow
   let focusedOpt = model.windowData(focused)
-  if focused == NullWindowId or focusedOpt.isNone or
-      focusedOpt.get().isFloating:
+  if focused == NullWindowId or focusedOpt.isNone or focusedOpt.get().isFloating:
     return
 
   let placementOpt = model.placementForWindowOnTag(tagId, focused)
@@ -228,10 +223,14 @@ proc newWindowColumnIndex(model: Model; tagId: TagId;
     return
   result = int(colIdx)
 
-proc createWindowForExternal*(model: var Model;
-    externalId: ExternalWindowId; appId, title: string; identifier = "";
-    parentExternalId = NullExternalWindowId; deferAdmission = false):
-    WindowId =
+proc createWindowForExternal*(
+    model: var Model,
+    externalId: ExternalWindowId,
+    appId, title: string,
+    identifier = "",
+    parentExternalId = NullExternalWindowId,
+    deferAdmission = false,
+): WindowId =
   if externalId == NullExternalWindowId:
     return NullWindowId
 
@@ -242,8 +241,10 @@ proc createWindowForExternal*(model: var Model;
   discard model.clearSettledRestoreFocus()
   let restoreFocusPending = model.restoreFocusedWindowPending()
   var targetSlot =
-    if model.activeWorkspaceSlot() == 0: 1'u32
-    else: model.activeWorkspaceSlot()
+    if model.activeWorkspaceSlot() == 0:
+      1'u32
+    else:
+      model.activeWorkspaceSlot()
 
   let directRestore = model.consumeRestoreWindow(externalId)
   if directRestore.isSome:
@@ -253,8 +254,7 @@ proc createWindowForExternal*(model: var Model;
       targetSlot = restored.slot
       hasRestoredTag = true
   elif model.restoreWindowCount() > 0:
-    let matched = model.findRestoredWindowByIdentity(
-      appId, title, identifier)
+    let matched = model.findRestoredWindowByIdentity(appId, title, identifier)
     if matched != NullExternalWindowId:
       let matchedRestore = model.consumeRestoreWindow(matched)
       if matchedRestore.isNone:
@@ -279,17 +279,13 @@ proc createWindowForExternal*(model: var Model;
 
   let ruleMatch = model.windowRuleFor(appId, title)
   let parentedRole =
-    if ruleMatch.found: ruleMatch.rule.parentedRole
-    else: ParentedRole.Dialog
+    if ruleMatch.found: ruleMatch.rule.parentedRole else: ParentedRole.Dialog
   let ruleForcesSlot = ruleMatch.found and ruleMatch.rule.defaultSlot != 0
-  if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and
-      not hasRestoredTag:
-    targetSlot =
-      ruleMatch.rule.defaultSlot
-  let forcedLayout =
-    if ruleMatch.found: ruleMatch.rule.forcedLayout
-    else: 0
-  let parentKnown = parentExternalId != NullExternalWindowId and
+  if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and not hasRestoredTag:
+    targetSlot = ruleMatch.rule.defaultSlot
+  let forcedLayout = if ruleMatch.found: ruleMatch.rule.forcedLayout else: 0
+  let parentKnown =
+    parentExternalId != NullExternalWindowId and
     model.windowForExternal(parentExternalId) != NullWindowId
   let parentOpensFloating =
     if ruleMatch.found and ruleMatch.rule.openFloatingSet:
@@ -315,12 +311,10 @@ proc createWindowForExternal*(model: var Model;
     floatingGeom = restored.floatingGeom
   elif parentKnown and parentOpensFloating:
     isFloating = true
-  let parentAutoFloating = parentKnown and isFloating and
-    parentedRole == ParentedRole.Dialog and
-    not hasRestoredWindow and
-    not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
-  let pendingAdmission = deferAdmission and not parentKnown and
-    not hasRestoredWindow
+  let parentAutoFloating =
+    parentKnown and isFloating and parentedRole == ParentedRole.Dialog and
+    not hasRestoredWindow and not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
+  let pendingAdmission = deferAdmission and not parentKnown and not hasRestoredWindow
   var focusAfterAdmission = false
 
   result = model.windowForExternal(externalId)
@@ -341,19 +335,21 @@ proc createWindowForExternal*(model: var Model;
     floatingGeom = floatingGeom,
     parentAutoFloating = parentAutoFloating,
     admissionState =
-      if pendingAdmission: WindowAdmissionState.PendingAdmission
-      else: WindowAdmissionState.Admitted,
+      if pendingAdmission:
+        WindowAdmissionState.PendingAdmission
+      else:
+        WindowAdmissionState.Admitted,
     focusAfterAdmission = false,
     parentExternalId = parentExternalId,
     keyboardShortcutsInhibit = shortcutInhibit,
-    preserveRuntimeState = existingWindow and not hasRestoredWindow
+    preserveRuntimeState = existingWindow and not hasRestoredWindow,
   )
 
   if existingWindow and not hasRestoredTag and not hasRestoredWindow:
     if pendingAdmission and focusAfterAdmission:
       discard model.setWindowAdmission(
-        result, WindowAdmissionState.PendingAdmission,
-        focusAfterAdmission = true)
+        result, WindowAdmissionState.PendingAdmission, focusAfterAdmission = true
+      )
     model.resolveRestoreHistories()
     model.syncRestoreOutputTags()
     discard model.clearSettledRestoreFocus()
@@ -364,7 +360,8 @@ proc createWindowForExternal*(model: var Model;
     discard model.ensureFloatingAt(
       result,
       model.floatingGeomForWindow(result, parentExternalId),
-      parentAutoFloating = parentAutoFloating)
+      parentAutoFloating = parentAutoFloating,
+    )
 
   if hasRestoredWindow:
     model.applyRestoredWindowState(result, restored)
@@ -379,27 +376,26 @@ proc createWindowForExternal*(model: var Model;
 
   if not restoredScratchpad:
     if hasRestoredTag:
-      discard model.placeRestoredWindow(
-        targetSlot, restoredExternalId, externalId, result)
+      discard
+        model.placeRestoredWindow(targetSlot, restoredExternalId, externalId, result)
     else:
       let targetTag = model.ensureWorkspaceSlot(targetSlot, forcedLayout)
       if targetTag == NullTagId:
         return NullWindowId
       if forcedLayout != 0:
         discard model.setTagLayout(
-          targetTag, safeLayoutMode(
-            forcedLayout, model.tag(targetTag).get().layoutMode))
+          targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)
+        )
       discard model.addPlacedWindowColumn(
-        targetTag,
-        result,
-        model.newWindowColumnIndex(targetTag, isFloating))
+        targetTag, result, model.newWindowColumnIndex(targetTag, isFloating)
+      )
       if not model.sessionLocked and not restoreFocusPending:
         if parentKnown:
           let parentOpensFocused =
             if ruleMatch.found and ruleMatch.rule.openFocusedSet:
               ruleMatch.rule.openFocused
-          else:
-            targetSlot == model.activeWorkspaceSlot()
+            else:
+              targetSlot == model.activeWorkspaceSlot()
           if parentOpensFocused:
             discard model.applyParentFocusPolicy(result, parentExternalId)
         elif targetSlot == model.activeWorkspaceSlot():
@@ -434,11 +430,12 @@ proc createWindowForExternal*(model: var Model;
   discard model.pruneDynamicWorkspaces()
   if pendingAdmission and focusAfterAdmission:
     discard model.setWindowAdmission(
-      result, WindowAdmissionState.PendingAdmission,
-      focusAfterAdmission = true)
+      result, WindowAdmissionState.PendingAdmission, focusAfterAdmission = true
+    )
 
-proc settleWindowAdmissionForExternal*(model: var Model;
-    externalId: ExternalWindowId): bool =
+proc settleWindowAdmissionForExternal*(
+    model: var Model, externalId: ExternalWindowId
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -453,8 +450,9 @@ proc settleWindowAdmissionForExternal*(model: var Model;
     if tagId != NullTagId and tagId == model.activeTag:
       discard model.focusWindow(winId)
 
-proc updateWindowIdentifierAndRestoreForExternal*(model: var Model;
-    externalId: ExternalWindowId; identifier: string): bool =
+proc updateWindowIdentifierAndRestoreForExternal*(
+    model: var Model, externalId: ExternalWindowId, identifier: string
+): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -467,12 +465,11 @@ proc updateWindowIdentifierAndRestoreForExternal*(model: var Model;
     let matchedRestore = model.restoreWindow(matchedExternalId)
     if matchedRestore.isNone:
       return true
-    return model.applyPendingRestore(
-      externalId, matchedExternalId, matchedRestore.get())
+    return
+      model.applyPendingRestore(externalId, matchedExternalId, matchedRestore.get())
   true
 
-proc destroyWindowForExternal*(
-    model: var Model; externalId: ExternalWindowId): bool =
+proc destroyWindowForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
@@ -481,8 +478,7 @@ proc destroyWindowForExternal*(
   let closedRoot = model.popupRoot(winId)
   let closedWasFocused =
     model.focusedOnActiveTag() == winId or
-    (model.tag(activeTag).isSome and
-      model.tag(activeTag).get().focusedWindow == winId)
+    (model.tag(activeTag).isSome and model.tag(activeTag).get().focusedWindow == winId)
   var affectedTags: seq[TagId] = @[]
   for tagId, placementWinId, _ in model.placementsWithId():
     if placementWinId == winId and affectedTags.find(tagId) == -1:
@@ -499,12 +495,10 @@ proc destroyWindowForExternal*(
     if closedRoot != NullWindowId and closedRoot != winId:
       let popupFocus = model.lastFocusedInPopupTree(closedRoot, activeTag)
       if popupFocus != NullWindowId:
-        recoveredPopupFocus = model.focusWindow(
-          popupFocus, restorePopupTree = false)
+        recoveredPopupFocus = model.focusWindow(popupFocus, restorePopupTree = false)
       elif model.windowData(closedRoot).isSome and
           model.placementForWindowOnTag(activeTag, closedRoot).isSome:
-        recoveredPopupFocus = model.focusWindow(
-          closedRoot, restorePopupTree = false)
+        recoveredPopupFocus = model.focusWindow(closedRoot, restorePopupTree = false)
 
     if recoveredPopupFocus:
       discard

@@ -4,25 +4,25 @@ import ../types/core
 proc len*[ID, T](manager: EntityManager[ID, T]): int =
   manager.data.len
 
-proc contains*[ID, T](manager: EntityManager[ID, T]; id: ID): bool =
+proc contains*[ID, T](manager: EntityManager[ID, T], id: ID): bool =
   manager.index.hasKey(id)
 
-proc entity*[ID, T](manager: EntityManager[ID, T]; id: ID): Option[T] =
+proc entity*[ID, T](manager: EntityManager[ID, T], id: ID): Option[T] =
   if not manager.index.hasKey(id):
     return none(T)
   some(manager.data[manager.index[id]])
 
-proc mEntity*[ID, T](manager: var EntityManager[ID, T]; id: ID): var T =
+proc mEntity*[ID, T](manager: var EntityManager[ID, T], id: ID): var T =
   manager.data[manager.index[id]]
 
-proc insert*[ID, T](manager: var EntityManager[ID, T]; entity: T) =
+proc insert*[ID, T](manager: var EntityManager[ID, T], entity: T) =
   let id = entity.id
   if manager.index.hasKey(id):
     raise newException(ValueError, "entity already exists: " & $id)
   manager.index[id] = manager.data.len
   manager.data.add(entity)
 
-proc delete*[ID, T](manager: var EntityManager[ID, T]; id: ID): bool =
+proc delete*[ID, T](manager: var EntityManager[ID, T], id: ID): bool =
   if not manager.index.hasKey(id):
     return false
 

@@ -8,7 +8,4 @@ proc waylandSessionProblem*(runtimeDir, waylandDisplay: string): string =
   ""
 
 proc currentWaylandSessionProblem*(): string =
-  waylandSessionProblem(
-    getEnv("XDG_RUNTIME_DIR", ""),
-    getEnv("WAYLAND_DISPLAY", "")
-  )
+  waylandSessionProblem(getEnv("XDG_RUNTIME_DIR", ""), getEnv("WAYLAND_DISPLAY", ""))

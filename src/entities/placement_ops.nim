@@ -2,15 +2,13 @@ import std/[options, tables]
 import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
 
-proc refreshWindowIndexes(
-    model: var Model; tagId: TagId; columnId: ColumnId) =
+proc refreshWindowIndexes(model: var Model, tagId: TagId, columnId: ColumnId) =
   if model.windowsByColumn.hasKey(columnId):
     for idx, winId in model.windowsByColumn[columnId]:
       if model.placementByTagWindow.hasKey((tagId, winId)):
         model.placementByTagWindow[(tagId, winId)].windowIdx = uint32(idx + 1)
 
-proc deleteColumnIfEmpty(
-    model: var Model; tagId: TagId; columnId: ColumnId) =
+proc deleteColumnIfEmpty(model: var Model, tagId: TagId, columnId: ColumnId) =
   if model.windowsByColumn.getOrDefault(columnId, @[]).len > 0:
     return
   if model.columnsByTag.hasKey(tagId):
@@ -20,21 +18,17 @@ proc deleteColumnIfEmpty(
   model.windowsByColumn.del(columnId)
   discard model.columns.delete(columnId)
 
-proc placeWindow*(
-    model: var Model; tagId: TagId; columnId: ColumnId;
-    winId: WindowId) =
+proc placeWindow*(model: var Model, tagId: TagId, columnId: ColumnId, winId: WindowId) =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
     raise newException(ValueError, "placement tag does not exist: " & $tagId)
   let columnOpt = model.columns.entity(columnId)
   if columnOpt.isNone:
-    raise newException(
-      ValueError, "placement column does not exist: " & $columnId)
+    raise newException(ValueError, "placement column does not exist: " & $columnId)
   if model.windows.entity(winId).isNone:
     raise newException(ValueError, "placement window does not exist: " & $winId)
   if columnOpt.get().tagId != tagId:
-    raise newException(
-      ValueError, "placement column belongs to a different tag")
+    raise newException(ValueError, "placement column belongs to a different tag")
 
   let key = (tagId, winId)
   if model.placementByTagWindow.hasKey(key):
@@ -53,18 +47,14 @@ proc placeWindow*(
     model.windowsByColumn[columnId].add(winId)
   let winIdx = uint32(model.windowsByColumn[columnId].find(winId) + 1)
   model.placementByTagWindow[key] = WindowPlacement(
-    tagId: tagId,
-    windowId: winId,
-    columnId: columnId,
-    windowIdx: winIdx
+    tagId: tagId, windowId: winId, columnId: columnId, windowIdx: winIdx
   )
 
   var mask = model.windowTags.getOrDefault(winId, EmptyTagMask)
   mask.incl(tagOpt.get().bit)
   model.windowTags[winId] = mask
 
-proc removeWindowFromTag*(
-    model: var Model; tagId: TagId; winId: WindowId): bool =
+proc removeWindowFromTag*(model: var Model, tagId: TagId, winId: WindowId): bool =
   let key = (tagId, winId)
   if not model.placementByTagWindow.hasKey(key):
     return false
@@ -93,8 +83,12 @@ proc removeWindowFromTag*(
   true
 
 proc moveWindowToColumn*(
-    model: var Model; tagId: TagId; winId: WindowId;
-    targetColumnId: ColumnId; targetIdx: int): bool =
+    model: var Model,
+    tagId: TagId,
+    winId: WindowId,
+    targetColumnId: ColumnId,
+    targetIdx: int,
+): bool =
   if model.columns.entity(targetColumnId).isNone:
     return false
   if model.columns.entity(targetColumnId).get().tagId != tagId:
@@ -132,7 +126,7 @@ proc moveWindowToColumn*(
     tagId: tagId,
     windowId: winId,
     columnId: targetColumnId,
-    windowIdx: uint32(insertIdx + 1)
+    windowIdx: uint32(insertIdx + 1),
   )
   model.refreshWindowIndexes(tagId, targetColumnId)
   if oldColumn != NullColumnId and oldColumn != targetColumnId:
@@ -140,8 +134,12 @@ proc moveWindowToColumn*(
   true
 
 proc swapPlacedWindows*(
-    model: var Model; firstTagId: TagId; firstWinId: WindowId;
-    secondTagId: TagId; secondWinId: WindowId): bool =
+    model: var Model,
+    firstTagId: TagId,
+    firstWinId: WindowId,
+    secondTagId: TagId,
+    secondWinId: WindowId,
+): bool =
   let firstKey = (firstTagId, firstWinId)
   let secondKey = (secondTagId, secondWinId)
   if not model.placementByTagWindow.hasKey(firstKey) or
@@ -190,12 +188,12 @@ proc swapPlacedWindows*(
     tagId: firstTagId,
     windowId: secondWinId,
     columnId: first.columnId,
-    windowIdx: uint32(firstIdx + 1)
+    windowIdx: uint32(firstIdx + 1),
   )
   model.placementByTagWindow[(secondTagId, firstWinId)] = WindowPlacement(
     tagId: secondTagId,
     windowId: firstWinId,
     columnId: second.columnId,
-    windowIdx: uint32(secondIdx + 1)
+    windowIdx: uint32(secondIdx + 1),
   )
   true

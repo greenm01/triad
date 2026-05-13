@@ -5,9 +5,9 @@ from ../types/runtime_values import WindowId
 
 type
   ProtocolSurfaceKind* {.pure.} = enum
-    PskShell,
-    PskHotkeyOverlay,
-    PskDecorationAbove,
+    PskShell
+    PskHotkeyOverlay
+    PskDecorationAbove
     PskDecorationBelow
 
   OwnedProtocolSurface* = object

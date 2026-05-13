@@ -6,13 +6,12 @@ from ../types/runtime_values import Direction, RenderInstruction
 import layout_projection
 import popup_tree
 
-type
-  FocusCandidate = object
-    winId: WindowId
-    geom: typeof(RenderInstruction().geom)
-    order: int
+type FocusCandidate = object
+  winId: WindowId
+  geom: typeof(RenderInstruction().geom)
+  order: int
 
-proc windowOnTag(model: Model; tagId: TagId; winId: WindowId): bool =
+proc windowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
 
 proc focusedOnActiveTag*(model: Model): WindowId =
@@ -21,34 +20,31 @@ proc focusedOnActiveTag*(model: Model): WindowId =
     return NullWindowId
   let focused = tagOpt.get().focusedWindow
   let winOpt = model.windowData(focused)
-  if focused != NullWindowId and winOpt.isSome and
-      not winOpt.get().isMinimized and
-      winOpt.get().windowAdmitted() and
-      model.windowOnTag(model.activeTag, focused):
+  if focused != NullWindowId and winOpt.isSome and not winOpt.get().isMinimized and
+      winOpt.get().windowAdmitted() and model.windowOnTag(model.activeTag, focused):
     return focused
   NullWindowId
 
-proc firstFocusableWindow(model: Model; tagId: TagId): WindowId =
+proc firstFocusableWindow(model: Model, tagId: TagId): WindowId =
   for winId, win in model.windowsOnTagWithId(tagId):
     if not win.isMinimized and win.windowAdmitted():
       return winId
   NullWindowId
 
-proc recomputeVisibleFocus*(model: var Model; tagId: TagId): WindowId =
+proc recomputeVisibleFocus*(model: var Model, tagId: TagId): WindowId =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return NullWindowId
   let focused = tagOpt.get().focusedWindow
   let winOpt = model.windowData(focused)
-  if focused != NullWindowId and winOpt.isSome and
-      not winOpt.get().isMinimized and winOpt.get().windowAdmitted() and
-      model.windowOnTag(tagId, focused):
+  if focused != NullWindowId and winOpt.isSome and not winOpt.get().isMinimized and
+      winOpt.get().windowAdmitted() and model.windowOnTag(tagId, focused):
     return focused
 
   result = model.firstFocusableWindow(tagId)
   discard model.setTagFocus(tagId, result)
 
-proc tagForWindow*(model: Model; winId: WindowId): TagId =
+proc tagForWindow*(model: Model, winId: WindowId): TagId =
   if model.activeTag != NullTagId and model.windowOnTag(model.activeTag, winId):
     return model.activeTag
 
@@ -57,14 +53,13 @@ proc tagForWindow*(model: Model; winId: WindowId): TagId =
     return position.tagId
   NullTagId
 
-proc isFocusableWindow*(model: Model; winId: WindowId): bool =
+proc isFocusableWindow*(model: Model, winId: WindowId): bool =
   let winOpt = model.windowData(winId)
-  winOpt.isSome and not winOpt.get().isMinimized and
-    winOpt.get().windowAdmitted()
+  winOpt.isSome and not winOpt.get().isMinimized and winOpt.get().windowAdmitted()
 
 proc popupFocusTarget(
-    model: Model; winId: WindowId; tagId: TagId;
-    restorePopupTree: bool): WindowId =
+    model: Model, winId: WindowId, tagId: TagId, restorePopupTree: bool
+): WindowId =
   if not restorePopupTree:
     return winId
   let root = model.popupRoot(winId)
@@ -76,8 +71,12 @@ proc popupFocusTarget(
   winId
 
 proc focusWindow*(
-    model: var Model; winId: WindowId; retargetViewport = true;
-    restorePopupTree = true; snapViewport = false): bool =
+    model: var Model,
+    winId: WindowId,
+    retargetViewport = true,
+    restorePopupTree = true,
+    snapViewport = false,
+): bool =
   var target = winId
   if model.windowData(target).isNone:
     return false
@@ -104,7 +103,7 @@ proc focusWindow*(
   discard model.clearPendingDialogFocus(target)
   true
 
-proc focusWorkspaceSlot*(model: var Model; slot: uint32): bool =
+proc focusWorkspaceSlot*(model: var Model, slot: uint32): bool =
   let tagId = model.ensureWorkspaceSlot(slot)
   if tagId == NullTagId:
     return false
@@ -116,39 +115,37 @@ proc focusWorkspaceSlot*(model: var Model; slot: uint32): bool =
     discard model.recordFocus(focused)
   true
 
-proc focusWorkspaceIndex*(model: var Model; index: uint32): bool =
+proc focusWorkspaceIndex*(model: var Model, index: uint32): bool =
   let slot = model.workspaceSlotForClampedIndex(index)
   slot != 0 and model.focusWorkspaceSlot(slot)
 
 proc focusExternalWindow*(
-    model: var Model; externalId: ExternalWindowId;
-    restorePopupTree = true): bool =
+    model: var Model, externalId: ExternalWindowId, restorePopupTree = true
+): bool =
   let winId = model.windowForExternal(externalId)
   winId != NullWindowId and model.focusWindow(
-    winId, restorePopupTree = restorePopupTree)
+    winId, restorePopupTree = restorePopupTree
+  )
 
 proc focusMostRecentWindow*(model: var Model): bool =
   var candidates: seq[WindowId] = @[]
   for candidate in model.focusHistoryIds():
-    if model.isFocusableWindow(candidate) and
-        model.tagForWindow(candidate) != NullTagId:
+    if model.isFocusableWindow(candidate) and model.tagForWindow(candidate) != NullTagId:
       candidates.add(candidate)
   discard model.replaceFocusHistory(candidates)
   if candidates.len == 0:
     return false
   model.focusWindow(candidates[^1])
 
-proc focusMostRecentWindowOnTag*(
-    model: var Model; tagId: TagId): bool =
+proc focusMostRecentWindowOnTag*(model: var Model, tagId: TagId): bool =
   if tagId == NullTagId:
     return false
   for candidate in model.focusHistoryIdsReverse():
-    if model.isFocusableWindow(candidate) and model.windowOnTag(
-        tagId, candidate):
+    if model.isFocusableWindow(candidate) and model.windowOnTag(tagId, candidate):
       return model.focusWindow(candidate)
   false
 
-proc isRestorableWorkspace(model: Model; tagId: TagId): bool =
+proc isRestorableWorkspace(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
@@ -178,14 +175,14 @@ proc focusLast*(model: var Model): bool =
       return model.focusWindow(candidate)
   false
 
-proc focusableWindowsOnTag(model: Model; tagId: TagId): seq[WindowId] =
+proc focusableWindowsOnTag(model: Model, tagId: TagId): seq[WindowId] =
   for winId, win in model.windowsOnTagWithId(tagId):
     if not win.isMinimized and win.windowAdmitted():
       result.add(winId)
 
-proc focusOverviewByStep*(model: var Model; step: int): bool
+proc focusOverviewByStep*(model: var Model, step: int): bool
 
-proc focusCycle*(model: var Model; step: int): bool =
+proc focusCycle*(model: var Model, step: int): bool =
   if model.overviewActive:
     return model.focusOverviewByStep(step)
   let tagId = model.activeTag
@@ -198,8 +195,10 @@ proc focusCycle*(model: var Model; step: int): bool =
 
   let idx = windows.find(tagOpt.get().focusedWindow)
   let nextIdx =
-    if idx == -1: 0
-    else: (idx + step + windows.len) mod windows.len
+    if idx == -1:
+      0
+    else:
+      (idx + step + windows.len) mod windows.len
   let target = windows[nextIdx]
   discard model.setTagFocus(tagId, target)
   discard model.requestTagViewportRetarget(tagId)
@@ -207,8 +206,7 @@ proc focusCycle*(model: var Model; step: int): bool =
   discard model.recordFocus(target)
   true
 
-proc visibleWindowNear(
-    model: Model; columnId: ColumnId; preferredIdx: int): WindowId =
+proc visibleWindowNear(model: Model, columnId: ColumnId, preferredIdx: int): WindowId =
   let count = model.windowCountForColumn(columnId)
   if count == 0:
     return NullWindowId
@@ -229,8 +227,9 @@ proc visibleWindowNear(
       return afterWin
   NullWindowId
 
-proc findWindowPosition(model: Model; tagId: TagId; winId: WindowId):
-    tuple[found: bool; colIdx, winIdx: int; columnId: ColumnId] =
+proc findWindowPosition(
+    model: Model, tagId: TagId, winId: WindowId
+): tuple[found: bool, colIdx, winIdx: int, columnId: ColumnId] =
   let placementOpt = model.placementForWindowOnTag(tagId, winId)
   if placementOpt.isNone:
     return (false, -1, -1, NullColumnId)
@@ -246,12 +245,10 @@ proc centerX(rect: typeof(RenderInstruction().geom)): int64 =
 proc centerY(rect: typeof(RenderInstruction().geom)): int64 =
   int64(rect.y) * 2'i64 + int64(rect.h)
 
-proc sameRect(
-    a, b: typeof(RenderInstruction().geom)): bool =
+proc sameRect(a, b: typeof(RenderInstruction().geom)): bool =
   a.x == b.x and a.y == b.y and a.w == b.w and a.h == b.h
 
-proc focusCandidateIndex(
-    candidates: openArray[FocusCandidate]; winId: WindowId): int =
+proc focusCandidateIndex(candidates: openArray[FocusCandidate], winId: WindowId): int =
   for idx, candidate in candidates:
     if candidate.winId == winId:
       return idx
@@ -267,8 +264,11 @@ proc visualFocusCandidates(model: Model): seq[FocusCandidate] =
     result.add(FocusCandidate(winId: winId, geom: instr.geom, order: order))
 
 proc orderedFallbackFocus(
-    model: var Model; candidates: openArray[FocusCandidate]; currentIdx: int;
-    direction: Direction): bool =
+    model: var Model,
+    candidates: openArray[FocusCandidate],
+    currentIdx: int,
+    direction: Direction,
+): bool =
   if candidates.len <= 1:
     return false
 
@@ -279,8 +279,7 @@ proc orderedFallbackFocus(
   let targetIdx = (currentIdx + step + candidates.len) mod candidates.len
   model.focusWindow(candidates[targetIdx].winId)
 
-proc focusByVisualDirection*(
-    model: var Model; direction: Direction): bool =
+proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
   let focused = model.focusedOnActiveTag()
   if focused == NullWindowId:
     return false
@@ -306,15 +305,18 @@ proc focusByVisualDirection*(
     let cy = candidate.geom.centerY()
     let (primary, perp) =
       case direction
-      of Direction.DirLeft: (currentCx - cx, abs(currentCy - cy))
-      of Direction.DirRight: (cx - currentCx, abs(currentCy - cy))
-      of Direction.DirUp: (currentCy - cy, abs(currentCx - cx))
-      of Direction.DirDown: (cy - currentCy, abs(currentCx - cx))
+      of Direction.DirLeft:
+        (currentCx - cx, abs(currentCy - cy))
+      of Direction.DirRight:
+        (cx - currentCx, abs(currentCy - cy))
+      of Direction.DirUp:
+        (currentCy - cy, abs(currentCx - cx))
+      of Direction.DirDown:
+        (cy - currentCy, abs(currentCx - cx))
     if primary <= 0:
       continue
     if perp < bestPerp or (perp == bestPerp and primary < bestPrimary) or
-        (perp == bestPerp and primary == bestPrimary and
-          candidate.order < bestOrder):
+        (perp == bestPerp and primary == bestPrimary and candidate.order < bestOrder):
       bestIdx = idx
       bestPrimary = primary
       bestPerp = perp
@@ -329,7 +331,7 @@ proc focusByVisualDirection*(
 
   false
 
-proc focusColumnByStep*(model: var Model; step: int): bool =
+proc focusColumnByStep*(model: var Model, step: int): bool =
   if step == 0:
     return false
   let tagId = model.activeTag
@@ -341,14 +343,13 @@ proc focusColumnByStep*(model: var Model; step: int): bool =
   let columnCount = model.columnCountForTag(tagId)
   var colIdx = pos.colIdx + step
   while colIdx >= 0 and colIdx < columnCount:
-    let target = model.visibleWindowNear(
-      model.columnAt(tagId, colIdx), pos.winIdx)
+    let target = model.visibleWindowNear(model.columnAt(tagId, colIdx), pos.winIdx)
     if target != NullWindowId:
       return model.focusWindow(target)
     colIdx += step
   false
 
-proc focusColumnAtEdge*(model: var Model; first: bool): bool =
+proc focusColumnAtEdge*(model: var Model, first: bool): bool =
   let tagId = model.activeTag
   let focused = model.focusedOnActiveTag()
   let pos = model.findWindowPosition(tagId, focused)
@@ -368,7 +369,7 @@ proc focusColumnAtEdge*(model: var Model; first: bool): bool =
         return model.focusWindow(target)
   false
 
-proc focusWindowOrWorkspace*(model: var Model; direction: int): bool =
+proc focusWindowOrWorkspace*(model: var Model, direction: int): bool =
   if direction == 0:
     return false
 
@@ -387,7 +388,7 @@ proc focusWindowOrWorkspace*(model: var Model; direction: int): bool =
   let target = model.nearestWorkspaceSlot(direction, false)
   target != 0 and model.focusWorkspaceSlot(target)
 
-proc focusOverviewByStep*(model: var Model; step: int): bool =
+proc focusOverviewByStep*(model: var Model, step: int): bool =
   let windows = model.overviewWindowIds()
   if windows.len == 0:
     return false
@@ -400,8 +401,7 @@ proc focusOverviewByStep*(model: var Model; step: int): bool =
     idx = (idx + step + windows.len) mod windows.len
   model.setOverviewSelection(windows[idx])
 
-proc focusOverviewByDelta(
-    model: var Model; deltaCol, deltaRow: int): bool =
+proc focusOverviewByDelta(model: var Model, deltaCol, deltaRow: int): bool =
   let windows = model.overviewWindowIds()
   if windows.len == 0:
     return false
@@ -416,7 +416,7 @@ proc focusOverviewByDelta(
     return false
   model.setOverviewSelection(windows[targetIdx])
 
-proc focusByDirection*(model: var Model; direction: Direction): bool =
+proc focusByDirection*(model: var Model, direction: Direction): bool =
   if model.overviewActive:
     case direction
     of Direction.DirLeft:

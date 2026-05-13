@@ -60,11 +60,26 @@ proc `$`*(id: GroupId): string {.borrow.}
 proc `$`*(id: ExternalWindowId): string {.borrow.}
 proc `$`*(id: ExternalOutputId): string {.borrow.}
 
-proc hash*(id: WindowId): Hash = hash(uint32(id))
-proc hash*(id: TagId): Hash = hash(uint32(id))
-proc hash*(id: ColumnId): Hash = hash(uint32(id))
-proc hash*(id: OutputId): Hash = hash(uint32(id))
-proc hash*(id: GroupId): Hash = hash(uint32(id))
-proc hash*(id: ExternalWindowId): Hash = hash(uint32(id))
-proc hash*(id: ExternalOutputId): Hash = hash(uint32(id))
-proc hash*(mask: TagMask): Hash = hash(uint64(mask))
+proc hash*(id: WindowId): Hash =
+  hash(uint32(id))
+
+proc hash*(id: TagId): Hash =
+  hash(uint32(id))
+
+proc hash*(id: ColumnId): Hash =
+  hash(uint32(id))
+
+proc hash*(id: OutputId): Hash =
+  hash(uint32(id))
+
+proc hash*(id: GroupId): Hash =
+  hash(uint32(id))
+
+proc hash*(id: ExternalWindowId): Hash =
+  hash(uint32(id))
+
+proc hash*(id: ExternalOutputId): Hash =
+  hash(uint32(id))
+
+proc hash*(mask: TagMask): Hash =
+  hash(uint64(mask))

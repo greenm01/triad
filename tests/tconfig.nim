@@ -13,25 +13,23 @@ const
   Super = 64'u32
 
 proc commandForBinding(
-    config: Config; key: string; modifiers: uint32;
-    mode = BindingMode.BindAlways): string =
+    config: Config, key: string, modifiers: uint32, mode = BindingMode.BindAlways
+): string =
   for binding in config.keyBindings:
-    if binding.key == key and binding.modifiers == modifiers and
-        binding.mode == mode:
+    if binding.key == key and binding.modifiers == modifiers and binding.mode == mode:
       return binding.command
   ""
 
 proc msgKindForBinding(
-    config: Config; key: string; modifiers: uint32;
-    mode = BindingMode.BindAlways): MsgKind =
+    config: Config, key: string, modifiers: uint32, mode = BindingMode.BindAlways
+): MsgKind =
   let command = config.commandForBinding(key, modifiers, mode)
   check command.len > 0
   let parsed = parseTextCommand(command)
   check parsed.isSome
   parsed.get().kind
 
-proc layoutForBinding(
-    config: Config; key: string; modifiers: uint32): LayoutMode =
+proc layoutForBinding(config: Config, key: string, modifiers: uint32): LayoutMode =
   let command = config.commandForBinding(key, modifiers)
   check command.len > 0
   let parsed = parseTextCommand(command)
@@ -39,8 +37,7 @@ proc layoutForBinding(
   check parsed.get().kind == MsgKind.CmdSetLayout
   parsed.get().newLayout
 
-proc spawnForBinding(
-    config: Config; key: string; modifiers: uint32): seq[string] =
+proc spawnForBinding(config: Config, key: string, modifiers: uint32): seq[string] =
   let command = config.commandForBinding(key, modifiers)
   check command.len > 0
   let parsed = parseTextCommand(command)
@@ -50,24 +47,29 @@ proc spawnForBinding(
 
 suite "KDL Configuration Parser":
   test "config application preserves live window state":
-    let initial = initRuntimeStateFromConfig(Config(
-      layout: LayoutConfig(
-        gaps: 8,
-        borderWidth: DefaultBorderWidth,
-        focusedBorderColor: DefaultFocusedBorderColor,
-        unfocusedBorderColor: DefaultUnfocusedBorderColor),
-      workspaces: WorkspaceConfig(defaultCount: 3)))
+    let initial = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 8,
+          borderWidth: DefaultBorderWidth,
+          focusedBorderColor: DefaultFocusedBorderColor,
+          unfocusedBorderColor: DefaultUnfocusedBorderColor,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    )
     var state = initial
-    discard state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 7,
-      appId: "brave",
-      title: "Brave"))
-    discard state.applyRuntimeUpdate(Msg(
-      kind: MsgKind.WlWindowDimensions,
-      dimensionsWindowId: 7,
-      actualWidth: 1200,
-      actualHeight: 800))
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 7, appId: "brave", title: "Brave")
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 7,
+        actualWidth: 1200,
+        actualHeight: 800,
+      )
+    )
 
     let config = Config(
       layout: LayoutConfig(
@@ -86,16 +88,15 @@ suite "KDL Configuration Parser":
         enableAnimations: false,
         animationSpeed: 0.5,
         smartGaps: true,
-        layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck,
-            LayoutMode.VerticalGrid]),
+        layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid],
+      ),
       workspaces: WorkspaceConfig(defaultCount: 4),
-      tagRules: @[
-        TagRule(tagId: 1, name: "term", defaultLayout: LayoutMode.Scroller),
-        TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid)
-      ],
-      windowRules: @[
-        WindowRule(appIdMatch: "brave", keyboardShortcutsInhibit: true)
-      ],
+      tagRules:
+        @[
+          TagRule(tagId: 1, name: "term", defaultLayout: LayoutMode.Scroller),
+          TagRule(tagId: 2, name: "web", defaultLayout: LayoutMode.Grid),
+        ],
+      windowRules: @[WindowRule(appIdMatch: "brave", keyboardShortcutsInhibit: true)],
       startupCommands: @[@["notify-send", "triad"]],
       quickshell: QuickshellConfig(enabled: true, theme: "noctalia"),
       terminal: TerminalConfig(command: @["kitty"]),
@@ -107,7 +108,8 @@ suite "KDL Configuration Parser":
         widthRatio: 0.4,
         heightRatio: 0.5,
         minWidth: 80,
-        minHeight: 90),
+        minHeight: 90,
+      ),
       screenLock: ScreenLockConfig(command: @["swaylock"]),
       windowMenu: WindowMenuConfig(command: @["bemenu"]),
       scratchpad: ScratchpadConfig(widthRatio: 0.7, heightRatio: 0.6),
@@ -115,17 +117,25 @@ suite "KDL Configuration Parser":
       presentationMode: PresentationMode.PresentationAsync,
       allowExitSession: true,
       protocolSurfaces: ProtocolSurfacesConfig(enabled: true),
-      keyBindings: @[
-        KeyBindingConfig(
-          key: "r",
-          modifiers: 12'u32,
-          command: "triad-reload",
-          bypassShortcutsInhibit: true)
-      ],
-      pointerBindings: @[
-        PointerBindingConfig(button: 0x110'u32, modifiers: 64'u32,
-            op: PointerOpKind.OpMove, command: "move")
-      ])
+      keyBindings:
+        @[
+          KeyBindingConfig(
+            key: "r",
+            modifiers: 12'u32,
+            command: "triad-reload",
+            bypassShortcutsInhibit: true,
+          )
+        ],
+      pointerBindings:
+        @[
+          PointerBindingConfig(
+            button: 0x110'u32,
+            modifiers: 64'u32,
+            op: PointerOpKind.OpMove,
+            command: "move",
+          )
+        ],
+    )
 
     check state.applyRuntimeConfig(config)
     check state.model.validateInvariants().ok
@@ -133,8 +143,8 @@ suite "KDL Configuration Parser":
     check state.model.innerGaps == 12
     check state.model.borderWidth == 4
     check state.model.defaultWorkspaceCount == 4
-    check state.model.layoutCycle == @[LayoutMode.Scroller, LayoutMode.Deck,
-        LayoutMode.VerticalGrid]
+    check state.model.layoutCycle ==
+      @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check state.model.terminal.command == @["kitty"]
     check state.model.keyBindings.len == 1
 
@@ -200,13 +210,13 @@ suite "KDL Configuration Parser":
     check maximizeToEdges.get().kind == MsgKind.CmdToggleMaximized
 
     let screenshot = parseTextCommand(
-      "screenshot-screen --path /tmp/a.png --hide-pointer --no-clipboard")
+      "screenshot-screen --path /tmp/a.png --hide-pointer --no-clipboard"
+    )
     check screenshot.isSome
     check screenshot.get().kind == MsgKind.CmdScreenshot
     check screenshot.get().screenshotKind == ScreenshotKind.ShotScreen
     check screenshot.get().screenshotPath == "/tmp/a.png"
-    check screenshot.get().screenshotPointerMode ==
-      ScreenshotPointerMode.PointerHide
+    check screenshot.get().screenshotPointerMode == ScreenshotPointerMode.PointerHide
     check screenshot.get().screenshotWriteToDisk
     check not screenshot.get().screenshotCopyToClipboard
 
@@ -230,7 +240,9 @@ suite "KDL Configuration Parser":
 
   test "Parser reads layout, workspace, binding, and command settings":
     let path = getCurrentDir() / "test_config_dod.kdl"
-    writeFile(path, """
+    writeFile(
+      path,
+      """
 layout {
   gaps 32
   center-focused-column "always"
@@ -318,7 +330,8 @@ bindings {
   pointer-bind "right" "close-window" mode="overview"
   pointer-bind "Super+btn_back" "focus-last"
 }
-""")
+""",
+    )
     let config = loadConfig(path)
     removeFile(path)
 
@@ -326,8 +339,8 @@ bindings {
     check config.mirrorHjklArrows
     check config.layout.borderWidth == 3
     check config.layout.centerFocusedColumn == "always"
-    check config.layout.layoutCycle == @[LayoutMode.Scroller, LayoutMode.Deck,
-        LayoutMode.VerticalGrid]
+    check config.layout.layoutCycle ==
+      @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
     check config.tagRules.len == 1
     check config.tagRules[0].tagId == 2
@@ -368,37 +381,44 @@ bindings {
     check config.hotkeyOverlay.hideNotBound
     check config.keyBindings.len > 0
     check config.commandForBinding("c", Super + Ctrl) == "layout-center-tile"
-    let uppercaseBindings = config.keyBindings.filterIt(
-      it.key == "c" and it.modifiers == Super + Ctrl)
+    let uppercaseBindings =
+      config.keyBindings.filterIt(it.key == "c" and it.modifiers == Super + Ctrl)
     check uppercaseBindings.len == 1
     check uppercaseBindings[0].bypassShortcutsInhibit
     check config.commandForBinding("Slash", Super) == "toggle-hotkey-overlay"
-    let titledBindings = config.keyBindings.filterIt(
-      it.key == "Slash" and it.modifiers == Super)
+    let titledBindings =
+      config.keyBindings.filterIt(it.key == "Slash" and it.modifiers == Super)
     check titledBindings.len == 1
     check titledBindings[0].hotkeyOverlayTitleKind ==
       HotkeyOverlayTitleKind.HotkeyTitleCustom
     check titledBindings[0].hotkeyOverlayTitle == "Show Important Hotkeys"
     let hiddenBindings = config.keyBindings.filterIt(
-      it.key == "Question" and it.modifiers == Super + Shift)
+      it.key == "Question" and it.modifiers == Super + Shift
+    )
     check hiddenBindings.len == 1
     check hiddenBindings[0].hotkeyOverlayTitleKind ==
       HotkeyOverlayTitleKind.HotkeyTitleHidden
     check config.commandForBinding("F12", 0'u32) == "focus-last"
     check config.pointerBindings.len == 4
     check config.pointerBindings.anyIt(
-      it.button == 0x110'u32 and it.op == PointerOpKind.OpMove)
+      it.button == 0x110'u32 and it.op == PointerOpKind.OpMove
+    )
     check config.pointerBindings.anyIt(
-      it.button == 0x112'u32 and it.command == "toggle-maximized")
+      it.button == 0x112'u32 and it.command == "toggle-maximized"
+    )
     check config.pointerBindings.anyIt(
       it.button == 0x111'u32 and it.command == "close-window" and
-        it.mode == BindingMode.BindOverview)
+        it.mode == BindingMode.BindOverview
+    )
     check config.pointerBindings.anyIt(
-      it.button == 0x116'u32 and it.command == "focus-last")
+      it.button == 0x116'u32 and it.command == "focus-last"
+    )
 
   test "HJKL mirroring preserves binding settings":
     let path = getCurrentDir() / "test_config_mirror.kdl"
-    writeFile(path, """
+    writeFile(
+      path,
+      """
 bindings {
   mirror-hjkl-arrows #true
   bind "Super+h" "focus-left" allow-inhibiting=#false
@@ -406,30 +426,34 @@ bindings {
   bind "Super+k" "focus-up" allow-inhibiting=#false
   bind "Super+Left" "custom-left"
 }
-""")
+""",
+    )
     let config = loadConfig(path)
     removeFile(path)
 
     check config.commandForBinding("Left", Super) == "custom-left"
-    check config.commandForBinding(
-      "Down", Super, BindingMode.BindOverview) == "focus-down"
+    check config.commandForBinding("Down", Super, BindingMode.BindOverview) ==
+      "focus-down"
     let mirroredDown = config.keyBindings.filterIt(
-      it.key == "Down" and it.modifiers == Super and
-        it.mode == BindingMode.BindOverview)
+      it.key == "Down" and it.modifiers == Super and it.mode == BindingMode.BindOverview
+    )
     check mirroredDown.len == 1
     let mirroredUp = config.keyBindings.filterIt(
-      it.key == "Up" and it.modifiers == Super and
-        it.command == "focus-up")
+      it.key == "Up" and it.modifiers == Super and it.command == "focus-up"
+    )
     check mirroredUp.len == 1
     check mirroredUp[0].bypassShortcutsInhibit
 
   test "Config adds hotkey overlay fallback when key slot is free":
     let path = getCurrentDir() / "test_config_hotkey_fallback.kdl"
-    writeFile(path, """
+    writeFile(
+      path,
+      """
 bindings {
   bind "Super+q" "close-window"
 }
-""")
+""",
+    )
     let config = loadConfig(path)
     removeFile(path)
 
@@ -437,59 +461,48 @@ bindings {
     check config.msgKindForBinding("Slash", Super + Shift) ==
       MsgKind.CmdToggleHotkeyOverlay
 
-    writeFile(path, """
+    writeFile(
+      path,
+      """
 bindings {
   bind "Super+Shift+Slash" "focus-last"
 }
-""")
+""",
+    )
     let occupied = loadConfig(path)
     removeFile(path)
 
-    check occupied.msgKindForBinding("Slash", Super + Shift) ==
-      MsgKind.CmdFocusLast
+    check occupied.msgKindForBinding("Slash", Super + Shift) == MsgKind.CmdFocusLast
 
   test "Default bindings follow Niri-style movement and scratchpad chords":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
 
-    check config.msgKindForBinding("h", Super + Ctrl) ==
-      MsgKind.CmdMoveColumnLeft
-    check config.msgKindForBinding("Left", Super + Ctrl) ==
-      MsgKind.CmdMoveColumnLeft
-    check config.msgKindForBinding("j", Super + Ctrl) ==
-      MsgKind.CmdMoveWindowDown
-    check config.msgKindForBinding("Down", Super + Ctrl) ==
-      MsgKind.CmdMoveWindowDown
-    check config.msgKindForBinding("k", Super + Ctrl) ==
-      MsgKind.CmdMoveWindowUp
-    check config.msgKindForBinding("l", Super + Ctrl) ==
-      MsgKind.CmdMoveColumnRight
-    check config.msgKindForBinding("h", Super + Alt) ==
-      MsgKind.CmdMoveWindowLeft
-    check config.msgKindForBinding("Right", Super + Alt) ==
-      MsgKind.CmdMoveWindowRight
-    check config.msgKindForBinding("w", Super) ==
-      MsgKind.CmdToggleScratchpad
-    check config.msgKindForBinding("w", Super + Shift) ==
-      MsgKind.CmdMoveToScratchpad
-    check config.msgKindForBinding("r", Super + Shift) ==
-      MsgKind.CmdRestoreScratchpad
+    check config.msgKindForBinding("h", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("Left", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("j", Super + Ctrl) == MsgKind.CmdMoveWindowDown
+    check config.msgKindForBinding("Down", Super + Ctrl) == MsgKind.CmdMoveWindowDown
+    check config.msgKindForBinding("k", Super + Ctrl) == MsgKind.CmdMoveWindowUp
+    check config.msgKindForBinding("l", Super + Ctrl) == MsgKind.CmdMoveColumnRight
+    check config.msgKindForBinding("h", Super + Alt) == MsgKind.CmdMoveWindowLeft
+    check config.msgKindForBinding("Right", Super + Alt) == MsgKind.CmdMoveWindowRight
+    check config.msgKindForBinding("w", Super) == MsgKind.CmdToggleScratchpad
+    check config.msgKindForBinding("w", Super + Shift) == MsgKind.CmdMoveToScratchpad
+    check config.msgKindForBinding("r", Super + Shift) == MsgKind.CmdRestoreScratchpad
     check config.spawnForBinding("c", Super) ==
       @["wtype", "-M", "ctrl", "-P", "Insert", "-p", "Insert", "-m", "ctrl"]
     check config.spawnForBinding("v", Super) ==
-      @["wtype", "-M", "shift", "-P", "Insert", "-p", "Insert", "-m",
-        "shift"]
+      @["wtype", "-M", "shift", "-P", "Insert", "-p", "Insert", "-m", "shift"]
     check config.spawnForBinding("x", Super) ==
       @["wtype", "-M", "ctrl", "x", "-m", "ctrl"]
     check config.msgKindForBinding("Print", 0'u32) == MsgKind.CmdScreenshot
     check config.commandForBinding("Print", Ctrl) == "screenshot-screen"
     check config.commandForBinding("Print", Alt) == "screenshot-window"
-    check config.commandForBinding("Print", Super) ==
-      "screenshot --clipboard-only"
+    check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
     check config.msgKindForBinding("Slash", Super + Shift) ==
       MsgKind.CmdToggleHotkeyOverlay
     for key in ["c", "v", "x"]:
-      let bindings = config.keyBindings.filterIt(
-        it.key == key and it.modifiers == Super)
+      let bindings =
+        config.keyBindings.filterIt(it.key == key and it.modifiers == Super)
       check bindings.len == 1
       check bindings[0].bypassShortcutsInhibit
     check config.layoutForBinding("c", Super + Ctrl) == LayoutMode.CenterTile
@@ -500,19 +513,23 @@ bindings {
 
   test "config defaults clamp invalid runtime values":
     var model = Model()
-    model.applyConfig(Config(
-      layout: LayoutConfig(
-        gaps: -9,
-        centerFocusedColumn: "sideways",
-        defaultColumnWidth: 4.0,
-        defaultWindowWidth: -1.0,
-        defaultWindowHeight: 0.0,
-        defaultMasterCount: 0,
-        defaultMasterRatio: 2.0,
-        animationSpeed: 5.0),
-      workspaces: WorkspaceConfig(defaultCount: 0),
-      overview: OverviewConfig(outerGap: -1),
-      scratchpad: ScratchpadConfig(widthRatio: 4.0, heightRatio: 0.0)))
+    model.applyConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: -9,
+          centerFocusedColumn: "sideways",
+          defaultColumnWidth: 4.0,
+          defaultWindowWidth: -1.0,
+          defaultWindowHeight: 0.0,
+          defaultMasterCount: 0,
+          defaultMasterRatio: 2.0,
+          animationSpeed: 5.0,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 0),
+        overview: OverviewConfig(outerGap: -1),
+        scratchpad: ScratchpadConfig(widthRatio: 4.0, heightRatio: 0.0),
+      )
+    )
 
     check model.outerGaps == 0
     check model.centerFocusedColumn == "never"

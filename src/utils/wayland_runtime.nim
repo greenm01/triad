@@ -22,7 +22,7 @@ proc prepareWaylandRead*(display: ptr Display): bool =
       return false
   true
 
-proc waitForWaylandEvents*(display: ptr Display; timeoutMs: int): bool =
+proc waitForWaylandEvents*(display: ptr Display, timeoutMs: int): bool =
   if display == nil:
     return false
 
@@ -34,7 +34,7 @@ proc waitForWaylandEvents*(display: ptr Display; timeoutMs: int): bool =
   FD_ZERO(readfds)
   FD_SET(fd, readfds)
   var timeout = Timeval(
-    tv_sec: Time(timeoutMs div 1000),
-    tv_usec: Suseconds((timeoutMs mod 1000) * 1000))
+    tv_sec: Time(timeoutMs div 1000), tv_usec: Suseconds((timeoutMs mod 1000) * 1000)
+  )
   let ready = select(fd + 1, addr readfds, nil, nil, addr timeout)
   ready > 0 and FD_ISSET(fd, readfds) != 0

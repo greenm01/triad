@@ -4,23 +4,16 @@ import ../types/runtime_values as rv
 const AnchorVisibilityTolerance* = 1'i32
 
 proc fixedSizeWidth*(win: model_types.WindowData): int32 =
-  if win.minWidth > 0 and win.maxWidth == win.minWidth:
-    win.minWidth
-  else:
-    0'i32
+  if win.minWidth > 0 and win.maxWidth == win.minWidth: win.minWidth else: 0'i32
 
 proc fixedSizeHeight*(win: model_types.WindowData): int32 =
-  if win.minHeight > 0 and win.maxHeight == win.minHeight:
-    win.minHeight
-  else:
-    0'i32
+  if win.minHeight > 0 and win.maxHeight == win.minHeight: win.minHeight else: 0'i32
 
 proc hasFixedSizeHint*(win: model_types.WindowData): bool =
   win.minWidth > 0 and win.minHeight > 0 and
     (win.fixedSizeWidth() > 0 or win.fixedSizeHeight() > 0)
 
-proc applyFloatingSizeHints*(win: model_types.WindowData;
-    geom: rv.Rect): rv.Rect =
+proc applyFloatingSizeHints*(win: model_types.WindowData, geom: rv.Rect): rv.Rect =
   result = geom
   let fixedW = win.fixedSizeWidth()
   let fixedH = win.fixedSizeHeight()
@@ -52,15 +45,12 @@ proc clampToScreen*(geom, screen: rv.Rect): rv.Rect =
 proc intersects*(a, b: rv.Rect): bool =
   if a.w <= 0 or a.h <= 0 or b.w <= 0 or b.h <= 0:
     return false
-  a.x < b.x + b.w and a.x + a.w > b.x and
-    a.y < b.y + b.h and a.y + a.h > b.y
+  a.x < b.x + b.w and a.x + a.w > b.x and a.y < b.y + b.h and a.y + a.h > b.y
 
-proc fullyWithin*(inner, outer: rv.Rect;
-    tolerance = AnchorVisibilityTolerance): bool =
+proc fullyWithin*(inner, outer: rv.Rect, tolerance = AnchorVisibilityTolerance): bool =
   if inner.w <= 0 or inner.h <= 0 or outer.w <= 0 or outer.h <= 0:
     return false
-  inner.x >= outer.x - tolerance and
-    inner.y >= outer.y - tolerance and
+  inner.x >= outer.x - tolerance and inner.y >= outer.y - tolerance and
     inner.x + inner.w <= outer.x + outer.w + tolerance and
     inner.y + inner.h <= outer.y + outer.h + tolerance
 
@@ -70,8 +60,8 @@ proc centeredIn*(bounds, geom: rv.Rect): rv.Rect =
   result.y = bounds.y + (bounds.h - geom.h) div 2
 
 proc anchoredFloatingGeom*(
-    win: model_types.WindowData; parentGeom, fallbackGeom,
-    screen: rv.Rect): rv.Rect =
+    win: model_types.WindowData, parentGeom, fallbackGeom, screen: rv.Rect
+): rv.Rect =
   result = fallbackGeom
   if win.parentAutoFloating:
     if parentGeom.w > 0:

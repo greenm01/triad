@@ -29,8 +29,7 @@ type
 
 proc uint32FromJson(node: JsonNode): Option[uint32] =
   try:
-    if node.kind == JInt and node.getInt() > 0 and
-        node.getInt() <= int(high(uint32)):
+    if node.kind == JInt and node.getInt() > 0 and node.getInt() <= int(high(uint32)):
       return some(uint32(node.getInt()))
   except CatchableError:
     discard
@@ -44,7 +43,7 @@ proc int32FromJson(node: JsonNode): int32 =
     discard
   0'i32
 
-proc float32FromJson(node: JsonNode; fallback = 0.0'f32): float32 =
+proc float32FromJson(node: JsonNode, fallback = 0.0'f32): float32 =
   try:
     if node.kind in {JFloat, JInt}:
       return float32(node.getFloat())
@@ -65,10 +64,26 @@ proc rectFromJson(node: JsonNode): Rect =
   if node.kind != JObject:
     return Rect()
   Rect(
-    x: if node.hasKey("x"): int32FromJson(node["x"]) else: 0'i32,
-    y: if node.hasKey("y"): int32FromJson(node["y"]) else: 0'i32,
-    w: if node.hasKey("w"): int32FromJson(node["w"]) else: 0'i32,
-    h: if node.hasKey("h"): int32FromJson(node["h"]) else: 0'i32
+    x:
+      if node.hasKey("x"):
+        int32FromJson(node["x"])
+      else:
+        0'i32,
+    y:
+      if node.hasKey("y"):
+        int32FromJson(node["y"])
+      else:
+        0'i32,
+    w:
+      if node.hasKey("w"):
+        int32FromJson(node["w"])
+      else:
+        0'i32,
+    h:
+      if node.hasKey("h"):
+        int32FromJson(node["h"])
+      else:
+        0'i32,
   )
 
 proc layoutModeFromJson(node: JsonNode): LayoutMode =
@@ -83,8 +98,7 @@ proc layoutModeFromJson(node: JsonNode): LayoutMode =
     discard
   LayoutMode.Scroller
 
-proc parseTagState(
-    state: var LiveRestoreState; node: JsonNode) =
+proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
   if node.kind != JObject or not node.hasKey("id"):
     return
   let tagId = uint32FromJson(node["id"])
@@ -94,12 +108,12 @@ proc parseTagState(
   var tag = RestoredTagState(
     tagId: tagId.get(),
     layoutMode:
-    if node.hasKey("layout_mode"):
+      if node.hasKey("layout_mode"):
         layoutModeFromJson(node["layout_mode"])
       else:
         LayoutMode.Scroller,
     masterCount: DefaultMasterCount,
-    masterSplitRatio: DefaultMasterRatio
+    masterSplitRatio: DefaultMasterRatio,
   )
 
   if node.hasKey("name"):
@@ -109,17 +123,13 @@ proc parseTagState(
     if focused.isSome:
       tag.focusedWindow = WindowId(focused.get())
   if node.hasKey("target_viewport_x_offset"):
-    tag.targetViewportXOffset =
-      float32FromJson(node["target_viewport_x_offset"])
+    tag.targetViewportXOffset = float32FromJson(node["target_viewport_x_offset"])
   if node.hasKey("current_viewport_x_offset"):
-    tag.currentViewportXOffset =
-      float32FromJson(node["current_viewport_x_offset"])
+    tag.currentViewportXOffset = float32FromJson(node["current_viewport_x_offset"])
   if node.hasKey("target_viewport_y_offset"):
-    tag.targetViewportYOffset =
-      float32FromJson(node["target_viewport_y_offset"])
+    tag.targetViewportYOffset = float32FromJson(node["target_viewport_y_offset"])
   if node.hasKey("current_viewport_y_offset"):
-    tag.currentViewportYOffset =
-      float32FromJson(node["current_viewport_y_offset"])
+    tag.currentViewportYOffset = float32FromJson(node["current_viewport_y_offset"])
   if node.hasKey("master_count") and node["master_count"].kind == JInt:
     tag.masterCount = max(1, node["master_count"].getInt())
   if node.hasKey("master_split_ratio"):
@@ -146,8 +156,7 @@ proc parseTagState(
 
   state.tags[tag.tagId] = tag
 
-proc parseWindowState(
-    state: var LiveRestoreState; node: JsonNode) =
+proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
   if node.kind != JObject or not node.hasKey("id"):
     return
   let winId = uint32FromJson(node["id"])
@@ -156,8 +165,7 @@ proc parseWindowState(
 
   let externalId = WindowId(winId.get())
   var win = RestoredWindowState(
-    widthProportion: DefaultColumnWidth,
-    heightProportion: DefaultWindowHeight
+    widthProportion: DefaultColumnWidth, heightProportion: DefaultWindowHeight
   )
   if node.hasKey("tag_id"):
     let tagId = uint32FromJson(node["tag_id"])
@@ -178,8 +186,7 @@ proc parseWindowState(
   if node.hasKey("identifier"):
     win.identifier = stringFromJson(node["identifier"])
   if node.hasKey("width_proportion"):
-    win.widthProportion =
-      float32FromJson(node["width_proportion"], DefaultColumnWidth)
+    win.widthProportion = float32FromJson(node["width_proportion"], DefaultColumnWidth)
   if node.hasKey("height_proportion"):
     win.heightProportion =
       float32FromJson(node["height_proportion"], DefaultWindowHeight)
@@ -238,23 +245,19 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if outputId.isSome and tagId.isSome:
         state.outputTags[outputId.get()] = tagId.get()
 
-  if root.hasKey("scratchpad_windows") and
-      root["scratchpad_windows"].kind == JArray:
+  if root.hasKey("scratchpad_windows") and root["scratchpad_windows"].kind == JArray:
     for node in root["scratchpad_windows"]:
       let winId = uint32FromJson(node)
       if winId.isSome:
         state.scratchpadWindows.add(WindowId(winId.get()))
 
-  if root.hasKey("named_scratchpads") and
-      root["named_scratchpads"].kind == JArray:
+  if root.hasKey("named_scratchpads") and root["named_scratchpads"].kind == JArray:
     for node in root["named_scratchpads"]:
-      if node.kind != JObject or not node.hasKey("name") or
-          not node.hasKey("window_id"):
+      if node.kind != JObject or not node.hasKey("name") or not node.hasKey("window_id"):
         continue
       let winId = uint32FromJson(node["window_id"])
       if winId.isSome:
-        state.namedScratchpads[stringFromJson(node["name"])] =
-          WindowId(winId.get())
+        state.namedScratchpads[stringFromJson(node["name"])] = WindowId(winId.get())
 
   if root.hasKey("visible_scratchpad"):
     let winId = uint32FromJson(root["visible_scratchpad"])
@@ -269,15 +272,14 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if winId.isSome:
         state.focusHistory.add(WindowId(winId.get()))
 
-  if root.hasKey("workspace_history") and
-      root["workspace_history"].kind == JArray:
+  if root.hasKey("workspace_history") and root["workspace_history"].kind == JArray:
     for node in root["workspace_history"]:
       let tagId = uint32FromJson(node)
       if tagId.isSome:
         state.workspaceHistory.add(tagId.get())
 
-  if state.activeTag == 0 and state.tagByWindow.len == 0 and
-      state.windows.len == 0 and state.tags.len == 0:
+  if state.activeTag == 0 and state.tagByWindow.len == 0 and state.windows.len == 0 and
+      state.tags.len == 0:
     return none(LiveRestoreState)
   some(state)
 
@@ -305,10 +307,8 @@ proc readLiveRestoreState*(path: string): Option[LiveRestoreState] =
 
 proc liveRestoreEnvFlagEnabled(value: string): bool =
   case value.normalize()
-  of "1", "true", "yes", "on":
-    true
-  else:
-    false
+  of "1", "true", "yes", "on": true
+  else: false
 
 proc liveRestoreCollapseAllowed*(): bool =
   getEnv("TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE", "").liveRestoreEnvFlagEnabled()
@@ -324,19 +324,16 @@ proc occupiedRestoreSlots(state: LiveRestoreState): seq[uint32] =
       result.add(win.tagId)
   result.sort()
 
-proc sameRestoreWindowSet(
-    previous, candidate: LiveRestoreState): bool =
+proc sameRestoreWindowSet(previous, candidate: LiveRestoreState): bool =
   previous.sortedRestoreWindowIds() == candidate.sortedRestoreWindowIds()
 
-proc suspiciousLiveRestoreCollapse*(
-    previous, candidate: LiveRestoreState): bool =
+proc suspiciousLiveRestoreCollapse*(previous, candidate: LiveRestoreState): bool =
   let previousWindows = previous.sortedRestoreWindowIds()
   if previousWindows.len < 2:
     return false
   if not previous.sameRestoreWindowSet(candidate):
     return false
-  previous.occupiedRestoreSlots().len > 1 and
-    candidate.occupiedRestoreSlots().len == 1
+  previous.occupiedRestoreSlots().len > 1 and candidate.occupiedRestoreSlots().len == 1
 
 proc liveRestoreStatus(root: JsonNode): string =
   if root.kind == JObject and root.hasKey("restore_status") and
@@ -348,8 +345,7 @@ proc liveRestoreStatus(root: JsonNode): string =
 proc liveRestorePayloadApplied*(payload: string): bool =
   try:
     let root = parseJson(payload)
-    root.kind == JObject and
-      root.hasKey("schema") and root["schema"].kind == JString and
+    root.kind == JObject and root.hasKey("schema") and root["schema"].kind == JString and
       root["schema"].getStr() == LiveRestoreSchema and
       root.liveRestoreStatus() == LiveRestoreStatusApplied
   except CatchableError:

@@ -1,8 +1,9 @@
 import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import Direction
-import dialog_focus, focus, placement, runtime, scratchpad, update_effects,
-  window_state, workspaces
+import
+  dialog_focus, focus, placement, runtime, scratchpad, update_effects, window_state,
+  workspaces
 
 proc closeOverview(model: var Model): bool =
   let wasActive = model.overviewActive
@@ -21,7 +22,7 @@ proc recomputeAllTagFocus(model: var Model) =
   for tagId, _ in model.tagsWithId():
     discard model.recomputeVisibleFocus(tagId)
 
-proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
+proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   case msg.kind
   of MsgKind.CmdSetLayout:
     result.dirty = model.setLayoutForSlot(msg.layoutTargetTag, msg.newLayout)
@@ -43,7 +44,6 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.resizeHeight(msg.deltaH)
   of MsgKind.CmdSetColumnWidth:
     result.dirty = model.setFocusedColumnWidth(msg.targetWidth)
-
   of MsgKind.CmdRenameTag:
     result.dirty = model.renameActiveWorkspace(msg.newName)
     if result.dirty:
@@ -52,7 +52,6 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.groupFocusedWindow()
   of MsgKind.CmdUngroupWindow, MsgKind.CmdFocusNextInGroup:
     result.dirty = true
-
   of MsgKind.CmdFocusNext:
     result.dirty = model.focusCycle(1)
   of MsgKind.CmdFocusPrev:
@@ -64,20 +63,16 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
       result.dirty = model.focusLast()
   of MsgKind.CmdFocusTagLeft:
     if not model.overviewActive:
-      result.dirty = model.focusWorkspaceSlot(
-        model.nearestWorkspaceSlot(-1, false))
+      result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, false))
   of MsgKind.CmdFocusTagRight:
     if not model.overviewActive:
-      result.dirty = model.focusWorkspaceSlot(
-        model.nearestWorkspaceSlot(1, false))
+      result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, false))
   of MsgKind.CmdFocusOccupiedTagLeft:
     if not model.overviewActive:
-      result.dirty = model.focusWorkspaceSlot(
-        model.nearestWorkspaceSlot(-1, true))
+      result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, true))
   of MsgKind.CmdFocusOccupiedTagRight:
     if not model.overviewActive:
-      result.dirty = model.focusWorkspaceSlot(
-        model.nearestWorkspaceSlot(1, true))
+      result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, true))
   of MsgKind.CmdFocusColumnFirst:
     if not model.overviewActive:
       result.dirty = model.focusColumnAtEdge(true)
@@ -106,19 +101,17 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
       if model.overviewWindowIds().find(winId) != -1:
         result.dirty = model.setOverviewSelection(winId)
     else:
-      result.dirty = model.focusExternalWindow(
-        msg.focusWindowId.externalWindowId())
-
+      result.dirty = model.focusExternalWindow(msg.focusWindowId.externalWindowId())
   of MsgKind.CmdMoveToTag:
     result.dirty = model.moveFocusedWindowToSlotAndFocus(msg.targetTag)
   of MsgKind.CmdSwapWindowToTag:
     result.dirty = model.swapFocusedWindowToSlot(msg.targetTagSwap)
   of MsgKind.CmdMoveToTagLeft:
-    result.dirty = model.moveFocusedWindowToSlotAndFocus(
-      model.nearestWorkspaceSlot(-1, false))
+    result.dirty =
+      model.moveFocusedWindowToSlotAndFocus(model.nearestWorkspaceSlot(-1, false))
   of MsgKind.CmdMoveToTagRight:
-    result.dirty = model.moveFocusedWindowToSlotAndFocus(
-      model.nearestWorkspaceSlot(1, false))
+    result.dirty =
+      model.moveFocusedWindowToSlotAndFocus(model.nearestWorkspaceSlot(1, false))
   of MsgKind.CmdMoveToWorkspaceIndex:
     let slot = model.workspaceSlotForClampedIndex(msg.workspaceIndex)
     result.dirty = slot != 0 and model.moveFocusedWindowToSlotAndFocus(slot)
@@ -152,7 +145,6 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.expelFocusedWindow()
   of MsgKind.CmdZoom:
     result.dirty = model.zoomFocusedWindow()
-
   of MsgKind.CmdMoveToScratchpad:
     result.dirty = model.moveFocusedToScratchpad()
   of MsgKind.CmdMoveToNamedScratchpad:
@@ -163,7 +155,6 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.toggleNamedScratchpad(msg.scratchpadName)
   of MsgKind.CmdRestoreScratchpad:
     result.dirty = model.restoreScratchpad()
-
   of MsgKind.CmdToggleOverview:
     if model.overviewActive:
       result.dirty = model.closeOverview()
@@ -184,7 +175,6 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.closeOverview()
     if result.dirty:
       result.effects.add(broadcastOverview(false))
-
   of MsgKind.CmdToggleFloating:
     result.dirty = model.toggleFloatingFocused()
   of MsgKind.CmdMoveFloating:
@@ -198,11 +188,11 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdToggleFullscreen:
     result.dirty = model.toggleFullscreenFocused()
   of MsgKind.CmdToggleFullscreenById:
-    result.dirty = model.toggleFullscreenForExternal(
-      msg.fullscreenWindowId.externalWindowId())
+    result.dirty =
+      model.toggleFullscreenForExternal(msg.fullscreenWindowId.externalWindowId())
   of MsgKind.CmdExitFullscreenById:
-    result.dirty = model.exitFullscreenForExternal(
-      msg.fullscreenWindowId.externalWindowId())
+    result.dirty =
+      model.exitFullscreenForExternal(msg.fullscreenWindowId.externalWindowId())
   of MsgKind.CmdToggleMaximized:
     result.dirty = model.toggleMaximizedFocused()
   of MsgKind.CmdMinimize:
@@ -217,35 +207,38 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdCloseWindow:
     let focused = model.focusedOnActiveTag()
     if focused != NullWindowId:
-      result.effects.add(Effect(
-        kind: EffectKind.EffCloseWindow,
-        closeId: model.runtimeWindowId(focused)))
+      result.effects.add(
+        Effect(kind: EffectKind.EffCloseWindow, closeId: model.runtimeWindowId(focused))
+      )
   of MsgKind.CmdCloseWindowById:
-    if model.windowForExternal(msg.closeWindowId.externalWindowId()) !=
-        NullWindowId:
-      result.effects.add(Effect(kind: EffectKind.EffCloseWindow,
-          closeId: msg.closeWindowId))
+    if model.windowForExternal(msg.closeWindowId.externalWindowId()) != NullWindowId:
+      result.effects.add(
+        Effect(kind: EffectKind.EffCloseWindow, closeId: msg.closeWindowId)
+      )
   of MsgKind.CmdSpawn:
     if msg.spawnCommand.len > 0:
-      result.effects.add(Effect(kind: EffectKind.EffSpawn,
-          spawnCommand: msg.spawnCommand))
+      result.effects.add(
+        Effect(kind: EffectKind.EffSpawn, spawnCommand: msg.spawnCommand)
+      )
   of MsgKind.CmdTick:
     result.dirty = model.tickAnimations()
     result.dirty = model.flushPendingDialogFocus() or result.dirty
   of MsgKind.CmdLockSession:
     if model.screenLockCommand.len > 0:
-      result.effects.add(Effect(
-        kind: EffectKind.EffSpawnScreenLock,
-        screenLockCommand: model.screenLockCommand))
+      result.effects.add(
+        Effect(
+          kind: EffectKind.EffSpawnScreenLock,
+          screenLockCommand: model.screenLockCommand,
+        )
+      )
     else:
-      result.effects.add(Effect(
-        kind: EffectKind.EffLog,
-        msg: "screen lock command is not configured"))
+      result.effects.add(
+        Effect(kind: EffectKind.EffLog, msg: "screen lock command is not configured")
+      )
   of MsgKind.CmdWarpPointer:
-    result.effects.add(Effect(
-      kind: EffectKind.EffPointerWarp,
-      warpX: msg.warpX,
-      warpY: msg.warpY))
+    result.effects.add(
+      Effect(kind: EffectKind.EffPointerWarp, warpX: msg.warpX, warpY: msg.warpY)
+    )
   of MsgKind.CmdEatNextKey:
     result.effects.add(Effect(kind: EffectKind.EffEnsureNextKeyEaten))
   of MsgKind.CmdCancelEatNextKey:
@@ -258,9 +251,9 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
     if model.allowExitSession:
       result.effects.add(Effect(kind: EffectKind.EffExitSession))
     else:
-      result.effects.add(Effect(
-        kind: EffectKind.EffLog,
-        msg: "exit-session is disabled by config"))
+      result.effects.add(
+        Effect(kind: EffectKind.EffLog, msg: "exit-session is disabled by config")
+      )
   of MsgKind.CmdFocusShellUi:
     if not model.sessionLocked and not model.layerFocusExclusive:
       result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
@@ -271,13 +264,16 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
   of MsgKind.CmdToggleHotkeyOverlay:
     result.dirty = model.setHotkeyOverlayOpen(not model.hotkeyOverlayOpen)
   of MsgKind.CmdScreenshot:
-    result.effects.add(Effect(
-      kind: EffectKind.EffScreenshot,
-      screenshotKind: msg.screenshotKind,
-      screenshotPath: msg.screenshotPath,
-      screenshotPointerMode: msg.screenshotPointerMode,
-      screenshotWriteToDisk: msg.screenshotWriteToDisk,
-      screenshotCopyToClipboard: msg.screenshotCopyToClipboard))
+    result.effects.add(
+      Effect(
+        kind: EffectKind.EffScreenshot,
+        screenshotKind: msg.screenshotKind,
+        screenshotPath: msg.screenshotPath,
+        screenshotPointerMode: msg.screenshotPointerMode,
+        screenshotWriteToDisk: msg.screenshotWriteToDisk,
+        screenshotCopyToClipboard: msg.screenshotCopyToClipboard,
+      )
+    )
   of MsgKind.CmdConfigReload, MsgKind.CmdSpawnTerminal:
     result.dirty = true
   else:

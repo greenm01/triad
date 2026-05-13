@@ -14,8 +14,7 @@ proc behaviorLogFiles(dir: string): seq[string] =
   if not dirExists(dir):
     return
   for kind, path in walkDir(dir):
-    if kind == pcFile and path.extractFilename().startsWith(
-        "triad-behavior-"):
+    if kind == pcFile and path.extractFilename().startsWith("triad-behavior-"):
       result.add(path)
 
 suite "Runtime logging":
@@ -34,8 +33,7 @@ suite "Runtime logging":
     check parseLogLevel("everything").isNone
 
   test "behavior log stays quiet when disabled":
-    let dir = getTempDir() / ("triad-behavior-disabled-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-disabled-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     defer:
@@ -51,8 +49,7 @@ suite "Runtime logging":
     check behaviorLogFiles(dir).len == 0
 
   test "behavior log writes valid jsonl when enabled":
-    let dir = getTempDir() / ("triad-behavior-enabled-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-enabled-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     defer:
@@ -76,8 +73,7 @@ suite "Runtime logging":
     check event.hasKey("pid")
 
   test "runtime update behavior event records workspace transition":
-    let dir = getTempDir() / ("triad-behavior-runtime-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-runtime-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     defer:
@@ -88,10 +84,10 @@ suite "Runtime logging":
 
     putEnv("TRIAD_BEHAVIOR_LOG", "1")
     putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
-    let model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
-    discard model.update(Msg(kind: MsgKind.CmdFocusWorkspaceIndex,
-      workspaceIndex: 2))
+    let model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    discard model.update(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
     check lines.len == 1
@@ -103,8 +99,7 @@ suite "Runtime logging":
     check event["window_states"]["after"].kind == JArray
 
   test "runtime update behavior event records window state effects":
-    let dir = getTempDir() / ("triad-behavior-effects-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-effects-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     defer:
@@ -116,12 +111,16 @@ suite "Runtime logging":
     putEnv("TRIAD_BEHAVIOR_LOG", "1")
     putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
     var model = initRuntimeStateFromConfig(Config()).model
-    (model, _) = model.update(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 9,
-      appId: "sublime_text",
-      title: "Sublime Text"))
-    discard model.update(Msg(kind: MsgKind.WlWindowMaximizeRequested,
-      maximizeRequestId: 9))
+    (model, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 9,
+        appId: "sublime_text",
+        title: "Sublime Text",
+      )
+    )
+    discard
+      model.update(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 9))
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
     check lines.len == 1
@@ -135,8 +134,7 @@ suite "Runtime logging":
     check event["effects"][0]["maximized"].getBool()
 
   test "runtime update behavior event records session lock transition":
-    let dir = getTempDir() / ("triad-behavior-session-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-session-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     defer:
@@ -164,8 +162,7 @@ suite "Runtime logging":
     check not unlocked["after"]["session_locked"].getBool()
 
   test "niri broadcast behavior event records active workspace":
-    let dir = getTempDir() / ("triad-behavior-broadcast-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-broadcast-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     defer:
@@ -176,14 +173,18 @@ suite "Runtime logging":
 
     putEnv("TRIAD_BEHAVIOR_LOG", "1")
     putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
-    waitFor broadcastJson($(%*{
-      "WorkspacesChanged": {
-        "workspaces": [
-          {"id": 1, "idx": 1, "is_active": false},
-          {"id": 2, "idx": 2, "is_active": true}
-        ]
-      }
-    }))
+    waitFor broadcastJson(
+      $(
+        %*{
+          "WorkspacesChanged": {
+            "workspaces": [
+              {"id": 1, "idx": 1, "is_active": false},
+              {"id": 2, "idx": 2, "is_active": true},
+            ]
+          }
+        }
+      )
+    )
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
     check lines.len == 1
@@ -195,8 +196,7 @@ suite "Runtime logging":
     check event.hasKey("workspace_signature")
 
   test "behavior log rotates oversized day file and cleans old logs":
-    let dir = getTempDir() / ("triad-behavior-rotate-" &
-      $getCurrentProcessId())
+    let dir = getTempDir() / ("triad-behavior-rotate-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     let oldMax = getEnv("TRIAD_BEHAVIOR_LOG_MAX_BYTES", "")

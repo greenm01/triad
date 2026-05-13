@@ -7,8 +7,7 @@ type ImportantHotkey = object
   label: string
 
 const ImportantHotkeys = [
-  ImportantHotkey(command: "toggle-hotkey-overlay",
-    label: "Show Important Hotkeys"),
+  ImportantHotkey(command: "toggle-hotkey-overlay", label: "Show Important Hotkeys"),
   ImportantHotkey(command: "close-window", label: "Close Focused Window"),
   ImportantHotkey(command: "focus-left", label: "Focus Left"),
   ImportantHotkey(command: "focus-right", label: "Focus Right"),
@@ -20,13 +19,14 @@ const ImportantHotkeys = [
   ImportantHotkey(command: "move-window-down", label: "Move Window Down"),
   ImportantHotkey(command: "switch-layout", label: "Switch Layout"),
   ImportantHotkey(command: "maximize-column", label: "Maximize Column"),
-  ImportantHotkey(command: "maximize-window-to-edges",
-    label: "Maximize Window to Edges"),
+  ImportantHotkey(
+    command: "maximize-window-to-edges", label: "Maximize Window to Edges"
+  ),
   ImportantHotkey(command: "fullscreen-window", label: "Fullscreen Window"),
   ImportantHotkey(command: "toggle-floating", label: "Toggle Floating"),
   ImportantHotkey(command: "toggle-overview", label: "Toggle Overview"),
   ImportantHotkey(command: "toggle-scratchpad", label: "Toggle Scratchpad"),
-  ImportantHotkey(command: "screenshot", label: "Take a Screenshot")
+  ImportantHotkey(command: "screenshot", label: "Take a Screenshot"),
 ]
 
 proc modifierNames(modifiers: uint32): seq[string] =
@@ -45,10 +45,14 @@ proc modifierNames(modifiers: uint32): seq[string] =
 
 proc prettyKeyName(key: string): string =
   case key
-  of "Slash": "/"
-  of "Question": "?"
-  of "Return": "Enter"
-  of "Print": "PrtSc"
+  of "Slash":
+    "/"
+  of "Question":
+    "?"
+  of "Return":
+    "Enter"
+  of "Print":
+    "PrtSc"
   else:
     if key.len == 1:
       key.toUpperAscii()
@@ -87,7 +91,8 @@ proc defaultCommandLabel(command: string): string =
     command.commandBase().replace("-", " ").capitalizeAscii()
 
 proc findBindingForCommand(
-    bindings: seq[KeyBindingConfig]; command: string): Option[KeyBindingConfig] =
+    bindings: seq[KeyBindingConfig], command: string
+): Option[KeyBindingConfig] =
   let target = command.commandBase()
   for binding in bindings:
     if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleHidden:
@@ -98,17 +103,16 @@ proc findBindingForCommand(
 
 proc rowForBinding(binding: KeyBindingConfig): HotkeyOverlayRow =
   let label =
-    if binding.hotkeyOverlayTitleKind ==
-        HotkeyOverlayTitleKind.HotkeyTitleCustom:
+    if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleCustom:
       binding.hotkeyOverlayTitle
     else:
       binding.command.defaultCommandLabel()
   HotkeyOverlayRow(key: binding.prettyBinding(), label: label)
 
-proc rowExists(rows: seq[HotkeyOverlayRow]; row: HotkeyOverlayRow): bool =
+proc rowExists(rows: seq[HotkeyOverlayRow], row: HotkeyOverlayRow): bool =
   rows.anyIt(it.key == row.key and it.label == row.label)
 
-proc addRow(rows: var seq[HotkeyOverlayRow]; row: HotkeyOverlayRow) =
+proc addRow(rows: var seq[HotkeyOverlayRow], row: HotkeyOverlayRow) =
   if row.key.len > 0 and row.label.len > 0 and not rows.rowExists(row):
     rows.add(row)
 
@@ -125,8 +129,7 @@ proc hotkeyOverlayRows*(model: Model): seq[HotkeyOverlayRow] =
       result.addRow(HotkeyOverlayRow(key: "(not bound)", label: item.label))
 
   for binding in model.keyBindings:
-    if binding.hotkeyOverlayTitleKind ==
-        HotkeyOverlayTitleKind.HotkeyTitleCustom:
+    if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleCustom:
       result.addRow(binding.rowForBinding())
 
   for binding in model.keyBindings:

@@ -8,8 +8,7 @@ import ../types/runtime_values as rv
 proc runtimeWindowId(win: model.WindowData): rv.WindowId =
   rv.WindowId(uint32(win.externalId))
 
-proc externalWindowId(
-    model: Model; winId: core_types.WindowId): rv.WindowId =
+proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
@@ -29,13 +28,11 @@ proc focusedOnActiveTag(model: Model): rv.WindowId =
   if model.placementForWindowOnTag(model.activeTag, winId).isNone:
     return 0'u32
   let winOpt = model.windowData(winId)
-  if winOpt.isNone or winOpt.get().isMinimized or
-      not winOpt.get().windowAdmitted():
+  if winOpt.isNone or winOpt.get().isMinimized or not winOpt.get().windowAdmitted():
     return 0'u32
   winOpt.get().runtimeWindowId()
 
-proc restoredWindowData*(source: rv.RestoredWindowState):
-    RestoredWindowData =
+proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
   RestoredWindowData(
     slot: source.tagId,
     parentExternalId: ExternalWindowId(uint32(source.parentId)),
@@ -51,7 +48,7 @@ proc restoredWindowData*(source: rv.RestoredWindowState):
     fullscreenOutput: ExternalOutputId(source.fullscreenOutput),
     floatingGeom: source.floatingGeom,
     actualW: source.actualW,
-    actualH: source.actualH
+    actualH: source.actualH,
   )
 
 proc restoredTagData*(source: rv.RestoredTagState): RestoredTagData =
@@ -65,12 +62,12 @@ proc restoredTagData*(source: rv.RestoredTagState): RestoredTagData =
     targetViewportYOffset: source.targetViewportYOffset,
     currentViewportYOffset: source.currentViewportYOffset,
     masterCount: source.masterCount,
-    masterSplitRatio: source.masterSplitRatio
+    masterSplitRatio: source.masterSplitRatio,
   )
   for col in source.columns:
     var restoredCol = RestoredColumnData(
-      widthProportion: col.widthProportion,
-      isFullWidth: col.isFullWidth)
+      widthProportion: col.widthProportion, isFullWidth: col.isFullWidth
+    )
     for winId in col.windows:
       restoredCol.windows.add(ExternalWindowId(uint32(winId)))
     result.columns.add(restoredCol)
@@ -97,13 +94,13 @@ proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
   for slot in source.workspaceHistory:
     result.workspaceHistory.add(slot)
 
-proc hasOutputTag(model: Model; tagId: TagId): bool =
+proc hasOutputTag(model: Model, tagId: TagId): bool =
   for _, outputTagId in model.outputTags.pairs:
     if outputTagId == tagId:
       return true
   false
 
-proc shouldPersistTag(model: Model; tag: TagData): bool =
+proc shouldPersistTag(model: Model, tag: TagData): bool =
   if tag.slot <= model.defaultWorkspaceCount:
     return true
   if tag.id == model.activeTag or model.tagHasLiveWindows(tag.id) or
@@ -116,8 +113,7 @@ proc shouldPersistTag(model: Model; tag: TagData): bool =
   if tag.targetViewportXOffset != 0 or tag.currentViewportXOffset != 0 or
       tag.targetViewportYOffset != 0 or tag.currentViewportYOffset != 0:
     return true
-  tag.masterCount != DefaultMasterCount or
-    tag.masterSplitRatio != DefaultMasterRatio
+  tag.masterCount != DefaultMasterCount or tag.masterSplitRatio != DefaultMasterRatio
 
 proc liveRestoreState*(model: Model): LiveRestoreState =
   result.activeTag = model.activeSlot
@@ -143,7 +139,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       targetViewportYOffset: tag.targetViewportYOffset,
       currentViewportYOffset: tag.currentViewportYOffset,
       masterCount: tag.masterCount,
-      masterSplitRatio: tag.masterSplitRatio
+      masterSplitRatio: tag.masterSplitRatio,
     )
 
     for colId in model.columnsForTag(tagId):
@@ -152,7 +148,8 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
         continue
       var restoredCol = rv.RestoredColumnState(
         widthProportion: colOpt.get().widthProportion,
-        isFullWidth: colOpt.get().isFullWidth)
+        isFullWidth: colOpt.get().isFullWidth,
+      )
       for winId in model.windowsForColumn(colId):
         if not model.windowAdmitted(winId):
           continue
@@ -196,7 +193,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       fullscreenOutput: uint32(win.fullscreenOutput),
       floatingGeom: win.floatingGeom,
       actualW: win.actualW,
-      actualH: win.actualH
+      actualH: win.actualH,
     )
 
   for outputId, tagId in model.outputTags.pairs:
@@ -219,8 +216,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     if external != 0:
       result.namedScratchpads[name] = external
 
-  result.visibleScratchpad = model.externalWindowId(
-    model.visibleScratchpadWindow())
+  result.visibleScratchpad = model.externalWindowId(model.visibleScratchpadWindow())
   result.isScratchpadVisible = model.scratchpadVisible()
 
   for winId in model.focusHistoryIds():
@@ -236,8 +232,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
 proc rectJson(rect: rv.Rect): JsonNode =
   %*{"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h}
 
-proc windowStateJson(
-    winId: rv.WindowId; win: rv.RestoredWindowState): JsonNode =
+proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode =
   %*{
     "id": winId,
     "tag_id": win.tagId,
@@ -254,7 +249,7 @@ proc windowStateJson(
     "fullscreen_output": win.fullscreenOutput,
     "floating_geom": rectJson(win.floatingGeom),
     "actual_w": win.actualW,
-    "actual_h": win.actualH
+    "actual_h": win.actualH,
   }
 
 proc tagStateJson(tag: rv.RestoredTagState): JsonNode =
@@ -263,11 +258,13 @@ proc tagStateJson(tag: rv.RestoredTagState): JsonNode =
     let windows = newJArray()
     for winId in col.windows:
       windows.add(%winId)
-    columns.add(%*{
-      "windows": windows,
-      "width_proportion": col.widthProportion,
-      "is_full_width": col.isFullWidth
-    })
+    columns.add(
+      %*{
+        "windows": windows,
+        "width_proportion": col.widthProportion,
+        "is_full_width": col.isFullWidth,
+      }
+    )
 
   %*{
     "id": tag.tagId,
@@ -280,7 +277,7 @@ proc tagStateJson(tag: rv.RestoredTagState): JsonNode =
     "target_viewport_y_offset": tag.targetViewportYOffset,
     "current_viewport_y_offset": tag.currentViewportYOffset,
     "master_count": tag.masterCount,
-    "master_split_ratio": tag.masterSplitRatio
+    "master_split_ratio": tag.masterSplitRatio,
   }
 
 proc liveRestoreStateJson(state: LiveRestoreState): string =
@@ -306,10 +303,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
     outputIds.add(outputId)
   outputIds.sort()
   for outputId in outputIds:
-    outputTags.add(%*{
-      "output_id": outputId,
-      "tag_id": state.outputTags[outputId]
-    })
+    outputTags.add(%*{"output_id": outputId, "tag_id": state.outputTags[outputId]})
 
   let scratchpads = newJArray()
   for winId in state.scratchpadWindows:
@@ -321,10 +315,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
     names.add(name)
   names.sort()
   for name in names:
-    namedScratchpads.add(%*{
-      "name": name,
-      "window_id": state.namedScratchpads[name]
-    })
+    namedScratchpads.add(%*{"name": name, "window_id": state.namedScratchpads[name]})
 
   let focusHistory = newJArray()
   for winId in state.focusHistory:
@@ -334,27 +325,30 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
   for tagId in state.workspaceHistory:
     workspaceHistory.add(%tagId)
 
-  $(%*{
-    "schema": LiveRestoreSchema,
-    "restore_status": LiveRestoreStatusPending,
-    "active_tag": state.activeTag,
-    "focused_window": state.focusedWindow,
-    "tags": tags,
-    "windows": windows,
-    "output_tags": outputTags,
-    "scratchpad_windows": scratchpads,
-    "named_scratchpads": namedScratchpads,
-    "visible_scratchpad": state.visibleScratchpad,
-    "is_scratchpad_visible": state.isScratchpadVisible,
-    "focus_history": focusHistory,
-    "workspace_history": workspaceHistory
-  })
+  $(
+    %*{
+      "schema": LiveRestoreSchema,
+      "restore_status": LiveRestoreStatusPending,
+      "active_tag": state.activeTag,
+      "focused_window": state.focusedWindow,
+      "tags": tags,
+      "windows": windows,
+      "output_tags": outputTags,
+      "scratchpad_windows": scratchpads,
+      "named_scratchpads": namedScratchpads,
+      "visible_scratchpad": state.visibleScratchpad,
+      "is_scratchpad_visible": state.isScratchpadVisible,
+      "focus_history": focusHistory,
+      "workspace_history": workspaceHistory,
+    }
+  )
 
 proc liveRestoreJson*(model: Model): string =
   model.liveRestoreState().liveRestoreStateJson()
 
 proc writeLiveRestoreState*(
-    model: Model; path = defaultLiveRestorePath()): LiveRestoreWriteResult =
+    model: Model, path = defaultLiveRestorePath()
+): LiveRestoreWriteResult =
   if path.len == 0:
     return LiveRestoreWriteResult(ok: false, error: "empty live restore path")
 

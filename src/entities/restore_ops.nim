@@ -1,8 +1,7 @@
 import std/[options, tables]
 import ../types/[core, model]
 
-proc loadRestoreState*(model: var Model; state: PendingRestoreState):
-    bool =
+proc loadRestoreState*(model: var Model, state: PendingRestoreState): bool =
   model.restoreActiveSlot = state.activeSlot
   model.restoreFocusedWindow = state.focusedWindow
   model.restoreTagByWindow = state.tagByWindow
@@ -18,23 +17,24 @@ proc loadRestoreState*(model: var Model; state: PendingRestoreState):
   true
 
 proc consumeRestoreWindow*(
-    model: var Model; externalId: ExternalWindowId):
-    Option[RestoredWindowData] =
+    model: var Model, externalId: ExternalWindowId
+): Option[RestoredWindowData] =
   if not model.restoreWindows.hasKey(externalId):
     return none(RestoredWindowData)
   result = some(model.restoreWindows[externalId])
   model.restoreWindows.del(externalId)
 
-proc consumeRestoreTagSlot*(model: var Model; externalId: ExternalWindowId):
-    tuple[found: bool; slot: uint32] =
+proc consumeRestoreTagSlot*(
+    model: var Model, externalId: ExternalWindowId
+): tuple[found: bool, slot: uint32] =
   if not model.restoreTagByWindow.hasKey(externalId):
     return (false, 0'u32)
   result = (true, model.restoreTagByWindow[externalId])
   model.restoreTagByWindow.del(externalId)
 
 proc rewriteRestoreFocusRefs*(
-    model: var Model; restoredExternalId, externalId: ExternalWindowId):
-    bool =
+    model: var Model, restoredExternalId, externalId: ExternalWindowId
+): bool =
   if restoredExternalId == externalId:
     return false
   for item in model.restoreFocusHistory.mitems:
@@ -43,7 +43,8 @@ proc rewriteRestoreFocusRefs*(
       result = true
 
 proc clearRestoreFocusedWindow*(
-    model: var Model; restoredExternalId: ExternalWindowId): bool =
+    model: var Model, restoredExternalId: ExternalWindowId
+): bool =
   if restoredExternalId == NullExternalWindowId or
       model.restoreFocusedWindow != restoredExternalId:
     return false

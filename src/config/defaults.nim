@@ -1,8 +1,8 @@
 import ../core/defaults as core_defaults
 export core_defaults
 
-const
-  FallbackConfigContent* = """// Triad Configuration (KDL 2.0)
+const FallbackConfigContent* =
+  """// Triad Configuration (KDL 2.0)
 
 layout {
     gaps 16

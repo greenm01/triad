@@ -16,14 +16,17 @@ suite "App identity compatibility":
       removeDir(root)
 
   test "parses desktop entry identity fields":
-    writeDesktop(root, "foot.desktop", """
+    writeDesktop(
+      root, "foot.desktop",
+      """
 [Desktop Entry]
 Name=Foot
 Exec=foot --server %U
 Icon=foot
 StartupWMClass=foot
 Categories=System;TerminalEmulator;
-""")
+""",
+    )
 
     let parsed = parseDesktopEntry(root / "foot.desktop", root)
     check parsed.isSome
@@ -36,39 +39,48 @@ Categories=System;TerminalEmulator;
     check parsed.get().isTerminalEntry
 
   test "maps exec basenames to desktop ids":
-    writeDesktop(root, "kitty.desktop", """
+    writeDesktop(
+      root, "kitty.desktop",
+      """
 [Desktop Entry]
 Name=kitty
 Exec=kitty --single-instance
 Icon=kitty
 Categories=System;TerminalEmulator;
-""")
+""",
+    )
 
     let index = buildAppIdentityIndex([root])
     check compatAppId("kitty", index) == "triad-kitty"
 
   test "maps startup wm class case-insensitively":
-    writeDesktop(root, "Alacritty.desktop", """
+    writeDesktop(
+      root, "Alacritty.desktop",
+      """
 [Desktop Entry]
 Name=Alacritty
 Exec=/usr/bin/alacritty
 Icon=Alacritty
 StartupWMClass=Alacritty
 Categories=System;TerminalEmulator;
-""")
+""",
+    )
 
     let index = buildAppIdentityIndex([root])
     check compatAppId("alacritty", index) == "triad-alacritty"
     check compatAppId("Alacritty", index) == "triad-alacritty"
 
   test "keeps non-terminal app ids on standard desktop ids":
-    writeDesktop(root, "Browser.desktop", """
+    writeDesktop(
+      root, "Browser.desktop",
+      """
 [Desktop Entry]
 Name=Browser
 Exec=browser
 Icon=browser
 Categories=Network;WebBrowser;
-""")
+""",
+    )
 
     let index = buildAppIdentityIndex([root])
     check compatAppId("browser", index) == "browser.desktop"
@@ -83,13 +95,16 @@ Categories=Network;WebBrowser;
     check compatAppId("ghostty", index) == "com.mitchellh.ghostty.desktop"
 
   test "terminal aliases use overlay ids when desktop metadata is present":
-    writeDesktop(root, "foot.desktop", """
+    writeDesktop(
+      root, "foot.desktop",
+      """
 [Desktop Entry]
 Name=Foot
 Exec=foot
 Icon=foot
 Categories=System;TerminalEmulator;
-""")
+""",
+    )
 
     let index = buildAppIdentityIndex([root])
     check compatAppId("footclient", index) == "triad-foot"

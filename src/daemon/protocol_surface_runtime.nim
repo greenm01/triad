@@ -33,33 +33,32 @@ proc premulColor*(value: uint32): tuple[r, g, b, a: uint32] =
   let b8 = (value shr 8) and 0xff
   let a8 = value and 0xff
   let max32 = uint64(high(uint32))
-  result.r = uint32((uint64(r8) * uint64(a8) * max32) div
-      (255'u64 * 255'u64))
-  result.g = uint32((uint64(g8) * uint64(a8) * max32) div
-      (255'u64 * 255'u64))
-  result.b = uint32((uint64(b8) * uint64(a8) * max32) div
-      (255'u64 * 255'u64))
+  result.r = uint32((uint64(r8) * uint64(a8) * max32) div (255'u64 * 255'u64))
+  result.g = uint32((uint64(g8) * uint64(a8) * max32) div (255'u64 * 255'u64))
+  result.b = uint32((uint64(b8) * uint64(a8) * max32) div (255'u64 * 255'u64))
   result.a = uint32((uint64(a8) * max32) div 255)
 
-proc createProtocolBuffer(
-    daemon: TriadDaemon; kind: ProtocolSurfaceKind): ptr Buffer =
+proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr Buffer =
   if daemon.singlePixelManager == nil:
     return nil
   let alpha =
-    if daemon.currentModel.protocolSurfaces.visibleDebug:
-      0x80000000'u32
-    else:
-      0'u32
-  let color = case kind
-    of ProtocolSurfaceKind.PskShell: 0x3aa5ff00'u32 or alpha
-    of ProtocolSurfaceKind.PskHotkeyOverlay: 0x11111100'u32 or alpha
-    of ProtocolSurfaceKind.PskDecorationAbove: 0xffcc0000'u32 or alpha
-    of ProtocolSurfaceKind.PskDecorationBelow: 0x2233cc00'u32 or alpha
+    if daemon.currentModel.protocolSurfaces.visibleDebug: 0x80000000'u32 else: 0'u32
+  let color =
+    case kind
+    of ProtocolSurfaceKind.PskShell:
+      0x3aa5ff00'u32 or alpha
+    of ProtocolSurfaceKind.PskHotkeyOverlay:
+      0x11111100'u32 or alpha
+    of ProtocolSurfaceKind.PskDecorationAbove:
+      0xffcc0000'u32 or alpha
+    of ProtocolSurfaceKind.PskDecorationBelow:
+      0x2233cc00'u32 or alpha
   let rgba = premulColor(color)
   daemon.singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
 
 proc createTransparentShmBuffer(
-    daemon: var TriadDaemon; width, height: int32): ptr Buffer =
+    daemon: var TriadDaemon, width, height: int32
+): ptr Buffer =
   if daemon.shm == nil:
     return nil
   let w = max(1'i32, width)
@@ -67,13 +66,14 @@ proc createTransparentShmBuffer(
   let stride = w * 4
   let size = stride * h
   inc daemon.shmBufferCounter
-  let path = getTempDir() / (
-    "triad-overview-shield-" & $getCurrentProcessId() & "-" &
-    $daemon.shmBufferCounter)
+  let path =
+    getTempDir() /
+    ("triad-overview-shield-" & $getCurrentProcessId() & "-" & $daemon.shmBufferCounter)
   let fd = posix.open(
     path.cstring,
     posix.O_RDWR or posix.O_CREAT or posix.O_EXCL,
-    posix.S_IRUSR or posix.S_IWUSR)
+    posix.S_IRUSR or posix.S_IWUSR,
+  )
   if fd < 0:
     warn "Unable to create overview shield shm file", path = path
     return nil
@@ -86,12 +86,7 @@ proc createTransparentShmBuffer(
     if pool == nil:
       warn "Unable to create overview shield shm pool"
       return nil
-    result = pool.createBuffer(
-      0,
-      w,
-      h,
-      stride,
-      uint32(ShmFormat.format_argb8888))
+    result = pool.createBuffer(0, w, h, stride, uint32(ShmFormat.format_argb8888))
     pool.destroy()
   finally:
     discard posix.close(fd)
@@ -100,14 +95,13 @@ proc createTransparentShmBuffer(
     except CatchableError:
       discard
 
-proc createArgbShmBuffer(
-    daemon: var TriadDaemon; buf: PixelBuffer): ptr Buffer =
+proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
   if daemon.shm == nil:
     return nil
   inc daemon.shmBufferCounter
-  let path = getTempDir() / (
-    "triad-hotkey-overlay-" & $getCurrentProcessId() & "-" &
-    $daemon.shmBufferCounter)
+  let path =
+    getTempDir() /
+    ("triad-hotkey-overlay-" & $getCurrentProcessId() & "-" & $daemon.shmBufferCounter)
   try:
     writeFile(path, argbBytes(buf.pixels))
     let fd = posix.open(path.cstring, posix.O_RDWR)
@@ -119,17 +113,13 @@ proc createArgbShmBuffer(
       if pool == nil:
         return nil
       result = pool.createBuffer(
-        0,
-        buf.width,
-        buf.height,
-        buf.width * 4,
-        uint32(ShmFormat.format_argb8888))
+        0, buf.width, buf.height, buf.width * 4, uint32(ShmFormat.format_argb8888)
+      )
       pool.destroy()
     finally:
       discard posix.close(fd)
   except CatchableError as e:
-    warn "Unable to create hotkey overlay shm buffer", path = path,
-      error = e.msg
+    warn "Unable to create hotkey overlay shm buffer", path = path, error = e.msg
   finally:
     try:
       if fileExists(path):
@@ -138,7 +128,8 @@ proc createArgbShmBuffer(
       discard
 
 proc createProtocolWlSurface(
-    daemon: var TriadDaemon; kind: ProtocolSurfaceKind): OwnedProtocolSurface =
+    daemon: var TriadDaemon, kind: ProtocolSurfaceKind
+): OwnedProtocolSurface =
   result.kind = kind
   if daemon.compositor == nil:
     return
@@ -149,8 +140,7 @@ proc createProtocolWlSurface(
   result.bufferW = 1
   result.bufferH = 1
 
-proc commitProtocolSurface*(
-    daemon: var TriadDaemon; surf: var OwnedProtocolSurface) =
+proc commitProtocolSurface*(daemon: var TriadDaemon, surf: var OwnedProtocolSurface) =
   if surf.surface == nil:
     return
   if surf.shellSurface != nil:
@@ -166,21 +156,20 @@ proc commitProtocolSurface*(
       input.destroy()
   if surf.buffer != nil:
     surf.surface.attach(surf.buffer, 0, 0)
-    surf.surface.damage(0, 0, max(1'i32, surf.bufferW),
-        max(1'i32, surf.bufferH))
+    surf.surface.damage(0, 0, max(1'i32, surf.bufferW), max(1'i32, surf.bufferH))
   surf.surface.commit()
   surf.syncPending = false
 
 proc setProtocolSurfaceBuffer*(
-    surf: var OwnedProtocolSurface; buffer: ptr Buffer; width, height: int32) =
+    surf: var OwnedProtocolSurface, buffer: ptr Buffer, width, height: int32
+) =
   if surf.buffer != nil and surf.buffer != buffer:
     surf.buffer.destroy()
   surf.buffer = buffer
   surf.bufferW = width
   surf.bufferH = height
 
-proc destroyProtocolSurface*(
-    daemon: var TriadDaemon; surf: var OwnedProtocolSurface) =
+proc destroyProtocolSurface*(daemon: var TriadDaemon, surf: var OwnedProtocolSurface) =
   if surf.node != nil:
     surf.node.destroy()
     surf.node = nil
@@ -222,8 +211,7 @@ proc ensureOwnedShellSurface*(daemon: var TriadDaemon) =
   daemon.shellSurfacePointers[daemon.ownedShellSurfaceId] = surf.shellSurface
   daemon.commitProtocolSurface(surf)
   daemon.surfaceTable[daemon.ownedShellSurfaceId] = surf
-  debug "Created protocol shell surface",
-    shellSurfaceId = daemon.ownedShellSurfaceId
+  debug "Created protocol shell surface", shellSurfaceId = daemon.ownedShellSurfaceId
 
 proc ensureHotkeyOverlaySurface*(daemon: var TriadDaemon) =
   if not daemon.currentModel.protocolSurfaces.enabled:
@@ -233,8 +221,7 @@ proc ensureHotkeyOverlaySurface*(daemon: var TriadDaemon) =
     return
   if daemon.riverManager == nil or daemon.compositor == nil:
     return
-  var surf = daemon.createProtocolWlSurface(
-    ProtocolSurfaceKind.PskHotkeyOverlay)
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskHotkeyOverlay)
   if surf.surface == nil:
     warn "Unable to create hotkey overlay wl_surface"
     return
@@ -251,17 +238,24 @@ proc ensureHotkeyOverlaySurface*(daemon: var TriadDaemon) =
   debug "Created hotkey overlay shell surface",
     shellSurfaceId = daemon.hotkeyOverlaySurfaceId
 
-proc syncOwnedShellSurface*(daemon: var TriadDaemon; screen: Rect) =
+proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
   if daemon.ownedShellSurfaceId == 0 or
       not daemon.surfaceTable.hasKey(daemon.ownedShellSurfaceId):
     return
 
   var surf = daemon.surfaceTable[daemon.ownedShellSurfaceId]
   let wantsShield = daemon.currentModel.overviewActive and daemon.shm != nil
-  let desiredW = if wantsShield: max(1'i32, screen.w) else: 1'i32
-  let desiredH = if wantsShield: max(1'i32, screen.h) else: 1'i32
-  if surf.buffer == nil or surf.bufferW != desiredW or
-      surf.bufferH != desiredH:
+  let desiredW =
+    if wantsShield:
+      max(1'i32, screen.w)
+    else:
+      1'i32
+  let desiredH =
+    if wantsShield:
+      max(1'i32, screen.h)
+    else:
+      1'i32
+  if surf.buffer == nil or surf.bufferW != desiredW or surf.bufferH != desiredH:
     let buffer =
       if wantsShield:
         daemon.createTransparentShmBuffer(desiredW, desiredH)
@@ -281,15 +275,14 @@ proc syncOwnedShellSurface*(daemon: var TriadDaemon; screen: Rect) =
   daemon.commitProtocolSurface(surf)
   daemon.surfaceTable[daemon.ownedShellSurfaceId] = surf
 
-proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon; screen: Rect) =
+proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
   if not daemon.currentModel.hotkeyOverlayOpen:
     if daemon.hotkeyOverlaySurfaceId != 0 and
         daemon.surfaceTable.hasKey(daemon.hotkeyOverlaySurfaceId):
       var surf = daemon.surfaceTable[daemon.hotkeyOverlaySurfaceId]
       surf.inputW = 0
       surf.inputH = 0
-      let buffer = daemon.createProtocolBuffer(
-        ProtocolSurfaceKind.PskHotkeyOverlay)
+      let buffer = daemon.createProtocolBuffer(ProtocolSurfaceKind.PskHotkeyOverlay)
       if buffer != nil:
         surf.setProtocolSurfaceBuffer(buffer, 1, 1)
       if surf.node != nil:
@@ -323,8 +316,8 @@ proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon; screen: Rect) =
   daemon.surfaceTable[daemon.hotkeyOverlaySurfaceId] = surf
 
 proc ensureDecorationSurface*(
-    daemon: var TriadDaemon; windowId: WindowId;
-    kind: ProtocolSurfaceKind): uint32 =
+    daemon: var TriadDaemon, windowId: WindowId, kind: ProtocolSurfaceKind
+): uint32 =
   if not daemon.currentModel.protocolSurfaces.enabled:
     return 0
   if not daemon.windowPointers.hasKey(windowId) or daemon.compositor == nil:
@@ -342,11 +335,9 @@ proc ensureDecorationSurface*(
   surf.windowId = windowId
   case kind
   of ProtocolSurfaceKind.PskDecorationAbove:
-    surf.decoration =
-      daemon.windowPointers[windowId].getDecorationAbove(surf.surface)
+    surf.decoration = daemon.windowPointers[windowId].getDecorationAbove(surf.surface)
   of ProtocolSurfaceKind.PskDecorationBelow:
-    surf.decoration =
-      daemon.windowPointers[windowId].getDecorationBelow(surf.surface)
+    surf.decoration = daemon.windowPointers[windowId].getDecorationBelow(surf.surface)
   else:
     discard
   if surf.decoration == nil:
@@ -361,12 +352,11 @@ proc ensureDecorationSurface*(
   elif kind == ProtocolSurfaceKind.PskDecorationBelow:
     daemon.windowDecorationBelow[windowId] = id
   let kindText = $kind
-  debug "Created protocol decoration surface", windowId = windowId,
-      decorationId = id, kind = kindText
+  debug "Created protocol decoration surface",
+    windowId = windowId, decorationId = id, kind = kindText
   id
 
-proc destroyWindowProtocolSurfaces*(
-    daemon: var TriadDaemon; windowId: WindowId) =
+proc destroyWindowProtocolSurfaces*(daemon: var TriadDaemon, windowId: WindowId) =
   if daemon.windowDecorationAbove.hasKey(windowId):
     let id = daemon.windowDecorationAbove[windowId]
     daemon.windowDecorationAbove.del(windowId)

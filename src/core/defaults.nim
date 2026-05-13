@@ -24,7 +24,7 @@ const
   DefaultScreenshotDirectory* = "~/Pictures/Screenshots"
   DefaultScreenshotFilenamePrefix* = "triad-screenshot"
   DefaultScreenshotCaptureCommand* = "grim"
-  DefaultScreenshotRegionSelectorCommand * = "slurp"
+  DefaultScreenshotRegionSelectorCommand* = "slurp"
   DefaultScreenshotClipboardCommand* = "wl-copy --type image/png"
   DefaultWorkspaceCount* = 3'u32
   MaxWorkspaceCount* = 64'u32

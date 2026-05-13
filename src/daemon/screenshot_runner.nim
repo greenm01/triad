@@ -22,9 +22,12 @@ proc focusedWindowGeometry*(daemon: TriadDaemon): Rect =
   daemon.currentModel.primaryScreen()
 
 proc runScreenshotCapture*(
-    daemon: ptr TriadDaemon; kind: ScreenshotKind; requestedPath: string;
-    pointerMode: ScreenshotPointerMode; writeToDisk,
-    copyToClipboard: bool) {.async.} =
+    daemon: ptr TriadDaemon,
+    kind: ScreenshotKind,
+    requestedPath: string,
+    pointerMode: ScreenshotPointerMode,
+    writeToDisk, copyToClipboard: bool,
+) {.async.} =
   if daemon == nil:
     return
   if daemon.screenshotCaptureActive:
@@ -54,7 +57,8 @@ proc runScreenshotCapture*(
       screenshotConfig,
       daemon[].currentModel.primaryScreen(),
       daemon[].focusedWindowGeometry(),
-      pointerMode)
+      pointerMode,
+    )
     info "Screenshot capture started", path = path, screenshotKind = $kind
 
     let code = await runShellCommandAsync(command)
@@ -64,11 +68,10 @@ proc runScreenshotCapture*(
 
     var clipboardOk = true
     if copyToClipboard:
-      let copyCode = await runShellCommandAsync(
-        screenshotClipboardCommand(path, screenshotConfig))
+      let copyCode =
+        await runShellCommandAsync(screenshotClipboardCommand(path, screenshotConfig))
       if copyCode != 0:
-        warn "Screenshot clipboard copy failed", path = path,
-          exitCode = copyCode
+        warn "Screenshot clipboard copy failed", path = path, exitCode = copyCode
         clipboardOk = false
     if not writeToDisk and not clipboardOk:
       return

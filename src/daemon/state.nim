@@ -12,8 +12,8 @@ import protocol_surfaces, quickshell_runner
 
 type
   RiverPhase* {.pure.} = enum
-    RiverIdle,
-    RiverManage,
+    RiverIdle
+    RiverManage
     RiverRender
 
   WlOutputListenerData* = object
@@ -109,14 +109,14 @@ proc daemonFromData*(data: pointer): ptr TriadDaemon =
   else:
     cast[ptr TriadDaemon](data)
 
-proc expectMaximizedAck*(
-    daemon: var TriadDaemon; id: WindowId; maximized: bool) =
+proc expectMaximizedAck*(daemon: var TriadDaemon, id: WindowId, maximized: bool) =
   if id == 0:
     return
   daemon.pendingMaximizedAcks[id] = maximized
 
 proc consumeMaximizedAck*(
-    daemon: var TriadDaemon; id: WindowId; maximized: bool): bool =
+    daemon: var TriadDaemon, id: WindowId, maximized: bool
+): bool =
   if not daemon.pendingMaximizedAcks.hasKey(id):
     return false
   if daemon.pendingMaximizedAcks[id] != maximized:

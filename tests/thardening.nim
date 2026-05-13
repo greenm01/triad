@@ -1,8 +1,7 @@
 import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
-from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck,
-  initTriadDaemon
+from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
@@ -16,24 +15,25 @@ proc baseSnapshot(): ShellSnapshot =
     activeTag: 1,
     activeWorkspaceIdx: 1,
     layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid],
-    workspaces: @[
-      ShellWorkspace(
-        tagId: 1,
-        workspaceIdx: 1,
-        layoutMode: LayoutMode.Scroller,
-        isActive: true,
-        outputName: "triad-0",
-        masterCount: 1,
-        masterSplitRatio: 0.5)
-    ],
-    outputs: @[ShellOutput(name: "triad-0", w: 1920, h: 1080)])
+    workspaces:
+      @[
+        ShellWorkspace(
+          tagId: 1,
+          workspaceIdx: 1,
+          layoutMode: LayoutMode.Scroller,
+          isActive: true,
+          outputName: "triad-0",
+          masterCount: 1,
+          masterSplitRatio: 0.5,
+        )
+      ],
+    outputs: @[ShellOutput(name: "triad-0", w: 1920, h: 1080)],
+  )
 
 suite "Crash hardening":
   test "daemon startup rejects missing Wayland session environment":
-    check waylandSessionProblem("", "wayland-1") ==
-      "XDG_RUNTIME_DIR is not set"
-    check waylandSessionProblem("/run/user/1000", "") ==
-      "WAYLAND_DISPLAY is not set"
+    check waylandSessionProblem("", "wayland-1") == "XDG_RUNTIME_DIR is not set"
+    check waylandSessionProblem("/run/user/1000", "") == "WAYLAND_DISPLAY is not set"
     check waylandSessionProblem("/run/user/1000", "wayland-1") == ""
 
   test "daemon consumes only matching self-generated maximize acknowledgements":
@@ -45,14 +45,13 @@ suite "Crash hardening":
     check not daemon.consumeMaximizedAck(42, false)
 
   test "duplicate window create keeps a single shell window":
-    var model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
     for title in ["old", "new"]:
-      let (next, _) = model.update(Msg(
-        kind: MsgKind.WlWindowCreated,
-        windowId: 10,
-        appId: "app",
-        title: title))
+      let (next, _) = model.update(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "app", title: title)
+      )
       model = next
 
     let snapshot = model.shellSnapshot()
@@ -62,8 +61,9 @@ suite "Crash hardening":
     check snapshot.windows[0].title == "new"
 
   test "stale focus command paths are no-ops, not crashes":
-    var model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
 
     for msg in [
       Msg(kind: MsgKind.CmdMoveToScratchpad),
@@ -73,7 +73,7 @@ suite "Crash hardening":
       Msg(kind: MsgKind.CmdMoveWindowLeft),
       Msg(kind: MsgKind.CmdMoveWindowRight),
       Msg(kind: MsgKind.CmdToggleFloating),
-      Msg(kind: MsgKind.CmdToggleFullscreen)
+      Msg(kind: MsgKind.CmdToggleFullscreen),
     ]:
       let (next, _) = model.update(msg)
       model = next
@@ -81,43 +81,45 @@ suite "Crash hardening":
       check model.shellSnapshot().windows.len == 0
 
   test "river output and fullscreen events tolerate removal":
-    var model = initRuntimeStateFromConfig(Config(
-      workspaces: WorkspaceConfig(defaultCount: 3))).model
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
     for msg in [
-      Msg(kind: MsgKind.WlOutputDimensions, outputId: 42, width: 1280,
-          height: 720),
-      Msg(kind: MsgKind.WlWindowCreated, windowId: 7, appId: "app",
-          title: "title"),
-      Msg(kind: MsgKind.WlWindowFullscreenRequested, fullscreenRequestId: 7,
-        fullscreenOutputId: 0)
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 42, width: 1280, height: 720),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 7, appId: "app", title: "title"),
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 7,
+        fullscreenOutputId: 0,
+      ),
     ]:
       let (next, _) = model.update(msg)
       model = next
 
     var effects: seq[Effect]
-    (model, effects) = model.update(Msg(
-      kind: MsgKind.WlOutputRemoved,
-      removedOutputId: 42))
+    (model, effects) =
+      model.update(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 42))
     check model.validateInvariants().ok
     check effects.anyIt(
-      it.kind == EffectKind.EffSetFullscreen and it.fsWinId == 7 and
-      not it.isFullscreen)
+      it.kind == EffectKind.EffSetFullscreen and it.fsWinId == 7 and not it.isFullscreen
+    )
 
   test "dimension hints are normalized for daemon bounds":
     var model = initRuntimeStateFromConfig(Config()).model
-    let (next, _) = model.update(Msg(
-      kind: MsgKind.WlWindowCreated,
-      windowId: 7,
-      appId: "app",
-      title: "title"))
+    let (next, _) = model.update(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 7, appId: "app", title: "title")
+    )
     model = next
-    let (hinted, _) = model.update(Msg(
-      kind: MsgKind.WlWindowDimensionsHint,
-      hintWindowId: 7,
-      minWidth: -10,
-      minHeight: 200,
-      maxWidth: 100,
-      maxHeight: 50))
+    let (hinted, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 7,
+        minWidth: -10,
+        minHeight: 200,
+        maxWidth: 100,
+        maxHeight: 50,
+      )
+    )
     let win = hinted.windowDataForRiverId(7).get()
 
     check win.minWidth == 0
@@ -126,8 +128,9 @@ suite "Crash hardening":
     check win.maxHeight == 200
     check win.boundedDimensions(50, 50) == (w: 50'i32, h: 200'i32)
     check win.boundedDimensions(500, 500) == (w: 100'i32, h: 200'i32)
-    check win.proposalDimensions(50, 50, honorMinimums = false) ==
-      (w: 50'i32, h: 50'i32)
+    check win.proposalDimensions(50, 50, honorMinimums = false) == (
+      w: 50'i32, h: 50'i32
+    )
     check win.proposalDimensions(500, 500, honorMinimums = false) ==
       (w: 100'i32, h: 200'i32)
     check win.needsCellClip(100, 100)
@@ -139,8 +142,8 @@ suite "Crash hardening":
     check parseJson(malformed.reply)["Err"].getStr().len > 0
 
     let unknown = niri_compat.handleNiriRequest(
-      """{"Action":{"NotARealAction":{}}}""",
-      baseSnapshot())
+      """{"Action":{"NotARealAction":{}}}""", baseSnapshot()
+    )
     check unknown.handled
     check parseJson(unknown.reply)["Err"].getStr().len > 0
 
@@ -154,29 +157,35 @@ suite "Crash hardening":
     check parseLiveRestoreJson("").isNone
     check parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""").isNone
     check not liveRestorePayloadApplied(
-      """{"restore_status":"applied","active_tag":1}""")
-    let parsed = parseLiveRestoreJson("""
+      """{"restore_status":"applied","active_tag":1}"""
+    )
+    let parsed = parseLiveRestoreJson(
+      """
 {
   "schema": "triad-live-restore-v2",
   "active_tag": 1,
   "tags": [{"id": 1, "layout_mode": "scroller"}]
 }
-""")
+"""
+    )
     check parsed.isSome
     check parsed.get().activeTag == 1
 
   test "live restore completion preserves applied diagnostic snapshot":
-    let path = getTempDir() / ("triad-live-restore-test-" &
-      $getCurrentProcessId() & ".json")
+    let path =
+      getTempDir() / ("triad-live-restore-test-" & $getCurrentProcessId() & ".json")
     try:
-      writeFile(path, """
+      writeFile(
+        path,
+        """
 {
   "schema": "triad-live-restore-v2",
   "restore_status": "pending",
   "active_tag": 1,
   "tags": [{"id": 1, "layout_mode": "scroller"}]
 }
-""")
+""",
+      )
       check loadLiveRestoreState(path).isSome
       check completeLiveRestoreState(path)
       check fileExists(path)
@@ -212,11 +221,13 @@ suite "Crash hardening":
       layoutMode: LayoutMode.Scroller,
       focusedWindow: 1,
       masterCount: 1,
-      masterSplitRatio: 0.5)
+      masterSplitRatio: 0.5,
+    )
     tag.columns.add(Column(windows: @[WindowId(1), 2], widthProportion: 0.5))
 
-    let scroller = layoutScroller(tag, initTable[WindowId, WindowData](),
-      screen, 4, 2, false, false, "never")
+    let scroller = layoutScroller(
+      tag, initTable[WindowId, WindowData](), screen, 4, 2, false, false, "never"
+    )
     let tiled = layoutMasterStack(tag, screen, 4, 2)
 
     for instruction in scroller & tiled:

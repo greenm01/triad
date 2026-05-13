@@ -6,8 +6,7 @@ proc gridDimensions*(count: int): tuple[cols, rows: int] =
   result.cols = int(ceil(sqrt(float64(count))))
   result.rows = int(ceil(float64(count) / float64(result.cols)))
 
-proc gridIndexByDelta*(
-    index, count, deltaCol, deltaRow: int): int =
+proc gridIndexByDelta*(index, count, deltaCol, deltaRow: int): int =
   if index < 0 or index >= count or count <= 0:
     return -1
 
@@ -17,8 +16,7 @@ proc gridIndexByDelta*(
   let targetCol = col + deltaCol
   let targetRow = row + deltaRow
 
-  if targetCol < 0 or targetCol >= dims.cols or targetRow < 0 or
-      targetRow >= dims.rows:
+  if targetCol < 0 or targetCol >= dims.cols or targetRow < 0 or targetRow >= dims.rows:
     return -1
 
   result = targetRow * dims.cols + targetCol

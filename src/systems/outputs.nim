@@ -6,8 +6,7 @@ proc syncPrimaryOutput*(model: var Model) =
     model.primaryOutput = NullOutputId
     return
 
-  if model.primaryOutput == NullOutputId or not model.hasOutput(
-      model.primaryOutput):
+  if model.primaryOutput == NullOutputId or not model.hasOutput(model.primaryOutput):
     model.primaryOutput = model.sortedOutputIdsByExternal()[0]
 
   let primary = model.output(model.primaryOutput)
@@ -15,7 +14,8 @@ proc syncPrimaryOutput*(model: var Model) =
     discard model.setScreenSize(primary.get().w, primary.get().h)
 
 proc upsertOutputForExternal*(
-    model: var Model; externalId: ExternalOutputId): OutputId =
+    model: var Model, externalId: ExternalOutputId
+): OutputId =
   if externalId == NullExternalOutputId:
     return NullOutputId
   result = model.outputForExternal(externalId)
@@ -23,7 +23,8 @@ proc upsertOutputForExternal*(
     result = model.addOutput(externalId)
 
 proc setOutputDimensionsForExternal*(
-    model: var Model; externalId: ExternalOutputId; w, h: int32): bool =
+    model: var Model, externalId: ExternalOutputId, w, h: int32
+): bool =
   if externalId == NullExternalOutputId:
     return model.setScreenSize(w, h)
 
@@ -33,7 +34,8 @@ proc setOutputDimensionsForExternal*(
   discard model.syncPrimaryOutputTag()
 
 proc setOutputNameForExternal*(
-    model: var Model; externalId: ExternalOutputId; name: string): bool =
+    model: var Model, externalId: ExternalOutputId, name: string
+): bool =
   if externalId == NullExternalOutputId:
     return false
 
@@ -43,7 +45,8 @@ proc setOutputNameForExternal*(
   discard model.syncPrimaryOutputTag()
 
 proc setOutputPositionForExternal*(
-    model: var Model; externalId: ExternalOutputId; x, y: int32): bool =
+    model: var Model, externalId: ExternalOutputId, x, y: int32
+): bool =
   if externalId == NullExternalOutputId:
     return false
 
@@ -52,8 +55,9 @@ proc setOutputPositionForExternal*(
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
 
-proc setOutputUsableForExternal*(model: var Model;
-    externalId: ExternalOutputId; x, y, w, h: int32): bool =
+proc setOutputUsableForExternal*(
+    model: var Model, externalId: ExternalOutputId, x, y, w, h: int32
+): bool =
   if externalId == NullExternalOutputId:
     return false
 
@@ -63,7 +67,8 @@ proc setOutputUsableForExternal*(model: var Model;
   discard model.syncPrimaryOutputTag()
 
 proc removeOutputForExternal*(
-    model: var Model; externalId: ExternalOutputId): seq[WindowId] =
+    model: var Model, externalId: ExternalOutputId
+): seq[WindowId] =
   if externalId == NullExternalOutputId:
     return
   let outputId = model.outputForExternal(externalId)

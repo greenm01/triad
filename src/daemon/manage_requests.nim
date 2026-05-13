@@ -2,12 +2,12 @@ import chronicles
 import protocols/river/client as river
 import state
 
-proc requestManage*(daemon: var TriadDaemon; reason: string) =
+proc requestManage*(daemon: var TriadDaemon, reason: string) =
   if daemon.riverManager == nil:
     return
   if daemon.manageRequestPending:
-    trace "Coalescing River manage request", reason = reason,
-      pendingReason = daemon.manageRequestReason
+    trace "Coalescing River manage request",
+      reason = reason, pendingReason = daemon.manageRequestReason
     return
   daemon.manageRequestPending = true
   daemon.manageRequestReason = reason

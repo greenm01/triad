@@ -22,20 +22,16 @@ template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.ownedShellSurfaceId
 
 proc applyBorder(
-    daemon: TriadDaemon; win: ptr RiverWindowV1; focused: bool;
-    edges: uint32) =
+    daemon: TriadDaemon, win: ptr RiverWindowV1, focused: bool, edges: uint32
+) =
   let color =
     if focused:
       premulColor(daemon.currentModel.focusedBorderColor)
     else:
       premulColor(daemon.currentModel.unfocusedBorderColor)
   win.setBorders(
-    edges,
-    daemon.currentModel.borderWidth,
-    color.r,
-    color.g,
-    color.b,
-    color.a)
+    edges, daemon.currentModel.borderWidth, color.r, color.g, color.b, color.a
+  )
 
 proc supportedCapabilities*(model: Model): uint32 =
   const
@@ -43,8 +39,8 @@ proc supportedCapabilities*(model: Model): uint32 =
     RiverCapabilityMaximize = 2'u32
     RiverCapabilityMinimize = 8'u32
     RiverCapabilityWindowMenu = 1'u32
-    RiverBaseCapabilities = RiverCapabilityFullscreen or
-        RiverCapabilityMaximize or RiverCapabilityMinimize
+    RiverBaseCapabilities =
+      RiverCapabilityFullscreen or RiverCapabilityMaximize or RiverCapabilityMinimize
 
   result = RiverBaseCapabilities
   if model.windowMenuCommand.len > 0:
@@ -58,8 +54,7 @@ proc configuredPresentationMode*(model: Model): uint32 =
 proc hasPresentationPreference*(model: Model): bool =
   model.presentationMode != PresentationMode.PresentationDefault
 
-proc isDescendantRiverWindow(
-    daemon: TriadDaemon; child, ancestor: WindowId): bool =
+proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: WindowId): bool =
   if child == 0 or ancestor == 0 or child == ancestor:
     return false
   var current = child
@@ -77,13 +72,13 @@ proc isDescendantRiverWindow(
     inc depth
   false
 
-proc logicalWindowSortKey(daemon: TriadDaemon; id: WindowId): uint32 =
+proc logicalWindowSortKey(daemon: TriadDaemon, id: WindowId): uint32 =
   let logicalId = daemon.currentModel.windowForRiverId(id)
   if uint32(logicalId) != 0:
     return uint32(logicalId)
   uint32(id)
 
-proc desiredStackCmp(daemon: TriadDaemon; a, b: WindowId): int =
+proc desiredStackCmp(daemon: TriadDaemon, a, b: WindowId): int =
   if daemon.isDescendantRiverWindow(a, b):
     return 1
   if daemon.isDescendantRiverWindow(b, a):
@@ -97,7 +92,10 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[WindowId] =
   for id in daemon.desiredPlacementOrder:
     if daemon.desiredPlacements.hasKey(id) and result.find(id) == -1:
       result.add(id)
-  result.sort(proc(a, b: WindowId): int = daemon.desiredStackCmp(a, b))
+  result.sort(
+    proc(a, b: WindowId): int =
+      daemon.desiredStackCmp(a, b)
+  )
 
 proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
   let highlighted =
@@ -107,16 +105,15 @@ proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
       0'u32
   for id in daemon.orderedDesiredIds():
     if id != highlighted:
-      result.add(RenderInstruction(
-        windowId: id,
-        geom: daemon.desiredPlacements[id]))
+      result.add(RenderInstruction(windowId: id, geom: daemon.desiredPlacements[id]))
   if highlighted != 0 and daemon.desiredPlacements.hasKey(highlighted):
-    result.add(RenderInstruction(
-      windowId: highlighted,
-      geom: daemon.desiredPlacements[highlighted]))
+    result.add(
+      RenderInstruction(
+        windowId: highlighted, geom: daemon.desiredPlacements[highlighted]
+      )
+    )
 
-proc overviewWindowAtPointer*(
-    daemon: TriadDaemon; seat: ptr RiverSeatV1): WindowId =
+proc overviewWindowAtPointer*(daemon: TriadDaemon, seat: ptr RiverSeatV1): WindowId =
   if not daemon.currentModel.overviewActive or seat == nil:
     return 0
   let seatId = seat.id()
@@ -125,32 +122,32 @@ proc overviewWindowAtPointer*(
   let point = daemon.pointerPositionBySeat[seatId]
   overviewHitTest(daemon.orderedDesiredInstructions(), point.x, point.y)
 
-proc placementHonorsMinimums(daemon: TriadDaemon; id: WindowId): bool =
+proc placementHonorsMinimums(daemon: TriadDaemon, id: WindowId): bool =
   if daemon.currentModel.overviewActive:
     return false
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
   if winOpt.isNone:
     return true
   let win = winOpt.get()
-  let scratchpad = daemon.currentModel.isScratchpadVisible and
+  let scratchpad =
+    daemon.currentModel.isScratchpadVisible and
     daemon.currentModel.visibleScratchpadRiverId() == id
   win.isFloating or win.isFullscreen or scratchpad
 
-proc placementNeedsCellClip(
-    daemon: TriadDaemon; id: WindowId; geom: Rect): bool =
+proc placementNeedsCellClip(daemon: TriadDaemon, id: WindowId, geom: Rect): bool =
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
   if winOpt.isNone:
     return false
   let win = winOpt.get()
   if not daemon.currentModel.overviewActive:
-    let scratchpad = daemon.currentModel.isScratchpadVisible and
+    let scratchpad =
+      daemon.currentModel.isScratchpadVisible and
       daemon.currentModel.visibleScratchpadRiverId() == id
     if win.isFloating or win.isFullscreen or scratchpad:
       return false
   win.needsCellClip(geom.w, geom.h)
 
-proc recordDesiredPlacement*(
-    daemon: var TriadDaemon; instr: RenderInstruction) =
+proc recordDesiredPlacement*(daemon: var TriadDaemon, instr: RenderInstruction) =
   if daemon.desiredPlacements.hasKey(instr.windowId):
     let existingIdx = daemon.desiredPlacementOrder.find(instr.windowId)
     if existingIdx != -1:
@@ -159,40 +156,43 @@ proc recordDesiredPlacement*(
   daemon.desiredPlacements[instr.windowId] = instr.geom
 
 proc recordDesiredPlacements*(
-    daemon: var TriadDaemon; instructions: seq[RenderInstruction]) =
+    daemon: var TriadDaemon, instructions: seq[RenderInstruction]
+) =
   daemon.desiredPlacements.clear()
   daemon.desiredPlacementOrder.setLen(0)
   for instr in instructions:
     daemon.recordDesiredPlacement(instr)
 
 proc proposeDesiredDimensions*(
-    daemon: var TriadDaemon; instructions: seq[RenderInstruction]) =
+    daemon: var TriadDaemon, instructions: seq[RenderInstruction]
+) =
   daemon.recordDesiredPlacements(instructions)
   for instr in instructions:
     if daemon.windowPointers.hasKey(instr.windowId):
       var geom = instr.geom
       let proposal = daemon.currentModel.proposalDimensionsForRiverId(
-        instr.windowId,
-        geom.w,
-        geom.h,
-        daemon.placementHonorsMinimums(instr.windowId))
+        instr.windowId, geom.w, geom.h, daemon.placementHonorsMinimums(instr.windowId)
+      )
       geom.w = proposal.w
       geom.h = proposal.h
       daemon.windowPointers[instr.windowId].proposeDimensions(
-        max(0'i32, geom.w),
-        max(0'i32, geom.h))
+        max(0'i32, geom.w), max(0'i32, geom.h)
+      )
 
 proc applyVisibility(
-    win: ptr RiverWindowV1; visibility: RenderVisibility; forceClip: bool;
-    borderWidth: int32) =
+    win: ptr RiverWindowV1,
+    visibility: RenderVisibility,
+    forceClip: bool,
+    borderWidth: int32,
+) =
   if visibility.visible:
     win.show()
     if visibility.clipped or forceClip:
       let clips = visibility.renderClipBoxes(borderWidth)
-      win.setClipBox(clips.windowX, clips.windowY, clips.windowW,
-          clips.windowH)
-      win.setContentClipBox(clips.contentX, clips.contentY,
-          clips.contentW, clips.contentH)
+      win.setClipBox(clips.windowX, clips.windowY, clips.windowW, clips.windowH)
+      win.setContentClipBox(
+        clips.contentX, clips.contentY, clips.contentW, clips.contentH
+      )
     else:
       win.setClipBox(0, 0, 0, 0)
       win.setContentClipBox(0, 0, 0, 0)
@@ -223,14 +223,17 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         node.placeAbove(lastNode)
       lastNode = node
       if daemon.windowPointers.hasKey(id):
-        let visibility = renderVisibility(geom, screen, max(
-            daemon.currentModel.borderWidth * 2, 4'i32))
+        let visibility = renderVisibility(
+          geom, screen, max(daemon.currentModel.borderWidth * 2, 4'i32)
+        )
         daemon.windowPointers[id].applyVisibility(
           visibility,
           daemon.placementNeedsCellClip(id, geom),
-          daemon.currentModel.borderWidth)
+          daemon.currentModel.borderWidth,
+        )
         daemon.applyBorder(
-          daemon.windowPointers[id], id == highlighted, visibility.borderEdges)
+          daemon.windowPointers[id], id == highlighted, visibility.borderEdges
+        )
 
   for id, win in daemon.windowPointers.pairs:
     if not visible.hasKey(id):
@@ -240,22 +243,21 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
   for id in ids:
     if daemon.windowNodes.hasKey(id):
       let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
-      let isScratchpad = daemon.currentModel.isScratchpadVisible and
-        visibleScratchpad == id
+      let isScratchpad =
+        daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
       let winOpt = daemon.currentModel.windowDataForRiverId(id)
       let isFloating = winOpt.isSome and winOpt.get().isFloating
       let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
       let isMaximized = winOpt.isSome and winOpt.get().isMaximized
       if not isFloating and not isScratchpad and
-          (isFullscreen or (isMaximized and maxSupported) or
-            id == highlighted):
+          (isFullscreen or (isMaximized and maxSupported) or id == highlighted):
         daemon.windowNodes[id].placeTop()
 
   for id in ids:
     if daemon.windowNodes.hasKey(id):
       let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
-      let isScratchpad = daemon.currentModel.isScratchpadVisible and
-        visibleScratchpad == id
+      let isScratchpad =
+        daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
       let winOpt = daemon.currentModel.windowDataForRiverId(id)
       let isFloating = winOpt.isSome and winOpt.get().isFloating
       if isFloating or isScratchpad or id == highlighted:

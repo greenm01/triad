@@ -1,12 +1,11 @@
 # Package
 
-version       = "0.1.0"
-author        = "Mason Green"
-description   = "Dynamic window management client for River"
-license       = "MIT"
-srcDir        = "src"
-bin           = @["triad", "triad_niri"]
-
+version = "0.1.0"
+author = "Mason Green"
+description = "Dynamic window management client for River"
+license = "MIT"
+srcDir = "src"
+bin = @["triad", "triad_niri"]
 
 # Dependencies
 
@@ -21,56 +20,30 @@ proc runTestSuite(path: string) =
 
 proc runUnitSuites() =
   for path in [
-    "tests/tapp_identity.nim",
-    "tests/tcompat.nim",
-    "tests/tconfig.nim",
-    "tests/tcore.nim",
-    "tests/tstate.nim",
-    "tests/thardening.nim",
-    "tests/tlayouts.nim",
-    "tests/tlogging.nim",
-    "tests/tprotocol.nim"
+    "tests/tapp_identity.nim", "tests/tcompat.nim", "tests/tconfig.nim",
+    "tests/tcore.nim", "tests/tstate.nim", "tests/thardening.nim", "tests/tlayouts.nim",
+    "tests/tlogging.nim", "tests/tprotocol.nim",
   ]:
     runTestSuite(path)
 
 proc runDaemonSuites() =
-  for path in [
-    "tests/tstate.nim",
-    "tests/thardening.nim"
-  ]:
+  for path in ["tests/tstate.nim", "tests/thardening.nim"]:
     runTestSuite(path)
 
 task tidy, "Remove local Nim build outputs and project cache artifacts":
   for path in [
-    "triad",
-    "triad_niri",
-    "src/config/parser",
-    "src/triad",
-    "src/triad_niri",
-    "tests/tapp_identity",
-    "tests/tcompat",
-    "tests/tconfig",
-    "tests/tcore",
-    "tests/tstate",
-    "tests/thardening",
-    "tests/tlayouts",
-    "tests/tlogging",
-    "tests/tprotocol",
-    "tests/tstress",
-    "triad-live-smoke.events",
-    "triad-live-smoke.log",
-    "triad-live-smoke.out"
+    "triad", "triad_niri", "src/config/parser", "src/triad", "src/triad_niri",
+    "tests/tapp_identity", "tests/tcompat", "tests/tconfig", "tests/tcore",
+    "tests/tstate", "tests/thardening", "tests/tlayouts", "tests/tlogging",
+    "tests/tprotocol", "tests/tstress", "triad-live-smoke.events",
+    "triad-live-smoke.log", "triad-live-smoke.out",
   ]:
     if fileExists(path):
       rmFile(path)
 
   for path in [
-    ".nimcache",
-    "nimcache",
-    "src/.nimcache",
-    "src/nimcache",
-    "tests/.nimcache",
-    "tests/nimcache"
+    ".nimcache", "nimcache", "src/.nimcache", "src/nimcache", "tests/.nimcache",
+    "tests/nimcache",
   ]:
     if dirExists(path):
       rmDir(path)
@@ -121,6 +94,7 @@ task testAll, "Run all explicit test suites":
   runUnitSuites()
   runTestSuite("tests/tstress.nim")
 
-task liveReload, "Build release binaries, install them, and restart the live Triad manager":
+task liveReload,
+  "Build release binaries, install them, and restart the live Triad manager":
   exec "nimble build -d:release"
   exec "sh tools/live_reload.sh"

@@ -28,13 +28,13 @@ proc tagBit*(slot: uint32): TagMask =
     raise newException(ValueError, "tag bit slot must be between 1 and " & $MaxTagBits)
   TagMask(1'u64 shl (slot - 1))
 
-proc incl*(mask: var TagMask; bit: TagMask) =
+proc incl*(mask: var TagMask, bit: TagMask) =
   mask = TagMask(uint64(mask) or uint64(bit))
 
-proc excl*(mask: var TagMask; bit: TagMask) =
+proc excl*(mask: var TagMask, bit: TagMask) =
   mask = TagMask(uint64(mask) and not uint64(bit))
 
-proc contains*(mask: TagMask; bit: TagMask): bool =
+proc contains*(mask: TagMask, bit: TagMask): bool =
   (uint64(mask) and uint64(bit)) != 0
 
 proc isEmpty*(mask: TagMask): bool =

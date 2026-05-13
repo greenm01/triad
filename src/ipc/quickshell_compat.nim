@@ -5,9 +5,9 @@ import ../types/runtime_values
 
 type
   QuickshellReloadAction* {.pure.} = enum
-    Noop,
-    SpawnOnly,
-    AuthoritativeStop,
+    Noop
+    SpawnOnly
+    AuthoritativeStop
     AuthoritativeRestart
 
   QuickshellCompatEnv* = object
@@ -51,9 +51,7 @@ proc quickshellKillArgs*(config: QuickshellConfig): seq[string] =
   @["kill", "-c", config.theme, "--any-display"]
 
 proc sameQuickshellConfig*(a, b: QuickshellConfig): bool =
-  a.enabled == b.enabled and
-    a.command == b.command and
-    a.theme == b.theme and
+  a.enabled == b.enabled and a.command == b.command and a.theme == b.theme and
     a.args == b.args
 
 proc quickshellStartupAction*(config: QuickshellConfig): QuickshellReloadAction =
@@ -63,7 +61,8 @@ proc quickshellStartupAction*(config: QuickshellConfig): QuickshellReloadAction 
     QuickshellReloadAction.Noop
 
 proc quickshellConfigReloadAction*(
-    previous, current: QuickshellConfig): QuickshellReloadAction =
+    previous, current: QuickshellConfig
+): QuickshellReloadAction =
   if sameQuickshellConfig(previous, current):
     return QuickshellReloadAction.Noop
   if current.enabled and current.theme.strip().len > 0:
@@ -76,7 +75,9 @@ proc defaultNiriCompatSocketPath*(): string =
 
 proc chooseNiriCompatSocketPath*(triadSocketPath: string): string =
   let requested = getEnv("NIRI_SOCKET", "")
-  if requested.len > 0 and requested != triadSocketPath and not unixPathExists(requested):
+  if requested.len > 0 and requested != triadSocketPath and not unixPathExists(
+    requested
+  ):
     return requested
   defaultNiriCompatSocketPath()
 
@@ -109,8 +110,11 @@ proc readIniValue(path, sectionName, keyName: string): string =
   ""
 
 proc detectIconTheme(): string =
-  result = readIniValue(getHomeDir() / ".config" / "gtk-3.0" / "settings.ini",
-      "Settings", "gtk-icon-theme-name")
+  result = readIniValue(
+    getHomeDir() / ".config" / "gtk-3.0" / "settings.ini",
+    "Settings",
+    "gtk-icon-theme-name",
+  )
   if result.len > 0:
     return
 
@@ -127,12 +131,14 @@ proc detectIconTheme(): string =
         result = line[sep + 1 .. ^1].strip().strip(chars = {'"'})
         return
 
-  result = readIniValue(getHomeDir() / ".config" / "qt6ct" / "qt6ct.conf",
-      "Appearance", "icon_theme")
+  result = readIniValue(
+    getHomeDir() / ".config" / "qt6ct" / "qt6ct.conf", "Appearance", "icon_theme"
+  )
   if result.len > 0:
     return
-  result = readIniValue(getHomeDir() / ".config" / "qt5ct" / "qt5ct.conf",
-      "Appearance", "icon_theme")
+  result = readIniValue(
+    getHomeDir() / ".config" / "qt5ct" / "qt5ct.conf", "Appearance", "icon_theme"
+  )
 
 proc chooseQtPlatformTheme(current: string): string =
   let normalized = current.strip().toLowerAscii()
@@ -145,7 +151,7 @@ proc chooseQtPlatformTheme(current: string): string =
     return "gtk3"
   current
 
-proc addUniqueDataDir(dirs: var seq[string]; path: string) =
+proc addUniqueDataDir(dirs: var seq[string], path: string) =
   let trimmed = path.strip()
   if trimmed.len == 0:
     return
@@ -168,10 +174,12 @@ proc appendWarning(existing, warning: string): string =
     return warning
   existing & "; " & warning
 
-proc installNiriShim(compatBinPath, triadNiriPath: string): tuple[ok: bool;
-    warning: string] =
+proc installNiriShim(
+    compatBinPath, triadNiriPath: string
+): tuple[ok: bool, warning: string] =
   if triadNiriPath.len == 0:
-    return (false, "triad_niri was not found; command-side Niri compatibility is disabled")
+    return
+      (false, "triad_niri was not found; command-side Niri compatibility is disabled")
 
   try:
     createDir(compatBinPath)
@@ -192,21 +200,23 @@ proc installNiriShim(compatBinPath, triadNiriPath: string): tuple[ok: bool;
 
   try:
     writeFile(shimPath, "#!/bin/sh\nexec " & shellQuote(triadNiriPath) & " \"$@\"\n")
-    setFilePermissions(shimPath, {
-      fpUserRead, fpUserWrite, fpUserExec,
-      fpGroupRead, fpGroupExec,
-      fpOthersRead, fpOthersExec
-    })
+    setFilePermissions(
+      shimPath,
+      {
+        fpUserRead, fpUserWrite, fpUserExec, fpGroupRead, fpGroupExec, fpOthersRead,
+        fpOthersExec,
+      },
+    )
     return (true, "")
   except CatchableError as e:
     (false, "failed to install niri shim: " & e.msg)
 
 proc prepareQuickshellCompatEnv*(
-    niriSocketPath: string;
-    runtimeDir = runtimeDir();
-    triadNiriPath = findTriadNiri();
-    triadSocketPath = ""
-  ): QuickshellCompatEnv =
+    niriSocketPath: string,
+    runtimeDir = runtimeDir(),
+    triadNiriPath = findTriadNiri(),
+    triadSocketPath = "",
+): QuickshellCompatEnv =
   result.env = copyCurrentEnv()
   result.niriSocketPath = niriSocketPath
   result.compatBinPath = runtimeDir / "triad-compat-bin"
@@ -214,8 +224,11 @@ proc prepareQuickshellCompatEnv*(
   result.triadNiriPath = triadNiriPath
 
   result.env["NIRI_SOCKET"] = niriSocketPath
-  result.env["TRIAD_SOCKET"] = if triadSocketPath.len >
-      0: triadSocketPath else: runtimeDir / "triad.sock"
+  result.env["TRIAD_SOCKET"] =
+    if triadSocketPath.len > 0:
+      triadSocketPath
+    else:
+      runtimeDir / "triad.sock"
   result.env["XDG_CURRENT_DESKTOP"] = "triad"
 
   let iconTheme = result.env.getOrDefault("QS_ICON_THEME", "").strip()
@@ -224,8 +237,8 @@ proc prepareQuickshellCompatEnv*(
     if detected.len > 0:
       result.env["QS_ICON_THEME"] = detected
 
-  let platformTheme = chooseQtPlatformTheme(result.env.getOrDefault(
-      "QT_QPA_PLATFORMTHEME", ""))
+  let platformTheme =
+    chooseQtPlatformTheme(result.env.getOrDefault("QT_QPA_PLATFORMTHEME", ""))
   if platformTheme.len > 0:
     result.env["QT_QPA_PLATFORMTHEME"] = platformTheme
 

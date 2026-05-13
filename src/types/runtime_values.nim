@@ -13,8 +13,8 @@ type
     hasUsable*: bool
 
   PresentationMode* {.pure.} = enum
-    PresentationDefault,
-    PresentationVsync,
+    PresentationDefault
+    PresentationVsync
     PresentationAsync
 
   RenderInstruction* = object
@@ -22,28 +22,28 @@ type
     geom*: Rect
 
   LayoutMode* {.pure.} = enum
-    Scroller,
-    VerticalScroller,
-    MasterStack,
-    Grid,
-    Monocle,
-    Deck,
-    CenterTile,
-    RightTile,
-    VerticalTile,
-    VerticalGrid,
-    VerticalDeck,
+    Scroller
+    VerticalScroller
+    MasterStack
+    Grid
+    Monocle
+    Deck
+    CenterTile
+    RightTile
+    VerticalTile
+    VerticalGrid
+    VerticalDeck
     TGMix
 
   Direction* {.pure.} = enum
-    DirLeft,
-    DirRight,
-    DirUp,
+    DirLeft
+    DirRight
+    DirUp
     DirDown
 
   ParentedRole* {.pure.} = enum
-    Dialog,
-    Tool,
+    Dialog
+    Tool
     Plain
 
   WindowRuleFloatingConfig* = object
@@ -176,18 +176,18 @@ type
     label*: string
 
   PointerOpKind* {.pure.} = enum
-    OpNone,
-    OpMove,
+    OpNone
+    OpMove
     OpResize
 
   HotkeyOverlayTitleKind* {.pure.} = enum
-    HotkeyTitleDefault,
-    HotkeyTitleCustom,
+    HotkeyTitleDefault
+    HotkeyTitleCustom
     HotkeyTitleHidden
 
   BindingMode* {.pure.} = enum
-    BindAlways,
-    BindNormal,
+    BindAlways
+    BindNormal
     BindOverview
 
   KeyBindingConfig* = object

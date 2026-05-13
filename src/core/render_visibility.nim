@@ -5,7 +5,8 @@ const
   RenderEdgeBottom* = 2'u32
   RenderEdgeLeft* = 4'u32
   RenderEdgeRight* = 8'u32
-  RenderAllEdges* = RenderEdgeTop or RenderEdgeBottom or RenderEdgeLeft or RenderEdgeRight
+  RenderAllEdges* =
+    RenderEdgeTop or RenderEdgeBottom or RenderEdgeLeft or RenderEdgeRight
 
 type
   RenderVisibility* = object
@@ -21,8 +22,9 @@ type
 proc hasRenderEdge(edges, edge: uint32): bool =
   (edges and edge) != 0
 
-proc renderVisibility*(geom, screen: Rect;
-    minVisibleThickness: int32): RenderVisibility =
+proc renderVisibility*(
+    geom, screen: Rect, minVisibleThickness: int32
+): RenderVisibility =
   let
     left = max(geom.x, screen.x)
     top = max(geom.y, screen.y)
@@ -43,10 +45,10 @@ proc renderVisibility*(geom, screen: Rect;
 
   result.clipped =
     result.clipX > 0 or result.clipY > 0 or result.clipW < geom.w or
-        result.clipH < geom.h
+    result.clipH < geom.h
 
-  if result.clipped and (visibleW <= minVisibleThickness or visibleH <=
-      minVisibleThickness):
+  if result.clipped and
+      (visibleW <= minVisibleThickness or visibleH <= minVisibleThickness):
     result.visible = false
     result.borderEdges = 0
     return
@@ -63,7 +65,8 @@ proc renderVisibility*(geom, screen: Rect;
     result.borderEdges = result.borderEdges and not (RenderEdgeTop or RenderEdgeBottom)
 
 proc renderClipBoxes*(
-    visibility: RenderVisibility; borderWidth: int32): RenderClipBoxes =
+    visibility: RenderVisibility, borderWidth: int32
+): RenderClipBoxes =
   result.contentX = visibility.clipX
   result.contentY = visibility.clipY
   result.contentW = visibility.clipW

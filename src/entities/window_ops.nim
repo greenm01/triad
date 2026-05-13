@@ -5,69 +5,86 @@ import ../types/core except Rect
 import ../types/model
 from ../types/runtime_values import Rect
 
-proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
-    appId = ""; widthProportion = 1.0'f32; heightProportion = 1.0'f32;
-    isFloating = false; isFullscreen = false; isMaximized = false;
-    isMinimized = false; fullscreenOutput = NullExternalOutputId;
-    parentExternalId = NullExternalWindowId; identifier = ""; actualW = 0'i32;
-    actualH = 0'i32; minWidth = 0'i32; minHeight = 0'i32; maxWidth = 0'i32;
-    maxHeight = 0'i32; hasDecorationHint = false; decorationHint = 0'u32;
-    hasPresentationHint = false; presentationHint = 0'u32;
-    floatingGeom = Rect(); parentAutoFloating = false;
-    admissionState = WindowAdmissionState.Admitted;
-    focusAfterAdmission = false;
-    keyboardShortcutsInhibit = false;
-    keyboardShortcutsInhibitBypass = false): WindowId =
-  if externalId != NullExternalWindowId and
-      model.externalWindowIds.hasKey(externalId):
+proc addWindow*(
+    model: var Model,
+    externalId: ExternalWindowId,
+    title = "",
+    appId = "",
+    widthProportion = 1.0'f32,
+    heightProportion = 1.0'f32,
+    isFloating = false,
+    isFullscreen = false,
+    isMaximized = false,
+    isMinimized = false,
+    fullscreenOutput = NullExternalOutputId,
+    parentExternalId = NullExternalWindowId,
+    identifier = "",
+    actualW = 0'i32,
+    actualH = 0'i32,
+    minWidth = 0'i32,
+    minHeight = 0'i32,
+    maxWidth = 0'i32,
+    maxHeight = 0'i32,
+    hasDecorationHint = false,
+    decorationHint = 0'u32,
+    hasPresentationHint = false,
+    presentationHint = 0'u32,
+    floatingGeom = Rect(),
+    parentAutoFloating = false,
+    admissionState = WindowAdmissionState.Admitted,
+    focusAfterAdmission = false,
+    keyboardShortcutsInhibit = false,
+    keyboardShortcutsInhibitBypass = false,
+): WindowId =
+  if externalId != NullExternalWindowId and model.externalWindowIds.hasKey(externalId):
     return model.externalWindowIds[externalId]
 
   let id = model.counters.generateWindowId()
-  model.windows.insert(WindowData(
-    id: id,
-    externalId: externalId,
-    title: title,
-    appId: appId,
-    widthProportion: widthProportion,
-    heightProportion: heightProportion,
-    isFloating: isFloating,
-    isFullscreen: isFullscreen,
-    isMaximized: isMaximized,
-    isMinimized: isMinimized,
-    fullscreenOutput: fullscreenOutput,
-    parentExternalId: parentExternalId,
-    identifier: identifier,
-    actualW: actualW,
-    actualH: actualH,
-    minWidth: minWidth,
-    minHeight: minHeight,
-    maxWidth: maxWidth,
-    maxHeight: maxHeight,
-    hasDecorationHint: hasDecorationHint,
-    decorationHint: decorationHint,
-    hasPresentationHint: hasPresentationHint,
-    presentationHint: presentationHint,
-    floatingGeom: floatingGeom,
-    parentAutoFloating: parentAutoFloating,
-    admissionState: admissionState,
-    focusAfterAdmission: focusAfterAdmission,
-    keyboardShortcutsInhibit: keyboardShortcutsInhibit,
-    keyboardShortcutsInhibitBypass: keyboardShortcutsInhibitBypass
-  ))
+  model.windows.insert(
+    WindowData(
+      id: id,
+      externalId: externalId,
+      title: title,
+      appId: appId,
+      widthProportion: widthProportion,
+      heightProportion: heightProportion,
+      isFloating: isFloating,
+      isFullscreen: isFullscreen,
+      isMaximized: isMaximized,
+      isMinimized: isMinimized,
+      fullscreenOutput: fullscreenOutput,
+      parentExternalId: parentExternalId,
+      identifier: identifier,
+      actualW: actualW,
+      actualH: actualH,
+      minWidth: minWidth,
+      minHeight: minHeight,
+      maxWidth: maxWidth,
+      maxHeight: maxHeight,
+      hasDecorationHint: hasDecorationHint,
+      decorationHint: decorationHint,
+      hasPresentationHint: hasPresentationHint,
+      presentationHint: presentationHint,
+      floatingGeom: floatingGeom,
+      parentAutoFloating: parentAutoFloating,
+      admissionState: admissionState,
+      focusAfterAdmission: focusAfterAdmission,
+      keyboardShortcutsInhibit: keyboardShortcutsInhibit,
+      keyboardShortcutsInhibitBypass: keyboardShortcutsInhibitBypass,
+    )
+  )
   if externalId != NullExternalWindowId:
     model.externalWindowIds[externalId] = id
   model.windowTags[id] = EmptyTagMask
   id
 
-proc pendingDialogFocusContains*(
-    model: Model; winId: WindowId): bool =
+proc pendingDialogFocusContains*(model: Model, winId: WindowId): bool =
   for pending in model.pendingDialogFocusWindows:
     if pending == winId:
       return true
   false
 
-proc enqueuePendingDialogFocus*(
-    model: var Model; winId: WindowId): bool =
+proc enqueuePendingDialogFocus*(model: var Model, winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
   if model.pendingDialogFocusContains(winId):
@@ -75,8 +92,7 @@ proc enqueuePendingDialogFocus*(
   model.pendingDialogFocusWindows.add(winId)
   true
 
-proc clearPendingDialogFocus*(
-    model: var Model; winId: WindowId): bool =
+proc clearPendingDialogFocus*(model: var Model, winId: WindowId): bool =
   if winId == NullWindowId or model.pendingDialogFocusWindows.len == 0:
     return false
   var kept: seq[WindowId] = @[]
@@ -88,7 +104,8 @@ proc clearPendingDialogFocus*(
     model.pendingDialogFocusWindows = kept
 
 proc clearPendingDialogFocusRefs(
-    model: var Model; winId: WindowId; externalId: ExternalWindowId): bool =
+    model: var Model, winId: WindowId, externalId: ExternalWindowId
+): bool =
   if model.pendingDialogFocusWindows.len == 0:
     return false
   var kept: seq[WindowId] = @[]
@@ -102,14 +119,23 @@ proc clearPendingDialogFocusRefs(
   if result:
     model.pendingDialogFocusWindows = kept
 
-proc setWindowCreatedState*(model: var Model; winId: WindowId;
-    title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
-    heightProportion = 1.0'f32; isFloating = false;
-    floatingGeom = Rect(); parentAutoFloating = false;
-    admissionState = WindowAdmissionState.Admitted;
-    focusAfterAdmission = false; parentExternalId = NullExternalWindowId;
-    keyboardShortcutsInhibit = false;
-    preserveRuntimeState = false): bool =
+proc setWindowCreatedState*(
+    model: var Model,
+    winId: WindowId,
+    title = "",
+    appId = "",
+    identifier = "",
+    widthProportion = 1.0'f32,
+    heightProportion = 1.0'f32,
+    isFloating = false,
+    floatingGeom = Rect(),
+    parentAutoFloating = false,
+    admissionState = WindowAdmissionState.Admitted,
+    focusAfterAdmission = false,
+    parentExternalId = NullExternalWindowId,
+    keyboardShortcutsInhibit = false,
+    preserveRuntimeState = false,
+): bool =
   let currentOpt = model.windows.entity(winId)
   if currentOpt.isNone:
     return false
@@ -121,73 +147,39 @@ proc setWindowCreatedState*(model: var Model; winId: WindowId;
     appId: appId,
     identifier: identifier,
     widthProportion:
-      if preserveRuntimeState: current.widthProportion
-      else: widthProportion,
+      if preserveRuntimeState: current.widthProportion else: widthProportion,
     heightProportion:
-      if preserveRuntimeState: current.heightProportion
-      else: heightProportion,
-    isFloating:
-      if preserveRuntimeState: current.isFloating
-      else: isFloating,
-    isFullscreen:
-      if preserveRuntimeState: current.isFullscreen
-      else: false,
-    isMaximized:
-      if preserveRuntimeState: current.isMaximized
-      else: false,
-    isMinimized:
-      if preserveRuntimeState: current.isMinimized
-      else: false,
+      if preserveRuntimeState: current.heightProportion else: heightProportion,
+    isFloating: if preserveRuntimeState: current.isFloating else: isFloating,
+    isFullscreen: if preserveRuntimeState: current.isFullscreen else: false,
+    isMaximized: if preserveRuntimeState: current.isMaximized else: false,
+    isMinimized: if preserveRuntimeState: current.isMinimized else: false,
     fullscreenOutput:
-      if preserveRuntimeState: current.fullscreenOutput
-      else: NullExternalOutputId,
-    actualW:
-      if preserveRuntimeState: current.actualW
-      else: 0'i32,
-    actualH:
-      if preserveRuntimeState: current.actualH
-      else: 0'i32,
-    minWidth:
-      if preserveRuntimeState: current.minWidth
-      else: 0'i32,
-    minHeight:
-      if preserveRuntimeState: current.minHeight
-      else: 0'i32,
-    maxWidth:
-      if preserveRuntimeState: current.maxWidth
-      else: 0'i32,
-    maxHeight:
-      if preserveRuntimeState: current.maxHeight
-      else: 0'i32,
-    hasDecorationHint:
-      if preserveRuntimeState: current.hasDecorationHint
-      else: false,
-    decorationHint:
-      if preserveRuntimeState: current.decorationHint
-      else: 0'u32,
+      if preserveRuntimeState: current.fullscreenOutput else: NullExternalOutputId,
+    actualW: if preserveRuntimeState: current.actualW else: 0'i32,
+    actualH: if preserveRuntimeState: current.actualH else: 0'i32,
+    minWidth: if preserveRuntimeState: current.minWidth else: 0'i32,
+    minHeight: if preserveRuntimeState: current.minHeight else: 0'i32,
+    maxWidth: if preserveRuntimeState: current.maxWidth else: 0'i32,
+    maxHeight: if preserveRuntimeState: current.maxHeight else: 0'i32,
+    hasDecorationHint: if preserveRuntimeState: current.hasDecorationHint else: false,
+    decorationHint: if preserveRuntimeState: current.decorationHint else: 0'u32,
     hasPresentationHint:
-      if preserveRuntimeState: current.hasPresentationHint
-      else: false,
-    presentationHint:
-      if preserveRuntimeState: current.presentationHint
-      else: 0'u32,
-    floatingGeom:
-      if preserveRuntimeState: current.floatingGeom
-      else: floatingGeom,
+      if preserveRuntimeState: current.hasPresentationHint else: false,
+    presentationHint: if preserveRuntimeState: current.presentationHint else: 0'u32,
+    floatingGeom: if preserveRuntimeState: current.floatingGeom else: floatingGeom,
     parentAutoFloating:
-      if preserveRuntimeState: current.parentAutoFloating
-      else: parentAutoFloating,
+      if preserveRuntimeState: current.parentAutoFloating else: parentAutoFloating,
     admissionState: admissionState,
     focusAfterAdmission: focusAfterAdmission,
     parentExternalId: parentExternalId,
     keyboardShortcutsInhibit: keyboardShortcutsInhibit,
     keyboardShortcutsInhibitBypass:
-      if preserveRuntimeState: current.keyboardShortcutsInhibitBypass
-      else: false
+      if preserveRuntimeState: current.keyboardShortcutsInhibitBypass else: false,
   )
   true
 
-proc destroyWindow*(model: var Model; winId: WindowId): bool =
+proc destroyWindow*(model: var Model, winId: WindowId): bool =
   let winOpt = model.windows.entity(winId)
   if winOpt.isNone:
     return false
@@ -212,8 +204,7 @@ proc destroyWindow*(model: var Model; winId: WindowId): bool =
       model.tags.mEntity(tag.id).focusedWindow = NullWindowId
   model.windows.delete(winId)
 
-proc setWindowMinimized*(
-    model: var Model; winId: WindowId; minimized: bool): bool =
+proc setWindowMinimized*(model: var Model, winId: WindowId, minimized: bool): bool =
   if model.windows.entity(winId).isNone:
     return false
   if minimized:
@@ -222,7 +213,8 @@ proc setWindowMinimized*(
   true
 
 proc preserveWindowRuntimeAttributes*(
-    model: var Model; winId: WindowId; source: WindowData): bool =
+    model: var Model, winId: WindowId, source: WindowData
+): bool =
   let currentOpt = model.windows.entity(winId)
   if currentOpt.isNone:
     return false
@@ -234,12 +226,9 @@ proc preserveWindowRuntimeAttributes*(
       current.isMaximized == source.isMaximized and
       current.isMinimized == source.isMinimized and
       current.fullscreenOutput == source.fullscreenOutput and
-      current.actualW == source.actualW and
-      current.actualH == source.actualH and
-      current.minWidth == source.minWidth and
-      current.minHeight == source.minHeight and
-      current.maxWidth == source.maxWidth and
-      current.maxHeight == source.maxHeight and
+      current.actualW == source.actualW and current.actualH == source.actualH and
+      current.minWidth == source.minWidth and current.minHeight == source.minHeight and
+      current.maxWidth == source.maxWidth and current.maxHeight == source.maxHeight and
       current.hasDecorationHint == source.hasDecorationHint and
       current.decorationHint == source.decorationHint and
       current.hasPresentationHint == source.hasPresentationHint and
@@ -248,8 +237,7 @@ proc preserveWindowRuntimeAttributes*(
       current.parentAutoFloating == source.parentAutoFloating and
       current.parentExternalId == source.parentExternalId and
       current.keyboardShortcutsInhibit == source.keyboardShortcutsInhibit and
-      current.keyboardShortcutsInhibitBypass ==
-        source.keyboardShortcutsInhibitBypass:
+      current.keyboardShortcutsInhibitBypass == source.keyboardShortcutsInhibitBypass:
     return false
 
   var win = model.windows.mEntity(winId)
@@ -278,7 +266,8 @@ proc preserveWindowRuntimeAttributes*(
   true
 
 proc setWindowWidthProportion*(
-    model: var Model; winId: WindowId; widthProportion: float32): bool =
+    model: var Model, winId: WindowId, widthProportion: float32
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).widthProportion =
@@ -286,37 +275,35 @@ proc setWindowWidthProportion*(
   true
 
 proc setWindowHeightProportion*(
-    model: var Model; winId: WindowId; heightProportion: float32): bool =
+    model: var Model, winId: WindowId, heightProportion: float32
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).heightProportion =
     clamp(heightProportion, 0.05'f32, 1.0'f32)
   true
 
-proc setWindowTitle*(model: var Model; winId: WindowId; title: string):
-    bool =
+proc setWindowTitle*(model: var Model, winId: WindowId, title: string): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).title = title
   true
 
-proc setWindowAppId*(model: var Model; winId: WindowId; appId: string):
-    bool =
+proc setWindowAppId*(model: var Model, winId: WindowId, appId: string): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).appId = appId
   true
 
-proc setWindowIdentifier*(
-    model: var Model; winId: WindowId; identifier: string): bool =
+proc setWindowIdentifier*(model: var Model, winId: WindowId, identifier: string): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).identifier = identifier
   true
 
 proc setWindowParent*(
-    model: var Model; winId: WindowId; parentExternalId: ExternalWindowId):
-    bool =
+    model: var Model, winId: WindowId, parentExternalId: ExternalWindowId
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   discard model.clearPendingDialogFocus(winId)
@@ -324,7 +311,8 @@ proc setWindowParent*(
   true
 
 proc setWindowDimensions*(
-    model: var Model; winId: WindowId; actualW, actualH: int32): bool =
+    model: var Model, winId: WindowId, actualW, actualH: int32
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).actualW = max(0'i32, actualW)
@@ -332,7 +320,8 @@ proc setWindowDimensions*(
   true
 
 proc setWindowRestoredState*(
-    model: var Model; winId: WindowId; restored: RestoredWindowData): bool =
+    model: var Model, winId: WindowId, restored: RestoredWindowData
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).widthProportion = restored.widthProportion
@@ -352,8 +341,9 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).actualH = restored.actualH
   true
 
-proc setWindowDimensionsHint*(model: var Model; winId: WindowId;
-    minWidth, minHeight, maxWidth, maxHeight: int32): bool =
+proc setWindowDimensionsHint*(
+    model: var Model, winId: WindowId, minWidth, minHeight, maxWidth, maxHeight: int32
+): bool =
   if model.windows.entity(winId).isNone:
     return false
 
@@ -372,55 +362,62 @@ proc setWindowDimensionsHint*(model: var Model; winId: WindowId;
   model.windows.mEntity(winId).maxHeight = maxH
   true
 
-proc setWindowDecorationHint*(
-    model: var Model; winId: WindowId; hint: uint32): bool =
+proc setWindowDecorationHint*(model: var Model, winId: WindowId, hint: uint32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).hasDecorationHint = true
   model.windows.mEntity(winId).decorationHint = hint
   true
 
-proc setWindowPresentationHint*(
-    model: var Model; winId: WindowId; hint: uint32): bool =
+proc setWindowPresentationHint*(model: var Model, winId: WindowId, hint: uint32): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).hasPresentationHint = true
   model.windows.mEntity(winId).presentationHint = hint
   true
 
-proc setWindowFloating*(model: var Model; winId: WindowId;
-    floating: bool; floatingGeom = Rect(); parentAutoFloating = false): bool =
+proc setWindowFloating*(
+    model: var Model,
+    winId: WindowId,
+    floating: bool,
+    floatingGeom = Rect(),
+    parentAutoFloating = false,
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   if not floating:
     discard model.clearPendingDialogFocus(winId)
   model.windows.mEntity(winId).isFloating = floating
-  model.windows.mEntity(winId).parentAutoFloating =
-    floating and parentAutoFloating
+  model.windows.mEntity(winId).parentAutoFloating = floating and parentAutoFloating
   if floating:
     model.windows.mEntity(winId).floatingGeom = floatingGeom
   true
 
 proc setWindowFloatingGeom*(
-    model: var Model; winId: WindowId; floatingGeom: Rect): bool =
+    model: var Model, winId: WindowId, floatingGeom: Rect
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).floatingGeom = floatingGeom
   model.windows.mEntity(winId).parentAutoFloating = false
   true
 
-proc setWindowAdmission*(model: var Model; winId: WindowId;
-    admissionState: WindowAdmissionState; focusAfterAdmission = false): bool =
+proc setWindowAdmission*(
+    model: var Model,
+    winId: WindowId,
+    admissionState: WindowAdmissionState,
+    focusAfterAdmission = false,
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).admissionState = admissionState
   model.windows.mEntity(winId).focusAfterAdmission =
-    admissionState == WindowAdmissionState.PendingAdmission and
-    focusAfterAdmission
+    admissionState == WindowAdmissionState.PendingAdmission and focusAfterAdmission
   true
 
-proc setWindowFullscreen*(model: var Model; winId: WindowId;
-    fullscreen: bool; outputId = NullExternalOutputId): bool =
+proc setWindowFullscreen*(
+    model: var Model, winId: WindowId, fullscreen: bool, outputId = NullExternalOutputId
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).isFullscreen = fullscreen
@@ -428,8 +425,7 @@ proc setWindowFullscreen*(model: var Model; winId: WindowId;
     if fullscreen: outputId else: NullExternalOutputId
   true
 
-proc setWindowMaximized*(
-    model: var Model; winId: WindowId; maximized: bool): bool =
+proc setWindowMaximized*(model: var Model, winId: WindowId, maximized: bool): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).isMaximized = maximized
@@ -437,17 +433,16 @@ proc setWindowMaximized*(
     model.windows.mEntity(winId).isMinimized = false
   true
 
-proc setWindowKeyboardShortcutsInhibit*(model: var Model;
-    winId: WindowId; inhibited: bool; bypass: bool): bool =
+proc setWindowKeyboardShortcutsInhibit*(
+    model: var Model, winId: WindowId, inhibited: bool, bypass: bool
+): bool =
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).keyboardShortcutsInhibit = inhibited
-  model.windows.mEntity(winId).keyboardShortcutsInhibitBypass =
-    inhibited and bypass
+  model.windows.mEntity(winId).keyboardShortcutsInhibitBypass = inhibited and bypass
   true
 
-proc toggleWindowKeyboardShortcutsInhibit*(
-    model: var Model; winId: WindowId): bool =
+proc toggleWindowKeyboardShortcutsInhibit*(model: var Model, winId: WindowId): bool =
   let winOpt = model.windows.entity(winId)
   if winOpt.isNone:
     return false

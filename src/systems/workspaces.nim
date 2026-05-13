@@ -10,15 +10,15 @@ proc activeWorkspaceSlot*(model: Model): uint32 =
     return model.activeSlot
   0
 
-proc ensureWorkspaceSlot*(
-    model: var Model; slot: uint32; forcedLayout = 0): TagId =
+proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): TagId =
   if slot == 0 or slot > MaxTagBits:
     return NullTagId
   result = model.tagForSlot(slot)
   if result != NullTagId:
     if forcedLayout != 0:
       discard model.setTagLayout(
-        result, safeLayoutMode(forcedLayout, model.tag(result).get().layoutMode))
+        result, safeLayoutMode(forcedLayout, model.tag(result).get().layoutMode)
+      )
     return result
   let tagRule = model.tagRuleForSlot(slot)
   let layoutMode =
@@ -28,15 +28,14 @@ proc ensureWorkspaceSlot*(
       tagRule.rule.defaultLayout
     else:
       LayoutMode.Scroller
-  let name =
-    if tagRule.found: tagRule.rule.name
-    else: ""
+  let name = if tagRule.found: tagRule.rule.name else: ""
   result = model.addTag(
     slot = slot,
     name = name,
     layoutMode = layoutMode,
     masterCount = model.defaultMasterCount(),
-    masterSplitRatio = model.defaultMasterRatio())
+    masterSplitRatio = model.defaultMasterRatio(),
+  )
 
 proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
   let defaultCount = model.defaultWorkspaceCount()
@@ -46,8 +45,7 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
   let activeSlot = model.activeWorkspaceSlot()
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
-    if slot > defaultCount and
-        (slot == activeSlot or model.tagHasLiveWindows(tagId)):
+    if slot > defaultCount and (slot == activeSlot or model.tagHasLiveWindows(tagId)):
       result.add(slot)
 
   result.sort()
@@ -64,8 +62,7 @@ proc trailingWorkspaceSlot*(model: Model): uint32 =
     return 0
   let last = slots[^1]
   let tagId = model.tagForSlot(last)
-  if last < MaxTagBits and tagId != NullTagId and
-      model.tagHasLiveWindows(tagId):
+  if last < MaxTagBits and tagId != NullTagId and model.tagHasLiveWindows(tagId):
     return last + 1
   0
 
@@ -96,7 +93,7 @@ proc ensureActiveWorkspace*(model: var Model): TagId =
     discard model.setActiveWorkspace(result)
     model.refreshVisibleWorkspaceSlots()
 
-proc workspaceSlotForIndex*(model: Model; index: uint32): uint32 =
+proc workspaceSlotForIndex*(model: Model, index: uint32): uint32 =
   if index == 0:
     return 0
   let slots = model.visibleWorkspaceSlots()
@@ -105,7 +102,7 @@ proc workspaceSlotForIndex*(model: Model; index: uint32): uint32 =
     return slots[i]
   0
 
-proc workspaceSlotForClampedIndex*(model: Model; index: uint32): uint32 =
+proc workspaceSlotForClampedIndex*(model: Model, index: uint32): uint32 =
   if index == 0:
     return 0
   let slots = model.visibleWorkspaceSlots()
@@ -122,18 +119,19 @@ proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
   if result > MaxTagBits:
     result = 0
 
-proc tagHasFocusableWindow*(model: Model; tagId: TagId): bool =
+proc tagHasFocusableWindow*(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
     if not win.isMinimized and win.windowAdmitted():
       return true
   false
 
-proc nearestWorkspaceSlot*(
-    model: Model; direction: int; occupiedOnly: bool): uint32 =
+proc nearestWorkspaceSlot*(model: Model, direction: int, occupiedOnly: bool): uint32 =
   let active = model.activeWorkspaceSlot()
   let slots =
-    if occupiedOnly: model.sortedSlots()
-    else: model.visibleWorkspaceSlots()
+    if occupiedOnly:
+      model.sortedSlots()
+    else:
+      model.visibleWorkspaceSlots()
   if slots.len == 0:
     return 0
 
@@ -141,28 +139,30 @@ proc nearestWorkspaceSlot*(
     for i in countdown(slots.len - 1, 0):
       let slot = slots[i]
       let tagId = model.tagForSlot(slot)
-      if slot < active and
-          (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
+      if slot < active and (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
         return slot
   elif direction > 0:
     for slot in slots:
       let tagId = model.tagForSlot(slot)
-      if slot > active and
-          (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
+      if slot > active and (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
         return slot
     if not occupiedOnly and active <= model.defaultWorkspaceCount() and
         active == slots[^1]:
       return model.nextDynamicWorkspaceSlot()
   0
 
-proc lowerWorkspaceFallback*(model: Model; fromSlot: uint32): uint32 =
+proc lowerWorkspaceFallback*(model: Model, fromSlot: uint32): uint32 =
   let slots = model.visibleWorkspaceSlots()
   for i in countdown(slots.len - 1, 0):
     let slot = slots[i]
     if slot < fromSlot and slot != fromSlot:
       return slot
   if model.defaultWorkspaceCount() > 0:
-    let below = if fromSlot > 1: fromSlot - 1 else: 1'u32
+    let below =
+      if fromSlot > 1:
+        fromSlot - 1
+      else:
+        1'u32
     return min(model.defaultWorkspaceCount(), max(1'u32, below))
   1'u32
 

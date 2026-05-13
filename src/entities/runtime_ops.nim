@@ -3,14 +3,13 @@ import ../state/entity_manager
 import ../types/[core, model]
 from ../types/runtime_values import PointerOpKind
 
-proc setOverviewActive*(model: var Model; active: bool): bool =
+proc setOverviewActive*(model: var Model, active: bool): bool =
   if model.overviewActive == active:
     return false
   model.overviewActive = active
   true
 
-proc setOverviewSelection*(
-    model: var Model; winId: WindowId): bool =
+proc setOverviewSelection*(model: var Model, winId: WindowId): bool =
   if model.overviewSelectedWindow == winId:
     return false
   model.overviewSelectedWindow = winId
@@ -26,20 +25,17 @@ proc saveOverviewViewportSnapshot*(model: var Model): bool =
       targetViewportXOffset: tag.targetViewportXOffset,
       currentViewportXOffset: tag.currentViewportXOffset,
       targetViewportYOffset: tag.targetViewportYOffset,
-      currentViewportYOffset: tag.currentViewportYOffset)
+      currentViewportYOffset: tag.currentViewportYOffset,
+    )
   true
 
 proc restoreOverviewViewportSnapshot*(model: var Model): bool =
   for tagId, viewport in model.overviewViewportSnapshot.pairs:
     if model.tags.entity(tagId).isSome:
-      model.tags.mEntity(tagId).targetViewportXOffset =
-        viewport.targetViewportXOffset
-      model.tags.mEntity(tagId).currentViewportXOffset =
-        viewport.currentViewportXOffset
-      model.tags.mEntity(tagId).targetViewportYOffset =
-        viewport.targetViewportYOffset
-      model.tags.mEntity(tagId).currentViewportYOffset =
-        viewport.currentViewportYOffset
+      model.tags.mEntity(tagId).targetViewportXOffset = viewport.targetViewportXOffset
+      model.tags.mEntity(tagId).currentViewportXOffset = viewport.currentViewportXOffset
+      model.tags.mEntity(tagId).targetViewportYOffset = viewport.targetViewportYOffset
+      model.tags.mEntity(tagId).currentViewportYOffset = viewport.currentViewportYOffset
       result = true
   if model.overviewViewportSnapshot.len > 0:
     model.overviewViewportSnapshot.clear()
@@ -51,8 +47,7 @@ proc restoreOverviewViewportSnapshot*(model: var Model): bool =
     model.viewportSnapTags.clear()
     result = true
 
-proc setLayerFocusExclusiveState*(
-    model: var Model; exclusive: bool): bool =
+proc setLayerFocusExclusiveState*(model: var Model, exclusive: bool): bool =
   if model.layerFocusExclusive == exclusive:
     return false
   model.layerFocusExclusive = exclusive
@@ -64,7 +59,7 @@ proc clearPointerOp*(model: var Model): bool =
   model.pointerOp = PointerOpData(kind: PointerOpKind.OpNone)
   true
 
-proc setSessionLockedState*(model: var Model; locked: bool): bool =
+proc setSessionLockedState*(model: var Model, locked: bool): bool =
   if model.sessionLocked == locked:
     return false
   model.sessionLocked = locked
@@ -72,19 +67,17 @@ proc setSessionLockedState*(model: var Model; locked: bool): bool =
     discard model.clearPointerOp()
   true
 
-proc setActiveModifiersState*(model: var Model; modifiers: uint32):
-    bool =
+proc setActiveModifiersState*(model: var Model, modifiers: uint32): bool =
   if model.activeModifiers == modifiers:
     return false
   model.activeModifiers = modifiers
   true
 
-proc setPointerOpState*(model: var Model; pointerOp: PointerOpData):
-    bool =
+proc setPointerOpState*(model: var Model, pointerOp: PointerOpData): bool =
   model.pointerOp = pointerOp
   true
 
-proc setScreenSize*(model: var Model; w, h: int32): bool =
+proc setScreenSize*(model: var Model, w, h: int32): bool =
   let nextW = max(0'i32, w)
   let nextH = max(0'i32, h)
   if model.screenWidth == nextW and model.screenHeight == nextH:
