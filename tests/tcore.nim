@@ -115,6 +115,13 @@ proc restoreWindowJson(model: Model, id: uint32): JsonNode =
       return node
   newJNull()
 
+proc restoreTagJson(model: Model, id: uint32): JsonNode =
+  let root = parseJson(model.liveRestoreJson())
+  for node in root["tags"]:
+    if node["id"].getInt() == int(id):
+      return node
+  newJNull()
+
 proc columnHeads(model: Model, slot: uint32): seq[uint32] =
   let tagId = model.tagForSlot(slot)
   for columnId, _ in model.columnsOnTagWithId(tagId):
@@ -783,6 +790,89 @@ suite "Core Runtime Logic":
     check not model.viewportRetargetRequested(model.activeTag)
     check effects.hasFocusEffect(2)
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Deck popup preserves parent column position":
+    var model = cameraModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "kitty", title: "btop")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "org.kde.okular",
+        title: "Okular",
+      )
+    )
+
+    let btopBefore = model.instructionGeom(1)
+    let parentBefore = model.instructionGeom(2)
+    check btopBefore.x < parentBefore.x
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        createdParentWindowId: 2,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+      )
+    )
+
+    let btopAfter = model.instructionGeom(1)
+    let parentAfter = model.instructionGeom(2)
+    let childAfter = model.instructionGeom(3)
+    check btopAfter == btopBefore
+    check parentAfter == parentBefore
+    check childAfter.x == parentAfter.x + (parentAfter.w - childAfter.w) div 2
+    check childAfter.y == parentAfter.y + (parentAfter.h - childAfter.h) div 2
+    check model.snapshotWindow(3).isFloating
+
+  test "Floating parented popup stays out of public columns":
+    var model = cameraModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "kitty", title: "btop")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "org.kde.okular",
+        title: "Okular",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        createdParentWindowId: 2,
+        appId: "xdg-desktop-portal-gtk",
+        title: "Open Document",
+      )
+    )
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces[0].columns.len == 2
+    check snapshot.workspaces[0].columns[0].windows == @[runtime_values.WindowId(1)]
+    check snapshot.workspaces[0].columns[1].windows == @[runtime_values.WindowId(2)]
+    check model.snapshotWindow(3).tagId.isSome
+    check model.snapshotWindow(3).tagId.get() == 1
+
+    let restoredTag = model.restoreTagJson(1)
+    check restoredTag["columns"].len == 2
+    check restoredTag["columns"][0]["windows"].len == 1
+    check restoredTag["columns"][0]["windows"][0].getInt() == 1
+    check restoredTag["columns"][1]["windows"].len == 1
+    check restoredTag["columns"][1]["windows"][0].getInt() == 2
+    check restoreWindowJson(model, 3)["tag_id"].getInt() == 1
 
   test "Auto parented popup fits parent when default floating is wider":
     var model = initRuntimeStateFromConfig(
@@ -4356,7 +4446,7 @@ suite "Core Runtime Logic":
     check snapshot.windows[0].isFloating
     check snapshot.workspaces[0].masterCount == 2
     check snapshot.workspaces[0].masterSplitRatio == 0.65'f32
-    check snapshot.workspaces[0].columns[0].widthProportion == 0.7'f32
+    check snapshot.workspaces[0].columns.len == 0
 
   test "Window rule marks matching windows as shortcut-inhibiting":
     var model = configuredModel()

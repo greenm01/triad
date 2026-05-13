@@ -15,11 +15,13 @@ proc externalWindowId(model: Model, winId: WindowId): runtime_values.WindowId =
 proc shellColumns(model: Model, tagId: TagId): seq[ShellColumn] =
   var idx = 0'u32
   for columnId, column in model.columnsOnTagWithId(tagId):
-    inc idx
     var windows: seq[runtime_values.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(columnId):
-      if win.windowAdmitted():
+      if win.windowAdmitted() and not win.isFloating:
         windows.add(model.externalWindowId(winId))
+    if windows.len == 0:
+      continue
+    inc idx
     result.add(
       ShellColumn(
         idx: idx,

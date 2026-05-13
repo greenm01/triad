@@ -84,10 +84,11 @@ proc applyPopupLayoutFocus(
     model: Model, tag: var rv.TagState, active: core_types.WindowId
 ) =
   let layoutFocus = model.popupTreeLayoutFocus(active)
+  if tag.layoutMode in {rv.LayoutMode.Deck, rv.LayoutMode.VerticalDeck}:
+    tag.focusedWindow = 0'u32
+    return
   if layoutFocus != NullWindowId and layoutFocus != active:
     tag.focusedWindow = model.externalWindowId(layoutFocus)
-  elif tag.layoutMode in {rv.LayoutMode.Deck, rv.LayoutMode.VerticalDeck}:
-    tag.focusedWindow = 0'u32
 
 proc addFloatingInstructions(
     model: Model,

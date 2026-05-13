@@ -152,13 +152,16 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
         isFullWidth: colOpt.get().isFullWidth,
       )
       for winId in model.windowsForColumn(colId):
-        if not model.windowAdmitted(winId):
+        let winOpt = model.windowData(winId)
+        if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating:
           continue
         let external = model.externalWindowId(winId)
         if external == 0:
           continue
         restoredCol.windows.add(external)
         result.tagByWindow[external] = tag.slot
+      if restoredCol.windows.len == 0:
+        continue
       restoredTag.columns.add(restoredCol)
 
     result.tags[tag.slot] = restoredTag

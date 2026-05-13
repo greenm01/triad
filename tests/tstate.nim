@@ -472,9 +472,7 @@ suite "Runtime state primitives":
     check snapshot.workspaces[1].currentViewportXOffset == 280.0'f32
     check snapshot.workspaces[1].targetViewportYOffset == 40.0'f32
     check snapshot.workspaces[1].currentViewportYOffset == 20.0'f32
-    check snapshot.workspaces[1].columns.len == 1
-    check snapshot.workspaces[1].columns[0].widthProportion == 0.75'f32
-    check snapshot.workspaces[1].columns[0].isFullWidth
+    check snapshot.workspaces[1].columns.len == 0
     check snapshot.windows[0].isFloating
     check snapshot.windows[0].floatingGeom ==
       runtime_values.Rect(x: 100, y: 80, w: 640, h: 480)
