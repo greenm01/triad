@@ -69,9 +69,7 @@ proc updateWindowAppIdForExternal*(
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     discard model.setWindowKeyboardShortcutsInhibit(
-      winId,
-      model.windowKeyboardShortcutsInhibit(winOpt.get().appId, winOpt.get().title),
-      false,
+      winId, model.windowKeyboardShortcutsInhibit(winOpt.get()), false
     )
     discard model.applyWindowRuleBounds(winId)
   true
@@ -86,9 +84,7 @@ proc updateWindowTitleForExternal*(
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     discard model.setWindowKeyboardShortcutsInhibit(
-      winId,
-      model.windowKeyboardShortcutsInhibit(winOpt.get().appId, winOpt.get().title),
-      false,
+      winId, model.windowKeyboardShortcutsInhibit(winOpt.get()), false
     )
     discard model.applyWindowRuleBounds(winId)
   true

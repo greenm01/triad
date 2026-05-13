@@ -3,7 +3,7 @@ import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import nil
 import ../utils/behavior_log
-import update_commands, update_effects, update_events, update_maintenance
+import update_commands, update_effects, update_events, update_maintenance, window_rules
 
 proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
   kind in {
@@ -173,6 +173,8 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   let maintenance = next.applyUpdateMaintenance(msg.kind)
   if maintenance.collapsed or maintenance.pruned:
     dirty = true
+  if dirty and next.windowRuleStateMatchersEnabled():
+    dirty = next.refreshWindowRuleDerivedState() or dirty
 
   let after = shellSnapshot(next)
   effects.addPostUpdateEffects(

@@ -89,6 +89,14 @@ type
     titleSet*: bool
     titlePattern*: string
     titleRegex*: Regex
+    isActiveSet*: bool
+    isActive*: bool
+    isFocusedSet*: bool
+    isFocused*: bool
+    isActiveInColumnSet*: bool
+    isActiveInColumn*: bool
+    isFloatingSet*: bool
+    isFloating*: bool
 
   WindowRuleData* = object
     matches*: seq[WindowRuleMatcherData]

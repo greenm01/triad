@@ -107,6 +107,14 @@ type
     appId*: string
     titleSet*: bool
     title*: string
+    isActiveSet*: bool
+    isActive*: bool
+    isFocusedSet*: bool
+    isFocused*: bool
+    isActiveInColumnSet*: bool
+    isActiveInColumn*: bool
+    isFloatingSet*: bool
+    isFloating*: bool
 
   WindowRule* = object
     appIdMatch*: string

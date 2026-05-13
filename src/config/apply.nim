@@ -40,6 +40,14 @@ proc windowRuleMatcherData(
             re(matcher.title)
           else:
             nil,
+        isActiveSet: matcher.isActiveSet,
+        isActive: matcher.isActive,
+        isFocusedSet: matcher.isFocusedSet,
+        isFocused: matcher.isFocused,
+        isActiveInColumnSet: matcher.isActiveInColumnSet,
+        isActiveInColumn: matcher.isActiveInColumn,
+        isFloatingSet: matcher.isFloatingSet,
+        isFloating: matcher.isFloating,
       )
     )
   except RegexError as e:
@@ -150,10 +158,7 @@ proc applyConfig*(model: var Model, config: Config) =
     if compiled.isSome:
       model.windowRules.add(compiled.get())
 
-  for winId, win in model.windowsWithId():
-    let inhibited = model.windowKeyboardShortcutsInhibit(win.appId, win.title)
-    discard model.setWindowKeyboardShortcutsInhibit(winId, inhibited, false)
-    discard model.applyWindowRuleBounds(winId)
+  discard model.refreshWindowRuleDerivedState()
 
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell

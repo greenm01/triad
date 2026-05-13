@@ -40,7 +40,7 @@ proc floatingGeomFromRule(model: Model, win: WindowData): runtime_values.Rect =
   let screenW = max(0'i32, model.screenWidth)
   let screenH = max(0'i32, model.screenHeight)
   result = model.defaultFloatingGeom()
-  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  let ruleMatch = model.windowRuleFor(win)
   if ruleMatch.found:
     let floating = ruleMatch.rule.floating
     if floating.xRatioSet:
@@ -82,7 +82,7 @@ proc parentedPrimarySurfaceIntent(
     win.clientMinHeight.nearSize(parentRect.h)
 
 proc parentFloatingRule(model: Model, win: WindowData): tuple[set: bool, value: bool] =
-  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  let ruleMatch = model.windowRuleFor(win)
   if ruleMatch.found and ruleMatch.rule.openFloatingSet:
     return (true, ruleMatch.rule.openFloating)
   (false, false)
@@ -139,7 +139,7 @@ proc parentWorkspaceAdoptionAllowed(model: Model, winId: WindowId): bool =
   if winOpt.isNone:
     return false
   let win = winOpt.get()
-  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  let ruleMatch = model.windowRuleFor(win)
   model.parentedRoleFor(win) != runtime_values.ParentedRole.Plain and
     not (ruleMatch.found and ruleMatch.rule.defaultSlot != 0)
 
@@ -150,7 +150,7 @@ proc parentFocusAllowed*(
   if winOpt.isNone:
     return false
   let win = winOpt.get()
-  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  let ruleMatch = model.windowRuleFor(win)
   if ruleMatch.found and ruleMatch.rule.openFocusedSet:
     return ruleMatch.rule.openFocused
   if model.parentedRoleFor(win) == runtime_values.ParentedRole.Plain:
@@ -166,7 +166,7 @@ proc parentDialogViewportJump*(model: Model, parentExternalId: ExternalWindowId)
   if parentOpt.isNone:
     return false
   let parent = parentOpt.get()
-  let ruleMatch = model.windowRuleFor(parent.appId, parent.title)
+  let ruleMatch = model.windowRuleFor(parent)
   ruleMatch.found and ruleMatch.rule.dialogViewportJump
 
 proc parentIsDeckBackground(model: Model, parentId: WindowId): bool =

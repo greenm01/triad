@@ -2055,6 +2055,175 @@ suite "Core Runtime Logic":
     check not privateWelcome.found
     check not titleMiss.found
 
+  test "Window rule state matchers use focused and active window state":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[
+            WindowRule(
+              matches: @[WindowRuleMatcher(appIdSet: true, appId: "^two$")],
+              defaultWorkspace: 2,
+              openFocusedSet: true,
+              openFocused: false,
+            ),
+            WindowRule(
+              matches: @[WindowRuleMatcher(isActiveSet: true, isActive: true)],
+              minWidthSet: true,
+              minWidth: 500,
+            ),
+            WindowRule(
+              matches: @[WindowRuleMatcher(isFocusedSet: true, isFocused: true)],
+              minHeightSet: true,
+              minHeight: 600,
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "one", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "two", title: "Two")
+    )
+
+    let one = model.windowData(WindowId(1)).get()
+    let two = model.windowData(WindowId(2)).get()
+    let oneRule = model.windowRuleFor(one)
+    let twoRule = model.windowRuleFor(two)
+
+    check oneRule.rule.minWidthSet
+    check oneRule.rule.minWidth == 500
+    check oneRule.rule.minHeightSet
+    check oneRule.rule.minHeight == 600
+    check twoRule.rule.minWidthSet
+    check twoRule.rule.minWidth == 500
+    check not twoRule.rule.minHeightSet
+    check one.minWidth == 500
+    check one.minHeight == 600
+    check two.minWidth == 500
+    check two.minHeight == 0
+
+  test "Window rule focused matcher refreshes keyboard inhibition":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true, appId: "^app$", isFocusedSet: true, isFocused: true
+                  )
+                ],
+              keyboardShortcutsInhibitSet: true,
+              keyboardShortcutsInhibit: true,
+            )
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    check not model.windowData(WindowId(1)).get().keyboardShortcutsInhibit
+    check model.windowData(WindowId(2)).get().keyboardShortcutsInhibit
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+
+    check model.windowData(WindowId(1)).get().keyboardShortcutsInhibit
+    check not model.windowData(WindowId(2)).get().keyboardShortcutsInhibit
+
+  test "Window rule floating matcher applies dynamic bounds after open":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches: @[WindowRuleMatcher(appIdSet: true, appId: "^floaty$")],
+              openFloatingSet: true,
+              openFloating: true,
+            ),
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^floaty$",
+                    isFloatingSet: true,
+                    isFloating: true,
+                  )
+                ],
+              minWidthSet: true,
+              minWidth: 700,
+            ),
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "floaty", title: "Floaty")
+    )
+
+    let win = model.windowData(WindowId(1)).get()
+    check win.isFloating
+    check win.minWidth == 700
+
+  test "Window rule active-in-column matcher distinguishes stacked windows":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isActiveInColumnSet: true,
+                    isActiveInColumn: true,
+                  )
+                ],
+              minWidthSet: true,
+              minWidth: 111,
+            ),
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isActiveInColumnSet: true,
+                    isActiveInColumn: false,
+                  )
+                ],
+              maxWidthSet: true,
+              maxWidth: 222,
+            ),
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdConsumeWindow))
+
+    let active = model.windowData(WindowId(1)).get()
+    let stacked = model.windowData(WindowId(2)).get()
+    check active.minWidth == 111
+    check active.maxWidth == 0
+    check stacked.minWidth == 0
+    check stacked.maxWidth == 222
+
   test "Parented tool role stays visible outside popup focus tree":
     var model = initRuntimeStateFromConfig(
       Config(

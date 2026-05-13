@@ -244,6 +244,18 @@ proc windowRuleMatcher(node: KdlNode): WindowRuleMatcher =
   if node.props.hasKey("title"):
     result.titleSet = true
     result.title = node.props["title"].kString()
+  if node.props.hasKey("is-active"):
+    result.isActiveSet = true
+    result.isActive = node.props["is-active"].kBool()
+  if node.props.hasKey("is-focused"):
+    result.isFocusedSet = true
+    result.isFocused = node.props["is-focused"].kBool()
+  if node.props.hasKey("is-active-in-column"):
+    result.isActiveInColumnSet = true
+    result.isActiveInColumn = node.props["is-active-in-column"].kBool()
+  if node.props.hasKey("is-floating"):
+    result.isFloatingSet = true
+    result.isFloating = node.props["is-floating"].kBool()
 
 proc validateWindowRuleRegex(pattern, context: string): string =
   try:

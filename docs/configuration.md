@@ -71,9 +71,11 @@ maps against Mango and River.
 
 `window-rule` entries match windows by app id and/or title regex and apply
 launch policy. Multiple `match` children are OR-ed, fields within one `match`
-are AND-ed, and any matching `exclude` child skips the rule. All matching rules
-are merged in file order: broad app rules can set defaults, and later specific
-title rules can override individual fields.
+are AND-ed, and any matching `exclude` child skips the rule. Matchers can also
+use boolean state properties: `is-focused`, `is-active`,
+`is-active-in-column`, and `is-floating`. All matching rules are merged in file
+order: broad app rules can set defaults, and later specific title or state
+rules can override individual fields.
 
 ```kdl
 window-rule {
@@ -110,8 +112,21 @@ window-rule {
     height-ratio 0.84
   }
 }
+
+window-rule {
+  match app-id="qemu" is-focused=#true
+  keyboard-shortcuts-inhibit #true
+}
 ```
 
+- `match` and `exclude`: support `app-id="<regex>"`, `title="<regex>"`,
+  `is-focused=#true|#false`, `is-active=#true|#false`,
+  `is-active-in-column=#true|#false`, and `is-floating=#true|#false`.
+  `is-active` matches the focused window of any workspace the window belongs
+  to. `is-active-in-column` is derived from the focused window in that column,
+  falling back to the first visible tiled window in the column. Initial opening
+  evaluation treats windows as unfocused, inactive, non-floating, and active in
+  column, matching Niri's cycle-avoidance behavior for `open-floating`.
 - `open-floating #true|#false`: explicitly opens matching windows floating or
   tiled. Parented dialogs open floating by default unless this rule is set.
 - `open-focused #true|#false`: explicitly allows or prevents focusing matching

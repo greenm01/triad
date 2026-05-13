@@ -765,9 +765,9 @@ window-rule {
       path,
       """
 window-rule {
-  match app-id="^org\\.gimp\\." title="Welcome"
-  match app-id="^gimp-tool$"
-  exclude title="Private"
+  match app-id="^org\\.gimp\\." title="Welcome" is-focused=#true is-active=#false
+  match app-id="^gimp-tool$" is-floating=#true is-active-in-column=#false
+  exclude title="Private" is-floating=#false
   default-workspace 4
 }
 """,
@@ -781,11 +781,21 @@ window-rule {
     check config.windowRules[0].matches[0].appId == "^org\\.gimp\\."
     check config.windowRules[0].matches[0].titleSet
     check config.windowRules[0].matches[0].title == "Welcome"
+    check config.windowRules[0].matches[0].isFocusedSet
+    check config.windowRules[0].matches[0].isFocused
+    check config.windowRules[0].matches[0].isActiveSet
+    check not config.windowRules[0].matches[0].isActive
     check config.windowRules[0].matches[1].appIdSet
     check config.windowRules[0].matches[1].appId == "^gimp-tool$"
+    check config.windowRules[0].matches[1].isFloatingSet
+    check config.windowRules[0].matches[1].isFloating
+    check config.windowRules[0].matches[1].isActiveInColumnSet
+    check not config.windowRules[0].matches[1].isActiveInColumn
     check config.windowRules[0].excludes.len == 1
     check config.windowRules[0].excludes[0].titleSet
     check config.windowRules[0].excludes[0].title == "Private"
+    check config.windowRules[0].excludes[0].isFloatingSet
+    check not config.windowRules[0].excludes[0].isFloating
 
   test "workspace config uses global default layout and explicit overrides":
     var model = initRuntimeStateFromConfig(
