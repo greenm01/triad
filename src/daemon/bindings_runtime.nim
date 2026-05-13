@@ -478,6 +478,8 @@ proc addPointerBinding(
   binding.enable()
 
 proc setupDefaultBindings*(daemon: var TriadDaemon) =
+  if daemon.currentModel.sessionLocked:
+    return
   if daemon.bindingsConfigured:
     return
   if daemon.seatPointers.len == 0:

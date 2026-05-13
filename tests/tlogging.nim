@@ -134,6 +134,35 @@ suite "Runtime logging":
     check event["effects"][0]["window_id"].getInt() == 9
     check event["effects"][0]["maximized"].getBool()
 
+  test "runtime update behavior event records session lock transition":
+    let dir = getTempDir() / ("triad-behavior-session-" &
+      $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    var model = initRuntimeStateFromConfig(Config()).model
+    (model, _) = model.update(Msg(kind: MsgKind.WlSessionLocked))
+    discard model.update(Msg(kind: MsgKind.WlSessionUnlocked))
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 2
+    let locked = parseJson(lines[0])
+    let unlocked = parseJson(lines[1])
+    check locked["event"].getStr() == "runtime_update"
+    check locked["kind"].getStr() == "WlSessionLocked"
+    check not locked["before"]["session_locked"].getBool()
+    check locked["after"]["session_locked"].getBool()
+    check unlocked["kind"].getStr() == "WlSessionUnlocked"
+    check unlocked["before"]["session_locked"].getBool()
+    check not unlocked["after"]["session_locked"].getBool()
+
   test "niri broadcast behavior event records active workspace":
     let dir = getTempDir() / ("triad-behavior-broadcast-" &
       $getCurrentProcessId())

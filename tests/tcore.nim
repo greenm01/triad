@@ -172,6 +172,28 @@ suite "Core Runtime Logic":
     check effects.len == 1
     check effects[0].kind == EffectKind.EffTriadReload
 
+  test "Session unlock clears stale layer focus and restores active focus":
+    var model = configuredModel()
+    model.seedCameraWindows(2)
+    check model.focusedWindowId() == 2
+
+    discard model.updateModel(Msg(kind: MsgKind.WlLayerFocusExclusive))
+    discard model.updateModel(Msg(kind: MsgKind.WlSessionLocked))
+    check model.sessionLocked
+    check model.layerFocusExclusive
+
+    let lockedEffects = model.updateModel(Msg(
+      kind: MsgKind.CmdFocusWindowById,
+      focusWindowId: 1))
+    check model.focusedWindowId() == 2
+    check lockedEffects.len == 0
+
+    let unlockEffects = model.updateModel(Msg(kind: MsgKind.WlSessionUnlocked))
+    check not model.sessionLocked
+    check not model.layerFocusExclusive
+    check model.focusedWindowId() == 2
+    check unlockEffects.hasFocusEffect(2)
+
   test "Screenshot command emits explicit capture effect":
     var model = Model()
     let (_, effects) = model.update(Msg(

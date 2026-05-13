@@ -28,12 +28,14 @@ proc executeManageEffect*(daemon: var TriadDaemon; eff: Effect) =
         max(0'i32, eff.h))
   of EffectKind.EffFocusWindow:
     if not daemon.runtimeState.model.sessionLocked and
+        not daemon.runtimeState.model.layerFocusExclusive and
         daemon.windowPointers.hasKey(eff.focusId):
       let win = daemon.windowPointers[eff.focusId]
       for seat in daemon.seatPointers:
         seat.focusWindow(win)
   of EffectKind.EffFocusShellSurface:
     if not daemon.runtimeState.model.sessionLocked and
+        not daemon.runtimeState.model.layerFocusExclusive and
         daemon.shellSurfacePointers.hasKey(eff.focusShellSurfaceId):
       let shellSurface = daemon.shellSurfacePointers[eff.focusShellSurfaceId]
       for seat in daemon.seatPointers:

@@ -10,6 +10,8 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.WlWindowMaximizeRequested,
     MsgKind.WlWindowUnmaximizeRequested,
     MsgKind.WlWindowMinimizeRequested,
+    MsgKind.WlSessionLocked,
+    MsgKind.WlSessionUnlocked,
     MsgKind.WlFocusChanged,
     MsgKind.CmdFocusTag,
     MsgKind.CmdFocusTagLeft,
@@ -26,11 +28,14 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMaximizeColumn,
     MsgKind.CmdToggleMaximized}
 
-proc updateSnapshotSummary(snapshot: ShellSnapshot): JsonNode =
+proc updateSnapshotSummary(
+    snapshot: ShellSnapshot; model: Model): JsonNode =
   %*{
     "active_tag": snapshot.activeTag,
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
     "focused_window": uint32(snapshot.focusedWindowId()),
+    "session_locked": model.sessionLocked,
+    "layer_focus_exclusive": model.layerFocusExclusive,
     "workspaces": snapshot.workspaces.len,
     "windows": snapshot.windows.len,
     "workspace_distribution": snapshot.compactWorkspaceDistribution()
@@ -121,8 +126,9 @@ proc compactRuntimeEffects(effects: seq[Effect]): JsonNode =
       discard
 
 proc writeRuntimeUpdateEvent(
-    msg: Msg; before, after: ShellSnapshot; dirty, collapsed,
-    pruned: bool; effects: seq[Effect]) =
+    msg: Msg; beforeModel, afterModel: Model; before,
+    after: ShellSnapshot; dirty, collapsed, pruned: bool;
+    effects: seq[Effect]) =
   let kind = msg.kind
   if not kind.shouldLogRuntimeUpdate():
     return
@@ -134,8 +140,8 @@ proc writeRuntimeUpdateEvent(
     "pruned": pruned,
     "effect_count": effects.len,
     "effects": effects.compactRuntimeEffects(),
-    "before": before.updateSnapshotSummary(),
-    "after": after.updateSnapshotSummary(),
+    "before": before.updateSnapshotSummary(beforeModel),
+    "after": after.updateSnapshotSummary(afterModel),
     "window_states": {
       "before": before.compactSnapshotWindows(),
       "after": after.compactSnapshotWindows()
@@ -171,7 +177,7 @@ proc update*(model: Model; msg: Msg): (Model, seq[Effect]) =
   effects.addPostUpdateEffects(
     msg, before, after, dirty, maintenance.collapsed, maintenance.pruned)
   writeRuntimeUpdateEvent(
-    msg, before, after, dirty, maintenance.collapsed, maintenance.pruned,
-    effects)
+    msg, model, next, before, after, dirty, maintenance.collapsed,
+    maintenance.pruned, effects)
 
   (next, effects)

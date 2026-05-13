@@ -144,6 +144,7 @@ proc applyEvent*(model: var Model; msg: Msg): UpdateStep =
     result.dirty = model.setSessionLocked(true)
   of MsgKind.WlSessionUnlocked:
     result.dirty = model.setSessionLocked(false)
+    result.dirty = model.setLayerFocusExclusive(false) or result.dirty
     let focused = model.focusedOnActiveTag()
     if focused != NullWindowId:
       let externalId = model.runtimeWindowId(focused)
