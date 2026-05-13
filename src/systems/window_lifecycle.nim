@@ -1,7 +1,14 @@
 import std/[options, tables]
-import floating_policy, focus, placement, popup_tree, scratchpad, workspaces
+import
+  floating_geometry, floating_policy, focus, layout_projection, placement, popup_tree,
+  scratchpad, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole
+
+type LeadFloatingAnchor = object
+  found: bool
+  winId: WindowId
+  columnId: ColumnId
 
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   model.windowForExternal(externalId)
@@ -223,6 +230,80 @@ proc newWindowColumnIndex(model: Model, tagId: TagId, isFloating: bool): int =
     return
   result = int(colIdx)
 
+proc tagHasSameAppNormal(
+    model: Model, tagId: TagId, appId: string, exceptWinId: WindowId
+): bool =
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if winId != exceptWinId and win.windowAdmitted() and not win.isFloating and
+        not win.isMinimized and win.appId == appId:
+      return true
+
+proc leadFloatingAnchorFor(
+    model: Model,
+    tagId: TagId,
+    winId: WindowId,
+    appId: string,
+    isFloating: bool,
+    parentExternalId: ExternalWindowId,
+    pendingAdmission: bool,
+): LeadFloatingAnchor =
+  if isFloating or pendingAdmission or parentExternalId != NullExternalWindowId or
+      tagId == NullTagId or tagId != model.activeTag or appId.len == 0:
+    return
+
+  let focused = model.focusedOnActiveTag()
+  if focused == NullWindowId or focused == winId:
+    return
+
+  let focusedOpt = model.windowData(focused)
+  if focusedOpt.isNone:
+    return
+
+  let lead = focusedOpt.get()
+  if not lead.windowAdmitted() or not lead.isFloating or lead.isMinimized or
+      lead.parentExternalId != NullExternalWindowId or lead.appId != appId:
+    return
+  if model.tagHasSameAppNormal(tagId, appId, winId):
+    return
+
+  let placementOpt = model.placementForWindowOnTag(tagId, focused)
+  if placementOpt.isNone:
+    return
+
+  LeadFloatingAnchor(found: true, winId: focused, columnId: placementOpt.get().columnId)
+
+proc instructionGeomFor(model: Model, winId: WindowId): GeometryRect =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return
+  let externalId = uint32(winOpt.get().externalId)
+  let projection = model.layoutProjection()
+  for instr in projection.instructions:
+    if uint32(instr.windowId) == externalId:
+      return instr.geom
+
+proc recenterLeadFloatingAnchor(
+    model: var Model, anchor: LeadFloatingAnchor, mainWinId: WindowId
+): bool =
+  if not anchor.found:
+    return false
+  let leadOpt = model.windowData(anchor.winId)
+  if leadOpt.isNone:
+    return false
+
+  let mainGeom = model.instructionGeomFor(mainWinId)
+  if mainGeom.w <= 0 or mainGeom.h <= 0:
+    return false
+
+  var leadGeom = leadOpt.get().floatingGeom
+  if leadGeom.w <= 0 or leadGeom.h <= 0:
+    leadGeom = model.floatingGeomForWindow(anchor.winId)
+
+  let centered = mainGeom
+    .centeredIn(leadOpt.get().applyFloatingSizeHints(leadGeom))
+    .clampToScreen(model.primaryScreen())
+  model.setWindowFloatingGeom(anchor.winId, centered)
+
 proc createWindowForExternal*(
     model: var Model,
     externalId: ExternalWindowId,
@@ -386,9 +467,21 @@ proc createWindowForExternal*(
         discard model.setTagLayout(
           targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)
         )
-      discard model.addPlacedWindowColumn(
-        targetTag, result, model.newWindowColumnIndex(targetTag, isFloating)
+      let leadAnchor = model.leadFloatingAnchorFor(
+        targetTag, result, appId, isFloating, parentExternalId, pendingAdmission
       )
+      if leadAnchor.found:
+        discard model.moveWindowToColumn(
+          targetTag,
+          result,
+          leadAnchor.columnId,
+          model.windowCountForColumn(leadAnchor.columnId),
+        )
+        discard model.recenterLeadFloatingAnchor(leadAnchor, result)
+      else:
+        discard model.addPlacedWindowColumn(
+          targetTag, result, model.newWindowColumnIndex(targetTag, isFloating)
+        )
       if not model.sessionLocked and not restoreFocusPending:
         if parentKnown:
           let parentOpensFocused =
@@ -399,7 +492,10 @@ proc createWindowForExternal*(
           if parentOpensFocused:
             discard model.applyParentFocusPolicy(result, parentExternalId)
         elif targetSlot == model.activeWorkspaceSlot():
-          if pendingAdmission:
+          if leadAnchor.found:
+            discard model.recordFocus(result)
+            discard model.focusWindow(leadAnchor.winId, retargetViewport = false)
+          elif pendingAdmission:
             focusAfterAdmission = true
           else:
             discard model.focusWindow(result)

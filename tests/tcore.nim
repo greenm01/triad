@@ -2025,6 +2025,107 @@ suite "Core Runtime Logic":
     check moved.y == initial.y + 20
     check model.instructionGeom(2) == moved
 
+  test "Lead floating startup window anchors same-app main window":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.5),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "gimp",
+              titleMatch: "Welcome",
+              openFloatingSet: true,
+              openFloating: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "browser", title: "Docs")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "gimp", title: "Welcome")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        appId: "gimp",
+        title: "GNU Image Manipulation Program",
+      )
+    )
+
+    let workspace = model.shellSnapshot().workspaces[0]
+    let leadGeom = model.instructionGeom(2)
+    let mainGeom = model.instructionGeom(3)
+    check workspace.columns.len == 2
+    check workspace.columns[1].windows == @[runtime_values.WindowId(3)]
+    check model.focusedWindowId() == 2
+    check abs(leadGeom.rectCenter().x - mainGeom.rectCenter().x) <= 1
+    check abs(leadGeom.rectCenter().y - mainGeom.rectCenter().y) <= 1
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
+    check model.focusedWindowId() == 3
+
+  test "Lead floating startup anchor ignores other apps and existing main windows":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.5),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "gimp",
+              titleMatch: "Welcome",
+              openFloatingSet: true,
+              openFloating: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "browser", title: "Docs")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "gimp", title: "Welcome")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "krita", title: "Main")
+    )
+    check model.shellSnapshot().workspaces[0].columns.len == 2
+    check model.shellSnapshot().workspaces[0].columns[1].windows ==
+      @[runtime_values.WindowId(3)]
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 3))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        appId: "gimp",
+        title: "GNU Image Manipulation Program",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 5,
+        appId: "gimp",
+        title: "GNU Image Manipulation Program 2",
+      )
+    )
+
+    let workspace = model.shellSnapshot().workspaces[0]
+    check workspace.columns.len == 3
+    check workspace.columns[1].windows == @[runtime_values.WindowId(4)]
+    check workspace.columns[2].windows == @[runtime_values.WindowId(5)]
+
   test "Plain parented float ignores parent workspace and anchoring":
     var model = initRuntimeStateFromConfig(
       Config(

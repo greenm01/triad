@@ -74,6 +74,20 @@ or `open-floating #false` when it should tile. `_NET_WM_WINDOW_TYPE_UTILITY`
 in particular sits in a gray zone; until River exposes that semantic type,
 app/title rules are the explicit escape hatch.
 
+## Edge Case: Lead Floating Startup Windows
+
+Some apps open an unparented floating welcome or chooser window before the
+main toplevel. GIMP's welcome window is one example: it is not protocol-parented
+to the later main window, but it semantically leads that startup sequence.
+
+When a focused, unparented floating window is followed by the first same-app,
+unparented normal window on the active workspace, Triad treats the float as a
+startup anchor. The normal main window is placed in the float's existing column,
+the float is re-centered over the new tile, and focus remains on the lead float
+until it closes. Triad does not invent a parent relationship for this case, and
+the heuristic is disabled once another same-app normal window already exists on
+that workspace.
+
 ## Summary
 
 `set_parent` is a necessary but not sufficient condition for floating. The decision tree is:
@@ -162,6 +176,7 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 | Persistent parented tool role | Pass | `window-rule parented-role "tool"` keeps parented tool windows visible as normal floats with rule/default geometry. |
 | Plain parented float role | Pass | `window-rule parented-role "plain"` disables parent adoption, anchoring, popup-tree hiding, and deferred dialog focus. |
 | Rule-level floating geometry | Pass | `window-rule floating` supports per-rule position and size ratios with fallback to global floating defaults. |
+| Lead floating startup anchor | Pass | A focused unparented floating lead window can anchor the first same-app unparented normal window without inventing a parent relationship. |
 | Larger/wider child behavior | Pass | Wider children remain centered and clamped; screen-sized children shrink to screen. |
 | Child stays in parent workspace/view | Pass | Parented children default to the parent workspace unless an explicit rule overrides it. |
 | Scroller parent visibility | Pass | Focused-parent children use normal retargeting; background off-screen children defer focus instead of hijacking the camera. |
