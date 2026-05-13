@@ -10,7 +10,9 @@ These conventions are drawn directly from the successful practices established i
 
 ### Key NEP-1 Rules:
 *   **Indentation:** Exactly **2 spaces**. No tabs.
-*   **Line Length:** Maximum **80 characters** per line.
+*   **Line Wrapping:** Let `nph` decide mechanical line wrapping. Prefer
+    readable short expressions where practical, but do not hand-wrap code in a
+    way that fights the formatter.
 *   **Naming Conventions:**
     *   Types and Macros: `PascalCase` (e.g., `WindowId`, `TagState`).
     *   Variables, Procs, and Constants: `camelCase` (e.g., `activeWindow`, `focusWindow`, `defaultMasterCount`). *Note: Constants do NOT use `UPPER_SNAKE_CASE` in Nim.*

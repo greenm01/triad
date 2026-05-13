@@ -17,8 +17,6 @@ const DeletedRuntimeModules = [
   "src/types/dod_shadow_health.nim",
 ]
 
-const MaxKnownOverlongLines = 108
-
 proc baseConfig(): Config =
   Config(
     layout: LayoutConfig(
@@ -155,12 +153,6 @@ suite "Runtime state primitives":
           (".data" in line or ".index" in line)
     )
     check entityStorageFailures.len == 0
-
-    let overlongFailures = sourceLineFailures(
-      proc(path, line: string): bool =
-        line.len > 80
-    )
-    check overlongFailures.len <= MaxKnownOverlongLines
 
   test "systems read state through facade queries":
     let blockedStateImports = sourceLineFailures(
