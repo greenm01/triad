@@ -221,7 +221,7 @@ proc isOverviewPreviewCommand(kind: MsgKind): bool =
   kind in {
     MsgKind.CmdFocusNext, MsgKind.CmdFocusPrev, MsgKind.CmdFocusDirection,
     MsgKind.CmdFocusWindowById, MsgKind.CmdFocusWindowOrWorkspaceUp,
-    MsgKind.CmdFocusWindowOrWorkspaceDown,
+    MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.WlOverviewWheel,
   }
 
 proc isFocusPreservingLayoutCommand(kind: MsgKind): bool =
@@ -405,6 +405,7 @@ proc addPostUpdateEffects*(
   let beforeFocus = before.focusedWindowId()
   let afterFocus = after.focusedWindowId()
   let overviewPreview = after.overviewActive and msg.kind.isOverviewPreviewCommand()
+  let overviewWorkspaceChanged = overviewPreview and before.activeTag != after.activeTag
 
   if before.activeTag != after.activeTag and after.activeTag != 0:
     effects.add(broadcastWorkspaceActivated(after))
@@ -444,20 +445,23 @@ proc addPostUpdateEffects*(
     effects.add(Effect(kind: EffectKind.EffManageDirty))
 
   if dirty or collapsed or pruned:
-    if overviewPreview:
+    if overviewPreview and not overviewWorkspaceChanged:
       effects.add(after.broadcastTriadStateChanged())
     else:
       if msg.kind.shouldBroadcastOutputsChanged():
         effects.add(after.broadcastOutputsChanged())
         effects.add(after.broadcastWorkspacesChanged())
         effects.add(after.broadcastWindowsChanged())
-      elif msg.kind.shouldBroadcastWindowsChanged():
+      elif msg.kind.shouldBroadcastWindowsChanged() or overviewWorkspaceChanged:
         effects.add(after.broadcastWorkspacesChanged())
-        effects.add(after.broadcastWindowsChanged())
+        if msg.kind.shouldBroadcastWindowsChanged():
+          effects.add(after.broadcastWindowsChanged())
       elif collapsed or pruned:
         effects.add(after.broadcastWorkspacesChanged())
 
-      if msg.kind.shouldBroadcastTriadLayoutChanged() or collapsed or pruned:
+      if msg.kind.shouldBroadcastTriadLayoutChanged() or overviewWorkspaceChanged or
+          collapsed or pruned:
         effects.add(after.broadcastTriadLayoutStateChanged())
-      if msg.kind.shouldBroadcastTriadStateChanged() or collapsed or pruned:
+      if msg.kind.shouldBroadcastTriadStateChanged() or overviewWorkspaceChanged or
+          collapsed or pruned:
         effects.add(after.broadcastTriadStateChanged())

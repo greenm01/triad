@@ -3467,6 +3467,36 @@ suite "Core Runtime Logic":
     check model.selectedOverviewWindow() == WindowId(1)
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
+  test "Unified overview workspace crossing updates shell workspaces":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    let windowEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check windowEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+
+    let navEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
+    check model.activeTag == model.tagForSlot(1)
+    check navEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+
   test "Unified overview fallback up key stays inside grid before workspace edge":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
@@ -3713,6 +3743,10 @@ suite "Core Runtime Logic":
     check model.activeTag == model.tagForSlot(2)
     check model.selectedOverviewWindow() == WindowId(2)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
 
   test "Wheel over unified overview focuses columns horizontally":
     var model = configuredModel()
@@ -3736,7 +3770,7 @@ suite "Core Runtime Logic":
     let target = model
       .workspacePreviewRect(model.primaryScreen(), slots, slots.find(1'u32))
       .rectCenter()
-    model.applyMsg(
+    let horizontalEffects = model.updateModel(
       Msg(
         kind: MsgKind.WlOverviewWheel,
         overviewWheelX: target.x,
@@ -3748,11 +3782,15 @@ suite "Core Runtime Logic":
 
     check model.activeTag == model.tagForSlot(1)
     check model.selectedOverviewWindow() == WindowId(2)
+    check not horizontalEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
 
     model.applyMsg(
       Msg(kind: MsgKind.WlModifiersChanged, oldModifiers: 0'u32, newModifiers: 1'u32)
     )
-    model.applyMsg(
+    let shiftEffects = model.updateModel(
       Msg(
         kind: MsgKind.WlOverviewWheel,
         overviewWheelX: target.x,
@@ -3764,6 +3802,10 @@ suite "Core Runtime Logic":
 
     check model.activeTag == model.tagForSlot(1)
     check model.selectedOverviewWindow() == WindowId(3)
+    check not shiftEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
 
   test "Holding unified overview drag over workspace activates drop":
     var model = configuredModel()
