@@ -54,6 +54,7 @@ proc broadcastWorkspaceActivated*(snapshot: ShellSnapshot): Effect =
   Effect(kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{
     "WorkspaceActivated": {
       "id": workspace.tagId,
+      "name": workspace.name,
       "focused": true
     }
   }))
@@ -110,24 +111,6 @@ proc broadcastOverview*(open: bool): Effect =
       "is_open": open
     }
   }))
-
-proc triadLayoutStateChangedEvent(snapshot: ShellSnapshot): string =
-  $(%*{
-    "triad": {
-      "version": TriadIpcVersion,
-      "event": "layout-state-changed",
-      "state": triadLayoutStateJson(snapshot)
-    }
-  })
-
-proc triadStateChangedEvent(snapshot: ShellSnapshot): string =
-  $(%*{
-    "triad": {
-      "version": TriadIpcVersion,
-      "event": "state-changed",
-      "state": triadStateJson(snapshot)
-    }
-  })
 
 proc broadcastTriadLayoutStateChanged*(snapshot: ShellSnapshot): Effect =
   Effect(
