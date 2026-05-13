@@ -104,7 +104,7 @@ external window manager.
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
-| Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | Scroller layouts use Niri-style workspace previews with Niri workspace navigation/camera behavior; other layouts keep the Mango-style grid overview. |
+| Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | Scroller layouts use Niri-style workspace previews with Niri workspace navigation/camera behavior; other layouts keep the Mango-style grid overview. See [Niri overview compatibility](./niri-overview-comp.md). |
 | Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | | | Not implemented. |
 | Overview | Overview tab mode | `ov_tab_mode` | WM policy | | | Not implemented. |
 | Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |
