@@ -15,6 +15,7 @@ const
   DefaultOverviewOuterGap* = 64'i32
   DefaultOverviewInnerGapMultiplier* = 2.0'f32
   DefaultOverviewZoom* = 0.5'f32
+  DefaultOverviewHotCornerSize* = 10'i32
   DefaultFloatingXRatio* = 0.25'f32
   DefaultFloatingYRatio* = 0.25'f32
   DefaultFloatingWidthRatio* = 0.5'f32

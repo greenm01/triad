@@ -2,8 +2,8 @@ import std/[options, os, sequtils, unittest]
 import ../src/config/[apply, defaults, parser, reload_policy]
 import ../src/core/msg
 import ../src/ipc/commands
-import ../src/state/[invariants, snapshot]
-import ../src/systems/runtime_facade
+import ../src/state/[engine, invariants, snapshot]
+import ../src/systems/[overview_hot_corners, runtime_facade]
 import ../src/types/[model, runtime_values]
 
 const
@@ -309,6 +309,12 @@ overview {
   outer-gap 80
   inner-gap-multiplier 1.75
   zoom 0.25
+  hot-corners {
+    size 12
+    top-left
+    top-right #false
+    bottom-right
+  }
 }
 cursor {
   theme "Bibata"
@@ -382,6 +388,11 @@ bindings {
     check config.overview.outerGap == 80
     check config.overview.innerGapMultiplier == 1.75'f32
     check config.overview.zoom == 0.25'f32
+    check config.overview.hotCorners.size == 12
+    check config.overview.hotCorners.topLeft
+    check not config.overview.hotCorners.topRight
+    check not config.overview.hotCorners.bottomLeft
+    check config.overview.hotCorners.bottomRight
     check config.cursor.theme == "Bibata"
     check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
@@ -535,7 +546,11 @@ bindings {
           animationSpeed: 5.0,
         ),
         workspaces: WorkspaceConfig(defaultCount: 0),
-        overview: OverviewConfig(outerGap: -1, zoom: 99.0),
+        overview: OverviewConfig(
+          outerGap: -1,
+          zoom: 99.0,
+          hotCorners: OverviewHotCornersConfig(size: 5000, topLeft: true),
+        ),
         scratchpad: ScratchpadConfig(widthRatio: 4.0, heightRatio: 0.0),
       )
     )
@@ -551,5 +566,23 @@ bindings {
     check model.defaultWorkspaceCount == DefaultWorkspaceCount
     check model.overviewOuterGap == DefaultOverviewOuterGap
     check model.overviewZoom == 0.75'f32
+    check model.overviewHotCorners.size == 1000
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32
+
+  test "overview hot corner geometry follows output bounds":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        overview: OverviewConfig(
+          hotCorners:
+            OverviewHotCornersConfig(size: 10, topLeft: true, bottomRight: true)
+        )
+      )
+    ).model
+    discard model.addOutput(ExternalOutputId(1), x = 0, y = 0, w = 100, h = 100)
+    discard model.addOutput(ExternalOutputId(2), x = 100, y = 0, w = 100, h = 100)
+
+    check model.overviewHotCornerAt(0, 0)
+    check model.overviewHotCornerAt(199, 99)
+    check not model.overviewHotCornerAt(99, 0)
+    check not model.overviewHotCornerAt(50, 50)

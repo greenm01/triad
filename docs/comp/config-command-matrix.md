@@ -105,7 +105,7 @@ external window manager.
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
-| Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | | | Not implemented. |
+| Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | `overview { hot-corners { size; top-left; top-right; bottom-left; bottom-right } }` | X | Triad hot corners are opt-in and open overview only. |
 | Overview | Overview tab mode | `ov_tab_mode` | WM policy | | | Not implemented. |
 | Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |
 | Scratchpad | Named scratchpad | `toggle_named_scratchpad`, `isnamedscratchpad` | WM policy | `move-to-named-scratchpad`, `toggle-named-scratchpad` | X | Triad names scratchpads directly. |

@@ -97,6 +97,7 @@ type
     wlPointerWheelRemainders*: Table[uint32, WlPointerWheelRemainder]
     pointerWindowBySeat*: Table[uint32, WindowId]
     pointerPositionBySeat*: Table[uint32, Rect]
+    pointerHotCornerInsideBySeat*: Table[uint32, bool]
     windowUnreliablePids*: Table[WindowId, int32]
     pendingWindows*: Table[WindowId, WindowData]
 

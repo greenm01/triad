@@ -226,6 +226,9 @@ proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
     binding.hotkeyOverlayTitleKind = HotkeyOverlayTitleKind.HotkeyTitleCustom
     binding.hotkeyOverlayTitle = value.kString()
 
+proc childFlagEnabled(node: KdlNode): bool =
+  node.args.len == 0 or node.args[0].kBool()
+
 proc parsePointerOp(value: string): PointerOpKind =
   case value
   of "move", "Move": PointerOpKind.OpMove
@@ -369,6 +372,7 @@ proc loadConfig*(path: string): Config =
   result.overview.outerGap = DefaultOverviewOuterGap
   result.overview.innerGapMultiplier = DefaultOverviewInnerGapMultiplier
   result.overview.zoom = DefaultOverviewZoom
+  result.overview.hotCorners.size = DefaultOverviewHotCornerSize
   result.floating.xRatio = DefaultFloatingXRatio
   result.floating.yRatio = DefaultFloatingYRatio
   result.floating.widthRatio = DefaultFloatingWidthRatio
@@ -661,6 +665,25 @@ proc loadConfig*(path: string): Config =
             elif child.name == "zoom" and child.args.len > 0:
               result.overview.zoom =
                 clampF32(float32(child.args[0].kFloat()), 0.0001, 0.75)
+            elif child.name == "hot-corners":
+              for cornerChild in child.children:
+                try:
+                  if cornerChild.name == "size" and cornerChild.args.len > 0:
+                    result.overview.hotCorners.size =
+                      clamp32(int32(cornerChild.args[0].kInt()), 1, 1000)
+                  elif cornerChild.name == "top-left":
+                    result.overview.hotCorners.topLeft = cornerChild.childFlagEnabled()
+                  elif cornerChild.name == "top-right":
+                    result.overview.hotCorners.topRight = cornerChild.childFlagEnabled()
+                  elif cornerChild.name == "bottom-left":
+                    result.overview.hotCorners.bottomLeft =
+                      cornerChild.childFlagEnabled()
+                  elif cornerChild.name == "bottom-right":
+                    result.overview.hotCorners.bottomRight =
+                      cornerChild.childFlagEnabled()
+                except CatchableError as e:
+                  warn "Ignoring invalid overview hot-corners field",
+                    field = cornerChild.name, error = e.msg
           except CatchableError as e:
             warn "Ignoring invalid overview field", field = child.name, error = e.msg
       elif node.name == "floating":

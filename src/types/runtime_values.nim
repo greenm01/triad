@@ -141,10 +141,18 @@ type
     clipboardCommand*: string
     showPointer*: bool
 
+  OverviewHotCornersConfig* = object
+    size*: int32
+    topLeft*: bool
+    topRight*: bool
+    bottomLeft*: bool
+    bottomRight*: bool
+
   OverviewConfig* = object
     outerGap*: int32
     innerGapMultiplier*: float32
     zoom*: float32
+    hotCorners*: OverviewHotCornersConfig
 
   FloatingConfig* = object
     xRatio*: float32

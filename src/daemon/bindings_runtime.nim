@@ -7,7 +7,7 @@ import wayland/native/client
 import ../config/keysyms
 import ../core/msg
 import ../ipc/commands
-import ../systems/[daemon_view, overview_geometry, runtime]
+import ../systems/[daemon_view, overview_geometry, overview_hot_corners, runtime]
 import ../types/[model, runtime_values]
 import
   manage_requests, message_queue, protocol_surface_runtime, protocol_surfaces,
@@ -130,6 +130,23 @@ proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): b
     return false
   true
 
+proc overviewHotCornerCanOpen(daemon: TriadDaemon): bool =
+  not daemon.currentModel.overviewActive and not daemon.currentModel.sessionLocked and
+    not daemon.currentModel.layerFocusExclusive and
+    not daemon.currentModel.keyboardShortcutsInhibited() and
+    daemon.currentModel.pointerOp.kind == PointerOpKind.OpNone
+
+proc updateOverviewHotCornerState*(
+    daemon: var TriadDaemon, seatId: uint32, x, y: int32
+): bool =
+  let inside = daemon.currentModel.overviewHotCornerAt(x, y)
+  let wasInside = daemon.pointerHotCornerInsideBySeat.getOrDefault(seatId, false)
+  if inside:
+    daemon.pointerHotCornerInsideBySeat[seatId] = true
+  else:
+    daemon.pointerHotCornerInsideBySeat.del(seatId)
+  inside and not wasInside and daemon.overviewHotCornerCanOpen()
+
 proc hasOverviewLeftClickBinding(daemon: TriadDaemon): bool =
   for binding in daemon.currentModel.pointerBindings:
     if binding.button == 0x110'u32 and binding.modifiers == 0'u32 and
@@ -244,6 +261,7 @@ proc onSeatRemoved(data: pointer, seat: ptr RiverSeatV1) =
   daemon.seatWlNames.del(seatId)
   daemon.pointerWindowBySeat.del(seatId)
   daemon.pointerPositionBySeat.del(seatId)
+  daemon.pointerHotCornerInsideBySeat.del(seatId)
   if daemon.xkbSeatPointers.hasKey(seatId):
     daemon.xkbSeatPointers[seatId].destroy()
     daemon.xkbSeatPointers.del(seatId)
@@ -316,6 +334,8 @@ proc onSeatPointerPosition(data: pointer, seat: ptr RiverSeatV1, x: int32, y: in
   if daemon == nil:
     return
   daemon.pointerPositionBySeat[seat.id()] = Rect(x: x, y: y, w: 0, h: 0)
+  if daemon[].updateOverviewHotCornerState(seat.id(), x, y):
+    daemon.enqueue(Msg(kind: MsgKind.CmdOpenOverview))
   trace "Seat pointer position", seatId = seat.id(), x = x, y = y
 
 var riverSeatListener* = RiverSeatV1Listener(

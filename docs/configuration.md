@@ -150,6 +150,28 @@ Triad adds `Super+Shift+Slash` as a fallback `toggle-hotkey-overlay` binding
 when no overlay binding is configured and that key slot is free. `Slash`, `/`,
 `Question`, and `?` are accepted key names for slash/question bindings.
 
+## Overview Hot Corners
+
+Overview hot corners are opt-in and open the overview when the pointer enters a
+configured corner square:
+
+```kdl
+overview {
+  hot-corners {
+    size 10
+    top-left
+    bottom-right
+  }
+}
+```
+
+- `size <px>`: sets the square trigger size in pixels. The default is `10`;
+  values are clamped to `1..1000`.
+- `top-left`, `top-right`, `bottom-left`, `bottom-right`: enable individual
+  corners. Corners can also be set to `#false`.
+- Hot corners open overview only. They do not close an already open overview.
+- Hot corners are disabled unless at least one corner is configured.
+
 ## Screenshots
 
 The `screenshot` block configures still-image capture:

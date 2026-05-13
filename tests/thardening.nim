@@ -45,6 +45,36 @@ suite "Crash hardening":
     check daemon.consumeMaximizedAck(42, false)
     check not daemon.consumeMaximizedAck(42, false)
 
+  test "daemon overview hot corner opens once and rearms after leave":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        overview:
+          OverviewConfig(hotCorners: OverviewHotCornersConfig(size: 10, topLeft: true))
+      )
+    )
+    daemon.runtimeState.model.screenWidth = 100
+    daemon.runtimeState.model.screenHeight = 100
+
+    check daemon.updateOverviewHotCornerState(1, 0, 0)
+    check not daemon.updateOverviewHotCornerState(1, 5, 5)
+    check not daemon.updateOverviewHotCornerState(1, 50, 50)
+    check daemon.updateOverviewHotCornerState(1, 0, 0)
+
+  test "daemon overview hot corner is open-only":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        overview:
+          OverviewConfig(hotCorners: OverviewHotCornersConfig(size: 10, topLeft: true))
+      )
+    )
+    daemon.runtimeState.model.screenWidth = 100
+    daemon.runtimeState.model.screenHeight = 100
+    daemon.runtimeState.model.overviewActive = true
+
+    check not daemon.updateOverviewHotCornerState(1, 0, 0)
+
   test "Niri overview fallback keys preserve user overview bindings":
     var model = initRuntimeStateFromConfig(Config()).model
     model.keyBindings =

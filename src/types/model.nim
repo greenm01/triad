@@ -4,8 +4,9 @@ from core import
   IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import
   CursorConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
-  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
-  QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig, WindowRuleFloatingConfig
+  OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
+  ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
+  WindowRuleFloatingConfig
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -217,6 +218,7 @@ type
     overviewOuterGap*: int32
     overviewInnerGapMultiplier*: float32
     overviewZoom*: float32
+    overviewHotCorners*: OverviewHotCornersConfig
     overviewScrollOffset*: float32
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool

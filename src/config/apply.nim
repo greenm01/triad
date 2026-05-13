@@ -83,6 +83,12 @@ proc applyConfig*(model: var Model, config: Config) =
       configClampF32(config.overview.zoom, 0.0001, 0.75)
     else:
       DefaultOverviewZoom
+  model.overviewHotCorners = config.overview.hotCorners
+  model.overviewHotCorners.size =
+    if model.overviewHotCorners.size > 0:
+      configClamp32(model.overviewHotCorners.size, 1, 1000)
+    else:
+      DefaultOverviewHotCornerSize
   model.floatingXRatio = config.floating.xRatio
   model.floatingYRatio = config.floating.yRatio
   model.floatingWidthRatio = config.floating.widthRatio
