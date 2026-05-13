@@ -303,6 +303,10 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
   let currentCx = current.geom.centerX()
   let currentCy = current.geom.centerY()
   let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isSome and tagOpt.get().layoutMode == LayoutMode.Scroller and
+      direction in {Direction.DirUp, Direction.DirDown}:
+    return false
+
   let useIntervalGeometry =
     tagOpt.isSome and
     tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}

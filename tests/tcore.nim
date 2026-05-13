@@ -422,6 +422,25 @@ suite "Core Runtime Logic":
     model.focusExternal(4)
     check model.focusDirection(Direction.DirLeft) in [2'u32, 3'u32]
 
+  test "Scroller up down focus stays within current column stack":
+    var model = directionalModel(LayoutMode.Scroller, 5)
+    let tagId = model.activeTag
+    let middleColumn = model.columnAt(tagId, 1)
+    let third = model.windowForExternal(ExternalWindowId(3))
+    discard model.moveWindowToColumn(tagId, third, middleColumn, 1)
+
+    model.focusExternal(1)
+    check model.focusDirection(Direction.DirDown) == 1
+    check model.focusDirection(Direction.DirUp) == 1
+
+    model.focusExternal(2)
+    check model.focusDirection(Direction.DirDown) == 3
+    check model.focusDirection(Direction.DirUp) == 2
+
+    model.focusExternal(3)
+    check model.focusDirection(Direction.DirUp) == 2
+    check model.focusDirection(Direction.DirDown) == 3
+
   test "Master layouts use visual directional focus":
     var tile = directionalModel(LayoutMode.MasterStack, 3)
     tile.focusExternal(1)
