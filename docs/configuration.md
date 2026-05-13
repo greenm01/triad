@@ -70,7 +70,8 @@ maps against Mango and River.
 ## Window Rules
 
 `window-rule` entries match windows by app id and/or title and apply launch
-policy:
+policy. All matching rules are merged in file order: broad app rules can set
+defaults, and later specific title rules can override individual fields.
 
 ```kdl
 window-rule {
@@ -82,6 +83,11 @@ window-rule {
 window-rule {
   match app-id="keepassxc"
   dialog-viewport-jump #true
+}
+
+window-rule {
+  match app-id="gimp"
+  default-workspace 4
 }
 
 window-rule {
@@ -121,6 +127,9 @@ window-rule {
   tool, plain, and unparented floats. Dialogs still center on the parent, but
   `width-ratio` and `height-ratio` can set their desired size before clamping.
   Missing fields fall back to the top-level `floating` defaults.
+- Rule-level `floating` fields merge independently. A later matching rule can
+  override only `width-ratio` while keeping `x-ratio` and `y-ratio` from an
+  earlier broad rule.
 
 ## Cursor
 

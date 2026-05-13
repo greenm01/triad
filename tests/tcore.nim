@@ -1930,6 +1930,78 @@ suite "Core Runtime Logic":
     check model.focusedWindowId() == 1
     check not effects.hasFocusEffect(2)
 
+  test "Window rules merge broad app and specific title rules in order":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "gimp",
+              defaultWorkspace: 4,
+              floating: WindowRuleFloatingConfig(
+                xRatioSet: true, xRatio: 0.10, yRatioSet: true, yRatio: 0.20
+              ),
+            ),
+            WindowRule(
+              appIdMatch: "gimp",
+              titleMatch: "Welcome",
+              openFloatingSet: true,
+              openFloating: true,
+              floating: WindowRuleFloatingConfig(widthRatioSet: true, widthRatio: 0.40),
+            ),
+          ]
+      )
+    ).model
+
+    let rule = model.windowRuleFor("gimp", "Welcome to GIMP")
+    check rule.found
+    check rule.rule.defaultSlot == 4
+    check rule.rule.openFloatingSet
+    check rule.rule.openFloating
+    check rule.rule.floating.xRatioSet
+    check rule.rule.floating.xRatio == 0.10'f32
+    check rule.rule.floating.yRatioSet
+    check rule.rule.floating.yRatio == 0.20'f32
+    check rule.rule.floating.widthRatioSet
+    check rule.rule.floating.widthRatio == 0.40'f32
+    check not rule.rule.floating.heightRatioSet
+
+  test "Window rules let later explicit fields override earlier matches":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "pinentry",
+              openFloating: true,
+              parentedRole: ParentedRole.Tool,
+              dialogViewportJump: true,
+              keyboardShortcutsInhibit: true,
+            ),
+            WindowRule(
+              appIdMatch: "pinentry",
+              titleMatch: "Passphrase",
+              openFloatingSet: true,
+              openFloating: false,
+              parentedRoleSet: true,
+              parentedRole: ParentedRole.Dialog,
+              dialogViewportJumpSet: true,
+              dialogViewportJump: false,
+              keyboardShortcutsInhibitSet: true,
+              keyboardShortcutsInhibit: false,
+            ),
+          ]
+      )
+    ).model
+
+    let rule = model.windowRuleFor("pinentry", "Passphrase")
+    check rule.found
+    check rule.rule.openFloatingSet
+    check not rule.rule.openFloating
+    check rule.rule.parentedRole == ParentedRole.Dialog
+    check not rule.rule.dialogViewportJump
+    check not rule.rule.keyboardShortcutsInhibit
+
   test "Parented tool role stays visible outside popup focus tree":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -2070,6 +2142,91 @@ suite "Core Runtime Logic":
 
     model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
     check model.focusedWindowId() == 3
+
+  test "Specific startup floating rule inherits broad app workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.5),
+        workspaces: WorkspaceConfig(defaultCount: 4),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "gimp", defaultWorkspace: 4),
+            WindowRule(
+              appIdMatch: "gimp",
+              titleMatch: "Welcome",
+              openFloatingSet: true,
+              openFloating: true,
+              openFocusedSet: true,
+              openFocused: false,
+            ),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "browser", title: "Docs")
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "gimp", title: "Welcome")
+    )
+    let win = model.snapshotWindow(2)
+
+    check win.isFloating
+    check win.workspaceIdx == 4
+    check model.focusedWindowId() == 1
+    check not effects.hasFocusEffect(2)
+
+  test "Parented tool rule inherits broad app workspace and specific geometry":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 4),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "gimp-tool", defaultWorkspace: 4),
+            WindowRule(
+              appIdMatch: "gimp-tool",
+              titleMatch: "Toolbox",
+              parentedRole: ParentedRole.Tool,
+              floating: WindowRuleFloatingConfig(
+                xRatioSet: true,
+                xRatio: 0.02,
+                yRatioSet: true,
+                yRatio: 0.08,
+                widthRatioSet: true,
+                widthRatio: 0.22,
+                heightRatioSet: true,
+                heightRatio: 0.84,
+              ),
+            ),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "gimp", title: "Image")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "gimp-tool",
+        title: "Toolbox",
+      )
+    )
+
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let child = model.snapshotWindow(2)
+    check child.isFloating
+    check child.workspaceIdx == 4
+    check model.windowData(childId).get().floatingGeom ==
+      runtime_values.Rect(x: 20, y: 56, w: 220, h: 588)
 
   test "Lead floating startup anchor ignores other apps and existing main windows":
     var model = initRuntimeStateFromConfig(
@@ -3098,6 +3255,44 @@ suite "Core Runtime Logic":
     check snapshot.workspaces[1].focusedWindow == 2
     check model.viewport(1) == beforeViewport
     check not effects.hasFocusEffect(2)
+
+  test "Window rule workspace placement is layout agnostic":
+    for mode in [
+      LayoutMode.Scroller, LayoutMode.VerticalScroller, LayoutMode.MasterStack,
+      LayoutMode.Grid, LayoutMode.Monocle, LayoutMode.Deck, LayoutMode.CenterTile,
+      LayoutMode.RightTile, LayoutMode.VerticalTile, LayoutMode.VerticalGrid,
+      LayoutMode.VerticalDeck, LayoutMode.TGMix,
+    ]:
+      var model = initRuntimeStateFromConfig(
+        Config(
+          workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: mode),
+          windowRules:
+            @[
+              WindowRule(
+                appIdMatch: "target",
+                defaultWorkspace: 2,
+                openFocusedSet: true,
+                openFocused: false,
+              )
+            ],
+        )
+      ).model
+      model.applyMsg(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+      )
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+      )
+      let effects = model.updateModel(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "target", title: "Two")
+      )
+      let snapshot = model.shellSnapshot()
+
+      check snapshot.activeTag == 1
+      check model.focusedWindowId() == 1
+      check model.activeWorkspaceFocusId() == 1
+      check snapshot.workspaces[1].focusedWindow == 2
+      check not effects.hasFocusEffect(2)
 
   test "Fullscreen presentation follows active focus":
     var model = cameraModel()

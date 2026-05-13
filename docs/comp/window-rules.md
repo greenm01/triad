@@ -133,9 +133,9 @@ These are gap-analysis categories, not target config names.
 
 ## Triad-Specific Notes
 
-- Rule matching is currently first-match and substring based. A broad rule such
-  as `match app-id="gimp"` can shadow a more specific title rule if it appears
-  first.
+- Rule matching is currently substring based. All matching rules are merged in
+  order, so broad app rules can provide defaults and later title-specific rules
+  can override individual fields.
 - Parented dialog behavior is policy-driven. Parented windows float by default,
   adopt the parent workspace unless an explicit `default-workspace` overrides
   it, and anchor to the parent's projected geometry.

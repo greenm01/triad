@@ -110,10 +110,14 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    parentedRoleSet*: bool
     parentedRole*: ParentedRole
     floating*: WindowRuleFloatingConfig
+    dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
+    keyboardShortcutsInhibitSet*: bool
     keyboardShortcutsInhibit*: bool
+    forcedLayoutSet*: bool
     forcedLayout*: int
 
   TagRule* = object

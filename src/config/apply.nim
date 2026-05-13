@@ -14,10 +14,15 @@ proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
     openFloating: rule.openFloating,
     openFocusedSet: rule.openFocusedSet,
     openFocused: rule.openFocused,
+    parentedRoleSet: rule.parentedRoleSet or rule.parentedRole != ParentedRole.Dialog,
     parentedRole: rule.parentedRole,
     floating: rule.floating,
+    dialogViewportJumpSet: rule.dialogViewportJumpSet or rule.dialogViewportJump,
     dialogViewportJump: rule.dialogViewportJump,
+    keyboardShortcutsInhibitSet:
+      rule.keyboardShortcutsInhibitSet or rule.keyboardShortcutsInhibit,
     keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
+    forcedLayoutSet: rule.forcedLayoutSet or rule.forcedLayout != 0,
     forcedLayout: rule.forcedLayout,
   )
 

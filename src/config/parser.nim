@@ -525,12 +525,16 @@ proc loadConfig*(path: string): Config =
               rule.openFocusedSet = true
               rule.openFocused = child.args[0].kBool()
             elif child.name == "parented-role" and child.args.len > 0:
+              rule.parentedRoleSet = true
               rule.parentedRole = parseParentedRole(child.args[0].kString())
             elif child.name == "dialog-viewport-jump" and child.args.len > 0:
+              rule.dialogViewportJumpSet = true
               rule.dialogViewportJump = child.args[0].kBool()
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
+              rule.keyboardShortcutsInhibitSet = true
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
             elif child.name == "forced-layout" and child.args.len > 0:
+              rule.forcedLayoutSet = true
               rule.forcedLayout = forcedLayoutValue(child.args[0].kString())
             elif child.name == "floating":
               for floatingChild in child.children:

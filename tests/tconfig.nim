@@ -378,7 +378,9 @@ bindings {
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
     check not config.windowRules[0].openFocused
+    check config.windowRules[0].parentedRoleSet
     check config.windowRules[0].parentedRole == ParentedRole.Tool
+    check config.windowRules[0].dialogViewportJumpSet
     check config.windowRules[0].dialogViewportJump
     check config.windowRules[0].floating.xRatioSet
     check config.windowRules[0].floating.xRatio == 0.02'f32
@@ -617,6 +619,30 @@ cursor {
     check model.overviewHotCorners.size == 1000
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32
+
+  test "Window rule parser preserves explicit false policy fields":
+    let path = getTempDir() / "triad-window-rule-explicit-false.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="demo"
+  parented-role "dialog"
+  dialog-viewport-jump #false
+  keyboard-shortcuts-inhibit #false
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 1
+    check config.windowRules[0].parentedRoleSet
+    check config.windowRules[0].parentedRole == ParentedRole.Dialog
+    check config.windowRules[0].dialogViewportJumpSet
+    check not config.windowRules[0].dialogViewportJump
+    check config.windowRules[0].keyboardShortcutsInhibitSet
+    check not config.windowRules[0].keyboardShortcutsInhibit
 
   test "workspace config uses global default layout and explicit overrides":
     var model = initRuntimeStateFromConfig(

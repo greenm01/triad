@@ -89,6 +89,22 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    parentedRoleSet*: bool
+    parentedRole*: ParentedRole
+    floating*: WindowRuleFloatingConfig
+    dialogViewportJumpSet*: bool
+    dialogViewportJump*: bool
+    keyboardShortcutsInhibitSet*: bool
+    keyboardShortcutsInhibit*: bool
+    forcedLayoutSet*: bool
+    forcedLayout*: int
+
+  ResolvedWindowRuleData* = object
+    defaultSlot*: uint32
+    openFloatingSet*: bool
+    openFloating*: bool
+    openFocusedSet*: bool
+    openFocused*: bool
     parentedRole*: ParentedRole
     floating*: WindowRuleFloatingConfig
     dialogViewportJump*: bool
