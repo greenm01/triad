@@ -134,13 +134,30 @@ proc initialOverviewWindow*(model: Model): WindowId =
 
   windows[0]
 
-proc selectedOverviewWindow*(model: Model): WindowId =
-  let windows = model.overviewWindowIds()
-  if windows.len == 0:
+proc overviewWindowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
+  for candidate, win in model.windowsOnTagWithId(tagId):
+    if candidate == winId:
+      return not win.isMinimized and win.windowAdmitted()
+  false
+
+proc activeOverviewWindow(model: Model): WindowId =
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isNone:
     return NullWindowId
-  if windows.find(model.overviewSelectedWindow) != -1:
+
+  let focused = tagOpt.get().focusedWindow
+  if model.overviewWindowOnTag(model.activeTag, focused):
+    return focused
+
+  for winId, _ in model.windowsOnTagWithId(model.activeTag):
+    if model.overviewWindowOnTag(model.activeTag, winId):
+      return winId
+  NullWindowId
+
+proc selectedOverviewWindow*(model: Model): WindowId =
+  if model.overviewWindowOnTag(model.activeTag, model.overviewSelectedWindow):
     return model.overviewSelectedWindow
-  model.initialOverviewWindow()
+  model.activeOverviewWindow()
 
 proc columnCountForTag*(model: Model, tagId: TagId): int =
   if model.columnsByTag.hasKey(tagId):

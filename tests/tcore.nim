@@ -3380,6 +3380,35 @@ suite "Core Runtime Logic":
     check model.overviewStyle() == OverviewStyle.WorkspaceStrip
     check model.overviewUsesWorkspacePreviews()
 
+  test "Selecting empty overview workspace enters it without window fallback":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(3)
+    check model.activeWorkspaceFocusId() == 3
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(4)
+    check model.selectedOverviewWindow() == NullWindowId
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdSelectWindow))
+    check not model.overviewActive
+    check model.activeTag == model.tagForSlot(4)
+    check model.focusedWindowId() == 0
+    check model.activeWorkspaceFocusId() == 0
+    check not effects.anyIt(it.kind == EffectKind.EffFocusWindow)
+
   test "Selecting overview window commits focus":
     var model = configuredModel()
     model.applyMsg(
@@ -3557,6 +3586,39 @@ suite "Core Runtime Logic":
     check not model.overviewActive
     check model.activeTag == model.tagForSlot(2)
     check model.focusedWindowId() == 2
+
+  test "Clicking blank trailing dynamic overview workspace enters it":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let slots = model.previewSlots()
+    let target =
+      model.workspacePreviewRect(model.primaryScreen(), slots, slots.find(4'u32))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 0,
+        overviewDragX: target.x + 1,
+        overviewDragY: target.y + 1,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check not model.overviewActive
+    check model.activeTag == model.tagForSlot(4)
+    check model.focusedWindowId() == 0
+    check model.activeWorkspaceFocusId() == 0
 
   test "Overview select retargets same-workspace camera":
     var model = cameraModel()

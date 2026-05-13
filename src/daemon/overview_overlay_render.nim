@@ -4,7 +4,9 @@ import ../types/model
 import ../types/runtime_values as rv
 import pixel_buffer
 
-const Transparent = 0x00000000'u32
+const
+  Transparent = 0x00000000'u32
+  EmptyWorkspaceFill = 0xcc000000'u32
 
 proc rgbaColorToArgb(value: uint32): uint32 =
   let r = (value shr 24) and 0xff
@@ -49,6 +51,9 @@ proc renderOverviewOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
         rgbaColorToArgb(model.focusedBorderColor)
       else:
         rgbaColorToArgb(model.unfocusedBorderColor)
+    result.fillRect(
+      rect.x - screen.x, rect.y - screen.y, rect.w, rect.h, EmptyWorkspaceFill
+    )
     result.strokeRect(
       rect.x - screen.x, rect.y - screen.y, rect.w, rect.h, thickness, color
     )

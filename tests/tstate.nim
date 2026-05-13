@@ -18,6 +18,8 @@ const DeletedRuntimeModules = [
   "src/types/dod_shadow_health.nim",
 ]
 
+const OverviewEmptyWorkspaceFill = 0xcc000000'u32
+
 proc baseConfig(): Config =
   Config(
     layout: LayoutConfig(
@@ -310,6 +312,9 @@ suite "Runtime state primitives":
     let rendered = model.renderOverviewOverlayBuffer(screen)
 
     check rendered.pixelAt(occupiedPreview.x, occupiedPreview.y) == 0
+    check rendered.pixelAt(occupiedPreview.x + 10, occupiedPreview.y + 10) == 0
+    check rendered.pixelAt(emptyPreview.x + 10, emptyPreview.y + 10) ==
+      OverviewEmptyWorkspaceFill
     check rendered.pixelAt(emptyPreview.x, emptyPreview.y) ==
       testArgb(config.layout.unfocusedBorderColor)
 
@@ -334,6 +339,8 @@ suite "Runtime state primitives":
     let rendered = model.renderOverviewOverlayBuffer(screen)
 
     check slots.find(4'u32) != -1
+    check rendered.pixelAt(trailingPreview.x + 10, trailingPreview.y + 10) ==
+      OverviewEmptyWorkspaceFill
     check rendered.pixelAt(trailingPreview.x, trailingPreview.y) ==
       testArgb(config.layout.unfocusedBorderColor)
 
@@ -355,6 +362,8 @@ suite "Runtime state primitives":
     let activePreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
     let rendered = model.renderOverviewOverlayBuffer(screen)
 
+    check rendered.pixelAt(activePreview.x + 10, activePreview.y + 10) ==
+      OverviewEmptyWorkspaceFill
     check rendered.pixelAt(activePreview.x, activePreview.y) ==
       testArgb(config.layout.focusedBorderColor)
 
