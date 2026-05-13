@@ -18,7 +18,10 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.
-*   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent visible workspace, creating the next dynamic workspace when appropriate.
+*   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent visible
+    workspace, creating the next dynamic workspace when appropriate. In
+    overview, these wrap through keyboard-selectable previews, skipping empty
+    default workspaces and including visible dynamic empty workspaces.
 *   `focus-occupied-tag-left`, `focus-occupied-tag-right`: Moves to the adjacent non-empty tag.
 *   `focus-column-first`, `focus-column-last`: Focuses the first or last visible column on the active tag.
 *   `focus-window-or-workspace-up`, `focus-window-or-workspace-down`: Moves vertically within the focused column, or switches to the adjacent tag at the edge.

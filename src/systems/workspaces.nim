@@ -125,6 +125,35 @@ proc tagHasFocusableWindow*(model: Model, tagId: TagId): bool =
       return true
   false
 
+proc overviewWorkspaceStepSlot*(model: Model, direction: int): uint32 =
+  if direction == 0:
+    return 0
+
+  let slots = model.visibleWorkspaceSlots()
+  if slots.len == 0:
+    return 0
+
+  let active = model.activeWorkspaceSlot()
+  var startIdx = slots.find(active)
+  if startIdx == -1:
+    startIdx =
+      if direction > 0:
+        slots.len - 1
+      else:
+        0
+  let step = if direction > 0: 1 else: -1
+
+  for offset in 1 .. slots.len:
+    let idx = (startIdx + step * offset + slots.len * 2) mod slots.len
+    let slot = slots[idx]
+    if slot == active:
+      continue
+    let tagId = model.tagForSlot(slot)
+    if slot > model.defaultWorkspaceCount() or
+        (tagId != NullTagId and model.tagHasLiveWindows(tagId)):
+      return slot
+  0
+
 proc nearestWorkspaceSlot*(model: Model, direction: int, occupiedOnly: bool): uint32 =
   let active = model.activeWorkspaceSlot()
   let slots =

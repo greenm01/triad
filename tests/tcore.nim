@@ -3281,7 +3281,8 @@ suite "Core Runtime Logic":
 
     let downEffects =
       model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-    check model.activeTag == model.tagForSlot(3)
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview fallback up key stays inside grid before workspace edge":
@@ -3306,6 +3307,34 @@ suite "Core Runtime Logic":
     check model.activeTag == model.tagForSlot(3)
     check model.selectedOverviewWindow() == WindowId(1)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+
+  test "Unified overview workspace navigation skips empty defaults and wraps dynamics":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    check model.activeTag == model.tagForSlot(3)
+    check model.activeWorkspaceFocusId() == 3
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
+    check model.activeTag == model.tagForSlot(4)
+    check model.activeWorkspaceFocusId() == 0
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp))
+    check model.activeTag == model.tagForSlot(4)
+    check model.activeWorkspaceFocusId() == 0
 
   test "Unified overview keeps workspace navigation live":
     var model = configuredModel()

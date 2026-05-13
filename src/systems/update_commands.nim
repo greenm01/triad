@@ -61,9 +61,17 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdFocusLast:
     result.dirty = model.focusLast()
   of MsgKind.CmdFocusTagLeft:
-    result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, false))
+    result.dirty =
+      if model.overviewActive:
+        model.focusOverviewWorkspaceStep(-1)
+      else:
+        model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, false))
   of MsgKind.CmdFocusTagRight:
-    result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, false))
+    result.dirty =
+      if model.overviewActive:
+        model.focusOverviewWorkspaceStep(1)
+      else:
+        model.focusWorkspaceSlot(model.nearestWorkspaceSlot(1, false))
   of MsgKind.CmdFocusOccupiedTagLeft:
     result.dirty = model.focusWorkspaceSlot(model.nearestWorkspaceSlot(-1, true))
   of MsgKind.CmdFocusOccupiedTagRight:

@@ -63,7 +63,8 @@ renders itself into its assigned rect:
 ### Core Principle
 
 > Arrow keys navigate spatially within the focused workspace. At the boundary
-> of that workspace, navigation crosses to the adjacent workspace.
+> of that workspace, navigation crosses to the adjacent keyboard-selectable
+> workspace preview, wrapping at the ends like a list highlight.
 
 Every layout implements the same two-method protocol. The overview manager
 dispatches uniformly with no per-layout special cases.
@@ -154,12 +155,16 @@ fn entry_window(&self, from: Direction) -> WindowId {
 
 ## PgUp / PgDn — Explicit Workspace Jump
 
-`PgUp` and `PgDn` jump to the previous or next workspace from anywhere in
-overview, bypassing intra-workspace navigation.
+`PgUp` and `PgDn` jump to the previous or next keyboard-selectable workspace
+preview from anywhere in overview, bypassing intra-workspace navigation.
 
 Both call the same `cross_to_adjacent` as boundary-triggered crossing.
 Workspace crossing behavior is identical regardless of how it was triggered.
 PgUp/PgDn are a **speed layer** on the spatial model, not a separate mode.
+
+Keyboard traversal skips empty default workspaces. It includes visible dynamic
+empty workspaces, including the trailing dynamic creation preview, because those
+previews are actionable overview destinations.
 
 ---
 

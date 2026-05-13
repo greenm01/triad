@@ -212,14 +212,12 @@ suite "Shell compatibility contracts":
     let overviewFocusNext =
       handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", overviewSnapshot)
     check overviewFocusNext.messages.len == 1
-    check overviewFocusNext.messages[0].kind == MsgKind.CmdFocusTag
-    check overviewFocusNext.messages[0].focusTag == 2
+    check overviewFocusNext.messages[0].kind == MsgKind.CmdFocusTagRight
 
     let overviewFocusPrevious =
       handleNiriRequest("""{"Action":{"FocusWorkspaceUp":{}}}""", overviewSnapshot)
     check overviewFocusPrevious.messages.len == 1
-    check overviewFocusPrevious.messages[0].kind == MsgKind.CmdFocusTag
-    check overviewFocusPrevious.messages[0].focusTag == 1
+    check overviewFocusPrevious.messages[0].kind == MsgKind.CmdFocusTagLeft
 
     let overviewFocusWorkspace = handleNiriRequest(
       """{"Action":{"FocusWorkspace":{"reference":{"Index":2}}}}""", overviewSnapshot

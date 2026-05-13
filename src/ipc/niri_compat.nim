@@ -117,10 +117,14 @@ proc actionMessages(
           if tag.isSome:
             return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: tag.get())])
   elif action.hasKey("FocusWorkspaceDown"):
+    if snapshot.overviewActive:
+      return (true, @[Msg(kind: MsgKind.CmdFocusTagRight)])
     let tag = nextTag(snapshot, 1)
     if tag.isSome:
       return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: tag.get())])
   elif action.hasKey("FocusWorkspaceUp"):
+    if snapshot.overviewActive:
+      return (true, @[Msg(kind: MsgKind.CmdFocusTagLeft)])
     let tag = nextTag(snapshot, -1)
     if tag.isSome:
       return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: tag.get())])

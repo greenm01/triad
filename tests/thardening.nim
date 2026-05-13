@@ -71,11 +71,13 @@ suite "Crash hardening":
 
     let fallbacks = model.overviewFallbackKeyBindings()
 
-    check overviewKeyBindingFallbacks().len == 6
+    check overviewKeyBindingFallbacks().len == 8
     check not fallbacks.anyIt(it.key == "Return")
     check not fallbacks.anyIt(it.key == "Left")
     check fallbacks.anyIt(it.key == "Right" and it.command == "focus-right")
     check fallbacks.anyIt(it.key == "Escape")
+    check fallbacks.anyIt(it.key == "Page_Up" and it.command == "focus-tag-left")
+    check fallbacks.anyIt(it.key == "Page_Down" and it.command == "focus-tag-right")
 
   test "duplicate window create keeps a single shell window":
     var model = initRuntimeStateFromConfig(

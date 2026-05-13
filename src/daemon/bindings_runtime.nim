@@ -148,6 +148,18 @@ proc overviewKeyBindingFallbacks*(): seq[KeyBindingConfig] =
       command: "focus-window-or-workspace-down",
       mode: BindingMode.BindOverview,
     ),
+    KeyBindingConfig(
+      key: "Page_Up",
+      modifiers: 0'u32,
+      command: "focus-tag-left",
+      mode: BindingMode.BindOverview,
+    ),
+    KeyBindingConfig(
+      key: "Page_Down",
+      modifiers: 0'u32,
+      command: "focus-tag-right",
+      mode: BindingMode.BindOverview,
+    ),
   ]
 
 proc sameOverviewKeySlot(binding, candidate: KeyBindingConfig): bool =
