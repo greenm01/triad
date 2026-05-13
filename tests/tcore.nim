@@ -3680,6 +3680,91 @@ suite "Core Runtime Logic":
       beforeViewport.targetViewportXOffset - 100.0'f32
     check model.pointerOp.kind == PointerOpKind.OpNone
 
+  test "Wheel over unified overview switches workspaces vertically":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let slots = model.previewSlots()
+    let target = model
+      .workspacePreviewRect(model.primaryScreen(), slots, slots.find(1'u32))
+      .rectCenter()
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlOverviewWheel,
+        overviewWheelX: target.x,
+        overviewWheelY: target.y,
+        overviewWheelHorizontal: 0,
+        overviewWheelVertical: 1,
+      )
+    )
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.selectedOverviewWindow() == WindowId(2)
+    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+
+  test "Wheel over unified overview focuses columns horizontally":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Scroller))
+    for id in 1'u32 .. 3'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let slots = model.previewSlots()
+    let target = model
+      .workspacePreviewRect(model.primaryScreen(), slots, slots.find(1'u32))
+      .rectCenter()
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewWheel,
+        overviewWheelX: target.x,
+        overviewWheelY: target.y,
+        overviewWheelHorizontal: 1,
+        overviewWheelVertical: 0,
+      )
+    )
+
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(2)
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlModifiersChanged, oldModifiers: 0'u32, newModifiers: 1'u32)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewWheel,
+        overviewWheelX: target.x,
+        overviewWheelY: target.y,
+        overviewWheelHorizontal: 0,
+        overviewWheelVertical: 1,
+      )
+    )
+
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(3)
+
   test "Holding unified overview drag over workspace activates drop":
     var model = configuredModel()
     model.applyMsg(

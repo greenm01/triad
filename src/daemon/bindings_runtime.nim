@@ -3,6 +3,7 @@ import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
+import wayland/native/client
 import ../config/keysyms
 import ../core/msg
 import ../ipc/commands
@@ -18,6 +19,11 @@ const
   RiverAllEdges = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
   RiverDecorationOnlySupportsCsd = 0'u32
   AllWatchedModifiers = 1'u32 or 4'u32 or 8'u32 or 32'u32 or 64'u32 or 128'u32
+  WlSeatCapabilityPointer = 1'u32
+  WlPointerAxisVertical = 0'u32
+  WlPointerAxisHorizontal = 1'u32
+  WlPointerAxisSourceWheel = 0'u32
+  WlWheelClick120 = 120'i32
 
 template currentModel(daemon: TriadDaemon): untyped =
   daemon.runtimeState.model
@@ -33,6 +39,8 @@ proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
 proc attachLayerOutput*(daemon: var TriadDaemon, outputId: uint32)
 proc attachLayerSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
 proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
+proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
+proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc destroyBindings*(daemon: var TriadDaemon)
 
 proc removeSeatPointer(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
@@ -42,6 +50,50 @@ proc removeSeatPointer(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
       daemon.seatPointers.delete(i)
     else:
       inc i
+
+proc riverSeatIdForWlName(daemon: TriadDaemon, globalName: uint32): uint32 =
+  for seatId, wlName in daemon.seatWlNames.pairs:
+    if wlName == globalName:
+      return seatId
+  0'u32
+
+proc mapWlPointerRiverSeat(daemon: var TriadDaemon, globalName: uint32) =
+  if not daemon.wlPointerPointers.hasKey(globalName):
+    return
+  let pointerId = daemon.wlPointerPointers[globalName].id()
+  let seatId = daemon.riverSeatIdForWlName(globalName)
+  if seatId == 0:
+    daemon.wlPointerRiverSeats.del(pointerId)
+  else:
+    daemon.wlPointerRiverSeats[pointerId] = seatId
+
+proc removeWlPointerRiverSeat(daemon: var TriadDaemon, seatId: uint32) =
+  var target = 0'u32
+  for pointerId, mappedSeatId in daemon.wlPointerRiverSeats.pairs:
+    if mappedSeatId == seatId:
+      target = pointerId
+  if target != 0:
+    daemon.wlPointerRiverSeats.del(target)
+
+proc wheelTicks(total120: int32, discrete: int32, remainder: var int32): int32 =
+  if discrete != 0:
+    remainder = 0
+    return discrete
+  if total120 == 0:
+    return 0
+
+  let total = remainder + total120
+  if total >= WlWheelClick120:
+    result = total div WlWheelClick120
+    remainder = total mod WlWheelClick120
+  elif total <= -WlWheelClick120:
+    result = -((-total) div WlWheelClick120)
+    remainder = -((-total) mod WlWheelClick120)
+  else:
+    remainder = total
+
+proc clearWlPointerFrame(daemon: var TriadDaemon, pointerId: uint32) =
+  daemon.wlPointerWheelFrames[pointerId] = WlPointerWheelFrame()
 
 proc queueWindowFocus(daemon: var TriadDaemon, target: WindowId) =
   if target == 0:
@@ -188,6 +240,7 @@ proc onSeatRemoved(data: pointer, seat: ptr RiverSeatV1) =
   info "Seat removed"
   let seatId = seat.id()
   daemon[].removeSeatPointer(seat)
+  daemon[].removeWlPointerRiverSeat(seatId)
   daemon.seatWlNames.del(seatId)
   daemon.pointerWindowBySeat.del(seatId)
   daemon.pointerPositionBySeat.del(seatId)
@@ -205,6 +258,7 @@ proc onSeatWlSeat(data: pointer, seat: ptr RiverSeatV1, name: uint32) =
   if daemon == nil:
     return
   daemon.seatWlNames[seat.id()] = name
+  daemon[].mapWlPointerRiverSeat(name)
   trace "Seat wl_seat received", seatId = seat.id(), name = name
 
 proc onSeatPointerEnter(data: pointer, seat: ptr RiverSeatV1, win: ptr RiverWindowV1) =
@@ -274,6 +328,164 @@ var riverSeatListener* = RiverSeatV1Listener(
   opDelta: onOpDelta,
   opRelease: onOpRelease,
   pointerPosition: onSeatPointerPosition,
+)
+
+proc onWlSeatCapabilities(data: pointer, seat: ptr Seat, capabilities: uint32) =
+  let listenerData = cast[ptr WlSeatListenerData](data)
+  if listenerData == nil:
+    warn "Ignoring wl_seat capabilities without listener context"
+    return
+  let daemon = listenerData.daemon
+  if daemon == nil:
+    warn "Ignoring wl_seat capabilities without daemon context"
+    return
+  if (capabilities and WlSeatCapabilityPointer) != 0:
+    daemon[].attachWlPointer(listenerData.globalName)
+  else:
+    daemon[].detachWlPointer(listenerData.globalName)
+
+proc onWlSeatName(data: pointer, seat: ptr Seat, name: cstring) =
+  discard
+
+var wlSeatListener* =
+  SeatListener(capabilities: onWlSeatCapabilities, name: onWlSeatName)
+
+proc onWlPointerAxisSource(data: pointer, pointer: ptr Pointer, axisSource: uint32) =
+  let daemon = callbackDaemon(data, "wl_pointer axis source")
+  if daemon == nil:
+    return
+  let pointerId = pointer.id()
+  var frame = daemon.wlPointerWheelFrames.getOrDefault(pointerId)
+  frame.hasSource = true
+  frame.source = axisSource
+  daemon.wlPointerWheelFrames[pointerId] = frame
+
+proc onWlPointerAxisDiscrete(
+    data: pointer, pointer: ptr Pointer, axis: uint32, discrete: int32
+) =
+  let daemon = callbackDaemon(data, "wl_pointer axis discrete")
+  if daemon == nil:
+    return
+  let pointerId = pointer.id()
+  var frame = daemon.wlPointerWheelFrames.getOrDefault(pointerId)
+  if axis == WlPointerAxisHorizontal:
+    frame.horizontalDiscrete += discrete
+  elif axis == WlPointerAxisVertical:
+    frame.verticalDiscrete += discrete
+  daemon.wlPointerWheelFrames[pointerId] = frame
+
+proc onWlPointerAxisValue120(
+    data: pointer, pointer: ptr Pointer, axis: uint32, value120: int32
+) =
+  let daemon = callbackDaemon(data, "wl_pointer axis value120")
+  if daemon == nil:
+    return
+  let pointerId = pointer.id()
+  var frame = daemon.wlPointerWheelFrames.getOrDefault(pointerId)
+  if axis == WlPointerAxisHorizontal:
+    frame.horizontal120 += value120
+  elif axis == WlPointerAxisVertical:
+    frame.vertical120 += value120
+  daemon.wlPointerWheelFrames[pointerId] = frame
+
+proc onWlPointerFrame(data: pointer, pointer: ptr Pointer) =
+  let daemon = callbackDaemon(data, "wl_pointer frame")
+  if daemon == nil:
+    return
+  let pointerId = pointer.id()
+  let frame = daemon.wlPointerWheelFrames.getOrDefault(pointerId)
+  if frame.hasSource and frame.source != WlPointerAxisSourceWheel:
+    daemon[].clearWlPointerFrame(pointerId)
+    return
+  if not daemon.wlPointerRiverSeats.hasKey(pointerId):
+    daemon[].clearWlPointerFrame(pointerId)
+    return
+  let seatId = daemon.wlPointerRiverSeats[pointerId]
+  if not daemon.pointerPositionBySeat.hasKey(seatId):
+    daemon[].clearWlPointerFrame(pointerId)
+    return
+
+  var remainder = daemon.wlPointerWheelRemainders.getOrDefault(pointerId)
+  let horizontal =
+    wheelTicks(frame.horizontal120, frame.horizontalDiscrete, remainder.horizontal120)
+  let vertical =
+    wheelTicks(frame.vertical120, frame.verticalDiscrete, remainder.vertical120)
+  daemon.wlPointerWheelRemainders[pointerId] = remainder
+  daemon[].clearWlPointerFrame(pointerId)
+
+  if horizontal == 0 and vertical == 0:
+    return
+  if not daemon[].currentModel.overviewUsesWorkspacePreviews():
+    return
+
+  let point = daemon.pointerPositionBySeat[seatId]
+  daemon.enqueue(
+    Msg(
+      kind: MsgKind.WlOverviewWheel,
+      overviewWheelX: point.x,
+      overviewWheelY: point.y,
+      overviewWheelHorizontal: horizontal,
+      overviewWheelVertical: vertical,
+    )
+  )
+
+proc ignoreWlPointerEnter(
+    data: pointer,
+    pointer: ptr Pointer,
+    serial: uint32,
+    surface: ptr Surface,
+    surfaceX: Fixed,
+    surfaceY: Fixed,
+) =
+  discard
+
+proc ignoreWlPointerLeave(
+    data: pointer, pointer: ptr Pointer, serial: uint32, surface: ptr Surface
+) =
+  discard
+
+proc ignoreWlPointerMotion(
+    data: pointer, pointer: ptr Pointer, time: uint32, surfaceX: Fixed, surfaceY: Fixed
+) =
+  discard
+
+proc ignoreWlPointerButton(
+    data: pointer,
+    pointer: ptr Pointer,
+    serial: uint32,
+    time: uint32,
+    button: uint32,
+    state: uint32,
+) =
+  discard
+
+proc ignoreWlPointerAxis(
+    data: pointer, pointer: ptr Pointer, time: uint32, axis: uint32, value: Fixed
+) =
+  discard
+
+proc ignoreWlPointerAxisStop(
+    data: pointer, pointer: ptr Pointer, time: uint32, axis: uint32
+) =
+  discard
+
+proc ignoreWlPointerAxisRelativeDirection(
+    data: pointer, pointer: ptr Pointer, axis: uint32, direction: uint32
+) =
+  discard
+
+var wlPointerListener* = PointerListener(
+  enter: ignoreWlPointerEnter,
+  leave: ignoreWlPointerLeave,
+  motion: ignoreWlPointerMotion,
+  button: ignoreWlPointerButton,
+  axis: ignoreWlPointerAxis,
+  frame: onWlPointerFrame,
+  axisSource: onWlPointerAxisSource,
+  axisStop: ignoreWlPointerAxisStop,
+  axisDiscrete: onWlPointerAxisDiscrete,
+  axisValue120: onWlPointerAxisValue120,
+  axisRelativeDirection: ignoreWlPointerAxisRelativeDirection,
 )
 
 proc onXkbPressed(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
@@ -520,6 +732,30 @@ proc attachLayerSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   let layerSeat = daemon.riverLayerShell.getSeat(seat)
   daemon.layerSeatPointers.add(layerSeat)
   discard layerSeat.addListener(layerSeatListener.addr, daemonData(daemon))
+
+proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
+  if not daemon.wlSeatPointers.hasKey(globalName) or
+      daemon.wlPointerPointers.hasKey(globalName):
+    return
+  let pointer = daemon.wlSeatPointers[globalName].getPointer()
+  daemon.wlPointerPointers[globalName] = pointer
+  daemon.wlPointerGlobalNames[pointer.id()] = globalName
+  daemon.wlPointerWheelFrames[pointer.id()] = WlPointerWheelFrame()
+  daemon.wlPointerWheelRemainders[pointer.id()] = WlPointerWheelRemainder()
+  daemon.mapWlPointerRiverSeat(globalName)
+  discard pointer.addListener(wlPointerListener.addr, daemonData(daemon))
+
+proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
+  if not daemon.wlPointerPointers.hasKey(globalName):
+    return
+  let pointer = daemon.wlPointerPointers[globalName]
+  let pointerId = pointer.id()
+  pointer.destroy()
+  daemon.wlPointerPointers.del(globalName)
+  daemon.wlPointerGlobalNames.del(pointerId)
+  daemon.wlPointerRiverSeats.del(pointerId)
+  daemon.wlPointerWheelFrames.del(pointerId)
+  daemon.wlPointerWheelRemainders.del(pointerId)
 
 proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   if daemon.riverXkbBindings == nil or seat == nil:

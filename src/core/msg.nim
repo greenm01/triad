@@ -47,6 +47,7 @@ type
     WlPointerResizeRequested
     WlOverviewPointerDragRequested
     WlOverviewPointerScrollRequested
+    WlOverviewWheel
     WlPointerDelta
     WlPointerRelease
     WlShellSurfaceInteraction
@@ -230,6 +231,9 @@ type
     of MsgKind.WlOverviewPointerScrollRequested:
       overviewScrollSeat*: pointer # ptr RiverSeatV1
       overviewScrollX*, overviewScrollY*: int32
+    of MsgKind.WlOverviewWheel:
+      overviewWheelX*, overviewWheelY*: int32
+      overviewWheelHorizontal*, overviewWheelVertical*: int32
     of MsgKind.WlPointerDelta:
       dx*, dy*: int32
     of MsgKind.WlShellSurfaceInteraction:

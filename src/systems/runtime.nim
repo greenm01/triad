@@ -4,7 +4,9 @@ import ../types/runtime_values as rv
 from ../types/runtime_values import PointerOpKind
 import focus, overview_geometry, placement
 
-const OverviewHoldTicks = 47
+const
+  OverviewHoldTicks = 47
+  ShiftModifier = 1'u32
 
 proc keyboardShortcutsInhibited*(model: Model): bool =
   if model.sessionLocked or model.layerFocusExclusive:
@@ -135,6 +137,41 @@ proc beginOverviewScroll*(model: var Model, x, y: int32): bool =
       hoverSlot: slot,
     )
   )
+
+proc signedStep(value: int32): int =
+  if value > 0:
+    return 1
+  if value < 0:
+    return -1
+  0
+
+proc overviewWorkspaceUnderPointerSlot(model: Model, x, y: int32): uint32 =
+  model.overviewWorkspaceSlotAt(model.overviewScreen(), x, y, extendedX = true)
+
+proc focusOverviewColumnWheel(model: var Model, x, y: int32, step: int): bool =
+  if step == 0:
+    return false
+  let slot = model.overviewWorkspaceUnderPointerSlot(x, y)
+  if slot == 0:
+    return false
+  result = model.focusWorkspaceSlot(slot)
+  result = model.focusColumnByStep(step) or result
+
+proc handleOverviewWheel*(model: var Model, x, y, horizontal, vertical: int32): bool =
+  if not model.overviewUsesWorkspacePreviews():
+    return false
+
+  let modifiers = model.activeModifiers
+  if modifiers == 0'u32:
+    result = model.focusOverviewColumnWheel(x, y, horizontal.signedStep())
+    let workspaceStep = vertical.signedStep()
+    if workspaceStep != 0:
+      let slot = model.overviewWorkspaceUnderPointerSlot(x, y)
+      if slot != 0:
+        result = model.focusWorkspaceSlot(slot) or result
+        result = model.focusOverviewWorkspaceStep(workspaceStep) or result
+  elif modifiers == ShiftModifier:
+    result = model.focusOverviewColumnWheel(x, y, vertical.signedStep())
 
 proc closeOverviewFromPointer(model: var Model): bool =
   result = model.setOverviewActive(false)

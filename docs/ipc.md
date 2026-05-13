@@ -107,10 +107,12 @@ pointer-bind "right" "close-window" mode="overview"
 `move` and `resize` start River pointer operations. Other commands are parsed
 as normal Triad commands and target the window under the pointer when the
 command is window-specific. In overview, unmodified left-drag moves a window
-preview to the hovered workspace, and unmodified right-drag pans the hovered
-workspace camera; this overrides overview right-click close while overview is
-open. Mouse-wheel and touchpad gesture bindings are not part of the current
-River input surface Triad receives.
+preview to the hovered workspace, unmodified right-drag pans the hovered
+workspace camera, unmodified vertical wheel switches workspace previews,
+unmodified horizontal wheel focuses columns, and Shift+vertical wheel focuses
+columns. The drag overrides overview right-click close while overview is open.
+Configurable mouse-wheel and touchpad gesture bindings are not part of the
+current River input surface Triad receives.
 
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.

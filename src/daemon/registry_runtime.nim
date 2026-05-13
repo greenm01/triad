@@ -62,6 +62,19 @@ proc handleGlobal*(
     )
     debug "Bound to wl_output",
       name = name, advertisedVersion = version, boundVersion = min(version, 4'u32)
+  elif interfaceName == "wl_seat":
+    let wlSeat = cast[ptr Seat](registry.`bind`(
+      name, wlCore.wl_seat_interface.addr, min(version, 9'u32)
+    ))
+    daemon.wlSeatPointers[name] = wlSeat
+    let listenerData = WlSeatListenerData(daemon: daemon, globalName: name)
+    daemon.wlSeatListenerData[name] = new(WlSeatListenerData)
+    daemon.wlSeatListenerData[name][] = listenerData
+    discard wlSeat.addListener(
+      wlSeatListener.addr, cast[pointer](daemon.wlSeatListenerData[name])
+    )
+    debug "Bound to wl_seat",
+      name = name, advertisedVersion = version, boundVersion = min(version, 9'u32)
   elif interfaceName == "river_layer_shell_v1":
     daemon.riverLayerShell = cast[ptr riverLayer.RiverLayerShellV1](registry.`bind`(
       name, riverLayer.river_layer_shell_v1_interface.addr, min(version, 1'u32)
@@ -98,6 +111,11 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
     daemon.wlOutputPointers[name].release()
     daemon.wlOutputPointers.del(name)
   daemon.wlOutputListenerData.del(name)
+  if daemon.wlSeatPointers.hasKey(name):
+    daemon[].detachWlPointer(name)
+    daemon.wlSeatPointers[name].release()
+    daemon.wlSeatPointers.del(name)
+  daemon.wlSeatListenerData.del(name)
   daemon.outputGlobalNames.del(name)
   if daemon.outputGlobalOwners.hasKey(name):
     let outputId = daemon.outputGlobalOwners[name]

@@ -183,6 +183,11 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       result.effects.add(
         Effect(kind: EffectKind.EffOpStartPointer, opSeat: msg.overviewScrollSeat)
       )
+  of MsgKind.WlOverviewWheel:
+    result.dirty = model.handleOverviewWheel(
+      msg.overviewWheelX, msg.overviewWheelY, msg.overviewWheelHorizontal,
+      msg.overviewWheelVertical,
+    )
   of MsgKind.WlPointerDelta:
     result.dirty = model.applyPointerDelta(msg.dx, msg.dy)
   of MsgKind.WlPointerRelease:

@@ -20,6 +20,22 @@ type
     daemon*: ptr TriadDaemon
     globalName*: uint32
 
+  WlSeatListenerData* = object
+    daemon*: ptr TriadDaemon
+    globalName*: uint32
+
+  WlPointerWheelFrame* = object
+    hasSource*: bool
+    source*: uint32
+    horizontal120*: int32
+    vertical120*: int32
+    horizontalDiscrete*: int32
+    verticalDiscrete*: int32
+
+  WlPointerWheelRemainder* = object
+    horizontal120*: int32
+    vertical120*: int32
+
   TriadDaemon* = object
     display*: ptr Display
     registry*: ptr Registry
@@ -72,6 +88,13 @@ type
     wlOutputPointers*: Table[uint32, ptr Output]
     wlOutputListenerData*: Table[uint32, ref WlOutputListenerData]
     seatWlNames*: Table[uint32, uint32]
+    wlSeatPointers*: Table[uint32, ptr Seat]
+    wlSeatListenerData*: Table[uint32, ref WlSeatListenerData]
+    wlPointerPointers*: Table[uint32, ptr Pointer]
+    wlPointerGlobalNames*: Table[uint32, uint32]
+    wlPointerRiverSeats*: Table[uint32, uint32]
+    wlPointerWheelFrames*: Table[uint32, WlPointerWheelFrame]
+    wlPointerWheelRemainders*: Table[uint32, WlPointerWheelRemainder]
     pointerWindowBySeat*: Table[uint32, WindowId]
     pointerPositionBySeat*: Table[uint32, Rect]
     windowUnreliablePids*: Table[WindowId, int32]

@@ -35,7 +35,7 @@ Status values:
 | Camera snapshot | Closing overview does not restore a saved camera snapshot. | Compliant | Triad leaves Niri-style camera changes intact. |
 | Camera retarget | Focus changes in overview update workspace camera/view targets. | Compliant | Projection emits viewport targets while overview is open. |
 | Right-drag camera pan | Right-drag pans the hovered workspace view offset. | Partial | Triad pans the preview; Niri-style inertial and snap settling are not fully modeled. |
-| Wheel in overview | Unmodified vertical wheel switches workspaces, horizontal wheel focuses columns, and Shift+vertical focuses columns. | Not Supported | River/Triad currently lacks the needed axis input surface. |
+| Wheel in overview | Unmodified vertical wheel switches workspaces, horizontal wheel focuses columns, and Shift+vertical focuses columns. | Compliant | Triad listens to raw `wl_pointer` wheel-axis events while overview is open and routes them through the unified overview navigation reducer. |
 | Touchpad overview scroll | Two-finger overview scrolling maps vertical movement to workspaces and horizontal movement to view offset. | Not Supported | Triad has no current touchpad gesture surface for this. |
 | Left-click window | Clicking a window activates that workspace/window and closes overview if it was not a drag. | Compliant | Covered by core overview regression tests. |
 | Blank-click workspace | Clicking empty workspace area activates that workspace and closes overview. | Compliant | Covered by core overview regression tests. |
@@ -56,5 +56,5 @@ state that is restored on close. Focus, pointer, drag, and IPC workspace changes
 made while overview is open should retarget normal workspace camera state.
 
 The main remaining gaps are input-surface gaps rather than layout math gaps:
-wheel axis handling, touchpad overview gestures, DnD edge scrolling, hot corner
-activation, and multi-output parity.
+touchpad overview gestures, DnD edge scrolling, hot corner activation, and
+multi-output parity.
