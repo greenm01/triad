@@ -78,7 +78,8 @@ proc nearSize(size, bounds: int32): bool =
 proc parentedPrimarySurfaceIntent(
     win: WindowData, parentRect: runtime_values.Rect
 ): bool =
-  win.minWidth.nearSize(parentRect.w) and win.minHeight.nearSize(parentRect.h)
+  win.clientMinWidth.nearSize(parentRect.w) and
+    win.clientMinHeight.nearSize(parentRect.h)
 
 proc parentFloatingRule(model: Model, win: WindowData): tuple[set: bool, value: bool] =
   let ruleMatch = model.windowRuleFor(win.appId, win.title)
@@ -270,7 +271,7 @@ proc applyParentFloatingPolicy*(
 
 proc applyFixedSizeFloatingPolicy*(model: var Model, winId: WindowId): bool =
   let winOpt = model.windowData(winId)
-  if winOpt.isNone or not winOpt.get().hasFixedSizeHint():
+  if winOpt.isNone or not winOpt.get().hasClientFixedSizeHint():
     return false
   let geom = model.floatingGeomForWindow(winId, winOpt.get().parentExternalId)
   result = model.ensureFloatingAt(winId, geom)

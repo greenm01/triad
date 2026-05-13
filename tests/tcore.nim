@@ -1,5 +1,5 @@
 import std/[asyncdispatch, json, options, os, sequtils, strutils, tables, unittest]
-import ../src/config/parser
+import ../src/config/[apply, parser]
 import ../src/core/[effects, msg, render_visibility, restore_state]
 import ../src/state/engine
 import
@@ -3519,6 +3519,205 @@ suite "Core Runtime Logic":
     check win.isFullscreen
     check win.widthProportion == 0.70'f32
     check win.heightProportion == 0.60'f32
+
+  test "Window rule size bounds apply on create and merge with client hints":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "bounded",
+              minWidthSet: true,
+              minWidth: 640,
+              maxHeightSet: true,
+              maxHeight: 600,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "bounded", title: "Main")
+    )
+    var win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.clientMinWidth == 0
+    check win.minWidth == 640
+    check win.maxHeight == 600
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 2,
+        minWidth: 300,
+        minHeight: 200,
+        maxWidth: 900,
+        maxHeight: 500,
+      )
+    )
+    win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+
+    check win.clientMinWidth == 300
+    check win.clientMinHeight == 200
+    check win.clientMaxWidth == 900
+    check win.clientMaxHeight == 500
+    check win.minWidth == 640
+    check win.minHeight == 200
+    check win.maxWidth == 900
+    check win.maxHeight == 600
+
+  test "Window rule size bounds re-evaluate on title changes":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "bounded", minWidthSet: true, minWidth: 500),
+            WindowRule(
+              appIdMatch: "bounded",
+              titleMatch: "Small",
+              minWidthSet: true,
+              minWidth: 0,
+              maxWidthSet: true,
+              maxWidth: 900,
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "bounded", title: "Main")
+    )
+    var win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.minWidth == 500
+    check win.maxWidth == 0
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 2, updatedTitle: "Small Dialog")
+    )
+    win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.minWidth == 0
+    check win.maxWidth == 900
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 2, updatedTitle: "Main")
+    )
+    win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.minWidth == 500
+    check win.maxWidth == 0
+
+  test "Window rule size bounds re-evaluate on app id changes":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[WindowRule(appIdMatch: "bounded", minHeightSet: true, minHeight: 400)],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "plain", title: "Main")
+    )
+    check model.windowData(model.windowForExternal(ExternalWindowId(2))).get().minHeight ==
+      0
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 2, updatedAppId: "bounded")
+    )
+    check model.windowData(model.windowForExternal(ExternalWindowId(2))).get().minHeight ==
+      400
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 2, updatedAppId: "plain")
+    )
+    check model.windowData(model.windowForExternal(ExternalWindowId(2))).get().minHeight ==
+      0
+
+  test "Config reload re-evaluates window rule size bounds":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[WindowRule(appIdMatch: "bounded", minWidthSet: true, minWidth: 500)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "bounded", title: "Main")
+    )
+    check model.windowData(model.windowForExternal(ExternalWindowId(2))).get().minWidth ==
+      500
+
+    model.applyConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[WindowRule(appIdMatch: "bounded", maxWidthSet: true, maxWidth: 700)],
+      )
+    )
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.minWidth == 0
+    check win.maxWidth == 700
+
+  test "Window rule fixed size bounds do not force floating":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "fixed-rule",
+              minWidthSet: true,
+              minWidth: 260,
+              minHeightSet: true,
+              minHeight: 140,
+              maxWidthSet: true,
+              maxWidth: 260,
+              maxHeightSet: true,
+              maxHeight: 140,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 2, appId: "fixed-rule", title: "Main"
+      )
+    )
+
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.minWidth == 260
+    check not win.isFloating
+
+  test "Client fixed size hints still force floating with rule bounds":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[WindowRule(appIdMatch: "fixed-client", maxWidthSet: true, maxWidth: 500)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 2, appId: "fixed-client", title: "Main"
+      )
+    )
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 2,
+        minWidth: 260,
+        minHeight: 140,
+        maxWidth: 260,
+        maxHeight: 140,
+      )
+    )
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
+    check win.isFloating
+    check win.maxWidth == 500
 
   test "Window rule open-on-output targets the visible workspace on that output":
     var model = initRuntimeStateFromConfig(

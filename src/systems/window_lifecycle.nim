@@ -494,6 +494,7 @@ proc createWindowForExternal*(
     keyboardShortcutsInhibit = shortcutInhibit,
     preserveRuntimeState = existingWindow and not hasRestoredWindow,
   )
+  discard model.applyWindowRuleBounds(result)
 
   if existingWindow and not hasRestoredTag and not hasRestoredWindow:
     if pendingAdmission and focusAfterAdmission:

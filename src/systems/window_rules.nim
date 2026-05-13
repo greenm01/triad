@@ -1,4 +1,4 @@
-import std/re
+import std/[options, re]
 import ../state/engine
 from ../types/runtime_values import ParentedRole, WindowRuleFloatingConfig
 
@@ -52,6 +52,18 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.defaultWindowHeightSet:
     result.defaultWindowHeightSet = true
     result.defaultWindowHeight = rule.defaultWindowHeight
+  if rule.minWidthSet:
+    result.minWidthSet = true
+    result.minWidth = rule.minWidth
+  if rule.minHeightSet:
+    result.minHeightSet = true
+    result.minHeight = rule.minHeight
+  if rule.maxWidthSet:
+    result.maxWidthSet = true
+    result.maxWidth = rule.maxWidth
+  if rule.maxHeightSet:
+    result.maxHeightSet = true
+    result.maxHeight = rule.maxHeight
   if rule.openFloatingSet:
     result.openFloatingSet = true
     result.openFloating = rule.openFloating
@@ -96,3 +108,30 @@ proc parentedRoleFor*(model: Model, win: WindowData): ParentedRole =
 proc windowKeyboardShortcutsInhibit*(model: Model, appId, title: string): bool =
   let ruleMatch = model.windowRuleFor(appId, title)
   ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
+
+proc applyWindowRuleBounds*(model: var Model, winId: WindowId): bool =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  let ruleMatch = model.windowRuleFor(win.appId, win.title)
+  var minWidth = win.clientMinWidth
+  var minHeight = win.clientMinHeight
+  var maxWidth = win.clientMaxWidth
+  var maxHeight = win.clientMaxHeight
+  if ruleMatch.found:
+    if ruleMatch.rule.minWidthSet:
+      minWidth = ruleMatch.rule.minWidth
+    if ruleMatch.rule.minHeightSet:
+      minHeight = ruleMatch.rule.minHeight
+    if ruleMatch.rule.maxWidthSet:
+      maxWidth = ruleMatch.rule.maxWidth
+    if ruleMatch.rule.maxHeightSet:
+      maxHeight = ruleMatch.rule.maxHeight
+  model.setWindowEffectiveDimensionsHint(
+    winId, minWidth, minHeight, maxWidth, maxHeight
+  )
+
+proc applyWindowRuleBounds*(model: var Model): bool =
+  for winId, _ in model.windowsWithId():
+    result = model.applyWindowRuleBounds(winId) or result

@@ -28,6 +28,7 @@ type
     parentExternalId*: ExternalWindowId
     identifier*: string
     actualW*, actualH*: int32
+    clientMinWidth*, clientMinHeight*, clientMaxWidth*, clientMaxHeight*: int32
     minWidth*, minHeight*, maxWidth*, maxHeight*: int32
     hasDecorationHint*: bool
     decorationHint*: uint32
@@ -100,6 +101,14 @@ type
     defaultWindowWidth*: float32
     defaultWindowHeightSet*: bool
     defaultWindowHeight*: float32
+    minWidthSet*: bool
+    minWidth*: int32
+    minHeightSet*: bool
+    minHeight*: int32
+    maxWidthSet*: bool
+    maxWidth*: int32
+    maxHeightSet*: bool
+    maxHeight*: int32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool
@@ -129,6 +138,14 @@ type
     defaultWindowWidth*: float32
     defaultWindowHeightSet*: bool
     defaultWindowHeight*: float32
+    minWidthSet*: bool
+    minWidth*: int32
+    minHeightSet*: bool
+    minHeight*: int32
+    maxWidthSet*: bool
+    maxWidth*: int32
+    maxHeightSet*: bool
+    maxHeight*: int32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool

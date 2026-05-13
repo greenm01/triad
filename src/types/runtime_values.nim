@@ -121,6 +121,14 @@ type
     defaultWindowWidth*: float32
     defaultWindowHeightSet*: bool
     defaultWindowHeight*: float32
+    minWidthSet*: bool
+    minWidth*: int32
+    minHeightSet*: bool
+    minHeight*: int32
+    maxWidthSet*: bool
+    maxWidth*: int32
+    maxHeightSet*: bool
+    maxHeight*: int32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool

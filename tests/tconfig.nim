@@ -303,6 +303,10 @@ window-rule {
   default-column-width { proportion 0.65 }
   default-window-width { proportion 0.75 }
   default-window-height { proportion 0.85 }
+  min-width 640
+  min-height 400
+  max-width 1920
+  max-height 1200
   open-floating #true
   open-focused #false
   open-fullscreen #false
@@ -409,6 +413,14 @@ bindings {
     check config.windowRules[0].defaultWindowWidth == 0.75'f32
     check config.windowRules[0].defaultWindowHeightSet
     check config.windowRules[0].defaultWindowHeight == 0.85'f32
+    check config.windowRules[0].minWidthSet
+    check config.windowRules[0].minWidth == 640
+    check config.windowRules[0].minHeightSet
+    check config.windowRules[0].minHeight == 400
+    check config.windowRules[0].maxWidthSet
+    check config.windowRules[0].maxWidth == 1920
+    check config.windowRules[0].maxHeightSet
+    check config.windowRules[0].maxHeight == 1200
     check config.windowRules[0].openFloatingSet
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
@@ -719,6 +731,33 @@ window-rule {
     check config.windowRules[0].defaultWindowWidth == 0.05'f32
     check config.windowRules[0].defaultWindowHeightSet
     check config.windowRules[0].defaultWindowHeight == 0.4'f32
+
+  test "Window rule parser clamps size bounds and preserves explicit zero":
+    let path = getTempDir() / "triad-window-rule-bounds.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="demo"
+  min-width -1
+  min-height 400
+  max-width 70000
+  max-height 0
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 1
+    check config.windowRules[0].minWidthSet
+    check config.windowRules[0].minWidth == 0
+    check config.windowRules[0].minHeightSet
+    check config.windowRules[0].minHeight == 400
+    check config.windowRules[0].maxWidthSet
+    check config.windowRules[0].maxWidth == 65535
+    check config.windowRules[0].maxHeightSet
+    check config.windowRules[0].maxHeight == 0
 
   test "Window rule parser reads multiple matches and excludes":
     let path = getTempDir() / "triad-window-rule-matchers.kdl"

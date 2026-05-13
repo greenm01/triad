@@ -116,6 +116,7 @@ external window manager.
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Open fullscreen/maximized | `isfullscreen`, `isfakefullscreen`, `noopenmaximized` | WM policy | `open-fullscreen`, `open-maximized`, `open-maximized-to-edges` | X | `open-maximized` means full-width scroller column; `open-maximized-to-edges` means client-visible maximize. |
 | Window rules | Open sizing/output | `width`, `height`, `monitor`, `scroller_proportion` | WM policy | `open-on-output`, `default-column-width`, `default-window-width`, `default-window-height` | X | `open-on-output` targets the workspace currently visible on that output. |
+| Window rules | Size bounds | `width`, `height`, `isnosizehint` | size-hint policy | `min-width`, `min-height`, `max-width`, `max-height` | X | Rule bounds constrain geometry without changing placement. |
 | Window rules | Parented float role | `isfloating`, `isoverlay`, app rules | WM policy | `window-rule parented-role` | X | `dialog`, `tool`, and `plain` separate transient dialogs from persistent parented floats without using overlay/global state. |
 | Window rules | Dialog viewport jump | Window rule/policy-specific | WM policy | `window-rule dialog-viewport-jump` | X | Matches the parent app rule; opts specific apps out of hide-until-visible dialog focus. |
 | Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
@@ -282,6 +283,7 @@ KDL config nodes and fields:
   `default-workspace`,
   `open-on-output`, `default-column-width`, `default-window-width`,
   `default-window-height`,
+  `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,
   `open-maximized-to-edges`, `parented-role`,
   `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `forced-layout`,

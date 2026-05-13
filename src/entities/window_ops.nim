@@ -58,6 +58,10 @@ proc addWindow*(
       identifier: identifier,
       actualW: actualW,
       actualH: actualH,
+      clientMinWidth: minWidth,
+      clientMinHeight: minHeight,
+      clientMaxWidth: maxWidth,
+      clientMaxHeight: maxHeight,
       minWidth: minWidth,
       minHeight: minHeight,
       maxWidth: maxWidth,
@@ -164,6 +168,10 @@ proc setWindowCreatedState*(
       if preserveRuntimeState: current.fullscreenOutput else: fullscreenOutput,
     actualW: if preserveRuntimeState: current.actualW else: 0'i32,
     actualH: if preserveRuntimeState: current.actualH else: 0'i32,
+    clientMinWidth: if preserveRuntimeState: current.clientMinWidth else: 0'i32,
+    clientMinHeight: if preserveRuntimeState: current.clientMinHeight else: 0'i32,
+    clientMaxWidth: if preserveRuntimeState: current.clientMaxWidth else: 0'i32,
+    clientMaxHeight: if preserveRuntimeState: current.clientMaxHeight else: 0'i32,
     minWidth: if preserveRuntimeState: current.minWidth else: 0'i32,
     minHeight: if preserveRuntimeState: current.minHeight else: 0'i32,
     maxWidth: if preserveRuntimeState: current.maxWidth else: 0'i32,
@@ -238,6 +246,10 @@ proc preserveWindowRuntimeAttributes*(
       current.isMinimized == source.isMinimized and
       current.fullscreenOutput == source.fullscreenOutput and
       current.actualW == source.actualW and current.actualH == source.actualH and
+      current.clientMinWidth == source.clientMinWidth and
+      current.clientMinHeight == source.clientMinHeight and
+      current.clientMaxWidth == source.clientMaxWidth and
+      current.clientMaxHeight == source.clientMaxHeight and
       current.minWidth == source.minWidth and current.minHeight == source.minHeight and
       current.maxWidth == source.maxWidth and current.maxHeight == source.maxHeight and
       current.hasDecorationHint == source.hasDecorationHint and
@@ -262,6 +274,10 @@ proc preserveWindowRuntimeAttributes*(
   win.fullscreenOutput = source.fullscreenOutput
   win.actualW = source.actualW
   win.actualH = source.actualH
+  win.clientMinWidth = source.clientMinWidth
+  win.clientMinHeight = source.clientMinHeight
+  win.clientMaxWidth = source.clientMaxWidth
+  win.clientMaxHeight = source.clientMaxHeight
   win.minWidth = source.minWidth
   win.minHeight = source.minHeight
   win.maxWidth = source.maxWidth
@@ -355,7 +371,7 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).actualH = restored.actualH
   true
 
-proc setWindowDimensionsHint*(
+proc setWindowEffectiveDimensionsHint*(
     model: var Model, winId: WindowId, minWidth, minHeight, maxWidth, maxHeight: int32
 ): bool =
   if model.windows.entity(winId).isNone:
@@ -375,6 +391,20 @@ proc setWindowDimensionsHint*(
   model.windows.mEntity(winId).maxWidth = maxW
   model.windows.mEntity(winId).maxHeight = maxH
   true
+
+proc setWindowDimensionsHint*(
+    model: var Model, winId: WindowId, minWidth, minHeight, maxWidth, maxHeight: int32
+): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+
+  model.windows.mEntity(winId).clientMinWidth = max(0'i32, minWidth)
+  model.windows.mEntity(winId).clientMinHeight = max(0'i32, minHeight)
+  model.windows.mEntity(winId).clientMaxWidth = max(0'i32, maxWidth)
+  model.windows.mEntity(winId).clientMaxHeight = max(0'i32, maxHeight)
+  model.setWindowEffectiveDimensionsHint(
+    winId, minWidth, minHeight, maxWidth, maxHeight
+  )
 
 proc setWindowDecorationHint*(model: var Model, winId: WindowId, hint: uint32): bool =
   if model.windows.entity(winId).isNone:

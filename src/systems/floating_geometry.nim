@@ -13,6 +13,22 @@ proc hasFixedSizeHint*(win: model_types.WindowData): bool =
   win.minWidth > 0 and win.minHeight > 0 and
     (win.fixedSizeWidth() > 0 or win.fixedSizeHeight() > 0)
 
+proc clientFixedSizeWidth*(win: model_types.WindowData): int32 =
+  if win.clientMinWidth > 0 and win.clientMaxWidth == win.clientMinWidth:
+    win.clientMinWidth
+  else:
+    0'i32
+
+proc clientFixedSizeHeight*(win: model_types.WindowData): int32 =
+  if win.clientMinHeight > 0 and win.clientMaxHeight == win.clientMinHeight:
+    win.clientMinHeight
+  else:
+    0'i32
+
+proc hasClientFixedSizeHint*(win: model_types.WindowData): bool =
+  win.clientMinWidth > 0 and win.clientMinHeight > 0 and
+    (win.clientFixedSizeWidth() > 0 or win.clientFixedSizeHeight() > 0)
+
 proc applyFloatingSizeHints*(win: model_types.WindowData, geom: rv.Rect): rv.Rect =
   result = geom
   let fixedW = win.fixedSizeWidth()

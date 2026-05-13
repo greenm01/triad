@@ -1,5 +1,5 @@
 import std/options
-import floating_policy
+import floating_policy, window_rules
 import ../state/engine
 
 proc chooseFullscreenOutput*(
@@ -66,7 +66,14 @@ proc updateWindowAppIdForExternal*(
   if winId == NullWindowId:
     return false
   discard model.setWindowAppId(winId, appId)
-  discard model.setWindowKeyboardShortcutsInhibit(winId, false, false)
+  let winOpt = model.windowData(winId)
+  if winOpt.isSome:
+    discard model.setWindowKeyboardShortcutsInhibit(
+      winId,
+      model.windowKeyboardShortcutsInhibit(winOpt.get().appId, winOpt.get().title),
+      false,
+    )
+    discard model.applyWindowRuleBounds(winId)
   true
 
 proc updateWindowTitleForExternal*(
@@ -76,7 +83,14 @@ proc updateWindowTitleForExternal*(
   if winId == NullWindowId:
     return false
   discard model.setWindowTitle(winId, title)
-  discard model.setWindowKeyboardShortcutsInhibit(winId, false, false)
+  let winOpt = model.windowData(winId)
+  if winOpt.isSome:
+    discard model.setWindowKeyboardShortcutsInhibit(
+      winId,
+      model.windowKeyboardShortcutsInhibit(winOpt.get().appId, winOpt.get().title),
+      false,
+    )
+    discard model.applyWindowRuleBounds(winId)
   true
 
 proc updateWindowDimensionsHintForExternal*(
@@ -89,6 +103,7 @@ proc updateWindowDimensionsHintForExternal*(
     return false
   result =
     model.setWindowDimensionsHint(winId, minWidth, minHeight, maxWidth, maxHeight)
+  result = model.applyWindowRuleBounds(winId) or result
   let winOpt = model.windowData(winId)
   if winOpt.isSome and winOpt.get().parentExternalId != NullExternalWindowId:
     result = model.reconcileParentedWindowPolicy(winId) or result

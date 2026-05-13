@@ -94,6 +94,8 @@ window-rule {
   open-maximized #true
   default-column-width { proportion 0.65 }
   default-window-height { proportion 0.90 }
+  min-width 640
+  max-height 1200
 }
 
 window-rule {
@@ -146,6 +148,11 @@ window-rule {
 - `default-window-width { proportion <n> }` and
   `default-window-height { proportion <n> }`: set the matching window's initial
   stored width and height proportions. Values are clamped to `0.05..1.0`.
+- `min-width <px>`, `min-height <px>`, `max-width <px>`, and
+  `max-height <px>`: override the effective size bounds used for matching
+  windows. Values are clamped to `0..65535`; `0` clears a broader matching
+  rule's bound. Bounds constrain geometry but do not make a window floating by
+  themselves.
 - `match` and `exclude` use regex search semantics. Simple strings such as
   `gimp` match as before; exact matches should be anchored, for example
   `^org\\.gimp\\.GIMP$`.
@@ -160,6 +167,10 @@ window-rule {
 - Rule-level opening sizing fields merge independently. A later matching rule
   can override only `default-window-height` while keeping an earlier
   `default-column-width`.
+- Rule-level size bounds merge independently and are re-evaluated when app id,
+  title, client dimension hints, or config change. Client-provided fixed-size
+  hints still drive fixed-size floating policy; rule bounds only constrain
+  geometry.
 - When multiple opening states are true, fullscreen wins over edge maximize,
   and edge maximize wins over full-width column.
 

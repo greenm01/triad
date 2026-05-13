@@ -79,6 +79,14 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       defaultWindowHeightSet:
         rule.defaultWindowHeightSet or rule.defaultWindowHeight > 0,
       defaultWindowHeight: rule.defaultWindowHeight,
+      minWidthSet: rule.minWidthSet,
+      minWidth: rule.minWidth,
+      minHeightSet: rule.minHeightSet,
+      minHeight: rule.minHeight,
+      maxWidthSet: rule.maxWidthSet,
+      maxWidth: rule.maxWidth,
+      maxHeightSet: rule.maxHeightSet,
+      maxHeight: rule.maxHeight,
       openFloatingSet: rule.openFloatingSet or rule.openFloating,
       openFloating: rule.openFloating,
       openFocusedSet: rule.openFocusedSet,
@@ -145,6 +153,7 @@ proc applyConfig*(model: var Model, config: Config) =
   for winId, win in model.windowsWithId():
     let inhibited = model.windowKeyboardShortcutsInhibit(win.appId, win.title)
     discard model.setWindowKeyboardShortcutsInhibit(winId, inhibited, false)
+    discard model.applyWindowRuleBounds(winId)
 
   model.startupCommands = config.startupCommands
   model.quickshell = config.quickshell

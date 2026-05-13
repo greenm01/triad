@@ -93,10 +93,10 @@ layout family.
 | Opening | `open-focused` | Allow or prevent initial focus | `open-focused #true/#false` | Pass | |
 | Opening | `default-column-display` | Set normal or tabbed column display | | Gap | Triad has no tabbed-column display mode. |
 | Opening | `default-floating-position` | Set initial floating position relative to an edge or corner | `floating { x-ratio; y-ratio }` | Partial | Triad uses screen-relative ratios and has fewer anchors. |
-| Dynamic | `min-width` | Override effective minimum width | `floating.min-width` | Partial | Triad only supports global floating minimum size. |
-| Dynamic | `min-height` | Override effective minimum height | `floating.min-height` | Partial | Triad only supports global floating minimum size. |
-| Dynamic | `max-width` | Override effective maximum width | | Gap | |
-| Dynamic | `max-height` | Override effective maximum height | | Gap | |
+| Dynamic | `min-width` | Override effective minimum width | `min-width <px>` | Pass | Rule bounds constrain geometry but do not change tiled/floating placement. |
+| Dynamic | `min-height` | Override effective minimum height | `min-height <px>` | Pass | Rule bounds are re-evaluated on metadata, hint, and config changes. |
+| Dynamic | `max-width` | Override effective maximum width | `max-width <px>` | Pass | `0` clears a broader matching rule's bound. |
+| Dynamic | `max-height` | Override effective maximum height | `max-height <px>` | Pass | Nonzero max below min normalizes to min. |
 | Dynamic | `variable-refresh-rate` | Opt matching windows into VRR policy | `presentation-mode` | Gap | Triad has global presentation mode, not per-window VRR. |
 | Dynamic | `scroll-factor` | Override scroll factor per window | | Gap | |
 | Dynamic | `tiled-state` | Control client-visible tiled state | | Gap | |
@@ -151,6 +151,9 @@ These are gap-analysis categories, not target config names.
 - `default-window-width` is a Triad-specific companion to niri's
   `default-window-height`; it controls the initial stored window width
   proportion.
+- Rule-level size bounds are dynamic geometry constraints. They intentionally do
+  not participate in Triad's fixed-size floating heuristic; that heuristic
+  still uses raw client hints.
 - Opening presentation states force tiled placement if they conflict with
   `open-floating`. Fullscreen takes precedence over edge maximize, which takes
   precedence over full-width column.

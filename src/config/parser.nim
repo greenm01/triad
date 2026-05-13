@@ -577,6 +577,18 @@ proc loadConfig*(path: string): Config =
               if proportion.found:
                 rule.defaultWindowHeightSet = true
                 rule.defaultWindowHeight = proportion.value
+            elif child.name == "min-width" and child.args.len > 0:
+              rule.minWidthSet = true
+              rule.minWidth = clamp32(int32(child.args[0].kInt()), 0, 65535)
+            elif child.name == "min-height" and child.args.len > 0:
+              rule.minHeightSet = true
+              rule.minHeight = clamp32(int32(child.args[0].kInt()), 0, 65535)
+            elif child.name == "max-width" and child.args.len > 0:
+              rule.maxWidthSet = true
+              rule.maxWidth = clamp32(int32(child.args[0].kInt()), 0, 65535)
+            elif child.name == "max-height" and child.args.len > 0:
+              rule.maxHeightSet = true
+              rule.maxHeight = clamp32(int32(child.args[0].kInt()), 0, 65535)
             elif child.name == "open-floating" and child.args.len > 0:
               rule.openFloatingSet = true
               rule.openFloating = child.args[0].kBool()
