@@ -1,29 +1,91 @@
-import std/[options, strutils]
+import std/[options, re, strutils]
+import chronicles
 import parser
 import defaults
 import ../state/engine
+import ../systems/window_rules
 import ../systems/workspaces
 import ../types/runtime_values as rv
 
-proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
-  WindowRuleData(
-    appIdMatch: rule.appIdMatch,
-    titleMatch: rule.titleMatch,
-    defaultSlot: rule.defaultWorkspace,
-    openFloatingSet: rule.openFloatingSet or rule.openFloating,
-    openFloating: rule.openFloating,
-    openFocusedSet: rule.openFocusedSet,
-    openFocused: rule.openFocused,
-    parentedRoleSet: rule.parentedRoleSet or rule.parentedRole != ParentedRole.Dialog,
-    parentedRole: rule.parentedRole,
-    floating: rule.floating,
-    dialogViewportJumpSet: rule.dialogViewportJumpSet or rule.dialogViewportJump,
-    dialogViewportJump: rule.dialogViewportJump,
-    keyboardShortcutsInhibitSet:
-      rule.keyboardShortcutsInhibitSet or rule.keyboardShortcutsInhibit,
-    keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
-    forcedLayoutSet: rule.forcedLayoutSet or rule.forcedLayout != 0,
-    forcedLayout: rule.forcedLayout,
+proc legacyWindowRuleMatcher(rule: rv.WindowRule): rv.WindowRuleMatcher =
+  if rule.appIdMatch.len > 0:
+    result.appIdSet = true
+    result.appId = rule.appIdMatch
+  if rule.titleMatch.len > 0:
+    result.titleSet = true
+    result.title = rule.titleMatch
+
+proc ruleMatchers(rule: rv.WindowRule): seq[rv.WindowRuleMatcher] =
+  result = rule.matches
+  if result.len == 0 and (rule.appIdMatch.len > 0 or rule.titleMatch.len > 0):
+    result.add(rule.legacyWindowRuleMatcher())
+
+proc windowRuleMatcherData(
+    matcher: rv.WindowRuleMatcher, context: string
+): Option[WindowRuleMatcherData] =
+  try:
+    result = some(
+      WindowRuleMatcherData(
+        appIdSet: matcher.appIdSet,
+        appIdPattern: matcher.appId,
+        appIdRegex:
+          if matcher.appIdSet:
+            re(matcher.appId)
+          else:
+            nil,
+        titleSet: matcher.titleSet,
+        titlePattern: matcher.title,
+        titleRegex:
+          if matcher.titleSet:
+            re(matcher.title)
+          else:
+            nil,
+      )
+    )
+  except RegexError as e:
+    warn "Skipping invalid window rule regex",
+      context = context, appId = matcher.appId, title = matcher.title, error = e.msg
+    result = none(WindowRuleMatcherData)
+
+proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
+  var matches: seq[WindowRuleMatcherData] = @[]
+  for matcherIdx, matcher in rule.ruleMatchers():
+    let compiled = matcher.windowRuleMatcherData(
+      "window-rule[" & $ruleIdx & "].match[" & $matcherIdx & "]"
+    )
+    if compiled.isNone:
+      return none(WindowRuleData)
+    matches.add(compiled.get())
+
+  var excludes: seq[WindowRuleMatcherData] = @[]
+  for matcherIdx, matcher in rule.excludes:
+    let compiled = matcher.windowRuleMatcherData(
+      "window-rule[" & $ruleIdx & "].exclude[" & $matcherIdx & "]"
+    )
+    if compiled.isNone:
+      return none(WindowRuleData)
+    excludes.add(compiled.get())
+
+  some(
+    WindowRuleData(
+      matches: matches,
+      excludes: excludes,
+      defaultSlot: rule.defaultWorkspace,
+      openFloatingSet: rule.openFloatingSet or rule.openFloating,
+      openFloating: rule.openFloating,
+      openFocusedSet: rule.openFocusedSet,
+      openFocused: rule.openFocused,
+      parentedRoleSet: rule.parentedRoleSet or rule.parentedRole != ParentedRole.Dialog,
+      parentedRole: rule.parentedRole,
+      floating: rule.floating,
+      dialogViewportJumpSet: rule.dialogViewportJumpSet or rule.dialogViewportJump,
+      dialogViewportJump: rule.dialogViewportJump,
+      keyboardShortcutsInhibitSet:
+        rule.keyboardShortcutsInhibitSet or rule.keyboardShortcutsInhibit,
+      keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
+      forcedLayoutSet: rule.forcedLayoutSet or rule.forcedLayout != 0,
+      forcedLayout: rule.forcedLayout,
+    )
   )
 
 proc tagRuleData(rule: rv.TagRule): TagRuleData =
@@ -61,8 +123,10 @@ proc applyConfig*(model: var Model, config: Config) =
   for rule in config.tagRules:
     model.tagRules.add(rule.tagRuleData())
   model.windowRules = @[]
-  for rule in config.windowRules:
-    model.windowRules.add(rule.windowRuleData())
+  for ruleIdx, rule in config.windowRules:
+    let compiled = rule.windowRuleData(ruleIdx)
+    if compiled.isSome:
+      model.windowRules.add(compiled.get())
 
   for winId, win in model.windowsWithId():
     let inhibited = model.windowKeyboardShortcutsInhibit(win.appId, win.title)

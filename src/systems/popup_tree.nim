@@ -1,4 +1,5 @@
 import std/options
+import window_rules
 import ../state/engine
 from ../types/runtime_values import ParentedRole
 

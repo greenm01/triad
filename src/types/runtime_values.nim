@@ -102,9 +102,17 @@ type
     masterCount*: int
     masterSplitRatio*: float32
 
+  WindowRuleMatcher* = object
+    appIdSet*: bool
+    appId*: string
+    titleSet*: bool
+    title*: string
+
   WindowRule* = object
     appIdMatch*: string
     titleMatch*: string
+    matches*: seq[WindowRuleMatcher]
+    excludes*: seq[WindowRuleMatcher]
     defaultWorkspace*: uint32
     openFloatingSet*: bool
     openFloating*: bool

@@ -1,7 +1,7 @@
 import std/[options, tables]
 import
   floating_geometry, floating_policy, focus, layout_projection, placement, popup_tree,
-  scratchpad, workspaces
+  scratchpad, window_rules, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole
 

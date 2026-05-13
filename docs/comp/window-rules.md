@@ -71,10 +71,10 @@ layout family.
 
 | Category | Niri rule/matcher | Niri behavior | Triad surface | Status | Notes |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| Matching | `match app-id` | Match app id by regex | `match app-id=...` | Partial | Triad uses substring matching. |
-| Matching | `match title` | Match title by regex | `match title=...` | Partial | Triad uses substring matching. |
-| Matching | Multiple `match` entries | Rule applies if any `match` child matches | | Gap | Triad effectively has one app/title match set per rule. |
-| Matching | `exclude` | Skip a rule when any exclude matcher matches | | Gap | |
+| Matching | `match app-id` | Match app id by regex | `match app-id=...` | Pass | Regex search semantics; anchor patterns for exact matching. |
+| Matching | `match title` | Match title by regex | `match title=...` | Pass | Regex search semantics; anchor patterns for exact matching. |
+| Matching | Multiple `match` entries | Rule applies if any `match` child matches | repeat `match` children | Pass | Fields inside one matcher are AND-ed; matchers are OR-ed. |
+| Matching | `exclude` | Skip a rule when any exclude matcher matches | repeat `exclude` children | Pass | Uses the same app/title matcher shape as `match`. |
 | Matching | `is-active` | Match active window state | | Gap | |
 | Matching | `is-focused` | Match focused state | | Gap | |
 | Matching | `is-active-in-column` | Match active-in-column state | | Gap | |
@@ -133,9 +133,10 @@ These are gap-analysis categories, not target config names.
 
 ## Triad-Specific Notes
 
-- Rule matching is currently substring based. All matching rules are merged in
+- Rule matching uses regex search semantics. All matching rules are merged in
   order, so broad app rules can provide defaults and later title-specific rules
-  can override individual fields.
+  can override individual fields. Invalid regex patterns reject strict config
+  reloads instead of silently changing policy.
 - Parented dialog behavior is policy-driven. Parented windows float by default,
   adopt the parent workspace unless an explicit `default-workspace` overrides
   it, and anchor to the parent's projected geometry.

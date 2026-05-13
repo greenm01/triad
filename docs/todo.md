@@ -11,8 +11,6 @@
 
 - (done) Native Triad IPC action surface completed. Logical IDs remain
   internal; external IDs are the stable public projection.
-- Add a niri-style composable window-rule resolver that merges broad app rules
-  with specific title rules in order.
 - Add future multi-workspace window-rule placement backed by the DOD tag mask
   model, while keeping public config workspace-oriented.
 - Evaluate Mango-informed window-rule gaps for Triad-native equivalents:

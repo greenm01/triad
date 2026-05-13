@@ -5,7 +5,7 @@ import ../src/state/engine
 import
   ../src/systems/[
     hotkey_overlay, layout_projection, overview_geometry, popup_tree, runtime_facade,
-    update, window_lifecycle,
+    update, window_lifecycle, window_rules,
   ]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
@@ -2002,6 +2002,44 @@ suite "Core Runtime Logic":
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
 
+  test "Window rules match regex entries with OR and exclude semantics":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^org\\.gimp\\.",
+                    titleSet: true,
+                    title: "Welcome",
+                  ),
+                  WindowRuleMatcher(appIdSet: true, appId: "^gimp-tool$"),
+                ],
+              excludes: @[WindowRuleMatcher(titleSet: true, title: "Private")],
+              defaultWorkspace: 4,
+              openFloatingSet: true,
+              openFloating: true,
+            )
+          ]
+      )
+    ).model
+
+    let welcome = model.windowRuleFor("org.gimp.GIMP", "Welcome to GIMP")
+    let tool = model.windowRuleFor("gimp-tool", "Toolbox")
+    let privateWelcome = model.windowRuleFor("org.gimp.GIMP", "Private Welcome")
+    let titleMiss = model.windowRuleFor("org.gimp.GIMP", "Toolbox")
+
+    check welcome.found
+    check welcome.rule.defaultSlot == 4
+    check welcome.rule.openFloating
+    check tool.found
+    check tool.rule.defaultSlot == 4
+    check not privateWelcome.found
+    check not titleMiss.found
+
   test "Parented tool role stays visible outside popup focus tree":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -3255,6 +3293,66 @@ suite "Core Runtime Logic":
     check snapshot.workspaces[1].focusedWindow == 2
     check model.viewport(1) == beforeViewport
     check not effects.hasFocusEffect(2)
+
+  test "Regex window rule placement applies through lifecycle":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^org\\.gimp\\.",
+                    titleSet: true,
+                    title: "Welcome",
+                  )
+                ],
+              excludes: @[WindowRuleMatcher(titleSet: true, title: "Private")],
+              defaultWorkspace: 2,
+              openFloatingSet: true,
+              openFloating: true,
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "org.gimp.GIMP",
+        title: "Welcome to GIMP",
+      )
+    )
+    let matched = model.snapshotWindow(2)
+    check matched.workspaceIdx == 2
+    check matched.isFloating
+    check model.focusedWindowId() == 1
+    check not effects.hasFocusEffect(2)
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        appId: "org.gimp.GIMP",
+        title: "Private Welcome",
+      )
+    )
+
+    let excluded = model.snapshotWindow(3)
+    check excluded.workspaceIdx == 1
+    check not excluded.isFloating
 
   test "Window rule workspace placement is layout agnostic":
     for mode in [

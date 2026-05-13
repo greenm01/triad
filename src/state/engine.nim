@@ -1,9 +1,9 @@
-import std/[options, strutils]
+import std/options
 import entity_manager, id_gen, invariants, iterators, live_restore, queries, snapshot
 import ../core/defaults
 import ../entities/ops
 import ../types/[core, model, shell_snapshot]
-from ../types/runtime_values import LayoutMode, ParentedRole, WindowRuleFloatingConfig
+from ../types/runtime_values import LayoutMode
 
 export defaults
 export iterators
@@ -132,46 +132,6 @@ proc defaultFloatingGeom*(model: Model): GeometryRect =
     ),
   )
 
-proc matches(rule: WindowRuleData, appId, title: string): bool =
-  let appIdMatches = rule.appIdMatch == "" or appId.contains(rule.appIdMatch)
-  let titleMatches = rule.titleMatch == "" or title.contains(rule.titleMatch)
-  appIdMatches and titleMatches
-
-proc mergeFloatingRule(
-    target: var WindowRuleFloatingConfig, source: WindowRuleFloatingConfig
-) =
-  if source.xRatioSet:
-    target.xRatioSet = true
-    target.xRatio = source.xRatio
-  if source.yRatioSet:
-    target.yRatioSet = true
-    target.yRatio = source.yRatio
-  if source.widthRatioSet:
-    target.widthRatioSet = true
-    target.widthRatio = source.widthRatio
-  if source.heightRatioSet:
-    target.heightRatioSet = true
-    target.heightRatio = source.heightRatio
-
-proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
-  if rule.defaultSlot != 0:
-    result.defaultSlot = rule.defaultSlot
-  if rule.openFloatingSet:
-    result.openFloatingSet = true
-    result.openFloating = rule.openFloating
-  if rule.openFocusedSet:
-    result.openFocusedSet = true
-    result.openFocused = rule.openFocused
-  if rule.parentedRoleSet:
-    result.parentedRole = rule.parentedRole
-  result.floating.mergeFloatingRule(rule.floating)
-  if rule.dialogViewportJumpSet:
-    result.dialogViewportJump = rule.dialogViewportJump
-  if rule.keyboardShortcutsInhibitSet:
-    result.keyboardShortcutsInhibit = rule.keyboardShortcutsInhibit
-  if rule.forcedLayoutSet:
-    result.forcedLayout = rule.forcedLayout
-
 proc tagRuleForSlot*(
     model: Model, slot: uint32
 ): tuple[found: bool, rule: TagRuleData] =
@@ -179,26 +139,6 @@ proc tagRuleForSlot*(
     if rule.slot == slot:
       return (true, rule)
   (false, TagRuleData())
-
-proc windowRuleFor*(
-    model: Model, appId, title: string
-): tuple[found: bool, rule: ResolvedWindowRuleData] =
-  result.rule.parentedRole = ParentedRole.Dialog
-  for rule in model.windowRules:
-    if rule.matches(appId, title):
-      result.found = true
-      result.rule.applyWindowRule(rule)
-
-proc parentedRoleFor*(model: Model, appId, title: string): ParentedRole =
-  let ruleMatch = model.windowRuleFor(appId, title)
-  if ruleMatch.found: ruleMatch.rule.parentedRole else: ParentedRole.Dialog
-
-proc parentedRoleFor*(model: Model, win: WindowData): ParentedRole =
-  model.parentedRoleFor(win.appId, win.title)
-
-proc windowKeyboardShortcutsInhibit*(model: Model, appId, title: string): bool =
-  let ruleMatch = model.windowRuleFor(appId, title)
-  ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
 
 proc window*(model: Model, winId: WindowId): Option[WindowData] =
   model.windowData(winId)

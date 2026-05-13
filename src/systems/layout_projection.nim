@@ -5,7 +5,8 @@ import ../types/core as core_types
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/runtime_values as rv
-import floating_geometry, overview_geometry, presentation_policy, popup_tree
+import
+  floating_geometry, overview_geometry, presentation_policy, popup_tree, window_rules
 
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
   let winOpt = model.windowData(winId)

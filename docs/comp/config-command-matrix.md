@@ -110,7 +110,7 @@ external window manager.
 | Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |
 | Scratchpad | Named scratchpad | `toggle_named_scratchpad`, `isnamedscratchpad` | WM policy | `move-to-named-scratchpad`, `toggle-named-scratchpad` | X | Triad names scratchpads directly. |
 | Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
-| Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=... }` | X | |
+| Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=...; exclude ... }` | X | Match and exclude use regex search semantics; repeated `match` children are OR-ed. |
 | Window rules | Default workspace | `windowrule tags` | WM policy | `window-rule default-workspace` | X | |
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
@@ -276,7 +276,8 @@ KDL config nodes and fields:
   `smart-gaps`, `layout-cycle`.
 - `workspaces`: `default-count`, `default-layout`.
 - `workspace-rules`: `workspace <id> name=... default-layout=...`.
-- `window-rule`: `match app-id=... title=...`, `default-workspace`,
+- `window-rule`: `match app-id=... title=...`, `exclude app-id=... title=...`,
+  `default-workspace`,
   `open-floating`, `open-focused`, `parented-role`,
   `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `forced-layout`,
   nested `floating`.

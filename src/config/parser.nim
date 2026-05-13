@@ -1,4 +1,4 @@
-import std/[os, strutils]
+import std/[os, re, strutils]
 import chronicles, kdl
 import defaults
 import ../types/runtime_values
@@ -228,6 +228,44 @@ proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
 
 proc childFlagEnabled(node: KdlNode): bool =
   node.args.len == 0 or node.args[0].kBool()
+
+proc windowRuleMatcher(node: KdlNode): WindowRuleMatcher =
+  if node.props.hasKey("app-id"):
+    result.appIdSet = true
+    result.appId = node.props["app-id"].kString()
+  if node.props.hasKey("title"):
+    result.titleSet = true
+    result.title = node.props["title"].kString()
+
+proc validateWindowRuleRegex(pattern, context: string): string =
+  try:
+    discard re(pattern)
+  except RegexError as e:
+    return context & ": " & e.msg
+  ""
+
+proc validateWindowRuleMatcher(matcher: WindowRuleMatcher, context: string): string =
+  if matcher.appIdSet:
+    result = validateWindowRuleRegex(matcher.appId, context & " app-id")
+    if result.len > 0:
+      return
+  if matcher.titleSet:
+    result = validateWindowRuleRegex(matcher.title, context & " title")
+
+proc validateWindowRuleRegexes(config: Config): string =
+  for ruleIdx, rule in config.windowRules:
+    for matcherIdx, matcher in rule.matches:
+      result = validateWindowRuleMatcher(
+        matcher, "window-rule[" & $ruleIdx & "].match[" & $matcherIdx & "]"
+      )
+      if result.len > 0:
+        return
+    for matcherIdx, matcher in rule.excludes:
+      result = validateWindowRuleMatcher(
+        matcher, "window-rule[" & $ruleIdx & "].exclude[" & $matcherIdx & "]"
+      )
+      if result.len > 0:
+        return
 
 proc parsePointerOp(value: string): PointerOpKind =
   case value
@@ -510,10 +548,9 @@ proc loadConfig*(path: string): Config =
         for child in node.children:
           try:
             if child.name == "match":
-              if child.props.hasKey("app-id"):
-                rule.appIdMatch = child.props["app-id"].kString()
-              if child.props.hasKey("title"):
-                rule.titleMatch = child.props["title"].kString()
+              rule.matches.add(child.windowRuleMatcher())
+            elif child.name == "exclude":
+              rule.excludes.add(child.windowRuleMatcher())
             elif child.name == "default-workspace" and child.args.len > 0:
               let rawWorkspace = child.args[0].kInt()
               if rawWorkspace > 0:
@@ -802,4 +839,9 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
   except CatchableError as e:
     return ConfigLoadResult(ok: false, error: e.msg)
 
-  result = ConfigLoadResult(ok: true, config: loadConfig(path))
+  let config = loadConfig(path)
+  let regexError = config.validateWindowRuleRegexes()
+  if regexError.len > 0:
+    return ConfigLoadResult(ok: false, error: regexError)
+
+  result = ConfigLoadResult(ok: true, config: config)

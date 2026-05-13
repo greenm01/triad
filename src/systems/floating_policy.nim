@@ -1,5 +1,5 @@
 import std/options
-import floating_geometry, focus, layout_projection, placement
+import floating_geometry, focus, layout_projection, placement, window_rules
 import ../state/engine
 from ../types/runtime_values import nil
 

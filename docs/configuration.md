@@ -69,9 +69,11 @@ maps against Mango and River.
 
 ## Window Rules
 
-`window-rule` entries match windows by app id and/or title and apply launch
-policy. All matching rules are merged in file order: broad app rules can set
-defaults, and later specific title rules can override individual fields.
+`window-rule` entries match windows by app id and/or title regex and apply
+launch policy. Multiple `match` children are OR-ed, fields within one `match`
+are AND-ed, and any matching `exclude` child skips the rule. All matching rules
+are merged in file order: broad app rules can set defaults, and later specific
+title rules can override individual fields.
 
 ```kdl
 window-rule {
@@ -87,6 +89,7 @@ window-rule {
 
 window-rule {
   match app-id="gimp"
+  exclude title="Private"
   default-workspace 4
 }
 
@@ -122,6 +125,9 @@ window-rule {
   until the parent is visible. The default is `#false`.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
+- `match` and `exclude` use regex search semantics. Simple strings such as
+  `gimp` match as before; exact matches should be anchored, for example
+  `^org\\.gimp\\.GIMP$`.
 - `floating { x-ratio; y-ratio; width-ratio; height-ratio }`: overrides the
   global floating defaults for this window rule. `x-ratio` and `y-ratio` place
   tool, plain, and unparented floats. Dialogs still center on the parent, but

@@ -1,4 +1,4 @@
-import std/[sets, tables]
+import std/[re, sets, tables]
 from core import
   ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
   IdCounters, OutputId, TagId, TagMask, WindowId
@@ -81,9 +81,17 @@ type
     columnId*: ColumnId
     windowIdx*: uint32
 
+  WindowRuleMatcherData* = object
+    appIdSet*: bool
+    appIdPattern*: string
+    appIdRegex*: Regex
+    titleSet*: bool
+    titlePattern*: string
+    titleRegex*: Regex
+
   WindowRuleData* = object
-    appIdMatch*: string
-    titleMatch*: string
+    matches*: seq[WindowRuleMatcherData]
+    excludes*: seq[WindowRuleMatcherData]
     defaultSlot*: uint32
     openFloatingSet*: bool
     openFloating*: bool

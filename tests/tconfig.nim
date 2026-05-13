@@ -1,4 +1,4 @@
-import std/[options, os, sequtils, unittest]
+import std/[options, os, sequtils, strutils, unittest]
 import ../src/config/[apply, defaults, parser, reload_policy]
 import ../src/core/msg
 import ../src/ipc/commands
@@ -177,6 +177,23 @@ suite "KDL Configuration Parser":
 
     check not loaded.ok
     check loaded.error.len > 0
+
+  test "Strict config load rejects invalid window rule regex":
+    let path = getCurrentDir() / "test_invalid_window_rule_regex.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="["
+  open-floating #true
+}
+""",
+    )
+    let loaded = loadConfigStrict(path)
+    removeFile(path)
+
+    check not loaded.ok
+    check loaded.error.contains("window-rule[0].match[0] app-id")
 
   test "Text command parser accepts targeted window recovery commands":
     let focus = parseTextCommand("focus-window 42")
@@ -373,6 +390,10 @@ bindings {
     check config.tagRules[1].defaultLayoutSet
     check config.tagRules[1].defaultLayout == LayoutMode.Grid
     check config.windowRules.len == 1
+    check config.windowRules[0].matches.len == 1
+    check config.windowRules[0].matches[0].appIdSet
+    check config.windowRules[0].matches[0].appId == "qemu"
+    check not config.windowRules[0].matches[0].titleSet
     check config.windowRules[0].defaultWorkspace == 3
     check config.windowRules[0].openFloatingSet
     check config.windowRules[0].openFloating
@@ -643,6 +664,34 @@ window-rule {
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet
     check not config.windowRules[0].keyboardShortcutsInhibit
+
+  test "Window rule parser reads multiple matches and excludes":
+    let path = getTempDir() / "triad-window-rule-matchers.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="^org\\.gimp\\." title="Welcome"
+  match app-id="^gimp-tool$"
+  exclude title="Private"
+  default-workspace 4
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 1
+    check config.windowRules[0].matches.len == 2
+    check config.windowRules[0].matches[0].appIdSet
+    check config.windowRules[0].matches[0].appId == "^org\\.gimp\\."
+    check config.windowRules[0].matches[0].titleSet
+    check config.windowRules[0].matches[0].title == "Welcome"
+    check config.windowRules[0].matches[1].appIdSet
+    check config.windowRules[0].matches[1].appId == "^gimp-tool$"
+    check config.windowRules[0].excludes.len == 1
+    check config.windowRules[0].excludes[0].titleSet
+    check config.windowRules[0].excludes[0].title == "Private"
 
   test "workspace config uses global default layout and explicit overrides":
     var model = initRuntimeStateFromConfig(
