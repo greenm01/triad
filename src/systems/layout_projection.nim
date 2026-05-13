@@ -293,8 +293,12 @@ proc preserveBackingPresentation(
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if scopedRoot != NullWindowId and winId != scopedRoot:
       continue
-    if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
-        (win.isFullscreen or (win.isMaximized and maxSupported)):
+    if win.windowAdmitted() and not win.isFloating and not win.isMinimized and (
+      win.isFullscreen or (
+        win.isMaximized and maxSupported and
+        not model.columnFullWidthForWindowOnTag(model.activeTag, winId)
+      )
+    ):
       instructions.upsertInstruction(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: screen)
       )
@@ -425,7 +429,10 @@ proc layoutProjection*(model: Model): LayoutProjection =
   elif focusedOpt.isSome:
     let win = focusedOpt.get()
     let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()
-    if win.isFullscreen or (win.isMaximized and maxSupported):
+    let effectivelyMaximized =
+      win.isMaximized and maxSupported and
+      not model.columnFullWidthForWindowOnTag(model.activeTag, focused)
+    if win.isFullscreen or effectivelyMaximized:
       result.instructions =
         @[rv.RenderInstruction(windowId: model.externalWindowId(focused), geom: screen)]
 

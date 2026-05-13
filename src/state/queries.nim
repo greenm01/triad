@@ -209,6 +209,13 @@ proc placementForWindowOnTag*(
     return none(WindowPlacement)
   some(placement)
 
+proc columnFullWidthForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): bool =
+  let placementOpt = model.placementForWindowOnTag(tagId, winId)
+  if placementOpt.isNone:
+    return false
+  let columnOpt = model.columnData(placementOpt.get().columnId)
+  columnOpt.isSome and columnOpt.get().isFullWidth
+
 proc latestScratchpadWindow*(model: Model): WindowId =
   if model.scratchpadWindows.len == 0:
     return NullWindowId

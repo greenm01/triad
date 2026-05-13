@@ -63,6 +63,20 @@ proc activeLayoutSupportsMaximize*(model: Model): bool =
   let tagOpt = model.tagData(model.activeTag)
   tagOpt.isSome and tagOpt.get().layoutMode.layoutSupportsMaximize()
 
+proc effectivelyMaximizedForRiverId*(
+    model: Model, winId: runtime_values.WindowId
+): bool =
+  let logicalId = model.windowForRiverId(winId)
+  if logicalId == NullWindowId:
+    return false
+  let winOpt = model.windowData(logicalId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  win.isMaximized and not win.isMinimized and not win.isFloating and
+    model.activeLayoutSupportsMaximize() and
+    not model.columnFullWidthForWindowOnTag(model.activeTag, logicalId)
+
 proc windowDataForRiverId*(
     model: Model, winId: runtime_values.WindowId
 ): Option[WindowData] =

@@ -2358,6 +2358,97 @@ suite "Core Runtime Logic":
     discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
     check not model.columnData(columnId).get().isFullWidth
 
+  test "Maximize column suppresses edge-maximized presentation":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+    let screen = model.primaryScreen()
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    check model.instructionGeom(1) == screen
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+
+    check model.columnData(columnId).get().isFullWidth
+    check model.snapshotWindow(1).isMaximized
+    check effects.hasMaximizedEffect(1, false)
+    check model.instructionGeom(1) != screen
+
+  test "Maximize to edges exits full-width column presentation":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+    let screen = model.primaryScreen()
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+
+    check not model.columnData(columnId).get().isFullWidth
+    check model.snapshotWindow(1).isMaximized
+    check effects.hasMaximizedEffect(1, true)
+    check model.instructionGeom(1) == screen
+
+  test "Maximize to edges restores stored maximized presentation from full-width column":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+    let screen = model.primaryScreen()
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    check model.columnData(columnId).get().isFullWidth
+    check model.snapshotWindow(1).isMaximized
+    check model.instructionGeom(1) != screen
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+
+    check not model.columnData(columnId).get().isFullWidth
+    check model.snapshotWindow(1).isMaximized
+    check effects.hasMaximizedEffect(1, true)
+    check model.instructionGeom(1) == screen
+
+  test "Vertical scroller switches between full-width column and edge maximize":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+    let screen = model.primaryScreen()
+    discard model.updateModel(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    discard model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+    check model.columnData(columnId).get().isFullWidth
+    check model.snapshotWindow(1).isMaximized
+    check model.instructionGeom(1) != screen
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check not model.columnData(columnId).get().isFullWidth
+    check effects.hasMaximizedEffect(1, true)
+    check model.instructionGeom(1) == screen
+
+  test "Maximize column is ignored outside scroller layouts":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMaximizeColumn))
+
+    check not model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+    check effects.len == 0
+
   test "Column resize clears maximize column state":
     var model = cameraModel()
     model.seedCameraWindows(1)

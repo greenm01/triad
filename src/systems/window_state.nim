@@ -190,7 +190,15 @@ proc toggleMaximizedFocused*(model: var Model): bool =
   let win = model.window(winId)
   if win.isNone:
     return false
-  model.setWindowMaximized(winId, not win.get().isMaximized)
+  if model.columnFullWidthForWindowOnTag(model.activeTag, winId):
+    let placement = model.placementForWindowOnTag(model.activeTag, winId)
+    if placement.isSome:
+      result = model.setColumnFullWidth(placement.get().columnId, false)
+      if result:
+        discard model.requestTagViewportRetarget(model.activeTag)
+    if win.get().isMaximized:
+      return result
+  result = model.setWindowMaximized(winId, not win.get().isMaximized)
 
 proc minimizeFocused*(model: var Model): bool =
   let winId = model.focusedWindow()

@@ -41,12 +41,24 @@ proc windowLayoutSupportsMaximize*(snapshot: ShellSnapshot, win: ShellWindow): b
   let workspace = snapshot.workspaceForTag(win.tagId.get())
   workspace.isSome and workspace.get().layoutMode.layoutSupportsMaximize()
 
+proc windowInFullWidthColumn*(snapshot: ShellSnapshot, win: ShellWindow): bool =
+  if win.tagId.isNone:
+    return false
+  let workspace = snapshot.workspaceForTag(win.tagId.get())
+  if workspace.isNone:
+    return false
+  for column in workspace.get().columns:
+    if column.isFullWidth and column.windows.find(win.id) != -1:
+      return true
+  false
+
 proc effectiveMaximized*(
     snapshot: ShellSnapshot, win: ShellWindow, focusedId: WindowId
 ): bool =
   if not win.isMaximized or win.isMinimized or win.isFloating:
     return false
-  if snapshot.overviewActive or not snapshot.windowLayoutSupportsMaximize(win):
+  if snapshot.overviewActive or not snapshot.windowLayoutSupportsMaximize(win) or
+      snapshot.windowInFullWidthColumn(win):
     return false
 
   let focusedWin = snapshot.windowById(focusedId)

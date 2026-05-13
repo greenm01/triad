@@ -239,7 +239,6 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     if not visible.hasKey(id):
       win.hide()
 
-  let maxSupported = daemon.currentModel.activeLayoutSupportsMaximize()
   for id in ids:
     if daemon.windowNodes.hasKey(id):
       let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
@@ -248,9 +247,9 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       let winOpt = daemon.currentModel.windowDataForRiverId(id)
       let isFloating = winOpt.isSome and winOpt.get().isFloating
       let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
-      let isMaximized = winOpt.isSome and winOpt.get().isMaximized
+      let isMaximized = daemon.currentModel.effectivelyMaximizedForRiverId(id)
       if not isFloating and not isScratchpad and
-          (isFullscreen or (isMaximized and maxSupported) or id == highlighted):
+          (isFullscreen or isMaximized or id == highlighted):
         daemon.windowNodes[id].placeTop()
 
   for id in ids:

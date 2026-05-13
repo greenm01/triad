@@ -374,9 +374,9 @@ proc shouldSyncMaximizedPresentation(
     MsgKind.WlManageStart, MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed,
     MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
     MsgKind.WlWindowMinimizeRequested, MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout,
-    MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdToggleFloating,
-    MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
-    MsgKind.CmdSelectWindow,
+    MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
+    MsgKind.CmdToggleFloating, MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview,
+    MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow,
   }
 
 proc addMaximizedPresentationSync(
