@@ -138,10 +138,37 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 | Background child focus deferral | Pass | Parented floating children queue focus until the parent is ready to show the dialog; Deck requires the parent to be active, not merely rendered in the stack. |
 | Parent-matched viewport jump escape hatch | Pass | `window-rule dialog-viewport-jump #true` opts specific parent apps into immediate focus and viewport snap. |
 | Hide popup when focus leaves popup tree | Pass | Only the active popup tree is projected. |
-| Popup focus tree/history | Pass | Closing children and returning to a parent use popup-tree focus history. |
+| Popup focus tree/history | Pass | Closing nested or sibling children uses popup-tree focus history instead of directly focusing the parent. |
 | Newer or recently focused popups cover older ones | Pass | Popup stacking follows descendant order, then focus/open history. |
 | Deck background parent behavior | Pass | Background deck children defer focus/projection until the parent becomes active; focused-parent popup trees still use popup-root layout focus. |
 | TGMix behavior | Pass | Popups anchor to the parent in both the tile-sized and grid-sized TGMix projections. |
+
+---
+
+## Future Gaps
+
+Persistent tool windows are not failed dialogs. GIMP panels, detached DevTools,
+and similar parent-related surfaces may need a separate policy from transient
+dialogs: visible while working in the parent app, position/size persistence, and
+rules that can promote them to tile, plain float, or a future tool role.
+
+Overlay, global/sticky, and unmanaged-global behavior should remain separate if
+Triad exposes Mango-like modes later. Overlay means always on top within the
+visible scope; global/sticky means visible across tags; unmanaged-global is a
+different compositor-management contract.
+
+Modal scroll-lock remains future work. It needs a reliable modal signal or an
+explicit rule before Triad should constrain navigation while a child dialog is
+open.
+
+A target-viewport projection mode is also future work, not current behavior.
+Triad still renders scrollers from current viewport offsets while animation is
+runtime-owned. A target-state projection may become useful if River or another
+compositor layer owns viewport animation later.
+
+Semantic type signals such as `xdg_dialog` and XWayland EWMH atoms should be
+used only if River exposes them to Triad. Until then, parent relationship, size
+hints, app id, title, and window rules are the available inputs.
 
 ---
 
