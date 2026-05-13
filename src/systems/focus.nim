@@ -1,9 +1,8 @@
 import std/options
 import workspaces
-import ../layouts/grid_math
 import ../state/engine
 from ../types/runtime_values import Direction, RenderInstruction
-import layout_projection, overview_geometry
+import layout_projection
 import popup_tree
 
 type FocusCandidate = object
@@ -180,11 +179,7 @@ proc focusableWindowsOnTag(model: Model, tagId: TagId): seq[WindowId] =
     if not win.isMinimized and win.windowAdmitted():
       result.add(winId)
 
-proc focusOverviewByStep*(model: var Model, step: int): bool
-
 proc focusCycle*(model: var Model, step: int): bool =
-  if model.overviewActive and model.overviewStyle() == OverviewStyle.MangoGrid:
-    return model.focusOverviewByStep(step)
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
@@ -388,46 +383,7 @@ proc focusWindowOrWorkspace*(model: var Model, direction: int): bool =
   let target = model.nearestWorkspaceSlot(direction, false)
   target != 0 and model.focusWorkspaceSlot(target)
 
-proc focusOverviewByStep*(model: var Model, step: int): bool =
-  let windows = model.overviewWindowIds()
-  if windows.len == 0:
-    return false
-
-  let current = model.selectedOverviewWindow()
-  var idx = windows.find(current)
-  if idx == -1:
-    idx = 0
-  else:
-    idx = (idx + step + windows.len) mod windows.len
-  model.setOverviewSelection(windows[idx])
-
-proc focusOverviewByDelta(model: var Model, deltaCol, deltaRow: int): bool =
-  let windows = model.overviewWindowIds()
-  if windows.len == 0:
-    return false
-
-  let current = model.selectedOverviewWindow()
-  var idx = windows.find(current)
-  if idx == -1:
-    idx = 0
-
-  let targetIdx = gridIndexByDelta(idx, windows.len, deltaCol, deltaRow)
-  if targetIdx < 0 or targetIdx == idx:
-    return false
-  model.setOverviewSelection(windows[targetIdx])
-
 proc focusByDirection*(model: var Model, direction: Direction): bool =
-  if model.overviewActive and model.overviewStyle() == OverviewStyle.MangoGrid:
-    case direction
-    of Direction.DirLeft:
-      return model.focusOverviewByDelta(-1, 0)
-    of Direction.DirRight:
-      return model.focusOverviewByDelta(1, 0)
-    of Direction.DirUp:
-      return model.focusOverviewByDelta(0, -1)
-    of Direction.DirDown:
-      return model.focusOverviewByDelta(0, 1)
-
   if model.focusByVisualDirection(direction):
     return true
 
@@ -460,6 +416,15 @@ proc focusByDirection*(model: var Model, direction: Direction): bool =
 
   if target != NullWindowId and model.isFocusableWindow(target):
     return model.focusWindow(target)
+
+  if model.overviewActive:
+    let workspaceDirection =
+      case direction
+      of Direction.DirLeft, Direction.DirUp: -1
+      of Direction.DirRight, Direction.DirDown: 1
+    let targetSlot = model.nearestWorkspaceSlot(workspaceDirection, false)
+    return targetSlot != 0 and model.focusWorkspaceSlot(targetSlot)
+
   false
 
 proc collapseEmptyActiveDynamicWorkspace*(model: var Model): bool =

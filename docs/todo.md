@@ -1,5 +1,12 @@
 # Triad TODO
 
+## Overview
+
+- Add cyclic overview hidden-window count badges for Deck, Vertical Deck, and
+  Monocle.
+- Add open-axis scroll indicators for Scroller and Vertical Scroller workspace
+  previews.
+
 ## Runtime
 
 - (done) Native Triad IPC action surface completed. Logical IDs remain

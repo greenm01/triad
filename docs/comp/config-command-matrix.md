@@ -40,7 +40,7 @@ external window manager.
 | Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
 | Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, inhibit policy, and hotkey overlay titles. |
-| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. Niri-style scroller overview adds unmodified Escape/Return/arrow fallback bindings only when those overview key slots are not configured. |
+| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. Unified overview adds unmodified Escape/Return/arrow fallback bindings only when those overview key slots are not configured. |
 | Bindings | HJKL/arrow mirroring | Manual binds | WM policy | `mirror-hjkl-arrows` | X | Triad can generate arrow equivalents for HJKL binds. |
 | Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
 | Bindings | Eat next key | | `ensure_next_key_eaten` | `eat-next-key`, `cancel-eat-next-key` | X | Useful for modal shell interactions. |
@@ -104,7 +104,7 @@ external window manager.
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
-| Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | Scroller layouts use Niri-style workspace previews with Niri workspace navigation/camera behavior; other layouts keep the Mango-style grid overview. See [Niri overview compatibility](./niri-overview-comp.md). |
+| Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
 | Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | | | Not implemented. |
 | Overview | Overview tab mode | `ov_tab_mode` | WM policy | | | Not implemented. |
 | Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |

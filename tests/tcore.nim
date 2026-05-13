@@ -3141,7 +3141,7 @@ suite "Core Runtime Logic":
     let activePreview = model.workspacePreviewRect(screen, slots, 0)
     let secondPreview = model.workspacePreviewRect(screen, slots, 1)
 
-    check model.overviewStyle() == OverviewStyle.NiriWorkspaces
+    check model.overviewStyle() == OverviewStyle.WorkspaceStrip
     check one.x >= activePreview.x
     check one.y >= activePreview.y
     check one.x + one.w <= activePreview.x + activePreview.w
@@ -3151,7 +3151,7 @@ suite "Core Runtime Logic":
     check two.x + two.w <= secondPreview.x + secondPreview.w
     check two.y + two.h <= secondPreview.y + secondPreview.h
 
-  test "Non-scroller overview keeps Mango grid projection":
+  test "Non-scroller overview projects workspace previews":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3165,14 +3165,24 @@ suite "Core Runtime Logic":
     )
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
-    let projection = model.layoutProjection()
     let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let projection = model.layoutProjection()
+    let activePreview = model.workspacePreviewRect(screen, slots, 0)
 
-    check model.overviewStyle() == OverviewStyle.MangoGrid
+    check model.overviewStyle() == OverviewStyle.WorkspaceStrip
+    check model.overviewUsesWorkspacePreviews()
     check projection.instructions.len == 2
-    check projection.instructions.allIt(it.geom.w > screen.w div 3)
+    check projection.instructions.allIt(it.geom.x >= activePreview.x)
+    check projection.instructions.allIt(it.geom.y >= activePreview.y)
+    check projection.instructions.allIt(
+      it.geom.x + it.geom.w <= activePreview.x + activePreview.w
+    )
+    check projection.instructions.allIt(
+      it.geom.y + it.geom.h <= activePreview.y + activePreview.h
+    )
 
-  test "Overview direction selection follows visual grid":
+  test "Unified overview direction focus follows workspace layout":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
     for id in 1'u32 .. 5'u32:
@@ -3187,22 +3197,18 @@ suite "Core Runtime Logic":
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     let activeTag = model.activeTag
-    let activeFocus = model.activeWorkspaceFocusId()
-    let focusHistory = model.focusHistory
-    let workspaceHistory = model.workspaceHistory
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     let rightEffects = model.updateModel(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
     )
     check model.selectedOverviewWindow() == WindowId(2)
-    check model.activeWorkspaceFocusId() == activeFocus
+    check model.activeWorkspaceFocusId() == 2
     let previewSnapshot = model.shellSnapshot()
     check previewSnapshot.overviewSelectedWindow == 2
-    check model.focusedWindowId() == activeFocus
     check rightEffects.anyIt(it.kind == EffectKind.EffFocusShellUi)
     check not rightEffects.anyIt(it.kind == EffectKind.EffFocusWindow)
-    check not rightEffects.anyIt(
+    check rightEffects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WindowFocusChanged")
     )
@@ -3233,69 +3239,52 @@ suite "Core Runtime Logic":
     check model.selectedOverviewWindow() == WindowId(5)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
-    check model.selectedOverviewWindow() == WindowId(5)
+    check model.selectedOverviewWindow() == WindowId(3)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
-    check model.selectedOverviewWindow() == WindowId(1)
+    check model.selectedOverviewWindow() == WindowId(4)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusPrev))
-    check model.selectedOverviewWindow() == WindowId(5)
+    check model.selectedOverviewWindow() == WindowId(3)
 
     check model.activeTag == activeTag
-    check model.activeWorkspaceFocusId() == activeFocus
-    check model.focusHistory == focusHistory
-    check model.workspaceHistory == workspaceHistory
 
     let closeEffects = model.updateModel(Msg(kind: MsgKind.CmdCloseOverview))
     check not model.overviewActive
     check model.overviewSelectedWindow == NullWindowId
-    check model.activeWorkspaceFocusId() == activeFocus
+    check model.activeWorkspaceFocusId() == 3
     check closeEffects.anyIt(
-      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == activeFocus
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 3
     )
 
-  test "Overview ignores workspace focus commands":
+  test "Unified overview keeps workspace focus commands live":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
-    for id in 1'u32 .. 5'u32:
-      model.applyMsg(
-        Msg(
-          kind: MsgKind.WlWindowCreated,
-          windowId: id,
-          appId: "app",
-          title: "Window " & $id,
-        )
-      )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
-    let activeTag = model.activeTag
-    let activeWorkspaceIdx = model.shellSnapshot().activeWorkspaceIdx
-    let focusHistory = model.focusHistory
-    let workspaceHistory = model.workspaceHistory
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
 
-    check model.selectedOverviewWindow() == WindowId(5)
-    check model.updateModel(
-      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2)
-    ).len == 0
-    check model.updateModel(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2)).len == 0
-    check model.updateModel(Msg(kind: MsgKind.CmdFocusOccupiedTagRight)).len == 0
-    check model.updateModel(Msg(kind: MsgKind.CmdFocusTagRight)).len == 0
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.selectedOverviewWindow() == WindowId(2)
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
-    check model.activeTag == activeTag
-    check model.shellSnapshot().activeWorkspaceIdx == activeWorkspaceIdx
-    check model.selectedOverviewWindow() == WindowId(5)
-    check model.focusHistory == focusHistory
-    check model.workspaceHistory == workspaceHistory
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
     let downEffects =
       model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-    check model.selectedOverviewWindow() == WindowId(5)
-    check model.activeTag == activeTag
+    check model.activeTag == model.tagForSlot(3)
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
-    check downEffects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
-  test "Niri scroller overview keeps workspace navigation live":
+  test "Unified overview keeps workspace navigation live":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
@@ -3317,7 +3306,7 @@ suite "Core Runtime Logic":
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
-  test "Niri scroller overview keeps preview style after navigating to grid workspace":
+  test "Unified overview keeps preview style after navigating to grid workspace":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
@@ -3336,7 +3325,7 @@ suite "Core Runtime Logic":
 
     check model.overviewActive
     check model.activeTag == model.tagForSlot(2)
-    check model.overviewStyle() == OverviewStyle.NiriWorkspaces
+    check model.overviewStyle() == OverviewStyle.WorkspaceStrip
     check model.overviewUsesWorkspacePreviews()
 
   test "Selecting overview window commits focus":
@@ -3362,7 +3351,7 @@ suite "Core Runtime Logic":
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
 
-  test "Dragging Niri overview preview moves window without closing":
+  test "Dragging unified overview preview moves window without closing":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3399,7 +3388,7 @@ suite "Core Runtime Logic":
     check model.activeWorkspaceFocusId() == 0
     check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(2)
 
-  test "Right-dragging Niri overview pans hovered workspace camera":
+  test "Right-dragging unified overview pans hovered workspace camera":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3428,7 +3417,7 @@ suite "Core Runtime Logic":
       beforeViewport.targetViewportXOffset - 100.0'f32
     check model.pointerOp.kind == PointerOpKind.OpNone
 
-  test "Holding Niri overview drag over workspace activates drop":
+  test "Holding unified overview drag over workspace activates drop":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3486,7 +3475,7 @@ suite "Core Runtime Logic":
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
 
-  test "Clicking blank Niri overview workspace activates workspace":
+  test "Clicking blank unified overview workspace activates workspace":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -3535,7 +3524,7 @@ suite "Core Runtime Logic":
       beforeViewport.currentViewportXOffset
     check model.viewport(1).targetViewportXOffset != beforeViewport.targetViewportXOffset
 
-  test "Niri overview camera retarget animates while overview is open":
+  test "Unified overview camera retarget animates while overview is open":
     var model = cameraModel()
     model.seedCameraWindows()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
@@ -3560,7 +3549,7 @@ suite "Core Runtime Logic":
     check not model.overviewActive
     check model.viewport(1) == afterTick
 
-  test "Niri overview ticks non-active preview workspace cameras":
+  test "Unified overview ticks non-active preview workspace cameras":
     var model = cameraModel()
     model.seedCameraWindows(1)
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
@@ -3621,7 +3610,7 @@ suite "Core Runtime Logic":
     check model.viewport(2).targetViewportXOffset !=
       workspace2Viewport.targetViewportXOffset
 
-  test "Closing Mango overview restores original camera":
+  test "Closing unified overview preserves camera changes":
     var model = cameraModel()
     model.seedCameraWindows()
     model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
@@ -3630,9 +3619,11 @@ suite "Core Runtime Logic":
 
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
     discard model.updateModel(Msg(kind: MsgKind.CmdTick))
+    let afterTick = model.viewport(1)
     model.applyMsg(Msg(kind: MsgKind.CmdCloseOverview))
 
-    check model.viewport(1) == beforeViewport
+    check model.viewport(1) == afterTick
+    check model.viewport(1) != beforeViewport
 
   test "Workspace round trip preserves each camera":
     var model = cameraModel()

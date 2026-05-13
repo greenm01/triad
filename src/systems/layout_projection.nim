@@ -320,24 +320,7 @@ proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]
       instr.geom.y += op.totalDY
       return
 
-proc layoutMangoOverview(model: Model, screen: rv.Rect): seq[rv.RenderInstruction] =
-  var overviewTag = rv.TagState(tagId: 0, layoutMode: rv.LayoutMode.Grid)
-  for winId in model.overviewWindowIds():
-    overviewTag.columns.add(
-      rv.Column(
-        windows: @[model.externalWindowId(winId)],
-        widthProportion: 1.0,
-        isFullWidth: true,
-      )
-    )
-  layoutGrid(
-    overviewTag,
-    screen,
-    max(0'i32, model.overviewOuterGap),
-    max(0'i32, int32(float32(model.innerGaps) * model.overviewInnerGapMultiplier)),
-  )
-
-proc layoutNiriOverview(
+proc layoutWorkspaceStripOverview(
     model: Model, windows: Table[rv.WindowId, rv.WindowData], screen: rv.Rect
 ): LayoutProjection =
   let slots = model.previewSlots()
@@ -389,10 +372,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
   let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
-    if model.overviewStyle() == OverviewStyle.NiriWorkspaces:
-      result = model.layoutNiriOverview(windows, screen)
-    else:
-      result.instructions = model.layoutMangoOverview(screen)
+    result = model.layoutWorkspaceStripOverview(windows, screen)
     return
 
   if model.activeTag == NullTagId:

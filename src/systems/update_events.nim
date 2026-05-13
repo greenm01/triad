@@ -3,7 +3,6 @@ import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import PointerOpKind
 import focus
-import overview_geometry
 import outputs
 import runtime
 import update_effects
@@ -17,8 +16,6 @@ proc setExternalFocus(model: var Model, externalId: ExternalWindowId): bool =
     let winId = model.windowForExternal(externalId)
     if winId == NullWindowId or model.overviewWindowIds().find(winId) == -1:
       return false
-    if model.overviewStyle() == OverviewStyle.MangoGrid:
-      discard model.restoreOverviewViewportSnapshot()
     discard model.setOverviewActive(false)
     discard model.setOverviewWorkspacePreviewsActive(false)
     discard model.clearOverviewSelection()

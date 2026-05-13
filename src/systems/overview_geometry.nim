@@ -1,12 +1,11 @@
-import std/[math, options]
+import std/math
 import ../state/engine
 import ../types/runtime_values as rv
 import workspaces
 
 type
   OverviewStyle* {.pure.} = enum
-    MangoGrid
-    NiriWorkspaces
+    WorkspaceStrip
 
   OverviewDropKind* {.pure.} = enum
     DropNone
@@ -27,20 +26,10 @@ proc effectiveOverviewZoom*(model: Model): float32 =
     DefaultOverviewZoom
 
 proc overviewStyle*(model: Model): OverviewStyle =
-  if model.overviewActive:
-    if model.overviewWorkspacePreviewsActive:
-      return OverviewStyle.NiriWorkspaces
-    return OverviewStyle.MangoGrid
-
-  let tagOpt = model.tagData(model.activeTag)
-  if tagOpt.isSome and
-      tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
-    OverviewStyle.NiriWorkspaces
-  else:
-    OverviewStyle.MangoGrid
+  OverviewStyle.WorkspaceStrip
 
 proc overviewUsesWorkspacePreviews*(model: Model): bool =
-  model.overviewActive and model.overviewStyle() == OverviewStyle.NiriWorkspaces
+  model.overviewActive
 
 proc previewSlots*(model: Model): seq[uint32] =
   model.visibleWorkspaceSlots()
@@ -90,7 +79,7 @@ proc yContains(rect: rv.Rect, y: int32): bool =
 proc overviewWorkspaceSlotAt*(
     model: Model, screen: rv.Rect, x, y: int32, extendedX = false
 ): uint32 =
-  if not model.overviewUsesWorkspacePreviews():
+  if not model.overviewActive:
     return 0
 
   let slots = model.previewSlots()
@@ -117,7 +106,7 @@ proc nextDynamicDropSlot(model: Model): uint32 =
 proc overviewDropTargetAt*(
     model: Model, screen: rv.Rect, x, y: int32
 ): OverviewDropTarget =
-  if not model.overviewUsesWorkspacePreviews():
+  if not model.overviewActive:
     return OverviewDropTarget(kind: OverviewDropKind.DropNone)
 
   let slots = model.previewSlots()

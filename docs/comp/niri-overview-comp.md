@@ -1,9 +1,8 @@
 # Niri Overview Compatibility
 
 This document tracks Triad's compatibility target for Niri-style overview
-behavior. It is scoped to scrolling layouts only: scroller and vertical scroller
-use the Niri overview model, while all other layouts intentionally keep the
-Mango-style overview grid.
+behavior. Triad now uses one workspace-preview overview model across layouts,
+with scroller and vertical scroller preserving the closest Niri camera behavior.
 
 ## Baseline
 
@@ -20,17 +19,17 @@ The Triad implementation target is the scroller overview behavior after
 
 Status values:
 
-- `Compliant`: Triad matches the Niri behavior for scroller overview.
+- `Compliant`: Triad matches the Niri behavior for the applicable overview path.
 - `Partial`: Triad implements the core behavior, but known details differ.
 - `Not Supported`: Triad has no equivalent input or runtime feature yet.
 - `Intentional Difference`: Triad intentionally keeps a different behavior.
 
 | Area | Expected Niri Behavior | Triad Status | Notes |
 | --- | --- | --- | --- |
-| Overview scope | Overview is a zoomed view of workspaces and windows, not a separate grid. | Compliant | Scroller and vertical scroller use Niri-style previews. |
-| Non-scroller fallback | Niri has one overview model. | Intentional Difference | Triad keeps the Mango-style grid overview for non-scroller layouts. |
+| Overview scope | Overview is a zoomed view of workspaces and windows, not a separate grid. | Compliant | All layouts use workspace previews. |
+| Non-scroller fallback | Niri has one overview model. | Compliant | Triad no longer falls back to a Mango-style grid overview for non-scroller layouts. |
 | Zoom default and clamp | Default zoom is `0.5`, clamped to `0.0001..0.75`. | Compliant | Triad config matches the Niri range and default. |
-| Preview geometry | Workspace preview size is output size multiplied by overview zoom. | Compliant | Implemented in scroller overview geometry. |
+| Preview geometry | Workspace preview size is output size multiplied by overview zoom. | Compliant | Implemented in workspace-strip overview geometry. |
 | Workspace gap | Workspace stack gap is output height multiplied by `0.1` and overview zoom. | Compliant | Matches Niri workspace stack spacing. |
 | Active workspace position | Active workspace is centered and the stack moves by active workspace index. | Compliant | Triad previews derive from the active workspace slot. |
 | Camera snapshot | Closing overview does not restore a saved camera snapshot. | Compliant | Triad leaves Niri-style camera changes intact. |
@@ -44,21 +43,17 @@ Status values:
 | Hold-to-activate | Holding a dragged item over a workspace activates it and closes overview. | Partial | Behavior exists, but Triad timing is tick-based rather than Niri's 750 ms timer. |
 | DnD edge workspace switch | Dragging near the top or bottom overview edge scrolls the workspace stack. | Not Supported | Future runtime/input feature. |
 | Drop into new workspace or gap | Drag can create or move to a new workspace above, below, or between existing workspaces. | Partial | Dynamic gap targeting exists; add explicit regression coverage. |
-| Keyboard shortcuts | Normal keyboard shortcuts continue to work while overview is open, with Escape/Return and arrow-key overview fallbacks. | Compliant | Triad keeps configured bindings active and adds Niri-style fallback keys for scroller overview when the user has not bound those key slots. |
+| Keyboard shortcuts | Normal keyboard shortcuts continue to work while overview is open, with Escape/Return and arrow-key overview fallbacks. | Compliant | Triad keeps configured bindings active and adds overview fallback keys when the user has not bound those key slots. |
 | Niri IPC workspace actions | `FocusWorkspace*` actions work while overview is open. | Compliant | Covered by compatibility tests. |
 | Hot corner | Default top-left hot corner toggles overview. | Not Supported | Triad has no hot-corner input feature. |
 | Multi-output overview | Niri renders and manages overview per output. | Partial | Triad remains primary-output oriented. |
 
 ## Implementation Notes
 
-Scroller overview should use Niri camera semantics. Opening overview may zoom and
-reframe the visible previews, but it must not introduce a separate camera state
-that is restored on close. Focus, pointer, drag, and IPC workspace changes made
-while overview is open should retarget normal workspace camera state.
-
-Mango overview remains the compatibility target for non-scroller layouts. Do not
-use this document as a mandate to replace grid overview behavior outside
-scrolling layouts.
+The unified overview should use Niri camera semantics. Opening overview may zoom
+and reframe the visible previews, but it must not introduce a separate camera
+state that is restored on close. Focus, pointer, drag, and IPC workspace changes
+made while overview is open should retarget normal workspace camera state.
 
 The main remaining gaps are input-surface gaps rather than layout math gaps:
 wheel axis handling, touchpad overview gestures, DnD edge scrolling, hot corner
