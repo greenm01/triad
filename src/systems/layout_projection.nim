@@ -382,7 +382,11 @@ proc applyLayoutProjection*(model: var Model; projection: LayoutProjection) =
     let tagId = model.tagForSlot(target.tagSlot)
     if tagId != NullTagId:
       discard model.setTagViewportTarget(tagId, target.targetX, target.targetY)
+      if model.viewportSnapRequested(tagId):
+        discard model.setTagViewportCurrent(
+          tagId, target.targetX, target.targetY)
       discard model.clearTagViewportRetarget(tagId)
+      discard model.clearTagViewportSnap(tagId)
 
 proc layoutInstructions*(model: var Model):
     seq[rv.RenderInstruction] =

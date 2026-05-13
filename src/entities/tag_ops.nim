@@ -95,11 +95,27 @@ proc requestTagViewportRetarget*(
   model.viewportRetargetTags.incl(tagId)
   true
 
+proc requestTagViewportSnap*(
+    model: var Model; tagId: TagId): bool =
+  if tagId == NullTagId or model.tags.entity(tagId).isNone:
+    return false
+  if model.viewportSnapTags.contains(tagId):
+    return false
+  model.viewportSnapTags.incl(tagId)
+  true
+
 proc clearTagViewportRetarget*(
     model: var Model; tagId: TagId): bool =
   if not model.viewportRetargetTags.contains(tagId):
     return false
   model.viewportRetargetTags.excl(tagId)
+  true
+
+proc clearTagViewportSnap*(
+    model: var Model; tagId: TagId): bool =
+  if not model.viewportSnapTags.contains(tagId):
+    return false
+  model.viewportSnapTags.excl(tagId)
   true
 
 proc setTagRestoredState*(model: var Model; tagId: TagId;

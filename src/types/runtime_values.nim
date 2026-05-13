@@ -95,6 +95,7 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     forcedLayout*: int
 

@@ -47,7 +47,8 @@ The supported KDL nodes are:
 - `workspaces`: default workspace floor.
 - `tag-rules`: tag names and default layouts.
 - `window-rule`: app/title matching, default tag, floating behavior,
-  focus behavior, shortcut inhibition, and forced layout.
+  focus behavior, parented-dialog viewport jump behavior, shortcut
+  inhibition, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -76,6 +77,11 @@ window-rule {
   open-floating #true
   open-focused #false
 }
+
+window-rule {
+  match app-id="keepassxc"
+  dialog-viewport-jump #true
+}
 ```
 
 - `open-floating #true|#false`: explicitly opens matching windows floating or
@@ -83,6 +89,9 @@ window-rule {
 - `open-focused #true|#false`: explicitly allows or prevents focusing matching
   windows when they open. Parented dialogs use smart focus by default: they
   focus only when they open on the active workspace.
+- `dialog-viewport-jump #true|#false`: when set on a parent app rule, its
+  child dialogs may immediately retarget/snap the viewport instead of waiting
+  until the parent is visible. The default is `#false`.
 - `default-tag <n>`: opens matching windows on a tag. For parented dialogs,
   this explicit tag overrides the parent workspace.
 

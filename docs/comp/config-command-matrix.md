@@ -114,6 +114,7 @@ external window manager.
 | Window rules | Default tag | `windowrule tags` | WM policy | `window-rule default-tag` | X | |
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
+| Window rules | Dialog viewport jump | Window rule/policy-specific | WM policy | `window-rule dialog-viewport-jump` | X | Matches the parent app rule; opts specific apps out of hide-until-visible dialog focus. |
 | Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
 | Window rules | Shortcut inhibition | `allow_shortcuts_inhibit` | client inhibit protocol/policy | `keyboard-shortcuts-inhibit`, `toggle-keyboard-shortcuts-inhibit` | X | |
 | Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-tag` | X | `open-focused #false` covers open-silent; explicit `default-tag` is the tag placement escape hatch. |
@@ -275,7 +276,8 @@ KDL config nodes and fields:
 - `workspaces`: `default-count`.
 - `tag-rules`: `tag <id> name=... default-layout=...`.
 - `window-rule`: `match app-id=... title=...`, `default-tag`,
-  `open-floating`, `keyboard-shortcuts-inhibit`, `forced-layout`.
+  `open-floating`, `open-focused`, `dialog-viewport-jump`,
+  `keyboard-shortcuts-inhibit`, `forced-layout`.
 - `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, plus
   `layout`, `mode`, `allow-inhibiting`, and `hotkey-overlay-title`

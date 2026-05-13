@@ -393,13 +393,10 @@ proc createWindowForExternal*(model: var Model;
           let parentOpensFocused =
             if ruleMatch.found and ruleMatch.rule.openFocusedSet:
               ruleMatch.rule.openFocused
-            else:
-              targetSlot == model.activeWorkspaceSlot()
+          else:
+            targetSlot == model.activeWorkspaceSlot()
           if parentOpensFocused:
-            discard model.focusWindow(
-              result,
-              retargetViewport = not model.parentVisibleInProjection(
-                parentExternalId))
+            discard model.applyParentFocusPolicy(result, parentExternalId)
         elif targetSlot == model.activeWorkspaceSlot():
           if pendingAdmission:
             focusAfterAdmission = true

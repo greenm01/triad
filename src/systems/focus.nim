@@ -77,7 +77,7 @@ proc popupFocusTarget(
 
 proc focusWindow*(
     model: var Model; winId: WindowId; retargetViewport = true;
-    restorePopupTree = true): bool =
+    restorePopupTree = true; snapViewport = false): bool =
   var target = winId
   if model.windowData(target).isNone:
     return false
@@ -98,7 +98,10 @@ proc focusWindow*(
   discard model.setTagFocus(tagId, target)
   if retargetViewport:
     discard model.requestTagViewportRetarget(tagId)
+    if snapViewport:
+      discard model.requestTagViewportSnap(tagId)
   discard model.recordFocus(target)
+  discard model.clearPendingDialogFocus(target)
   true
 
 proc focusWorkspaceSlot*(model: var Model; slot: uint32): bool =

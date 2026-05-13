@@ -7,7 +7,7 @@ The right discriminator for float vs. tile is the **semantic type of the child w
 | Surface type | Window type / size | Behavior |
 |---|---|---|
 | `xdg_popup` | — | Always float, anchor to parent |
-| `xdg_toplevel` + `set_parent` | `DIALOG`, `UTILITY`, `xdg_dialog`, or no type with small size | Float, center on parent |
+| `xdg_toplevel` + `set_parent` | Dialog/utility intent, or no type with small size | Float, center on parent |
 | `xdg_toplevel` + `set_parent` | `NORMAL` or large size hint | Tile as normal surface |
 | `xdg_toplevel`, no parent | Any | Tile as normal surface |
 
@@ -44,7 +44,7 @@ Floating every window that sets `set_parent` is too broad. Some toplevels set a 
 | Yes | `NORMAL`, large size hint | Tile |
 | No | Any | Tile |
 
-For Wayland-native clients, also watch for the `xdg_dialog` protocol (introduced as a complement to xdg-shell) which explicitly marks a toplevel as a dialog regardless of size, giving you a clean signal without heuristics.
+In Triad's River client, semantic window types such as `xdg_dialog` and XWayland EWMH atoms are not exposed today. Triad can currently use the parent relationship, size hints, app id, title, and window rules; explicit dialog protocol/type signals should be treated as future input if River exposes them.
 
 ## Edge Case: Persistent Tool Windows
 
@@ -79,7 +79,7 @@ The parent is either the master window or one tile in the stack column. Policy i
 
 ### Scroller (Scroller, Vertical Scroller)
 
-As discussed throughout this document. Float the child centered on the parent column and ensure the parent column is scrolled into view before the child appears. A child that floats over an off-screen parent is disorienting.
+Float the child centered on the parent column. If the parent is already focused, normal focus retargeting keeps the parent in view and the child can focus immediately. If a background parent is off-screen, the child stays hidden and pending until the parent naturally becomes visible; it must not hijack the user's viewport. Apps that should demand immediate attention can opt in with a parent-matched `dialog-viewport-jump` window rule.
 
 ### Grid (Grid, Vertical Grid)
 
@@ -90,7 +90,7 @@ All cells are equal size and the parent can be any cell. Float the child centere
 One master window is visible; others are stacked behind it. Two cases:
 
 - **Focused (master) window spawns a child** — float centered on the master area. Normal case.
-- **Background (stacked) window spawns a child** — the parent is not visible. Promote the parent to master first, then float the child on it. Floating a child whose parent is invisible breaks the spatial contract. Do not silently center the child on screen as if the parent doesn't exist.
+- **Background (stacked) window spawns a child** — defer the child focus and projection until the parent becomes the active deck item. Do not promote a background parent by default; that steals context from the user's current deck window. A parent-matched `dialog-viewport-jump` rule can opt specific apps into the aggressive behavior.
 
 ### Monocle
 
@@ -110,12 +110,12 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 | Center Tile | Master-Stack | Float | Tile | Parent window geometry | Master is centered; float appears naturally central if parent is master |
 | Vertical Tile | Master-Stack | Float | Tile | Parent window geometry | Same rules, vertical axis; stack windows are horizontally narrow |
 | Right Tile | Master-Stack | Float | Tile | Parent window geometry | Mirror of Tile; no behavioral difference |
-| Scroller | Scroller | Float | Tile | Parent column center | Scroll parent column into view before showing child |
-| Vertical Scroller | Scroller | Float | Tile | Parent row center | Scroll parent row into view before showing child |
+| Scroller | Scroller | Float | Tile | Parent column center | Background off-screen children defer focus; `dialog-viewport-jump` opts in to immediate camera movement |
+| Vertical Scroller | Scroller | Float | Tile | Parent row center | Same deferred default as Scroller on the vertical axis |
 | Grid | Grid | Float | Tile | Parent cell center | Grid reflowing around a float is expected and fine |
 | Vertical Grid | Grid | Float | Tile | Parent cell center | Same as Grid; vertical split priority doesn't change child policy |
-| Deck | Deck | Float | Tile | Master window | If background window spawns child, promote parent to master first |
-| Vertical Deck | Deck | Float | Tile | Master window | Same promotion rule as Deck; vertical axis only |
+| Deck | Deck | Float | Tile | Master window | Background children defer by default; parent rule can opt in to immediate promotion |
+| Vertical Deck | Deck | Float | Tile | Master window | Same deferred default as Deck; vertical axis only |
 | Monocle | Monocle | Float | Tile (hidden until layout change) | Screen center | Canonical fullscreen case; parent and screen center coincide |
 | TGMix | Hybrid | Float | Tile | Parent window geometry | Master zone: follow master-stack rules; grid zone: follow grid rules |
 
@@ -127,14 +127,16 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 |---|---|---|
 | Store parent id for child windows | Pass | River parent events are persisted in runtime, shell snapshots, and live restore. |
 | Parent layout state does not decide float/tile | Pass | Parented child policy ignores whether the parent is tiled, maximized, or fullscreen. |
-| `xdg_popup` always floats and anchors | Partial | River currently exposes parent relationships, not xdg role or positioner data. |
-| Dialog/utility/small parented toplevel floats | Partial | Parented windows float by default; explicit surface type is not available yet. |
-| Normal/large parented toplevel tiles | Partial | Triad uses conservative size-hint detection plus window-rule escape hatches. |
-| Unparented toplevels tile | Partial | Triad intentionally floats fixed-size unparented utility windows. |
+| `xdg_popup` always floats and anchors | Protocol-owned | True xdg_popup anchoring is handled by River/compositor xdg-shell plumbing; Triad policy begins with managed `river_window_v1` windows. |
+| Dialog/utility/small parented toplevel floats | Pass | Parented River windows float by default unless explicit rules or large primary-surface hints tile them. |
+| Normal/large parented toplevel tiles | Pass | Large parented primary surfaces tile via River dimensions hints; window rules remain explicit overrides. |
+| Unparented toplevels tile | Partial | Normal unparented windows tile; fixed-size unparented utility windows intentionally float. |
 | Child centered on parent geometry | Pass | Floating children anchor to the parent's projected render rectangle. |
 | Larger/wider child behavior | Pass | Wider children remain centered and clamped; screen-sized children shrink to screen. |
 | Child stays in parent workspace/view | Pass | Parented children default to the parent workspace unless an explicit rule overrides it. |
-| Scroller parent visibility | Pass | Focused children retarget the camera only when the parent is off-screen. |
+| Scroller parent visibility | Pass | Focused-parent children use normal retargeting; background off-screen children defer focus instead of hijacking the camera. |
+| Background child focus deferral | Pass | Parented floating children queue focus until the parent is render-visible. |
+| Parent-matched viewport jump escape hatch | Pass | `window-rule dialog-viewport-jump #true` opts specific parent apps into immediate focus and viewport snap. |
 | Hide popup when focus leaves popup tree | Pass | Only the active popup tree is projected. |
 | Popup focus tree/history | Pass | Closing children and returning to a parent use popup-tree focus history. |
 | Newer or recently focused popups cover older ones | Pass | Popup stacking follows descendant order, then focus/open history. |

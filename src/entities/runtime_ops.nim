@@ -47,6 +47,9 @@ proc restoreOverviewViewportSnapshot*(model: var Model): bool =
   if model.viewportRetargetTags.len > 0:
     model.viewportRetargetTags.clear()
     result = true
+  if model.viewportSnapTags.len > 0:
+    model.viewportSnapTags.clear()
+    result = true
 
 proc setLayerFocusExclusiveState*(
     model: var Model; exclusive: bool): bool =

@@ -761,10 +761,10 @@ suite "Core Runtime Logic":
   test "Parented floating window follows scroller camera":
     var model = cameraModel()
     model.seedCameraWindows(3)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 2,
       appId: "pinentry", title: "Passphrase"))
-    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     let beforeChildGeom = model.instructionGeom(4)
 
     model.setViewport(1, targetX = 500.0, currentX = 500.0)
@@ -817,10 +817,10 @@ suite "Core Runtime Logic":
   test "Parented popup remains while focus is on child":
     var model = cameraModel()
     model.seedCameraWindows(3)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     discard model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 2,
       appId: "pinentry", title: "Passphrase"))
-    model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let parentGeom = model.instructionGeom(2)
     let childGeom = model.instructionGeom(4)
@@ -831,6 +831,7 @@ suite "Core Runtime Logic":
   test "Parented popup tree remains while focus is on nested child":
     var model = cameraModel()
     model.seedCameraWindows(3)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 2,
       appId: "pinentry", title: "First"))
@@ -840,7 +841,6 @@ suite "Core Runtime Logic":
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 6, createdParentWindowId: 4,
       appId: "pinentry", title: "Nested"))
-    model.setViewport(1, targetX = 400.0, currentX = 400.0)
 
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
     check model.focusedWindowId() == 6
@@ -886,6 +886,7 @@ suite "Core Runtime Logic":
   test "Closing focused popup falls back within popup tree":
     var model = cameraModel()
     model.seedCameraWindows(3)
+    model.setViewport(1, targetX = 400.0, currentX = 400.0)
     model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 2,
       appId: "pinentry", title: "First"))
@@ -1151,22 +1152,126 @@ suite "Core Runtime Logic":
 
     check not model.snapshotWindow(2).isFloating
 
-  test "Offscreen parented popup retargets scroller camera on open":
+  test "Offscreen parented popup defers focus until parent is visible":
     var model = cameraModel()
     model.seedCameraWindows(3)
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     discard model.layoutInstructions()
     model.setViewport(1, targetX = 0.0, currentX = 0.0)
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
       windowId: 4, createdParentWindowId: 3,
       appId: "pinentry", title: "Passphrase"))
     discard model.layoutInstructions()
 
-    check model.focusedWindowId() == 4
-    check model.viewport(1).targetViewportXOffset > 0.0'f32
+    check not effects.hasFocusEffect(4)
+    check model.focusedWindowId() == 1
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+    check model.pendingDialogFocusWindows.len == 1
+    check model.instructionGeom(4).w == 0
 
-  test "Deck popup promotes background parent for anchoring":
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+    discard model.layoutInstructions()
+    let parentViewport = model.viewport(1)
+    model.setViewport(
+      1,
+      targetX = parentViewport.targetViewportXOffset,
+      currentX = parentViewport.targetViewportXOffset)
+    let flushEffects = model.updateModel(Msg(kind: MsgKind.CmdTick))
+
+    check flushEffects.hasFocusEffect(4)
+    check model.focusedWindowId() == 4
+    check model.pendingDialogFocusWindows.len == 0
+
+  test "Parented popup viewport jump rule focuses and snaps":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        centerFocusedColumn: "always",
+        enableAnimations: true,
+        animationSpeed: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Window 1"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Window 2"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
+      appId: "keepassxc", title: "KeePassXC"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "pinentry", title: "Passphrase"))
+    discard model.layoutInstructions()
+
+    check effects.hasFocusEffect(4)
+    check model.focusedWindowId() == 4
+    check model.pendingDialogFocusWindows.len == 0
+    check model.viewport(1).targetViewportXOffset > 0.0'f32
+    check model.viewport(1).currentViewportXOffset ==
+      model.viewport(1).targetViewportXOffset
+
+  test "Parented popup open-focused false suppresses viewport jump":
+    var model = initRuntimeStateFromConfig(Config(
+      layout: LayoutConfig(
+        gaps: 10,
+        defaultColumnWidth: 0.7,
+        centerFocusedColumn: "always",
+        enableAnimations: true,
+        animationSpeed: 0.5),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      windowRules: @[
+        WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true),
+        WindowRule(appIdMatch: "pinentry", openFocusedSet: true,
+          openFocused: false)
+      ])).model
+    model.applyMsg(Msg(kind: MsgKind.WlOutputDimensions, outputId: 0,
+      width: 1000, height: 700))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1,
+      appId: "app", title: "Window 1"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 2,
+      appId: "app", title: "Window 2"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 3,
+      appId: "keepassxc", title: "KeePassXC"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "pinentry", title: "Passphrase"))
+    discard model.layoutInstructions()
+
+    check not effects.hasFocusEffect(4)
+    check model.focusedWindowId() == 1
+    check model.pendingDialogFocusWindows.len == 0
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+
+  test "Queued parented popup is cleared when parent closes":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.layoutInstructions()
+    model.setViewport(1, targetX = 0.0, currentX = 0.0)
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+      windowId: 4, createdParentWindowId: 3,
+      appId: "pinentry", title: "Passphrase"))
+
+    check model.pendingDialogFocusWindows.len == 1
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 3))
+
+    check model.pendingDialogFocusWindows.len == 0
+
+  test "Deck popup from background parent defers focus":
     var model = directionalModel(LayoutMode.Deck, 3)
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     let beforeParentGeom = model.instructionGeom(3)
@@ -1177,10 +1282,10 @@ suite "Core Runtime Logic":
 
     let parentGeom = model.instructionGeom(3)
     let childGeom = model.instructionGeom(4)
-    check beforeParentGeom.x > parentGeom.x
-    check childGeom.x <= parentGeom.x + parentGeom.w
-    check childGeom.x + childGeom.w >= parentGeom.x
-    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+    check parentGeom == beforeParentGeom
+    check childGeom.w == 0
+    check model.focusedWindowId() == 1
+    check model.pendingDialogFocusWindows.len == 1
 
   test "TGMix popup anchors in tile-sized parent zone":
     var model = directionalModel(LayoutMode.TGMix, 3)

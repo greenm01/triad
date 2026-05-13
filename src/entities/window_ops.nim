@@ -59,6 +59,49 @@ proc addWindow*(model: var Model; externalId: ExternalWindowId; title = "";
   model.windowTags[id] = EmptyTagMask
   id
 
+proc pendingDialogFocusContains*(
+    model: Model; winId: WindowId): bool =
+  for pending in model.pendingDialogFocusWindows:
+    if pending == winId:
+      return true
+  false
+
+proc enqueuePendingDialogFocus*(
+    model: var Model; winId: WindowId): bool =
+  if winId == NullWindowId or model.windows.entity(winId).isNone:
+    return false
+  if model.pendingDialogFocusContains(winId):
+    return false
+  model.pendingDialogFocusWindows.add(winId)
+  true
+
+proc clearPendingDialogFocus*(
+    model: var Model; winId: WindowId): bool =
+  if winId == NullWindowId or model.pendingDialogFocusWindows.len == 0:
+    return false
+  var kept: seq[WindowId] = @[]
+  for pending in model.pendingDialogFocusWindows:
+    if pending != winId:
+      kept.add(pending)
+  result = kept.len != model.pendingDialogFocusWindows.len
+  if result:
+    model.pendingDialogFocusWindows = kept
+
+proc clearPendingDialogFocusRefs(
+    model: var Model; winId: WindowId; externalId: ExternalWindowId): bool =
+  if model.pendingDialogFocusWindows.len == 0:
+    return false
+  var kept: seq[WindowId] = @[]
+  for pending in model.pendingDialogFocusWindows:
+    let pendingOpt = model.windows.entity(pending)
+    if pending == winId or pendingOpt.isNone or
+        pendingOpt.get().parentExternalId == externalId:
+      result = true
+    else:
+      kept.add(pending)
+  if result:
+    model.pendingDialogFocusWindows = kept
+
 proc setWindowCreatedState*(model: var Model; winId: WindowId;
     title = ""; appId = ""; identifier = ""; widthProportion = 1.0'f32;
     heightProportion = 1.0'f32; isFloating = false;
@@ -148,6 +191,7 @@ proc destroyWindow*(model: var Model; winId: WindowId): bool =
   let winOpt = model.windows.entity(winId)
   if winOpt.isNone:
     return false
+  discard model.clearPendingDialogFocusRefs(winId, winOpt.get().externalId)
 
   var tagIds: seq[TagId] = @[]
   for tagId, placementWinId, _ in model.placementsWithId():
@@ -172,6 +216,8 @@ proc setWindowMinimized*(
     model: var Model; winId: WindowId; minimized: bool): bool =
   if model.windows.entity(winId).isNone:
     return false
+  if minimized:
+    discard model.clearPendingDialogFocus(winId)
   model.windows.mEntity(winId).isMinimized = minimized
   true
 
@@ -273,6 +319,7 @@ proc setWindowParent*(
     bool =
   if model.windows.entity(winId).isNone:
     return false
+  discard model.clearPendingDialogFocus(winId)
   model.windows.mEntity(winId).parentExternalId = parentExternalId
   true
 
@@ -345,6 +392,8 @@ proc setWindowFloating*(model: var Model; winId: WindowId;
     floating: bool; floatingGeom = Rect(); parentAutoFloating = false): bool =
   if model.windows.entity(winId).isNone:
     return false
+  if not floating:
+    discard model.clearPendingDialogFocus(winId)
   model.windows.mEntity(winId).isFloating = floating
   model.windows.mEntity(winId).parentAutoFloating =
     floating and parentAutoFloating

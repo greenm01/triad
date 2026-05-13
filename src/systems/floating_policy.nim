@@ -126,6 +126,48 @@ proc parentFocusAllowed*(model: Model; winId: WindowId;
     return ruleMatch.rule.openFocused
   model.parentWorkspaceSlot(parentExternalId) == model.activeSlot
 
+proc parentDialogViewportJump*(
+    model: Model; parentExternalId: ExternalWindowId): bool =
+  let parentId = model.windowForExternal(parentExternalId)
+  if parentId == NullWindowId:
+    return false
+  let parentOpt = model.windowData(parentId)
+  if parentOpt.isNone:
+    return false
+  let parent = parentOpt.get()
+  let ruleMatch = model.windowRuleFor(parent.appId, parent.title)
+  ruleMatch.found and ruleMatch.rule.dialogViewportJump
+
+proc parentIsDeckBackground(
+    model: Model; parentId: WindowId): bool =
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isNone or tagOpt.get().layoutMode notin {
+      runtime_values.LayoutMode.Deck,
+      runtime_values.LayoutMode.VerticalDeck}:
+    return false
+  parentId != model.activeFocus()
+
+proc applyParentFocusPolicy*(
+    model: var Model; winId: WindowId;
+    parentExternalId: ExternalWindowId): bool =
+  if not model.parentFocusAllowed(winId, parentExternalId):
+    discard model.clearPendingDialogFocus(winId)
+    return false
+
+  let parentId = model.windowForExternal(parentExternalId)
+  let parentVisible = model.parentVisibleInProjection(parentExternalId)
+  if parentVisible and not model.parentIsDeckBackground(parentId):
+    return model.focusWindow(winId, retargetViewport = false)
+
+  if parentId != NullWindowId and parentId == model.activeFocus():
+    return model.focusWindow(winId, retargetViewport = true)
+
+  if model.parentDialogViewportJump(parentExternalId):
+    return model.focusWindow(
+      winId, retargetViewport = true, snapViewport = true)
+
+  model.enqueuePendingDialogFocus(winId)
+
 proc ensureFloatingAt*(model: var Model; winId: WindowId;
     geom: runtime_values.Rect; parentAutoFloating = false): bool =
   let winOpt = model.windowData(winId)
@@ -173,11 +215,7 @@ proc applyParentFloatingPolicy*(model: var Model; winId: WindowId;
   result = model.reconcileParentedWindowPolicy(
     winId, allowFloatCreation = true) or result
   result = model.clearWindowViewportRetarget(winId) or result
-  if model.parentFocusAllowed(winId, parentExternalId):
-    result = model.focusWindow(
-      winId,
-      retargetViewport = not model.parentVisibleInProjection(parentExternalId)
-    ) or result
+  result = model.applyParentFocusPolicy(winId, parentExternalId) or result
 
 proc applyFixedSizeFloatingPolicy*(model: var Model; winId: WindowId): bool =
   let winOpt = model.windowData(winId)

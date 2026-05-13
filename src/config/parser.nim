@@ -474,6 +474,8 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-focused" and child.args.len > 0:
               rule.openFocusedSet = true
               rule.openFocused = child.args[0].kBool()
+            elif child.name == "dialog-viewport-jump" and child.args.len > 0:
+              rule.dialogViewportJump = child.args[0].kBool()
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
             elif child.name == "forced-layout" and child.args.len > 0:

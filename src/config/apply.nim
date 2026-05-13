@@ -14,6 +14,7 @@ proc windowRuleData(rule: rv.WindowRule): WindowRuleData =
     openFloating: rule.openFloating,
     openFocusedSet: rule.openFocusedSet,
     openFocused: rule.openFocused,
+    dialogViewportJump: rule.dialogViewportJump,
     keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
     forcedLayout: rule.forcedLayout
   )

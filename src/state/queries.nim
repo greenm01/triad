@@ -326,6 +326,9 @@ proc shellWorkspaceOutputName*(model: Model; tagId: TagId): string =
 proc viewportRetargetRequested*(model: Model; tagId: TagId): bool =
   model.viewportRetargetTags.contains(tagId)
 
+proc viewportSnapRequested*(model: Model; tagId: TagId): bool =
+  model.viewportSnapTags.contains(tagId)
+
 proc windowPositionOnTag*(model: Model; tagId: TagId; winId: WindowId):
     tuple[found: bool; tagId: TagId; slot, colIdx, winIdx: uint32] =
   if tagId == NullTagId:

@@ -262,6 +262,7 @@ window-rule {
   default-tag 3
   open-floating #true
   open-focused #false
+  dialog-viewport-jump #true
 }
 spawn-at-startup "notify-send" "triad"
 quickshell {
@@ -330,6 +331,7 @@ bindings {
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
     check not config.windowRules[0].openFocused
+    check config.windowRules[0].dialogViewportJump
     check config.startupCommands == @[@["notify-send", "triad"]]
     check config.quickshell.theme == "noctalia"
     check config.terminal.command.len > 0

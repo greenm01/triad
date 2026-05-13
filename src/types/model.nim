@@ -86,6 +86,7 @@ type
     openFloating*: bool
     openFocusedSet*: bool
     openFocused*: bool
+    dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     forcedLayout*: int
 
@@ -188,6 +189,8 @@ type
     overviewSelectedWindow*: WindowId
     overviewViewportSnapshot*: Table[TagId, ViewportState]
     viewportRetargetTags*: HashSet[TagId]
+    viewportSnapTags*: HashSet[TagId]
+    pendingDialogFocusWindows*: seq[WindowId]
     layerFocusExclusive*: bool
     sessionLocked*: bool
     activeModifiers*: uint32

@@ -1,8 +1,8 @@
 import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import Direction
-import focus, placement, runtime, scratchpad, update_effects, window_state,
-  workspaces
+import dialog_focus, focus, placement, runtime, scratchpad, update_effects,
+  window_state, workspaces
 
 proc closeOverview(model: var Model): bool =
   let wasActive = model.overviewActive
@@ -231,6 +231,7 @@ proc applyCommand*(model: var Model; msg: Msg): UpdateStep =
           spawnCommand: msg.spawnCommand))
   of MsgKind.CmdTick:
     result.dirty = model.tickAnimations()
+    result.dirty = model.flushPendingDialogFocus() or result.dirty
   of MsgKind.CmdLockSession:
     if model.screenLockCommand.len > 0:
       result.effects.add(Effect(
