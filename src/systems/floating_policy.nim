@@ -147,6 +147,13 @@ proc parentIsDeckBackground(
     return false
   parentId != model.activeFocus()
 
+proc parentReadyForDialogFocus*(
+    model: Model; parentExternalId: ExternalWindowId): bool =
+  let parentId = model.windowForExternal(parentExternalId)
+  parentId != NullWindowId and
+    model.parentVisibleInProjection(parentExternalId) and
+    not model.parentIsDeckBackground(parentId)
+
 proc applyParentFocusPolicy*(
     model: var Model; winId: WindowId;
     parentExternalId: ExternalWindowId): bool =
@@ -155,8 +162,7 @@ proc applyParentFocusPolicy*(
     return false
 
   let parentId = model.windowForExternal(parentExternalId)
-  let parentVisible = model.parentVisibleInProjection(parentExternalId)
-  if parentVisible and not model.parentIsDeckBackground(parentId):
+  if model.parentReadyForDialogFocus(parentExternalId):
     return model.focusWindow(winId, retargetViewport = false)
 
   if parentId != NullWindowId and parentId == model.activeFocus():

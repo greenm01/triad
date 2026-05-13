@@ -23,7 +23,7 @@ proc flushPendingDialogFocus*(model: var Model): bool =
       result = true
       continue
 
-    if model.parentVisibleInProjection(win.parentExternalId):
+    if model.parentReadyForDialogFocus(win.parentExternalId):
       discard model.focusWindow(winId, retargetViewport = false)
       result = true
     else:

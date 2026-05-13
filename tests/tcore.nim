@@ -1271,21 +1271,44 @@ suite "Core Runtime Logic":
 
     check model.pendingDialogFocusWindows.len == 0
 
-  test "Deck popup from background parent defers focus":
-    var model = directionalModel(LayoutMode.Deck, 3)
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
-    let beforeParentGeom = model.instructionGeom(3)
+  test "Deck popup from background parent defers until parent active":
+    for mode in [LayoutMode.Deck, LayoutMode.VerticalDeck]:
+      var model = directionalModel(mode, 3)
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+      let beforeParentGeom = model.instructionGeom(3)
 
-    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
-      windowId: 4, createdParentWindowId: 3,
-      appId: "pinentry", title: "Passphrase"))
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated,
+        windowId: 4, createdParentWindowId: 3,
+        appId: "pinentry", title: "Passphrase"))
 
-    let parentGeom = model.instructionGeom(3)
-    let childGeom = model.instructionGeom(4)
-    check parentGeom == beforeParentGeom
-    check childGeom.w == 0
-    check model.focusedWindowId() == 1
-    check model.pendingDialogFocusWindows.len == 1
+      var parentGeom = model.instructionGeom(3)
+      var childGeom = model.instructionGeom(4)
+      check parentGeom == beforeParentGeom
+      check childGeom.w == 0
+      check model.focusedWindowId() == 1
+      check model.pendingDialogFocusWindows.len == 1
+
+      let idleEffects = model.updateModel(Msg(kind: MsgKind.CmdTick))
+      parentGeom = model.instructionGeom(3)
+      childGeom = model.instructionGeom(4)
+
+      check not idleEffects.hasFocusEffect(4)
+      check parentGeom == beforeParentGeom
+      check childGeom.w == 0
+      check model.focusedWindowId() == 1
+      check model.pendingDialogFocusWindows.len == 1
+
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+      let flushEffects = model.updateModel(Msg(kind: MsgKind.CmdTick))
+      parentGeom = model.instructionGeom(3)
+      childGeom = model.instructionGeom(4)
+
+      check flushEffects.hasFocusEffect(4)
+      check model.focusedWindowId() == 4
+      check model.pendingDialogFocusWindows.len == 0
+      check childGeom.w > 0
+      check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+      check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
 
   test "TGMix popup anchors in tile-sized parent zone":
     var model = directionalModel(LayoutMode.TGMix, 3)

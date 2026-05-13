@@ -24,7 +24,7 @@ The maximized/fullscreen case is simply the most visible instance of the general
 
 ## Positioning
 
-Float the child **centered on the parent column**, not on the full screen. This keeps the spatial relationship legible in a busy scrolling layout.
+Float the child **centered on the parent's projected geometry**, not on the full screen. This keeps the spatial relationship legible in a busy layout.
 
 ## Why "Always Float a Child Window" Is Also Wrong
 
@@ -71,7 +71,7 @@ The parent's layout state (maximized, tiled, fullscreen) is irrelevant to this d
 
 ## Applying the Policy Across Layouts
 
-The float/tile decision rules are layout-agnostic — the same signal logic applies everywhere. What varies per layout is **where you anchor the float** and **whether the parent is visible** when the child opens. Layouts fall into five families:
+The float/tile decision rules are layout-agnostic — the same signal logic applies everywhere. What varies per layout is **where you anchor the float** and **whether the parent is visible** when the child opens. Layouts fall into six families:
 
 ### Master-Stack (Tile, Center Tile, Vertical Tile, Right Tile)
 
@@ -89,7 +89,7 @@ All cells are equal size and the parent can be any cell. Float the child centere
 
 One master window is visible; others are stacked behind it. Two cases:
 
-- **Focused (master) window spawns a child** — float centered on the master area. Normal case.
+- **Focused (master) window spawns a child** — float centered on the master area. `applyPopupLayoutFocus()` drives deck layout focus from the popup root, keeping the parent visible. Normal case.
 - **Background (stacked) window spawns a child** — defer the child focus and projection until the parent becomes the active deck item. Do not promote a background parent by default; that steals context from the user's current deck window. A parent-matched `dialog-viewport-jump` rule can opt specific apps into the aggressive behavior.
 
 ### Monocle
@@ -135,12 +135,12 @@ Hybrid tile + grid. Follow master-stack rules for windows in the master zone and
 | Larger/wider child behavior | Pass | Wider children remain centered and clamped; screen-sized children shrink to screen. |
 | Child stays in parent workspace/view | Pass | Parented children default to the parent workspace unless an explicit rule overrides it. |
 | Scroller parent visibility | Pass | Focused-parent children use normal retargeting; background off-screen children defer focus instead of hijacking the camera. |
-| Background child focus deferral | Pass | Parented floating children queue focus until the parent is render-visible. |
+| Background child focus deferral | Pass | Parented floating children queue focus until the parent is ready to show the dialog; Deck requires the parent to be active, not merely rendered in the stack. |
 | Parent-matched viewport jump escape hatch | Pass | `window-rule dialog-viewport-jump #true` opts specific parent apps into immediate focus and viewport snap. |
 | Hide popup when focus leaves popup tree | Pass | Only the active popup tree is projected. |
 | Popup focus tree/history | Pass | Closing children and returning to a parent use popup-tree focus history. |
 | Newer or recently focused popups cover older ones | Pass | Popup stacking follows descendant order, then focus/open history. |
-| Deck background parent behavior | Pass | Deck projection uses the popup root as layout focus so the parent is visible first. |
+| Deck background parent behavior | Pass | Background deck children defer focus/projection until the parent becomes active; focused-parent popup trees still use popup-root layout focus. |
 | TGMix behavior | Pass | Popups anchor to the parent in both the tile-sized and grid-sized TGMix projections. |
 
 ---
