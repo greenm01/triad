@@ -41,6 +41,17 @@ proc mergeFloatingRule(
 proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.defaultSlot != 0:
     result.defaultSlot = rule.defaultSlot
+  if rule.openOnOutput.len > 0:
+    result.openOnOutput = rule.openOnOutput
+  if rule.defaultColumnWidthSet:
+    result.defaultColumnWidthSet = true
+    result.defaultColumnWidth = rule.defaultColumnWidth
+  if rule.defaultWindowWidthSet:
+    result.defaultWindowWidthSet = true
+    result.defaultWindowWidth = rule.defaultWindowWidth
+  if rule.defaultWindowHeightSet:
+    result.defaultWindowHeightSet = true
+    result.defaultWindowHeight = rule.defaultWindowHeight
   if rule.openFloatingSet:
     result.openFloatingSet = true
     result.openFloating = rule.openFloating

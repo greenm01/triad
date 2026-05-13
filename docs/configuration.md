@@ -92,12 +92,15 @@ window-rule {
   exclude title="Private"
   default-workspace 4
   open-maximized #true
+  default-column-width { proportion 0.65 }
+  default-window-height { proportion 0.90 }
 }
 
 window-rule {
   match app-id="gimp" title="Toolbox"
   parented-role "tool"
   open-focused #false
+  open-on-output "HDMI-A-1"
   floating {
     x-ratio 0.02
     y-ratio 0.08
@@ -134,6 +137,15 @@ window-rule {
   until the parent is visible. The default is `#false`.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
+- `open-on-output "<name>"`: opens matching windows on the workspace currently
+  visible on the named output. This does not switch workspaces or reassign
+  outputs. Unknown outputs fall back to the normal active-workspace behavior,
+  and `default-workspace` takes precedence.
+- `default-column-width { proportion <n> }`: sets the initial width of a newly
+  created tiled column for matching windows. Values are clamped to `0.05..1.0`.
+- `default-window-width { proportion <n> }` and
+  `default-window-height { proportion <n> }`: set the matching window's initial
+  stored width and height proportions. Values are clamped to `0.05..1.0`.
 - `match` and `exclude` use regex search semantics. Simple strings such as
   `gimp` match as before; exact matches should be anchored, for example
   `^org\\.gimp\\.GIMP$`.
@@ -145,6 +157,9 @@ window-rule {
 - Rule-level `floating` fields merge independently. A later matching rule can
   override only `width-ratio` while keeping `x-ratio` and `y-ratio` from an
   earlier broad rule.
+- Rule-level opening sizing fields merge independently. A later matching rule
+  can override only `default-window-height` while keeping an earlier
+  `default-column-width`.
 - When multiple opening states are true, fullscreen wins over edge maximize,
   and edge maximize wins over full-width column.
 

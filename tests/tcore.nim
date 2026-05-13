@@ -3407,6 +3407,268 @@ suite "Core Runtime Logic":
       check snapshot.workspaces[1].focusedWindow == 2
       check not effects.hasFocusEffect(2)
 
+  test "Window rule opening sizing sets initial column and window proportions":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          defaultColumnWidth: 0.5, defaultWindowWidth: 0.5, defaultWindowHeight: 1.0
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "sized",
+              defaultColumnWidthSet: true,
+              defaultColumnWidth: 0.65,
+              defaultWindowWidthSet: true,
+              defaultWindowWidth: 0.75,
+              defaultWindowHeightSet: true,
+              defaultWindowHeight: 0.85,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "sized", title: "Main")
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(2)))
+    let win = model.snapshotWindow(2)
+
+    check placement.found
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+    check model.columnData(columnId).get().widthProportion == 0.65'f32
+    check win.widthProportion == 0.75'f32
+    check win.heightProportion == 0.85'f32
+
+  test "Window rule opening sizing fields merge independently":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          defaultColumnWidth: 0.5, defaultWindowWidth: 0.5, defaultWindowHeight: 1.0
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "sized",
+              defaultColumnWidthSet: true,
+              defaultColumnWidth: 0.60,
+              defaultWindowWidthSet: true,
+              defaultWindowWidth: 0.70,
+            ),
+            WindowRule(
+              appIdMatch: "sized",
+              titleMatch: "Tall",
+              defaultWindowHeightSet: true,
+              defaultWindowHeight: 0.80,
+            ),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "sized", title: "Tall")
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(2)))
+    let win = model.snapshotWindow(2)
+
+    check placement.found
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+    check model.columnData(columnId).get().widthProportion == 0.60'f32
+    check win.widthProportion == 0.70'f32
+    check win.heightProportion == 0.80'f32
+
+  test "Window rule opening sizing coexists with presentation states":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "video",
+              defaultColumnWidthSet: true,
+              defaultColumnWidth: 0.40,
+              defaultWindowWidthSet: true,
+              defaultWindowWidth: 0.70,
+              defaultWindowHeightSet: true,
+              defaultWindowHeight: 0.60,
+              openFullscreenSet: true,
+              openFullscreen: true,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "video", title: "Main")
+    )
+    let win = model.snapshotWindow(2)
+
+    check win.isFullscreen
+    check win.widthProportion == 0.70'f32
+    check win.heightProportion == 0.60'f32
+
+  test "Window rule open-on-output targets the visible workspace on that output":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "chat",
+              openOnOutput: "HDMI-A-1",
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "chat", title: "Main")
+    )
+
+    check model.snapshotWindow(3).workspaceIdx == 2
+    check model.activeTag == model.tagForSlot(1)
+    check model.focusedWindowId() == 0
+    check not effects.hasFocusEffect(3)
+
+  test "Window rule open-on-output falls back when output is unknown":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "chat", openOnOutput: "missing")],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "chat", title: "Main")
+    )
+
+    check model.snapshotWindow(3).workspaceIdx == 1
+
+  test "Window rule default workspace wins over open-on-output":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "chat",
+              defaultWorkspace: 3,
+              openOnOutput: "HDMI-A-1",
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "chat", title: "Main")
+    )
+
+    check model.snapshotWindow(3).workspaceIdx == 3
+
+  test "Live restore state wins over opening sizing and output rules":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "generic-app",
+              openOnOutput: "HDMI-A-1",
+              defaultColumnWidthSet: true,
+              defaultColumnWidth: 0.30,
+              defaultWindowWidthSet: true,
+              defaultWindowWidth: 0.40,
+              defaultWindowHeightSet: true,
+              defaultWindowHeight: 0.50,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    var restore = PendingRestoreState(activeSlot: 1)
+    restore.addRestoredWindow(ExternalWindowId(50), 1, "generic-app", "Old title")
+    model.applyLiveRestore(restore)
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 50,
+        appId: "generic-app",
+        title: "Old title",
+      )
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(50)))
+    let win = model.snapshotWindow(50)
+
+    check win.workspaceIdx == 1
+    check win.widthProportion == 0.8'f32
+    check win.heightProportion == 0.6'f32
+    check placement.found
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+    check model.columnData(columnId).get().widthProportion == 0.7'f32
+
   test "Open-fullscreen window rule creates tiled fullscreen window":
     var model = initRuntimeStateFromConfig(
       Config(

@@ -22,6 +22,25 @@ proc applyOpenColumnMaximize(model: var Model, tagId: TagId, columnId: ColumnId)
   if result and tagId == model.activeTag:
     discard model.requestTagViewportRetarget(tagId)
 
+proc outputForRuleName(model: Model, name: string): OutputId =
+  if name.len == 0:
+    return NullOutputId
+  for outputId, output in model.outputsWithId():
+    if output.name == name or model.shellOutputName(outputId) == name:
+      return outputId
+  NullOutputId
+
+proc visibleSlotForOutputRule(model: Model, name: string): uint32 =
+  let outputId = model.outputForRuleName(name)
+  if outputId == NullOutputId:
+    return 0
+  for mappedOutputId, tagId in model.outputTagsWithId():
+    if mappedOutputId == outputId:
+      let tagOpt = model.tagData(tagId)
+      if tagOpt.isSome:
+        return tagOpt.get().slot
+  0
+
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   model.windowForExternal(externalId)
 
@@ -376,6 +395,10 @@ proc createWindowForExternal*(
   let ruleForcesSlot = ruleMatch.found and ruleMatch.rule.defaultSlot != 0
   if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and not hasRestoredTag:
     targetSlot = ruleMatch.rule.defaultSlot
+  elif ruleMatch.found and not hasRestoredTag:
+    let outputSlot = model.visibleSlotForOutputRule(ruleMatch.rule.openOnOutput)
+    if outputSlot != 0:
+      targetSlot = outputSlot
   let forcedLayout = if ruleMatch.found: ruleMatch.rule.forcedLayout else: 0
   let parentKnown =
     parentExternalId != NullExternalWindowId and
@@ -411,12 +434,22 @@ proc createWindowForExternal*(
   var isFloating = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
+  var widthProportion = model.defaultWindowWidth()
+  var heightProportion = model.defaultWindowHeight()
+  var columnWidthProportion = 0.0'f32
   if ruleMatch.found:
     if ruleMatch.rule.openFloatingSet:
       isFloating = ruleMatch.rule.openFloating
     if isFloating:
       floatingGeom = model.defaultFloatingGeom()
     shortcutInhibit = ruleMatch.rule.keyboardShortcutsInhibit
+    if not hasRestoredWindow:
+      if ruleMatch.rule.defaultWindowWidthSet:
+        widthProportion = ruleMatch.rule.defaultWindowWidth
+      if ruleMatch.rule.defaultWindowHeightSet:
+        heightProportion = ruleMatch.rule.defaultWindowHeight
+      if ruleMatch.rule.defaultColumnWidthSet:
+        columnWidthProportion = ruleMatch.rule.defaultColumnWidth
   if hasRestoredWindow:
     isFloating = restored.isFloating
     floatingGeom = restored.floatingGeom
@@ -443,8 +476,8 @@ proc createWindowForExternal*(
     title = title,
     appId = appId,
     identifier = identifier,
-    widthProportion = model.defaultWindowWidth(),
-    heightProportion = model.defaultWindowHeight(),
+    widthProportion = widthProportion,
+    heightProportion = heightProportion,
     isFloating = isFloating,
     isFullscreen = isFullscreen,
     isMaximized = isMaximized,
@@ -518,7 +551,10 @@ proc createWindowForExternal*(
         discard model.recenterLeadFloatingAnchor(leadAnchor, result)
       else:
         placedColumn = model.addPlacedWindowColumn(
-          targetTag, result, model.newWindowColumnIndex(targetTag, isFloating)
+          targetTag,
+          result,
+          model.newWindowColumnIndex(targetTag, isFloating),
+          columnWidthProportion,
         )
       if openColumnMaximized:
         discard model.applyOpenColumnMaximize(targetTag, placedColumn)

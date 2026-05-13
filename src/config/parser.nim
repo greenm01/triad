@@ -62,6 +62,14 @@ proc configClamp32*(value, lo, hi: int32): int32 =
 proc configClampF32*(value, lo, hi: float32): float32 =
   clampF32(value, lo, hi)
 
+proc proportionChild(
+    node: KdlNode, lo = 0.05'f32, hi = 1.0'f32
+): tuple[found: bool, value: float32] =
+  if node.children.len > 0 and node.children[0].name == "proportion" and
+      node.children[0].args.len > 0:
+    result.found = true
+    result.value = clampF32(float32(node.children[0].args[0].kFloat()), lo, hi)
+
 proc runtimeWorkspaceCount*(count: uint32): uint32 =
   if count == 0:
     DefaultWorkspaceCount
@@ -440,20 +448,17 @@ proc loadConfig*(path: string): Config =
               if mode in ["never", "always", "on-overflow"]:
                 result.layout.centerFocusedColumn = mode
             elif child.name == "default-column-width":
-              if child.children.len > 0 and child.children[0].name == "proportion" and
-                  child.children[0].args.len > 0:
-                result.layout.defaultColumnWidth =
-                  clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+              let proportion = child.proportionChild()
+              if proportion.found:
+                result.layout.defaultColumnWidth = proportion.value
             elif child.name == "default-window-width":
-              if child.children.len > 0 and child.children[0].name == "proportion" and
-                  child.children[0].args.len > 0:
-                result.layout.defaultWindowWidth =
-                  clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+              let proportion = child.proportionChild()
+              if proportion.found:
+                result.layout.defaultWindowWidth = proportion.value
             elif child.name == "default-window-height":
-              if child.children.len > 0 and child.children[0].name == "proportion" and
-                  child.children[0].args.len > 0:
-                result.layout.defaultWindowHeight =
-                  clampF32(float32(child.children[0].args[0].kFloat()), 0.05, 1.0)
+              let proportion = child.proportionChild()
+              if proportion.found:
+                result.layout.defaultWindowHeight = proportion.value
             elif child.name == "master":
               for masterChild in child.children:
                 try:
@@ -555,6 +560,23 @@ proc loadConfig*(path: string): Config =
               let rawWorkspace = child.args[0].kInt()
               if rawWorkspace > 0:
                 rule.defaultWorkspace = uint32(rawWorkspace)
+            elif child.name == "open-on-output" and child.args.len > 0:
+              rule.openOnOutput = child.args[0].kString().strip()
+            elif child.name == "default-column-width":
+              let proportion = child.proportionChild()
+              if proportion.found:
+                rule.defaultColumnWidthSet = true
+                rule.defaultColumnWidth = proportion.value
+            elif child.name == "default-window-width":
+              let proportion = child.proportionChild()
+              if proportion.found:
+                rule.defaultWindowWidthSet = true
+                rule.defaultWindowWidth = proportion.value
+            elif child.name == "default-window-height":
+              let proportion = child.proportionChild()
+              if proportion.found:
+                rule.defaultWindowHeightSet = true
+                rule.defaultWindowHeight = proportion.value
             elif child.name == "open-floating" and child.args.len > 0:
               rule.openFloatingSet = true
               rule.openFloating = child.args[0].kBool()

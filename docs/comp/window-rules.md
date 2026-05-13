@@ -82,9 +82,9 @@ layout family.
 | Matching | `is-window-cast-target` | Match window cast target state | | Gap | |
 | Matching | `is-urgent` | Match urgent state | | Gap | |
 | Matching | `at-startup` | Match only startup or non-startup windows | | Gap | |
-| Opening | `default-column-width` | Set initial column width | `layout.default-column-width` | Partial | Triad only supports a global default. |
-| Opening | `default-window-height` | Set initial tiled window height | `layout.default-window-height` | Partial | Triad only supports a global default. |
-| Opening | `open-on-output` | Open matching window on a named output | | Gap | |
+| Opening | `default-column-width` | Set initial column width | `default-column-width { proportion ... }` | Pass | Rule-level value overrides the global layout default for newly created columns. |
+| Opening | `default-window-height` | Set initial tiled window height | `default-window-height { proportion ... }` | Pass | Triad also supports rule-level `default-window-width`. |
+| Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output; it does not move workspaces between outputs. |
 | Opening | `open-on-workspace` | Open matching window on a named workspace | `default-workspace <n>` | Pass | Triad uses numeric workspace slots. |
 | Opening | `open-maximized` | Open matching window maximized | `open-maximized #true/#false` | Pass | Maps to full-width column in scroller layouts, not client-visible maximize. |
 | Opening | `open-maximized-to-edges` | Open matching window maximized to edges | `open-maximized-to-edges #true/#false` | Pass | Uses Triad's client-visible maximized state. |
@@ -148,6 +148,9 @@ These are gap-analysis categories, not target config names.
   policy, paired with the runtime `toggle-keyboard-shortcuts-inhibit` command.
 - `forced-layout` is a Triad-specific rule that can select the workspace layout
   used for a matching new window.
+- `default-window-width` is a Triad-specific companion to niri's
+  `default-window-height`; it controls the initial stored window width
+  proportion.
 - Opening presentation states force tiled placement if they conflict with
   `open-floating`. Fullscreen takes precedence over edge maximize, which takes
   precedence over full-width column.

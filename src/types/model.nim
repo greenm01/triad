@@ -93,6 +93,13 @@ type
     matches*: seq[WindowRuleMatcherData]
     excludes*: seq[WindowRuleMatcherData]
     defaultSlot*: uint32
+    openOnOutput*: string
+    defaultColumnWidthSet*: bool
+    defaultColumnWidth*: float32
+    defaultWindowWidthSet*: bool
+    defaultWindowWidth*: float32
+    defaultWindowHeightSet*: bool
+    defaultWindowHeight*: float32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool
@@ -115,6 +122,13 @@ type
 
   ResolvedWindowRuleData* = object
     defaultSlot*: uint32
+    openOnOutput*: string
+    defaultColumnWidthSet*: bool
+    defaultColumnWidth*: float32
+    defaultWindowWidthSet*: bool
+    defaultWindowWidth*: float32
+    defaultWindowHeightSet*: bool
+    defaultWindowHeight*: float32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool

@@ -299,6 +299,10 @@ workspace-rules {
 window-rule {
   match app-id="qemu"
   default-workspace 3
+  open-on-output "HDMI-A-1"
+  default-column-width { proportion 0.65 }
+  default-window-width { proportion 0.75 }
+  default-window-height { proportion 0.85 }
   open-floating #true
   open-focused #false
   open-fullscreen #false
@@ -398,6 +402,13 @@ bindings {
     check config.windowRules[0].matches[0].appId == "qemu"
     check not config.windowRules[0].matches[0].titleSet
     check config.windowRules[0].defaultWorkspace == 3
+    check config.windowRules[0].openOnOutput == "HDMI-A-1"
+    check config.windowRules[0].defaultColumnWidthSet
+    check config.windowRules[0].defaultColumnWidth == 0.65'f32
+    check config.windowRules[0].defaultWindowWidthSet
+    check config.windowRules[0].defaultWindowWidth == 0.75'f32
+    check config.windowRules[0].defaultWindowHeightSet
+    check config.windowRules[0].defaultWindowHeight == 0.85'f32
     check config.windowRules[0].openFloatingSet
     check config.windowRules[0].openFloating
     check config.windowRules[0].openFocusedSet
@@ -682,6 +693,32 @@ window-rule {
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet
     check not config.windowRules[0].keyboardShortcutsInhibit
+
+  test "Window rule parser clamps opening sizing proportions":
+    let path = getTempDir() / "triad-window-rule-sizing.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="demo"
+  open-on-output "DP-1"
+  default-column-width { proportion 2.0 }
+  default-window-width { proportion 0.0 }
+  default-window-height { proportion 0.4 }
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 1
+    check config.windowRules[0].openOnOutput == "DP-1"
+    check config.windowRules[0].defaultColumnWidthSet
+    check config.windowRules[0].defaultColumnWidth == 1.0'f32
+    check config.windowRules[0].defaultWindowWidthSet
+    check config.windowRules[0].defaultWindowWidth == 0.05'f32
+    check config.windowRules[0].defaultWindowHeightSet
+    check config.windowRules[0].defaultWindowHeight == 0.4'f32
 
   test "Window rule parser reads multiple matches and excludes":
     let path = getTempDir() / "triad-window-rule-matchers.kdl"

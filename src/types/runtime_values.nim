@@ -114,6 +114,13 @@ type
     matches*: seq[WindowRuleMatcher]
     excludes*: seq[WindowRuleMatcher]
     defaultWorkspace*: uint32
+    openOnOutput*: string
+    defaultColumnWidthSet*: bool
+    defaultColumnWidth*: float32
+    defaultWindowWidthSet*: bool
+    defaultWindowWidth*: float32
+    defaultWindowHeightSet*: bool
+    defaultWindowHeight*: float32
     openFloatingSet*: bool
     openFloating*: bool
     openFocusedSet*: bool
