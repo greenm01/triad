@@ -12,6 +12,7 @@ type
     outputRules*: seq[OutputRule]
     tagRules*: seq[TagRule]
     windowRules*: seq[WindowRule]
+    environment*: seq[EnvironmentEntryConfig]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
     terminal*: TerminalConfig
@@ -126,6 +127,16 @@ proc parseColor(value: string, fallback: uint32): uint32 =
     result = uint32(parseHexInt(hex))
   except CatchableError:
     result = fallback
+
+proc validEnvironmentName(name: string): bool =
+  if name.len == 0:
+    return false
+  if not (name[0].isAlphaAscii() or name[0] == '_'):
+    return false
+  for ch in name:
+    if not (ch.isAlphaNumeric() or ch == '_'):
+      return false
+  true
 
 proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
   case name
@@ -1207,6 +1218,25 @@ proc loadConfig*(path: string): Config =
           warn "Ignoring invalid startup command", error = e.msg
         if cmd.len > 0:
           result.startupCommands.add(cmd)
+      elif node.name == "environment":
+        for child in node.children:
+          try:
+            if not validEnvironmentName(child.name):
+              warn "Ignoring invalid environment variable name", name = child.name
+              continue
+            if child.args.len == 0:
+              continue
+            let value = child.args[0]
+            if value.kind == KNull:
+              result.environment.add(
+                EnvironmentEntryConfig(name: child.name, unset: true)
+              )
+            else:
+              result.environment.add(
+                EnvironmentEntryConfig(name: child.name, value: value.kString())
+              )
+          except CatchableError as e:
+            warn "Ignoring invalid environment field", field = child.name, error = e.msg
       elif node.name == "window-menu-command":
         var cmd: seq[string] = @[]
         try:

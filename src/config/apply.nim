@@ -245,6 +245,7 @@ proc applyConfig*(model: var Model, config: Config) =
   if model.screenshot.clipboardCommand.strip().len == 0:
     model.screenshot.clipboardCommand = DefaultScreenshotClipboardCommand
 
+  model.environment = config.environment
   model.overviewOuterGap = config.overview.outerGap
   if model.overviewOuterGap < 0:
     model.overviewOuterGap = DefaultOverviewOuterGap

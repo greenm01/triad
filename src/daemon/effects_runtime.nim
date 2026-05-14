@@ -115,13 +115,14 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffBroadcastTriadJson:
     asyncCheck broadcastTriadJson(eff.jsonPayload, eff.triadEventName)
   of EffectKind.EffSpawnScreenLock:
-    spawnScreenLock(eff.screenLockCommand)
+    spawnScreenLock(daemon.runtimeState.model, eff.screenLockCommand)
   of EffectKind.EffSpawnWindowMenu:
     spawnWindowMenu(
-      eff.windowMenuCommand, eff.windowMenuId, eff.windowMenuX, eff.windowMenuY
+      daemon.runtimeState.model, eff.windowMenuCommand, eff.windowMenuId,
+      eff.windowMenuX, eff.windowMenuY,
     )
   of EffectKind.EffSpawn:
-    spawnCommand(eff.spawnCommand)
+    spawnCommand(daemon.runtimeState.model, eff.spawnCommand)
   of EffectKind.EffPointerWarp:
     for seat in daemon.seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)

@@ -101,6 +101,11 @@ recent-windows {
     }
 }
 
+// environment {
+//     GTK_THEME "Adwaita:dark"
+//     SSH_AUTH_SOCK #null
+// }
+
 bindings {
     bind "Super+Shift+Slash" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Super+q" "close-window"

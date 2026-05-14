@@ -81,7 +81,7 @@ The supported KDL nodes are:
 - `bindings`: keyboard bindings, pointer button and wheel bindings,
   HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
-- `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
+- `environment`, `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
 - `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`,
   `input`, `cursor`.
@@ -96,6 +96,30 @@ capability changes, update this guide and
 `docs/comp/config-command-matrix.md` in the same change. The configuration
 guide states Triad's naming policy; the comparison matrix shows how that policy
 maps against Mango and River.
+
+## Session Environment
+
+`environment` sets literal environment variables for future user-facing
+processes that Triad starts:
+
+```kdl
+environment {
+  GTK_THEME "Adwaita:dark"
+  SSH_AUTH_SOCK #null
+}
+```
+
+- Child node names are environment variable names. Names must start with a
+  letter or `_` and may contain letters, digits, and `_`.
+- String values are used literally. Triad does not expand `~`, `$VAR`, command
+  substitutions, or shell quoting.
+- `#null` removes the variable from the spawned process environment.
+- Later entries for the same variable win.
+- The block applies to future `spawn-at-startup`, `spawn`, `spawn-terminal`,
+  `screen-lock`, `window-menu-command`, screenshot helper commands, and the
+  configured Quickshell process. It does not change Triad's own environment,
+  systemd/dbus activation environments, externally started processes, or an
+  already-running Quickshell instance after `config-reload`.
 
 ## Window Rules
 

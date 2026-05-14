@@ -255,6 +255,11 @@ type
     focusAtStartup*: bool
     workspaceSlots*: seq[uint32]
 
+  EnvironmentEntryConfig* = object
+    name*: string
+    value*: string
+    unset*: bool
+
   WorkspaceConfig* = object
     defaultCount*: uint32
     defaultLayout*: LayoutMode

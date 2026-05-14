@@ -1,4 +1,4 @@
-import std/[asyncdispatch, os, osproc, strutils, times]
+import std/[asyncdispatch, os, osproc, strtabs, strutils, times]
 import ../core/[defaults, msg]
 import ../types/runtime_values
 
@@ -89,12 +89,14 @@ proc screenshotClipboardCommand*(path: string, config: ScreenshotConfig): string
       DefaultScreenshotClipboardCommand
   clipboardCommand & " < " & shellQuote(path)
 
-proc runShellCommandAsync*(command: string, pollMs = 50): Future[int] {.async.} =
+proc runShellCommandAsync*(
+    command: string, env: StringTableRef = nil, pollMs = 50
+): Future[int] {.async.} =
   var process: Process
   var finished = false
   try:
     process = startProcess(
-      "sh", args = @["-c", command], options = {poUsePath, poParentStreams}
+      "sh", args = @["-c", command], env = env, options = {poUsePath, poParentStreams}
     )
     while true:
       let code = process.peekExitCode()

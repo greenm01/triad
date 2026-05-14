@@ -1,6 +1,5 @@
 import std/[os, posix, strtabs, strutils]
 import shell_overlay, socket
-import ../core/xdg
 import ../types/runtime_values
 
 type
@@ -86,6 +85,13 @@ proc copyCurrentEnv(): StringTableRef =
   for key, value in envPairs():
     result[key] = value
 
+proc copyEnv(baseEnv: StringTableRef): StringTableRef =
+  if baseEnv == nil:
+    return copyCurrentEnv()
+  result = newStringTable(modeCaseSensitive)
+  for key, value in baseEnv.pairs:
+    result[key] = value
+
 proc readIniValue(path, sectionName, keyName: string): string =
   if not fileExists(path):
     return ""
@@ -160,11 +166,22 @@ proc addUniqueDataDir(dirs: var seq[string], path: string) =
       return
   dirs.add(trimmed)
 
-proc xdgDataDirsWithOverlay(overlaySharePath: string): string =
+proc xdgDataDirsWithOverlay(overlaySharePath, baseDataDirs: string): string =
   var dirs: seq[string] = @[]
   dirs.addUniqueDataDir(overlaySharePath)
-  for dir in xdgDataDirs(includeHome = false):
+  let sourceDirs =
+    if baseDataDirs.len > 0:
+      baseDataDirs
+    else:
+      "/usr/local/share" & $PathSep & "/usr/share"
+  for dir in sourceDirs.split(PathSep):
     dirs.addUniqueDataDir(dir)
+  let flatpakUser = getHomeDir() / ".local" / "share" / "flatpak" / "exports" / "share"
+  if dirExists(flatpakUser):
+    dirs.addUniqueDataDir(flatpakUser)
+  let flatpakSystem = "/var/lib/flatpak/exports/share"
+  if dirExists(flatpakSystem):
+    dirs.addUniqueDataDir(flatpakSystem)
   dirs.join($PathSep)
 
 proc appendWarning(existing, warning: string): string =
@@ -216,8 +233,9 @@ proc prepareQuickshellCompatEnv*(
     runtimeDir = runtimeDir(),
     triadNiriPath = findTriadNiri(),
     triadSocketPath = "",
+    baseEnv: StringTableRef = nil,
 ): QuickshellCompatEnv =
-  result.env = copyCurrentEnv()
+  result.env = baseEnv.copyEnv()
   result.niriSocketPath = niriSocketPath
   result.compatBinPath = runtimeDir / "triad-compat-bin"
   result.niriShimPath = result.compatBinPath / "niri"
@@ -260,4 +278,10 @@ proc prepareQuickshellCompatEnv*(
       result.env["PATH"] = result.compatBinPath
 
   if result.overlayReady:
-    result.env["XDG_DATA_DIRS"] = xdgDataDirsWithOverlay(result.xdgSharePath)
+    let baseDataDirs =
+      if result.env.hasKey("XDG_DATA_DIRS"):
+        result.env["XDG_DATA_DIRS"]
+      else:
+        ""
+    result.env["XDG_DATA_DIRS"] =
+      xdgDataDirsWithOverlay(result.xdgSharePath, baseDataDirs)

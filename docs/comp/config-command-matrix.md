@@ -34,8 +34,8 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Implemented with in-place include expansion, recursion safety, include hot reload watching, `TRIAD_CONFIG`, `--config`, `-c`, and standalone validation. | Keep validating against real configs while future config work expands. |
 | Done | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Implemented through River input, XKB, and libinput config protocols for keyboard repeat, XKB keymaps/options, lock state, and basic mouse/touchpad/trackpoint/trackball settings. | Keep validating against live hardware; keyboard layout cycling remains separate command work. |
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
+| Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
 | P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, pointer button, and wheel-axis bindings exist; gesture and hardware switch bindings are missing. | Add the next narrow event source after confirming the available compositor/input protocol path. |
-| P2 | Session environment | `environment { KEY "value"; KEY null }` | Niri `environment`; Mango `env` | Triad startup/spawn commands inherit the daemon environment only. | Apply configured variables to Triad-spawned processes and clearly document that this does not retroactively change external systemd/dbus-launched processes. |
 | P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Add the smallest user-visible polish items first: cursor hide timeout and config reload notification controls. |
 
 ## Feature Matrix
@@ -49,7 +49,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config in-process; full Triad reload snapshots state and restarts through the session manager path. |
 | Config lifecycle | Reload notifications | | Shell/WM policy | | | Triad logs reload behavior but has no user-facing config for success/error notifications. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
-| Startup | Environment variables | `env` | Init script environment | | | Triad does not set arbitrary env vars from config. |
+| Startup | Environment variables | `env` | Init script environment | `environment` | X | Applies literal set/unset entries to future Triad-spawned user-facing processes. |
 | Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
 | Session | Quit manager | `quit` | `river_window_manager_v1.stop` | `stop-manager` | X | Triad also has `exit-session` behind config. |
 | Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
@@ -321,7 +321,7 @@ KDL config nodes and fields:
   `presentation-mode`, `border`, `focus-ring`, `clip-to-geometry`,
   `tiled-state`, `forced-layout`, nested `floating` with ratio or fixed pixel
   size fields, and `default-floating-position`.
-- `spawn-at-startup`, `window-menu-command`.
+- `environment`, `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, `axis-bind`, plus
   `layout`, `mode`, `allow-inhibiting`, and `hotkey-overlay-title`
   properties.

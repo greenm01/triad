@@ -87,6 +87,13 @@ window-rule {
   }
 }
 spawn-at-startup "notify-send" "triad"
+environment {
+  GTK_THEME "Adwaita:dark"
+  TRIAD_EMPTY ""
+  SSH_AUTH_SOCK #null
+  GTK_THEME "Breeze"
+  BAD-NAME "ignored"
+}
 quickshell {
   command "qs"
   theme "noctalia"
@@ -315,6 +322,15 @@ bindings {
     check config.windowRules[0].floating.heightSet
     check config.windowRules[0].floating.height == 640
     check config.startupCommands == @[@["notify-send", "triad"]]
+    check config.environment.len == 4
+    check config.environment[0].name == "GTK_THEME"
+    check config.environment[0].value == "Adwaita:dark"
+    check config.environment[1].name == "TRIAD_EMPTY"
+    check config.environment[1].value == ""
+    check config.environment[2].name == "SSH_AUTH_SOCK"
+    check config.environment[2].unset
+    check config.environment[3].name == "GTK_THEME"
+    check config.environment[3].value == "Breeze"
     check config.quickshell.theme == "noctalia"
     check config.terminal.command.len > 0
     check config.screenshot.directory == "~/shots"

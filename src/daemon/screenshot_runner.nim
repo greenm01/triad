@@ -5,6 +5,7 @@ import ../ipc/socket
 import ../systems/[daemon_view, layout_projection]
 import ../types/runtime_values
 import ../utils/screenshot_capture
+import process_runner
 import state
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -61,15 +62,17 @@ proc runScreenshotCapture*(
     )
     info "Screenshot capture started", path = path, screenshotKind = $kind
 
-    let code = await runShellCommandAsync(command)
+    let env = daemon[].currentModel.configuredProcessEnv()
+    let code = await runShellCommandAsync(command, env)
     if code != 0:
       warn "Screenshot capture failed", path = path, exitCode = code
       return
 
     var clipboardOk = true
     if copyToClipboard:
-      let copyCode =
-        await runShellCommandAsync(screenshotClipboardCommand(path, screenshotConfig))
+      let copyCode = await runShellCommandAsync(
+        screenshotClipboardCommand(path, screenshotConfig), env
+      )
       if copyCode != 0:
         warn "Screenshot clipboard copy failed", path = path, exitCode = copyCode
         clipboardOk = false

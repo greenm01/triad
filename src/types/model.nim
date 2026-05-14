@@ -3,12 +3,12 @@ from core import
   ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
   IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import
-  AxisBindingConfig, CursorConfig, InputConfig, KeyBindingConfig, LayoutMode,
-  HotkeyOverlayConfig, ParentedRole, OverviewHotCornersConfig, PointerBindingConfig,
-  PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
-  RecentWindowFilter, RecentWindowScope, RecentWindowsConfig, Rect, ScreenshotConfig,
-  TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
-  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  AxisBindingConfig, CursorConfig, EnvironmentEntryConfig, InputConfig,
+  KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
+  OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
+  ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter, RecentWindowScope,
+  RecentWindowsConfig, Rect, ScreenshotConfig, TerminalConfig, WindowRuleBorderConfig,
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
@@ -431,6 +431,7 @@ type
     floatingHeightRatio*: float32
     floatingMinWidth*: int32
     floatingMinHeight*: int32
+    environment*: seq[EnvironmentEntryConfig]
     scratchpadWidthRatio*: float32
     scratchpadHeightRatio*: float32
     startupCommands*: seq[seq[string]]

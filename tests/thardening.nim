@@ -1,16 +1,17 @@
-import std/[json, options, os, sequtils, tables, unittest]
+import std/[json, options, os, sequtils, strtabs, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, cursor_shake, input_device_classification, message_queue,
-    reload_runtime,
+    process_runner, reload_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
+from ../src/types/model import Model
 import ../src/types/[runtime_values, shell_snapshot]
 import ../src/utils/session_env
 
@@ -48,6 +49,30 @@ suite "Crash hardening":
     check not daemon.consumeMaximizedAck(42, true)
     check daemon.consumeMaximizedAck(42, false)
     check not daemon.consumeMaximizedAck(42, false)
+
+  test "configured process environment applies literal set and unset entries":
+    let base = newStringTable(modeCaseSensitive)
+    base["KEEP"] = "base"
+    base["DROP"] = "remove"
+    base["OVERRIDE"] = "old"
+
+    let model = Model(
+      environment:
+        @[
+          EnvironmentEntryConfig(name: "OVERRIDE", value: "new"),
+          EnvironmentEntryConfig(name: "EMPTY", value: ""),
+          EnvironmentEntryConfig(name: "DROP", unset: true),
+          EnvironmentEntryConfig(name: "OVERRIDE", value: "last"),
+        ]
+    )
+
+    let env = model.configuredProcessEnv(base)
+    check env["KEEP"] == "base"
+    check env["OVERRIDE"] == "last"
+    check env["EMPTY"] == ""
+    check not env.hasKey("DROP")
+    check base["DROP"] == "remove"
+    check base["OVERRIDE"] == "old"
 
   test "axis bindings dispatch matching wheel detents":
     var daemon = initTriadDaemon()

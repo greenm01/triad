@@ -163,6 +163,12 @@ recent-windows {
     }
 }
 
+// Environment variables for future Triad-spawned processes.
+// environment {
+//     GTK_THEME "Adwaita:dark"
+//     SSH_AUTH_SOCK #null
+// }
+
 spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
 spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"

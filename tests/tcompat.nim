@@ -383,6 +383,34 @@ suite "Shell compatibility contracts":
     check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")
     check compat.env["XDG_DATA_DIRS"].contains("/custom/share")
 
+  test "Quickshell compatibility environment starts from configured env":
+    let tmp = getTempDir() / ("triad-compat-config-env-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fakeTriadNiri = tmp / "triad_niri"
+    writeFile(fakeTriadNiri, "#!/bin/sh\nexit 0\n")
+    setFilePermissions(fakeTriadNiri, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let base = newStringTable(modeCaseSensitive)
+    base["PATH"] = "/configured/bin"
+    base["XDG_DATA_DIRS"] = "/configured/share"
+    base["XDG_CURRENT_DESKTOP"] = "wrong"
+    base["CUSTOM_TRIAD_ENV"] = "kept"
+
+    let compat =
+      prepareQuickshellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri, baseEnv = base)
+    check compat.env["CUSTOM_TRIAD_ENV"] == "kept"
+    check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
+    check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")
+    check compat.env["PATH"].contains("/configured/bin")
+    check compat.env["XDG_DATA_DIRS"].startsWith(compat.xdgSharePath)
+    check compat.env["XDG_DATA_DIRS"].contains("/configured/share")
+
   test "Quickshell launch and kill commands target configured theme":
     let config = QuickshellConfig(
       enabled: true, command: "qs", theme: "noctalia-shell", args: @["--verbose"]

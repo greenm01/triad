@@ -134,7 +134,12 @@ proc stopConfiguredQuickshell*(model: Model, reason: string) =
     %*{"kill_args": args},
   )
   try:
-    let p = startProcess(model.quickshell.command, args = args, options = {poUsePath})
+    let p = startProcess(
+      model.quickshell.command,
+      args = args,
+      env = model.configuredProcessEnv(),
+      options = {poUsePath},
+    )
     let code = p.pollProcessExitCode(1000)
     if code == -1:
       p.kill()
@@ -213,7 +218,9 @@ proc spawnQuickshell*(
     )
 
     try:
-      let compat = prepareQuickshellCompatEnv(niriSocketPath)
+      let compat = prepareQuickshellCompatEnv(
+        niriSocketPath, baseEnv = model.configuredProcessEnv()
+      )
       if compat.warning.len > 0:
         warn "Quickshell compatibility environment is incomplete",
           warning = compat.warning

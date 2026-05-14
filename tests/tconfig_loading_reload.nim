@@ -72,6 +72,11 @@ suite "KDL Configuration Parser: loading reload":
       ),
       screenLock: ScreenLockConfig(command: @["swaylock"]),
       windowMenu: WindowMenuConfig(command: @["bemenu"]),
+      environment:
+        @[
+          EnvironmentEntryConfig(name: "GTK_THEME", value: "Adwaita:dark"),
+          EnvironmentEntryConfig(name: "SSH_AUTH_SOCK", unset: true),
+        ],
       scratchpad: ScratchpadConfig(widthRatio: 0.7, heightRatio: 0.6),
       cursor: CursorConfig(theme: "Bibata", size: 32),
       presentationMode: PresentationMode.PresentationAsync,
@@ -114,6 +119,7 @@ suite "KDL Configuration Parser: loading reload":
     check state.model.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check state.model.terminal.command == @["kitty"]
+    check state.model.environment.len == 2
     check state.model.overviewZoom == 0.25'f32
     check state.model.keyBindings.len == 1
     check state.model.axisBindings.len == 1
