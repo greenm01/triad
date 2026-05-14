@@ -2087,6 +2087,8 @@ suite "Core Runtime Logic":
               parentedRole: ParentedRole.Tool,
               dialogViewportJump: true,
               keyboardShortcutsInhibit: true,
+              presentationModeSet: true,
+              presentationMode: PresentationMode.PresentationAsync,
               tiledState: true,
             ),
             WindowRule(
@@ -2112,6 +2114,8 @@ suite "Core Runtime Logic":
               dialogViewportJump: false,
               keyboardShortcutsInhibitSet: true,
               keyboardShortcutsInhibit: false,
+              presentationModeSet: true,
+              presentationMode: PresentationMode.PresentationDefault,
               tiledStateSet: true,
               tiledState: false,
             ),
@@ -2138,8 +2142,76 @@ suite "Core Runtime Logic":
     check rule.rule.parentedRole == ParentedRole.Dialog
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
+    check rule.rule.presentationModeSet
+    check rule.rule.presentationMode == PresentationMode.PresentationDefault
     check rule.rule.tiledStateSet
     check not rule.rule.tiledState
+
+  test "Window rule presentation-mode follows focused window":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        presentationMode: PresentationMode.PresentationVsync,
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "game",
+              presentationModeSet: true,
+              presentationMode: PresentationMode.PresentationAsync,
+            ),
+            WindowRule(
+              appIdMatch: "docs",
+              presentationModeSet: true,
+              presentationMode: PresentationMode.PresentationDefault,
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "game", title: "Game")
+    )
+    var policy = model.effectivePresentationMode()
+    check policy.hasPreference
+    check policy.mode == PresentationMode.PresentationAsync
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "docs", title: "Docs")
+    )
+    policy = model.effectivePresentationMode()
+    check policy.hasPreference
+    check policy.mode == PresentationMode.PresentationVsync
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    policy = model.effectivePresentationMode()
+    check policy.hasPreference
+    check policy.mode == PresentationMode.PresentationAsync
+
+  test "Window rule presentation-mode has no preference without focused match":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "game",
+              presentationModeSet: true,
+              presentationMode: PresentationMode.PresentationAsync,
+            )
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "plain", title: "Plain")
+    )
+    var policy = model.effectivePresentationMode()
+    check not policy.hasPreference
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "game", title: "Game")
+    )
+    policy = model.effectivePresentationMode()
+    check policy.hasPreference
+    check policy.mode == PresentationMode.PresentationAsync
 
   test "Window rules match regex entries with OR and exclude semantics":
     var model = initRuntimeStateFromConfig(

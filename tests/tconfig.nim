@@ -316,6 +316,7 @@ window-rule {
   respect-size-hints #false
   center-floating #true
   parented-role "tool"
+  presentation-mode "async"
   default-floating-position x=32 y=48 relative-to="bottom-left"
   dialog-viewport-jump #true
   floating {
@@ -442,6 +443,8 @@ bindings {
     check config.windowRules[0].centerFloating
     check config.windowRules[0].parentedRoleSet
     check config.windowRules[0].parentedRole == ParentedRole.Tool
+    check config.windowRules[0].presentationModeSet
+    check config.windowRules[0].presentationMode == PresentationMode.PresentationAsync
     check config.windowRules[0].defaultFloatingPosition.set
     check config.windowRules[0].defaultFloatingPosition.x == 32
     check config.windowRules[0].defaultFloatingPosition.y == 48
@@ -703,6 +706,7 @@ window-rule {
   center-floating #false
   dialog-viewport-jump #false
   keyboard-shortcuts-inhibit #false
+  presentation-mode "default"
   tiled-state #false
 }
 """,
@@ -729,6 +733,8 @@ window-rule {
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet
     check not config.windowRules[0].keyboardShortcutsInhibit
+    check config.windowRules[0].presentationModeSet
+    check config.windowRules[0].presentationMode == PresentationMode.PresentationDefault
     check config.windowRules[0].tiledStateSet
     check not config.windowRules[0].tiledState
 

@@ -1,7 +1,7 @@
 import std/[algorithm, options, tables]
 import protocols/river/client as river
 import ../core/render_visibility
-import ../systems/[daemon_view, layout_projection]
+import ../systems/[daemon_view, layout_projection, window_rules]
 import ../types/[model, runtime_values]
 import ../utils/overview_hit_test
 import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
@@ -46,13 +46,16 @@ proc supportedCapabilities*(model: Model): uint32 =
   if model.windowMenuCommand.len > 0:
     result = result or RiverCapabilityWindowMenu
 
-proc configuredPresentationMode*(model: Model): uint32 =
-  case model.presentationMode
+proc riverPresentationMode*(mode: PresentationMode): uint32 =
+  case mode
   of PresentationMode.PresentationAsync: RiverPresentationAsync
   else: RiverPresentationVsync
 
+proc configuredPresentationMode*(model: Model): uint32 =
+  model.effectivePresentationMode().mode.riverPresentationMode()
+
 proc hasPresentationPreference*(model: Model): bool =
-  model.presentationMode != PresentationMode.PresentationDefault
+  model.effectivePresentationMode().hasPreference
 
 proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: WindowId): bool =
   if child == 0 or ancestor == 0 or child == ancestor:

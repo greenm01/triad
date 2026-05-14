@@ -60,7 +60,7 @@ external window manager.
 | Input | Scroll factor/button/method | `axis_scroll_factor`, `scroll_button`, `scroll_method` | input/libinput config requests | | | No Triad config. |
 | Output | Monitor rules | `monitorrule` | Init script or external tools | | | Triad tracks River outputs but has no monitor layout config. |
 | Output | Monitor power | `disable_monitor`, `enable_monitor`, `toggle_monitor` | External output management | | | Not exposed by Triad. |
-| Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports vsync/async presentation mode. |
+| Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports global vsync/async presentation mode. |
 | Output | Cursor theme/size/find | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size; shake-to-find }` | X | Applied through River seat protocol. Shake-to-find temporarily reapplies the configured theme at a larger size. |
 | Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
@@ -124,6 +124,7 @@ external window manager.
 | Window rules | Dialog viewport jump | Window rule/policy-specific | WM policy | `window-rule dialog-viewport-jump` | X | Matches the parent app rule; opts specific apps out of hide-until-visible dialog focus. |
 | Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
 | Window rules | Shortcut inhibition | `allow_shortcuts_inhibit` | client inhibit protocol/policy | `keyboard-shortcuts-inhibit`, `toggle-keyboard-shortcuts-inhibit` | X | |
+| Window rules | Presentation/tearing policy | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Focused matching window rules can request output-level vsync/async mode; global `presentation-mode` remains the fallback. |
 | Window rules | Client tiled hint | `force_tiled_state` | `river_window_v1.set_tiled` | `window-rule tiled-state` | X | Controls the client-visible tiled state only; Triad placement is unchanged. |
 | Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-workspace` | X | `open-focused #false` covers open-silent; explicit `default-workspace` is the workspace placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `window-rule floating`, `center-floating`, `default-floating-position` | X | Rule-level floating ratios or fixed pixel sizes override global default size; `center-floating` centers generated geometry and `default-floating-position` provides anchored pixel placement. |

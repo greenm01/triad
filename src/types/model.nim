@@ -151,6 +151,8 @@ type
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
     keyboardShortcutsInhibit*: bool
+    presentationModeSet*: bool
+    presentationMode*: PresentationMode
     tiledStateSet*: bool
     tiledState*: bool
     forcedLayoutSet*: bool
@@ -200,6 +202,8 @@ type
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
+    presentationModeSet*: bool
+    presentationMode*: PresentationMode
     tiledStateSet*: bool
     tiledState*: bool
     forcedLayout*: int

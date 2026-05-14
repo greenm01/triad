@@ -142,6 +142,8 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       keyboardShortcutsInhibitSet:
         rule.keyboardShortcutsInhibitSet or rule.keyboardShortcutsInhibit,
       keyboardShortcutsInhibit: rule.keyboardShortcutsInhibit,
+      presentationModeSet: rule.presentationModeSet,
+      presentationMode: rule.presentationMode,
       tiledStateSet: rule.tiledStateSet or rule.tiledState,
       tiledState: rule.tiledState,
       forcedLayoutSet: rule.forcedLayoutSet or rule.forcedLayout != 0,

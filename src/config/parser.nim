@@ -398,11 +398,16 @@ proc ensureHotkeyOverlayFallback(bindings: var seq[KeyBindingConfig]) =
   if not bindings.hasHotkeyOverlayCommand() and not bindings.hasKeySlot(fallback):
     bindings.add(fallback)
 
-proc parsePresentationMode(value: string): PresentationMode =
-  case value
-  of "vsync", "Vsync", "VSYNC": PresentationMode.PresentationVsync
-  of "async", "Async", "ASYNC": PresentationMode.PresentationAsync
-  else: PresentationMode.PresentationDefault
+proc parsePresentationMode(value: string): tuple[valid: bool, mode: PresentationMode] =
+  case value.toLowerAscii()
+  of "default":
+    (true, PresentationMode.PresentationDefault)
+  of "vsync":
+    (true, PresentationMode.PresentationVsync)
+  of "async":
+    (true, PresentationMode.PresentationAsync)
+  else:
+    (false, PresentationMode.PresentationDefault)
 
 proc defaultKeyBindings*(): seq[KeyBindingConfig] =
   @[
@@ -710,6 +715,14 @@ proc loadConfig*(path: string): Config =
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
               rule.keyboardShortcutsInhibitSet = true
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
+            elif child.name == "presentation-mode" and child.args.len > 0:
+              let parsed = parsePresentationMode(child.args[0].kString())
+              if parsed.valid:
+                rule.presentationModeSet = true
+                rule.presentationMode = parsed.mode
+              else:
+                warn "Ignoring invalid window rule presentation mode",
+                  value = child.args[0].kString()
             elif child.name == "tiled-state" and child.args.len > 0:
               rule.tiledStateSet = true
               rule.tiledState = child.args[0].kBool()
@@ -959,7 +972,11 @@ proc loadConfig*(path: string): Config =
               field = child.name, error = e.msg
       elif node.name == "presentation-mode" and node.args.len > 0:
         try:
-          result.presentationMode = parsePresentationMode(node.args[0].kString())
+          let parsed = parsePresentationMode(node.args[0].kString())
+          if parsed.valid:
+            result.presentationMode = parsed.mode
+          else:
+            warn "Ignoring invalid presentation mode", value = node.args[0].kString()
         except CatchableError as e:
           warn "Ignoring invalid presentation mode", error = e.msg
       elif node.name == "allow-exit-session" and node.args.len > 0:

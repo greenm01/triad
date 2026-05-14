@@ -1,7 +1,8 @@
 import std/[options, re]
 import ../state/engine
 from ../types/runtime_values import
-  ParentedRole, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig
+  ParentedRole, PresentationMode, WindowRuleFloatingConfig,
+  WindowRuleFloatingPositionConfig
 
 type WindowRuleMatchContext = object
   winId: WindowId
@@ -265,6 +266,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:
     result.keyboardShortcutsInhibit = rule.keyboardShortcutsInhibit
+  if rule.presentationModeSet:
+    result.presentationModeSet = true
+    result.presentationMode = rule.presentationMode
   if rule.tiledStateSet:
     result.tiledStateSet = true
     result.tiledState = rule.tiledState
@@ -311,6 +315,27 @@ proc windowKeyboardShortcutsInhibit*(model: Model, appId, title: string): bool =
 proc windowKeyboardShortcutsInhibit*(model: Model, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(win)
   ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
+
+proc effectivePresentationMode*(
+    model: Model
+): tuple[hasPreference: bool, mode: PresentationMode] =
+  let focused = model.ruleFocusedWindow()
+  if focused != NullWindowId:
+    let winOpt = model.windowData(focused)
+    if winOpt.isSome:
+      let ruleMatch = model.windowRuleFor(focused, winOpt.get())
+      if ruleMatch.found and ruleMatch.rule.presentationModeSet:
+        if ruleMatch.rule.presentationMode == PresentationMode.PresentationDefault:
+          return (
+            hasPreference:
+              model.presentationMode != PresentationMode.PresentationDefault,
+            mode: model.presentationMode,
+          )
+        return (hasPreference: true, mode: ruleMatch.rule.presentationMode)
+  (
+    hasPreference: model.presentationMode != PresentationMode.PresentationDefault,
+    mode: model.presentationMode,
+  )
 
 proc windowRespectsSizeHints*(model: Model, winId: WindowId, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(winId, win)

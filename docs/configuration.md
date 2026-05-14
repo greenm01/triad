@@ -49,7 +49,7 @@ The supported KDL nodes are:
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   focus behavior, parented-dialog viewport jump behavior, size-hint policy,
-  shortcut inhibition, and forced layout.
+  shortcut inhibition, presentation mode, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -140,6 +140,11 @@ window-rule {
   default-workspaces 2 4
   open-focused #false
 }
+
+window-rule {
+  match app-id="^steam_app_"
+  presentation-mode "async"
+}
 ```
 
 - `match` and `exclude`: support `app-id="<regex>"`, `title="<regex>"`,
@@ -195,6 +200,12 @@ window-rule {
 - `tiled-state #true|#false`: overrides the client-visible tiled hint sent via
   River `set_tiled`. This does not move the window between Triad tiled and
   floating placement; use `open-floating` for placement.
+- `presentation-mode "default"|"vsync"|"async"`: controls output presentation
+  mode while the matching window is focused. Focused matching windows win over
+  the top-level `presentation-mode`; `default` clears a broader matching rule
+  and falls back to the top-level setting or backend default. River exposes
+  this as output-level policy, so background matching windows do not change the
+  output mode.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
 - `default-workspaces <n>...`: opens matching windows on multiple workspaces.
