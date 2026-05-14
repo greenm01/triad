@@ -47,7 +47,7 @@ The supported KDL nodes are:
   scroller centering, animation settings, smart gaps, and layout cycle.
 - `workspaces`: default workspace floor and fallback default layout.
 - `workspace-rules`: workspace names and explicit default layouts.
-- `window-rule`: app/title matching, default workspace, floating behavior,
+- `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   focus behavior, parented-dialog viewport jump behavior, size-hint policy,
   shortcut inhibition, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
@@ -134,6 +134,12 @@ window-rule {
   match app-id="^org\\.keepassxc\\.KeePassXC$" at-startup=#true
   default-workspace 2
 }
+
+window-rule {
+  match app-id="obsidian"
+  default-workspaces 2 4
+  open-focused #false
+}
 ```
 
 - `match` and `exclude`: support `app-id="<regex>"`, `title="<regex>"`,
@@ -191,11 +197,17 @@ window-rule {
   floating placement; use `open-floating` for placement.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
+- `default-workspaces <n>...`: opens matching windows on multiple workspaces.
+  The first valid workspace is the primary target for focus, output placement,
+  and shell snapshots; additional workspaces get normal tag placements without
+  switching focus or moving the camera. Later matching rules replace the whole
+  workspace list. Duplicate workspace numbers are ignored.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently
-  visible on the named output. When combined with `default-workspace`, Triad
-  may move that workspace's non-primary output mapping to the named output, but
-  it never switches the active workspace just because a window opened. Unknown
-  outputs fall back to the normal active-workspace behavior.
+  visible on the named output. When combined with `default-workspace` or
+  `default-workspaces`, Triad may move the primary target workspace's
+  non-primary output mapping to the named output, but it never switches the
+  active workspace just because a window opened. Unknown outputs fall back to
+  the normal active-workspace behavior.
 - `open-named-scratchpad "<name>"`: opens matching new windows as hidden named
   scratchpads. The window is untagged until `toggle-named-scratchpad <name>` is
   run. Empty names are ignored; live restore takes precedence; config reloads

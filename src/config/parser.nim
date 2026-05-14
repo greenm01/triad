@@ -94,6 +94,14 @@ proc normalizeWorkspaceCountFromConfig(count: int): uint32 =
   else:
     runtimeWorkspaceCount(uint32(count))
 
+proc workspaceTargets(node: KdlNode): seq[uint32] =
+  for arg in node.args:
+    let rawWorkspace = arg.kInt()
+    if rawWorkspace > 0:
+      let slot = uint32(rawWorkspace)
+      if result.find(slot) == -1:
+        result.add(slot)
+
 proc parseColor(value: string, fallback: uint32): uint32 =
   var hex = value.strip()
   if hex.startsWith("#"):
@@ -607,6 +615,15 @@ proc loadConfig*(path: string): Config =
               let rawWorkspace = child.args[0].kInt()
               if rawWorkspace > 0:
                 rule.defaultWorkspace = uint32(rawWorkspace)
+                rule.defaultWorkspaces = @[rule.defaultWorkspace]
+            elif child.name == "default-workspaces":
+              let targets = child.workspaceTargets()
+              rule.defaultWorkspaces = targets
+              rule.defaultWorkspace =
+                if targets.len > 0:
+                  targets[0]
+                else:
+                  0'u32
             elif child.name == "open-on-output" and child.args.len > 0:
               rule.openOnOutput = child.args[0].kString().strip()
             elif child.name == "default-column-width":

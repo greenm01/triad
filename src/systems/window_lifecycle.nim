@@ -17,6 +17,33 @@ proc applyOpenColumnMaximize(model: var Model, tagId: TagId, columnId: ColumnId)
   if result and tagId == model.activeTag:
     discard model.requestTagViewportRetarget(tagId)
 
+proc placeSecondaryRuleTarget(
+    model: var Model,
+    slot: uint32,
+    winId: WindowId,
+    forcedLayout: int,
+    columnWidthProportion, columnScrollerSingleProportion: float32,
+    openColumnMaximized, pendingAdmission: bool,
+): bool =
+  let targetTag = model.ensureWorkspaceSlot(slot, forcedLayout)
+  if targetTag == NullTagId or model.placementForWindowOnTag(targetTag, winId).isSome:
+    return false
+  if forcedLayout != 0:
+    discard model.setTagLayout(
+      targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)
+    )
+  let placedColumn = model.addPlacedWindowColumn(
+    targetTag,
+    winId,
+    widthProportion = columnWidthProportion,
+    scrollerSingleProportion = columnScrollerSingleProportion,
+  )
+  if openColumnMaximized:
+    discard model.applyOpenColumnMaximize(targetTag, placedColumn)
+  if not pendingAdmission and targetTag != model.activeTag:
+    discard model.setTagFocus(targetTag, winId)
+  true
+
 proc outputForRuleName(model: Model, name: string): OutputId =
   if name.len == 0:
     return NullOutputId
@@ -348,12 +375,19 @@ proc createWindowForExternal*(
   let ruleMatch = model.windowRuleFor(appId, title)
   let parentedRole =
     if ruleMatch.found: ruleMatch.rule.parentedRole else: ParentedRole.Dialog
-  let ruleForcesSlot = ruleMatch.found and ruleMatch.rule.defaultSlot != 0
+  let ruleTargetSlots =
+    if ruleMatch.found and ruleMatch.rule.defaultSlots.len > 0:
+      ruleMatch.rule.defaultSlots
+    elif ruleMatch.found and ruleMatch.rule.defaultSlot != 0:
+      @[ruleMatch.rule.defaultSlot]
+    else:
+      @[]
+  let ruleForcesSlot = ruleTargetSlots.len > 0
   let opensNamedScratchpad =
     ruleMatch.found and not hasRestoredWindow and not hasRestoredTag and
     ruleMatch.rule.openNamedScratchpad.len > 0
-  if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and not hasRestoredTag:
-    targetSlot = ruleMatch.rule.defaultSlot
+  if ruleForcesSlot and not hasRestoredTag:
+    targetSlot = ruleTargetSlots[0]
   elif ruleMatch.found and not hasRestoredTag:
     let outputSlot = model.visibleSlotForOutputRule(ruleMatch.rule.openOnOutput)
     if outputSlot != 0:
@@ -553,6 +587,17 @@ proc createWindowForExternal*(
         else:
           if not pendingAdmission:
             discard model.setTagFocus(targetTag, result)
+      if ruleTargetSlots.len > 1:
+        for i in 1 ..< ruleTargetSlots.len:
+          discard model.placeSecondaryRuleTarget(
+            ruleTargetSlots[i],
+            result,
+            forcedLayout,
+            columnWidthProportion,
+            columnScrollerSingleProportion,
+            openColumnMaximized,
+            pendingAdmission,
+          )
 
     if restoresFocusedWindow:
       let targetTag = model.tagForSlot(targetSlot)

@@ -20,6 +20,14 @@ proc ruleMatchers(rule: rv.WindowRule): seq[rv.WindowRuleMatcher] =
   if result.len == 0 and (rule.appIdMatch.len > 0 or rule.titleMatch.len > 0):
     result.add(rule.legacyWindowRuleMatcher())
 
+proc workspaceTargets(rule: rv.WindowRule): seq[uint32] =
+  if rule.defaultWorkspaces.len > 0:
+    for slot in rule.defaultWorkspaces:
+      if slot > 0 and result.find(slot) == -1:
+        result.add(slot)
+  elif rule.defaultWorkspace != 0:
+    result.add(rule.defaultWorkspace)
+
 proc windowRuleMatcherData(
     matcher: rv.WindowRuleMatcher, context: string
 ): Option[WindowRuleMatcherData] =
@@ -76,11 +84,17 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       return none(WindowRuleData)
     excludes.add(compiled.get())
 
+  let targets = rule.workspaceTargets()
   some(
     WindowRuleData(
       matches: matches,
       excludes: excludes,
-      defaultSlot: rule.defaultWorkspace,
+      defaultSlot:
+        if targets.len > 0:
+          targets[0]
+        else:
+          0'u32,
+      defaultSlots: targets,
       openOnOutput: rule.openOnOutput,
       defaultColumnWidthSet: rule.defaultColumnWidthSet or rule.defaultColumnWidth > 0,
       defaultColumnWidth: rule.defaultColumnWidth,

@@ -194,7 +194,11 @@ proc mergeFloatingPositionRule(
     target = source
 
 proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
-  if rule.defaultSlot != 0:
+  if rule.defaultSlots.len > 0:
+    result.defaultSlots = rule.defaultSlots
+    result.defaultSlot = rule.defaultSlots[0]
+  elif rule.defaultSlot != 0:
+    result.defaultSlots = @[rule.defaultSlot]
     result.defaultSlot = rule.defaultSlot
   if rule.openOnOutput.len > 0:
     result.openOnOutput = rule.openOnOutput

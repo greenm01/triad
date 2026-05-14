@@ -1999,6 +1999,7 @@ suite "Core Runtime Logic":
     let rule = model.windowRuleFor("gimp", "Welcome to GIMP")
     check rule.found
     check rule.rule.defaultSlot == 4
+    check rule.rule.defaultSlots == @[4'u32]
     check rule.rule.openFloatingSet
     check rule.rule.openFloating
     check rule.rule.floating.xRatioSet
@@ -2008,6 +2009,34 @@ suite "Core Runtime Logic":
     check rule.rule.floating.widthRatioSet
     check rule.rule.floating.widthRatio == 0.40'f32
     check not rule.rule.floating.heightRatioSet
+
+  test "Window rules let later workspace target lists override earlier lists":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "app", defaultWorkspaces: @[2'u32, 4'u32]),
+            WindowRule(appIdMatch: "app", titleMatch: "Single", defaultWorkspace: 3),
+            WindowRule(
+              appIdMatch: "app", titleMatch: "Multi", defaultWorkspaces: @[5'u32, 2'u32]
+            ),
+          ]
+      )
+    ).model
+
+    let broad = model.windowRuleFor("app", "Other")
+    let single = model.windowRuleFor("app", "Single")
+    let multi = model.windowRuleFor("app", "Multi")
+
+    check broad.found
+    check broad.rule.defaultSlot == 2
+    check broad.rule.defaultSlots == @[2'u32, 4'u32]
+    check single.found
+    check single.rule.defaultSlot == 3
+    check single.rule.defaultSlots == @[3'u32]
+    check multi.found
+    check multi.rule.defaultSlot == 5
+    check multi.rule.defaultSlots == @[5'u32, 2'u32]
 
   test "Window rules merge broad floating size and specific anchor":
     var model = initRuntimeStateFromConfig(
@@ -4352,6 +4381,92 @@ suite "Core Runtime Logic":
       check snapshot.workspaces[1].focusedWindow == 2
       check not effects.hasFocusEffect(2)
 
+  test "Window rule multi-workspace placement uses tag-mask placements":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 4, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "target",
+              defaultWorkspaces: @[2'u32, 4'u32],
+              defaultColumnWidthSet: true,
+              defaultColumnWidth: 0.60,
+              openMaximizedSet: true,
+              openMaximized: true,
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "target", title: "Two")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(2))
+    let tag2 = model.tagForSlot(2)
+    let tag4 = model.tagForSlot(4)
+    let mask = model.windowTags[winId]
+    let tag2Column = model.placementForWindowOnTag(tag2, winId).get().columnId
+    let tag4Column = model.placementForWindowOnTag(tag4, winId).get().columnId
+
+    check model.snapshotWindow(2).workspaceIdx == 2
+    check model.placementForWindowOnTag(tag2, winId).isSome
+    check model.placementForWindowOnTag(tag4, winId).isSome
+    check mask.contains(model.tagData(tag2).get().bit)
+    check mask.contains(model.tagData(tag4).get().bit)
+    check model.columnData(tag2Column).get().widthProportion == 0.60'f32
+    check model.columnData(tag4Column).get().widthProportion == 0.60'f32
+    check model.columnData(tag2Column).get().isFullWidth
+    check model.columnData(tag4Column).get().isFullWidth
+    check model.tagData(tag2).get().focusedWindow == winId
+    check model.tagData(tag4).get().focusedWindow == winId
+    check model.activeTag == model.tagForSlot(1)
+    check model.focusedWindowId() == 1
+    check not effects.hasFocusEffect(2)
+
+  test "Window rule secondary active workspace placement does not steal focus":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "target",
+              defaultWorkspaces: @[2'u32, 1'u32],
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    let beforeViewport = model.viewport(1)
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "target", title: "Two")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(2))
+
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isSome
+    check model.placementForWindowOnTag(model.tagForSlot(1), winId).isSome
+    check model.activeTag == model.tagForSlot(1)
+    check model.focusedWindowId() == 1
+    check model.viewport(1) == beforeViewport
+    check not effects.hasFocusEffect(2)
+
   test "Window rule opening sizing sets initial column and window proportions":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -4994,6 +5109,7 @@ suite "Core Runtime Logic":
           @[
             WindowRule(
               appIdMatch: "generic-app",
+              defaultWorkspaces: @[2'u32, 3'u32],
               openOnOutput: "HDMI-A-1",
               defaultColumnWidthSet: true,
               defaultColumnWidth: 0.30,
@@ -5042,6 +5158,9 @@ suite "Core Runtime Logic":
     check model.scratchpadWindowCount() == 0
     check model.namedScratchpadWindow("files") == NullWindowId
     check placement.found
+    check model.placementForWindowOnTag(
+      model.tagForSlot(3), model.windowForExternal(ExternalWindowId(50))
+    ).isNone
     let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
     check model.columnData(columnId).get().widthProportion == 0.7'f32
 
@@ -6600,7 +6719,14 @@ suite "Core Runtime Logic":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules: @[WindowRule(appIdMatch: "st-yazi", openNamedScratchpad: "files")],
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "st-yazi",
+              defaultWorkspaces: @[2'u32, 3'u32],
+              openNamedScratchpad: "files",
+            )
+          ],
       )
     ).model
     model.applyMsg(
@@ -6617,6 +6743,8 @@ suite "Core Runtime Logic":
     check model.namedScratchpadWindow("files") == winId
     check not model.scratchpadVisible()
     check not model.firstWindowPosition(winId).found
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isNone
+    check model.placementForWindowOnTag(model.tagForSlot(3), winId).isNone
     check model.shellSnapshot().windows.anyIt(uint32(it.id) == 10 and it.tagId.isNone)
 
     model.applyMsg(Msg(kind: MsgKind.CmdToggleNamedScratchpad, scratchpadName: "files"))

@@ -106,6 +106,7 @@ type
     matches*: seq[WindowRuleMatcherData]
     excludes*: seq[WindowRuleMatcherData]
     defaultSlot*: uint32
+    defaultSlots*: seq[uint32]
     openOnOutput*: string
     defaultColumnWidthSet*: bool
     defaultColumnWidth*: float32
@@ -157,6 +158,7 @@ type
 
   ResolvedWindowRuleData* = object
     defaultSlot*: uint32
+    defaultSlots*: seq[uint32]
     openOnOutput*: string
     defaultColumnWidthSet*: bool
     defaultColumnWidth*: float32

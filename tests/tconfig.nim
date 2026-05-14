@@ -885,6 +885,40 @@ window-rule {
     check config.windowRules[0].excludes[0].atStartupSet
     check not config.windowRules[0].excludes[0].atStartup
 
+  test "Window rule parser reads multi-workspace targets":
+    let path = getTempDir() / "triad-window-rule-workspaces.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="multi"
+  default-workspaces 2 4 2 0
+}
+
+window-rule {
+  match app-id="plural-wins"
+  default-workspace 2
+  default-workspaces 5 3 5
+}
+
+window-rule {
+  match app-id="singular-wins"
+  default-workspaces 2 3
+  default-workspace 4
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 3
+    check config.windowRules[0].defaultWorkspace == 2
+    check config.windowRules[0].defaultWorkspaces == @[2'u32, 4'u32]
+    check config.windowRules[1].defaultWorkspace == 5
+    check config.windowRules[1].defaultWorkspaces == @[5'u32, 3'u32]
+    check config.windowRules[2].defaultWorkspace == 4
+    check config.windowRules[2].defaultWorkspaces == @[4'u32]
+
   test "workspace config uses global default layout and explicit overrides":
     var model = initRuntimeStateFromConfig(
       Config(

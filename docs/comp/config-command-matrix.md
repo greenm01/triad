@@ -112,7 +112,7 @@ external window manager.
 | Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
 | Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=...; exclude ... }` | X | Match and exclude use regex search semantics; repeated `match` children are OR-ed. |
 | Window rules | State matching | `windowrule isfloating`, focus/window-state variants | WM policy | `match is-focused=... is-active=... is-active-in-column=... is-floating=...` | X | Opening-time evaluation uses unmapped defaults; existing-window dynamic fields refresh from current runtime state. |
-| Window rules | Default workspace | `windowrule tags` | WM policy | `window-rule default-workspace` | X | |
+| Window rules | Default workspace | `windowrule tags` | WM policy | `window-rule default-workspace`, `default-workspaces` | X | `default-workspaces` places a matching window on multiple Triad workspace tags; the first target is the primary focus/snapshot target. |
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Open fullscreen/maximized | `isfullscreen`, `isfakefullscreen`, `noopenmaximized` | WM policy | `open-fullscreen`, `open-maximized`, `open-maximized-to-edges` | X | `open-maximized` means full-width scroller column; `open-maximized-to-edges` means client-visible maximize. |

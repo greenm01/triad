@@ -149,6 +149,7 @@ type
     matches*: seq[WindowRuleMatcher]
     excludes*: seq[WindowRuleMatcher]
     defaultWorkspace*: uint32
+    defaultWorkspaces*: seq[uint32]
     openOnOutput*: string
     defaultColumnWidthSet*: bool
     defaultColumnWidth*: float32
