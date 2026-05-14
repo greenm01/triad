@@ -47,6 +47,14 @@ proc setTagFocus*(model: var Model, tagId: TagId, winId: WindowId): bool =
   if winId != NullWindowId and model.windows.entity(winId).isNone:
     return false
   model.tags.mEntity(tagId).focusedWindow = winId
+  if winId != NullWindowId:
+    let winOpt = model.windows.entity(winId)
+    let key = (tagId, winId)
+    if winOpt.isSome and not winOpt.get().isFloating and
+        model.placementByTagWindow.hasKey(key):
+      let columnId = model.placementByTagWindow[key].columnId
+      if model.columns.entity(columnId).isSome:
+        model.columns.mEntity(columnId).focusedWindow = winId
   true
 
 proc setTagLayout*(model: var Model, tagId: TagId, mode: LayoutMode): bool =

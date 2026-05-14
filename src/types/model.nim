@@ -61,6 +61,7 @@ type
     tagId*: TagId
     widthProportion*: float32
     isFullWidth*: bool
+    focusedWindow*: WindowId
 
   OutputData* = object
     id*: OutputId

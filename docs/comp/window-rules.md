@@ -77,7 +77,7 @@ layout family.
 | Matching | `exclude` | Skip a rule when any exclude matcher matches | repeat `exclude` children | Pass | Uses the same app/title matcher shape as `match`. |
 | Matching | `is-active` | Match active window state | `match is-active=#true/#false` | Pass | Matches the focused window of any workspace the window belongs to. |
 | Matching | `is-focused` | Match focused state | `match is-focused=#true/#false` | Pass | Matches Triad's single active-focus window; layer-shell exclusive focus makes this false. |
-| Matching | `is-active-in-column` | Match active-in-column state | `match is-active-in-column=#true/#false` | Partial | Triad derives one visible tiled candidate per column from workspace focus or the first visible admitted window; it does not yet persist last-focused-per-column history. |
+| Matching | `is-active-in-column` | Match active-in-column state | `match is-active-in-column=#true/#false` | Pass | Triad records the last focused tiled window per column and falls back to the first visible admitted window when history is missing or stale. |
 | Matching | `is-floating` | Match current floating state | `match is-floating=#true/#false` | Pass | Initial/opening rule evaluation treats unmapped windows as non-floating to avoid a cycle with `open-floating`; dynamic fields refresh after state changes. |
 | Matching | `is-window-cast-target` | Match window cast target state | | Gap | |
 | Matching | `is-urgent` | Match urgent state | | Gap | |

@@ -65,6 +65,14 @@ proc contextActiveInColumnOnTag(model: Model, tagId: TagId, winId: WindowId): bo
   if placementOpt.isNone:
     return false
   let columnId = placementOpt.get().columnId
+  let columnOpt = model.columnData(columnId)
+  if columnOpt.isSome:
+    let columnFocused = columnOpt.get().focusedWindow
+    let focusedPlacement = model.placementForWindowOnTag(tagId, columnFocused)
+    if focusedPlacement.isSome and focusedPlacement.get().columnId == columnId and
+        model.visibleTiledColumnWindow(columnFocused):
+      return columnFocused == winId
+
   let tagOpt = model.tagData(tagId)
   if tagOpt.isSome:
     let focused = tagOpt.get().focusedWindow

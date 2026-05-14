@@ -2307,6 +2307,147 @@ suite "Core Runtime Logic":
     check stacked.minWidth == 0
     check stacked.maxWidth == 222
 
+  test "Window rule active-in-column remembers focus after leaving column":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isActiveInColumnSet: true,
+                    isActiveInColumn: true,
+                  )
+                ],
+              minWidthSet: true,
+              minWidth: 111,
+            ),
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isActiveInColumnSet: true,
+                    isActiveInColumn: false,
+                  )
+                ],
+              maxWidthSet: true,
+              maxWidth: 222,
+            ),
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    let tagId = model.activeTag
+    let firstColumn = model.columnAt(tagId, 0)
+    discard model.moveWindowToColumn(tagId, WindowId(2), firstColumn, 1)
+    model.focusExternal(2)
+    model.focusExternal(3)
+    discard model.refreshWindowRuleDerivedState()
+
+    let first = model.windowData(WindowId(1)).get()
+    let remembered = model.windowData(WindowId(2)).get()
+    let current = model.windowData(WindowId(3)).get()
+    check first.minWidth == 0
+    check first.maxWidth == 222
+    check remembered.minWidth == 111
+    check remembered.maxWidth == 0
+    check current.minWidth == 111
+    check current.maxWidth == 0
+
+  test "Window rule active-in-column falls back from stale column focus":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isActiveInColumnSet: true,
+                    isActiveInColumn: true,
+                  )
+                ],
+              minWidthSet: true,
+              minWidth: 111,
+            ),
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isActiveInColumnSet: true,
+                    isActiveInColumn: false,
+                  )
+                ],
+              maxWidthSet: true,
+              maxWidth: 222,
+            ),
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    let tagId = model.activeTag
+    let firstColumn = model.columnAt(tagId, 0)
+    discard model.moveWindowToColumn(tagId, WindowId(2), firstColumn, 1)
+    model.focusExternal(2)
+    discard model.setWindowFloating(WindowId(2), true, model.defaultFloatingGeom())
+    discard model.refreshWindowRuleDerivedState()
+
+    var first = model.windowData(WindowId(1)).get()
+    var stale = model.windowData(WindowId(2)).get()
+    check first.minWidth == 111
+    check first.maxWidth == 0
+    check stale.minWidth == 0
+    check stale.maxWidth == 222
+
+    discard model.setWindowFloating(WindowId(2), false)
+    model.focusExternal(2)
+    discard model.setWindowMinimized(WindowId(2), true)
+    discard model.refreshWindowRuleDerivedState()
+
+    first = model.windowData(WindowId(1)).get()
+    stale = model.windowData(WindowId(2)).get()
+    check first.minWidth == 111
+    check first.maxWidth == 0
+    check stale.minWidth == 0
+    check stale.maxWidth == 222
+
+    discard model.setWindowMinimized(WindowId(2), false)
+    model.focusExternal(2)
+    let targetColumn = model.addColumn(tagId)
+    discard model.moveWindowToColumn(tagId, WindowId(2), targetColumn, 0)
+    discard model.refreshWindowRuleDerivedState()
+
+    first = model.windowData(WindowId(1)).get()
+    let moved = model.windowData(WindowId(2)).get()
+    check first.minWidth == 111
+    check first.maxWidth == 0
+    check moved.minWidth == 111
+    check moved.maxWidth == 0
+
   test "Parented tool role stays visible outside popup focus tree":
     var model = initRuntimeStateFromConfig(
       Config(

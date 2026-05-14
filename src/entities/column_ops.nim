@@ -15,6 +15,7 @@ proc addColumn*(
       tagId: tagId,
       widthProportion: max(0.05'f32, min(1.0'f32, widthProportion)),
       isFullWidth: isFullWidth,
+      focusedWindow: NullWindowId,
     )
   )
   model.columnsByTag.mgetOrPut(tagId, @[]).add(id)
@@ -51,6 +52,14 @@ proc setColumnFullWidth*(model: var Model, columnId: ColumnId, fullWidth: bool):
   if model.columns.mEntity(columnId).isFullWidth == fullWidth:
     return false
   model.columns.mEntity(columnId).isFullWidth = fullWidth
+  true
+
+proc setColumnFocus*(model: var Model, columnId: ColumnId, winId: WindowId): bool =
+  if model.columns.entity(columnId).isNone:
+    return false
+  if winId != NullWindowId and model.windows.entity(winId).isNone:
+    return false
+  model.columns.mEntity(columnId).focusedWindow = winId
   true
 
 proc toggleColumnFullWidth*(model: var Model, columnId: ColumnId): bool =
