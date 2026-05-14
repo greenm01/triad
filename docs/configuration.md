@@ -48,8 +48,9 @@ The supported KDL nodes are:
 - `workspaces`: default workspace floor and fallback default layout.
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
-  all-workspace sticky behavior, focus behavior, parented-dialog viewport jump
-  behavior, size-hint policy, shortcut inhibition, presentation mode,
+  all-workspace sticky behavior, managed overlay behavior, focus behavior,
+  parented-dialog viewport jump behavior, size-hint policy, shortcut inhibition,
+  presentation mode,
   border/focus-ring/clip policy, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
@@ -253,6 +254,12 @@ window-rule {
   `parented-role "plain"` when a parented window should behave like a normal
   sticky window. Sticky-only occupancy does not keep dynamic workspaces alive,
   and moving a sticky window to scratchpad clears sticky state.
+- `open-overlay #true|#false`: keeps matching managed windows above normal
+  managed windows without making them floating, sticky, scratchpad, or
+  unmanaged. Later matching rules can clear a broader overlay rule with
+  `#false`. Focused overlay windows preserve the fullscreen or maximized
+  presentation of the backing workspace the same way focused floating popups
+  do.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently
   visible on the named output. Targets match connector names such as
   `HDMI-A-1`, shell fallback names such as `river-2`, niri-style

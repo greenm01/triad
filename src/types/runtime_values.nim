@@ -110,6 +110,7 @@ type
     isMaximized*: bool
     isMinimized*: bool
     isSticky*: bool
+    isOverlay*: bool
     fullscreenOutput*: uint32
     parentId*: WindowId
     identifier*: string
@@ -202,6 +203,8 @@ type
     openMaximizedToEdges*: bool
     openOnAllWorkspacesSet*: bool
     openOnAllWorkspaces*: bool
+    openOverlaySet*: bool
+    openOverlay*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool

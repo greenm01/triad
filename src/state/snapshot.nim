@@ -156,6 +156,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         isMaximized: win.isMaximized,
         isMinimized: win.isMinimized,
         isSticky: win.isSticky,
+        isOverlay: win.isOverlay,
         fullscreenOutput: uint32(win.fullscreenOutput),
         widthProportion: win.widthProportion,
         heightProportion: win.heightProportion,

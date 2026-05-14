@@ -85,11 +85,34 @@ proc logicalWindowSortKey(daemon: TriadDaemon, id: WindowId): uint32 =
     return uint32(logicalId)
   uint32(id)
 
+proc windowOrAncestorOverlay(daemon: TriadDaemon, id: WindowId): bool =
+  if id == 0:
+    return false
+  var current = id
+  var depth = 0
+  while current != 0 and depth < 64:
+    let winOpt = daemon.currentModel.windowDataForRiverId(current)
+    if winOpt.isNone:
+      return false
+    let win = winOpt.get()
+    if win.isOverlay:
+      return true
+    let parent = WindowId(uint32(win.parentExternalId))
+    if parent == 0:
+      return false
+    current = parent
+    inc depth
+  false
+
 proc desiredStackCmp(daemon: TriadDaemon, a, b: WindowId): int =
   if daemon.isDescendantRiverWindow(a, b):
     return 1
   if daemon.isDescendantRiverWindow(b, a):
     return -1
+  let aOverlay = daemon.windowOrAncestorOverlay(a)
+  let bOverlay = daemon.windowOrAncestorOverlay(b)
+  if aOverlay != bOverlay:
+    return cmp(ord(aOverlay), ord(bOverlay))
   cmp(daemon.logicalWindowSortKey(a), daemon.logicalWindowSortKey(b))
 
 proc orderedDesiredIds*(daemon: TriadDaemon): seq[WindowId] =
@@ -268,6 +291,13 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       let isFloating = winOpt.isSome and winOpt.get().isFloating
       if isFloating or isScratchpad or id == highlighted:
         daemon.windowNodes[id].placeTop()
+
+  for id in ids:
+    if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorOverlay(id):
+      daemon.windowNodes[id].placeTop()
+
+  if highlighted != 0 and daemon.windowNodes.hasKey(highlighted):
+    daemon.windowNodes[highlighted].placeTop()
 
   if daemon.ownedShellSurfaceId != 0 and
       daemon.surfaceTable.hasKey(daemon.ownedShellSurfaceId):

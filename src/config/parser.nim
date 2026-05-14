@@ -703,6 +703,9 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-on-all-workspaces" and child.args.len > 0:
               rule.openOnAllWorkspacesSet = true
               rule.openOnAllWorkspaces = child.args[0].kBool()
+            elif child.name == "open-overlay" and child.args.len > 0:
+              rule.openOverlaySet = true
+              rule.openOverlay = child.args[0].kBool()
             elif child.name == "maximize-policy" and child.args.len > 0:
               rule.maximizePolicySet = true
               rule.maximizePolicy = parseMaximizePolicy(child.args[0].kString())

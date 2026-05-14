@@ -428,6 +428,7 @@ proc createWindowForExternal*(
 
   var isFloating = false
   var isSticky = false
+  var isOverlay = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
   var idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone
@@ -442,6 +443,8 @@ proc createWindowForExternal*(
       floatingGeom = model.defaultFloatingGeom()
     shortcutInhibit = ruleMatch.rule.keyboardShortcutsInhibit
     idleInhibitMode = ruleMatch.rule.idleInhibitMode
+    if ruleMatch.rule.openOverlaySet:
+      isOverlay = ruleMatch.rule.openOverlay
     if not hasRestoredWindow:
       if ruleMatch.rule.defaultWindowWidthSet:
         widthProportion = ruleMatch.rule.defaultWindowWidth
@@ -488,6 +491,7 @@ proc createWindowForExternal*(
     isFullscreen = isFullscreen,
     isMaximized = isMaximized,
     isSticky = isSticky,
+    isOverlay = isOverlay,
     fullscreenOutput = fullscreenOutput,
     floatingGeom = floatingGeom,
     parentAutoFloating = parentAutoFloating,

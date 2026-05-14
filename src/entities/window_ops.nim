@@ -17,6 +17,7 @@ proc addWindow*(
     isMaximized = false,
     isMinimized = false,
     isSticky = false,
+    isOverlay = false,
     fullscreenOutput = NullExternalOutputId,
     parentExternalId = NullExternalWindowId,
     identifier = "",
@@ -56,6 +57,7 @@ proc addWindow*(
       isMaximized: isMaximized,
       isMinimized: isMinimized,
       isSticky: isSticky,
+      isOverlay: isOverlay,
       fullscreenOutput: fullscreenOutput,
       parentExternalId: parentExternalId,
       identifier: identifier,
@@ -141,6 +143,7 @@ proc setWindowCreatedState*(
     isFullscreen = false,
     isMaximized = false,
     isSticky = false,
+    isOverlay = false,
     fullscreenOutput = NullExternalOutputId,
     floatingGeom = Rect(),
     parentAutoFloating = false,
@@ -171,6 +174,7 @@ proc setWindowCreatedState*(
     isMaximized: if preserveRuntimeState: current.isMaximized else: isMaximized,
     isMinimized: if preserveRuntimeState: current.isMinimized else: false,
     isSticky: if preserveRuntimeState: current.isSticky else: isSticky,
+    isOverlay: if preserveRuntimeState: current.isOverlay else: isOverlay,
     fullscreenOutput:
       if preserveRuntimeState: current.fullscreenOutput else: fullscreenOutput,
     actualW: if preserveRuntimeState: current.actualW else: 0'i32,
@@ -253,6 +257,7 @@ proc preserveWindowRuntimeAttributes*(
       current.isFullscreen == source.isFullscreen and
       current.isMaximized == source.isMaximized and
       current.isMinimized == source.isMinimized and current.isSticky == source.isSticky and
+      current.isOverlay == source.isOverlay and
       current.fullscreenOutput == source.fullscreenOutput and
       current.actualW == source.actualW and current.actualH == source.actualH and
       current.clientMinWidth == source.clientMinWidth and
@@ -282,6 +287,7 @@ proc preserveWindowRuntimeAttributes*(
   win.isMaximized = source.isMaximized
   win.isMinimized = source.isMinimized
   win.isSticky = source.isSticky
+  win.isOverlay = source.isOverlay
   win.fullscreenOutput = source.fullscreenOutput
   win.actualW = source.actualW
   win.actualH = source.actualH
@@ -505,6 +511,14 @@ proc setWindowSticky*(model: var Model, winId: WindowId, sticky: bool): bool =
   if model.windows.mEntity(winId).isSticky == sticky:
     return false
   model.windows.mEntity(winId).isSticky = sticky
+  true
+
+proc setWindowOverlay*(model: var Model, winId: WindowId, overlay: bool): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  if model.windows.mEntity(winId).isOverlay == overlay:
+    return false
+  model.windows.mEntity(winId).isOverlay = overlay
   true
 
 proc setWindowKeyboardShortcutsInhibit*(

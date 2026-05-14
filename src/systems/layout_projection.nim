@@ -145,6 +145,7 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
       isMaximized: win.isMaximized,
       isMinimized: win.isMinimized,
       isSticky: win.isSticky,
+      isOverlay: win.isOverlay,
       fullscreenOutput: uint32(win.fullscreenOutput),
       parentId: rv.WindowId(uint32(win.parentExternalId)),
       identifier: win.identifier,
@@ -289,7 +290,8 @@ proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
     return true
   let focusedOpt = model.windowData(focused)
-  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and focusedOpt.get().isFloating
+  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and
+    (focusedOpt.get().isFloating or focusedOpt.get().isOverlay)
 
 proc preserveBackingPresentation(
     model: Model,

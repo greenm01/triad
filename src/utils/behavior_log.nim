@@ -153,6 +153,7 @@ proc compactSnapshotWindows*(snapshot: ShellSnapshot): JsonNode =
         "fullscreen": win.isFullscreen,
         "maximized": win.isMaximized,
         "minimized": win.isMinimized,
+        "overlay": win.isOverlay,
         "app_id": win.appId,
         "title": win.title,
       }

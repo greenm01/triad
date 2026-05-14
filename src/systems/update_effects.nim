@@ -385,11 +385,11 @@ proc shouldSyncFullscreenPresentation(
     return true
   kind in {
     MsgKind.WlManageStart, MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed,
-    MsgKind.WlWindowFullscreenRequested, MsgKind.WlWindowExitFullscreenRequested,
-    MsgKind.WlOutputRemoved, MsgKind.CmdToggleFullscreen,
-    MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById,
-    MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
-    MsgKind.CmdSelectWindow,
+    MsgKind.WlWindowAppId, MsgKind.WlWindowTitle, MsgKind.WlWindowFullscreenRequested,
+    MsgKind.WlWindowExitFullscreenRequested, MsgKind.WlOutputRemoved,
+    MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
+    MsgKind.CmdExitFullscreenById, MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview,
+    MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
   }
 
 proc addFullscreenPresentationSync(
@@ -400,7 +400,8 @@ proc addFullscreenPresentationSync(
 
   let afterFocus = after.focusedWindowId()
   let focusedWin = after.windowById(afterFocus)
-  let overlayFocus = focusedWin.isSome and focusedWin.get().isFloating
+  let overlayFocus =
+    focusedWin.isSome and (focusedWin.get().isFloating or focusedWin.get().isOverlay)
   let overlayRoot =
     if overlayFocus:
       after.popupRoot(afterFocus)
@@ -414,7 +415,9 @@ proc addFullscreenPresentationSync(
         elif overlayFocus and overlayRoot != afterFocus:
           win.id == overlayRoot
         elif overlayFocus:
-          not win.isFloating and after.windowOnActiveWorkspace(win)
+          not win.isFloating and not win.isOverlay and after.windowOnActiveWorkspace(
+            win
+          )
         else:
           win.id == afterFocus
       effects.addFullscreenPresentationEffect(win, present)
@@ -432,11 +435,12 @@ proc shouldSyncMaximizedPresentation(
     return true
   kind in {
     MsgKind.WlManageStart, MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed,
-    MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
-    MsgKind.WlWindowMinimizeRequested, MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout,
-    MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
-    MsgKind.CmdToggleFloating, MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview,
-    MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow,
+    MsgKind.WlWindowAppId, MsgKind.WlWindowTitle, MsgKind.WlWindowMaximizeRequested,
+    MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
+    MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn,
+    MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdToggleFloating,
+    MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
+    MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
   }
 
 proc addMaximizedPresentationSync(

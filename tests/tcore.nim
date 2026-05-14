@@ -1,6 +1,8 @@
 import std/[asyncdispatch, json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/[apply, parser]
-import ../src/core/[effects, msg, render_visibility, restore_state]
+import ../src/core/[effects, msg, render_visibility, restore_state, triad_state]
+import ../src/daemon/render_runtime
+from ../src/daemon/state import initTriadDaemon
 import ../src/state/engine
 import
   ../src/systems/[
@@ -2083,6 +2085,7 @@ suite "Core Runtime Logic":
               openFullscreen: true,
               openMaximized: true,
               openMaximizedToEdges: true,
+              openOverlay: true,
               maximizePolicySet: true,
               maximizePolicy: WindowRuleMaximizePolicy.Ignore,
               respectSizeHintsSet: true,
@@ -2121,6 +2124,8 @@ suite "Core Runtime Logic":
               openMaximized: false,
               openMaximizedToEdgesSet: true,
               openMaximizedToEdges: false,
+              openOverlaySet: true,
+              openOverlay: false,
               maximizePolicySet: true,
               maximizePolicy: WindowRuleMaximizePolicy.Edge,
               respectSizeHintsSet: true,
@@ -2163,6 +2168,8 @@ suite "Core Runtime Logic":
     check not rule.rule.openMaximized
     check rule.rule.openMaximizedToEdgesSet
     check not rule.rule.openMaximizedToEdges
+    check rule.rule.openOverlaySet
+    check not rule.rule.openOverlay
     check rule.rule.maximizePolicySet
     check rule.rule.maximizePolicy == WindowRuleMaximizePolicy.Edge
     check rule.rule.respectSizeHintsSet
@@ -5871,6 +5878,102 @@ suite "Core Runtime Logic":
     check model.placementForWindowOnTag(model.tagForSlot(1), winId).isSome
     check model.placementForWindowOnTag(model.tagForSlot(2), winId).isNone
 
+  test "Window rule open-overlay creates managed overlay without floating":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules: @[WindowRule(appIdMatch: "hud", openOverlay: true)],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 30, appId: "hud", title: "HUD")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(30))
+    let win = model.windowData(winId).get()
+    let snapshot = model.shellSnapshot()
+    let shellWin = snapshotWindow(model, 30)
+    let stateJson = triadStateJson(snapshot)
+
+    check win.isOverlay
+    check not win.isFloating
+    check shellWin.isOverlay
+    check stateJson["windows"][0]["is_overlay"].getBool()
+
+  test "Window rule open-overlay refreshes on dynamic rule changes":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 1))
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 31, appId: "panel", title: "Main")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(31))
+    check not model.windowData(winId).get().isOverlay
+
+    model.applyConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 1),
+        windowRules: @[WindowRule(appIdMatch: "panel", openOverlay: true)],
+      )
+    )
+    check model.windowData(winId).get().isOverlay
+
+    model.applyConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 1),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "panel", openOverlay: true),
+            WindowRule(
+              appIdMatch: "panel",
+              titleMatch: "Main",
+              openOverlaySet: true,
+              openOverlay: false,
+            ),
+          ],
+      )
+    )
+    check not model.windowData(winId).get().isOverlay
+
+  test "Overlay render order is above normal managed windows":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 1),
+        windowRules: @[WindowRule(appIdMatch: "hud", openOverlay: true)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 32, appId: "term", title: "A")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 33, appId: "hud", title: "HUD")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 34, appId: "term", title: "B")
+    )
+
+    var daemon = initTriadDaemon()
+    daemon.runtimeState.model = model
+    daemon.recordDesiredPlacement(
+      RenderInstruction(
+        windowId: 32, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
+      )
+    )
+    daemon.recordDesiredPlacement(
+      RenderInstruction(
+        windowId: 33, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
+      )
+    )
+    daemon.recordDesiredPlacement(
+      RenderInstruction(
+        windowId: 34, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
+      )
+    )
+    let order = daemon.orderedDesiredInstructions().mapIt(uint32(it.windowId))
+
+    check order[^1] == 33'u32
+
   test "Sticky windows sync to dynamic workspaces without pinning them occupied":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -6444,6 +6547,43 @@ suite "Core Runtime Logic":
     let screen = model.primaryScreen()
 
     check not popupEffects.hasFullscreenEffect(2, false)
+    check model.instructionGeom(2) == screen
+    check model.instructionGeom(3).w > 0
+    check model.focusedWindowId() == 3
+
+  test "Overlay window preserves fullscreen presentation":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          centerFocusedColumn: "always",
+          enableAnimations: true,
+          animationSpeed: 0.5,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "hud", openOverlay: true)],
+      )
+    ).model
+    model.seedCameraWindows(2)
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowFullscreenRequested,
+        fullscreenRequestId: 2,
+        fullscreenOutputId: 0,
+      )
+    )
+
+    let overlayEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "hud", title: "HUD")
+    )
+    let screen = model.primaryScreen()
+
+    check model.windowData(model.windowForExternal(ExternalWindowId(3))).get().isOverlay
+    check not model
+    .windowData(model.windowForExternal(ExternalWindowId(3)))
+    .get().isFloating
+    check not overlayEffects.hasFullscreenEffect(2, false)
     check model.instructionGeom(2) == screen
     check model.instructionGeom(3).w > 0
     check model.focusedWindowId() == 3

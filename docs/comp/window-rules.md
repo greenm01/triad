@@ -90,6 +90,7 @@ layout family.
 | Opening | `open-on-workspace` | Open matching window on a named workspace | `default-workspace <n>` | Pass | Triad uses numeric workspace slots. |
 | Opening | Multi-workspace placement | Mango-style multi-tag opening placement | `default-workspaces <n>...` | Pass | Triad places one window on multiple workspace tags using normal per-tag placement rows. The first target is the primary snapshot/focus target. |
 | Opening | Sticky/global workspace placement | Mango-style global window placement | `open-on-all-workspaces #true/#false` | Pass | Matching top-level windows are marked sticky and synced to every materialized workspace. Sticky-only occupancy does not pin dynamic workspaces; scratchpad clears sticky state. Parented dialogs/tools ignore sticky unless `parented-role "plain"` is set. |
+| Opening | Managed overlay stacking | Mango-style overlay/top-layer placement | `open-overlay #true/#false` | Pass | Matching managed windows stay above normal managed windows without becoming floating, sticky, scratchpad, or unmanaged. Focused overlays preserve backing fullscreen/maximized presentation. |
 | Opening | `open-maximized` | Open matching window maximized | `open-maximized #true/#false` | Pass | Maps to full-width column in scroller layouts, not client-visible maximize. |
 | Opening | `open-maximized-to-edges` | Open matching window maximized to edges | `open-maximized-to-edges #true/#false` | Pass | Uses Triad's client-visible maximized state. |
 | Opening | `open-fullscreen` | Open matching window fullscreen | `open-fullscreen #true/#false` | Pass | Fullscreen wins over other opening presentation states. |
@@ -134,7 +135,7 @@ These are gap-analysis categories, not target config names.
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Partial | Rule-level border, focused-only focus-ring width/colors, and clip-to-geometry exist; shadows, blur, radius, opacity, and per-window animation policy remain gaps. |
-| Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening and sticky workspace placement exist. Overlay and unmanaged-global behavior remain gaps. Keep these as separate concepts; do not collapse into floating. |
+| Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening, sticky workspace placement, and managed overlay stacking exist. Unmanaged-global behavior remains a gap. Keep these as separate concepts; do not collapse into floating. |
 | Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit, idle inhibit, and focused-window `presentation-mode` exist. Global keybinding policy remains a gap. |
 
@@ -156,6 +157,10 @@ These are gap-analysis categories, not target config names.
   intentionally distinct from `default-workspaces`: sticky windows follow
   future materialized workspaces, do not make every workspace occupied for
   dynamic pruning, and lose sticky state when moved to scratchpad.
+- `open-overlay` is a managed stacking rule. It does not imply floating,
+  sticky, scratchpad, unmanaged-global, or layer-shell behavior; it only keeps
+  matching windows above normal managed windows and preserves backing
+  fullscreen/maximized presentation while focused.
 - `dialog-viewport-jump` is a Triad-specific opt-in for parented dialogs that
   should retarget the viewport immediately.
 - `keyboard-shortcuts-inhibit` is a Triad-specific rule for shortcut inhibit

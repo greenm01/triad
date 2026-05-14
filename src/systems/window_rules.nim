@@ -273,6 +273,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.openOnAllWorkspacesSet:
     result.openOnAllWorkspacesSet = true
     result.openOnAllWorkspaces = rule.openOnAllWorkspaces
+  if rule.openOverlaySet:
+    result.openOverlaySet = true
+    result.openOverlay = rule.openOverlay
   if rule.maximizePolicySet:
     result.maximizePolicySet = true
     result.maximizePolicy = rule.maximizePolicy
@@ -362,6 +365,14 @@ proc windowIdleInhibitMode*(model: Model, win: WindowData): WindowRuleIdleInhibi
   if ruleMatch.found:
     return ruleMatch.rule.idleInhibitMode
   WindowRuleIdleInhibitMode.IdleInhibitNone
+
+proc windowOverlay*(model: Model, appId, title: string): bool =
+  let ruleMatch = model.windowRuleFor(appId, title)
+  ruleMatch.found and ruleMatch.rule.openOverlaySet and ruleMatch.rule.openOverlay
+
+proc windowOverlay*(model: Model, win: WindowData): bool =
+  let ruleMatch = model.windowRuleFor(win)
+  ruleMatch.found and ruleMatch.rule.openOverlaySet and ruleMatch.rule.openOverlay
 
 proc windowClipToGeometry*(model: Model, winId: WindowId): bool =
   if winId == NullWindowId:
@@ -467,4 +478,6 @@ proc refreshWindowRuleDerivedState*(model: var Model): bool =
         ) or result
     let idleInhibitMode = model.windowIdleInhibitMode(win)
     result = model.setWindowIdleInhibitMode(winId, idleInhibitMode) or result
+    let overlay = model.windowOverlay(win)
+    result = model.setWindowOverlay(winId, overlay) or result
     result = model.applyWindowRuleBounds(winId) or result

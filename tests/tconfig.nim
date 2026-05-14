@@ -314,6 +314,7 @@ window-rule {
   open-maximized #true
   open-maximized-to-edges #false
   open-on-all-workspaces #true
+  open-overlay #true
   respect-size-hints #false
   center-floating #true
   parented-role "tool"
@@ -451,6 +452,8 @@ bindings {
     check not config.windowRules[0].openMaximizedToEdges
     check config.windowRules[0].openOnAllWorkspacesSet
     check config.windowRules[0].openOnAllWorkspaces
+    check config.windowRules[0].openOverlaySet
+    check config.windowRules[0].openOverlay
     check config.windowRules[0].respectSizeHintsSet
     check not config.windowRules[0].respectSizeHints
     check config.windowRules[0].centerFloatingSet
@@ -728,6 +731,7 @@ window-rule {
   open-maximized #false
   open-maximized-to-edges #false
   open-on-all-workspaces #false
+  open-overlay #false
   maximize-policy "ignore"
   respect-size-hints #false
   center-floating #false
@@ -756,6 +760,8 @@ window-rule {
     check not config.windowRules[0].openMaximizedToEdges
     check config.windowRules[0].openOnAllWorkspacesSet
     check not config.windowRules[0].openOnAllWorkspaces
+    check config.windowRules[0].openOverlaySet
+    check not config.windowRules[0].openOverlay
     check config.windowRules[0].maximizePolicySet
     check config.windowRules[0].maximizePolicy == WindowRuleMaximizePolicy.Ignore
     check config.windowRules[0].respectSizeHintsSet

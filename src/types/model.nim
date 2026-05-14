@@ -26,6 +26,7 @@ type
     isMaximized*: bool
     isMinimized*: bool
     isSticky*: bool
+    isOverlay*: bool
     fullscreenOutput*: ExternalOutputId
     parentExternalId*: ExternalWindowId
     identifier*: string
@@ -144,6 +145,8 @@ type
     openMaximizedToEdges*: bool
     openOnAllWorkspacesSet*: bool
     openOnAllWorkspaces*: bool
+    openOverlaySet*: bool
+    openOverlay*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -206,6 +209,8 @@ type
     openMaximizedToEdges*: bool
     openOnAllWorkspacesSet*: bool
     openOnAllWorkspaces*: bool
+    openOverlaySet*: bool
+    openOverlay*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool

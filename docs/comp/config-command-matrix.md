@@ -86,7 +86,8 @@ external window manager.
 | Window state | Maximize column | `set_proportion 1.0` | WM policy | `maximize-column` | X | Full-width column; does not set client maximized state. |
 | Window state | Maximize to edges | `togglemaximizescreen` | maximize request/capability | `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize` | X | Client-visible maximized state. |
 | Window state | Sticky/global window | `toggleglobal`, `isglobal` | WM policy | `window-rule open-on-all-workspaces` | X | Exposed as declarative open policy. Triad does not yet expose an imperative toggle command. |
-| Window state | Overlay/global unmanaged | `toggleoverlay`, `isoverlay`, `isunglobal` | Layer/shell primitives | | | Not exposed by Triad. |
+| Window state | Managed overlay | `toggleoverlay`, `isoverlay` | WM policy | `window-rule open-overlay` | X | Declarative managed stacking policy; not floating, sticky, or unmanaged. |
+| Window state | Global unmanaged | `isunglobal` | Layer/shell primitives | | | Not exposed by Triad. |
 | Window state | Center floating window | `centerwin`, `no_force_center` | WM policy | `window-rule center-floating`, `floating { x-ratio; y-ratio; ... }` | X | Rule-level centering controls generated floating geometry; Triad has no separate center command. |
 | Window movement | Swap/move by direction | `exchange_client` | WM policy | `move-window-*`, `swap-window-up/down` | X | Triad separates moves and stack swaps. |
 | Window movement | Stack exchange | `exchange_stack_client` | WM policy | `swap-window-up/down` | X | |
