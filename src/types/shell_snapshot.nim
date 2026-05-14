@@ -31,6 +31,7 @@ type
 
   ShellWindow* = object
     id*: WindowId
+    pid*: int32
     parentId*: WindowId
     title*: string
     appId*: string
@@ -54,6 +55,10 @@ type
     floatingGeom*: Rect
     keyboardShortcutsInhibit*: bool
     idleInhibitMode*: WindowRuleIdleInhibitMode
+    isTerminal*: bool
+    allowSwallow*: bool
+    swallowedBy*: WindowId
+    swallowing*: WindowId
 
   ShellOutput* = object
     id*: uint32

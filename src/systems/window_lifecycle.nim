@@ -219,6 +219,8 @@ proc applyRestoredWindowState(
 ) =
   discard model.setWindowRestoredState(winId, restored)
 
+proc syncRestoredSwallowRelations(model: var Model)
+
 proc applyPendingRestore(
     model: var Model,
     externalId, restoredExternalId: ExternalWindowId,
@@ -267,6 +269,7 @@ proc applyPendingRestore(
 
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
+  model.syncRestoredSwallowRelations()
   true
 
 proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
@@ -289,6 +292,7 @@ proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
         discard model.syncPrimaryOutputTag()
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
+  model.syncRestoredSwallowRelations()
   discard model.syncPrimaryOutputTag()
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()
@@ -316,12 +320,106 @@ proc newWindowColumnIndex(model: Model, tagId: TagId, isFloating: bool): int =
     return
   result = int(colIdx)
 
+proc windowCanSwallow*(model: Model, host, child: WindowId): bool =
+  if host == NullWindowId or child == NullWindowId or host == child:
+    return false
+  let hostOpt = model.windowData(host)
+  let childOpt = model.windowData(child)
+  if hostOpt.isNone or childOpt.isNone:
+    return false
+  let hostWin = hostOpt.get()
+  let childWin = childOpt.get()
+  if not hostWin.windowAdmitted() or not childWin.windowAdmitted():
+    return false
+  if not hostWin.isTerminal or hostWin.isFloating or hostWin.isSticky or
+      hostWin.isMinimized or model.swallowingWindow(host) != NullWindowId:
+    return false
+  if childWin.pid <= 0 or hostWin.pid <= 0 or childWin.isTerminal or
+      not childWin.allowSwallow or childWin.isFloating or childWin.isSticky or
+      childWin.parentExternalId != NullExternalWindowId:
+    return false
+  model.firstWindowPosition(host).found
+
+proc applySwallow*(model: var Model, host, child: WindowId): bool =
+  if not model.windowCanSwallow(host, child):
+    return false
+
+  var hostTags: seq[TagId] = @[]
+  for tagId, winId, _ in model.placementsWithId():
+    if winId == host:
+      hostTags.add(tagId)
+  if hostTags.len == 0:
+    return false
+
+  for tagId in hostTags:
+    discard model.replacePlacedWindow(tagId, host, child)
+  discard model.setSwallowRelation(host, child)
+  if model.activeTag != NullTagId and
+      model.placementForWindowOnTag(model.activeTag, child).isSome:
+    discard model.setTagFocus(model.activeTag, child)
+    discard model.recordFocus(child)
+  true
+
+proc restoreSwallowedHost*(model: var Model, child: WindowId): bool =
+  let host = model.swallowedByWindow(child)
+  if host == NullWindowId:
+    return false
+  if model.windowData(host).isNone or model.windowData(child).isNone:
+    discard model.clearSwallowRelationForChild(child)
+    return false
+
+  var childTags: seq[TagId] = @[]
+  for tagId, winId, _ in model.placementsWithId():
+    if winId == child:
+      childTags.add(tagId)
+  for tagId in childTags:
+    discard model.replacePlacedWindow(tagId, child, host)
+
+  discard model.clearSwallowRelationForChild(child)
+  if model.activeTag != NullTagId and
+      model.placementForWindowOnTag(model.activeTag, host).isSome:
+    discard model.setTagFocus(model.activeTag, host)
+    discard model.recordFocus(host)
+  true
+
+proc syncRestoredSwallowRelations(model: var Model) =
+  for hostExternalId, childExternalId in model.restoreSwallowingWithId():
+    let host = model.windowForExternal(hostExternalId)
+    let child = model.windowForExternal(childExternalId)
+    if host == NullWindowId or child == NullWindowId:
+      continue
+    if model.windowData(host).isNone or model.windowData(child).isNone:
+      continue
+    if model.swallowedByWindow(child) == host:
+      continue
+    let currentChild = model.swallowingWindow(host)
+    if currentChild != NullWindowId and currentChild != child:
+      continue
+
+    var hostTags: seq[TagId] = @[]
+    for tagId, winId, _ in model.placementsWithId():
+      if winId == host:
+        hostTags.add(tagId)
+    for tagId in hostTags:
+      if model.placementForWindowOnTag(tagId, child).isSome:
+        discard model.removeWindowFromTag(tagId, host)
+      else:
+        discard model.replacePlacedWindow(tagId, host, child)
+    if hostTags.len > 0 or model.firstWindowPosition(child).found:
+      discard model.setSwallowRelation(host, child)
+      if model.activeTag != NullTagId and
+          model.placementForWindowOnTag(model.activeTag, child).isSome:
+        discard model.setTagFocus(model.activeTag, child)
+        discard model.recordFocus(child)
+
 proc createWindowForExternal*(
     model: var Model,
     externalId: ExternalWindowId,
     appId, title: string,
     identifier = "",
+    pid = 0'i32,
     parentExternalId = NullExternalWindowId,
+    swallowHostExternalId = NullExternalWindowId,
     deferAdmission = false,
 ): WindowId =
   if externalId == NullExternalWindowId:
@@ -432,6 +530,8 @@ proc createWindowForExternal*(
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
   var idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone
+  var isTerminal = false
+  var allowSwallow = true
   var widthProportion = model.defaultWindowWidth()
   var heightProportion = model.defaultWindowHeight()
   var columnWidthProportion = 0.0'f32
@@ -443,6 +543,8 @@ proc createWindowForExternal*(
       floatingGeom = model.defaultFloatingGeom()
     shortcutInhibit = ruleMatch.rule.keyboardShortcutsInhibit
     idleInhibitMode = ruleMatch.rule.idleInhibitMode
+    isTerminal = ruleMatch.rule.terminal
+    allowSwallow = ruleMatch.rule.allowSwallow
     if ruleMatch.rule.openOverlaySet:
       isOverlay = ruleMatch.rule.openOverlay
     if not hasRestoredWindow:
@@ -485,6 +587,7 @@ proc createWindowForExternal*(
     title = title,
     appId = appId,
     identifier = identifier,
+    pid = pid,
     widthProportion = widthProportion,
     heightProportion = heightProportion,
     isFloating = isFloating,
@@ -504,9 +607,25 @@ proc createWindowForExternal*(
     parentExternalId = parentExternalId,
     keyboardShortcutsInhibit = shortcutInhibit,
     idleInhibitMode = idleInhibitMode,
+    isTerminal = isTerminal,
+    allowSwallow = allowSwallow,
     preserveRuntimeState = existingWindow and not hasRestoredWindow,
   )
   discard model.applyWindowRuleBounds(result)
+
+  let swallowHost = model.windowForExternal(swallowHostExternalId)
+  let canSwallow =
+    not existingWindow and not hasRestoredWindow and not hasRestoredTag and
+    not opensNamedScratchpad and parentExternalId == NullExternalWindowId and
+    swallowHost != NullWindowId and model.windowCanSwallow(swallowHost, result)
+  if canSwallow:
+    discard model.applySwallow(swallowHost, result)
+    model.resolveRestoreHistories()
+    model.syncRestoreOutputTags()
+    model.syncRestoredSwallowRelations()
+    discard model.clearSettledRestoreFocus()
+    discard model.pruneDynamicWorkspaces()
+    return
 
   if existingWindow and not hasRestoredTag and not hasRestoredWindow:
     if pendingAdmission and focusAfterAdmission:
@@ -515,6 +634,7 @@ proc createWindowForExternal*(
       )
     model.resolveRestoreHistories()
     model.syncRestoreOutputTags()
+    model.syncRestoredSwallowRelations()
     discard model.clearSettledRestoreFocus()
     discard model.pruneDynamicWorkspaces()
     return
@@ -640,6 +760,7 @@ proc createWindowForExternal*(
 
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
+  model.syncRestoredSwallowRelations()
   discard model.clearSettledRestoreFocus()
   discard model.pruneDynamicWorkspaces()
   if pendingAdmission and focusAfterAdmission:
@@ -683,10 +804,21 @@ proc updateWindowIdentifierAndRestoreForExternal*(
       model.applyPendingRestore(externalId, matchedExternalId, matchedRestore.get())
   true
 
+proc updateWindowPidForExternal*(
+    model: var Model, externalId: ExternalWindowId, pid: int32
+): bool =
+  let winId = model.windowForExternal(externalId)
+  winId != NullWindowId and model.setWindowPid(winId, pid)
+
 proc destroyWindowForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
+
+  if model.swallowedByWindow(winId) != NullWindowId:
+    discard model.restoreSwallowedHost(winId)
+  elif model.swallowingWindow(winId) != NullWindowId:
+    discard model.clearSwallowRelationForHost(winId)
 
   let activeTag = model.activeTag
   let closedRoot = model.popupRoot(winId)

@@ -285,6 +285,12 @@ proc onWindowUnreliablePid(
   if daemon == nil:
     return
   daemon.windowUnreliablePids[win.id()] = unreliablePid
+  if daemon.pendingWindows.hasKey(win.id()):
+    daemon.pendingWindows[win.id()].pid = max(0'i32, unreliablePid)
+  elif daemon[].currentModel.hasRiverWindow(win.id()):
+    daemon.enqueue(
+      Msg(kind: MsgKind.WlWindowPid, pidWindowId: win.id(), windowPid: unreliablePid)
+    )
   trace "Window unreliable pid received", windowId = win.id(), pid = unreliablePid
 
 proc onWindowPresentationHint(data: pointer, win: ptr RiverWindowV1, hint: uint32) =
@@ -344,5 +350,6 @@ proc trackWindow*(daemon: var TriadDaemon, win: ptr RiverWindowV1) =
   info "Window discovered", windowId = id
   daemon.windowPointers[id] = win
   daemon.windowNodes[id] = win.getNode()
-  daemon.pendingWindows[id] = rv.WindowData(id: id, appId: "unknown", title: "unknown")
+  daemon.pendingWindows[id] =
+    rv.WindowData(id: id, appId: "unknown", title: "unknown", allowSwallow: true)
   discard win.addListener(riverWindowListener.addr, daemonData(daemon))

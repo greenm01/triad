@@ -20,6 +20,7 @@ type
     WlWindowExitFullscreenRequested
     WlWindowParent
     WlWindowIdentifier
+    WlWindowPid
     WlWindowAppId
     WlWindowTitle
     WlWindowDimensionsHint
@@ -155,6 +156,8 @@ type
     of MsgKind.WlWindowCreated:
       windowId*: WindowId
       createdParentWindowId*: WindowId
+      createdSwallowHostWindowId*: WindowId
+      createdPid*: int32
       appId*: string
       title*: string
       createdIdentifier*: string
@@ -174,6 +177,9 @@ type
     of MsgKind.WlWindowIdentifier:
       identifierWindowId*: WindowId
       identifier*: string
+    of MsgKind.WlWindowPid:
+      pidWindowId*: WindowId
+      windowPid*: int32
     of MsgKind.WlWindowAppId:
       appIdWindowId*: WindowId
       updatedAppId*: string

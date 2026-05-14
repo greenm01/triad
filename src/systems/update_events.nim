@@ -80,7 +80,9 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       msg.appId,
       msg.title,
       msg.createdIdentifier,
+      msg.createdPid,
       msg.createdParentWindowId.externalWindowId(),
+      msg.createdSwallowHostWindowId.externalWindowId(),
       msg.deferAdmission,
     )
     result.dirty = winId != NullWindowId
@@ -108,6 +110,10 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     let externalId = msg.identifierWindowId.externalWindowId()
     result.dirty =
       model.updateWindowIdentifierAndRestoreForExternal(externalId, msg.identifier)
+  of MsgKind.WlWindowPid:
+    result.dirty = model.updateWindowPidForExternal(
+      msg.pidWindowId.externalWindowId(), msg.windowPid
+    )
   of MsgKind.WlWindowAppId:
     result.dirty = model.updateWindowAppIdForExternal(
       msg.appIdWindowId.externalWindowId(), msg.updatedAppId

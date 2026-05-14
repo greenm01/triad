@@ -91,6 +91,11 @@ proc idleInhibitModeId(mode: WindowRuleIdleInhibitMode): string =
 proc triadWindowJson(win: ShellWindow): JsonNode =
   %*{
     "id": win.id,
+    "pid":
+      if win.pid <= 0:
+        newJNull()
+      else:
+        %win.pid,
     "parent_id":
       if win.parentId == 0:
         newJNull()
@@ -144,6 +149,18 @@ proc triadWindowJson(win: ShellWindow): JsonNode =
     },
     "keyboard_shortcuts_inhibit": win.keyboardShortcutsInhibit,
     "idle_inhibit": idleInhibitModeId(win.idleInhibitMode),
+    "is_terminal": win.isTerminal,
+    "allow_swallow": win.allowSwallow,
+    "swallowed_by":
+      if win.swallowedBy == 0:
+        newJNull()
+      else:
+        %win.swallowedBy,
+    "swallowing":
+      if win.swallowing == 0:
+        newJNull()
+      else:
+        %win.swallowing,
   }
 
 proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =

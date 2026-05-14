@@ -17,6 +17,7 @@ type
   WindowData* = object
     id*: WindowId
     externalId*: ExternalWindowId
+    pid*: int32
     title*: string
     appId*: string
     widthProportion*: float32
@@ -45,6 +46,8 @@ type
     keyboardShortcutsInhibit*: bool
     keyboardShortcutsInhibitBypass*: bool
     idleInhibitMode*: WindowRuleIdleInhibitMode
+    isTerminal*: bool
+    allowSwallow*: bool
 
   TagData* = object
     id*: TagId
@@ -147,6 +150,10 @@ type
     openOnAllWorkspaces*: bool
     openOverlaySet*: bool
     openOverlay*: bool
+    terminalSet*: bool
+    terminal*: bool
+    allowSwallowSet*: bool
+    allowSwallow*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -211,6 +218,10 @@ type
     openOnAllWorkspaces*: bool
     openOverlaySet*: bool
     openOverlay*: bool
+    terminalSet*: bool
+    terminal*: bool
+    allowSwallowSet*: bool
+    allowSwallow*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -244,6 +255,9 @@ type
   RestoredWindowData* = object
     slot*: uint32
     parentExternalId*: ExternalWindowId
+    swallowedByExternalId*: ExternalWindowId
+    swallowingExternalId*: ExternalWindowId
+    pid*: int32
     appId*: string
     title*: string
     identifier*: string
@@ -257,6 +271,8 @@ type
     fullscreenOutput*: ExternalOutputId
     floatingGeom*: Rect
     manualFloatingPosition*: bool
+    isTerminal*: bool
+    allowSwallow*: bool
     actualW*, actualH*: int32
 
   RestoredColumnData* = object
@@ -309,6 +325,8 @@ type
     isScratchpadVisible*: bool
     focusHistory*: seq[ExternalWindowId]
     workspaceHistory*: seq[uint32]
+    swallowedBy*: Table[ExternalWindowId, ExternalWindowId]
+    swallowing*: Table[ExternalWindowId, ExternalWindowId]
 
   Model* = object
     counters*: IdCounters
@@ -336,6 +354,8 @@ type
     namedScratchpads*: Table[string, WindowId]
     visibleScratchpad*: WindowId
     isScratchpadVisible*: bool
+    swallowedBy*: Table[WindowId, WindowId]
+    swallowing*: Table[WindowId, WindowId]
 
     activeTag*: TagId
     activeSlot*: uint32
@@ -418,6 +438,8 @@ type
     restoreIsScratchpadVisible*: bool
     restoreFocusHistory*: seq[ExternalWindowId]
     restoreWorkspaceHistory*: seq[uint32]
+    restoreSwallowedBy*: Table[ExternalWindowId, ExternalWindowId]
+    restoreSwallowing*: Table[ExternalWindowId, ExternalWindowId]
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[TagId]

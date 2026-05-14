@@ -276,6 +276,12 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.openOverlaySet:
     result.openOverlaySet = true
     result.openOverlay = rule.openOverlay
+  if rule.terminalSet:
+    result.terminalSet = true
+    result.terminal = rule.terminal
+  if rule.allowSwallowSet:
+    result.allowSwallowSet = true
+    result.allowSwallow = rule.allowSwallow
   if rule.maximizePolicySet:
     result.maximizePolicySet = true
     result.maximizePolicy = rule.maximizePolicy
@@ -316,6 +322,7 @@ proc windowRuleFor*(
 ): tuple[found: bool, rule: ResolvedWindowRuleData] =
   let context = openingContext(appId, title)
   result.rule.parentedRole = ParentedRole.Dialog
+  result.rule.allowSwallow = true
   for rule in model.windowRules:
     if rule.matches(model, context):
       result.found = true
@@ -326,6 +333,7 @@ proc windowRuleFor*(
 ): tuple[found: bool, rule: ResolvedWindowRuleData] =
   let context = windowContext(winId, win)
   result.rule.parentedRole = ParentedRole.Dialog
+  result.rule.allowSwallow = true
   for rule in model.windowRules:
     if rule.matches(model, context):
       result.found = true
@@ -373,6 +381,22 @@ proc windowOverlay*(model: Model, appId, title: string): bool =
 proc windowOverlay*(model: Model, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(win)
   ruleMatch.found and ruleMatch.rule.openOverlaySet and ruleMatch.rule.openOverlay
+
+proc windowTerminalPolicy*(
+    model: Model, appId, title: string
+): tuple[terminal, allowSwallow: bool] =
+  result.allowSwallow = true
+  let ruleMatch = model.windowRuleFor(appId, title)
+  if ruleMatch.found:
+    if ruleMatch.rule.terminalSet:
+      result.terminal = ruleMatch.rule.terminal
+    if ruleMatch.rule.allowSwallowSet:
+      result.allowSwallow = ruleMatch.rule.allowSwallow
+
+proc windowTerminalPolicy*(
+    model: Model, win: WindowData
+): tuple[terminal, allowSwallow: bool] =
+  model.windowTerminalPolicy(win.appId, win.title)
 
 proc windowClipToGeometry*(model: Model, winId: WindowId): bool =
   if winId == NullWindowId:
@@ -480,4 +504,9 @@ proc refreshWindowRuleDerivedState*(model: var Model): bool =
     result = model.setWindowIdleInhibitMode(winId, idleInhibitMode) or result
     let overlay = model.windowOverlay(win)
     result = model.setWindowOverlay(winId, overlay) or result
+    let terminalPolicy = model.windowTerminalPolicy(win)
+    result =
+      model.setWindowTerminalPolicy(
+        winId, terminalPolicy.terminal, terminalPolicy.allowSwallow
+      ) or result
     result = model.applyWindowRuleBounds(winId) or result

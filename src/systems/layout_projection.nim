@@ -136,6 +136,7 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
   for winId, win in model.windowsWithId():
     result[model.externalWindowId(winId)] = rv.WindowData(
       id: model.externalWindowId(winId),
+      pid: win.pid,
       title: win.title,
       appId: win.appId,
       widthProportion: win.widthProportion,
@@ -163,6 +164,8 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
       keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
       keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass,
       idleInhibitMode: win.idleInhibitMode,
+      isTerminal: win.isTerminal,
+      allowSwallow: win.allowSwallow,
     )
 
 proc projectedTag(

@@ -118,6 +118,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     let win = model.windowData(winId).get()
     if not win.windowAdmitted():
       continue
+    if model.windowHiddenBySwallow(winId):
+      continue
     let pos = model.firstWindowPosition(winId)
     let tagOpt =
       if pos.found:
@@ -130,6 +132,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     result.windows.add(
       ShellWindow(
         id: runtime_values.WindowId(uint32(win.externalId)),
+        pid: win.pid,
         parentId: runtime_values.WindowId(uint32(win.parentExternalId)),
         title: win.title,
         appId: win.appId,
@@ -165,6 +168,14 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         floatingGeom: win.floatingGeom,
         keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
         idleInhibitMode: win.idleInhibitMode,
+        isTerminal: win.isTerminal,
+        allowSwallow: win.allowSwallow,
+        swallowedBy: runtime_values.WindowId(
+          uint32(model.externalWindowId(model.swallowedByWindow(winId)))
+        ),
+        swallowing: runtime_values.WindowId(
+          uint32(model.externalWindowId(model.swallowingWindow(winId)))
+        ),
       )
     )
 

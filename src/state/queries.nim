@@ -41,6 +41,15 @@ proc groupData*(model: Model, groupId: GroupId): Option[GroupData] =
 proc groupForWindow*(model: Model, winId: WindowId): GroupId =
   model.groupByWindow.getOrDefault(winId, NullGroupId)
 
+proc swallowedByWindow*(model: Model, winId: WindowId): WindowId =
+  model.swallowedBy.getOrDefault(winId, NullWindowId)
+
+proc swallowingWindow*(model: Model, winId: WindowId): WindowId =
+  model.swallowing.getOrDefault(winId, NullWindowId)
+
+proc windowHiddenBySwallow*(model: Model, winId: WindowId): bool =
+  model.swallowingWindow(winId) != NullWindowId
+
 proc windowHiddenByGroup*(model: Model, winId: WindowId): bool =
   let groupId = model.groupForWindow(winId)
   if groupId == NullGroupId:

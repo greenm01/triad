@@ -1,5 +1,5 @@
 import std/[options, tables]
-import group_ops, history_ops, placement_ops, scratchpad_ops
+import group_ops, history_ops, placement_ops, scratchpad_ops, swallow_ops
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/core except Rect
 import ../types/model
@@ -8,6 +8,7 @@ from ../types/runtime_values import Rect, WindowRuleIdleInhibitMode
 proc addWindow*(
     model: var Model,
     externalId: ExternalWindowId,
+    pid = 0'i32,
     title = "",
     appId = "",
     widthProportion = 1.0'f32,
@@ -39,6 +40,8 @@ proc addWindow*(
     keyboardShortcutsInhibit = false,
     keyboardShortcutsInhibitBypass = false,
     idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone,
+    isTerminal = false,
+    allowSwallow = true,
 ): WindowId =
   if externalId != NullExternalWindowId and model.externalWindowIds.hasKey(externalId):
     return model.externalWindowIds[externalId]
@@ -48,6 +51,7 @@ proc addWindow*(
     WindowData(
       id: id,
       externalId: externalId,
+      pid: pid,
       title: title,
       appId: appId,
       widthProportion: widthProportion,
@@ -83,6 +87,8 @@ proc addWindow*(
       keyboardShortcutsInhibit: keyboardShortcutsInhibit,
       keyboardShortcutsInhibitBypass: keyboardShortcutsInhibitBypass,
       idleInhibitMode: idleInhibitMode,
+      isTerminal: isTerminal,
+      allowSwallow: allowSwallow,
     )
   )
   if externalId != NullExternalWindowId:
@@ -137,6 +143,7 @@ proc setWindowCreatedState*(
     title = "",
     appId = "",
     identifier = "",
+    pid = 0'i32,
     widthProportion = 1.0'f32,
     heightProportion = 1.0'f32,
     isFloating = false,
@@ -153,6 +160,8 @@ proc setWindowCreatedState*(
     parentExternalId = NullExternalWindowId,
     keyboardShortcutsInhibit = false,
     idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone,
+    isTerminal = false,
+    allowSwallow = true,
     preserveRuntimeState = false,
 ): bool =
   let currentOpt = model.windows.entity(winId)
@@ -162,6 +171,7 @@ proc setWindowCreatedState*(
   model.windows.mEntity(winId) = WindowData(
     id: winId,
     externalId: current.externalId,
+    pid: if preserveRuntimeState: current.pid else: pid,
     title: title,
     appId: appId,
     identifier: identifier,
@@ -208,6 +218,8 @@ proc setWindowCreatedState*(
       if preserveRuntimeState: current.keyboardShortcutsInhibitBypass else: false,
     idleInhibitMode:
       if preserveRuntimeState: current.idleInhibitMode else: idleInhibitMode,
+    isTerminal: if preserveRuntimeState: current.isTerminal else: isTerminal,
+    allowSwallow: if preserveRuntimeState: current.allowSwallow else: allowSwallow,
   )
   true
 
@@ -229,6 +241,7 @@ proc destroyWindow*(model: var Model, winId: WindowId): bool =
   if externalId != NullExternalWindowId:
     model.externalWindowIds.del(externalId)
   discard model.removeScratchpadRef(winId)
+  discard model.clearSwallowRelations(winId)
   model.windowTags.del(winId)
   discard model.removeFocusHistoryRef(winId)
   for _, tag in model.tagsWithId():
@@ -251,7 +264,7 @@ proc preserveWindowRuntimeAttributes*(
   if currentOpt.isNone:
     return false
   let current = currentOpt.get()
-  if current.widthProportion == source.widthProportion and
+  if current.widthProportion == source.widthProportion and current.pid == source.pid and
       current.heightProportion == source.heightProportion and
       current.isFloating == source.isFloating and
       current.isFullscreen == source.isFullscreen and
@@ -276,10 +289,13 @@ proc preserveWindowRuntimeAttributes*(
       current.parentExternalId == source.parentExternalId and
       current.keyboardShortcutsInhibit == source.keyboardShortcutsInhibit and
       current.keyboardShortcutsInhibitBypass == source.keyboardShortcutsInhibitBypass and
-      current.idleInhibitMode == source.idleInhibitMode:
+      current.idleInhibitMode == source.idleInhibitMode and
+      current.isTerminal == source.isTerminal and
+      current.allowSwallow == source.allowSwallow:
     return false
 
   var win = model.windows.mEntity(winId)
+  win.pid = source.pid
   win.widthProportion = source.widthProportion
   win.heightProportion = source.heightProportion
   win.isFloating = source.isFloating
@@ -310,6 +326,8 @@ proc preserveWindowRuntimeAttributes*(
   win.keyboardShortcutsInhibit = source.keyboardShortcutsInhibit
   win.keyboardShortcutsInhibitBypass = source.keyboardShortcutsInhibitBypass
   win.idleInhibitMode = source.idleInhibitMode
+  win.isTerminal = source.isTerminal
+  win.allowSwallow = source.allowSwallow
   true
 
 proc setWindowWidthProportion*(
@@ -346,6 +364,14 @@ proc setWindowIdentifier*(model: var Model, winId: WindowId, identifier: string)
   if model.windows.entity(winId).isNone:
     return false
   model.windows.mEntity(winId).identifier = identifier
+  true
+
+proc setWindowPid*(model: var Model, winId: WindowId, pid: int32): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  if model.windows.mEntity(winId).pid == pid:
+    return false
+  model.windows.mEntity(winId).pid = max(0'i32, pid)
   true
 
 proc setWindowParent*(
@@ -386,6 +412,9 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).floatingGeom = restored.floatingGeom
   if restored.parentExternalId != NullExternalWindowId:
     model.windows.mEntity(winId).parentExternalId = restored.parentExternalId
+  model.windows.mEntity(winId).pid = restored.pid
+  model.windows.mEntity(winId).isTerminal = restored.isTerminal
+  model.windows.mEntity(winId).allowSwallow = restored.allowSwallow
   model.windows.mEntity(winId).actualW = restored.actualW
   model.windows.mEntity(winId).actualH = restored.actualH
   true
@@ -519,6 +548,18 @@ proc setWindowOverlay*(model: var Model, winId: WindowId, overlay: bool): bool =
   if model.windows.mEntity(winId).isOverlay == overlay:
     return false
   model.windows.mEntity(winId).isOverlay = overlay
+  true
+
+proc setWindowTerminalPolicy*(
+    model: var Model, winId: WindowId, terminal, allowSwallow: bool
+): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  var win = model.windows.mEntity(winId)
+  if win.isTerminal == terminal and win.allowSwallow == allowSwallow:
+    return false
+  win.isTerminal = terminal
+  win.allowSwallow = allowSwallow
   true
 
 proc setWindowKeyboardShortcutsInhibit*(

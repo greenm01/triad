@@ -11,7 +11,7 @@ import
   ]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
-import ../src/utils/[overview_hit_test, screenshot_capture]
+import ../src/utils/[overview_hit_test, process_tree, screenshot_capture]
 import tag_semantics_checks
 
 proc configuredModel(): Model =
@@ -295,6 +295,17 @@ suite "Core Runtime Logic":
     check expandUserPath("/tmp/shot.png") == "/tmp/shot.png"
     check path.startsWith(home / "Pictures" / "Screenshots" / "screenshot-")
     check not path.startsWith("home/")
+
+  test "Process tree descendant check follows parent chain":
+    proc parentPid(pid: int32): int32 {.gcsafe.} =
+      case pid
+      of 20'i32: 10'i32
+      of 30'i32: 20'i32
+      else: 0'i32
+
+    check isDescendantProcess(10, 30, parentPid)
+    check not isDescendantProcess(30, 10, parentPid)
+    check not isDescendantProcess(0, 30, parentPid)
 
   test "Async shell command runner yields while process runs":
     var ticked = false
@@ -2016,6 +2027,164 @@ suite "Core Runtime Logic":
     check rule.rule.floating.widthRatioSet
     check rule.rule.floating.widthRatio == 0.40'f32
     check not rule.rule.floating.heightRatioSet
+
+  test "Window rule terminal swallowing replaces host until child closes":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "term", terminalSet: true, terminal: true),
+            WindowRule(appIdMatch: "app"),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 1,
+        appId: "term",
+        title: "Shell",
+        createdPid: 100,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "app",
+        title: "Editor",
+        createdSwallowHostWindowId: 1,
+        createdPid: 101,
+      )
+    )
+
+    let host = model.windowForExternal(ExternalWindowId(1))
+    let child = model.windowForExternal(ExternalWindowId(2))
+    check model.windowData(host).get().isTerminal
+    check model.windowData(child).get().allowSwallow
+    check model.swallowingWindow(host) == child
+    check model.swallowedByWindow(child) == host
+    check model.columnHeads(1) == @[2'u32]
+    check not model.shellSnapshot().windows.anyIt(uint32(it.id) == 1)
+    check model.snapshotWindow(2).swallowedBy == runtime_values.WindowId(1)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
+
+    check model.swallowingWindow(host) == NullWindowId
+    check model.columnHeads(1) == @[1'u32]
+    check model.focusedWindowId() == 1
+
+  test "Window rule allow-swallow false keeps child tiled beside terminal":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "term", terminalSet: true, terminal: true),
+            WindowRule(appIdMatch: "app", allowSwallowSet: true, allowSwallow: false),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 1,
+        appId: "term",
+        title: "Shell",
+        createdPid: 100,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "app",
+        title: "Editor",
+        createdSwallowHostWindowId: 1,
+        createdPid: 101,
+      )
+    )
+
+    let host = model.windowForExternal(ExternalWindowId(1))
+    let child = model.windowForExternal(ExternalWindowId(2))
+    check not model.windowData(child).get().allowSwallow
+    check model.swallowingWindow(host) == NullWindowId
+    check model.swallowedByWindow(child) == NullWindowId
+    check model.columnHeads(1) == @[1'u32, 2]
+
+  test "Live restore preserves swallowed terminal relation":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "term", terminalSet: true, terminal: true),
+            WindowRule(appIdMatch: "app"),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 1,
+        appId: "term",
+        title: "Shell",
+        createdPid: 100,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "app",
+        title: "Editor",
+        createdSwallowHostWindowId: 1,
+        createdPid: 101,
+      )
+    )
+
+    let hostJson = model.restoreWindowJson(1)
+    check hostJson["is_terminal"].getBool()
+    check hostJson["pid"].getInt() == 100
+    check hostJson["swallowing"].getInt() == 2
+
+    var restored = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "term", terminalSet: true, terminal: true),
+            WindowRule(appIdMatch: "app"),
+          ],
+      )
+    ).model
+    let state = parseLiveRestoreJson(model.liveRestoreJson()).get()
+    restored.applyLiveRestore(state.pendingRestoreState())
+    restored.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 1,
+        appId: "term",
+        title: "Shell",
+        createdPid: 100,
+      )
+    )
+    restored.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "app",
+        title: "Editor",
+        createdPid: 101,
+      )
+    )
+
+    let restoredHost = restored.windowForExternal(ExternalWindowId(1))
+    let restoredChild = restored.windowForExternal(ExternalWindowId(2))
+    check restored.swallowingWindow(restoredHost) == restoredChild
+    check restored.swallowedByWindow(restoredChild) == restoredHost
+    check restored.columnHeads(1) == @[2'u32]
 
   test "Window rules let later workspace target lists override earlier lists":
     var model = initRuntimeStateFromConfig(

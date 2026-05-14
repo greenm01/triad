@@ -706,6 +706,12 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-overlay" and child.args.len > 0:
               rule.openOverlaySet = true
               rule.openOverlay = child.args[0].kBool()
+            elif child.name == "terminal" and child.args.len > 0:
+              rule.terminalSet = true
+              rule.terminal = child.args[0].kBool()
+            elif child.name == "allow-swallow" and child.args.len > 0:
+              rule.allowSwallowSet = true
+              rule.allowSwallow = child.args[0].kBool()
             elif child.name == "maximize-policy" and child.args.len > 0:
               rule.maximizePolicySet = true
               rule.maximizePolicy = parseMaximizePolicy(child.args[0].kString())

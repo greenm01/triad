@@ -273,6 +273,17 @@ window-rule {
     keyboard-shortcuts-inhibit #true
 }
 
+// Example terminal swallowing rules:
+// window-rule {
+//     match app-id="kitty|Alacritty|foot"
+//     terminal #true
+// }
+//
+// window-rule {
+//     match app-id="keepassxc"
+//     allow-swallow #false
+// }
+
 // Example scroller-specific sizing rule:
 // window-rule {
 //     match app-id="^org\\.wezfurlong\\.wezterm$"

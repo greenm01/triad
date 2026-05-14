@@ -49,7 +49,11 @@ proc niriWindowJson*(snapshot: ShellSnapshot, win: ShellWindow): JsonNode =
           newJNull()
         else:
           %compatId,
-      "pid": newJNull(),
+      "pid":
+        if win.pid <= 0:
+          newJNull()
+        else:
+          %win.pid,
       "workspace_id":
         if win.tagId.isSome:
           %win.tagId.get()

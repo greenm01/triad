@@ -101,6 +101,7 @@ type
 
   WindowData* = object
     id*: WindowId
+    pid*: int32
     title*: string
     appId*: string
     widthProportion*: float32
@@ -124,6 +125,8 @@ type
     keyboardShortcutsInhibit*: bool
     keyboardShortcutsInhibitBypass*: bool
     idleInhibitMode*: WindowRuleIdleInhibitMode
+    isTerminal*: bool
+    allowSwallow*: bool
 
   GroupState* = object
     id*: uint32
@@ -205,6 +208,10 @@ type
     openOnAllWorkspaces*: bool
     openOverlaySet*: bool
     openOverlay*: bool
+    terminalSet*: bool
+    terminal*: bool
+    allowSwallowSet*: bool
+    allowSwallow*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -354,6 +361,9 @@ type
   RestoredWindowState* = object
     tagId*: uint32
     parentId*: WindowId
+    swallowedBy*: WindowId
+    swallowing*: WindowId
+    pid*: int32
     appId*: string
     title*: string
     identifier*: string
@@ -367,6 +377,8 @@ type
     fullscreenOutput*: uint32
     floatingGeom*: Rect
     manualFloatingPosition*: bool
+    isTerminal*: bool
+    allowSwallow*: bool
     actualW*, actualH*: int32
 
   RestoredColumnState* = object

@@ -49,8 +49,8 @@ The supported KDL nodes are:
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   all-workspace sticky behavior, managed overlay behavior, focus behavior,
-  parented-dialog viewport jump behavior, size-hint policy, shortcut inhibition,
-  presentation mode,
+  parented-dialog viewport jump behavior, terminal swallowing policy, size-hint
+  policy, shortcut inhibition, presentation mode,
   border/focus-ring/clip policy, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
@@ -147,6 +147,16 @@ window-rule {
   match app-id="waybar|quickshell"
   open-on-all-workspaces #true
   open-focused #false
+}
+
+window-rule {
+  match app-id="kitty|Alacritty|foot"
+  terminal #true
+}
+
+window-rule {
+  match app-id="keepassxc"
+  allow-swallow #false
 }
 
 window-rule {
@@ -273,6 +283,14 @@ window-rule {
   scratchpads. The window is untagged until `toggle-named-scratchpad <name>` is
   run. Empty names are ignored; live restore takes precedence; config reloads
   do not move existing windows into or out of scratchpads.
+- `terminal #true|#false`: marks matching windows as terminal hosts for
+  swallowing. Triad does not infer terminal status from desktop metadata in v1.
+  A terminal can swallow only a new top-level child whose reported PID descends
+  from the terminal PID.
+- `allow-swallow #true|#false`: controls whether matching child windows may be
+  swallowed by an eligible terminal host. The default is `#true`; use `#false`
+  for apps that should always open as normal tiled/floating windows. Missing
+  PID data disables swallowing rather than guessing.
 - `default-column-width { proportion <n> }`: sets the initial width of a newly
   created tiled column for matching windows. Values are clamped to `0.05..1.0`.
 - `scroller-proportion { proportion <n> }`: sets the initial primary-axis size

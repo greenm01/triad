@@ -136,7 +136,7 @@ These are gap-analysis categories, not target config names.
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Partial | Rule-level border, focused-only focus-ring width/colors, and clip-to-geometry exist; shadows, blur, radius, opacity, and per-window animation policy remain gaps. |
 | Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening, sticky workspace placement, and managed overlay stacking exist. Unmanaged-global behavior remains a gap. Keep these as separate concepts; do not collapse into floating. |
-| Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
+| Terminal swallowing | `isterm`, `noswallow` | Pass | Implemented as explicit `terminal` and `allow-swallow` rules. Swallowing requires a terminal host PID and a new child PID that descends from it; missing PID data never guesses. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit, idle inhibit, and focused-window `presentation-mode` exist. Global keybinding policy remains a gap. |
 
 ## Remaining Gap Triage
@@ -147,8 +147,7 @@ can be implemented with the current runtime model.
 
 | Priority | Gap | Classification | Decision |
 | :---: | :--- | :--- | :--- |
-| P1 | Terminal swallowing: `isterm`, `noswallow` | Implementable next | Best next code slice. Requires terminal identification, spawned-child association, and restore/unhide behavior, but does not require new River protocol support. |
-| P2 | Unmanaged-global windows: `isunglobal` | Design needed | Keep distinct from sticky, managed overlay, floating, scratchpad, and layer-shell behavior. Do not implement until the lifecycle and render semantics are specified. |
+| P1 | Unmanaged-global windows: `isunglobal` | Design needed | Keep distinct from sticky, managed overlay, floating, scratchpad, and layer-shell behavior. Do not implement until the lifecycle and render semantics are specified. |
 | P3 | True output serial matching | Protocol/data blocked | Current output identity stores connector name, make/model, and description. Keep `open-on-output` partial until serial data is available. |
 | P3 | Urgent matcher: `is-urgent` | Protocol/data blocked | Native Triad and niri-compatible state currently report urgency as false. Implement only after Triad has a real urgent-window signal. |
 | P3 | Cast-target matcher: `is-window-cast-target` | Protocol/data blocked | No current state or protocol source identifies cast targets. |
@@ -214,6 +213,10 @@ can be implemented with the current runtime model.
   full-width scroller columns, and `ignore` refuses maximize-on requests.
 - `forced-layout` is a Triad-specific rule that can select the workspace layout
   used for a matching new window.
+- `terminal #true` and `allow-swallow #false` are Triad's explicit swallowing
+  controls. Triad intentionally does not infer terminal status from desktop
+  metadata in v1; a child can be swallowed only when the compositor reports a
+  PID and that PID descends from the eligible terminal host PID.
 - `open-named-scratchpad` is a Triad-specific opening rule for tools that
   should be available through `toggle-named-scratchpad` without first occupying
   a workspace. It is intentionally opening-only, and live restore wins.

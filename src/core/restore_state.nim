@@ -21,6 +21,8 @@ type
     isScratchpadVisible*: bool
     focusHistory*: seq[WindowId]
     workspaceHistory*: seq[uint32]
+    swallowedBy*: Table[WindowId, WindowId]
+    swallowing*: Table[WindowId, WindowId]
 
   LiveRestoreWriteResult* = object
     ok*: bool
@@ -182,6 +184,18 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
     let parentId = uint32FromJson(node["parent_id"])
     if parentId.isSome:
       win.parentId = WindowId(parentId.get())
+  if node.hasKey("swallowed_by"):
+    let swallowedBy = uint32FromJson(node["swallowed_by"])
+    if swallowedBy.isSome:
+      win.swallowedBy = WindowId(swallowedBy.get())
+      state.swallowedBy[externalId] = win.swallowedBy
+  if node.hasKey("swallowing"):
+    let swallowing = uint32FromJson(node["swallowing"])
+    if swallowing.isSome:
+      win.swallowing = WindowId(swallowing.get())
+      state.swallowing[externalId] = win.swallowing
+  if node.hasKey("pid"):
+    win.pid = max(0'i32, int32FromJson(node["pid"]))
   if node.hasKey("app_id"):
     win.appId = stringFromJson(node["app_id"])
   if node.hasKey("title"):
@@ -211,6 +225,12 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
     win.floatingGeom = rectFromJson(node["floating_geom"])
   if node.hasKey("manual_floating_position"):
     win.manualFloatingPosition = boolFromJson(node["manual_floating_position"])
+  if node.hasKey("is_terminal"):
+    win.isTerminal = boolFromJson(node["is_terminal"])
+  if node.hasKey("allow_swallow"):
+    win.allowSwallow = boolFromJson(node["allow_swallow"])
+  else:
+    win.allowSwallow = true
   if node.hasKey("actual_w"):
     win.actualW = max(0'i32, int32FromJson(node["actual_w"]))
   if node.hasKey("actual_h"):

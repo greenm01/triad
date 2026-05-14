@@ -14,6 +14,8 @@ proc loadRestoreState*(model: var Model, state: PendingRestoreState): bool =
   model.restoreIsScratchpadVisible = state.isScratchpadVisible
   model.restoreFocusHistory = state.focusHistory
   model.restoreWorkspaceHistory = state.workspaceHistory
+  model.restoreSwallowedBy = state.swallowedBy
+  model.restoreSwallowing = state.swallowing
   true
 
 proc consumeRestoreWindow*(

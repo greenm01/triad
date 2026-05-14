@@ -105,3 +105,9 @@ iterator restoreWindowsWithId*(
 ): tuple[externalId: ExternalWindowId, window: RestoredWindowData] =
   for externalId, restored in model.restoreWindows.pairs:
     yield (externalId, restored)
+
+iterator restoreSwallowingWithId*(
+    model: Model
+): tuple[hostExternalId: ExternalWindowId, childExternalId: ExternalWindowId] =
+  for hostExternalId, childExternalId in model.restoreSwallowing.pairs:
+    yield (hostExternalId, childExternalId)

@@ -1,10 +1,14 @@
-import std/tables
+import std/[options, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import ../core/msg
+import ../state/[iterators, queries]
+import ../systems/window_rules
+import ../types/runtime_values
 from ../types/runtime_values import WindowId
+import ../utils/process_tree
 import
   bindings_runtime, live_restore_runtime, manage_requests, message_queue,
   protocol_surface_runtime, river_outputs_runtime, river_windows, state, wayland_helpers
@@ -38,6 +42,7 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
     let output = daemon.outputPointers[id]
     daemon.outputPointers.del(id)
     output.destroy()
+
   daemon.outputWlNames.clear()
 
   for seat in daemon.layerSeatPointers:
@@ -62,6 +67,60 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
   if daemon.riverLayerShell != nil:
     daemon.riverLayerShell.destroy()
     daemon.riverLayerShell = nil
+
+proc pendingWindowPid(daemon: TriadDaemon, id: WindowId): int32 =
+  result = daemon.windowUnreliablePids.getOrDefault(id, 0'i32)
+  if result <= 0 and daemon.pendingWindows.hasKey(id):
+    result = daemon.pendingWindows[id].pid
+
+proc pendingWindowAllowsSwallow(
+    daemon: TriadDaemon, data: runtime_values.WindowData
+): bool =
+  let rule = daemon.runtimeState.model.windowRuleFor(data.appId, data.title)
+  if not rule.found:
+    return true
+  if rule.rule.terminalSet and rule.rule.terminal:
+    return false
+  if rule.rule.allowSwallowSet and not rule.rule.allowSwallow:
+    return false
+  if rule.rule.openFloatingSet and rule.rule.openFloating:
+    return false
+  if rule.rule.openOnAllWorkspacesSet and rule.rule.openOnAllWorkspaces:
+    return false
+  if rule.rule.openNamedScratchpad.len > 0:
+    return false
+  if data.parentId != 0 or data.isFloating:
+    return false
+  true
+
+proc swallowHostForPendingWindow(
+    daemon: TriadDaemon, id: WindowId, data: runtime_values.WindowData
+): WindowId =
+  let childPid = daemon.pendingWindowPid(id)
+  if childPid <= 0 or not daemon.pendingWindowAllowsSwallow(data):
+    return 0'u32
+
+  var fallback = 0'u32
+  for logicalId in daemon.runtimeState.model.focusHistoryIdsReverse():
+    let winOpt = daemon.runtimeState.model.windowData(logicalId)
+    if winOpt.isNone:
+      continue
+    let win = winOpt.get()
+    let external = WindowId(uint32(win.externalId))
+    if win.isTerminal and not win.isFloating and not win.isSticky and not win.isMinimized and
+        win.windowAdmitted() and win.pid > 0 and
+        uint32(daemon.runtimeState.model.swallowingWindow(logicalId)) == 0'u32 and
+        isDescendantProcess(win.pid, childPid):
+      return external
+
+  for logicalId, win in daemon.runtimeState.model.windowsWithId():
+    let external = WindowId(uint32(win.externalId))
+    if win.isTerminal and not win.isFloating and not win.isSticky and not win.isMinimized and
+        win.windowAdmitted() and win.pid > 0 and
+        uint32(daemon.runtimeState.model.swallowingWindow(logicalId)) == 0'u32 and
+        isDescendantProcess(win.pid, childPid) and external > fallback:
+      fallback = external
+  fallback
 
 proc onManagerUnavailable(data: pointer, mgr: ptr RiverWindowManagerV1) =
   fatal "River window manager interface is unavailable"
@@ -99,11 +158,14 @@ proc onManageStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
   debug "River manage start", pendingWindows = daemon.pendingWindows.len
   daemon[].applyPendingLiveRestore("manage start")
   for id, data in daemon.pendingWindows:
+    let pid = daemon[].pendingWindowPid(id)
     daemon.enqueue(
       Msg(
         kind: MsgKind.WlWindowCreated,
         windowId: id,
         createdParentWindowId: data.parentId,
+        createdSwallowHostWindowId: daemon[].swallowHostForPendingWindow(id, data),
+        createdPid: pid,
         appId: data.appId,
         title: data.title,
         createdIdentifier: data.identifier,

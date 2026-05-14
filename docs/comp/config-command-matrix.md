@@ -132,7 +132,7 @@ external window manager.
 | Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-workspace` | X | `open-focused #false` covers open-silent; explicit `default-workspace` is the workspace placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `window-rule floating`, `center-floating`, `default-floating-position` | X | Rule-level floating ratios or fixed pixel sizes override global default size; `center-floating` centers generated geometry and `default-floating-position` provides anchored pixel placement. |
 | Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `border`, `focus-ring`, `clip-to-geometry`, `enable-animations`, `animation-speed` | | Rule-level border, focused-only focus-ring width/colors, and geometry clipping are supported; opacity, blur, shadows, radius, and per-window animation policy are not. |
-| Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy | | | Not implemented. |
+| Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy and process ancestry | `window-rule terminal`, `window-rule allow-swallow` | X | Explicit rules only: terminal hosts must be marked with `terminal #true`; child windows swallow by default unless `allow-swallow #false`, and missing PID data disables swallowing. |
 | Window rules | Global keybinding | `globalkeybinding` | WM policy | | | Not implemented. |
 | Layer rules | Layer shell rules | `layerrule` | Layer shell protocols | | | Triad handles shell/layer focus but has no rule config. |
 | Shell | Shell integration | External bars/tools | Protocol/shell surfaces | `quickshell`, native state events | X | Triad has Quickshell launch/compat and native events. |
@@ -294,6 +294,7 @@ KDL config nodes and fields:
   `open-on-output`, `default-column-width`, `scroller-proportion`,
   `scroller-single-proportion`, `default-window-width`, `default-window-height`,
   `open-named-scratchpad`, `open-on-all-workspaces`, `open-overlay`,
+  `terminal`, `allow-swallow`,
   `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,
   `open-maximized-to-edges`, `maximize-policy`, `parented-role`,

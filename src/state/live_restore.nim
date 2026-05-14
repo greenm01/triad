@@ -36,6 +36,9 @@ proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
   RestoredWindowData(
     slot: source.tagId,
     parentExternalId: ExternalWindowId(uint32(source.parentId)),
+    swallowedByExternalId: ExternalWindowId(uint32(source.swallowedBy)),
+    swallowingExternalId: ExternalWindowId(uint32(source.swallowing)),
+    pid: source.pid,
     appId: source.appId,
     title: source.title,
     identifier: source.identifier,
@@ -49,6 +52,8 @@ proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
     fullscreenOutput: ExternalOutputId(source.fullscreenOutput),
     floatingGeom: source.floatingGeom,
     manualFloatingPosition: source.manualFloatingPosition,
+    isTerminal: source.isTerminal,
+    allowSwallow: source.allowSwallow,
     actualW: source.actualW,
     actualH: source.actualH,
   )
@@ -97,6 +102,12 @@ proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
     result.focusHistory.add(ExternalWindowId(uint32(winId)))
   for slot in source.workspaceHistory:
     result.workspaceHistory.add(slot)
+  for winId, hostId in source.swallowedBy.pairs:
+    result.swallowedBy[ExternalWindowId(uint32(winId))] =
+      ExternalWindowId(uint32(hostId))
+  for winId, childId in source.swallowing.pairs:
+    result.swallowing[ExternalWindowId(uint32(winId))] =
+      ExternalWindowId(uint32(childId))
 
 proc hasOutputTag(model: Model, tagId: TagId): bool =
   for _, outputTagId in model.outputTags.pairs:
@@ -190,6 +201,11 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     result.windows[external] = rv.RestoredWindowState(
       tagId: slot,
       parentId: rv.WindowId(uint32(win.parentExternalId)),
+      swallowedBy:
+        rv.WindowId(uint32(model.externalWindowId(model.swallowedByWindow(winId)))),
+      swallowing:
+        rv.WindowId(uint32(model.externalWindowId(model.swallowingWindow(winId)))),
+      pid: win.pid,
       appId: win.appId,
       title: win.title,
       identifier: win.identifier,
@@ -203,6 +219,8 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       fullscreenOutput: uint32(win.fullscreenOutput),
       floatingGeom: win.floatingGeom,
       manualFloatingPosition: win.manualFloatingPosition,
+      isTerminal: win.isTerminal,
+      allowSwallow: win.allowSwallow,
       actualW: win.actualW,
       actualH: win.actualH,
     )
@@ -248,6 +266,9 @@ proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode 
     "id": winId,
     "tag_id": win.tagId,
     "parent_id": win.parentId,
+    "swallowed_by": win.swallowedBy,
+    "swallowing": win.swallowing,
+    "pid": win.pid,
     "app_id": win.appId,
     "title": win.title,
     "identifier": win.identifier,
@@ -261,6 +282,8 @@ proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode 
     "fullscreen_output": win.fullscreenOutput,
     "floating_geom": rectJson(win.floatingGeom),
     "manual_floating_position": win.manualFloatingPosition,
+    "is_terminal": win.isTerminal,
+    "allow_swallow": win.allowSwallow,
     "actual_w": win.actualW,
     "actual_h": win.actualH,
   }

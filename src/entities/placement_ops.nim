@@ -133,6 +133,53 @@ proc moveWindowToColumn*(
     model.deleteColumnIfEmpty(tagId, oldColumn)
   true
 
+proc replacePlacedWindow*(
+    model: var Model, tagId: TagId, oldWinId, newWinId: WindowId
+): bool =
+  let key = (tagId, oldWinId)
+  if oldWinId == NullWindowId or newWinId == NullWindowId or oldWinId == newWinId or
+      not model.placementByTagWindow.hasKey(key):
+    return false
+  if model.windows.entity(oldWinId).isNone or model.windows.entity(newWinId).isNone:
+    return false
+
+  let placement = model.placementByTagWindow[key]
+  if not model.windowsByColumn.hasKey(placement.columnId):
+    return false
+  let columnIdx = model.windowsByColumn[placement.columnId].find(oldWinId)
+  if columnIdx == -1:
+    return false
+
+  if model.placementByTagWindow.hasKey((tagId, newWinId)):
+    discard model.removeWindowFromTag(tagId, newWinId)
+
+  model.windowsByColumn[placement.columnId][columnIdx] = newWinId
+  if model.windowsByTag.hasKey(tagId):
+    let tagIdx = model.windowsByTag[tagId].find(oldWinId)
+    if tagIdx != -1:
+      model.windowsByTag[tagId][tagIdx] = newWinId
+
+  model.placementByTagWindow.del(key)
+  model.placementByTagWindow[(tagId, newWinId)] = WindowPlacement(
+    tagId: tagId,
+    windowId: newWinId,
+    columnId: placement.columnId,
+    windowIdx: placement.windowIdx,
+  )
+
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isSome:
+    var oldMask = model.windowTags.getOrDefault(oldWinId, EmptyTagMask)
+    oldMask.excl(tagOpt.get().bit)
+    model.windowTags[oldWinId] = oldMask
+    var newMask = model.windowTags.getOrDefault(newWinId, EmptyTagMask)
+    newMask.incl(tagOpt.get().bit)
+    model.windowTags[newWinId] = newMask
+    if tagOpt.get().focusedWindow == oldWinId:
+      model.tags.mEntity(tagId).focusedWindow = newWinId
+
+  true
+
 proc swapPlacedWindows*(
     model: var Model,
     firstTagId: TagId,
