@@ -49,8 +49,8 @@ The supported KDL nodes are:
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   focus behavior, parented-dialog viewport jump behavior, size-hint policy,
-  shortcut inhibition, presentation mode, border/focus-ring policy, and forced
-  layout.
+  shortcut inhibition, presentation mode, border/focus-ring/clip policy, and
+  forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -154,6 +154,7 @@ window-rule {
     width 6
     active-color "#ffbf7f"
   }
+  clip-to-geometry #true
 }
 ```
 
@@ -227,6 +228,11 @@ window-rule {
   It uses River's same border primitive, so unfocused rendering keeps the
   normal `border` or top-level `layout.border` policy. To get active-only
   rings, combine `border { width 0 }` with a nonzero `focus-ring` width.
+- `clip-to-geometry #true|#false`: forces matching windows to use River clip
+  boxes around Triad's rendered geometry. This is a render policy only; it
+  does not change placement, sizing, focus, or layout. Explicit `#false`
+  clears a broader matching rule but cannot disable safety clipping for
+  oversized or offscreen cells.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
 - `default-workspaces <n>...`: opens matching windows on multiple workspaces.

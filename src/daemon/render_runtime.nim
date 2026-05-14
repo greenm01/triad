@@ -234,9 +234,10 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         let focused = id == highlighted
         let border = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
         let visibility = renderVisibility(geom, screen, max(border.width * 2, 4'i32))
-        daemon.windowPointers[id].applyVisibility(
-          visibility, daemon.placementNeedsCellClip(id, geom), border.width
-        )
+        let forceClip =
+          daemon.currentModel.windowClipToGeometry(logicalId) or
+          daemon.placementNeedsCellClip(id, geom)
+        daemon.windowPointers[id].applyVisibility(visibility, forceClip, border.width)
         daemon.applyBorder(
           id, daemon.windowPointers[id], focused, visibility.borderEdges
         )

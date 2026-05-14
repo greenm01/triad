@@ -731,6 +731,9 @@ proc loadConfig*(path: string): Config =
                   rule.focusRing.activeColorSet = true
                   rule.focusRing.activeColor =
                     parseColor(ringChild.args[0].kString(), rule.focusRing.activeColor)
+            elif child.name == "clip-to-geometry" and child.args.len > 0:
+              rule.clipToGeometrySet = true
+              rule.clipToGeometry = child.args[0].kBool()
             elif child.name == "dialog-viewport-jump" and child.args.len > 0:
               rule.dialogViewportJumpSet = true
               rule.dialogViewportJump = child.args[0].kBool()

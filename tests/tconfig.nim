@@ -326,6 +326,7 @@ window-rule {
     width 7
     active-color "#fedcba"
   }
+  clip-to-geometry #true
   default-floating-position x=32 y=48 relative-to="bottom-left"
   dialog-viewport-jump #true
   floating {
@@ -464,6 +465,8 @@ bindings {
     check config.windowRules[0].focusRing.width == 7
     check config.windowRules[0].focusRing.activeColorSet
     check config.windowRules[0].focusRing.activeColor == 0xfedcbaff'u32
+    check config.windowRules[0].clipToGeometrySet
+    check config.windowRules[0].clipToGeometry
     check config.windowRules[0].defaultFloatingPosition.set
     check config.windowRules[0].defaultFloatingPosition.x == 32
     check config.windowRules[0].defaultFloatingPosition.y == 48
@@ -728,6 +731,7 @@ window-rule {
   presentation-mode "default"
   border { width 0 }
   focus-ring { width 0 }
+  clip-to-geometry #false
   tiled-state #false
 }
 """,
@@ -760,6 +764,8 @@ window-rule {
     check config.windowRules[0].border.width == 0
     check config.windowRules[0].focusRing.widthSet
     check config.windowRules[0].focusRing.width == 0
+    check config.windowRules[0].clipToGeometrySet
+    check not config.windowRules[0].clipToGeometry
     check config.windowRules[0].tiledStateSet
     check not config.windowRules[0].tiledState
 

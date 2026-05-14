@@ -287,6 +287,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   result.defaultFloatingPosition.mergeFloatingPositionRule(rule.defaultFloatingPosition)
   result.border.mergeBorderRule(rule.border)
   result.focusRing.mergeFocusRingRule(rule.focusRing)
+  if rule.clipToGeometrySet:
+    result.clipToGeometrySet = true
+    result.clipToGeometry = rule.clipToGeometry
   if rule.dialogViewportJumpSet:
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:
@@ -340,6 +343,15 @@ proc windowKeyboardShortcutsInhibit*(model: Model, appId, title: string): bool =
 proc windowKeyboardShortcutsInhibit*(model: Model, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(win)
   ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
+
+proc windowClipToGeometry*(model: Model, winId: WindowId): bool =
+  if winId == NullWindowId:
+    return false
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let ruleMatch = model.windowRuleFor(winId, winOpt.get())
+  ruleMatch.found and ruleMatch.rule.clipToGeometrySet and ruleMatch.rule.clipToGeometry
 
 proc effectivePresentationMode*(
     model: Model

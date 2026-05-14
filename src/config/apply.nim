@@ -139,6 +139,8 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       defaultFloatingPosition: rule.defaultFloatingPosition,
       border: rule.border,
       focusRing: rule.focusRing,
+      clipToGeometrySet: rule.clipToGeometrySet,
+      clipToGeometry: rule.clipToGeometry,
       dialogViewportJumpSet: rule.dialogViewportJumpSet or rule.dialogViewportJump,
       dialogViewportJump: rule.dialogViewportJump,
       keyboardShortcutsInhibitSet:

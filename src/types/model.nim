@@ -150,6 +150,8 @@ type
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     border*: WindowRuleBorderConfig
     focusRing*: WindowRuleFocusRingConfig
+    clipToGeometrySet*: bool
+    clipToGeometry*: bool
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
@@ -205,6 +207,8 @@ type
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     border*: WindowRuleBorderConfig
     focusRing*: WindowRuleFocusRingConfig
+    clipToGeometrySet*: bool
+    clipToGeometry*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     presentationModeSet*: bool

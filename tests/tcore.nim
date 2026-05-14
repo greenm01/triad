@@ -2101,6 +2101,8 @@ suite "Core Runtime Logic":
                 activeColorSet: true,
                 activeColor: 0x0000ffff'u32,
               ),
+              clipToGeometrySet: true,
+              clipToGeometry: true,
               tiledState: true,
             ),
             WindowRule(
@@ -2135,6 +2137,8 @@ suite "Core Runtime Logic":
                 inactiveColor: 0x00ff00ff'u32,
               ),
               focusRing: WindowRuleFocusRingConfig(widthSet: true, width: 9),
+              clipToGeometrySet: true,
+              clipToGeometry: false,
               tiledStateSet: true,
               tiledState: false,
             ),
@@ -2173,6 +2177,8 @@ suite "Core Runtime Logic":
     check rule.rule.focusRing.width == 9
     check rule.rule.focusRing.activeColorSet
     check rule.rule.focusRing.activeColor == 0x0000ffff'u32
+    check rule.rule.clipToGeometrySet
+    check not rule.rule.clipToGeometry
     check rule.rule.tiledStateSet
     check not rule.rule.tiledState
 
@@ -2449,6 +2455,47 @@ suite "Core Runtime Logic":
     let focused = model.effectiveWindowBorder(WindowId(1), focused = true)
     check focused.width == 8
     check focused.activeColor == 0xabcdef80'u32
+
+  test "Window rule clip-to-geometry merges as explicit boolean":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(appIdMatch: "app", clipToGeometrySet: true, clipToGeometry: true),
+            WindowRule(
+              appIdMatch: "app",
+              titleMatch: "Dialog",
+              clipToGeometrySet: true,
+              clipToGeometry: false,
+            ),
+            WindowRule(
+              appIdMatch: "app",
+              titleMatch: "Tool",
+              clipToGeometrySet: true,
+              clipToGeometry: true,
+            ),
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Main")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Dialog")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "other", title: "Other")
+    )
+
+    check model.windowClipToGeometry(WindowId(1))
+    check not model.windowClipToGeometry(WindowId(2))
+    check not model.windowClipToGeometry(WindowId(3))
+
+    let tool = model.windowRuleFor("app", "Tool")
+    check tool.found
+    check tool.rule.clipToGeometrySet
+    check tool.rule.clipToGeometry
 
   test "Window rules match regex entries with OR and exclude semantics":
     var model = initRuntimeStateFromConfig(

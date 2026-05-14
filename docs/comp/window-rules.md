@@ -112,7 +112,7 @@ layout family.
 | Visual | `draw-border-with-background` | Draw border with background | | Gap | |
 | Visual | `opacity` | Override window opacity | | Gap | |
 | Visual | `geometry-corner-radius` | Override assumed corner radius | | Gap | |
-| Visual | `clip-to-geometry` | Clip rendering to geometry | | Gap | |
+| Visual | `clip-to-geometry` | Clip rendering to geometry | `clip-to-geometry #true/#false` | Pass | Uses River clip boxes around Triad's rendered geometry. This does not change placement or sizing. |
 | Visual | `baba-is-float` | Apply niri's floating visual effect | | N/A | Not a Triad target. |
 | Visual | `block-out-from` | Block window from selected render targets | | Gap | |
 | Visual | `background-effect` | Configure background blur/effects | | Gap | |
@@ -131,7 +131,7 @@ These are gap-analysis categories, not target config names.
 | Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Pass | Triad supports open floating, ratio sizing, fixed pixel sizing, anchored pixel position, opt-in centering, and rule-level client size-hint policy. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
-| Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Partial | Rule-level border and focused-only focus-ring width/colors exist; shadows, blur, radius, opacity, and per-window animation policy remain gaps. |
+| Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Partial | Rule-level border, focused-only focus-ring width/colors, and clip-to-geometry exist; shadows, blur, radius, opacity, and per-window animation policy remain gaps. |
 | Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening exists; global and overlay rules remain gaps. Keep these as separate concepts; do not collapse into floating. |
 | Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit exists. `presentation-mode` gives focused matching windows output-level vsync/async policy; idle inhibit and global keybinding policy remain gaps. |
@@ -164,6 +164,9 @@ These are gap-analysis categories, not target config names.
 - Rule-level `focus-ring` is implemented as a focused-state border override
   because River exposes one compositor border primitive to Triad. It can be
   combined with `border { width 0 }` for active-only rings.
+- `clip-to-geometry` maps to River clip boxes around Triad's rendered geometry.
+  It is render-only and cannot disable required safety clipping for oversized
+  or offscreen cells.
 - `tiled-state` controls the client-visible River tiled hint. It does not move
   a window between Triad's tiled and floating placement.
 - `respect-size-hints` is a Triad-style positive name for Mango's
