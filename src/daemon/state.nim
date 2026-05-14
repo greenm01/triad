@@ -41,10 +41,12 @@ type
     pointer*: pointer
     deviceType*: uint32
     name*: string
+    done*: bool
 
   LibinputDeviceRuntime* = object
     pointer*: pointer
     inputDeviceId*: uint32
+    done*: bool
     sendEventsSupport*: uint32
     tapFingerCount*: int32
     accelProfilesSupport*: uint32

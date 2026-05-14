@@ -227,6 +227,11 @@ proc applyPointerCommon(
   let device = runtime.libinputDevicePtr()
   if device == nil:
     return
+  if runtime.inputDeviceId == 0 or not daemon.inputDevices.hasKey(runtime.inputDeviceId):
+    return
+  let inputRuntime = daemon.inputDevices[runtime.inputDeviceId]
+  if inputRuntime.pointer == nil or not inputRuntime.done:
+    return
 
   if pointerConfig.offSet and
       (runtime.sendEventsSupport and LibinputSendEventsDisabled) != 0:
@@ -252,14 +257,15 @@ proc applyPointerCommon(
     if (runtime.accelProfilesSupport and profile) != 0 or profile == LibinputAccelNone:
       daemon.addResultListener(device.setAccelProfile(profile), "input accel-profile")
   if pointerConfig.accelSpeedSet:
-    var array: Array
-    array.init()
-    try:
-      let speed = array.add(cdouble)
-      speed[] = cdouble(pointerConfig.accelSpeed)
-      daemon.addResultListener(device.setAccelSpeed(addr array), "input accel-speed")
-    finally:
-      array.release()
+    if runtime.accelProfilesSupport != 0:
+      var array: Array
+      array.init()
+      try:
+        let speed = array.add(cdouble)
+        speed[] = cdouble(pointerConfig.accelSpeed)
+        daemon.addResultListener(device.setAccelSpeed(addr array), "input accel-speed")
+      finally:
+        array.release()
   if pointerConfig.scrollMethodSet:
     let scrollMethod = pointerConfig.scrollMethod.scrollMethodValue()
     if (runtime.scrollMethodsSupport and scrollMethod) != 0 or
@@ -276,8 +282,8 @@ proc applyPointerCommon(
       device.setScrollButtonLock(pointerConfig.scrollButtonLock.boolState()),
       "input scroll-button-lock",
     )
-  if pointerConfig.scrollFactorSet and daemon.inputDevices.hasKey(runtime.inputDeviceId):
-    daemon.inputDevices[runtime.inputDeviceId].inputDevicePtr().setScrollFactor(
+  if pointerConfig.scrollFactorSet:
+    inputRuntime.inputDevicePtr().setScrollFactor(
       pointerConfig.scrollFactor.fixedFromFloat()
     )
 
@@ -326,7 +332,7 @@ proc applyLibinputDevice*(daemon: var TriadDaemon, libinputId: uint32) =
   if not daemon.libinputDevices.hasKey(libinputId):
     return
   let runtime = daemon.libinputDevices[libinputId]
-  if runtime.pointer == nil:
+  if runtime.pointer == nil or not runtime.done:
     return
   if daemon.inputDeviceType(runtime.inputDeviceId) != RiverInputTypePointer:
     return
@@ -342,7 +348,7 @@ proc applyInputDevice*(daemon: var TriadDaemon, inputDeviceId: uint32) =
   if not daemon.inputDevices.hasKey(inputDeviceId):
     return
   let runtime = daemon.inputDevices[inputDeviceId]
-  if runtime.pointer == nil:
+  if runtime.pointer == nil or not runtime.done:
     return
   if runtime.deviceType == RiverInputTypeKeyboard:
     let keyboard = daemon.currentModel.input.keyboard
@@ -478,6 +484,10 @@ proc onInputDeviceDone(data: pointer, device: ptr riverInput.RiverInputDeviceV1)
   let daemon = callbackDaemon(data, "input device done")
   if daemon == nil:
     return
+  var runtime = daemon.inputDevices.getOrDefault(device.id())
+  runtime.pointer = cast[pointer](device)
+  runtime.done = true
+  daemon.inputDevices[device.id()] = runtime
   daemon[].applyInputDevice(device.id())
 
 inputDeviceListener = riverInput.RiverInputDeviceV1Listener(
@@ -732,6 +742,10 @@ proc onLibinputDone(data: pointer, device: ptr riverLibinput.RiverLibinputDevice
   let daemon = callbackDaemon(data, "libinput done")
   if daemon == nil:
     return
+  var runtime = daemon.libinputDevices.getOrDefault(device.id())
+  runtime.pointer = cast[pointer](device)
+  runtime.done = true
+  daemon.libinputDevices[device.id()] = runtime
   daemon[].applyLibinputDevice(device.id())
 
 proc ignoreLibinputUint(
