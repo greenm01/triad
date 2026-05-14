@@ -104,6 +104,7 @@ type
     isFullscreen*: bool
     isMaximized*: bool
     isMinimized*: bool
+    isSticky*: bool
     fullscreenOutput*: uint32
     parentId*: WindowId
     identifier*: string
@@ -193,6 +194,8 @@ type
     openMaximized*: bool
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
+    openOnAllWorkspacesSet*: bool
+    openOnAllWorkspaces*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -349,6 +352,7 @@ type
     isFullscreen*: bool
     isMaximized*: bool
     isMinimized*: bool
+    isSticky*: bool
     fullscreenOutput*: uint32
     floatingGeom*: Rect
     manualFloatingPosition*: bool

@@ -1,5 +1,6 @@
 import std/[algorithm, options]
 import outputs
+import sticky_windows
 import ../state/engine
 
 proc activeWorkspaceSlot*(model: Model): uint32 =
@@ -43,6 +44,7 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
       discard model.setTagOutput(result, outputId)
   else:
     discard model.learnTagOutputFromActive(result)
+  discard model.syncStickyWindowsForWorkspace(result)
 
 proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
   let defaultCount = model.defaultWorkspaceCount()
@@ -52,7 +54,8 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
   let activeSlot = model.activeWorkspaceSlot()
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
-    if slot > defaultCount and (slot == activeSlot or model.tagHasLiveWindows(tagId)):
+    if slot > defaultCount and
+        (slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId)):
       result.add(slot)
 
   result.sort()
@@ -69,7 +72,9 @@ proc trailingWorkspaceSlot*(model: Model): uint32 =
     return 0
   let last = slots[^1]
   let tagId = model.tagForSlot(last)
-  if last < MaxTagBits and tagId != NullTagId and model.tagHasLiveWindows(tagId):
+  if last < MaxTagBits and tagId != NullTagId and model.tagHasNonStickyLiveWindows(
+    tagId
+  ):
     return last + 1
   0
 
@@ -132,6 +137,12 @@ proc tagHasFocusableWindow*(model: Model, tagId: TagId): bool =
       return true
   false
 
+proc tagHasNonStickyFocusableWindow*(model: Model, tagId: TagId): bool =
+  for _, win in model.windowsOnTagWithId(tagId):
+    if not win.isSticky and not win.isMinimized and win.windowAdmitted():
+      return true
+  false
+
 proc overviewWorkspaceStepSlot*(model: Model, direction: int): uint32 =
   if direction == 0:
     return 0
@@ -172,12 +183,14 @@ proc nearestWorkspaceSlot*(model: Model, direction: int, occupiedOnly: bool): ui
     for i in countdown(slots.len - 1, 0):
       let slot = slots[i]
       let tagId = model.tagForSlot(slot)
-      if slot < active and (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
+      if slot < active and
+          (not occupiedOnly or model.tagHasNonStickyFocusableWindow(tagId)):
         return slot
   elif direction > 0:
     for slot in slots:
       let tagId = model.tagForSlot(slot)
-      if slot > active and (not occupiedOnly or model.tagHasFocusableWindow(tagId)):
+      if slot > active and
+          (not occupiedOnly or model.tagHasNonStickyFocusableWindow(tagId)):
         return slot
     if not occupiedOnly and active <= model.defaultWorkspaceCount() and
         active == slots[^1]:
@@ -209,7 +222,7 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
     if tagId == NullTagId or slot <= defaultCount or slot == activeSlot or
         slot == trailing:
       continue
-    if model.tagHasLiveWindows(tagId):
+    if model.tagHasNonStickyLiveWindows(tagId):
       continue
     if model.destroyTag(tagId):
       result = true

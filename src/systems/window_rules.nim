@@ -270,6 +270,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.openMaximizedToEdgesSet:
     result.openMaximizedToEdgesSet = true
     result.openMaximizedToEdges = rule.openMaximizedToEdges
+  if rule.openOnAllWorkspacesSet:
+    result.openOnAllWorkspacesSet = true
+    result.openOnAllWorkspaces = rule.openOnAllWorkspaces
   if rule.maximizePolicySet:
     result.maximizePolicySet = true
     result.maximizePolicy = rule.maximizePolicy

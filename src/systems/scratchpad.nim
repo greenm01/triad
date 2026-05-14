@@ -14,6 +14,7 @@ proc moveFocusedToScratchpad*(model: var Model, name = ""): bool =
   if activeTag == NullTagId or model.placementForWindowOnTag(activeTag, focused).isNone:
     return false
 
+  discard model.setWindowSticky(focused, false)
   discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
   discard model.addScratchpadRef(focused)
   let scratchpadName = name.strip()
@@ -87,6 +88,7 @@ proc restoreScratchpad*(model: var Model): bool =
   if tagId == NullTagId:
     return false
 
+  discard model.setWindowSticky(winId, false)
   discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
   discard model.addPlacedWindowColumn(tagId, winId)
   discard model.setTagFocus(tagId, winId)

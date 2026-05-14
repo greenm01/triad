@@ -144,6 +144,7 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
       isFullscreen: win.isFullscreen,
       isMaximized: win.isMaximized,
       isMinimized: win.isMinimized,
+      isSticky: win.isSticky,
       fullscreenOutput: uint32(win.fullscreenOutput),
       parentId: rv.WindowId(uint32(win.parentExternalId)),
       identifier: win.identifier,

@@ -687,6 +687,9 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-maximized-to-edges" and child.args.len > 0:
               rule.openMaximizedToEdgesSet = true
               rule.openMaximizedToEdges = child.args[0].kBool()
+            elif child.name == "open-on-all-workspaces" and child.args.len > 0:
+              rule.openOnAllWorkspacesSet = true
+              rule.openOnAllWorkspaces = child.args[0].kBool()
             elif child.name == "maximize-policy" and child.args.len > 0:
               rule.maximizePolicySet = true
               rule.maximizePolicy = parseMaximizePolicy(child.args[0].kString())

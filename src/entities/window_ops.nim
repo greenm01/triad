@@ -16,6 +16,7 @@ proc addWindow*(
     isFullscreen = false,
     isMaximized = false,
     isMinimized = false,
+    isSticky = false,
     fullscreenOutput = NullExternalOutputId,
     parentExternalId = NullExternalWindowId,
     identifier = "",
@@ -53,6 +54,7 @@ proc addWindow*(
       isFullscreen: isFullscreen,
       isMaximized: isMaximized,
       isMinimized: isMinimized,
+      isSticky: isSticky,
       fullscreenOutput: fullscreenOutput,
       parentExternalId: parentExternalId,
       identifier: identifier,
@@ -136,6 +138,7 @@ proc setWindowCreatedState*(
     isFloating = false,
     isFullscreen = false,
     isMaximized = false,
+    isSticky = false,
     fullscreenOutput = NullExternalOutputId,
     floatingGeom = Rect(),
     parentAutoFloating = false,
@@ -164,6 +167,7 @@ proc setWindowCreatedState*(
     isFullscreen: if preserveRuntimeState: current.isFullscreen else: isFullscreen,
     isMaximized: if preserveRuntimeState: current.isMaximized else: isMaximized,
     isMinimized: if preserveRuntimeState: current.isMinimized else: false,
+    isSticky: if preserveRuntimeState: current.isSticky else: isSticky,
     fullscreenOutput:
       if preserveRuntimeState: current.fullscreenOutput else: fullscreenOutput,
     actualW: if preserveRuntimeState: current.actualW else: 0'i32,
@@ -243,7 +247,7 @@ proc preserveWindowRuntimeAttributes*(
       current.isFloating == source.isFloating and
       current.isFullscreen == source.isFullscreen and
       current.isMaximized == source.isMaximized and
-      current.isMinimized == source.isMinimized and
+      current.isMinimized == source.isMinimized and current.isSticky == source.isSticky and
       current.fullscreenOutput == source.fullscreenOutput and
       current.actualW == source.actualW and current.actualH == source.actualH and
       current.clientMinWidth == source.clientMinWidth and
@@ -271,6 +275,7 @@ proc preserveWindowRuntimeAttributes*(
   win.isFullscreen = source.isFullscreen
   win.isMaximized = source.isMaximized
   win.isMinimized = source.isMinimized
+  win.isSticky = source.isSticky
   win.fullscreenOutput = source.fullscreenOutput
   win.actualW = source.actualW
   win.actualH = source.actualH
@@ -363,6 +368,7 @@ proc setWindowRestoredState*(
   model.windows.mEntity(winId).isFullscreen = restored.isFullscreen
   model.windows.mEntity(winId).isMaximized = restored.isMaximized
   model.windows.mEntity(winId).isMinimized = restored.isMinimized
+  model.windows.mEntity(winId).isSticky = restored.isSticky
   model.windows.mEntity(winId).fullscreenOutput = restored.fullscreenOutput
   model.windows.mEntity(winId).floatingGeom = restored.floatingGeom
   if restored.parentExternalId != NullExternalWindowId:
@@ -484,6 +490,14 @@ proc setWindowMaximized*(model: var Model, winId: WindowId, maximized: bool): bo
   model.windows.mEntity(winId).isMaximized = maximized
   if maximized:
     model.windows.mEntity(winId).isMinimized = false
+  true
+
+proc setWindowSticky*(model: var Model, winId: WindowId, sticky: bool): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  if model.windows.mEntity(winId).isSticky == sticky:
+    return false
+  model.windows.mEntity(winId).isSticky = sticky
   true
 
 proc setWindowKeyboardShortcutsInhibit*(

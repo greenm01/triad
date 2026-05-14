@@ -90,7 +90,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         layoutMode: tag.layoutMode,
         isActive: slot == model.activeSlot,
         focusedWindow: model.externalWindowId(tag.focusedWindow),
-        occupied: tagId != NullTagId and model.tagHasLiveWindows(tagId),
+        occupied: tagId != NullTagId and model.tagHasNonStickyLiveWindows(tagId),
         outputName:
           if tagId != NullTagId:
             model.shellWorkspaceOutputName(tagId)
@@ -151,6 +151,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         isFullscreen: win.isFullscreen,
         isMaximized: win.isMaximized,
         isMinimized: win.isMinimized,
+        isSticky: win.isSticky,
         fullscreenOutput: uint32(win.fullscreenOutput),
         widthProportion: win.widthProportion,
         heightProportion: win.heightProportion,

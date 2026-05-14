@@ -45,6 +45,7 @@ proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
     isFullscreen: source.isFullscreen,
     isMaximized: source.isMaximized,
     isMinimized: source.isMinimized,
+    isSticky: source.isSticky,
     fullscreenOutput: ExternalOutputId(source.fullscreenOutput),
     floatingGeom: source.floatingGeom,
     manualFloatingPosition: source.manualFloatingPosition,
@@ -106,12 +107,12 @@ proc hasOutputTag(model: Model, tagId: TagId): bool =
 proc shouldPersistTag(model: Model, tag: TagData): bool =
   if tag.slot <= model.defaultWorkspaceCount:
     return true
-  if tag.id == model.activeTag or model.tagHasLiveWindows(tag.id) or
+  if tag.id == model.activeTag or model.tagHasNonStickyLiveWindows(tag.id) or
       model.hasOutputTag(tag.id):
     return true
   if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller:
     return true
-  if tag.focusedWindow != NullWindowId or model.columnsForTag(tag.id).len > 0:
+  if tag.focusedWindow != NullWindowId and model.tagHasNonStickyLiveWindows(tag.id):
     return true
   if tag.targetViewportXOffset != 0 or tag.currentViewportXOffset != 0 or
       tag.targetViewportYOffset != 0 or tag.currentViewportYOffset != 0:
@@ -156,7 +157,8 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       )
       for winId in model.windowsForColumn(colId):
         let winOpt = model.windowData(winId)
-        if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating:
+        if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
+            winOpt.get().isSticky:
           continue
         let external = model.externalWindowId(winId)
         if external == 0:
@@ -197,6 +199,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       isFullscreen: win.isFullscreen,
       isMaximized: win.isMaximized,
       isMinimized: win.isMinimized,
+      isSticky: win.isSticky,
       fullscreenOutput: uint32(win.fullscreenOutput),
       floatingGeom: win.floatingGeom,
       manualFloatingPosition: win.manualFloatingPosition,
@@ -254,6 +257,7 @@ proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode 
     "is_fullscreen": win.isFullscreen,
     "is_maximized": win.isMaximized,
     "is_minimized": win.isMinimized,
+    "is_sticky": win.isSticky,
     "fullscreen_output": win.fullscreenOutput,
     "floating_geom": rectJson(win.floatingGeom),
     "manual_floating_position": win.manualFloatingPosition,

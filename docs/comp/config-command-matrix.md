@@ -85,7 +85,7 @@ external window manager.
 | Window state | Fake fullscreen | `togglefakefullscreen` | WM policy | | | No Triad equivalent. |
 | Window state | Maximize column | `set_proportion 1.0` | WM policy | `maximize-column` | X | Full-width column; does not set client maximized state. |
 | Window state | Maximize to edges | `togglemaximizescreen` | maximize request/capability | `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize` | X | Client-visible maximized state. |
-| Window state | Sticky/global window | `toggleglobal`, `isglobal` | WM policy | | | Not exposed by Triad. |
+| Window state | Sticky/global window | `toggleglobal`, `isglobal` | WM policy | `window-rule open-on-all-workspaces` | X | Exposed as declarative open policy. Triad does not yet expose an imperative toggle command. |
 | Window state | Overlay/global unmanaged | `toggleoverlay`, `isoverlay`, `isunglobal` | Layer/shell primitives | | | Not exposed by Triad. |
 | Window state | Center floating window | `centerwin`, `no_force_center` | WM policy | `window-rule center-floating`, `floating { x-ratio; y-ratio; ... }` | X | Rule-level centering controls generated floating geometry; Triad has no separate center command. |
 | Window movement | Swap/move by direction | `exchange_client` | WM policy | `move-window-*`, `swap-window-up/down` | X | Triad separates moves and stack swaps. |
@@ -114,6 +114,7 @@ external window manager.
 | Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=...; exclude ... }` | X | Match and exclude use regex search semantics; repeated `match` children are OR-ed. |
 | Window rules | State matching | `windowrule isfloating`, focus/window-state variants | WM policy | `match is-focused=... is-active=... is-active-in-column=... is-floating=...` | X | Opening-time evaluation uses unmapped defaults; existing-window dynamic fields refresh from current runtime state. |
 | Window rules | Default workspace | `windowrule tags` | WM policy | `window-rule default-workspace`, `default-workspaces` | X | `default-workspaces` places a matching window on multiple Triad workspace tags; the first target is the primary focus/snapshot target. |
+| Window rules | Sticky/global workspace placement | `windowrule global`, global tags | WM policy | `window-rule open-on-all-workspaces` | X | Matching top-level windows are synced to every materialized workspace. Sticky-only occupancy does not keep dynamic workspaces alive, and scratchpad clears sticky state. |
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Open fullscreen/maximized | `isfullscreen`, `isfakefullscreen`, `noopenmaximized` | WM policy | `open-fullscreen`, `open-maximized`, `open-maximized-to-edges` | X | `open-maximized` means full-width scroller column; `open-maximized-to-edges` means client-visible maximize. |
@@ -291,7 +292,7 @@ KDL config nodes and fields:
   `default-workspace`,
   `open-on-output`, `default-column-width`, `scroller-proportion`,
   `scroller-single-proportion`, `default-window-width`, `default-window-height`,
-  `open-named-scratchpad`,
+  `open-named-scratchpad`, `open-on-all-workspaces`,
   `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,
   `open-maximized-to-edges`, `maximize-policy`, `parented-role`,

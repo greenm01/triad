@@ -61,7 +61,7 @@ proc setLayoutForSlot*(model: var Model, slot: uint32, mode: LayoutMode): bool =
   if tagId == NullTagId:
     return false
   if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
-      not model.tagHasLiveWindows(tagId):
+      not model.tagHasNonStickyLiveWindows(tagId):
     return false
   tagId != NullTagId and model.setTagLayout(tagId, mode)
 
@@ -202,7 +202,7 @@ proc moveWindowToSlot*(
     return false
   if targetTag == sourceTag:
     return false
-  let targetWasEmpty = not model.tagHasLiveWindows(targetTag)
+  let targetWasEmpty = not model.tagHasNonStickyLiveWindows(targetTag)
 
   let sourcePlacement = model.placementForWindowOnTag(sourceTag, winId)
   var sourceColumnWidth = model.defaultColumnWidth()

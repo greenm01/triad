@@ -63,6 +63,12 @@ proc tagHasLiveWindows*(model: Model, tagId: TagId): bool =
       return true
   false
 
+proc tagHasNonStickyLiveWindows*(model: Model, tagId: TagId): bool =
+  for _, win in model.windowsOnTagWithId(tagId):
+    if not win.isSticky and win.windowAdmitted():
+      return true
+  false
+
 proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if model.visibleSlots.len > 0:
     return model.visibleSlots
@@ -73,7 +79,7 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
     if slot > model.defaultWorkspaceCount and
-        (slot == model.activeSlot or model.tagHasLiveWindows(tagId)):
+        (slot == model.activeSlot or model.tagHasNonStickyLiveWindows(tagId)):
       result.add(slot)
 
   result.sort()
@@ -87,7 +93,8 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if result.len > 0:
     let last = result[^1]
     let lastTag = model.tagForSlot(last)
-    if last < MaxTagBits and lastTag != NullTagId and model.tagHasLiveWindows(lastTag):
+    if last < MaxTagBits and lastTag != NullTagId and
+        model.tagHasNonStickyLiveWindows(lastTag):
       result.add(last + 1)
 
 proc workspaceIndexForSlot*(model: Model, slot: uint32): uint32 =

@@ -26,6 +26,9 @@ proc focusedOnActiveTag*(model: Model): WindowId =
 
 proc firstFocusableWindow(model: Model, tagId: TagId): WindowId =
   for winId, win in model.windowsOnTagWithId(tagId):
+    if not win.isSticky and not win.isMinimized and win.windowAdmitted():
+      return winId
+  for winId, win in model.windowsOnTagWithId(tagId):
     if not win.isMinimized and win.windowAdmitted():
       return winId
   NullWindowId
@@ -149,7 +152,7 @@ proc isRestorableWorkspace(model: Model, tagId: TagId): bool =
   if tagOpt.isNone:
     return false
   tagOpt.get().slot <= model.defaultWorkspaceCount() or
-    model.tagHasFocusableWindow(tagId)
+    model.tagHasNonStickyFocusableWindow(tagId)
 
 proc focusMostRecentWorkspace*(model: var Model): bool =
   var candidates: seq[TagId] = @[]
@@ -496,7 +499,7 @@ proc collapseEmptyActiveDynamicWorkspace*(model: var Model): bool =
   let oldTag = model.activeTag
   if oldTag == NullTagId or model.tagData(oldTag).isNone:
     return false
-  if model.tagHasLiveWindows(oldTag):
+  if model.tagHasNonStickyLiveWindows(oldTag):
     return false
 
   let fallback = model.lowerWorkspaceFallback(oldSlot)

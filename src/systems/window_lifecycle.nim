@@ -1,7 +1,7 @@
 import std/[options, tables]
 import
-  focus, outputs, placement, popup_tree, window_policy, scratchpad, window_rules,
-  window_state, workspaces
+  focus, outputs, placement, popup_tree, sticky_windows, window_policy, scratchpad,
+  window_rules, window_state, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole
 
@@ -147,6 +147,8 @@ proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
       restored.currentViewportXOffset, restored.targetViewportYOffset,
       restored.currentViewportYOffset, restored.masterCount, restored.masterSplitRatio,
     )
+  if result != NullTagId:
+    discard model.syncStickyWindowsForWorkspace(result)
 
 proc ensureRestoredColumn(
     model: var Model, tagId: TagId, restoredTag: RestoredTagData, colIdx: int
@@ -247,10 +249,14 @@ proc applyPendingRestore(
   if not restoredScratchpad and targetSlot != 0:
     discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
     discard model.placeRestoredWindow(targetSlot, restoredExternalId, externalId, winId)
+    if restored.isSticky:
+      discard model.syncStickyWindow(winId, model.tagForSlot(targetSlot))
     if restoresFocusedWindow:
       let tagId = model.tagForSlot(targetSlot)
       if tagId != NullTagId:
         discard model.setTagFocus(tagId, winId)
+  elif restoredScratchpad:
+    discard model.setWindowSticky(winId, false)
 
   if restoresFocusedWindow and targetSlot == model.activeWorkspaceSlot():
     let tagId = model.tagForSlot(targetSlot)
@@ -397,6 +403,10 @@ proc createWindowForExternal*(
   if parentSlot != 0 and not hasRestoredTag and not ruleForcesSlot and
       parentedRole != ParentedRole.Plain:
     targetSlot = parentSlot
+  let openSticky =
+    ruleMatch.found and ruleMatch.rule.openOnAllWorkspacesSet and
+    ruleMatch.rule.openOnAllWorkspaces and not opensNamedScratchpad and
+    (not parentKnown or parentedRole == ParentedRole.Plain)
 
   var isFullscreen = false
   var isMaximized = false
@@ -417,6 +427,7 @@ proc createWindowForExternal*(
     openColumnMaximized = false
 
   var isFloating = false
+  var isSticky = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
   var widthProportion = model.defaultWindowWidth()
@@ -442,7 +453,10 @@ proc createWindowForExternal*(
         columnScrollerSingleProportion = ruleMatch.rule.scrollerSingleProportion
   if hasRestoredWindow:
     isFloating = restored.isFloating
+    isSticky = restored.isSticky
     floatingGeom = restored.floatingGeom
+  elif openSticky:
+    isSticky = true
   elif parentKnown and parentOpensFloating:
     isFloating = true
   if isFullscreen or isMaximized or openColumnMaximized:
@@ -471,6 +485,7 @@ proc createWindowForExternal*(
     isFloating = isFloating,
     isFullscreen = isFullscreen,
     isMaximized = isMaximized,
+    isSticky = isSticky,
     fullscreenOutput = fullscreenOutput,
     floatingGeom = floatingGeom,
     parentAutoFloating = parentAutoFloating,
@@ -523,6 +538,8 @@ proc createWindowForExternal*(
     if hasRestoredTag:
       discard
         model.placeRestoredWindow(targetSlot, restoredExternalId, externalId, result)
+      if isSticky:
+        discard model.syncStickyWindow(result, model.tagForSlot(targetSlot))
     else:
       let targetTag = model.ensureWorkspaceSlot(targetSlot, forcedLayout)
       if targetTag == NullTagId:
@@ -592,6 +609,8 @@ proc createWindowForExternal*(
             openColumnMaximized,
             pendingAdmission,
           )
+      if isSticky:
+        discard model.syncStickyWindow(result, targetTag)
 
     if restoresFocusedWindow:
       let targetTag = model.tagForSlot(targetSlot)
@@ -601,6 +620,8 @@ proc createWindowForExternal*(
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId:
         discard model.recomputeVisibleFocus(targetTag)
+  elif restoredScratchpad:
+    discard model.setWindowSticky(result, false)
   if hasRestoredWindow:
     discard model.rewriteRestoreFocusRefs(restoredExternalId, externalId)
     if restoresFocusedWindow and targetSlot == model.activeWorkspaceSlot():

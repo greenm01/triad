@@ -13,10 +13,11 @@
   internal; external IDs are the stable public projection.
 - (done) Add multi-workspace window-rule placement backed by the DOD tag mask
   model, while keeping public config workspace-oriented.
-- Evaluate Mango-informed window-rule gaps for Triad-native equivalents:
-  sticky/global windows, unmanaged-global windows, overlay windows, named app
-  scratchpad rules, terminal swallowing, per-window tearing/performance policy,
-  and layout-family size hints.
+- Evaluate remaining Mango-informed window-rule gaps for Triad-native
+  equivalents: unmanaged-global windows, overlay windows, named app scratchpad
+  rules, terminal swallowing, idle inhibit, global keybinding policy, and
+  layout-family size hints. Sticky/global workspace placement is implemented as
+  `open-on-all-workspaces`.
 - If Triad exposes Mango-like floating modes, keep overlay, global/sticky, and
   unmanaged-global behavior separate instead of collapsing them into one flag.
 - Revisit target-viewport layout projection only if compositor-owned animation

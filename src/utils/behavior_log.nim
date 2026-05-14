@@ -207,6 +207,7 @@ proc compactLiveRestoreWindows(state: LiveRestoreState): JsonNode =
         "is_floating": win.isFloating,
         "is_fullscreen": win.isFullscreen,
         "is_maximized": win.isMaximized,
+        "is_sticky": win.isSticky,
       }
     )
 

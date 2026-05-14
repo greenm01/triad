@@ -25,6 +25,7 @@ type
     isFullscreen*: bool
     isMaximized*: bool
     isMinimized*: bool
+    isSticky*: bool
     fullscreenOutput*: ExternalOutputId
     parentExternalId*: ExternalWindowId
     identifier*: string
@@ -140,6 +141,8 @@ type
     openMaximized*: bool
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
+    openOnAllWorkspacesSet*: bool
+    openOnAllWorkspaces*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -198,6 +201,8 @@ type
     openMaximized*: bool
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
+    openOnAllWorkspacesSet*: bool
+    openOnAllWorkspaces*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
     respectSizeHintsSet*: bool
@@ -239,6 +244,7 @@ type
     isFullscreen*: bool
     isMaximized*: bool
     isMinimized*: bool
+    isSticky*: bool
     fullscreenOutput*: ExternalOutputId
     floatingGeom*: Rect
     manualFloatingPosition*: bool

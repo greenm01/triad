@@ -5,7 +5,7 @@ import ../src/state/engine
 import
   ../src/systems/[
     hotkey_overlay, layout_projection, overview_geometry, popup_tree, runtime_facade,
-    update, window_lifecycle, window_rules,
+    update, window_lifecycle, window_rules, workspaces,
   ]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
@@ -5730,6 +5730,221 @@ suite "Core Runtime Logic":
     ).isNone
     let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
     check model.columnData(columnId).get().widthProportion == 0.7'f32
+
+  test "Window rule open-on-all-workspaces places sticky windows everywhere":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "status",
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: true,
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "status", title: "bar")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(20))
+
+    check model.windowData(winId).get().isSticky
+    for slot in 1'u32 .. 3'u32:
+      check model.placementForWindowOnTag(model.tagForSlot(slot), winId).isSome
+    for workspace in model.shellSnapshot().workspaces:
+      check not workspace.occupied
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    check model.activeWorkspaceFocusId() == 20
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 21, appId: "local", title: "main")
+    )
+    check model.activeWorkspaceFocusId() == 21
+
+  test "Window rule open-on-all-workspaces obeys later explicit false":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "app", openOnAllWorkspacesSet: true, openOnAllWorkspaces: true
+            ),
+            WindowRule(
+              appIdMatch: "app",
+              titleMatch: "single",
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: false,
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 22, appId: "app", title: "single")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(22))
+
+    check not model.windowData(winId).get().isSticky
+    check model.placementForWindowOnTag(model.tagForSlot(1), winId).isSome
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isNone
+
+  test "Sticky windows sync to dynamic workspaces without pinning them occupied":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 1),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "status",
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: true,
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 23, appId: "status", title: "bar")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(23))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 4))
+
+    check model.tagForSlot(4) != NullTagId
+    check model.placementForWindowOnTag(model.tagForSlot(4), winId).isSome
+    check model.activeWorkspaceFocusId() == 23
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    discard model.pruneDynamicWorkspaces()
+    check model.tagForSlot(4) == NullTagId
+
+  test "Parented dialog sticky rules require plain parented role":
+    var dialogModel = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "child",
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: true,
+            )
+          ],
+      )
+    ).model
+    dialogModel.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 24, appId: "parent", title: "main")
+    )
+    dialogModel.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 25,
+        createdParentWindowId: 24,
+        appId: "child",
+        title: "dialog",
+      )
+    )
+    let dialogId = dialogModel.windowForExternal(ExternalWindowId(25))
+    check not dialogModel.windowData(dialogId).get().isSticky
+    check dialogModel.placementForWindowOnTag(dialogModel.tagForSlot(2), dialogId).isNone
+
+    var plainModel = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "child",
+              parentedRoleSet: true,
+              parentedRole: ParentedRole.Plain,
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: true,
+            )
+          ],
+      )
+    ).model
+    plainModel.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 26, appId: "parent", title: "main")
+    )
+    plainModel.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 27,
+        createdParentWindowId: 26,
+        appId: "child",
+        title: "plain",
+      )
+    )
+    let plainId = plainModel.windowForExternal(ExternalWindowId(27))
+    check plainModel.windowData(plainId).get().isSticky
+    check plainModel.placementForWindowOnTag(plainModel.tagForSlot(2), plainId).isSome
+
+  test "Scratchpad clears sticky state and restores as normal window":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "status",
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: true,
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 28, appId: "status", title: "bar")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(28))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    check not model.windowData(winId).get().isSticky
+    check model.placementForWindowOnTag(model.tagForSlot(1), winId).isNone
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isNone
+
+    model.applyMsg(Msg(kind: MsgKind.CmdRestoreScratchpad))
+    check not model.windowData(winId).get().isSticky
+    check model.placementForWindowOnTag(model.tagForSlot(1), winId).isSome
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isNone
+
+  test "Live restore preserves sticky window state":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "status",
+              openOnAllWorkspacesSet: true,
+              openOnAllWorkspaces: true,
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 29, appId: "status", title: "bar")
+    )
+    check model.restoreWindowJson(29)["is_sticky"].getBool()
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+
+    var restoredModel = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    restoredModel.applyLiveRestore(restore.pendingRestoreState())
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 29, appId: "status", title: "bar")
+    )
+    let restoredId = restoredModel.windowForExternal(ExternalWindowId(29))
+
+    check restoredModel.windowData(restoredId).get().isSticky
+    check restoredModel.placementForWindowOnTag(restoredModel.tagForSlot(1), restoredId).isSome
+    check restoredModel.placementForWindowOnTag(restoredModel.tagForSlot(2), restoredId).isSome
 
   test "Open-fullscreen window rule creates tiled fullscreen window":
     var model = initRuntimeStateFromConfig(

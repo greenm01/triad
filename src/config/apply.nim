@@ -127,6 +127,8 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       openMaximized: rule.openMaximized,
       openMaximizedToEdgesSet: rule.openMaximizedToEdgesSet or rule.openMaximizedToEdges,
       openMaximizedToEdges: rule.openMaximizedToEdges,
+      openOnAllWorkspacesSet: rule.openOnAllWorkspacesSet,
+      openOnAllWorkspaces: rule.openOnAllWorkspaces,
       maximizePolicySet: rule.maximizePolicySet,
       maximizePolicy: rule.maximizePolicy,
       respectSizeHintsSet: rule.respectSizeHintsSet,

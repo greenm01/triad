@@ -48,9 +48,9 @@ The supported KDL nodes are:
 - `workspaces`: default workspace floor and fallback default layout.
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
-  focus behavior, parented-dialog viewport jump behavior, size-hint policy,
-  shortcut inhibition, presentation mode, border/focus-ring/clip policy, and
-  forced layout.
+  all-workspace sticky behavior, focus behavior, parented-dialog viewport jump
+  behavior, size-hint policy, shortcut inhibition, presentation mode,
+  border/focus-ring/clip policy, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -139,6 +139,12 @@ window-rule {
 window-rule {
   match app-id="obsidian"
   default-workspaces 2 4
+  open-focused #false
+}
+
+window-rule {
+  match app-id="waybar|quickshell"
+  open-on-all-workspaces #true
   open-focused #false
 }
 
@@ -240,6 +246,13 @@ window-rule {
   and shell snapshots; additional workspaces get normal tag placements without
   switching focus or moving the camera. Later matching rules replace the whole
   workspace list. Duplicate workspace numbers are ignored.
+- `open-on-all-workspaces #true|#false`: makes matching top-level windows
+  sticky across every materialized workspace. Later rules can clear a broader
+  sticky rule with `#false`. Parented `dialog` and `tool` windows ignore this
+  rule so transient popups stay attached to their parent; use
+  `parented-role "plain"` when a parented window should behave like a normal
+  sticky window. Sticky-only occupancy does not keep dynamic workspaces alive,
+  and moving a sticky window to scratchpad clears sticky state.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently
   visible on the named output. Targets match connector names such as
   `HDMI-A-1`, shell fallback names such as `river-2`, niri-style
