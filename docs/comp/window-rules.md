@@ -139,22 +139,55 @@ These are gap-analysis categories, not target config names.
 | Terminal swallowing | `isterm`, `noswallow` | Pass | Implemented as explicit `terminal` and `allow-swallow` rules. Swallowing requires a terminal host PID and a new child PID that descends from it; missing PID data never guesses. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit, idle inhibit, and focused-window `presentation-mode` exist. Global keybinding policy remains a gap. |
 
-## Remaining Gap Triage
+## Remaining Work Triage
 
-This table is the blocked/deferred backlog for window-rule work. The remaining
-items should not gain user-facing config fields until Triad has the protocol,
-data, render, or layout substrate needed to make the rule real.
+The remaining window-rule gaps are not one implementation queue. Most should
+stay out of the user-facing config until Triad has the protocol, data, render,
+or layout substrate needed to make the rule real.
 
-| Priority | Gap | Classification | Decision |
-| :---: | :--- | :--- | :--- |
-| P3 | True output serial matching | Protocol/data blocked | Current output identity stores connector name, make/model, and description. Keep `open-on-output` partial until River or another compositor protocol supplies a real serial source. |
-| P3 | Urgent matcher: `is-urgent` | Protocol/data blocked | Native Triad and niri-compatible state currently report urgency as false. Add `match is-urgent` only after Triad receives real urgent state from compositor or activation events. |
-| P3 | Cast-target matcher: `is-window-cast-target` | Protocol/data blocked | No current state or protocol source identifies cast targets. Add the matcher only after screencast/window-cast target state exists. |
-| P3 | Per-window `scroll-factor` | Protocol-shape blocked | River exposes input-device scroll factor, not a current per-window forwarding primitive in Triad. Revisit only after a clear input forwarding policy exists. |
-| P3 | Global keybinding policy | Design/protocol blocked | Keep separate from shortcut inhibit. Mango forwards matching global keypresses to app surfaces; Triad cannot provide that as only a River WM client without a compositor-level key forwarding substrate. |
-| P4 | Opacity, shadow, blur, radius, background effects, popup visual effects | Protocol/render blocked | River/Triad currently expose borders, decorations, clips, and protocol surfaces, not compositor scene effects for managed windows or popups. |
-| P4 | Tabbed column display and tab indicator | Layout-model blocked | Do not add rule fields without a real tabbed-column layout model. |
-| P4 | Render-target blocking: `block-out-from` | Render-target blocked | Screenshot/cast target filtering is not part of the current render model. Add only after Triad tracks render targets that can honor per-window exclusion. |
+### Ready Now
+
+These items are documentation and triage work only. They do not add config
+fields or runtime behavior.
+
+| Item | Action |
+| :--- | :--- |
+| `open-on-output` partial status | Keep documenting the current identity matching surface: connector name, shell fallback, make/model with unknown serial, and raw description strings. Do not imply true serial matching exists. |
+| `block-out-from` gap | Keep listed as blocked until Triad has render targets that can honor per-window exclusion. Do not add a placeholder config field. |
+| Visual effect gaps | Keep grouped as render-substrate gaps so opacity, shadow, blur, radius, background effects, and popup visual effects are not mistaken for small parser TODOs. |
+
+### Blocked
+
+These are valid concepts, but each needs missing lower-level support before a
+window-rule field would be honest.
+
+| Gap | Blocker | Promotion rule |
+| :--- | :--- | :--- |
+| True output serial matching | Triad stores connector name, make/model, and description, but has no real output serial source. | Promote only when River or another compositor protocol exposes serial identity. |
+| Urgent matcher: `is-urgent` | Native Triad and niri-compatible state currently report urgency as false. | Promote only after Triad receives real urgent state from compositor or activation events. |
+| Cast-target matcher: `is-window-cast-target` | No current state or protocol source identifies cast targets. | Promote only after screencast/window-cast target state exists. |
+| Per-window `scroll-factor` | River exposes input-device scroll factor, not a per-window forwarding primitive in Triad. | Promote only after a clear input forwarding policy exists. |
+| Global keybinding policy | Mango forwards matching global keypresses to app surfaces; Triad cannot do this as only a River WM client. | Promote only with compositor-level key forwarding substrate. |
+| Managed-window opacity, shadow, blur, radius, and background effects | River/Triad expose borders, decorations, clips, and protocol surfaces, not compositor scene effects for managed windows. | Promote only after Triad can apply managed-window render effects. |
+| Popup visual effects | Triad has popup policy, not popup-specific render controls. | Promote only after popup render effects exist independently of placement policy. |
+| Render-target blocking: `block-out-from` | Screenshot/cast target filtering is not part of the current render model. | Promote only after Triad tracks render targets that can honor per-window exclusion. |
+
+### Not Target
+
+These should not become window-rule work unless Triad deliberately changes the
+larger layout or visual model.
+
+| Feature | Decision |
+| :--- | :--- |
+| `default-column-display` and `tab-indicator` | Not a target while Triad has no tabbed-column layout model. |
+| Niri `baba-is-float` visual effect | Not a Triad target; keep floating visuals tied to Triad's own presentation model. |
+
+### How To Pick Next Work
+
+Promote a gap to `Ready Now` only when the required substrate already exists in
+Triad. If a feature would require inventing placeholder config that cannot
+affect real compositor behavior, keep it blocked. Prefer finishing one
+substrate-backed rule end to end over adding parser-only rule fields.
 
 ## Triad-Specific Notes
 
