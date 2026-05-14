@@ -1,8 +1,7 @@
-import std/strutils
 import ../systems/recent_windows
 import ../types/model
 import ../types/runtime_values as rv
-import hotkey_overlay_render
+import overlay_text_render
 import pixel_buffer
 
 const
@@ -12,17 +11,13 @@ const
   MutedTextColor = 0xffc8d0dc'u32
   PanelBg = 0xdd111318'u32
   PanelBorder = 0xff62a8ff'u32
-  TextScale = 2'i32
   TitleGap = 14'i32
   PanelPadding = 12'i32
   SelectedBorderWidth = 2'i32
   SelectedFillAlpha = 0x55'u32
-
-proc clippedTitle(title: string): string =
-  let clean = title.strip()
-  if clean.len <= 42:
-    return clean
-  clean[0 ..< 39] & "..."
+  TitleStyle = OverlayTextStyle(sizePx: 14.0, color: TextColor)
+  MutedTitleStyle = OverlayTextStyle(sizePx: 14.0, color: MutedTextColor)
+  PanelStyle = OverlayTextStyle(sizePx: 14.0, color: TextColor)
 
 proc scopeText(model: Model): string =
   case model.recentWindowsScope
@@ -42,7 +37,7 @@ proc fillSelectedChrome(
 ) =
   if padding <= 0:
     return
-  let titleH = 7'i32 * TextScale
+  let titleH = TitleStyle.textHeight()
   let x = preview.geom.x - screen.x - padding
   let y = preview.geom.y - screen.y - padding
   let w = preview.geom.w + padding * 2
@@ -75,25 +70,25 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
         preview.geom.x - screen.x - padding,
         preview.geom.y - screen.y - padding,
         preview.geom.w + padding * 2,
-        preview.geom.h + padding * 2 + TitleGap + 7'i32 * TextScale,
+        preview.geom.h + padding * 2 + TitleGap + TitleStyle.textHeight(),
         SelectedBorderWidth,
         borderColor,
       )
-    let title = preview.title.clippedTitle()
-    let titleW = textWidth(title, TextScale)
+    let style = if preview.selected: TitleStyle else: MutedTitleStyle
+    let title = preview.title.ellipsizeText(preview.geom.w, style)
+    let titleW = title.textWidth(style)
     let titleX = preview.geom.x - screen.x + max(0'i32, (preview.geom.w - titleW) div 2)
     result.drawText(
       titleX,
       preview.geom.y - screen.y + preview.geom.h + TitleGap,
       max(preview.geom.w, 1'i32),
       title,
-      if preview.selected: TextColor else: MutedTextColor,
-      TextScale,
+      style,
     )
 
   let panel = model.scopeText()
-  let panelW = textWidth(panel, TextScale) + PanelPadding * 2
-  let panelH = 7'i32 * TextScale + PanelPadding * 2
+  let panelW = panel.textWidth(PanelStyle) + PanelPadding * 2
+  let panelH = PanelStyle.textHeight() + PanelPadding * 2
   let panelX = max(0'i32, (screen.w - panelW) div 2)
   let panelY = PanelPadding * 2
   result.fillRect(panelX, panelY, panelW, panelH, PanelBg)
@@ -103,8 +98,7 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
     panelY + PanelPadding,
     panelW - PanelPadding * 2,
     panel,
-    TextColor,
-    TextScale,
+    PanelStyle,
   )
 
 proc renderRecentWindowsOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =

@@ -14,9 +14,10 @@ requires "nimkdl >= 2.1.0"
 requires "https://github.com/panno8M/wayland-nim == 0.1.0"
 requires "https://github.com/Nimaoth/fsnotify >= 0.1.6"
 requires "chronicles >= 0.10.3"
+requires "pixie >= 5.1.0"
 
 proc runTestSuite(path: string) =
-  exec "nim c -r --hints:off --nimcache:tests/nimcache " & path
+  exec "nimble c -r --hints:off --nimcache:tests/nimcache " & path
 
 proc runCoreSuites() =
   for path in [
@@ -67,9 +68,10 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tcore_window_rules_placement", "tests/tcore_output_sticky_scratchpad",
     "tests/tcore_presentation_overview", "tests/tcore_overview",
     "tests/tcore_overview_interactions", "tests/tcore_recent_windows",
-    "tests/tcore_shell_snapshot_ipc", "tests/tcore_unmanaged_global", "tests/tstate", "tests/thardening",
-    "tests/tlayouts", "tests/tlogging", "tests/tprotocol", "tests/tstress",
-    "triad-live-smoke.events", "triad-live-smoke.log", "triad-live-smoke.out",
+    "tests/tcore_shell_snapshot_ipc", "tests/tcore_unmanaged_global", "tests/tstate",
+    "tests/thardening", "tests/tlayouts", "tests/tlogging", "tests/tprotocol",
+    "tests/tstress", "triad-live-smoke.events", "triad-live-smoke.log",
+    "triad-live-smoke.out",
   ]:
     if fileExists(path):
       rmFile(path)

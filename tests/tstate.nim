@@ -2,6 +2,7 @@ import std/[json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
+import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
 import ../src/daemon/recent_windows_overlay_render
 import ../src/state/engine except WindowId
@@ -295,6 +296,23 @@ suite "Runtime state primitives":
     check rendered.width <= int32(float(screen.w) * 0.9)
     check rendered.height > 0
     check bytes.len == rendered.pixels.len * 4
+
+  test "overlay text renderer measures clips and draws text":
+    let style = OverlayTextStyle(sizePx: 14.0, color: 0xffffffff'u32)
+    let metrics = "Triad".textMetrics(style)
+    var rendered = initPixelBuffer(120, 40, 0x00000000'u32)
+    rendered.drawText(4, 4, 112, "Triad", style)
+    let clipped = "A very long title that must fit".ellipsizeText(60, style)
+
+    check metrics.width > 0
+    check metrics.height > 0
+    check clipped.len < "A very long title that must fit".len
+    check clipped.textWidth(style) <= 60
+    check rendered.pixels.anyIt(it != 0)
+    if overlayTextAvailable():
+      check rendered.pixels.anyIt(
+        ((it shr 24) and 0xff) > 0 and ((it shr 24) and 0xff) < 0xff
+      )
 
   test "recent windows chrome converts RGBA config colors to ARGB pixels":
     var config = baseConfig()
