@@ -82,6 +82,7 @@ type
     xkbSeatAteUnbound*: Table[uint32, uint32]
     xkbBindingPressed*: Table[uint32, bool]
     xkbBindingModes*: Table[uint32, BindingMode]
+    xkbBindingModifiers*: Table[uint32, uint32]
     xkbStopRepeatCount*: Table[uint32, uint32]
     pointerBindings*: Table[uint32, Msg]
     pointerBindingKinds*: Table[uint32, PointerOpKind]

@@ -6,7 +6,7 @@ from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTri
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
-import ../src/systems/[daemon_view, runtime_facade, update]
+import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 import ../src/types/[runtime_values, shell_snapshot]
 import ../src/utils/session_env
 
@@ -180,6 +180,143 @@ workspaces {
     check fallbacks.anyIt(it.key == "Escape")
     check fallbacks.anyIt(it.key == "Page_Up" and it.command == "focus-tag-left")
     check fallbacks.anyIt(it.key == "Page_Down" and it.command == "focus-tag-right")
+
+  test "Niri overview fallback keys derive user direction keys":
+    var model = initRuntimeStateFromConfig(Config()).model
+    model.keyBindings =
+      @[
+        KeyBindingConfig(
+          key: "h",
+          modifiers: 64'u32,
+          command: "focus-left",
+          mode: BindingMode.BindAlways,
+        ),
+        KeyBindingConfig(
+          key: "l",
+          modifiers: 64'u32,
+          command: "focus-right",
+          mode: BindingMode.BindNormal,
+        ),
+        KeyBindingConfig(
+          key: "j",
+          modifiers: 64'u32,
+          command: "focus-window-or-workspace-down",
+          mode: BindingMode.BindNormal,
+        ),
+        KeyBindingConfig(
+          key: "k",
+          modifiers: 64'u32,
+          command: "focus-window-or-workspace-up",
+          mode: BindingMode.BindOverview,
+        ),
+      ]
+
+    let fallbacks = model.overviewFallbackKeyBindings()
+
+    check fallbacks.anyIt(
+      it.key == "h" and it.modifiers == 0'u32 and it.command == "focus-left"
+    )
+    check fallbacks.anyIt(
+      it.key == "l" and it.modifiers == 0'u32 and it.command == "focus-right"
+    )
+    check fallbacks.anyIt(
+      it.key == "j" and it.modifiers == 0'u32 and
+        it.command == "focus-window-or-workspace-down"
+    )
+    check fallbacks.anyIt(
+      it.key == "k" and it.modifiers == 0'u32 and
+        it.command == "focus-window-or-workspace-up"
+    )
+
+  test "Niri recent fallback keys use held switcher modifiers":
+    var model = initRuntimeStateFromConfig(Config()).model
+    discard model.setActiveModifiers(8'u32)
+
+    let fallbacks = model.recentOpenFallbackKeyBindings()
+
+    check fallbacks.anyIt(
+      it.key == "Left" and it.modifiers == 8'u32 and it.command == "recent-window-prev"
+    )
+    check fallbacks.anyIt(
+      it.key == "Right" and it.modifiers == 8'u32 and it.command == "recent-window-next"
+    )
+    check fallbacks.anyIt(
+      it.key == "Home" and it.modifiers == 8'u32 and it.command == "recent-window-first"
+    )
+    check fallbacks.anyIt(
+      it.key == "End" and it.modifiers == 8'u32 and it.command == "recent-window-last"
+    )
+    check not fallbacks.anyIt(it.key == "Up")
+    check not fallbacks.anyIt(it.key == "Down")
+
+  test "Niri recent fallback keys preserve user recent bindings":
+    var model = initRuntimeStateFromConfig(Config()).model
+    discard model.setActiveModifiers(8'u32)
+    model.keyBindings.add(
+      KeyBindingConfig(
+        key: "Left",
+        modifiers: 8'u32,
+        command: "custom-recent-left",
+        mode: BindingMode.BindRecent,
+      )
+    )
+
+    let fallbacks = model.recentOpenFallbackKeyBindings()
+
+    check not fallbacks.anyIt(
+      it.key == "Left" and it.modifiers == 8'u32 and it.command == "recent-window-prev"
+    )
+    check fallbacks.anyIt(
+      it.key == "Right" and it.modifiers == 8'u32 and it.command == "recent-window-next"
+    )
+
+  test "Niri recent fallback keys derive user direction keys":
+    var model = initRuntimeStateFromConfig(Config()).model
+    discard model.setActiveModifiers(8'u32)
+    model.keyBindings =
+      @[
+        KeyBindingConfig(
+          key: "h",
+          modifiers: 64'u32,
+          command: "focus-left",
+          mode: BindingMode.BindAlways,
+        ),
+        KeyBindingConfig(
+          key: "l",
+          modifiers: 64'u32,
+          command: "focus-right",
+          mode: BindingMode.BindNormal,
+        ),
+        KeyBindingConfig(
+          key: "j",
+          modifiers: 64'u32,
+          command: "focus-down",
+          mode: BindingMode.BindAlways,
+        ),
+        KeyBindingConfig(
+          key: "k", modifiers: 64'u32, command: "focus-up", mode: BindingMode.BindAlways
+        ),
+        KeyBindingConfig(
+          key: "Left",
+          modifiers: 8'u32,
+          command: "focus-left",
+          mode: BindingMode.BindAlways,
+        ),
+      ]
+
+    let fallbacks = model.recentOpenFallbackKeyBindings()
+
+    check fallbacks.anyIt(
+      it.key == "h" and it.modifiers == 8'u32 and it.command == "recent-window-prev"
+    )
+    check fallbacks.anyIt(
+      it.key == "l" and it.modifiers == 8'u32 and it.command == "recent-window-next"
+    )
+    check fallbacks.anyIt(
+      it.key == "Left" and it.modifiers == 8'u32 and it.command == "recent-window-prev"
+    )
+    check not fallbacks.anyIt(it.key == "j")
+    check not fallbacks.anyIt(it.key == "k")
 
   test "duplicate window create keeps a single shell window":
     var model = initRuntimeStateFromConfig(

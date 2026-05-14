@@ -66,12 +66,17 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
+    let previousActiveModifiers = daemon.runtimeState.model.activeModifiers
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let effects = syncRuntimeUpdate("message", msg)
+    let recentModifiersChanged =
+      daemon.runtimeState.model.recentWindowsActive and
+      previousActiveModifiers != daemon.runtimeState.model.activeModifiers
     if previousOverview != daemon.runtimeState.model.overviewActive or
         previousRecentWindows != daemon.runtimeState.model.recentWindowsActive or
         previousSessionLocked != daemon.runtimeState.model.sessionLocked or
+        recentModifiersChanged or
         previousShortcutsInhibited !=
         daemon.runtimeState.model.keyboardShortcutsInhibited():
       daemon.requestBindingReconfigure("binding profile changed")

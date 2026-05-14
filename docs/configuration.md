@@ -451,7 +451,9 @@ recent-windows {
 While open, releasing all modifiers confirms the selected window. `Escape`
 cancels, `Return` confirms, Left/Right move selection, Home/End jump to the
 edges, `a`/`w`/`o` select all/workspace/output scope, `s` cycles scope, and `q`
-closes the selected window.
+closes the selected window. Triad also derives switcher navigation from normal
+direction bindings: for example, a configured `Super+h` `focus-left` binding
+adds `Alt+h` previous-window behavior while the switcher is open.
 
 ## Hotkey Overlay
 
@@ -498,6 +500,10 @@ overview {
 
 - `size <px>`: sets the square trigger size in pixels. The default is `10`;
   values are clamped to `1..1000`.
+
+Overview also derives modal navigation keys from configured direction bindings.
+For example, a configured `Super+h` `focus-left` binding adds bare `h`
+navigation while overview is open, as long as that overview key slot is free.
 - `top-left`, `top-right`, `bottom-left`, `bottom-right`: enable individual
   corners. Corners can also be set to `#false`.
 - Hot corners open overview only. They do not close an already open overview.
