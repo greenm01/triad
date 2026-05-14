@@ -318,8 +318,8 @@ window-rule {
   floating {
     x-ratio 0.02
     y-ratio 0.08
-    width-ratio 0.22
-    height-ratio 0.84
+    width 880
+    height 640
   }
 }
 spawn-at-startup "notify-send" "triad"
@@ -445,10 +445,10 @@ bindings {
     check config.windowRules[0].floating.xRatio == 0.02'f32
     check config.windowRules[0].floating.yRatioSet
     check config.windowRules[0].floating.yRatio == 0.08'f32
-    check config.windowRules[0].floating.widthRatioSet
-    check config.windowRules[0].floating.widthRatio == 0.22'f32
-    check config.windowRules[0].floating.heightRatioSet
-    check config.windowRules[0].floating.heightRatio == 0.84'f32
+    check config.windowRules[0].floating.widthSet
+    check config.windowRules[0].floating.width == 880
+    check config.windowRules[0].floating.heightSet
+    check config.windowRules[0].floating.height == 640
     check config.startupCommands == @[@["notify-send", "triad"]]
     check config.quickshell.theme == "noctalia"
     check config.terminal.command.len > 0
@@ -726,6 +726,10 @@ window-rule {
   default-column-width { proportion 2.0 }
   default-window-width { proportion 0.0 }
   default-window-height { proportion 0.4 }
+  floating {
+    width -12
+    height 70000
+  }
 }
 """,
     )
@@ -740,6 +744,37 @@ window-rule {
     check config.windowRules[0].defaultWindowWidth == 0.05'f32
     check config.windowRules[0].defaultWindowHeightSet
     check config.windowRules[0].defaultWindowHeight == 0.4'f32
+    check config.windowRules[0].floating.widthSet
+    check config.windowRules[0].floating.width == 1
+    check config.windowRules[0].floating.heightSet
+    check config.windowRules[0].floating.height == 65535
+
+  test "Window rule parser lets latest floating size field win per axis":
+    let path = getTempDir() / "triad-window-rule-floating-size-order.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="demo"
+  floating {
+    width-ratio 0.25
+    width 900
+    height 480
+    height-ratio 0.5
+  }
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 1
+    check config.windowRules[0].floating.widthSet
+    check not config.windowRules[0].floating.widthRatioSet
+    check config.windowRules[0].floating.width == 900
+    check config.windowRules[0].floating.heightRatioSet
+    check not config.windowRules[0].floating.heightSet
+    check config.windowRules[0].floating.heightRatio == 0.5'f32
 
   test "Window rule parser clamps size bounds and preserves explicit zero":
     let path = getTempDir() / "triad-window-rule-bounds.kdl"

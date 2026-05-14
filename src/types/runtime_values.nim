@@ -63,8 +63,12 @@ type
     yRatio*: float32
     widthRatioSet*: bool
     widthRatio*: float32
+    widthSet*: bool
+    width*: int32
     heightRatioSet*: bool
     heightRatio*: float32
+    heightSet*: bool
+    height*: int32
 
   WindowRuleFloatingPositionConfig* = object
     set*: bool

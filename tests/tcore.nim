@@ -5907,6 +5907,78 @@ suite "Core Runtime Logic":
     check snapshot.workspaces[0].masterSplitRatio == 0.65'f32
     check snapshot.workspaces[0].columns.len == 0
 
+  test "Window rule fixed floating size overrides ratio size":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "fixed-float",
+              openFloating: true,
+              floating: WindowRuleFloatingConfig(
+                widthRatioSet: true,
+                widthRatio: 0.25,
+                widthSet: true,
+                width: 900,
+                heightRatioSet: true,
+                heightRatio: 0.5,
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 131,
+        appId: "fixed-float",
+        title: "Tool",
+      )
+    )
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(131))).get()
+
+    check win.isFloating
+    check win.floatingGeom.w == 900
+    check win.floatingGeom.h == 350
+
+  test "Window rule fixed floating size respects rule bounds":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "bounded-float",
+              openFloating: true,
+              maxWidthSet: true,
+              maxWidth: 700,
+              minHeightSet: true,
+              minHeight: 500,
+              floating: WindowRuleFloatingConfig(
+                widthSet: true, width: 900, heightSet: true, height: 420
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 132,
+        appId: "bounded-float",
+        title: "Tool",
+      )
+    )
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(132))).get()
+
+    check win.isFloating
+    check win.floatingGeom.w == 700
+    check win.floatingGeom.h == 500
+
   test "Window rule marks matching windows as shortcut-inhibiting":
     var model = configuredModel()
     let (nextModel, _) = model.update(

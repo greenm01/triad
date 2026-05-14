@@ -138,11 +138,15 @@ proc floatingGeomFromRule(
       result.geom.w = max(
         model.effectiveFloatingMinWidth(), int32(float32(screenW) * floating.widthRatio)
       )
+    if floating.widthSet:
+      result.geom.w = max(model.effectiveFloatingMinWidth(), floating.width)
     if floating.heightRatioSet:
       result.geom.h = max(
         model.effectiveFloatingMinHeight(),
         int32(float32(screenH) * floating.heightRatio),
       )
+    if floating.heightSet:
+      result.geom.h = max(model.effectiveFloatingMinHeight(), floating.height)
     result.position = ruleMatch.rule.defaultFloatingPosition
 
 proc floatingGeomForWindow*(

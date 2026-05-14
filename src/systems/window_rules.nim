@@ -135,10 +135,20 @@ proc mergeFloatingRule(
     target.yRatio = source.yRatio
   if source.widthRatioSet:
     target.widthRatioSet = true
+    target.widthSet = false
     target.widthRatio = source.widthRatio
+  if source.widthSet:
+    target.widthSet = true
+    target.widthRatioSet = false
+    target.width = source.width
   if source.heightRatioSet:
     target.heightRatioSet = true
+    target.heightSet = false
     target.heightRatio = source.heightRatio
+  if source.heightSet:
+    target.heightSet = true
+    target.heightRatioSet = false
+    target.height = source.height
 
 proc mergeFloatingPositionRule(
     target: var WindowRuleFloatingPositionConfig,

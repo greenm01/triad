@@ -123,7 +123,7 @@ These are gap-analysis categories, not target config names.
 | Mango rule family | Examples | Triad status | Layout note |
 | :--- | :--- | :---: | :--- |
 | Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement and open focus exist; monitor placement and tag-silent semantics are gaps. |
-| Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating, ratio sizing, and anchored pixel position; fixed pixel size and no-center policy are gaps. |
+| Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating, ratio sizing, fixed pixel sizing, and anchored pixel position; no-center policy and size-hint bypass are gaps. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Gap | Applies only to scroller layouts unless generalized into Triad size hints. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Partial | Triad has runtime fullscreen/maximize commands but few rule-level equivalents. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Gap | Mostly compositor/render policy; Triad has global border and animation config. |

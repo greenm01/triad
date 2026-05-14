@@ -176,12 +176,14 @@ window-rule {
 - `match` and `exclude` use regex search semantics. Simple strings such as
   `gimp` match as before; exact matches should be anchored, for example
   `^org\\.gimp\\.GIMP$`.
-- `floating { x-ratio; y-ratio; width-ratio; height-ratio }`: overrides the
+- `floating { x-ratio; y-ratio; width-ratio; height-ratio; width; height }`: overrides the
   global floating defaults for this window rule. `x-ratio` and `y-ratio` place
   tool, plain, and unparented floats when `default-floating-position` is not
-  set. Dialogs still center on the parent, but `width-ratio` and
-  `height-ratio` can set their desired size before clamping. Missing fields
-  fall back to the top-level `floating` defaults.
+  set. Dialogs still center on the parent, but `width-ratio`, `height-ratio`,
+  `width`, and `height` can set their desired size before clamping. Missing
+  fields fall back to the top-level `floating` defaults. Fixed pixel `width`
+  and `height` are clamped to `1..65535` and override ratio size on the same
+  axis.
 - `default-floating-position x=<px> y=<px> relative-to="<anchor>"`: sets the
   initial position for tool, plain, and unparented floats. Anchors are
   `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top`, `bottom`,
@@ -189,9 +191,10 @@ window-rule {
   `y` are logical pixel offsets from that edge or corner and are clamped to
   `-65535..65535`. Parented dialogs still use parent anchoring for position,
   while rule/global floating size still applies.
-- Rule-level `floating` fields merge independently. A later matching rule can
-  override only `width-ratio` while keeping `x-ratio` and `y-ratio` from an
-  earlier broad rule.
+- Rule-level `floating` fields merge independently by axis. A later matching
+  rule can override only `width` while keeping `x-ratio` and `y-ratio` from an
+  earlier broad rule. Fixed pixel size and ratio size are mutually exclusive
+  on the same axis; the later field wins.
 - Rule-level `default-floating-position` merges atomically. A later matching
   rule replaces the earlier anchor and both offsets.
 - Rule-level opening sizing fields merge independently. A later matching rule

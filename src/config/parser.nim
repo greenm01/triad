@@ -676,12 +676,24 @@ proc loadConfig*(path: string): Config =
                     clampF32(float32(floatingChild.args[0].kFloat()), 0.0, 1.0)
                 elif floatingChild.name == "width-ratio" and floatingChild.args.len > 0:
                   rule.floating.widthRatioSet = true
+                  rule.floating.widthSet = false
                   rule.floating.widthRatio =
                     clampF32(float32(floatingChild.args[0].kFloat()), 0.05, 1.0)
+                elif floatingChild.name == "width" and floatingChild.args.len > 0:
+                  rule.floating.widthSet = true
+                  rule.floating.widthRatioSet = false
+                  rule.floating.width =
+                    clamp32(int32(floatingChild.args[0].kInt()), 1, 65535)
                 elif floatingChild.name == "height-ratio" and floatingChild.args.len > 0:
                   rule.floating.heightRatioSet = true
+                  rule.floating.heightSet = false
                   rule.floating.heightRatio =
                     clampF32(float32(floatingChild.args[0].kFloat()), 0.05, 1.0)
+                elif floatingChild.name == "height" and floatingChild.args.len > 0:
+                  rule.floating.heightSet = true
+                  rule.floating.heightRatioSet = false
+                  rule.floating.height =
+                    clamp32(int32(floatingChild.args[0].kInt()), 1, 65535)
           except CatchableError as e:
             warn "Ignoring invalid window rule field", field = child.name, error = e.msg
         result.windowRules.add(rule)
