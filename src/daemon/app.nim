@@ -64,11 +64,13 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       daemon.tickCursorShake()
 
     let previousOverview = daemon.runtimeState.model.overviewActive
+    let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let effects = syncRuntimeUpdate("message", msg)
     if previousOverview != daemon.runtimeState.model.overviewActive or
+        previousRecentWindows != daemon.runtimeState.model.recentWindowsActive or
         previousSessionLocked != daemon.runtimeState.model.sessionLocked or
         previousShortcutsInhibited !=
         daemon.runtimeState.model.keyboardShortcutsInhibited():

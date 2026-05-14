@@ -1,4 +1,4 @@
-import std/[options, tables, times]
+import std/[options, strutils, tables, times]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -177,12 +177,23 @@ proc bindingModeActive(daemon: TriadDaemon, mode: BindingMode): bool =
   of BindingMode.BindAlways:
     true
   of BindingMode.BindNormal:
-    not daemon.currentModel.overviewActive
+    not daemon.currentModel.overviewActive and
+      not daemon.currentModel.recentWindowsActive
   of BindingMode.BindOverview:
     daemon.currentModel.overviewActive
+  of BindingMode.BindRecent:
+    daemon.currentModel.recentWindowsActive
+
+proc isRecentAdvanceCommand(command: string): bool =
+  let parts = command.strip().splitWhitespace()
+  parts.len > 0 and parts[0] in ["recent-window-next", "recent-window-prev"]
 
 proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
-  if not daemon.bindingModeActive(binding.mode):
+  if binding.mode == BindingMode.BindRecent and
+      not daemon.currentModel.recentWindowsActive and
+      binding.command.isRecentAdvanceCommand() and not daemon.currentModel.overviewActive:
+    discard
+  elif not daemon.bindingModeActive(binding.mode):
     return false
   if daemon.currentModel.keyboardShortcutsInhibited() and
       not binding.bypassShortcutsInhibit:
@@ -403,6 +414,12 @@ proc onSeatPointerPosition(data: pointer, seat: ptr RiverSeatV1, x: int32, y: in
     return
   daemon.pointerPositionBySeat[seat.id()] = Rect(x: x, y: y, w: 0, h: 0)
   daemon[].applyCursorShakeMotion(seat, x, y)
+  if daemon[].currentModel.recentWindowsActive:
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlRecentWindowPointerMotion, recentPointerX: x, recentPointerY: y
+      )
+    )
   if daemon[].updateOverviewHotCornerState(seat.id(), x, y):
     daemon.enqueue(Msg(kind: MsgKind.CmdOpenOverview))
   trace "Seat pointer position", seatId = seat.id(), x = x, y = y

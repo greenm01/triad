@@ -40,7 +40,8 @@ external window manager.
 | Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
 | Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, inhibit policy, and hotkey overlay titles. |
-| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"` or `mode="overview"` | | Triad has fixed binding modes, not arbitrary named modes. Unified overview adds unmodified Escape/Return/arrow fallback bindings only when those overview key slots are not configured. |
+| Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"`, `mode="overview"`, or `mode="recent"` | | Triad has fixed binding modes, not arbitrary named modes. Unified overview and recent-windows add modal fallback bindings only when those key slots are free. |
+| Bindings | Recent-window switcher | MRU switcher actions | WM policy plus `river_xkb_bindings_v1` | `recent-windows`, `recent-window-*` | X | Niri-style recent window switching with debounce, open delay, scopes, app-id filter, and preview overlay. Defaults are Alt-only so `Super+Tab` remains available for Triad focus commands. |
 | Bindings | HJKL/arrow mirroring | Manual binds | WM policy | `mirror-hjkl-arrows` | X | Triad can generate arrow equivalents for HJKL binds. |
 | Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
 | Bindings | Eat next key | | `ensure_next_key_eaten` | `eat-next-key`, `cancel-eat-next-key` | X | Useful for modal shell interactions. |
@@ -311,6 +312,8 @@ KDL config nodes and fields:
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
 - `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`.
+- `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
+  `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.
 - `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,
   `min-width`, `min-height`.
@@ -328,7 +331,11 @@ Text IPC and bind commands:
   `focus-occupied-tag-right`, `focus-column-first`,
   `focus-column-last`, `focus-window-or-workspace-up`,
   `focus-window-or-workspace-down`, `focus-window`,
-  `focus-workspace`, `focus-tag`, `focus-shell-ui`.
+  `focus-workspace`, `focus-tag`, `focus-shell-ui`,
+  `recent-window-next`, `recent-window-prev`, `recent-window-confirm`,
+  `recent-window-cancel`, `recent-window-first`, `recent-window-last`,
+  `recent-window-scope`, `recent-window-cycle-scope`,
+  `recent-window-close-current`.
 - Window and session: `close-window`, `toggle-floating`,
   `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen`,
   `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize`,

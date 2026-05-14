@@ -284,6 +284,36 @@ type
     zoom*: float32
     hotCorners*: OverviewHotCornersConfig
 
+  RecentWindowDirection* {.pure.} = enum
+    Forward
+    Backward
+
+  RecentWindowScope* {.pure.} = enum
+    All
+    Workspace
+    Output
+
+  RecentWindowFilter* {.pure.} = enum
+    All
+    AppId
+
+  RecentWindowsHighlightConfig* = object
+    activeColor*: uint32
+    urgentColor*: uint32
+    padding*: int32
+    cornerRadius*: int32
+
+  RecentWindowsPreviewConfig* = object
+    maxHeight*: int32
+    maxScale*: float32
+
+  RecentWindowsConfig* = object
+    enabled*: bool
+    debounceMs*: int32
+    openDelayMs*: int32
+    highlight*: RecentWindowsHighlightConfig
+    previews*: RecentWindowsPreviewConfig
+
   FloatingConfig* = object
     xRatio*: float32
     yRatio*: float32
@@ -331,6 +361,7 @@ type
     BindAlways
     BindNormal
     BindOverview
+    BindRecent
 
   KeyBindingConfig* = object
     key*: string

@@ -75,6 +75,27 @@ workspace-rules {
 // Shells, bars, launchers, lock screens, startup services, and app rules are
 // intentionally configured outside this fallback.
 
+recent-windows {
+    debounce-ms 750
+    open-delay-ms 150
+    highlight {
+        active-color "#999999"
+        urgent-color "#ff9999"
+        padding 30
+        corner-radius 0
+    }
+    previews {
+        max-height 480
+        max-scale 0.5
+    }
+    binds {
+        bind "Alt+Tab" "recent-window-next"
+        bind "Alt+Shift+Tab" "recent-window-prev"
+        bind "Alt+grave" "recent-window-next --filter app-id"
+        bind "Alt+Shift+grave" "recent-window-prev --filter app-id"
+    }
+}
+
 bindings {
     bind "Super+Shift+Slash" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Super+q" "close-window"

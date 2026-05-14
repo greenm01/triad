@@ -160,7 +160,7 @@ proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
       MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
       MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById,
       MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdSelectWindow,
-      MsgKind.CmdFocusTag, MsgKind.CmdFocusWindowById:
+      MsgKind.CmdRecentWindowConfirm, MsgKind.CmdFocusTag, MsgKind.CmdFocusWindowById:
     true
   else:
     false
@@ -264,9 +264,9 @@ proc isFocusChangingCommand*(kind: MsgKind): bool =
     MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusColumnFirst,
     MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,
     MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdFocusTag,
-    MsgKind.CmdFocusWindowById, MsgKind.CmdSelectWindow, MsgKind.CmdToggleScratchpad,
-    MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
-    MsgKind.WlShellSurfaceInteraction,
+    MsgKind.CmdFocusWindowById, MsgKind.CmdSelectWindow, MsgKind.CmdRecentWindowConfirm,
+    MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
+    MsgKind.CmdRestoreScratchpad, MsgKind.WlShellSurfaceInteraction,
   }
 
 proc shouldCollapseAfterUpdate*(kind: MsgKind): bool =

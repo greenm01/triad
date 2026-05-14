@@ -74,6 +74,53 @@ proc parseScreenshotCommand(parts: seq[string], kind: ScreenshotKind): Option[Ms
     )
   )
 
+proc parseRecentScope(value: string): Option[RecentWindowScope] =
+  case value.toLowerAscii()
+  of "all":
+    some(RecentWindowScope.All)
+  of "workspace":
+    some(RecentWindowScope.Workspace)
+  of "output":
+    some(RecentWindowScope.Output)
+  else:
+    none(RecentWindowScope)
+
+proc parseRecentFilter(value: string): Option[RecentWindowFilter] =
+  case value.toLowerAscii()
+  of "all":
+    some(RecentWindowFilter.All)
+  of "app-id", "appid":
+    some(RecentWindowFilter.AppId)
+  else:
+    none(RecentWindowFilter)
+
+proc parseRecentAdvanceCommand(parts: seq[string], kind: MsgKind): Option[Msg] =
+  var msg = Msg(kind: kind)
+  var i = 1
+  while i < parts.len:
+    case parts[i]
+    of "--scope":
+      if i + 1 >= parts.len:
+        return none(Msg)
+      let scope = parseRecentScope(parts[i + 1])
+      if scope.isNone:
+        return none(Msg)
+      msg.recentScope = scope.get()
+      msg.recentScopeSet = true
+      inc i, 2
+    of "--filter":
+      if i + 1 >= parts.len:
+        return none(Msg)
+      let filter = parseRecentFilter(parts[i + 1])
+      if filter.isNone:
+        return none(Msg)
+      msg.recentFilter = filter.get()
+      msg.recentFilterSet = true
+      inc i, 2
+    else:
+      return none(Msg)
+  some(msg)
+
 proc parseTextCommand*(line: string): Option[Msg] =
   let parts = line.strip().splitWhitespace()
   if parts.len == 0:
@@ -166,6 +213,31 @@ proc parseTextCommand*(line: string): Option[Msg] =
     some(Msg(kind: MsgKind.CmdOpenOverview))
   of "close-overview":
     some(Msg(kind: MsgKind.CmdCloseOverview))
+  of "recent-window-next":
+    parseRecentAdvanceCommand(parts, MsgKind.CmdRecentWindowNext)
+  of "recent-window-prev":
+    parseRecentAdvanceCommand(parts, MsgKind.CmdRecentWindowPrev)
+  of "recent-window-confirm":
+    some(Msg(kind: MsgKind.CmdRecentWindowConfirm))
+  of "recent-window-cancel":
+    some(Msg(kind: MsgKind.CmdRecentWindowCancel))
+  of "recent-window-first":
+    some(Msg(kind: MsgKind.CmdRecentWindowFirst))
+  of "recent-window-last":
+    some(Msg(kind: MsgKind.CmdRecentWindowLast))
+  of "recent-window-scope":
+    if parts.len == 2:
+      let scope = parseRecentScope(parts[1])
+      if scope.isSome:
+        some(Msg(kind: MsgKind.CmdRecentWindowScope, recentTargetScope: scope.get()))
+      else:
+        none(Msg)
+    else:
+      none(Msg)
+  of "recent-window-cycle-scope":
+    some(Msg(kind: MsgKind.CmdRecentWindowCycleScope))
+  of "recent-window-close-current":
+    some(Msg(kind: MsgKind.CmdRecentWindowCloseCurrent))
   of "toggle-floating":
     some(Msg(kind: MsgKind.CmdToggleFloating))
   of "fullscreen-window", "toggle-fullscreen":

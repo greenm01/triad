@@ -1,7 +1,7 @@
 import std/[options, sets, tables]
 import ../state/entity_manager
 import ../types/[core, model]
-from ../types/runtime_values import PointerOpKind
+from ../types/runtime_values import PointerOpKind, RecentWindowFilter, RecentWindowScope
 
 proc setOverviewActive*(model: var Model, active: bool): bool =
   if model.overviewActive == active:
@@ -23,6 +23,46 @@ proc setOverviewSelection*(model: var Model, winId: WindowId): bool =
 
 proc clearOverviewSelection*(model: var Model): bool =
   model.setOverviewSelection(NullWindowId)
+
+proc setRecentWindowsActive*(model: var Model, active: bool): bool =
+  if model.recentWindowsActive == active:
+    return false
+  model.recentWindowsActive = active
+  true
+
+proc setRecentWindowsSelected*(model: var Model, winId: WindowId): bool =
+  if model.recentWindowsSelectedWindow == winId:
+    return false
+  model.recentWindowsSelectedWindow = winId
+  true
+
+proc closeRecentWindows*(model: var Model): bool =
+  result = model.setRecentWindowsActive(false)
+  if model.recentWindowsSelectedWindow != NullWindowId:
+    model.recentWindowsSelectedWindow = NullWindowId
+    result = true
+  if model.recentWindowsPointerSelectedWindow != NullWindowId:
+    model.recentWindowsPointerSelectedWindow = NullWindowId
+    result = true
+  if model.recentWindowsOpenElapsedMs != 0:
+    model.recentWindowsOpenElapsedMs = 0
+    result = true
+
+proc setRecentWindowsScope*(model: var Model, scope: RecentWindowScope): bool =
+  if model.recentWindowsScope == scope:
+    return false
+  model.recentWindowsPreviousScope = model.recentWindowsScope
+  model.recentWindowsScope = scope
+  true
+
+proc setRecentWindowsFilter*(
+    model: var Model, filter: RecentWindowFilter, appId = ""
+): bool =
+  if model.recentWindowsFilter == filter and model.recentWindowsAppIdFilter == appId:
+    return false
+  model.recentWindowsFilter = filter
+  model.recentWindowsAppIdFilter = appId
+  true
 
 proc setOverviewScrollOffset*(model: var Model, offset: float32): bool =
   if model.overviewScrollOffset == offset:

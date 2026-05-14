@@ -4,6 +4,30 @@ import ../types/[core, model]
 
 const MaxHistoryEntries = 32
 
+proc commitRecentFocus*(model: var Model, winId: WindowId): bool =
+  if winId == NullWindowId or model.windows.entity(winId).isNone:
+    return false
+  model.recentWindowHistory.keepIf(
+    proc(id: WindowId): bool =
+      id != winId
+  )
+  model.recentWindowHistory.add(winId)
+  while model.recentWindowHistory.len > MaxHistoryEntries:
+    model.recentWindowHistory.delete(0)
+  if model.pendingRecentFocusWindow == winId:
+    model.pendingRecentFocusWindow = NullWindowId
+    model.pendingRecentFocusElapsedMs = 0
+  true
+
+proc scheduleRecentFocus(model: var Model, winId: WindowId): bool =
+  if winId == NullWindowId or model.windows.entity(winId).isNone:
+    return false
+  if model.recentWindowHistory.find(winId) == -1 or model.recentWindows.debounceMs <= 0:
+    return model.commitRecentFocus(winId)
+  model.pendingRecentFocusWindow = winId
+  model.pendingRecentFocusElapsedMs = 0
+  true
+
 proc recordFocus*(model: var Model, winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
@@ -14,6 +38,7 @@ proc recordFocus*(model: var Model, winId: WindowId): bool =
   model.focusHistory.add(winId)
   while model.focusHistory.len > MaxHistoryEntries:
     model.focusHistory.delete(0)
+  discard model.scheduleRecentFocus(winId)
   true
 
 proc recordWorkspace*(model: var Model, tagId: TagId): bool =
@@ -30,8 +55,11 @@ proc recordWorkspace*(model: var Model, tagId: TagId): bool =
 
 proc replaceFocusHistory*(model: var Model, history: seq[WindowId]): bool =
   model.focusHistory = history
+  model.recentWindowHistory = history
   while model.focusHistory.len > MaxHistoryEntries:
     model.focusHistory.delete(0)
+  while model.recentWindowHistory.len > MaxHistoryEntries:
+    model.recentWindowHistory.delete(0)
   true
 
 proc replaceWorkspaceHistory*(model: var Model, history: seq[TagId]): bool =
@@ -46,6 +74,13 @@ proc removeFocusHistoryRef*(model: var Model, winId: WindowId): bool =
     proc(id: WindowId): bool =
       id != winId
   )
+  model.recentWindowHistory.keepIf(
+    proc(id: WindowId): bool =
+      id != winId
+  )
+  if model.pendingRecentFocusWindow == winId:
+    model.pendingRecentFocusWindow = NullWindowId
+    model.pendingRecentFocusElapsedMs = 0
   model.focusHistory.len != before
 
 proc removeWorkspaceHistoryRef*(model: var Model, tagId: TagId): bool =

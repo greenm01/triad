@@ -129,6 +129,14 @@ proc actionToMsg(
     some(Msg(kind: MsgKind.CmdOpenOverview))
   of "close-overview":
     some(Msg(kind: MsgKind.CmdCloseOverview))
+  of "recent-window-next":
+    some(Msg(kind: MsgKind.CmdRecentWindowNext))
+  of "recent-window-prev":
+    some(Msg(kind: MsgKind.CmdRecentWindowPrev))
+  of "recent-window-confirm":
+    some(Msg(kind: MsgKind.CmdRecentWindowConfirm))
+  of "recent-window-cancel":
+    some(Msg(kind: MsgKind.CmdRecentWindowCancel))
   of "toggle-scratchpad":
     some(Msg(kind: MsgKind.CmdToggleScratchpad))
   of "restore-scratchpad":

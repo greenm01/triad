@@ -4,11 +4,11 @@ import wayland/native/client
 import protocols/river/client as river
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
-import ../systems/hotkey_overlay
+import ../systems/[hotkey_overlay, recent_windows]
 import ../types/runtime_values
 import
-  hotkey_overlay_render, overview_overlay_render, protocol_surfaces, state,
-  wayland_helpers
+  hotkey_overlay_render, overview_overlay_render, protocol_surfaces,
+  recent_windows_overlay_render, state, wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -22,6 +22,9 @@ template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
 
 template hotkeyOverlaySurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.hotkeyOverlaySurfaceId
+
+template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
 
 template windowDecorationAbove(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.windowDecorationAbove
@@ -50,6 +53,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
     of ProtocolSurfaceKind.PskShell:
       0x3aa5ff00'u32 or alpha
     of ProtocolSurfaceKind.PskHotkeyOverlay:
+      0x11111100'u32 or alpha
+    of ProtocolSurfaceKind.PskRecentWindows:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskDecorationAbove:
       0xffcc0000'u32 or alpha
@@ -201,6 +206,31 @@ proc ensureHotkeyOverlaySurface*(daemon: var TriadDaemon) =
   debug "Created hotkey overlay shell surface",
     shellSurfaceId = daemon.hotkeyOverlaySurfaceId
 
+proc ensureRecentWindowsSurface*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    return
+  if daemon.recentWindowsSurfaceId != 0 and
+      daemon.surfaceTable.hasKey(daemon.recentWindowsSurfaceId):
+    return
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskRecentWindows)
+  if surf.surface == nil:
+    warn "Unable to create recent-windows wl_surface"
+    return
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create recent-windows shell surface"
+    daemon.destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  daemon.recentWindowsSurfaceId = surf.shellSurface.id()
+  daemon.shellSurfacePointers[daemon.recentWindowsSurfaceId] = surf.shellSurface
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[daemon.recentWindowsSurfaceId] = surf
+  debug "Created recent-windows shell surface",
+    shellSurfaceId = daemon.recentWindowsSurfaceId
+
 proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
   if daemon.ownedShellSurfaceId == 0 or
       not daemon.surfaceTable.hasKey(daemon.ownedShellSurfaceId):
@@ -287,6 +317,43 @@ proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
     surf.node.placeTop()
   daemon.surfaceTable[daemon.hotkeyOverlaySurfaceId] = surf
 
+proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
+  if not daemon.currentModel.recentWindowsVisible():
+    if daemon.recentWindowsSurfaceId != 0 and
+        daemon.surfaceTable.hasKey(daemon.recentWindowsSurfaceId):
+      var surf = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
+      surf.inputW = 0
+      surf.inputH = 0
+      let buffer = daemon.createProtocolBuffer(ProtocolSurfaceKind.PskRecentWindows)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, 1, 1)
+      if surf.node != nil:
+        surf.node.placeBottom()
+      daemon.commitProtocolSurface(surf)
+      daemon.surfaceTable[daemon.recentWindowsSurfaceId] = surf
+    return
+
+  daemon.ensureRecentWindowsSurface()
+  if daemon.recentWindowsSurfaceId == 0 or
+      not daemon.surfaceTable.hasKey(daemon.recentWindowsSurfaceId):
+    return
+
+  let rendered = renderRecentWindowsOverlayBuffer(daemon.currentModel, screen)
+  var surf = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
+  let buffer = daemon.createArgbShmBuffer(rendered)
+  if buffer != nil:
+    surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+  else:
+    warn "Recent-windows overlay buffer unavailable"
+    return
+  surf.inputW = surf.bufferW
+  surf.inputH = surf.bufferH
+  daemon.commitProtocolSurface(surf)
+  if surf.node != nil:
+    surf.node.setPosition(screen.x, screen.y)
+    surf.node.placeTop()
+  daemon.surfaceTable[daemon.recentWindowsSurfaceId] = surf
+
 proc ensureDecorationSurface*(
     daemon: var TriadDaemon, windowId: WindowId, kind: ProtocolSurfaceKind
 ): uint32 =
@@ -354,5 +421,6 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
     daemon.destroyProtocolSurface(surf)
   daemon.ownedShellSurfaceId = 0
   daemon.hotkeyOverlaySurfaceId = 0
+  daemon.recentWindowsSurfaceId = 0
   daemon.windowDecorationAbove.clear()
   daemon.windowDecorationBelow.clear()

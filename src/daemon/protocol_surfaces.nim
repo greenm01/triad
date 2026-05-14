@@ -7,6 +7,7 @@ type
   ProtocolSurfaceKind* {.pure.} = enum
     PskShell
     PskHotkeyOverlay
+    PskRecentWindows
     PskDecorationAbove
     PskDecorationBelow
 
@@ -31,5 +32,6 @@ type
     surfaces*: Table[uint32, OwnedProtocolSurface]
     ownedShellSurfaceId*: uint32
     hotkeyOverlaySurfaceId*: uint32
+    recentWindowsSurfaceId*: uint32
     windowDecorationAbove*: Table[WindowId, uint32]
     windowDecorationBelow*: Table[WindowId, uint32]

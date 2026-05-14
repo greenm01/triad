@@ -1,9 +1,9 @@
 import ../core/[effects, msg]
 import ../state/engine
-from ../types/runtime_values import Direction
+from ../types/runtime_values import Direction, RecentWindowDirection
 import
-  dialog_focus, focus, output_navigation, placement, runtime, scratchpad,
-  update_effects, window_state, window_rules, workspaces
+  dialog_focus, focus, output_navigation, placement, recent_windows, runtime,
+  scratchpad, update_effects, window_state, window_rules, workspaces
 
 proc closeOverview(model: var Model): bool =
   result = model.setOverviewActive(false)
@@ -177,6 +177,40 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.closeOverview()
     if result.dirty:
       result.effects.add(broadcastOverview(false))
+  of MsgKind.CmdRecentWindowNext:
+    result.dirty = model.openOrAdvanceRecentWindow(
+      RecentWindowDirection.Forward, msg.recentScope, msg.recentScopeSet,
+      msg.recentFilter, msg.recentFilterSet,
+    )
+  of MsgKind.CmdRecentWindowPrev:
+    result.dirty = model.openOrAdvanceRecentWindow(
+      RecentWindowDirection.Backward, msg.recentScope, msg.recentScopeSet,
+      msg.recentFilter, msg.recentFilterSet,
+    )
+  of MsgKind.CmdRecentWindowConfirm:
+    let selected = model.confirmedRecentWindow()
+    result.dirty = selected != NullWindowId
+    if selected != NullWindowId:
+      result.dirty = model.focusWindow(selected) or result.dirty
+  of MsgKind.CmdRecentWindowCancel:
+    result.dirty = model.cancelRecentWindows()
+  of MsgKind.CmdRecentWindowFirst:
+    result.dirty = model.selectFirstRecentWindow()
+  of MsgKind.CmdRecentWindowLast:
+    result.dirty = model.selectLastRecentWindow()
+  of MsgKind.CmdRecentWindowScope:
+    result.dirty = model.setRecentWindowScopeCommand(msg.recentTargetScope)
+  of MsgKind.CmdRecentWindowCycleScope:
+    result.dirty = model.cycleRecentWindowScope()
+  of MsgKind.CmdRecentWindowCloseCurrent:
+    let selected = model.closeCurrentRecentWindow()
+    if selected != NullWindowId:
+      result.effects.add(
+        Effect(
+          kind: EffectKind.EffCloseWindow, closeId: model.runtimeWindowId(selected)
+        )
+      )
+      result.dirty = true
   of MsgKind.CmdToggleFloating:
     result.dirty = model.toggleFloatingFocused()
   of MsgKind.CmdMoveFloating:
@@ -225,6 +259,7 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdTick:
     result.dirty = model.tickAnimations()
     result.dirty = model.tickOverviewPointerHold() or result.dirty
+    result.dirty = model.tickRecentWindows() or result.dirty
     result.dirty = model.flushPendingDialogFocus() or result.dirty
   of MsgKind.CmdExpireStartupWindowRules:
     result.dirty = model.expireStartupWindowRules()

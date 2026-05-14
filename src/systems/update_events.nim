@@ -4,6 +4,7 @@ import ../state/engine
 from ../types/runtime_values import PointerOpKind
 import focus
 import outputs
+import recent_windows
 import runtime
 import update_effects
 import window_lifecycle
@@ -154,6 +155,11 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       result.dirty = model.setHotkeyOverlayOpen(false)
   of MsgKind.WlModifiersChanged:
     discard model.setActiveModifiers(msg.newModifiers)
+    if model.recentWindowsActive and msg.newModifiers == 0:
+      let selected = model.confirmedRecentWindow()
+      result.dirty = selected != NullWindowId
+      if selected != NullWindowId:
+        result.dirty = model.focusWindow(selected) or result.dirty
   of MsgKind.WlLayerFocusExclusive:
     result.dirty = model.setLayerFocusExclusive(true)
   of MsgKind.WlLayerFocusNonExclusive, MsgKind.WlLayerFocusNone:
@@ -202,6 +208,8 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       msg.overviewWheelX, msg.overviewWheelY, msg.overviewWheelHorizontal,
       msg.overviewWheelVertical,
     )
+  of MsgKind.WlRecentWindowPointerMotion:
+    result.dirty = model.selectRecentWindowAt(msg.recentPointerX, msg.recentPointerY)
   of MsgKind.WlPointerDelta:
     result.dirty = model.applyPointerDelta(msg.dx, msg.dy)
   of MsgKind.WlPointerRelease:

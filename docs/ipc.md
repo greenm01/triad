@@ -28,6 +28,18 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `toggle-overview`: Activates or deactivates the unified workspace-strip
     overview for every layout.
 *   `open-overview`, `close-overview`: Idempotently opens or closes the overview.
+*   `recent-window-next [--scope all|workspace|output] [--filter all|app-id]`:
+    Opens or advances the recent-windows switcher toward older MRU entries.
+*   `recent-window-prev [--scope all|workspace|output] [--filter all|app-id]`:
+    Opens or advances the recent-windows switcher toward newer MRU entries.
+*   `recent-window-confirm`, `recent-window-cancel`: Closes the switcher and
+    either focuses the selected window or leaves focus unchanged.
+*   `recent-window-first`, `recent-window-last`: Jumps to the first or last
+    visible switcher candidate.
+*   `recent-window-scope all|workspace|output`,
+    `recent-window-cycle-scope`: Changes the active switcher scope.
+*   `recent-window-close-current`: Requests close for the selected switcher
+    window without leaving the switcher.
 *   `toggle-scratchpad`: Shows the most recent scratchpad window as a centered overlay, or hides it.
 *   `toggle-named-scratchpad <name>`: Shows or hides a named scratchpad; if the name is new, the focused window is assigned to it.
 *   `restore-scratchpad`: Moves the visible or most recent scratchpad window back to the active tag.

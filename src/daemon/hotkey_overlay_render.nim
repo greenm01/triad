@@ -120,7 +120,7 @@ proc drawChar(
       if bit == '1':
         buf.fillRect(x + int32(gx) * scale, y + int32(gy) * scale, scale, scale, color)
 
-proc drawText(
+proc drawText*(
     buf: var PixelBuffer,
     x, y, maxW: int32,
     text: string,

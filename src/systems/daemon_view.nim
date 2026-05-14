@@ -2,6 +2,7 @@ import std/options
 import ../state/engine
 from ../types/runtime_values import nil
 import presentation_policy
+import recent_windows
 
 proc runtimeWindowId*(model: Model, winId: WindowId): runtime_values.WindowId =
   if winId == NullWindowId:
@@ -46,6 +47,8 @@ proc activeFocusRiverId*(model: Model): runtime_values.WindowId =
   0'u32
 
 proc highlightRiverId*(model: Model): runtime_values.WindowId =
+  if model.recentWindowsActive:
+    return model.riverIdForWindow(model.selectedRecentWindow())
   if model.overviewActive:
     return model.riverIdForWindow(model.selectedOverviewWindow())
   model.activeFocusRiverId()

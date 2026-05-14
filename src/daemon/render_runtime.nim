@@ -1,7 +1,7 @@
 import std/[algorithm, options, tables]
 import protocols/river/client as river
 import ../core/render_visibility
-import ../systems/[daemon_view, layout_projection, window_rules]
+import ../systems/[daemon_view, layout_projection, recent_windows, window_rules]
 import ../types/[model, runtime_values]
 import ../utils/overview_hit_test
 import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
@@ -130,7 +130,7 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[WindowId] =
 
 proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
   let highlighted =
-    if daemon.currentModel.overviewActive:
+    if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
       daemon.currentModel.highlightRiverId()
     else:
       0'u32
@@ -154,7 +154,7 @@ proc overviewWindowAtPointer*(daemon: TriadDaemon, seat: ptr RiverSeatV1): Windo
   overviewHitTest(daemon.orderedDesiredInstructions(), point.x, point.y)
 
 proc placementHonorsMinimums(daemon: TriadDaemon, id: WindowId): bool =
-  if daemon.currentModel.overviewActive:
+  if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
     return false
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
   if winOpt.isNone:
@@ -170,7 +170,8 @@ proc placementNeedsCellClip(daemon: TriadDaemon, id: WindowId, geom: Rect): bool
   if winOpt.isNone:
     return false
   let win = winOpt.get()
-  if not daemon.currentModel.overviewActive:
+  if not daemon.currentModel.overviewActive and
+      not daemon.currentModel.recentWindowsActive:
     let scratchpad =
       daemon.currentModel.isScratchpadVisible and
       daemon.currentModel.visibleScratchpadRiverId() == id
@@ -312,6 +313,10 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       shell.node.setPosition(screen.x, screen.y)
       if daemon.currentModel.overviewActive:
         shell.node.placeTop()
+      elif daemon.currentModel.recentWindowsVisible():
+        shell.node.placeBottom()
+        if firstNode != nil:
+          shell.node.placeBelow(firstNode)
       else:
         shell.node.placeBottom()
         if firstNode != nil:
@@ -319,3 +324,4 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     daemon.surfaceTable[daemon.ownedShellSurfaceId] = shell
 
   daemon.syncHotkeyOverlaySurface(screen)
+  daemon.syncRecentWindowsSurface(screen)

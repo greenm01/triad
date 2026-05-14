@@ -111,6 +111,23 @@ overview {
     bottom-right
   }
 }
+recent-windows {
+  debounce-ms 500
+  open-delay-ms 90
+  highlight {
+    active-color "#101112"
+    urgent-color "#202122"
+    padding 18
+    corner-radius 4
+  }
+  previews {
+    max-height 360
+    max-scale 0.4
+  }
+  binds {
+    bind "Alt+Tab" "recent-window-next --scope workspace"
+  }
+}
 cursor {
   theme "Bibata"
   size 32
@@ -252,6 +269,17 @@ bindings {
     check not config.overview.hotCorners.topRight
     check not config.overview.hotCorners.bottomLeft
     check config.overview.hotCorners.bottomRight
+    check config.recentWindows.enabled
+    check config.recentWindows.debounceMs == 500
+    check config.recentWindows.openDelayMs == 90
+    check config.recentWindows.highlight.activeColor == 0x101112ff'u32
+    check config.recentWindows.highlight.urgentColor == 0x202122ff'u32
+    check config.recentWindows.highlight.padding == 18
+    check config.recentWindows.highlight.cornerRadius == 4
+    check config.recentWindows.previews.maxHeight == 360
+    check config.recentWindows.previews.maxScale == 0.4'f32
+    check config.commandForBinding("Tab", Alt, BindingMode.BindRecent) ==
+      "recent-window-next --scope workspace"
     check config.cursor.theme == "Bibata"
     check config.cursor.shakeToFind
     check config.presentationMode == PresentationMode.PresentationAsync
@@ -411,6 +439,11 @@ cursor {
     check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
     check config.msgKindForBinding("Slash", Super + Shift) ==
       MsgKind.CmdToggleHotkeyOverlay
+    check config.msgKindForBinding("Tab", Alt, BindingMode.BindRecent) ==
+      MsgKind.CmdRecentWindowNext
+    check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
+      MsgKind.CmdRecentWindowPrev
+    check config.commandForBinding("Tab", Super) == "focus-last"
     for key in ["c", "v", "x"]:
       let bindings =
         config.keyBindings.filterIt(it.key == key and it.modifiers == Super)

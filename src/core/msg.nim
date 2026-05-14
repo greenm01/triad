@@ -51,6 +51,7 @@ type
     WlOverviewPointerDragRequested
     WlOverviewPointerScrollRequested
     WlOverviewWheel
+    WlRecentWindowPointerMotion
     WlPointerDelta
     WlPointerRelease
     WlShellSurfaceInteraction
@@ -115,6 +116,15 @@ type
     CmdToggleOverview
     CmdOpenOverview
     CmdCloseOverview
+    CmdRecentWindowNext
+    CmdRecentWindowPrev
+    CmdRecentWindowConfirm
+    CmdRecentWindowCancel
+    CmdRecentWindowFirst
+    CmdRecentWindowLast
+    CmdRecentWindowScope
+    CmdRecentWindowCycleScope
+    CmdRecentWindowCloseCurrent
     CmdToggleFloating
     CmdToggleFullscreen
     CmdToggleFullscreenById
@@ -253,6 +263,8 @@ type
     of MsgKind.WlOverviewWheel:
       overviewWheelX*, overviewWheelY*: int32
       overviewWheelHorizontal*, overviewWheelVertical*: int32
+    of MsgKind.WlRecentWindowPointerMotion:
+      recentPointerX*, recentPointerY*: int32
     of MsgKind.WlPointerDelta:
       dx*, dy*: int32
     of MsgKind.WlShellSurfaceInteraction:
@@ -267,6 +279,13 @@ type
       layoutTargetTag*: uint32
     of MsgKind.CmdFocusDirection:
       direction*: Direction
+    of MsgKind.CmdRecentWindowNext, MsgKind.CmdRecentWindowPrev:
+      recentScope*: RecentWindowScope
+      recentScopeSet*: bool
+      recentFilter*: RecentWindowFilter
+      recentFilterSet*: bool
+    of MsgKind.CmdRecentWindowScope:
+      recentTargetScope*: RecentWindowScope
     of MsgKind.CmdMoveToTag:
       targetTag*: uint32
     of MsgKind.CmdSwapWindowToTag:

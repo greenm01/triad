@@ -16,6 +16,14 @@ const
   DefaultOverviewInnerGapMultiplier* = 2.0'f32
   DefaultOverviewZoom* = 0.5'f32
   DefaultOverviewHotCornerSize* = 10'i32
+  DefaultRecentWindowsDebounceMs* = 750'i32
+  DefaultRecentWindowsOpenDelayMs* = 150'i32
+  DefaultRecentWindowsHighlightActiveColor* = 0x999999ff'u32
+  DefaultRecentWindowsHighlightUrgentColor* = 0xff9999ff'u32
+  DefaultRecentWindowsHighlightPadding* = 30'i32
+  DefaultRecentWindowsHighlightCornerRadius* = 0'i32
+  DefaultRecentWindowsPreviewMaxHeight* = 480'i32
+  DefaultRecentWindowsPreviewMaxScale* = 0.5'f32
   DefaultFloatingXRatio* = 0.25'f32
   DefaultFloatingYRatio* = 0.25'f32
   DefaultFloatingWidthRatio* = 0.5'f32

@@ -5,9 +5,10 @@ from core import
 from runtime_values import
   CursorConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
-  ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
-  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter, RecentWindowScope,
+  RecentWindowsConfig, Rect, ScreenshotConfig, TerminalConfig, WindowRuleBorderConfig,
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -375,6 +376,14 @@ type
     hotkeyOverlayOpen*: bool
     hotkeyOverlayShownOnce*: bool
     overviewSelectedWindow*: WindowId
+    recentWindowsActive*: bool
+    recentWindowsOpenElapsedMs*: int32
+    recentWindowsScope*: RecentWindowScope
+    recentWindowsPreviousScope*: RecentWindowScope
+    recentWindowsFilter*: RecentWindowFilter
+    recentWindowsAppIdFilter*: string
+    recentWindowsSelectedWindow*: WindowId
+    recentWindowsPointerSelectedWindow*: WindowId
     overviewViewportSnapshot*: Table[TagId, ViewportState]
     viewportRetargetTags*: HashSet[TagId]
     viewportSnapTags*: HashSet[TagId]
@@ -421,6 +430,7 @@ type
     screenshot*: ScreenshotConfig
     cursor*: CursorConfig
     hotkeyOverlay*: HotkeyOverlayConfig
+    recentWindows*: RecentWindowsConfig
     presentationMode*: PresentationMode
     protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]
@@ -448,5 +458,8 @@ type
     restoreSwallowing*: Table[ExternalWindowId, ExternalWindowId]
     layoutCycle*: seq[LayoutMode]
     focusHistory*: seq[WindowId]
+    recentWindowHistory*: seq[WindowId]
+    pendingRecentFocusWindow*: WindowId
+    pendingRecentFocusElapsedMs*: int32
     workspaceHistory*: seq[TagId]
     nextGroupId*: uint32

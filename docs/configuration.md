@@ -409,6 +409,50 @@ workspace-rules {
   reconnects restore the workspace to that output when the target reappears.
 - Workspace rules beyond `default-count` are valid dynamic workspace templates.
 
+## Recent Windows
+
+Triad includes a niri-style MRU switcher with debounced focus history and a
+native preview overlay:
+
+```kdl
+recent-windows {
+  debounce-ms 750
+  open-delay-ms 150
+  highlight {
+    active-color "#999999"
+    urgent-color "#ff9999"
+    padding 30
+    corner-radius 0
+  }
+  previews {
+    max-height 480
+    max-scale 0.5
+  }
+  binds {
+    bind "Alt+Tab" "recent-window-next"
+    bind "Alt+Shift+Tab" "recent-window-prev"
+    bind "Alt+grave" "recent-window-next --filter app-id"
+    bind "Alt+Shift+grave" "recent-window-prev --filter app-id"
+  }
+}
+```
+
+- `off`: disables the feature and prevents default recent-window binds.
+- `debounce-ms <ms>`: waits before committing a focused window to the MRU list.
+  Newly seen windows are recorded immediately. The default is `750`.
+- `open-delay-ms <ms>`: delays drawing the switcher so a quick tap can switch
+  without flashing the overlay. The default is `150`.
+- `highlight`: configures the selected preview border. `urgent-color` is parsed
+  for compatibility, but Triad does not expose urgency state yet.
+- `previews`: limits preview size by maximum height and scale.
+- `binds`: replaces the default Alt-only recent-window binds. Recent binds are
+  added only when the physical key slot is not already used by normal bindings.
+
+While open, releasing all modifiers confirms the selected window. `Escape`
+cancels, `Return` confirms, Left/Right move selection, Home/End jump to the
+edges, `a`/`w`/`o` select all/workspace/output scope, `s` cycles scope, and `q`
+closes the selected window.
+
 ## Hotkey Overlay
 
 Triad can render a native keyboard helper popup from the active config:

@@ -7,7 +7,7 @@ import ../src/state/engine
 import
   ../src/systems/[
     hotkey_overlay, layout_projection, overview_geometry, popup_tree, runtime_facade,
-    update, window_lifecycle, window_rules, workspaces,
+    recent_windows, update, window_lifecycle, window_rules, workspaces,
   ]
 import ../src/types/model
 import ../src/types/runtime_values except WindowId
@@ -17,9 +17,9 @@ import tag_semantics_checks
 export
   asyncdispatch, json, options, os, sequtils, strutils, tables, unittest, apply, parser,
   effects, msg, render_visibility, restore_state, triad_state, render_runtime, engine,
-  hotkey_overlay, layout_projection, overview_geometry, popup_tree, runtime_facade,
-  update, window_lifecycle, window_rules, workspaces, model, overview_hit_test,
-  process_tree, screenshot_capture, tag_semantics_checks
+  hotkey_overlay, layout_projection, overview_geometry, popup_tree, recent_windows,
+  runtime_facade, update, window_lifecycle, window_rules, workspaces, model,
+  overview_hit_test, process_tree, screenshot_capture, tag_semantics_checks
 export runtime_values except WindowId
 
 proc initTriadDaemon*(): auto =

@@ -261,6 +261,21 @@ proc applyConfig*(model: var Model, config: Config) =
   model.scratchpadHeightRatio = configClampF32(config.scratchpad.heightRatio, 0.1, 1.0)
   model.cursor = config.cursor
   model.hotkeyOverlay = config.hotkeyOverlay
+  model.recentWindows = config.recentWindows
+  model.recentWindows.debounceMs =
+    configClamp32(model.recentWindows.debounceMs, 0, 60000)
+  model.recentWindows.openDelayMs =
+    configClamp32(model.recentWindows.openDelayMs, 0, 60000)
+  model.recentWindows.highlight.padding =
+    configClamp32(model.recentWindows.highlight.padding, 0, 65535)
+  model.recentWindows.highlight.cornerRadius =
+    configClamp32(model.recentWindows.highlight.cornerRadius, 0, 65535)
+  model.recentWindows.previews.maxHeight =
+    configClamp32(model.recentWindows.previews.maxHeight, 1, 65535)
+  model.recentWindows.previews.maxScale =
+    configClampF32(model.recentWindows.previews.maxScale, 0.01, 1.0)
+  if not model.recentWindows.enabled:
+    discard model.closeRecentWindows()
   model.presentationMode = config.presentationMode
   model.allowExitSession = config.allowExitSession
   model.protocolSurfaces = config.protocolSurfaces

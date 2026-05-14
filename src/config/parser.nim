@@ -1,4 +1,4 @@
-import std/[os, re, strutils]
+import std/[options, os, re, strutils]
 import chronicles, kdl
 import defaults
 import ../types/runtime_values
@@ -14,6 +14,7 @@ type
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig
     overview*: OverviewConfig
+    recentWindows*: RecentWindowsConfig
     floating*: FloatingConfig
     screenLock*: ScreenLockConfig
     windowMenu*: WindowMenuConfig
@@ -340,6 +341,7 @@ proc parseBindingMode(value: string): BindingMode =
   case value.normalize()
   of "normal": BindingMode.BindNormal
   of "overview": BindingMode.BindOverview
+  of "recent": BindingMode.BindRecent
   else: BindingMode.BindAlways
 
 proc mirroredArrowKey(key: string): string =
@@ -357,6 +359,15 @@ proc sameKeySlot(a, b: KeyBindingConfig): bool =
 proc hasKeySlot(bindings: seq[KeyBindingConfig], candidate: KeyBindingConfig): bool =
   for binding in bindings:
     if binding.sameKeySlot(candidate):
+      return true
+  false
+
+proc hasPhysicalKeySlot(
+    bindings: seq[KeyBindingConfig], candidate: KeyBindingConfig
+): bool =
+  for binding in bindings:
+    if binding.key.toLowerAscii() == candidate.key.toLowerAscii() and
+        binding.modifiers == candidate.modifiers:
       return true
   false
 
@@ -380,6 +391,112 @@ proc hotkeyOverlayFallbackBinding(): KeyBindingConfig =
     hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,
     hotkeyOverlayTitle: "Show Important Hotkeys",
   )
+
+proc defaultRecentWindowBindings*(): seq[KeyBindingConfig] =
+  @[
+    KeyBindingConfig(
+      key: "Tab",
+      modifiers: 8'u32,
+      command: "recent-window-next",
+      mode: BindingMode.BindRecent,
+    ),
+    KeyBindingConfig(
+      key: "Tab",
+      modifiers: 9'u32,
+      command: "recent-window-prev",
+      mode: BindingMode.BindRecent,
+    ),
+    KeyBindingConfig(
+      key: "grave",
+      modifiers: 8'u32,
+      command: "recent-window-next --filter app-id",
+      mode: BindingMode.BindRecent,
+    ),
+    KeyBindingConfig(
+      key: "grave",
+      modifiers: 9'u32,
+      command: "recent-window-prev --filter app-id",
+      mode: BindingMode.BindRecent,
+    ),
+  ]
+
+proc recentWindowFallbackBindings*(): seq[KeyBindingConfig] =
+  @[
+    KeyBindingConfig(
+      key: "Escape", command: "recent-window-cancel", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "Return", command: "recent-window-confirm", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "Left", command: "recent-window-prev", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "Right", command: "recent-window-next", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "Home", command: "recent-window-first", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "End", command: "recent-window-last", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "a", command: "recent-window-scope all", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "w", command: "recent-window-scope workspace", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "o", command: "recent-window-scope output", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "s", command: "recent-window-cycle-scope", mode: BindingMode.BindRecent
+    ),
+    KeyBindingConfig(
+      key: "q", command: "recent-window-close-current", mode: BindingMode.BindRecent
+    ),
+  ]
+
+proc isRecentWindowCommand(command: string): bool =
+  let parts = command.strip().splitWhitespace()
+  parts.len > 0 and parts[0].startsWith("recent-window-")
+
+proc addRecentWindowBindings(
+    bindings: var seq[KeyBindingConfig], recent: seq[KeyBindingConfig]
+) =
+  for binding in recent:
+    if not bindings.hasPhysicalKeySlot(binding):
+      bindings.add(binding)
+  for binding in recentWindowFallbackBindings():
+    if not bindings.hasPhysicalKeySlot(binding):
+      bindings.add(binding)
+
+proc keyBindingFromNode(
+    node: KdlNode, defaultMode = BindingMode.BindAlways
+): Option[KeyBindingConfig] =
+  if node.args.len < 2:
+    return none(KeyBindingConfig)
+  let spec = parseKeySpec(node.args[0].kString())
+  if spec.key.len == 0:
+    return none(KeyBindingConfig)
+  var binding = KeyBindingConfig(
+    key: spec.key,
+    modifiers: spec.modifiers,
+    command: node.args[1].kString(),
+    mode: defaultMode,
+  )
+  if node.props.hasKey("layout"):
+    let layout = node.props["layout"].kInt()
+    if layout >= 0:
+      binding.hasLayoutOverride = true
+      binding.layoutOverride = uint32(layout)
+  if node.props.hasKey("mode"):
+    binding.mode = parseBindingMode(node.props["mode"].kString())
+  if node.props.hasKey("allow-inhibiting"):
+    binding.bypassShortcutsInhibit = not node.props["allow-inhibiting"].kBool()
+  if node.props.hasKey("hotkey-overlay-title"):
+    binding.applyHotkeyOverlayTitle(node.props["hotkey-overlay-title"])
+  some(binding)
 
 proc isHotkeyOverlayCommand(command: string): bool =
   let parts = command.strip().splitWhitespace()
@@ -464,6 +581,7 @@ proc defaultConfigPath*(): string =
   return configHome / "triad" / "config.kdl"
 
 proc loadConfig*(path: string): Config =
+  var recentWindowBindings = defaultRecentWindowBindings()
   # Default values
   result.layout.gaps = DefaultGaps
   result.layout.centerFocusedColumn = DefaultCenterFocusedColumn
@@ -493,6 +611,16 @@ proc loadConfig*(path: string): Config =
   result.overview.innerGapMultiplier = DefaultOverviewInnerGapMultiplier
   result.overview.zoom = DefaultOverviewZoom
   result.overview.hotCorners.size = DefaultOverviewHotCornerSize
+  result.recentWindows.enabled = true
+  result.recentWindows.debounceMs = DefaultRecentWindowsDebounceMs
+  result.recentWindows.openDelayMs = DefaultRecentWindowsOpenDelayMs
+  result.recentWindows.highlight.activeColor = DefaultRecentWindowsHighlightActiveColor
+  result.recentWindows.highlight.urgentColor = DefaultRecentWindowsHighlightUrgentColor
+  result.recentWindows.highlight.padding = DefaultRecentWindowsHighlightPadding
+  result.recentWindows.highlight.cornerRadius =
+    DefaultRecentWindowsHighlightCornerRadius
+  result.recentWindows.previews.maxHeight = DefaultRecentWindowsPreviewMaxHeight
+  result.recentWindows.previews.maxScale = DefaultRecentWindowsPreviewMaxScale
   result.floating.xRatio = DefaultFloatingXRatio
   result.floating.yRatio = DefaultFloatingYRatio
   result.floating.widthRatio = DefaultFloatingWidthRatio
@@ -851,27 +979,9 @@ proc loadConfig*(path: string): Config =
             if child.name == "mirror-hjkl-arrows" and child.args.len > 0:
               result.mirrorHjklArrows = child.args[0].kBool()
             elif child.name == "bind" and child.args.len >= 2:
-              let spec = parseKeySpec(child.args[0].kString())
-              if spec.key.len > 0:
-                var binding = KeyBindingConfig(
-                  key: spec.key,
-                  modifiers: spec.modifiers,
-                  command: child.args[1].kString(),
-                  mode: BindingMode.BindAlways,
-                )
-                if child.props.hasKey("layout"):
-                  let layout = child.props["layout"].kInt()
-                  if layout >= 0:
-                    binding.hasLayoutOverride = true
-                    binding.layoutOverride = uint32(layout)
-                if child.props.hasKey("mode"):
-                  binding.mode = parseBindingMode(child.props["mode"].kString())
-                if child.props.hasKey("allow-inhibiting"):
-                  binding.bypassShortcutsInhibit =
-                    not child.props["allow-inhibiting"].kBool()
-                if child.props.hasKey("hotkey-overlay-title"):
-                  binding.applyHotkeyOverlayTitle(child.props["hotkey-overlay-title"])
-                result.keyBindings.add(binding)
+              let binding = child.keyBindingFromNode()
+              if binding.isSome:
+                result.keyBindings.add(binding.get())
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               let button = buttonValue(spec.key)
@@ -972,6 +1082,72 @@ proc loadConfig*(path: string): Config =
                     field = cornerChild.name, error = e.msg
           except CatchableError as e:
             warn "Ignoring invalid overview field", field = child.name, error = e.msg
+      elif node.name == "recent-windows":
+        for child in node.children:
+          try:
+            if child.name == "on":
+              result.recentWindows.enabled = child.childFlagEnabled()
+            elif child.name == "off":
+              result.recentWindows.enabled = false
+            elif child.name == "enabled" and child.args.len > 0:
+              result.recentWindows.enabled = child.args[0].kBool()
+            elif child.name == "debounce-ms" and child.args.len > 0:
+              result.recentWindows.debounceMs =
+                clamp32(int32(child.args[0].kInt()), 0, 60000)
+            elif child.name == "open-delay-ms" and child.args.len > 0:
+              result.recentWindows.openDelayMs =
+                clamp32(int32(child.args[0].kInt()), 0, 60000)
+            elif child.name == "highlight":
+              for highlightChild in child.children:
+                try:
+                  if highlightChild.name == "active-color" and
+                      highlightChild.args.len > 0:
+                    result.recentWindows.highlight.activeColor = parseColor(
+                      highlightChild.args[0].kString(),
+                      result.recentWindows.highlight.activeColor,
+                    )
+                  elif highlightChild.name == "urgent-color" and
+                      highlightChild.args.len > 0:
+                    result.recentWindows.highlight.urgentColor = parseColor(
+                      highlightChild.args[0].kString(),
+                      result.recentWindows.highlight.urgentColor,
+                    )
+                  elif highlightChild.name == "padding" and highlightChild.args.len > 0:
+                    result.recentWindows.highlight.padding =
+                      clamp32(int32(highlightChild.args[0].kInt()), 0, 65535)
+                  elif highlightChild.name == "corner-radius" and
+                      highlightChild.args.len > 0:
+                    result.recentWindows.highlight.cornerRadius =
+                      clamp32(int32(highlightChild.args[0].kInt()), 0, 65535)
+                except CatchableError as e:
+                  warn "Ignoring invalid recent-windows highlight field",
+                    field = highlightChild.name, error = e.msg
+            elif child.name == "previews":
+              for previewChild in child.children:
+                try:
+                  if previewChild.name == "max-height" and previewChild.args.len > 0:
+                    result.recentWindows.previews.maxHeight =
+                      clamp32(int32(previewChild.args[0].kInt()), 1, 65535)
+                  elif previewChild.name == "max-scale" and previewChild.args.len > 0:
+                    result.recentWindows.previews.maxScale =
+                      clampF32(float32(previewChild.args[0].kFloat()), 0.01, 1.0)
+                except CatchableError as e:
+                  warn "Ignoring invalid recent-windows previews field",
+                    field = previewChild.name, error = e.msg
+            elif child.name == "binds":
+              recentWindowBindings = @[]
+              for bindChild in child.children:
+                try:
+                  if bindChild.name == "bind":
+                    let binding = bindChild.keyBindingFromNode(BindingMode.BindRecent)
+                    if binding.isSome and binding.get().command.isRecentWindowCommand():
+                      recentWindowBindings.add(binding.get())
+                except CatchableError as e:
+                  warn "Ignoring invalid recent-windows bind",
+                    field = bindChild.name, error = e.msg
+          except CatchableError as e:
+            warn "Ignoring invalid recent-windows field",
+              field = child.name, error = e.msg
       elif node.name == "floating":
         for child in node.children:
           try:
@@ -1067,6 +1243,8 @@ proc loadConfig*(path: string): Config =
     result.keyBindings = defaultKeyBindings()
   else:
     result.keyBindings.ensureHotkeyOverlayFallback()
+  if result.recentWindows.enabled:
+    result.keyBindings.addRecentWindowBindings(recentWindowBindings)
   if result.pointerBindings.len == 0:
     result.pointerBindings = defaultPointerBindings()
 
