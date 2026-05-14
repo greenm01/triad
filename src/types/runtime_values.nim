@@ -346,6 +346,8 @@ type
     theme*: string
     size*: uint32
     shakeToFind*: bool
+    hideWhenTyping*: bool
+    hideAfterInactiveMs*: int32
 
   InputAccelProfile* {.pure.} = enum
     AccelNone

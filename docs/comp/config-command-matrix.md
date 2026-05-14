@@ -36,7 +36,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
 | P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, pointer button, wheel-axis, dormant gesture, and dormant switch-event binding surfaces exist. Live gesture/switch hardware delivery is still blocked on a compositor or input event source. | Connect the next narrow event source without changing the user-facing config syntax. |
-| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Config reload notification commands, cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; cursor hiding and advanced polish remain partial or blocked. | Confirm whether cursor hiding needs a compositor-side protocol before adding the next polish item. |
+| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Pick the next small polish surface: richer animation tuning, layer rules, or overview/hotkey refinements. |
 
 ## Feature Matrix
 
@@ -78,7 +78,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Output | Monitor power | `disable_monitor`, `enable_monitor`, `toggle_monitor` | External output management | | | Not exposed by Triad. |
 | Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports global vsync/async presentation mode. |
 | Output | Cursor theme/size/find | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size; shake-to-find }` | X | Applied through River seat protocol. Shake-to-find temporarily reapplies the configured theme at a larger size. |
-| Output | Cursor inactivity hiding | `cursor_hide_timeout` | Compositor/seat policy | | | Triad can configure cursor theme, size, and shake-to-find, but does not hide the cursor after inactivity or typing. |
+| Output | Cursor inactivity hiding | `cursor_hide_timeout` | `wl_pointer.set_cursor`, `wp_cursor_shape_manager_v1`, River seat cursor ownership | `cursor { hide-after-inactive-ms; hide-when-typing }` | X | Triad hides the compositor cursor with a null pointer cursor and restores the default cursor shape when cursor-shape support is advertised. |
 | Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
 | Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad follows the moved window and also has `move-to-workspace`. |
@@ -343,7 +343,8 @@ KDL config nodes and fields:
   `min-width`, `min-height`.
 - `screenshot`: `directory`, `filename-prefix`, `capture-command`,
   `region-selector-command`, `clipboard-command`, `show-pointer`.
-- `cursor`: `theme`, `size`, `shake-to-find`.
+- `cursor`: `theme`, `size`, `shake-to-find`, `hide-when-typing`,
+  `hide-after-inactive-ms`.
 - Top-level: `presentation-mode`, `allow-exit-session`,
   `protocol-surfaces.enabled`, `protocol-surfaces.visible-debug`.
 

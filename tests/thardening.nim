@@ -245,6 +245,11 @@ suite "Crash hardening":
     check not state.enlarged
     check large.cursorShakeSize() == 512'u32
 
+  test "cursor hide inactivity config is opt-in":
+    check not CursorConfig().cursorHideInactiveEnabled()
+    check not CursorConfig(hideAfterInactiveMs: 0).cursorHideInactiveEnabled()
+    check CursorConfig(hideAfterInactiveMs: 1).cursorHideInactiveEnabled()
+
   test "input pointer classification prefers explicit names and touchpad support":
     check pointerClassFor("Kensington Expert Trackball", 0, false, false) ==
       PointerDeviceClass.Trackball

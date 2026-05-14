@@ -4,6 +4,7 @@ import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
+import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import ../core/[effects, msg, restore_state]
@@ -95,6 +96,8 @@ type
     riverXkbBindings*: ptr riverXkb.RiverXkbBindingsV1
     compositor*: ptr Compositor
     shm*: ptr Shm
+    cursorShapeManager*: ptr cursorShape.WpCursorShapeManagerV1
+    cursorShapeGlobalName*: uint32
     singlePixelManager*: ptr singlepixel.WpSinglePixelBufferManagerV1
     idleInhibitManager*: ptr idle.ZwpIdleInhibitManagerV1
     idleInhibitGlobalName*: uint32
@@ -157,6 +160,9 @@ type
     wlPointerRiverSeats*: Table[uint32, uint32]
     wlPointerWheelFrames*: Table[uint32, WlPointerWheelFrame]
     wlPointerWheelRemainders*: Table[uint32, WlPointerWheelRemainder]
+    cursorShapeDevices*: Table[uint32, ptr cursorShape.WpCursorShapeDeviceV1]
+    cursorHiddenPointers*: Table[uint32, bool]
+    cursorLastMotionMsByPointer*: Table[uint32, int64]
     pointerWindowBySeat*: Table[uint32, WindowId]
     pointerPositionBySeat*: Table[uint32, Rect]
     pointerHotCornerInsideBySeat*: Table[uint32, bool]

@@ -91,6 +91,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     if msg.kind == MsgKind.CmdTick:
       daemon.tickCursorShake()
+      daemon.tickCursorVisibility()
 
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive

@@ -35,6 +35,9 @@ proc cursorBaseSize*(config: CursorConfig): uint32 =
 proc cursorShakeEnabled*(config: CursorConfig): bool =
   config.shakeToFind and config.theme.len > 0
 
+proc cursorHideInactiveEnabled*(config: CursorConfig): bool =
+  config.hideAfterInactiveMs > 0
+
 proc cursorShakeSize*(baseSize: uint32): uint32 =
   min(max(baseSize * 2, baseSize + 24), CursorShakeMaxSize)
 

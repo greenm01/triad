@@ -8,12 +8,14 @@ import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_config/client as riverXkbConfig
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/protocols/wayland/client as wlCore
+import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import ../core/msg
 import
   bindings_runtime, idle_inhibit_runtime, input_runtime, manage_requests, message_queue,
-  protocol_surface_runtime, river_manager_runtime, river_outputs_runtime, state
+  protocol_surface_runtime, river_manager_runtime, river_outputs_runtime, state,
+  wayland_helpers
 
 proc handleGlobal*(
     data: pointer,
@@ -54,6 +56,14 @@ proc handleGlobal*(
       name, wlCore.wl_shm_interface.addr, min(version, 1'u32)
     ))
     info "Bound to wl_shm", name = name, advertisedVersion = version
+  elif interfaceName == "wp_cursor_shape_manager_v1":
+    daemon.cursorShapeManager = cast[ptr cursorShape.WpCursorShapeManagerV1](registry.`bind`(
+      name, cursorShape.wp_cursor_shape_manager_v1_interface.addr, min(version, 2'u32)
+    ))
+    daemon.cursorShapeGlobalName = name
+    for pointer in daemon.wlPointerPointers.values:
+      daemon[].attachCursorShapePointer(pointer.id())
+    info "Bound to wp_cursor_shape_manager_v1", name = name, advertisedVersion = version
   elif interfaceName == "wl_output":
     let wlOutput = cast[ptr Output](registry.`bind`(
       name, wlCore.wl_output_interface.addr, min(version, 4'u32)
@@ -143,6 +153,8 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
     return
 
   debug "Wayland global removed", name = name
+  if daemon.cursorShapeGlobalName == name:
+    daemon[].destroyCursorShapeRuntime()
   if daemon.idleInhibitGlobalName == name:
     let desiredIdleInhibit = daemon.idleInhibitDesired
     daemon[].destroyIdleInhibitRuntime()

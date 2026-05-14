@@ -1,9 +1,10 @@
-import std/[options, strutils, tables, times]
+import std/[options, sequtils, strutils, tables, times]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/native/client
+import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import ../config/[keysyms, parser]
 import ../core/msg
 import ../ipc/commands
@@ -43,6 +44,8 @@ proc attachLayerSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
 proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
 proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
+proc attachCursorShapePointer*(daemon: var TriadDaemon, pointerId: uint32)
+proc destroyCursorShapeRuntime*(daemon: var TriadDaemon)
 proc destroyBindings*(daemon: var TriadDaemon)
 proc enqueuePointerCommand(
   daemon: var TriadDaemon, seatId: uint32, seat: ptr RiverSeatV1, msg: Msg
@@ -135,6 +138,60 @@ proc configuredCursorSize(daemon: TriadDaemon, seatId: uint32): uint32 =
       daemon.cursorShakeBySeat.hasKey(seatId) and
       daemon.cursorShakeBySeat[seatId].enlarged:
     result = daemon.currentModel.cursor.cursorShakeSize()
+
+proc wlPointerById(daemon: TriadDaemon, pointerId: uint32): ptr Pointer =
+  if not daemon.wlPointerGlobalNames.hasKey(pointerId):
+    return nil
+  let globalName = daemon.wlPointerGlobalNames[pointerId]
+  daemon.wlPointerPointers.getOrDefault(globalName)
+
+proc showCursorPointer(daemon: var TriadDaemon, pointerId: uint32) =
+  if not daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
+    return
+  if daemon.cursorShapeDevices.hasKey(pointerId):
+    daemon.cursorShapeDevices[pointerId].setShape(
+      0'u32, uint32(cursorShape.shape_default)
+    )
+  daemon.cursorHiddenPointers.del(pointerId)
+
+proc hideCursorPointer(daemon: var TriadDaemon, pointerId: uint32) =
+  if daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
+    return
+  if not daemon.cursorShapeDevices.hasKey(pointerId):
+    return
+  let pointer = daemon.wlPointerById(pointerId)
+  if pointer == nil:
+    return
+  pointer.setCursor(0'u32, nil, 0, 0)
+  daemon.cursorHiddenPointers[pointerId] = true
+
+proc pointerIdForRiverSeat(daemon: TriadDaemon, seatId: uint32): uint32 =
+  for pointerId, mappedSeatId in daemon.wlPointerRiverSeats.pairs:
+    if mappedSeatId == seatId:
+      return pointerId
+  0'u32
+
+proc observeCursorActivity(daemon: var TriadDaemon, seatId: uint32, now: int64) =
+  let pointerId = daemon.pointerIdForRiverSeat(seatId)
+  if pointerId == 0:
+    return
+  daemon.cursorLastMotionMsByPointer[pointerId] = now
+  daemon.showCursorPointer(pointerId)
+
+proc hideAllCursors(daemon: var TriadDaemon) =
+  for pointerId in daemon.wlPointerRiverSeats.keys:
+    daemon.hideCursorPointer(pointerId)
+
+proc tickCursorVisibility*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.cursor.cursorHideInactiveEnabled():
+    for pointerId in daemon.cursorHiddenPointers.keys.toSeq():
+      daemon.showCursorPointer(pointerId)
+    return
+  let now = nowMs()
+  let delay = int64(daemon.currentModel.cursor.hideAfterInactiveMs)
+  for pointerId, lastMotion in daemon.cursorLastMotionMsByPointer.pairs:
+    if now - lastMotion >= delay:
+      daemon.hideCursorPointer(pointerId)
 
 proc applyCursorShakeMotion(
     daemon: var TriadDaemon, seat: ptr RiverSeatV1, x, y: int32
@@ -587,6 +644,7 @@ proc onSeatPointerPosition(data: pointer, seat: ptr RiverSeatV1, x: int32, y: in
   if daemon == nil:
     return
   daemon.pointerPositionBySeat[seat.id()] = Rect(x: x, y: y, w: 0, h: 0)
+  daemon[].observeCursorActivity(seat.id(), nowMs())
   daemon[].applyCursorShakeMotion(seat, x, y)
   if daemon[].currentModel.recentWindowsActive:
     daemon.enqueue(
@@ -836,6 +894,8 @@ proc onXkbPressed(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
   let daemon = callbackDaemon(data, "xkb pressed")
   if daemon == nil:
     return
+  if daemon[].currentModel.cursor.hideWhenTyping:
+    daemon[].hideAllCursors()
   let id = binding.id()
   daemon.xkbBindingPressed[id] = true
   if daemon.xkbBindingModes.hasKey(id) and
@@ -1104,19 +1164,43 @@ proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   daemon.wlPointerWheelFrames[pointer.id()] = WlPointerWheelFrame()
   daemon.wlPointerWheelRemainders[pointer.id()] = WlPointerWheelRemainder()
   daemon.mapWlPointerRiverSeat(globalName)
+  daemon.attachCursorShapePointer(pointer.id())
   discard pointer.addListener(wlPointerListener.addr, daemonData(daemon))
+
+proc attachCursorShapePointer*(daemon: var TriadDaemon, pointerId: uint32) =
+  if daemon.cursorShapeManager == nil or daemon.cursorShapeDevices.hasKey(pointerId):
+    return
+  let pointer = daemon.wlPointerById(pointerId)
+  if pointer == nil:
+    return
+  daemon.cursorShapeDevices[pointerId] = daemon.cursorShapeManager.getPointer(pointer)
 
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   if not daemon.wlPointerPointers.hasKey(globalName):
     return
   let pointer = daemon.wlPointerPointers[globalName]
   let pointerId = pointer.id()
+  if daemon.cursorShapeDevices.hasKey(pointerId):
+    daemon.cursorShapeDevices[pointerId].destroy()
+    daemon.cursorShapeDevices.del(pointerId)
+  daemon.cursorHiddenPointers.del(pointerId)
+  daemon.cursorLastMotionMsByPointer.del(pointerId)
   pointer.destroy()
   daemon.wlPointerPointers.del(globalName)
   daemon.wlPointerGlobalNames.del(pointerId)
   daemon.wlPointerRiverSeats.del(pointerId)
   daemon.wlPointerWheelFrames.del(pointerId)
   daemon.wlPointerWheelRemainders.del(pointerId)
+
+proc destroyCursorShapeRuntime*(daemon: var TriadDaemon) =
+  for device in daemon.cursorShapeDevices.values:
+    device.destroy()
+  daemon.cursorShapeDevices.clear()
+  daemon.cursorHiddenPointers.clear()
+  if daemon.cursorShapeManager != nil:
+    daemon.cursorShapeManager.destroy()
+  daemon.cursorShapeManager = nil
+  daemon.cursorShapeGlobalName = 0'u32
 
 proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   if daemon.riverXkbBindings == nil or seat == nil:

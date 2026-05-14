@@ -195,6 +195,8 @@ cursor {
   theme "Bibata"
   size 32
   shake-to-find
+  hide-when-typing
+  hide-after-inactive-ms 1250
 }
 presentation-mode "async"
 allow-exit-session #true
@@ -448,6 +450,8 @@ switch-events {
       "recent-window-next --scope workspace"
     check config.cursor.theme == "Bibata"
     check config.cursor.shakeToFind
+    check config.cursor.hideWhenTyping
+    check config.cursor.hideAfterInactiveMs == 1250
     check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
     check config.protocolSurfaces.enabled

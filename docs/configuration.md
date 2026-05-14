@@ -491,6 +491,8 @@ cursor {
   theme "default"
   size 24
   shake-to-find #true
+  hide-when-typing #true
+  hide-after-inactive-ms 1000
 }
 ```
 
@@ -499,6 +501,11 @@ cursor {
 - `shake-to-find #true|#false`: when enabled, rapid back-and-forth pointer
   motion temporarily enlarges the compositor cursor and restores it after idle.
   The default is `#false`.
+- `hide-when-typing #true|#false`: hides the compositor cursor on key binding
+  input and shows it again on pointer motion. The default is `#false`.
+- `hide-after-inactive-ms <ms>`: hides the compositor cursor after this many
+  milliseconds without pointer motion. `0` disables inactivity hiding, which is
+  the default.
 
 ## Workspaces
 

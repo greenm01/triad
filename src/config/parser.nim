@@ -1578,6 +1578,11 @@ proc loadConfig*(path: string): Config =
                 result.cursor.size = uint32(min(size, 512))
             elif child.name == "shake-to-find":
               result.cursor.shakeToFind = child.childFlagEnabled()
+            elif child.name == "hide-when-typing":
+              result.cursor.hideWhenTyping = child.childFlagEnabled()
+            elif child.name == "hide-after-inactive-ms" and child.args.len > 0:
+              result.cursor.hideAfterInactiveMs =
+                clamp32(int32(child.args[0].kInt()), 0, 3_600_000)
           except CatchableError as e:
             warn "Ignoring invalid cursor field", field = child.name, error = e.msg
       elif node.name == "hotkey-overlay":

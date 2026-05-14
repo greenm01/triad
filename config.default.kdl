@@ -128,6 +128,8 @@ cursor {
     theme "default"
     size 24
     // shake-to-find #true
+    // hide-when-typing #true
+    // hide-after-inactive-ms 1000
 }
 
 presentation-mode "vsync"
