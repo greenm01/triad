@@ -67,6 +67,18 @@ suite "Core Runtime Logic: restore identity":
     check win.isMaximized
     check effects.hasMaximizedEffect(70, true)
 
+  test "Live restore seeds screen size from restored windows when outputs are missing":
+    var model = restoreMatchingModel()
+    var restore = PendingRestoreState(activeSlot: 1)
+    restore.addRestoredWindow(ExternalWindowId(50), 1, "generic-app", "Restored window")
+    restore.windows[ExternalWindowId(50)].actualW = 1200
+    restore.windows[ExternalWindowId(50)].actualH = 800
+
+    model.applyLiveRestore(restore)
+
+    check model.screenWidth == 1200
+    check model.screenHeight == 800
+
   test "Live restore does not guess between duplicate app ids":
     var model = restoreMatchingModel()
     var restore = PendingRestoreState(activeSlot: 1)

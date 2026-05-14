@@ -274,8 +274,24 @@ proc applyPendingRestore(
   model.syncRestoredSwallowRelations()
   true
 
+proc applyRestoredFallbackScreen(model: var Model, state: PendingRestoreState) =
+  if model.outputsCount() > 0 or model.screenWidth > 0 or model.screenHeight > 0:
+    return
+
+  var fallbackW = 0'i32
+  var fallbackH = 0'i32
+  for _, win in state.windows.pairs:
+    if win.actualW > fallbackW:
+      fallbackW = win.actualW
+    if win.actualH > fallbackH:
+      fallbackH = win.actualH
+
+  if fallbackW > 0 and fallbackH > 0:
+    discard model.setScreenSize(fallbackW, fallbackH)
+
 proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
   discard model.loadRestoreState(state)
+  model.applyRestoredFallbackScreen(state)
   var targetSlot = state.activeSlot
   if targetSlot != 0:
     var activeHasRestoredWindow = false

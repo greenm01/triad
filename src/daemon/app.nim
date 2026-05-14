@@ -20,8 +20,6 @@ import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
 
-const InitialRiverStateWaitMs = 30_000
-
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
@@ -159,7 +157,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.executeEffect(eff)
 
 proc hasInitialRiverState(): bool =
-  daemon.outputPointers.len > 0
+  daemon.outputPointers.len > 0 or daemon.seatPointers.len > 0
 
 proc waitForInitialRiverState(timeoutMs: int): bool =
   let deadline = epochTime() + timeoutMs.float / 1000.0
@@ -315,7 +313,7 @@ proc main*() =
   if daemon.pendingLiveRestore.isSome and not hasInitialRiverState():
     info "Live restore handoff waiting for initial River state",
       path = daemon.pendingLiveRestorePath
-    if not waitForInitialRiverState(InitialRiverStateWaitMs):
+    if not waitForInitialRiverState(250):
       warn "Live restore handoff has no initial River state; retrying startup",
         path = daemon.pendingLiveRestorePath
       quit 0
