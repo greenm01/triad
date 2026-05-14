@@ -625,6 +625,9 @@ proc loadConfig*(path: string): Config =
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
               rule.keyboardShortcutsInhibitSet = true
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
+            elif child.name == "tiled-state" and child.args.len > 0:
+              rule.tiledStateSet = true
+              rule.tiledState = child.args[0].kBool()
             elif child.name == "forced-layout" and child.args.len > 0:
               rule.forcedLayoutSet = true
               rule.forcedLayout = forcedLayoutValue(child.args[0].kString())

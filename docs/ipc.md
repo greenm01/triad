@@ -382,3 +382,6 @@ event kind and then pushes updates when relevant state changes:
 
 Native Triad subscribers receive only native Triad events. Niri compatibility
 subscribers continue to receive only Niri-shaped events.
+
+See `docs/the_triad.md` for why this combination enables powerful external
+orchestration.

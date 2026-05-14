@@ -154,6 +154,8 @@ type
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
     keyboardShortcutsInhibit*: bool
+    tiledStateSet*: bool
+    tiledState*: bool
     forcedLayoutSet*: bool
     forcedLayout*: int
 

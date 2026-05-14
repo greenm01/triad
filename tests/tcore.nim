@@ -1980,6 +1980,7 @@ suite "Core Runtime Logic":
               parentedRole: ParentedRole.Tool,
               dialogViewportJump: true,
               keyboardShortcutsInhibit: true,
+              tiledState: true,
             ),
             WindowRule(
               appIdMatch: "pinentry",
@@ -1998,6 +1999,8 @@ suite "Core Runtime Logic":
               dialogViewportJump: false,
               keyboardShortcutsInhibitSet: true,
               keyboardShortcutsInhibit: false,
+              tiledStateSet: true,
+              tiledState: false,
             ),
           ]
       )
@@ -2016,6 +2019,8 @@ suite "Core Runtime Logic":
     check rule.rule.parentedRole == ParentedRole.Dialog
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
+    check rule.rule.tiledStateSet
+    check not rule.rule.tiledState
 
   test "Window rules match regex entries with OR and exclude semantics":
     var model = initRuntimeStateFromConfig(
@@ -2137,6 +2142,55 @@ suite "Core Runtime Logic":
 
     check model.windowData(WindowId(1)).get().keyboardShortcutsInhibit
     check not model.windowData(WindowId(2)).get().keyboardShortcutsInhibit
+
+  test "Window rule state matcher can control tiled-state":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isFloatingSet: true,
+                    isFloating: false,
+                  )
+                ],
+              tiledStateSet: true,
+              tiledState: true,
+            ),
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^app$",
+                    isFloatingSet: true,
+                    isFloating: true,
+                  )
+                ],
+              tiledStateSet: true,
+              tiledState: false,
+            ),
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    let tiled = model.windowData(WindowId(1)).get()
+    let tiledRule = model.windowRuleFor(tiled)
+    check tiledRule.rule.tiledStateSet
+    check tiledRule.rule.tiledState
+
+    discard model.setWindowFloating(WindowId(1), true, model.defaultFloatingGeom())
+    let floating = model.windowData(WindowId(1)).get()
+    let floatingRule = model.windowRuleFor(floating)
+    check floatingRule.rule.tiledStateSet
+    check not floatingRule.rule.tiledState
 
   test "Window rule floating matcher applies dynamic bounds after open":
     var model = initRuntimeStateFromConfig(

@@ -7,16 +7,18 @@ import wayland/native/client
 import ../config/keysyms
 import ../core/msg
 import ../ipc/commands
-import ../systems/[daemon_view, overview_geometry, overview_hot_corners, runtime]
+import
+  ../systems/
+    [daemon_view, overview_geometry, overview_hot_corners, runtime, window_rules]
 import ../types/[model, runtime_values]
 import
   cursor_shake, manage_requests, message_queue, protocol_surface_runtime,
   protocol_surfaces, render_runtime, state, wayland_helpers
 
 const
-  RiverEdgeTop = 1'u32
-  RiverEdgeLeft = 4'u32
-  RiverAllEdges = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
+  RiverEdgeTop* = 1'u32
+  RiverEdgeLeft* = 4'u32
+  RiverAllEdges* = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
   RiverDecorationOnlySupportsCsd = 0'u32
   AllWatchedModifiers = 1'u32 or 4'u32 or 8'u32 or 32'u32 or 64'u32 or 128'u32
   WlSeatCapabilityPointer = 1'u32
@@ -43,6 +45,12 @@ proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc destroyBindings*(daemon: var TriadDaemon)
 proc requestBindingReconfigure*(daemon: var TriadDaemon, reason: string)
+
+proc tiledEdgesForWindow*(runtimeModel: Model, data: model.WindowData): uint32 =
+  let ruleMatch = runtimeModel.windowRuleFor(data)
+  if ruleMatch.found and ruleMatch.rule.tiledStateSet:
+    return if ruleMatch.rule.tiledState: RiverAllEdges else: 0'u32
+  if data.isFloating or data.isFullscreen: 0'u32 else: RiverAllEdges
 
 proc removeSeatPointer(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   var i = 0
@@ -976,8 +984,7 @@ proc applyManageState*(daemon: var TriadDaemon) =
       else:
         win.useSsd()
       win.setDimensionBounds(data.maxWidth, data.maxHeight)
-      if data.isFloating or data.isFullscreen:
-        edges = 0
+      edges = daemon.currentModel.tiledEdgesForWindow(data)
       discard daemon.ensureDecorationSurface(id, ProtocolSurfaceKind.PskDecorationBelow)
       discard daemon.ensureDecorationSurface(id, ProtocolSurfaceKind.PskDecorationAbove)
     else:

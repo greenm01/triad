@@ -99,7 +99,7 @@ layout family.
 | Dynamic | `max-height` | Override effective maximum height | `max-height <px>` | Pass | Nonzero max below min normalizes to min. |
 | Dynamic | `variable-refresh-rate` | Opt matching windows into VRR policy | `presentation-mode` | Gap | Triad has global presentation mode, not per-window VRR. |
 | Dynamic | `scroll-factor` | Override scroll factor per window | | Gap | |
-| Dynamic | `tiled-state` | Control client-visible tiled state | | Gap | |
+| Dynamic | `tiled-state` | Control client-visible tiled state | `tiled-state #true/#false` | Pass | Sends River tiled edges as a client hint only; it does not change Triad placement. |
 | Visual | `focus-ring` | Override focus ring appearance | `layout.border` | Gap | Triad border/focus colors are global. |
 | Visual | `border` | Override border appearance | `layout.border` | Gap | Triad border config is global. |
 | Visual | `shadow` | Override shadow appearance | | Gap | |
@@ -146,6 +146,8 @@ These are gap-analysis categories, not target config names.
   should retarget the viewport immediately.
 - `keyboard-shortcuts-inhibit` is a Triad-specific rule for shortcut inhibit
   policy, paired with the runtime `toggle-keyboard-shortcuts-inhibit` command.
+- `tiled-state` controls the client-visible River tiled hint. It does not move
+  a window between Triad's tiled and floating placement.
 - `forced-layout` is a Triad-specific rule that can select the workspace layout
   used for a matching new window.
 - `default-window-width` is a Triad-specific companion to niri's

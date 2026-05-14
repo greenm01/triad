@@ -94,6 +94,7 @@ window-rule {
   exclude title="Private"
   default-workspace 4
   open-maximized #true
+  tiled-state #true
   default-column-width { proportion 0.65 }
   default-window-height { proportion 0.90 }
   min-width 640
@@ -152,6 +153,9 @@ window-rule {
 - `dialog-viewport-jump #true|#false`: when set on a parent app rule, its
   child dialogs may immediately retarget/snap the viewport instead of waiting
   until the parent is visible. The default is `#false`.
+- `tiled-state #true|#false`: overrides the client-visible tiled hint sent via
+  River `set_tiled`. This does not move the window between Triad tiled and
+  floating placement; use `open-floating` for placement.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently

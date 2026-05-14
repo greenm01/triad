@@ -122,6 +122,7 @@ external window manager.
 | Window rules | Dialog viewport jump | Window rule/policy-specific | WM policy | `window-rule dialog-viewport-jump` | X | Matches the parent app rule; opts specific apps out of hide-until-visible dialog focus. |
 | Window rules | Forced layout | `windowrule scroller_proportion...` and layout rules | WM policy | `window-rule forced-layout` | X | Triad supports forced layout selection, not every Mango per-window layout parameter. |
 | Window rules | Shortcut inhibition | `allow_shortcuts_inhibit` | client inhibit protocol/policy | `keyboard-shortcuts-inhibit`, `toggle-keyboard-shortcuts-inhibit` | X | |
+| Window rules | Client tiled hint | `force_tiled_state` | `river_window_v1.set_tiled` | `window-rule tiled-state` | X | Controls the client-visible tiled state only; Triad placement is unchanged. |
 | Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-workspace` | X | `open-focused #false` covers open-silent; explicit `default-workspace` is the workspace placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `window-rule floating` | X | Rule-level floating ratios override global defaults for initial float position and size. |
 | Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `enable-animations`, `animation-speed` | | Triad has global animation config, not per-window visual rules. |
@@ -288,8 +289,8 @@ KDL config nodes and fields:
   `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,
   `open-maximized-to-edges`, `parented-role`,
-  `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `forced-layout`,
-  nested `floating`.
+  `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `tiled-state`,
+  `forced-layout`, nested `floating`.
 - `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, plus
   `layout`, `mode`, `allow-inhibiting`, and `hotkey-overlay-title`

@@ -686,6 +686,7 @@ window-rule {
   open-maximized-to-edges #false
   dialog-viewport-jump #false
   keyboard-shortcuts-inhibit #false
+  tiled-state #false
 }
 """,
     )
@@ -705,6 +706,8 @@ window-rule {
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet
     check not config.windowRules[0].keyboardShortcutsInhibit
+    check config.windowRules[0].tiledStateSet
+    check not config.windowRules[0].tiledState
 
   test "Window rule parser clamps opening sizing proportions":
     let path = getTempDir() / "triad-window-rule-sizing.kdl"

@@ -187,6 +187,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:
     result.keyboardShortcutsInhibit = rule.keyboardShortcutsInhibit
+  if rule.tiledStateSet:
+    result.tiledStateSet = true
+    result.tiledState = rule.tiledState
   if rule.forcedLayoutSet:
     result.forcedLayout = rule.forcedLayout
 

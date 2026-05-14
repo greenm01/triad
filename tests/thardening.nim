@@ -273,6 +273,78 @@ workspaces {
     check win.needsCellClip(100, 100)
     check not win.needsCellClip(100, 220)
 
+  test "window rule tiled-state controls River tiled edges":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches: @[WindowRuleMatcher(appIdSet: true, appId: "^float-default$")],
+              openFloatingSet: true,
+              openFloating: true,
+            ),
+            WindowRule(
+              matches: @[WindowRuleMatcher(appIdSet: true, appId: "^force-tiled$")],
+              openFloatingSet: true,
+              openFloating: true,
+              tiledStateSet: true,
+              tiledState: true,
+            ),
+            WindowRule(
+              matches: @[WindowRuleMatcher(appIdSet: true, appId: "^force-untiled$")],
+              tiledStateSet: true,
+              tiledState: false,
+            ),
+          ]
+      )
+    ).model
+
+    let (next1, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 1,
+        appId: "normal-default",
+        title: "Normal",
+      )
+    )
+    model = next1
+    let (next2, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        appId: "float-default",
+        title: "Float",
+      )
+    )
+    model = next2
+    let (next3, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        appId: "force-tiled",
+        title: "Force Tiled",
+      )
+    )
+    model = next3
+    let (next4, _) = model.update(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 4,
+        appId: "force-untiled",
+        title: "Force Untiled",
+      )
+    )
+    model = next4
+
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(1)).get()) ==
+      RiverAllEdges
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(2)).get()) ==
+      0'u32
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(3)).get()) ==
+      RiverAllEdges
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(4)).get()) ==
+      0'u32
+
   test "Niri compatibility rejects malformed IPC without crashing":
     let malformed = niri_compat.handleNiriRequest("{", baseSnapshot())
     check malformed.handled

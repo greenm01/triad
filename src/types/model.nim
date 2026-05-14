@@ -134,6 +134,8 @@ type
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
     keyboardShortcutsInhibit*: bool
+    tiledStateSet*: bool
+    tiledState*: bool
     forcedLayoutSet*: bool
     forcedLayout*: int
 
@@ -168,6 +170,8 @@ type
     floating*: WindowRuleFloatingConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
+    tiledStateSet*: bool
+    tiledState*: bool
     forcedLayout*: int
 
   TagRuleData* = object

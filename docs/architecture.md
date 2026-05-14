@@ -88,7 +88,8 @@ The architecture separates Triad-native IPC from shell projection IPC:
 *   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
 This lets Quickshell modules choose either Niri-shaped projection events or
-Triad's richer tagged model.
+Triad's richer tagged model. See `docs/the_triad.md` for the high-level
+rationale behind Tags + Rules + IPC.
 
 ### Niri Projection IPC
 Triad implements a Niri-shaped JSON IPC stream for shells that consume that
