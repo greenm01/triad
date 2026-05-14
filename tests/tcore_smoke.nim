@@ -1,0 +1,189 @@
+import tcore_support
+
+suite "Core Runtime Logic: smoke":
+  test "Triad reload command emits restart effect":
+    var model = Model()
+    let (_, effects) = model.update(Msg(kind: MsgKind.CmdTriadReload))
+    check effects.len == 1
+    check effects[0].kind == EffectKind.EffTriadReload
+
+  test "Session unlock clears stale layer focus and restores active focus":
+    var model = configuredModel()
+    model.seedCameraWindows(2)
+    check model.focusedWindowId() == 2
+
+    discard model.updateModel(Msg(kind: MsgKind.WlLayerFocusExclusive))
+    discard model.updateModel(Msg(kind: MsgKind.WlSessionLocked))
+    check model.sessionLocked
+    check model.layerFocusExclusive
+
+    let lockedEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    check model.focusedWindowId() == 2
+    check lockedEffects.len == 0
+
+    let unlockEffects = model.updateModel(Msg(kind: MsgKind.WlSessionUnlocked))
+    check not model.sessionLocked
+    check not model.layerFocusExclusive
+    check model.focusedWindowId() == 2
+    check unlockEffects.hasFocusEffect(2)
+
+  test "Screenshot command emits explicit capture effect":
+    var model = Model()
+    let (_, effects) = model.update(
+      Msg(
+        kind: MsgKind.CmdScreenshot,
+        screenshotKind: ScreenshotKind.ShotWindow,
+        screenshotPath: "/tmp/window.png",
+        screenshotPointerMode: ScreenshotPointerMode.PointerShow,
+        screenshotWriteToDisk: true,
+        screenshotCopyToClipboard: false,
+      )
+    )
+
+    check effects.len == 1
+    check effects[0].kind == EffectKind.EffScreenshot
+    check effects[0].screenshotKind == ScreenshotKind.ShotWindow
+    check effects[0].screenshotPath == "/tmp/window.png"
+    check effects[0].screenshotPointerMode == ScreenshotPointerMode.PointerShow
+    check effects[0].screenshotWriteToDisk
+    check not effects[0].screenshotCopyToClipboard
+
+  test "Screenshot command builder preserves shell snippets and quotes data":
+    let config = ScreenshotConfig(
+      captureCommand: "grim -t png",
+      regionSelectorCommand: "slurp -d",
+      clipboardCommand: "wl-copy --type image/png",
+    )
+    let screen = runtime_values.Rect(x: 0, y: 0, w: 1920, h: 1080)
+    let win = runtime_values.Rect(x: 40, y: 50, w: 800, h: 600)
+
+    check screenshotCaptureCommand(
+      ScreenshotKind.ShotRegion, "/tmp/region shot.png", config, screen, win,
+      ScreenshotPointerMode.PointerDefault,
+    ) == "grim -t png -g \"$(slurp -d)\" '/tmp/region shot.png'"
+    check screenshotCaptureCommand(
+      ScreenshotKind.ShotScreen, "/tmp/screen.png", config, screen, win,
+      ScreenshotPointerMode.PointerShow,
+    ) == "grim -t png -c -g '0,0 1920x1080' '/tmp/screen.png'"
+    check screenshotCaptureCommand(
+      ScreenshotKind.ShotWindow, "/tmp/window.png", config, screen, win,
+      ScreenshotPointerMode.PointerHide,
+    ) == "grim -t png -g '40,50 800x600' '/tmp/window.png'"
+    check screenshotClipboardCommand("/tmp/window.png", config) ==
+      "wl-copy --type image/png < '/tmp/window.png'"
+
+  test "Screenshot paths expand home directory absolutely":
+    let home = getHomeDir().strip(leading = false, trailing = true, chars = {'/'})
+    let config = ScreenshotConfig(
+      directory: "~/Pictures/Screenshots", filenamePrefix: "screenshot"
+    )
+    let path = screenshotPathOrDefault("", config)
+
+    check expandUserPath("~") == home
+    check expandUserPath("~/") == home
+    check expandUserPath("~/Pictures/Screenshots") == home / "Pictures" / "Screenshots"
+    check expandUserPath("/tmp/shot.png") == "/tmp/shot.png"
+    check path.startsWith(home / "Pictures" / "Screenshots" / "screenshot-")
+    check not path.startsWith("home/")
+
+  test "Process tree descendant check follows parent chain":
+    proc parentPid(pid: int32): int32 {.gcsafe.} =
+      case pid
+      of 20'i32: 10'i32
+      of 30'i32: 20'i32
+      else: 0'i32
+
+    check isDescendantProcess(10, 30, parentPid)
+    check not isDescendantProcess(30, 10, parentPid)
+    check not isDescendantProcess(0, 30, parentPid)
+
+  test "Async shell command runner yields while process runs":
+    var ticked = false
+
+    proc markTick() {.async.} =
+      await sleepAsync(20)
+      ticked = true
+
+    proc runSlow(): Future[int] {.async.} =
+      asyncCheck markTick()
+      result = await runShellCommandAsync("sleep 0.1", pollMs = 10)
+
+    check waitFor(runSlow()) == 0
+    check ticked
+    check waitFor(runShellCommandAsync("exit 7", pollMs = 10)) == 7
+
+  test "Targeted layout command updates requested slot only":
+    var model = configuredModel()
+    let (nextModel, effects) = model.update(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck, layoutTargetTag: 2)
+    )
+    let snapshot = nextModel.shellSnapshot()
+
+    check snapshot.activeTag == 1
+    check snapshot.workspaces[0].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and
+        it.jsonPayload.contains("layout-state-changed")
+    )
+
+  test "Hotkey overlay commands update runtime state":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
+
+    var effects = model.updateModel(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
+    check model.hotkeyOverlayOpen
+    check model.hotkeyOverlayShownOnce
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
+    check model.hotkeyOverlayOpen
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdToggleHotkeyOverlay))
+    check not model.hotkeyOverlayOpen
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+    check not model.hotkeyOverlayOpen
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Hotkey overlay rows honor custom and hidden binding titles":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        hotkeyOverlay: HotkeyOverlayConfig(hideNotBound: true),
+        keyBindings:
+          @[
+            KeyBindingConfig(
+              key: "Slash",
+              modifiers: 65'u32,
+              command: "toggle-hotkey-overlay",
+              hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,
+              hotkeyOverlayTitle: "Show Important Hotkeys",
+            ),
+            KeyBindingConfig(
+              key: "q",
+              modifiers: 64'u32,
+              command: "close-window",
+              hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleHidden,
+            ),
+            KeyBindingConfig(
+              key: "Return", modifiers: 64'u32, command: "spawn-terminal"
+            ),
+          ],
+      )
+    ).model
+    let rows = model.hotkeyOverlayRows()
+
+    check rows.anyIt(
+      it.key == "Super + Shift + /" and it.label == "Show Important Hotkeys"
+    )
+    check not rows.anyIt(it.label == "Close Focused Window")
+    check rows.anyIt(it.key == "Super + Enter" and it.label == "Open Terminal")
+    check not rows.anyIt(it.key == "(not bound)")

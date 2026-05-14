@@ -1,0 +1,460 @@
+import tconfig_support
+
+suite "KDL Configuration Parser: parser defaults":
+  test "Parser reads layout, workspace, binding, and command settings":
+    let path = getCurrentDir() / "test_config_dod.kdl"
+    writeFile(
+      path,
+      """
+layout {
+  gaps 32
+  center-focused-column "always"
+  default-column-width { proportion 0.7 }
+  default-window-width { proportion 0.8 }
+  default-window-height { proportion 0.9 }
+  master {
+    count 2
+    split-ratio 0.6
+  }
+  border {
+    width 3
+    active-color "#112233"
+    inactive-color "#445566"
+  }
+  scroller-focus-center #true
+  scroller-prefer-center #true
+  enable-animations #false
+  animation-speed 0.4
+  smart-gaps #true
+  layout-cycle "scroller" "deck" "vertical-grid"
+}
+workspaces {
+  default-count 4
+  default-layout "scroller"
+}
+workspace-rules {
+  workspace 1 name="term"
+  workspace 2 name="web" default-layout="grid" open-on-output="HDMI-A-1"
+}
+window-rule {
+  match app-id="qemu"
+  default-workspace 3
+  open-on-output "HDMI-A-1"
+  open-named-scratchpad "files"
+  default-column-width { proportion 0.65 }
+  default-window-width { proportion 0.75 }
+  default-window-height { proportion 0.85 }
+  min-width 640
+  min-height 400
+  max-width 1920
+  max-height 1200
+  open-floating #true
+  open-focused #false
+  open-fullscreen #false
+  open-maximized #true
+  open-maximized-to-edges #false
+  open-on-all-workspaces #true
+  open-overlay #true
+  respect-size-hints #false
+  center-floating #true
+  parented-role "tool"
+  presentation-mode "async"
+  border {
+    width 5
+    active-color "#abcdef"
+    inactive-color "#12345680"
+  }
+  focus-ring {
+    width 7
+    active-color "#fedcba"
+  }
+  clip-to-geometry #true
+  default-floating-position x=32 y=48 relative-to="bottom-left"
+  dialog-viewport-jump #true
+  floating {
+    x-ratio 0.02
+    y-ratio 0.08
+    width 880
+    height 640
+  }
+}
+spawn-at-startup "notify-send" "triad"
+quickshell {
+  command "qs"
+  theme "noctalia"
+  args "--verbose"
+}
+terminal { command "kitty" }
+screenshot {
+  directory "~/shots"
+  filename-prefix "triad-test"
+  capture-command "grim -t png"
+  region-selector-command "slurp -d"
+  clipboard-command "wl-copy --type image/png"
+  show-pointer #true
+}
+screen-lock { command "swaylock" }
+window-menu-command "bemenu"
+scratchpad {
+  width-ratio 0.7
+  height-ratio 0.6
+}
+overview {
+  outer-gap 80
+  inner-gap-multiplier 1.75
+  zoom 0.25
+  hot-corners {
+    size 12
+    top-left
+    top-right #false
+    bottom-right
+  }
+}
+cursor {
+  theme "Bibata"
+  size 32
+  shake-to-find
+}
+presentation-mode "async"
+allow-exit-session #true
+protocol-surfaces {
+  enabled #true
+  visible-debug #true
+}
+hotkey-overlay {
+  skip-at-startup
+  hide-not-bound
+}
+bindings {
+  mirror-hjkl-arrows #true
+  bind "Super+Return" "spawn-terminal"
+  bind "SUPER+CTRL+c" "layout-center-tile" allow-inhibiting=#false
+  bind "Super+/" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
+  bind "Super+Shift+?" "focus-last" hotkey-overlay-title=#null
+  bind "NONE+F12" "focus-last"
+  pointer-bind "Super+left" "move"
+  pointer-bind "Super+middle" "toggle-maximized"
+  pointer-bind "right" "close-window" mode="overview"
+  pointer-bind "Super+btn_back" "focus-last"
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.layout.gaps == 32
+    check config.mirrorHjklArrows
+    check config.layout.borderWidth == 3
+    check config.layout.centerFocusedColumn == "always"
+    check config.layout.layoutCycle ==
+      @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
+    check config.workspaces.defaultCount == 4
+    check config.workspaces.defaultLayout == LayoutMode.Scroller
+    check config.tagRules.len == 2
+    check config.tagRules[0].tagId == 1
+    check config.tagRules[0].name == "term"
+    check not config.tagRules[0].defaultLayoutSet
+    check config.tagRules[1].tagId == 2
+    check config.tagRules[1].defaultLayoutSet
+    check config.tagRules[1].defaultLayout == LayoutMode.Grid
+    check config.tagRules[1].openOnOutput == "HDMI-A-1"
+    check config.windowRules.len == 1
+    check config.windowRules[0].matches.len == 1
+    check config.windowRules[0].matches[0].appIdSet
+    check config.windowRules[0].matches[0].appId == "qemu"
+    check not config.windowRules[0].matches[0].titleSet
+    check config.windowRules[0].defaultWorkspace == 3
+    check config.windowRules[0].openOnOutput == "HDMI-A-1"
+    check config.windowRules[0].openNamedScratchpad == "files"
+    check config.windowRules[0].defaultColumnWidthSet
+    check config.windowRules[0].defaultColumnWidth == 0.65'f32
+    check config.windowRules[0].defaultWindowWidthSet
+    check config.windowRules[0].defaultWindowWidth == 0.75'f32
+    check config.windowRules[0].defaultWindowHeightSet
+    check config.windowRules[0].defaultWindowHeight == 0.85'f32
+    check config.windowRules[0].minWidthSet
+    check config.windowRules[0].minWidth == 640
+    check config.windowRules[0].minHeightSet
+    check config.windowRules[0].minHeight == 400
+    check config.windowRules[0].maxWidthSet
+    check config.windowRules[0].maxWidth == 1920
+    check config.windowRules[0].maxHeightSet
+    check config.windowRules[0].maxHeight == 1200
+    check config.windowRules[0].openFloatingSet
+    check config.windowRules[0].openFloating
+    check config.windowRules[0].openFocusedSet
+    check not config.windowRules[0].openFocused
+    check config.windowRules[0].openFullscreenSet
+    check not config.windowRules[0].openFullscreen
+    check config.windowRules[0].openMaximizedSet
+    check config.windowRules[0].openMaximized
+    check config.windowRules[0].openMaximizedToEdgesSet
+    check not config.windowRules[0].openMaximizedToEdges
+    check config.windowRules[0].openOnAllWorkspacesSet
+    check config.windowRules[0].openOnAllWorkspaces
+    check config.windowRules[0].openOverlaySet
+    check config.windowRules[0].openOverlay
+    check config.windowRules[0].respectSizeHintsSet
+    check not config.windowRules[0].respectSizeHints
+    check config.windowRules[0].centerFloatingSet
+    check config.windowRules[0].centerFloating
+    check config.windowRules[0].parentedRoleSet
+    check config.windowRules[0].parentedRole == ParentedRole.Tool
+    check config.windowRules[0].presentationModeSet
+    check config.windowRules[0].presentationMode == PresentationMode.PresentationAsync
+    check config.windowRules[0].border.widthSet
+    check config.windowRules[0].border.width == 5
+    check config.windowRules[0].border.activeColorSet
+    check config.windowRules[0].border.activeColor == 0xabcdefff'u32
+    check config.windowRules[0].border.inactiveColorSet
+    check config.windowRules[0].border.inactiveColor == 0x12345680'u32
+    check config.windowRules[0].focusRing.widthSet
+    check config.windowRules[0].focusRing.width == 7
+    check config.windowRules[0].focusRing.activeColorSet
+    check config.windowRules[0].focusRing.activeColor == 0xfedcbaff'u32
+    check config.windowRules[0].clipToGeometrySet
+    check config.windowRules[0].clipToGeometry
+    check config.windowRules[0].defaultFloatingPosition.set
+    check config.windowRules[0].defaultFloatingPosition.x == 32
+    check config.windowRules[0].defaultFloatingPosition.y == 48
+    check config.windowRules[0].defaultFloatingPosition.relativeTo ==
+      FloatingPositionAnchor.BottomLeft
+    check config.windowRules[0].dialogViewportJumpSet
+    check config.windowRules[0].dialogViewportJump
+    check config.windowRules[0].floating.xRatioSet
+    check config.windowRules[0].floating.xRatio == 0.02'f32
+    check config.windowRules[0].floating.yRatioSet
+    check config.windowRules[0].floating.yRatio == 0.08'f32
+    check config.windowRules[0].floating.widthSet
+    check config.windowRules[0].floating.width == 880
+    check config.windowRules[0].floating.heightSet
+    check config.windowRules[0].floating.height == 640
+    check config.startupCommands == @[@["notify-send", "triad"]]
+    check config.quickshell.theme == "noctalia"
+    check config.terminal.command.len > 0
+    check config.screenshot.directory == "~/shots"
+    check config.screenshot.filenamePrefix == "triad-test"
+    check config.screenshot.captureCommand == "grim -t png"
+    check config.screenshot.regionSelectorCommand == "slurp -d"
+    check config.screenshot.clipboardCommand == "wl-copy --type image/png"
+    check config.screenshot.showPointer
+    check config.screenLock.command == @["swaylock"]
+    check config.windowMenu.command == @["bemenu"]
+    check config.scratchpad.widthRatio == 0.7'f32
+    check config.overview.outerGap == 80
+    check config.overview.innerGapMultiplier == 1.75'f32
+    check config.overview.zoom == 0.25'f32
+    check config.overview.hotCorners.size == 12
+    check config.overview.hotCorners.topLeft
+    check not config.overview.hotCorners.topRight
+    check not config.overview.hotCorners.bottomLeft
+    check config.overview.hotCorners.bottomRight
+    check config.cursor.theme == "Bibata"
+    check config.cursor.shakeToFind
+    check config.presentationMode == PresentationMode.PresentationAsync
+    check config.allowExitSession
+    check config.protocolSurfaces.enabled
+    check config.hotkeyOverlay.skipAtStartup
+    check config.hotkeyOverlay.hideNotBound
+    check config.keyBindings.len > 0
+    check config.commandForBinding("c", Super + Ctrl) == "layout-center-tile"
+    let uppercaseBindings =
+      config.keyBindings.filterIt(it.key == "c" and it.modifiers == Super + Ctrl)
+    check uppercaseBindings.len == 1
+    check uppercaseBindings[0].bypassShortcutsInhibit
+    check config.commandForBinding("Slash", Super) == "toggle-hotkey-overlay"
+    let titledBindings =
+      config.keyBindings.filterIt(it.key == "Slash" and it.modifiers == Super)
+    check titledBindings.len == 1
+    check titledBindings[0].hotkeyOverlayTitleKind ==
+      HotkeyOverlayTitleKind.HotkeyTitleCustom
+    check titledBindings[0].hotkeyOverlayTitle == "Show Important Hotkeys"
+    let hiddenBindings = config.keyBindings.filterIt(
+      it.key == "Question" and it.modifiers == Super + Shift
+    )
+    check hiddenBindings.len == 1
+    check hiddenBindings[0].hotkeyOverlayTitleKind ==
+      HotkeyOverlayTitleKind.HotkeyTitleHidden
+    check config.commandForBinding("F12", 0'u32) == "focus-last"
+    check config.pointerBindings.len == 4
+    check config.pointerBindings.anyIt(
+      it.button == 0x110'u32 and it.op == PointerOpKind.OpMove
+    )
+    check config.pointerBindings.anyIt(
+      it.button == 0x112'u32 and it.command == "toggle-maximized"
+    )
+    check config.pointerBindings.anyIt(
+      it.button == 0x111'u32 and it.command == "close-window" and
+        it.mode == BindingMode.BindOverview
+    )
+    check config.pointerBindings.anyIt(
+      it.button == 0x116'u32 and it.command == "focus-last"
+    )
+
+  test "HJKL mirroring preserves binding settings":
+    let path = getCurrentDir() / "test_config_mirror.kdl"
+    writeFile(
+      path,
+      """
+bindings {
+  mirror-hjkl-arrows #true
+  bind "Super+h" "focus-left" allow-inhibiting=#false
+  bind "Super+j" "focus-down" mode="overview"
+  bind "Super+k" "focus-up" allow-inhibiting=#false
+  bind "Super+Left" "custom-left"
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.commandForBinding("Left", Super) == "custom-left"
+    check config.commandForBinding("Down", Super, BindingMode.BindOverview) ==
+      "focus-down"
+    let mirroredDown = config.keyBindings.filterIt(
+      it.key == "Down" and it.modifiers == Super and it.mode == BindingMode.BindOverview
+    )
+    check mirroredDown.len == 1
+    let mirroredUp = config.keyBindings.filterIt(
+      it.key == "Up" and it.modifiers == Super and it.command == "focus-up"
+    )
+    check mirroredUp.len == 1
+    check mirroredUp[0].bypassShortcutsInhibit
+
+  test "Config adds hotkey overlay fallback when key slot is free":
+    let path = getCurrentDir() / "test_config_hotkey_fallback.kdl"
+    writeFile(
+      path,
+      """
+bindings {
+  bind "Super+q" "close-window"
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.hotkeyOverlay.skipAtStartup
+    check config.msgKindForBinding("Slash", Super + Shift) ==
+      MsgKind.CmdToggleHotkeyOverlay
+
+    writeFile(
+      path,
+      """
+bindings {
+  bind "Super+Shift+Slash" "focus-last"
+}
+""",
+    )
+    let occupied = loadConfig(path)
+    removeFile(path)
+
+    check occupied.msgKindForBinding("Slash", Super + Shift) == MsgKind.CmdFocusLast
+
+  test "cursor shake-to-find defaults off and supports explicit false":
+    let path = getCurrentDir() / "test_config_cursor_shake.kdl"
+    writeFile(
+      path,
+      """
+cursor {
+  theme "default"
+  size 24
+}
+""",
+    )
+    let defaultOff = loadConfig(path)
+    removeFile(path)
+
+    check not defaultOff.cursor.shakeToFind
+
+    writeFile(
+      path,
+      """
+cursor {
+  theme "default"
+  size 24
+  shake-to-find #false
+}
+""",
+    )
+    let explicitFalse = loadConfig(path)
+    removeFile(path)
+
+    check not explicitFalse.cursor.shakeToFind
+
+  test "Default bindings follow Niri-style movement and scratchpad chords":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+
+    check config.msgKindForBinding("h", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("Left", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("j", Super + Ctrl) == MsgKind.CmdMoveWindowDown
+    check config.msgKindForBinding("Down", Super + Ctrl) == MsgKind.CmdMoveWindowDown
+    check config.msgKindForBinding("k", Super + Ctrl) == MsgKind.CmdMoveWindowUp
+    check config.msgKindForBinding("l", Super + Ctrl) == MsgKind.CmdMoveColumnRight
+    check config.msgKindForBinding("h", Super + Alt) == MsgKind.CmdMoveWindowLeft
+    check config.msgKindForBinding("Right", Super + Alt) == MsgKind.CmdMoveWindowRight
+    check config.msgKindForBinding("w", Super) == MsgKind.CmdToggleScratchpad
+    check config.msgKindForBinding("w", Super + Shift) == MsgKind.CmdMoveToScratchpad
+    check config.msgKindForBinding("r", Super + Shift) == MsgKind.CmdRestoreScratchpad
+    check config.spawnForBinding("c", Super) ==
+      @["wtype", "-M", "ctrl", "-P", "Insert", "-p", "Insert", "-m", "ctrl"]
+    check config.spawnForBinding("v", Super) ==
+      @["wtype", "-M", "shift", "-P", "Insert", "-p", "Insert", "-m", "shift"]
+    check config.spawnForBinding("x", Super) ==
+      @["wtype", "-M", "ctrl", "x", "-m", "ctrl"]
+    check config.msgKindForBinding("Print", 0'u32) == MsgKind.CmdScreenshot
+    check config.commandForBinding("Print", Ctrl) == "screenshot-screen"
+    check config.commandForBinding("Print", Alt) == "screenshot-window"
+    check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
+    check config.msgKindForBinding("Slash", Super + Shift) ==
+      MsgKind.CmdToggleHotkeyOverlay
+    for key in ["c", "v", "x"]:
+      let bindings =
+        config.keyBindings.filterIt(it.key == key and it.modifiers == Super)
+      check bindings.len == 1
+      check bindings[0].bypassShortcutsInhibit
+    check config.layoutForBinding("c", Super + Ctrl) == LayoutMode.CenterTile
+    check config.layoutForBinding("v", Super + Ctrl) == LayoutMode.Deck
+    check config.layoutForBinding("x", Super + Ctrl) == LayoutMode.Monocle
+    check config.layoutForBinding("c", Super + Shift) == LayoutMode.RightTile
+    check parseTextCommand("layout-tgmix").get().newLayout == LayoutMode.TGMix
+
+  test "config defaults clamp invalid runtime values":
+    var model = Model()
+    model.applyConfig(
+      Config(
+        layout: LayoutConfig(
+          gaps: -9,
+          centerFocusedColumn: "sideways",
+          defaultColumnWidth: 4.0,
+          defaultWindowWidth: -1.0,
+          defaultWindowHeight: 0.0,
+          defaultMasterCount: 0,
+          defaultMasterRatio: 2.0,
+          animationSpeed: 5.0,
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 0),
+        overview: OverviewConfig(
+          outerGap: -1,
+          zoom: 99.0,
+          hotCorners: OverviewHotCornersConfig(size: 5000, topLeft: true),
+        ),
+        scratchpad: ScratchpadConfig(widthRatio: 4.0, heightRatio: 0.0),
+      )
+    )
+
+    check model.outerGaps == 0
+    check model.centerFocusedColumn == "never"
+    check model.defaultColumnWidth == 1.0'f32
+    check model.defaultWindowWidth == 0.05'f32
+    check model.defaultWindowHeight == 0.05'f32
+    check model.defaultMasterCount == 1
+    check model.defaultMasterRatio == 0.95'f32
+    check model.animationSpeed == 1.0'f32
+    check model.defaultWorkspaceCount == DefaultWorkspaceCount
+    check model.defaultWorkspaceLayout == LayoutMode.Scroller
+    check model.overviewOuterGap == DefaultOverviewOuterGap
+    check model.overviewZoom == 0.75'f32
+    check model.overviewHotCorners.size == 1000
+    check model.scratchpadWidthRatio == 1.0'f32
+    check model.scratchpadHeightRatio == 0.1'f32

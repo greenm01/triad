@@ -18,13 +18,36 @@ requires "chronicles >= 0.10.3"
 proc runTestSuite(path: string) =
   exec "nim c -r --hints:off --nimcache:tests/nimcache " & path
 
-proc runUnitSuites() =
+proc runCoreSuites() =
   for path in [
-    "tests/tapp_identity.nim", "tests/tcompat.nim", "tests/tconfig.nim",
-    "tests/tcore.nim", "tests/tstate.nim", "tests/thardening.nim", "tests/tlayouts.nim",
-    "tests/tlogging.nim", "tests/tprotocol.nim",
+    "tests/tcore_smoke.nim", "tests/tcore_navigation_layout.nim",
+    "tests/tcore_lifecycle_basic.nim", "tests/tcore_parented_popups.nim",
+    "tests/tcore_parented_geometry.nim", "tests/tcore_window_rules_merge.nim",
+    "tests/tcore_window_rules_policy.nim", "tests/tcore_window_rules_matchers.nim",
+    "tests/tcore_floating_rules.nim", "tests/tcore_window_movement.nim",
+    "tests/tcore_restore_identity.nim", "tests/tcore_window_rules_placement.nim",
+    "tests/tcore_output_sticky_scratchpad.nim", "tests/tcore_presentation_overview.nim",
+    "tests/tcore_overview.nim", "tests/tcore_overview_interactions.nim",
+    "tests/tcore_shell_snapshot_ipc.nim",
   ]:
     runTestSuite(path)
+
+proc runConfigSuites() =
+  for path in [
+    "tests/tconfig_loading_reload.nim", "tests/tconfig_parser_defaults.nim",
+    "tests/tconfig_window_rules_workspace.nim",
+  ]:
+    runTestSuite(path)
+
+proc runUnitSuites() =
+  for path in [
+    "tests/tapp_identity.nim", "tests/tcompat.nim", "tests/tstate.nim",
+    "tests/thardening.nim", "tests/tlayouts.nim", "tests/tlogging.nim",
+    "tests/tprotocol.nim",
+  ]:
+    runTestSuite(path)
+  runConfigSuites()
+  runCoreSuites()
 
 proc runDaemonSuites() =
   for path in ["tests/tstate.nim", "tests/thardening.nim"]:
@@ -33,7 +56,16 @@ proc runDaemonSuites() =
 task tidy, "Remove local Nim build outputs and project cache artifacts":
   for path in [
     "triad", "triad_niri", "src/config/parser", "src/triad", "src/triad_niri",
-    "tests/tapp_identity", "tests/tcompat", "tests/tconfig", "tests/tcore",
+    "tests/tapp_identity", "tests/tcompat", "tests/tconfig_loading_reload",
+    "tests/tconfig_parser_defaults", "tests/tconfig_window_rules_workspace",
+    "tests/tcore_smoke", "tests/tcore_navigation_layout", "tests/tcore_lifecycle_basic",
+    "tests/tcore_parented_popups", "tests/tcore_parented_geometry",
+    "tests/tcore_window_rules_merge", "tests/tcore_window_rules_policy",
+    "tests/tcore_window_rules_matchers", "tests/tcore_floating_rules",
+    "tests/tcore_window_movement", "tests/tcore_restore_identity",
+    "tests/tcore_window_rules_placement", "tests/tcore_output_sticky_scratchpad",
+    "tests/tcore_presentation_overview", "tests/tcore_overview",
+    "tests/tcore_overview_interactions", "tests/tcore_shell_snapshot_ipc",
     "tests/tstate", "tests/thardening", "tests/tlayouts", "tests/tlogging",
     "tests/tprotocol", "tests/tstress", "triad-live-smoke.events",
     "triad-live-smoke.log", "triad-live-smoke.out",
@@ -61,10 +93,10 @@ task testCompat, "Run shell compatibility contract tests":
   runTestSuite("tests/tcompat.nim")
 
 task testConfig, "Run configuration parser tests":
-  runTestSuite("tests/tconfig.nim")
+  runConfigSuites()
 
 task testCore, "Run core model/update tests":
-  runTestSuite("tests/tcore.nim")
+  runCoreSuites()
 
 task testState, "Run runtime state tests":
   runTestSuite("tests/tstate.nim")
