@@ -48,8 +48,8 @@ The supported KDL nodes are:
 - `workspaces`: default workspace floor and fallback default layout.
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace, floating behavior,
-  focus behavior, parented-dialog viewport jump behavior, shortcut
-  inhibition, and forced layout.
+  focus behavior, parented-dialog viewport jump behavior, size-hint policy,
+  shortcut inhibition, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -82,6 +82,7 @@ window-rule {
   match app-id="pinentry"
   open-floating #true
   open-focused #false
+  center-floating #true
 }
 
 window-rule {
@@ -96,6 +97,7 @@ window-rule {
   open-maximized #true
   maximize-policy "column"
   tiled-state #true
+  respect-size-hints #true
   default-column-width { proportion 0.65 }
   scroller-proportion { proportion 0.70 }
   scroller-single-proportion { proportion 0.80 }
@@ -163,6 +165,15 @@ window-rule {
   `column` maps maximize actions to a full-width scroller column without
   setting client-visible maximize state. `ignore` refuses maximize-on actions;
   unmaximize and toggle-off still clear existing maximize state.
+- `respect-size-hints #true|#false`: controls whether matching windows use
+  client-provided min, max, and fixed-size hints. The default is `#true`.
+  `#false` ignores client hints for effective geometry and disables fixed-size
+  auto-floating for that rule, but explicit Triad `min-*` and `max-*` rule
+  bounds still apply.
+- `center-floating #true|#false`: centers generated floating geometry on the
+  active screen after rule/global floating size is resolved. The default is
+  `#false`, preserving the normal floating ratios. `default-floating-position`
+  takes precedence when both match.
 - `parented-role "dialog"|"tool"|"plain"`: controls how a matching parented
   floating window participates in child-window policy. `dialog` is the default:
   it joins the popup tree, adopts the parent workspace unless `default-workspace`
@@ -204,7 +215,8 @@ window-rule {
   `max-height <px>`: override the effective size bounds used for matching
   windows. Values are clamped to `0..65535`; `0` clears a broader matching
   rule's bound. Bounds constrain geometry but do not make a window floating by
-  themselves.
+  themselves. They still apply when `respect-size-hints #false` ignores client
+  hints.
 - `match` and `exclude` use regex search semantics. Simple strings such as
   `gimp` match as before; exact matches should be anchored, for example
   `^org\\.gimp\\.GIMP$`.
@@ -229,6 +241,8 @@ window-rule {
   on the same axis; the later field wins.
 - Rule-level `default-floating-position` merges atomically. A later matching
   rule replaces the earlier anchor and both offsets.
+- Rule-level `respect-size-hints` and `center-floating` merge as ordinary
+  explicit booleans. A later matching rule can override `#true` with `#false`.
 - Rule-level opening sizing fields merge independently. A later matching rule
   can override only `default-window-height` while keeping an earlier
   `default-column-width`.

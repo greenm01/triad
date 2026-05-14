@@ -1608,6 +1608,49 @@ suite "Core Runtime Logic":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
     check model.focusedWindowId() == 1
 
+  test "Respect size hints false keeps large parented surface floating":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "editor", respectSizeHintsSet: true, respectSizeHints: false
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+    )
+    let parentGeom = model.instructionGeom(1)
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "editor",
+        title: "Detached",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 2,
+        minWidth: int32(float32(parentGeom.w) * 0.95'f32),
+        minHeight: int32(float32(parentGeom.h) * 0.95'f32),
+        maxWidth: 0,
+        maxHeight: 0,
+      )
+    )
+
+    let child = model.snapshotWindow(2)
+    check child.isFloating
+
   test "Manual tiled parented child is not refloated by later hints":
     var model = cameraModel()
     model.applyMsg(
@@ -2008,6 +2051,10 @@ suite "Core Runtime Logic":
               openMaximizedToEdges: true,
               maximizePolicySet: true,
               maximizePolicy: WindowRuleMaximizePolicy.Ignore,
+              respectSizeHintsSet: true,
+              respectSizeHints: false,
+              centerFloatingSet: true,
+              centerFloating: true,
               parentedRole: ParentedRole.Tool,
               dialogViewportJump: true,
               keyboardShortcutsInhibit: true,
@@ -2026,6 +2073,10 @@ suite "Core Runtime Logic":
               openMaximizedToEdges: false,
               maximizePolicySet: true,
               maximizePolicy: WindowRuleMaximizePolicy.Edge,
+              respectSizeHintsSet: true,
+              respectSizeHints: true,
+              centerFloatingSet: true,
+              centerFloating: false,
               parentedRoleSet: true,
               parentedRole: ParentedRole.Dialog,
               dialogViewportJumpSet: true,
@@ -2051,6 +2102,10 @@ suite "Core Runtime Logic":
     check not rule.rule.openMaximizedToEdges
     check rule.rule.maximizePolicySet
     check rule.rule.maximizePolicy == WindowRuleMaximizePolicy.Edge
+    check rule.rule.respectSizeHintsSet
+    check rule.rule.respectSizeHints
+    check rule.rule.centerFloatingSet
+    check not rule.rule.centerFloating
     check rule.rule.parentedRole == ParentedRole.Dialog
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
@@ -2652,6 +2707,135 @@ suite "Core Runtime Logic":
     let winId = model.windowForExternal(ExternalWindowId(1))
     check model.windowData(winId).get().floatingGeom ==
       runtime_values.Rect(x: 32, y: 552, w: 200, h: 200)
+
+  test "Center floating rule centers unparented generated geometry":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "picker",
+              openFloatingSet: true,
+              openFloating: true,
+              centerFloatingSet: true,
+              centerFloating: true,
+              floating: WindowRuleFloatingConfig(
+                widthSet: true, width: 400, heightSet: true, height: 200
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 800)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "picker", title: "Pick")
+    )
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    check model.windowData(winId).get().floatingGeom ==
+      runtime_values.Rect(x: 300, y: 300, w: 400, h: 200)
+
+  test "Floating anchor overrides center floating rule":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "anchored",
+              openFloatingSet: true,
+              openFloating: true,
+              centerFloatingSet: true,
+              centerFloating: true,
+              floating: WindowRuleFloatingConfig(
+                widthSet: true, width: 200, heightSet: true, height: 200
+              ),
+              defaultFloatingPosition: WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.BottomLeft, x: 32, y: 48
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 800)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "anchored", title: "Pick")
+    )
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    check model.windowData(winId).get().floatingGeom ==
+      runtime_values.Rect(x: 32, y: 552, w: 200, h: 200)
+
+  test "Respect size hints false disables fixed-size auto floating":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "utility", respectSizeHintsSet: true, respectSizeHints: false
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "utility", title: "Tool")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensionsHint,
+        hintWindowId: 1,
+        minWidth: 260,
+        minHeight: 140,
+        maxWidth: 260,
+        maxHeight: 140,
+      )
+    )
+
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(1))).get()
+    check not win.isFloating
+    check win.clientMinWidth == 260
+    check win.minWidth == 0
+    check win.maxWidth == 0
+
+  test "Respect size hints false still honors explicit rule bounds":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "bounded-tool",
+              openFloatingSet: true,
+              openFloating: true,
+              respectSizeHintsSet: true,
+              respectSizeHints: false,
+              minWidthSet: true,
+              minWidth: 500,
+              maxHeightSet: true,
+              maxHeight: 300,
+              floating: WindowRuleFloatingConfig(
+                widthSet: true, width: 300, heightSet: true, height: 500
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 1, appId: "bounded-tool", title: "Tool"
+      )
+    )
+
+    let win = model.windowData(model.windowForExternal(ExternalWindowId(1))).get()
+    check win.isFloating
+    check win.floatingGeom.w == 500
+    check win.floatingGeom.h == 300
 
   test "Single-edge floating anchor centers on the other axis":
     var model = initRuntimeStateFromConfig(

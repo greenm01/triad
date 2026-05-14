@@ -664,6 +664,12 @@ proc loadConfig*(path: string): Config =
             elif child.name == "maximize-policy" and child.args.len > 0:
               rule.maximizePolicySet = true
               rule.maximizePolicy = parseMaximizePolicy(child.args[0].kString())
+            elif child.name == "respect-size-hints" and child.args.len > 0:
+              rule.respectSizeHintsSet = true
+              rule.respectSizeHints = child.args[0].kBool()
+            elif child.name == "center-floating" and child.args.len > 0:
+              rule.centerFloatingSet = true
+              rule.centerFloating = child.args[0].kBool()
             elif child.name == "parented-role" and child.args.len > 0:
               rule.parentedRoleSet = true
               rule.parentedRole = parseParentedRole(child.args[0].kString())

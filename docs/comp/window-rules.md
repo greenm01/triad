@@ -127,7 +127,7 @@ These are gap-analysis categories, not target config names.
 | Mango rule family | Examples | Triad status | Layout note |
 | :--- | :--- | :---: | :--- |
 | Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement and open focus exist; monitor placement and tag-silent semantics are gaps. |
-| Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating, ratio sizing, fixed pixel sizing, and anchored pixel position; no-center policy and size-hint bypass are gaps. |
+| Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Pass | Triad supports open floating, ratio sizing, fixed pixel sizing, anchored pixel position, opt-in centering, and rule-level client size-hint policy. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Gap | Mostly compositor/render policy; Triad has global border and animation config. |
@@ -155,6 +155,12 @@ These are gap-analysis categories, not target config names.
   policy, paired with the runtime `toggle-keyboard-shortcuts-inhibit` command.
 - `tiled-state` controls the client-visible River tiled hint. It does not move
   a window between Triad's tiled and floating placement.
+- `respect-size-hints` is a Triad-style positive name for Mango's
+  `isnosizehint` capability. `#false` ignores client-provided min, max, and
+  fixed-size hints while preserving explicit Triad rule bounds.
+- `center-floating` is Triad's opt-in equivalent for Mango's floating
+  center-placement behavior. `default-floating-position` remains the more
+  specific placement rule and wins when both match.
 - `maximize-policy` controls maximize actions after the window exists. `edge`
   keeps the client-visible maximized model, `column` maps maximize to
   full-width scroller columns, and `ignore` refuses maximize-on requests.
@@ -171,16 +177,19 @@ These are gap-analysis categories, not target config names.
   `VerticalScroller`; other layouts preserve the stored column value but do not
   consume it.
 - Rule-level size bounds are dynamic geometry constraints. They intentionally do
-  not participate in Triad's fixed-size floating heuristic; that heuristic
-  still uses raw client hints.
+  not participate in Triad's fixed-size floating heuristic. That heuristic uses
+  raw client hints only when `respect-size-hints` is enabled.
 - Opening presentation states force tiled placement if they conflict with
   `open-floating`. Fullscreen takes precedence over edge maximize, which takes
   precedence over full-width column.
 - Fixed-size unparented windows can open floating by policy, similar to niri's
-  fixed-height floating default.
+  fixed-height floating default, unless a matching rule disables
+  `respect-size-hints`.
 - `default-floating-position` controls initial position for unparented,
   `tool`, and `plain` floats and for later toggle-to-floating placement.
-  Parented `dialog` windows keep parent-relative placement.
+  Parented `dialog` windows keep parent-relative placement. `center-floating`
+  fills the gap between the default floating ratios and explicit anchored
+  placement.
 - Lead floating startup windows are handled by Triad policy: a focused
   unparented floating lead window can anchor the first same-app unparented
   normal window without inventing a parent relationship.

@@ -245,6 +245,12 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.maximizePolicySet:
     result.maximizePolicySet = true
     result.maximizePolicy = rule.maximizePolicy
+  if rule.respectSizeHintsSet:
+    result.respectSizeHintsSet = true
+    result.respectSizeHints = rule.respectSizeHints
+  if rule.centerFloatingSet:
+    result.centerFloatingSet = true
+    result.centerFloating = rule.centerFloating
   if rule.parentedRoleSet:
     result.parentedRole = rule.parentedRole
   if rule.openNamedScratchpad.len > 0:
@@ -302,16 +308,24 @@ proc windowKeyboardShortcutsInhibit*(model: Model, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(win)
   ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
 
+proc windowRespectsSizeHints*(model: Model, winId: WindowId, win: WindowData): bool =
+  let ruleMatch = model.windowRuleFor(winId, win)
+  not ruleMatch.found or not ruleMatch.rule.respectSizeHintsSet or
+    ruleMatch.rule.respectSizeHints
+
 proc applyWindowRuleBounds*(model: var Model, winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   if winOpt.isNone:
     return false
   let win = winOpt.get()
   let ruleMatch = model.windowRuleFor(winId, win)
-  var minWidth = win.clientMinWidth
-  var minHeight = win.clientMinHeight
-  var maxWidth = win.clientMaxWidth
-  var maxHeight = win.clientMaxHeight
+  let respectSizeHints =
+    not ruleMatch.found or not ruleMatch.rule.respectSizeHintsSet or
+    ruleMatch.rule.respectSizeHints
+  var minWidth = if respectSizeHints: win.clientMinWidth else: 0'i32
+  var minHeight = if respectSizeHints: win.clientMinHeight else: 0'i32
+  var maxWidth = if respectSizeHints: win.clientMaxWidth else: 0'i32
+  var maxHeight = if respectSizeHints: win.clientMaxHeight else: 0'i32
   if ruleMatch.found:
     if ruleMatch.rule.minWidthSet:
       minWidth = ruleMatch.rule.minWidth

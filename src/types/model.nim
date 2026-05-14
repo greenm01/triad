@@ -137,6 +137,10 @@ type
     openMaximizedToEdges*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
+    respectSizeHintsSet*: bool
+    respectSizeHints*: bool
+    centerFloatingSet*: bool
+    centerFloating*: bool
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
     openNamedScratchpad*: string
@@ -184,6 +188,10 @@ type
     openMaximizedToEdges*: bool
     maximizePolicySet*: bool
     maximizePolicy*: WindowRuleMaximizePolicy
+    respectSizeHintsSet*: bool
+    respectSizeHints*: bool
+    centerFloatingSet*: bool
+    centerFloating*: bool
     parentedRole*: ParentedRole
     openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig

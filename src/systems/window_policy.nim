@@ -122,7 +122,9 @@ proc recenterLeadFloatingAnchor*(
 proc floatingGeomFromRule(
     model: Model, win: WindowData
 ): tuple[
-  geom: runtime_values.Rect, position: runtime_values.WindowRuleFloatingPositionConfig
+  geom: runtime_values.Rect,
+  position: runtime_values.WindowRuleFloatingPositionConfig,
+  center: bool,
 ] =
   let screenW = max(0'i32, model.screenWidth)
   let screenH = max(0'i32, model.screenHeight)
@@ -148,6 +150,7 @@ proc floatingGeomFromRule(
     if floating.heightSet:
       result.geom.h = max(model.effectiveFloatingMinHeight(), floating.height)
     result.position = ruleMatch.rule.defaultFloatingPosition
+    result.center = ruleMatch.rule.centerFloatingSet and ruleMatch.rule.centerFloating
 
 proc floatingGeomForWindow*(
     model: Model, winId: WindowId, parentExternalId: ExternalWindowId
@@ -166,6 +169,8 @@ proc floatingGeomForWindow*(
   result = win.applyFloatingSizeHints(result)
   if resolved.position.set:
     result = screen.positionedByAnchor(result, resolved.position)
+  elif resolved.center:
+    result = screen.centeredIn(result)
   result = result.clampToScreen(screen)
 
 proc nearSize(size, bounds: int32): bool =
@@ -202,7 +207,8 @@ proc parentedWindowIntent*(model: Model, winId: WindowId): ParentedWindowIntent 
     return ParentedWindowIntent.Float
 
   let parent = model.parentRenderRect(win.parentExternalId)
-  if parent.found and win.parentedPrimarySurfaceIntent(parent.rect):
+  if parent.found and model.windowRespectsSizeHints(winId, win) and
+      win.parentedPrimarySurfaceIntent(parent.rect):
     return ParentedWindowIntent.Tile
   ParentedWindowIntent.Float
 
@@ -367,8 +373,11 @@ proc applyParentFloatingPolicy*(
 
 proc applyFixedSizeFloatingPolicy*(model: var Model, winId: WindowId): bool =
   let winOpt = model.windowData(winId)
-  if winOpt.isNone or not winOpt.get().hasClientFixedSizeHint():
+  if winOpt.isNone:
     return false
-  let geom = model.floatingGeomForWindow(winId, winOpt.get().parentExternalId)
+  let win = winOpt.get()
+  if not model.windowRespectsSizeHints(winId, win) or not win.hasClientFixedSizeHint():
+    return false
+  let geom = model.floatingGeomForWindow(winId, win.parentExternalId)
   result = model.ensureFloatingAt(winId, geom)
   result = model.clearWindowViewportRetarget(winId) or result
