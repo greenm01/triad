@@ -125,6 +125,13 @@ environment {
   systemd/dbus activation environments, externally started processes, or an
   already-running Quickshell instance after `config-reload`.
 
+## Layout
+
+`layout { scroller-proportion-presets <n>... }` sets the ascending proportions
+used by `switch-proportion-preset`. Values are clamped to `0.05..1.0`; empty
+lists fall back to `0.33 0.5 0.67 1.0`. Triad does not bind
+`switch-proportion-preset` by default.
+
 ## Window Rules
 
 `window-rule` entries match windows by app id and/or title regex and apply

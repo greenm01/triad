@@ -50,6 +50,7 @@ type
     unfocusedBorderColor*: uint32
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
+    scrollerProportionPresets*: seq[float32]
     enableAnimations*: bool
     animationSpeed*: float32
     smartGaps*: bool
@@ -857,6 +858,11 @@ proc loadConfig*(path: string): Config =
   result.layout.gaps = DefaultGaps
   result.layout.centerFocusedColumn = DefaultCenterFocusedColumn
   result.layout.defaultColumnWidth = DefaultColumnWidth
+  result.layout.scrollerProportionPresets =
+    @[
+      DefaultScrollerProportionPresetSmall, DefaultScrollerProportionPresetMedium,
+      DefaultScrollerProportionPresetLarge, DefaultScrollerProportionPresetFull,
+    ]
   result.layout.defaultWindowWidth = DefaultWindowWidth
   result.layout.defaultWindowHeight = DefaultWindowHeight
   result.layout.defaultMasterCount = DefaultMasterCount
@@ -964,6 +970,12 @@ proc loadConfig*(path: string): Config =
               result.layout.scrollerFocusCenter = child.args[0].kBool()
             elif child.name == "scroller-prefer-center" and child.args.len > 0:
               result.layout.scrollerPreferCenter = child.args[0].kBool()
+            elif child.name == "scroller-proportion-presets":
+              result.layout.scrollerProportionPresets = @[]
+              for arg in child.args:
+                result.layout.scrollerProportionPresets.add(
+                  clampF32(float32(arg.kFloat()), 0.05, 1.0)
+                )
             elif child.name == "enable-animations" and child.args.len > 0:
               result.layout.enableAnimations = child.args[0].kBool()
             elif child.name == "animation-speed" and child.args.len > 0:

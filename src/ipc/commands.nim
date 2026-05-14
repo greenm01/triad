@@ -500,6 +500,19 @@ proc parseTextCommand*(line: string): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
+  of "switch-proportion-preset":
+    if parts.len >= 2:
+      try:
+        some(
+          Msg(
+            kind: MsgKind.CmdSwitchProportionPreset,
+            proportionPresetDelta: parseInt(parts[1]),
+          )
+        )
+      except CatchableError:
+        none(Msg)
+    else:
+      some(Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1))
   of "maximize-column":
     some(Msg(kind: MsgKind.CmdMaximizeColumn))
   of "adjust-gaps":

@@ -549,6 +549,30 @@ suite "Core Runtime Logic: window movement":
     discard model.updateModel(Msg(kind: MsgKind.CmdResizeWidth, deltaW: 0.1'f32))
     check not model.columnData(columnId).get().isFullWidth
 
+  test "Proportion preset command cycles scroller column widths":
+    var model = cameraModel()
+    model.scrollerProportionPresets = @[0.25'f32, 0.5'f32, 0.75'f32]
+    model.seedCameraWindows(1)
+    let tagId = model.activeTag
+    let columnId = model.columnAt(tagId, 0)
+
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdSetColumnWidth, targetWidth: 0.5'f32))
+    discard model.updateModel(
+      Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1)
+    )
+    check model.columnData(columnId).get().widthProportion == 0.75'f32
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1)
+    )
+    check model.columnData(columnId).get().widthProportion == 0.25'f32
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: -1)
+    )
+    check model.columnData(columnId).get().widthProportion == 0.75'f32
+
   test "Moving full-width column preserves column presentation":
     var model = cameraModel()
     model.seedCameraWindows(1)

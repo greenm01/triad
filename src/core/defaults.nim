@@ -5,6 +5,10 @@ const
   DefaultGaps* = 16'i32
   DefaultCenterFocusedColumn* = "on-overflow"
   DefaultColumnWidth* = 0.5'f32
+  DefaultScrollerProportionPresetSmall* = 0.33'f32
+  DefaultScrollerProportionPresetMedium* = 0.5'f32
+  DefaultScrollerProportionPresetLarge* = 0.67'f32
+  DefaultScrollerProportionPresetFull* = 1.0'f32
   DefaultWindowWidth* = 0.5'f32
   DefaultWindowHeight* = 1.0'f32
   DefaultMasterCount* = 1

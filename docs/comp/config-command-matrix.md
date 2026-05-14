@@ -118,7 +118,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Layouts | Master ratio | `setmfact`, `default_mfact`, `mfact` | WM policy | `master-ratio`, `adjust-master-ratio`, `layout.master.split-ratio` | X | |
 | Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width`, `scroller-proportion`, `scroller-single-proportion` | X | Triad uses column/window width proportions; scroller rule proportions apply at new-window placement time. |
 | Layouts | Scroller focus centering | `scroller_focus_center`, `scroller_prefer_center` | WM policy | `scroller-focus-center`, `scroller-prefer-center` | X | |
-| Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | | | Not exposed by Triad. |
+| Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | `scroller-proportion-presets`, `switch-proportion-preset` | X | Triad cycles focused horizontal or vertical scroller columns through configured clamped presets. |
 | Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |

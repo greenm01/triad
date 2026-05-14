@@ -86,6 +86,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `resize-height <delta>`: Adjusts the height proportion.
 *   `maximize-column`: Toggles the focused column to full width while keeping gaps, borders, and client state unchanged.
 *   `set-column-width <proportion>`: Precisely dictates the width of the focused column (e.g., `0.5`, `1.0`).
+*   `switch-proportion-preset [delta]`: Cycles the focused scroller column through `layout.scroller-proportion-presets`; negative deltas cycle backward.
 *   `adjust-gaps <delta>`: Increases or decreases the global gap size (e.g., `5` or `-5`).
 *   `toggle-gaps`: Instantly eliminates all gaps or restores them to their former glory.
 *   `warp-pointer <x> <y>`: Requests a River pointer warp on every active seat.

@@ -23,6 +23,7 @@ layout {
   }
   scroller-focus-center #true
   scroller-prefer-center #true
+  scroller-proportion-presets 1.2 0.25 0.5 0.5
   enable-animations #false
   animation-speed 0.4
   smart-gaps #true
@@ -249,6 +250,8 @@ switch-events {
     check config.mirrorHjklArrows
     check config.layout.borderWidth == 3
     check config.layout.centerFocusedColumn == "always"
+    check config.layout.scrollerProportionPresets ==
+      @[1.0'f32, 0.25'f32, 0.5'f32, 0.5'f32]
     check config.layout.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
@@ -622,6 +625,14 @@ cursor {
   test "Default bindings follow Niri-style movement and scratchpad chords":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
 
+    for i, binding in config.keyBindings:
+      for j in (i + 1) ..< config.keyBindings.len:
+        let other = config.keyBindings[j]
+        check not (
+          binding.key == other.key and binding.modifiers == other.modifiers and
+          binding.mode == other.mode
+        )
+
     check config.msgKindForBinding("h", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
     check config.msgKindForBinding("Left", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
     check config.msgKindForBinding("j", Super + Ctrl) == MsgKind.CmdMoveWindowDown
@@ -660,6 +671,9 @@ cursor {
     check config.layoutForBinding("x", Super + Ctrl) == LayoutMode.Monocle
     check config.layoutForBinding("c", Super + Shift) == LayoutMode.RightTile
     check parseTextCommand("layout-tgmix").get().newLayout == LayoutMode.TGMix
+    let preset = parseTextCommand("switch-proportion-preset -1").get()
+    check preset.kind == MsgKind.CmdSwitchProportionPreset
+    check preset.proportionPresetDelta == -1
 
   test "config defaults clamp invalid runtime values":
     var model = Model()
@@ -669,6 +683,7 @@ cursor {
           gaps: -9,
           centerFocusedColumn: "sideways",
           defaultColumnWidth: 4.0,
+          scrollerProportionPresets: @[2.0'f32, 0.5'f32, 0.5'f32, 0.0'f32],
           defaultWindowWidth: -1.0,
           defaultWindowHeight: 0.0,
           defaultMasterCount: 0,
@@ -688,6 +703,7 @@ cursor {
     check model.outerGaps == 0
     check model.centerFocusedColumn == "never"
     check model.defaultColumnWidth == 1.0'f32
+    check model.scrollerProportionPresets == @[0.05'f32, 0.5'f32, 1.0'f32]
     check model.defaultWindowWidth == 0.05'f32
     check model.defaultWindowHeight == 0.05'f32
     check model.defaultMasterCount == 1

@@ -420,6 +420,7 @@ type
     scrollerPreferCenter*: bool
     centerFocusedColumn*: string
     defaultColumnWidth*: float32
+    scrollerProportionPresets*: seq[float32]
     defaultWindowWidth*: float32
     defaultWindowHeight*: float32
     defaultMasterCount*: int

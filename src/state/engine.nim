@@ -1,4 +1,4 @@
-import std/options
+import std/[algorithm, options]
 import entity_manager, id_gen, invariants, iterators, live_restore, queries, snapshot
 import ../core/defaults
 import ../entities/ops
@@ -21,6 +21,28 @@ type GeometryRect* = typeof(WindowData().floatingGeom)
 
 proc clampProportion*(value: float32, lo = 0.05'f32, hi = 1.0'f32): float32 =
   clamp(value, lo, hi)
+
+proc defaultScrollerProportionPresets*(): seq[float32] =
+  @[
+    DefaultScrollerProportionPresetSmall, DefaultScrollerProportionPresetMedium,
+    DefaultScrollerProportionPresetLarge, DefaultScrollerProportionPresetFull,
+  ]
+
+proc normalizedProportionPresets*(values: openArray[float32]): seq[float32] =
+  for value in values:
+    result.add(clampProportion(value))
+  result.sort()
+  var writeIdx = 0
+  for value in result:
+    if writeIdx == 0 or abs(value - result[writeIdx - 1]) > 0.0001'f32:
+      result[writeIdx] = value
+      inc writeIdx
+  result.setLen(writeIdx)
+  if result.len == 0:
+    result = defaultScrollerProportionPresets()
+
+proc scrollerProportionPresets*(model: Model): seq[float32] =
+  normalizedProportionPresets(model.scrollerProportionPresets)
 
 proc defaultWindowWidth*(model: Model): float32 =
   if model.defaultWindowWidth > 0:

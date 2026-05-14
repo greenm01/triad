@@ -195,6 +195,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.centerFocusedColumn =
     runtimeCenterFocusedColumn(config.layout.centerFocusedColumn)
   model.defaultColumnWidth = configClampF32(config.layout.defaultColumnWidth, 0.05, 1.0)
+  model.scrollerProportionPresets =
+    normalizedProportionPresets(config.layout.scrollerProportionPresets)
   model.defaultWindowWidth = configClampF32(config.layout.defaultWindowWidth, 0.05, 1.0)
   model.defaultWindowHeight =
     configClampF32(config.layout.defaultWindowHeight, 0.05, 1.0)

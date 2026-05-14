@@ -106,6 +106,7 @@ type
     CmdResizeWidth
     CmdResizeHeight
     CmdSetColumnWidth
+    CmdSwitchProportionPreset
     CmdAdjustGaps
     CmdToggleGapsRel # Unused
     CmdMoveToScratchpad
@@ -308,6 +309,8 @@ type
       deltaH*: float32
     of MsgKind.CmdSetColumnWidth:
       targetWidth*: float32
+    of MsgKind.CmdSwitchProportionPreset:
+      proportionPresetDelta*: int
     of MsgKind.CmdAdjustGaps:
       deltaG*: int32
     of MsgKind.CmdResizeFloating:

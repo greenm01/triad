@@ -263,6 +263,12 @@ proc actionToMsg(
       some(Msg(kind: MsgKind.CmdResizeHeight, deltaH: d.get()))
     else:
       none(Msg)
+  of "switch-proportion-preset":
+    let d = intFromField(payload, "delta")
+    if d.isSome:
+      some(Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: d.get()))
+    else:
+      some(Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1))
   of "adjust-master-ratio":
     let d = floatFromField(payload, "delta")
     if d.isSome:

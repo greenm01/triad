@@ -142,6 +142,42 @@ proc setFocusedColumnWidth*(model: var Model, width: float32): bool =
     return false
   model.setColumnWidth(pos.columnId, width)
 
+proc switchProportionPreset*(model: var Model, delta: int): bool =
+  if delta == 0:
+    return false
+  let pos = model.focusedPosition()
+  if not pos.found:
+    return false
+  let tag = model.tagData(pos.tagId).get()
+  if tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+    return false
+  let presets = model.scrollerProportionPresets()
+  if presets.len == 0:
+    return false
+  let column = model.column(pos.columnId).get()
+  let current = clampProportion(column.widthProportion)
+  let epsilon = 0.0001'f32
+  var index =
+    if delta > 0:
+      0
+    else:
+      presets.len - 1
+  if delta > 0:
+    while index < presets.len and presets[index] <= current + epsilon:
+      inc index
+    if index >= presets.len:
+      index = 0
+    for _ in 1 ..< abs(delta):
+      index = (index + 1) mod presets.len
+  else:
+    while index >= 0 and presets[index] >= current - epsilon:
+      dec index
+    if index < 0:
+      index = presets.len - 1
+    for _ in 1 ..< abs(delta):
+      index = (index + presets.len - 1) mod presets.len
+  model.setColumnWidth(pos.columnId, presets[index])
+
 proc toggleFocusedColumnFullWidth*(model: var Model): bool =
   let pos = model.focusedPosition()
   if not pos.found:

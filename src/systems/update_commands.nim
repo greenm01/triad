@@ -44,6 +44,8 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.resizeHeight(msg.deltaH)
   of MsgKind.CmdSetColumnWidth:
     result.dirty = model.setFocusedColumnWidth(msg.targetWidth)
+  of MsgKind.CmdSwitchProportionPreset:
+    result.dirty = model.switchProportionPreset(msg.proportionPresetDelta)
   of MsgKind.CmdRenameTag:
     result.dirty = model.renameActiveWorkspace(msg.newName)
     if result.dirty:
