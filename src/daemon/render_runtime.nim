@@ -2,9 +2,11 @@ import std/[algorithm, options, tables]
 import protocols/river/client as river
 import ../core/render_visibility
 import ../systems/[daemon_view, layout_projection, recent_windows, window_rules]
-import ../types/[model, runtime_values]
+import ../types/model
+import ../types/runtime_values except WindowId
 import ../utils/overview_hit_test
 import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
+from ../types/core import WindowId
 
 const
   RiverEdgeBottom* = 2'u32
@@ -27,6 +29,13 @@ template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
 template recentWindowsChromeSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsChromeSurfaceId
 
+proc renderWindowBorder*(
+    model: Model, logicalId: WindowId, focused: bool
+): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
+  if model.recentWindowsVisible():
+    return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
+  model.effectiveWindowBorder(logicalId, focused)
+
 proc applyBorder(
     daemon: TriadDaemon,
     id: runtime_values.WindowId,
@@ -35,7 +44,7 @@ proc applyBorder(
     edges: uint32,
 ) =
   let logicalId = daemon.currentModel.windowForRiverId(id)
-  let border = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
+  let border = daemon.currentModel.renderWindowBorder(logicalId, focused)
   let color =
     if focused:
       premulColor(border.activeColor)
@@ -67,7 +76,9 @@ proc configuredPresentationMode*(model: Model): uint32 =
 proc hasPresentationPreference*(model: Model): bool =
   model.effectivePresentationMode().hasPreference
 
-proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: WindowId): bool =
+proc isDescendantRiverWindow(
+    daemon: TriadDaemon, child, ancestor: runtime_values.WindowId
+): bool =
   if child == 0 or ancestor == 0 or child == ancestor:
     return false
   var current = child
@@ -76,7 +87,7 @@ proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: WindowId): bo
     let winOpt = daemon.currentModel.windowDataForRiverId(current)
     if winOpt.isNone:
       return false
-    let parent = WindowId(uint32(winOpt.get().parentExternalId))
+    let parent = runtime_values.WindowId(uint32(winOpt.get().parentExternalId))
     if parent == 0:
       return false
     if parent == ancestor:
@@ -85,13 +96,13 @@ proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: WindowId): bo
     inc depth
   false
 
-proc logicalWindowSortKey(daemon: TriadDaemon, id: WindowId): uint32 =
+proc logicalWindowSortKey(daemon: TriadDaemon, id: runtime_values.WindowId): uint32 =
   let logicalId = daemon.currentModel.windowForRiverId(id)
   if uint32(logicalId) != 0:
     return uint32(logicalId)
   uint32(id)
 
-proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: WindowId): int =
+proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: runtime_values.WindowId): int =
   if id == 0:
     return 0
   var current = id
@@ -105,13 +116,13 @@ proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: WindowId): int =
       return 2
     if win.isOverlay:
       result = max(result, 1)
-    let parent = WindowId(uint32(win.parentExternalId))
+    let parent = runtime_values.WindowId(uint32(win.parentExternalId))
     if parent == 0:
       return
     current = parent
     inc depth
 
-proc desiredStackCmp(daemon: TriadDaemon, a, b: WindowId): int =
+proc desiredStackCmp(daemon: TriadDaemon, a, b: runtime_values.WindowId): int =
   if daemon.isDescendantRiverWindow(a, b):
     return 1
   if daemon.isDescendantRiverWindow(b, a):
@@ -122,7 +133,7 @@ proc desiredStackCmp(daemon: TriadDaemon, a, b: WindowId): int =
     return cmp(aLayer, bLayer)
   cmp(daemon.logicalWindowSortKey(a), daemon.logicalWindowSortKey(b))
 
-proc orderedDesiredIds*(daemon: TriadDaemon): seq[WindowId] =
+proc orderedDesiredIds*(daemon: TriadDaemon): seq[runtime_values.WindowId] =
   for id in daemon.desiredPlacements.keys:
     if daemon.desiredPlacementOrder.find(id) == -1:
       result.add(id)
@@ -130,7 +141,7 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[WindowId] =
     if daemon.desiredPlacements.hasKey(id) and result.find(id) == -1:
       result.add(id)
   result.sort(
-    proc(a, b: WindowId): int =
+    proc(a, b: runtime_values.WindowId): int =
       daemon.desiredStackCmp(a, b)
   )
 
@@ -150,7 +161,9 @@ proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
       )
     )
 
-proc overviewWindowAtPointer*(daemon: TriadDaemon, seat: ptr RiverSeatV1): WindowId =
+proc overviewWindowAtPointer*(
+    daemon: TriadDaemon, seat: ptr RiverSeatV1
+): runtime_values.WindowId =
   if not daemon.currentModel.overviewActive or seat == nil:
     return 0
   let seatId = seat.id()
@@ -159,7 +172,7 @@ proc overviewWindowAtPointer*(daemon: TriadDaemon, seat: ptr RiverSeatV1): Windo
   let point = daemon.pointerPositionBySeat[seatId]
   overviewHitTest(daemon.orderedDesiredInstructions(), point.x, point.y)
 
-proc placementHonorsMinimums(daemon: TriadDaemon, id: WindowId): bool =
+proc placementHonorsMinimums(daemon: TriadDaemon, id: runtime_values.WindowId): bool =
   if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
     return false
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
@@ -171,7 +184,9 @@ proc placementHonorsMinimums(daemon: TriadDaemon, id: WindowId): bool =
     daemon.currentModel.visibleScratchpadRiverId() == id
   win.isFloating or win.isFullscreen or scratchpad
 
-proc placementNeedsCellClip(daemon: TriadDaemon, id: WindowId, geom: Rect): bool =
+proc placementNeedsCellClip(
+    daemon: TriadDaemon, id: runtime_values.WindowId, geom: Rect
+): bool =
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
   if winOpt.isNone:
     return false
@@ -245,7 +260,7 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       output.setPresentationMode(mode)
   let ids = daemon.orderedDesiredIds()
 
-  var visible = initTable[WindowId, bool]()
+  var visible = initTable[runtime_values.WindowId, bool]()
   var lastNode: ptr RiverNodeV1 = nil
   var firstNode: ptr RiverNodeV1 = nil
   let highlighted = daemon.currentModel.highlightRiverId()

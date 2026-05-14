@@ -234,6 +234,28 @@ suite "Core Runtime Logic: recent windows":
     check poisoned.geom.w > 16
     check poisoned.geom.h > 16
 
+  test "recent-window previews suppress normal compositor borders":
+    var model = recentModel()
+    model.borderWidth = 3
+    model.seedCameraWindows(2)
+    let focused = model.selectedRecentWindow()
+
+    check model.renderWindowBorder(focused, true).width == 3
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+
+    check model.recentWindowsVisible()
+    check model.renderWindowBorder(model.selectedRecentWindow(), true).width == 0
+
+  test "overview keeps normal compositor borders":
+    var model = recentModel()
+    model.borderWidth = 3
+    model.seedCameraWindows(2)
+    discard model.updateModel(Msg(kind: MsgKind.CmdOpenOverview))
+
+    check model.overviewActive
+    check model.renderWindowBorder(model.selectedRecentWindow(), true).width == 3
+
   test "recent-window pointer hover freezes strip position":
     var model = recentModel()
     model.seedCameraWindows(4)
