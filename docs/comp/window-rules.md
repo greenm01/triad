@@ -141,20 +141,20 @@ These are gap-analysis categories, not target config names.
 
 ## Remaining Gap Triage
 
-This table is the working priority list for future window-rule work. It keeps
-blocked compositor/protocol features separate from Triad-native features that
-can be implemented with the current runtime model.
+This table is the blocked/deferred backlog for window-rule work. The remaining
+items should not gain user-facing config fields until Triad has the protocol,
+data, render, or layout substrate needed to make the rule real.
 
 | Priority | Gap | Classification | Decision |
 | :---: | :--- | :--- | :--- |
-| P3 | True output serial matching | Protocol/data blocked | Current output identity stores connector name, make/model, and description. Keep `open-on-output` partial until serial data is available. |
-| P3 | Urgent matcher: `is-urgent` | Protocol/data blocked | Native Triad and niri-compatible state currently report urgency as false. Implement only after Triad has a real urgent-window signal. |
-| P3 | Cast-target matcher: `is-window-cast-target` | Protocol/data blocked | No current state or protocol source identifies cast targets. |
-| P3 | Per-window `scroll-factor` | Protocol-shape blocked | River exposes input-device scroll factor, not a current per-window rule primitive in Triad. Revisit only with a clear input policy design. |
-| P3 | Global keybinding policy | Design/protocol needed | Keep separate from shortcut inhibit. Needs a model for app-scoped global shortcuts before adding rules. |
-| P4 | Opacity, shadow, blur, radius, background effects, popup visual effects | Protocol/render blocked | River/Triad currently expose borders, decorations, clips, and protocol surfaces, not compositor scene effects for managed windows. |
-| P4 | Tabbed column display and tab indicator | Out of scope | Do not add rule fields without a real tabbed-column layout model. |
-| P4 | Render-target blocking: `block-out-from` | Out of scope | Screenshot/cast target filtering is not part of the current render model. |
+| P3 | True output serial matching | Protocol/data blocked | Current output identity stores connector name, make/model, and description. Keep `open-on-output` partial until River or another compositor protocol supplies a real serial source. |
+| P3 | Urgent matcher: `is-urgent` | Protocol/data blocked | Native Triad and niri-compatible state currently report urgency as false. Add `match is-urgent` only after Triad receives real urgent state from compositor or activation events. |
+| P3 | Cast-target matcher: `is-window-cast-target` | Protocol/data blocked | No current state or protocol source identifies cast targets. Add the matcher only after screencast/window-cast target state exists. |
+| P3 | Per-window `scroll-factor` | Protocol-shape blocked | River exposes input-device scroll factor, not a current per-window forwarding primitive in Triad. Revisit only after a clear input forwarding policy exists. |
+| P3 | Global keybinding policy | Design/protocol blocked | Keep separate from shortcut inhibit. Mango forwards matching global keypresses to app surfaces; Triad cannot provide that as only a River WM client without a compositor-level key forwarding substrate. |
+| P4 | Opacity, shadow, blur, radius, background effects, popup visual effects | Protocol/render blocked | River/Triad currently expose borders, decorations, clips, and protocol surfaces, not compositor scene effects for managed windows or popups. |
+| P4 | Tabbed column display and tab indicator | Layout-model blocked | Do not add rule fields without a real tabbed-column layout model. |
+| P4 | Render-target blocking: `block-out-from` | Render-target blocked | Screenshot/cast target filtering is not part of the current render model. Add only after Triad tracks render targets that can honor per-window exclusion. |
 
 ## Triad-Specific Notes
 
