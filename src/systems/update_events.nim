@@ -92,9 +92,12 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     if result.dirty:
       result.effects.add(broadcastWindowClosed(msg.destroyedId))
   of MsgKind.WlWindowDimensions:
-    result.dirty = model.updateWindowDimensionsForExternal(
-      msg.dimensionsWindowId.externalWindowId(), msg.actualWidth, msg.actualHeight
-    )
+    if model.recentWindowsActive or model.overviewActive:
+      result.dirty = false
+    else:
+      result.dirty = model.updateWindowDimensionsForExternal(
+        msg.dimensionsWindowId.externalWindowId(), msg.actualWidth, msg.actualHeight
+      )
   of MsgKind.WlWindowDecorationHint:
     result.dirty = model.updateWindowDecorationHintForExternal(
       msg.decorationWindowId.externalWindowId(), msg.decorationHint

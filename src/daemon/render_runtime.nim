@@ -21,6 +21,12 @@ template surfaceTable(daemon: TriadDaemon): untyped =
 template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.ownedShellSurfaceId
 
+template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
+
+template recentWindowsChromeSurfaceId(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.recentWindowsChromeSurfaceId
+
 proc applyBorder(
     daemon: TriadDaemon,
     id: runtime_values.WindowId,
@@ -325,3 +331,20 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
 
   daemon.syncHotkeyOverlaySurface(screen)
   daemon.syncRecentWindowsSurface(screen)
+  if daemon.currentModel.recentWindowsVisible():
+    if daemon.recentWindowsSurfaceId != 0 and
+        daemon.surfaceTable.hasKey(daemon.recentWindowsSurfaceId):
+      var backdrop = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
+      if backdrop.node != nil:
+        backdrop.node.setPosition(screen.x, screen.y)
+        backdrop.node.placeBottom()
+        if firstNode != nil:
+          backdrop.node.placeBelow(firstNode)
+      daemon.surfaceTable[daemon.recentWindowsSurfaceId] = backdrop
+    if daemon.recentWindowsChromeSurfaceId != 0 and
+        daemon.surfaceTable.hasKey(daemon.recentWindowsChromeSurfaceId):
+      var chrome = daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId]
+      if chrome.node != nil:
+        chrome.node.setPosition(screen.x, screen.y)
+        chrome.node.placeTop()
+      daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = chrome

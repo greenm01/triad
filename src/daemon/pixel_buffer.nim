@@ -3,6 +3,13 @@ type PixelBuffer* = object
   height*: int32
   pixels*: seq[uint32]
 
+proc rgbaColorToArgb*(value: uint32): uint32 =
+  let r = (value shr 24) and 0xff
+  let g = (value shr 16) and 0xff
+  let b = (value shr 8) and 0xff
+  let a = value and 0xff
+  (a shl 24) or (r shl 16) or (g shl 8) or b
+
 proc initPixelBuffer*(width, height: int32, color: uint32): PixelBuffer =
   result.width = max(1'i32, width)
   result.height = max(1'i32, height)

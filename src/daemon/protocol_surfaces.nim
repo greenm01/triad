@@ -8,6 +8,7 @@ type
     PskShell
     PskHotkeyOverlay
     PskRecentWindows
+    PskRecentWindowsChrome
     PskDecorationAbove
     PskDecorationBelow
 
@@ -33,5 +34,6 @@ type
     ownedShellSurfaceId*: uint32
     hotkeyOverlaySurfaceId*: uint32
     recentWindowsSurfaceId*: uint32
+    recentWindowsChromeSurfaceId*: uint32
     windowDecorationAbove*: Table[WindowId, uint32]
     windowDecorationBelow*: Table[WindowId, uint32]

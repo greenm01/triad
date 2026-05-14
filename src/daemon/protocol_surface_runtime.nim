@@ -26,6 +26,9 @@ template hotkeyOverlaySurfaceId(daemon: TriadDaemon): untyped =
 template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
 
+template recentWindowsChromeSurfaceId(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.recentWindowsChromeSurfaceId
+
 template windowDecorationAbove(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.windowDecorationAbove
 
@@ -55,6 +58,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
     of ProtocolSurfaceKind.PskHotkeyOverlay:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskRecentWindows:
+      0x11111100'u32 or alpha
+    of ProtocolSurfaceKind.PskRecentWindowsChrome:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskDecorationAbove:
       0xffcc0000'u32 or alpha
@@ -231,6 +236,31 @@ proc ensureRecentWindowsSurface*(daemon: var TriadDaemon) =
   debug "Created recent-windows shell surface",
     shellSurfaceId = daemon.recentWindowsSurfaceId
 
+proc ensureRecentWindowsChromeSurface*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    return
+  if daemon.recentWindowsChromeSurfaceId != 0 and
+      daemon.surfaceTable.hasKey(daemon.recentWindowsChromeSurfaceId):
+    return
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskRecentWindowsChrome)
+  if surf.surface == nil:
+    warn "Unable to create recent-windows chrome wl_surface"
+    return
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create recent-windows chrome shell surface"
+    daemon.destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  daemon.recentWindowsChromeSurfaceId = surf.shellSurface.id()
+  daemon.shellSurfacePointers[daemon.recentWindowsChromeSurfaceId] = surf.shellSurface
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = surf
+  debug "Created recent-windows chrome shell surface",
+    shellSurfaceId = daemon.recentWindowsChromeSurfaceId
+
 proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
   if daemon.ownedShellSurfaceId == 0 or
       not daemon.surfaceTable.hasKey(daemon.ownedShellSurfaceId):
@@ -331,28 +361,61 @@ proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
         surf.node.placeBottom()
       daemon.commitProtocolSurface(surf)
       daemon.surfaceTable[daemon.recentWindowsSurfaceId] = surf
+    if daemon.recentWindowsChromeSurfaceId != 0 and
+        daemon.surfaceTable.hasKey(daemon.recentWindowsChromeSurfaceId):
+      var surf = daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId]
+      surf.inputW = 0
+      surf.inputH = 0
+      let buffer =
+        daemon.createProtocolBuffer(ProtocolSurfaceKind.PskRecentWindowsChrome)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, 1, 1)
+      if surf.node != nil:
+        surf.node.placeBottom()
+      daemon.commitProtocolSurface(surf)
+      daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = surf
     return
 
   daemon.ensureRecentWindowsSurface()
+  daemon.ensureRecentWindowsChromeSurface()
   if daemon.recentWindowsSurfaceId == 0 or
       not daemon.surfaceTable.hasKey(daemon.recentWindowsSurfaceId):
     return
-
-  let rendered = renderRecentWindowsOverlayBuffer(daemon.currentModel, screen)
-  var surf = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
-  let buffer = daemon.createArgbShmBuffer(rendered)
-  if buffer != nil:
-    surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
-  else:
-    warn "Recent-windows overlay buffer unavailable"
+  if daemon.recentWindowsChromeSurfaceId == 0 or
+      not daemon.surfaceTable.hasKey(daemon.recentWindowsChromeSurfaceId):
     return
-  surf.inputW = surf.bufferW
-  surf.inputH = surf.bufferH
-  daemon.commitProtocolSurface(surf)
-  if surf.node != nil:
-    surf.node.setPosition(screen.x, screen.y)
-    surf.node.placeTop()
-  daemon.surfaceTable[daemon.recentWindowsSurfaceId] = surf
+
+  let backdrop = renderRecentWindowsBackdropBuffer(daemon.currentModel, screen)
+  var backdropSurf = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
+  let backdropBuffer = daemon.createArgbShmBuffer(backdrop)
+  if backdropBuffer != nil:
+    backdropSurf.setProtocolSurfaceBuffer(
+      backdropBuffer, backdrop.width, backdrop.height
+    )
+  else:
+    warn "Recent-windows backdrop buffer unavailable"
+    return
+  backdropSurf.inputW = 0
+  backdropSurf.inputH = 0
+  daemon.commitProtocolSurface(backdropSurf)
+  if backdropSurf.node != nil:
+    backdropSurf.node.setPosition(screen.x, screen.y)
+  daemon.surfaceTable[daemon.recentWindowsSurfaceId] = backdropSurf
+
+  let chrome = renderRecentWindowsChromeBuffer(daemon.currentModel, screen)
+  var chromeSurf = daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId]
+  let chromeBuffer = daemon.createArgbShmBuffer(chrome)
+  if chromeBuffer != nil:
+    chromeSurf.setProtocolSurfaceBuffer(chromeBuffer, chrome.width, chrome.height)
+  else:
+    warn "Recent-windows chrome buffer unavailable"
+    return
+  chromeSurf.inputW = chromeSurf.bufferW
+  chromeSurf.inputH = chromeSurf.bufferH
+  daemon.commitProtocolSurface(chromeSurf)
+  if chromeSurf.node != nil:
+    chromeSurf.node.setPosition(screen.x, screen.y)
+  daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = chromeSurf
 
 proc ensureDecorationSurface*(
     daemon: var TriadDaemon, windowId: WindowId, kind: ProtocolSurfaceKind
@@ -422,5 +485,6 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
   daemon.ownedShellSurfaceId = 0
   daemon.hotkeyOverlaySurfaceId = 0
   daemon.recentWindowsSurfaceId = 0
+  daemon.recentWindowsChromeSurfaceId = 0
   daemon.windowDecorationAbove.clear()
   daemon.windowDecorationBelow.clear()

@@ -36,6 +36,20 @@ proc setRecentWindowsSelected*(model: var Model, winId: WindowId): bool =
   model.recentWindowsSelectedWindow = winId
   true
 
+proc unfreezeRecentWindowsView*(model: var Model): bool =
+  if not model.recentWindowsViewFrozen and model.recentWindowsFrozenStartX == 0:
+    return false
+  model.recentWindowsViewFrozen = false
+  model.recentWindowsFrozenStartX = 0
+  true
+
+proc freezeRecentWindowsView*(model: var Model, startX: int32): bool =
+  if model.recentWindowsViewFrozen and model.recentWindowsFrozenStartX == startX:
+    return false
+  model.recentWindowsViewFrozen = true
+  model.recentWindowsFrozenStartX = startX
+  true
+
 proc closeRecentWindows*(model: var Model): bool =
   result = model.setRecentWindowsActive(false)
   if model.recentWindowsSelectedWindow != NullWindowId:
@@ -47,6 +61,7 @@ proc closeRecentWindows*(model: var Model): bool =
   if model.recentWindowsOpenElapsedMs != 0:
     model.recentWindowsOpenElapsedMs = 0
     result = true
+  result = model.unfreezeRecentWindowsView() or result
 
 proc setRecentWindowsScope*(model: var Model, scope: RecentWindowScope): bool =
   if model.recentWindowsScope == scope:

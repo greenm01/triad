@@ -188,6 +188,11 @@ proc isRecentAdvanceCommand(command: string): bool =
   let parts = command.strip().splitWhitespace()
   parts.len > 0 and parts[0] in ["recent-window-next", "recent-window-prev"]
 
+proc recentBindingCanOpen(model: Model, mode: BindingMode, msg: Msg): bool =
+  mode == BindingMode.BindRecent and not model.recentWindowsActive and
+    not model.overviewActive and
+    msg.kind in {MsgKind.CmdRecentWindowNext, MsgKind.CmdRecentWindowPrev}
+
 proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
   if binding.mode == BindingMode.BindRecent and
       not daemon.currentModel.recentWindowsActive and
@@ -602,7 +607,11 @@ proc onXkbPressed(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
   daemon.xkbBindingPressed[id] = true
   if daemon.xkbBindingModes.hasKey(id) and
       not daemon[].bindingModeActive(daemon.xkbBindingModes[id]):
-    return
+    if not daemon.xkbBindings.hasKey(id) or
+        not daemon[].currentModel.recentBindingCanOpen(
+          daemon.xkbBindingModes[id], daemon.xkbBindings[id]
+        ):
+      return
   if daemon.xkbBindings.hasKey(id):
     let msg = daemon.xkbBindings[id]
     daemon.enqueue(msg)

@@ -3,9 +3,12 @@ import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
 import ../src/daemon/overview_overlay_render
+import ../src/daemon/recent_windows_overlay_render
 import ../src/state/engine except WindowId
 import ../src/state/[invariants, snapshot]
-import ../src/systems/[layout_projection, overview_geometry, runtime_facade, update]
+import
+  ../src/systems/
+    [layout_projection, overview_geometry, recent_windows, runtime_facade, update]
 import ../src/types/[model, runtime_values]
 
 const DeletedRuntimeModules = [
@@ -292,6 +295,33 @@ suite "Runtime state primitives":
     check rendered.width <= int32(float(screen.w) * 0.9)
     check rendered.height > 0
     check bytes.len == rendered.pixels.len * 4
+
+  test "recent windows chrome converts RGBA config colors to ARGB pixels":
+    var config = baseConfig()
+    config.recentWindows.enabled = true
+    config.recentWindows.openDelayMs = 0
+    config.recentWindows.highlight.activeColor = 0x112233ff'u32
+    config.recentWindows.highlight.padding = 12
+    config.recentWindows.previews.maxHeight = 480
+    config.recentWindows.previews.maxScale = 0.5
+    var model = initRuntimeStateFromConfig(config).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two"),
+      Msg(kind: MsgKind.CmdRecentWindowNext),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+
+    let screen = model.primaryScreen()
+    let selected = model.recentWindowPreviews(screen).filterIt(it.selected)[0]
+    let rendered = model.renderRecentWindowsChromeBuffer(screen)
+
+    check rendered.pixelAt(
+      selected.geom.x - screen.x - config.recentWindows.highlight.padding,
+      selected.geom.y - screen.y - config.recentWindows.highlight.padding,
+    ) == testArgb(config.recentWindows.highlight.activeColor)
 
   test "overview overlay frames empty workspace previews":
     var config = baseConfig()

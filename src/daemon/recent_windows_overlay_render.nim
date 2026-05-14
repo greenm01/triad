@@ -7,6 +7,7 @@ import pixel_buffer
 
 const
   Backdrop = 0xcc000000'u32
+  Transparent = 0x00000000'u32
   TextColor = 0xffffffff'u32
   MutedTextColor = 0xffc8d0dc'u32
   PanelBg = 0xdd111318'u32
@@ -14,6 +15,8 @@ const
   TextScale = 2'i32
   TitleGap = 14'i32
   PanelPadding = 12'i32
+  SelectedBorderWidth = 2'i32
+  SelectedFillAlpha = 0x55'u32
 
 proc clippedTitle(title: string): string =
   let clean = title.strip()
@@ -27,22 +30,53 @@ proc scopeText(model: Model): string =
   of RecentWindowScope.Workspace: "Scope: Workspace"
   of RecentWindowScope.Output: "Scope: Output"
 
-proc renderRecentWindowsOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
+proc rgbaWithAlpha(value, alpha: uint32): uint32 =
+  (value and 0xffffff00'u32) or min(alpha, value and 0xff'u32)
+
+proc fillSelectedChrome(
+    buf: var PixelBuffer,
+    preview: RecentWindowPreview,
+    screen: rv.Rect,
+    padding: int32,
+    color: uint32,
+) =
+  if padding <= 0:
+    return
+  let titleH = 7'i32 * TextScale
+  let x = preview.geom.x - screen.x - padding
+  let y = preview.geom.y - screen.y - padding
+  let w = preview.geom.w + padding * 2
+  let h = preview.geom.h + padding * 2 + TitleGap + titleH
+  buf.fillRect(x, y, w, padding, color)
+  buf.fillRect(x, y + padding + preview.geom.h, w, h - padding - preview.geom.h, color)
+  buf.fillRect(x, y + padding, padding, preview.geom.h, color)
+  buf.fillRect(
+    x + padding + preview.geom.w, y + padding, padding, preview.geom.h, color
+  )
+
+proc renderRecentWindowsBackdropBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
   result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Backdrop)
+
+proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
+  result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
   if not model.recentWindowsVisible():
     return
 
   let previews = model.recentWindowPreviews(screen)
-  let borderColor = model.recentWindows.highlight.activeColor
-  let padding = model.recentWindows.highlight.padding
+  let borderColor = rgbaColorToArgb(model.recentWindows.highlight.activeColor)
+  let selectedFillColor = rgbaColorToArgb(
+    model.recentWindows.highlight.activeColor.rgbaWithAlpha(SelectedFillAlpha)
+  )
+  let padding = max(0'i32, model.recentWindows.highlight.padding)
   for preview in previews:
     if preview.selected:
+      result.fillSelectedChrome(preview, screen, padding, selectedFillColor)
       result.strokeRect(
         preview.geom.x - screen.x - padding,
         preview.geom.y - screen.y - padding,
         preview.geom.w + padding * 2,
-        preview.geom.h + padding * 2,
-        3,
+        preview.geom.h + padding * 2 + TitleGap + 7'i32 * TextScale,
+        SelectedBorderWidth,
         borderColor,
       )
     let title = preview.title.clippedTitle()
@@ -61,7 +95,7 @@ proc renderRecentWindowsOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuff
   let panelW = textWidth(panel, TextScale) + PanelPadding * 2
   let panelH = 7'i32 * TextScale + PanelPadding * 2
   let panelX = max(0'i32, (screen.w - panelW) div 2)
-  let panelY = screen.h - panelH - 32'i32
+  let panelY = PanelPadding * 2
   result.fillRect(panelX, panelY, panelW, panelH, PanelBg)
   result.strokeRect(panelX, panelY, panelW, panelH, 2, PanelBorder)
   result.drawText(
@@ -72,3 +106,6 @@ proc renderRecentWindowsOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuff
     TextColor,
     TextScale,
   )
+
+proc renderRecentWindowsOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
+  model.renderRecentWindowsChromeBuffer(screen)

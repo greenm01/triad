@@ -384,6 +384,8 @@ type
     recentWindowsAppIdFilter*: string
     recentWindowsSelectedWindow*: WindowId
     recentWindowsPointerSelectedWindow*: WindowId
+    recentWindowsViewFrozen*: bool
+    recentWindowsFrozenStartX*: int32
     overviewViewportSnapshot*: Table[TagId, ViewportState]
     viewportRetargetTags*: HashSet[TagId]
     viewportSnapTags*: HashSet[TagId]

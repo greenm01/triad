@@ -8,13 +8,6 @@ const
   Transparent = 0x00000000'u32
   EmptyWorkspaceFill = 0xcc000000'u32
 
-proc rgbaColorToArgb(value: uint32): uint32 =
-  let r = (value shr 24) and 0xff
-  let g = (value shr 16) and 0xff
-  let b = (value shr 8) and 0xff
-  let a = value and 0xff
-  (a shl 24) or (r shl 16) or (g shl 8) or b
-
 proc emptyWorkspaceFrameThickness*(model: Model): int32 =
   max(2'i32, min(max(0'i32, model.borderWidth), 8'i32))
 

@@ -1,3 +1,4 @@
+import std/math
 import tcore_support
 
 proc recentConfig(debounceMs = 0'i32, openDelayMs = 0'i32): RecentWindowsConfig =
@@ -106,3 +107,148 @@ suite "Core Runtime Logic: recent windows":
       )
     )
     check model.selectedRecentWindow() == target.winId
+
+  test "recent-window previews reserve highlight padding between neighbors":
+    var model = recentModel()
+    model.seedCameraWindows(3)
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+
+    let previews = model.recentWindowPreviews(model.primaryScreen())
+    check previews.len == 3
+    let requiredGap = model.recentWindows.highlight.padding * 2 + 2'i32 * 2'i32 + 16'i32
+    for idx in 0 ..< previews.len - 1:
+      let gap = previews[idx + 1].geom.x - (previews[idx].geom.x + previews[idx].geom.w)
+      check gap >= requiredGap
+
+  test "recent-window previews are bounded by output-aware niri sizing":
+    var model = recentModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "wide", title: "Wide")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 1,
+        actualWidth: 4000,
+        actualHeight: 500,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "tall", title: "Tall")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 2,
+        actualWidth: 500,
+        actualHeight: 4000,
+      )
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+
+    let previews = model.recentWindowPreviews(model.primaryScreen())
+    let boundedMaxH = min(
+      model.recentWindows.previews.maxHeight,
+      int32(
+        round(float32(model.primaryScreen().h) * model.recentWindows.previews.maxScale)
+      ),
+    )
+    let aspectMaxW = int32(
+      round(
+        float32(boundedMaxH * model.primaryScreen().w) / float32(
+          model.primaryScreen().h
+        )
+      )
+    )
+    for preview in previews:
+      check preview.geom.h <= boundedMaxH
+      check preview.geom.w <= aspectMaxW
+
+  test "recent-window presentation dimensions do not overwrite source dimensions":
+    var model = recentModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "one", title: "One")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 1,
+        actualWidth: 1200,
+        actualHeight: 800,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "two", title: "Two")
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+
+    let selected = model.selectedRecentWindow()
+    let before = model.windowData(selected).get()
+    let external = uint32(before.externalId)
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: external,
+        actualWidth: 16,
+        actualHeight: 16,
+      )
+    )
+    let after = model.windowData(selected).get()
+
+    check before.actualW == 1200
+    check before.actualH == 800
+    check after.actualW == before.actualW
+    check after.actualH == before.actualH
+
+  test "recent-window previews recover from poisoned minimum source dimensions":
+    var model = recentModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "poisoned", title: "Tiny")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 1,
+        actualWidth: 16,
+        actualHeight: 16,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "normal", title: "Normal")
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+
+    let poisoned = model.recentWindowPreviews(model.primaryScreen()).filterIt(
+      uint32(it.winId) == 1
+    )[0]
+
+    check poisoned.geom.w > 16
+    check poisoned.geom.h > 16
+
+  test "recent-window pointer hover freezes strip position":
+    var model = recentModel()
+    model.seedCameraWindows(4)
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+
+    let before = model.recentWindowPreviews(model.primaryScreen())
+    let target = before.filterIt(not it.selected)[0]
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlRecentWindowPointerMotion,
+        recentPointerX: target.geom.x + target.geom.w div 2,
+        recentPointerY: target.geom.y + target.geom.h div 2,
+      )
+    )
+    let after = model.recentWindowPreviews(model.primaryScreen())
+
+    check model.selectedRecentWindow() == target.winId
+    check after[0].geom.x == before[0].geom.x

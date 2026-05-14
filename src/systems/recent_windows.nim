@@ -7,6 +7,9 @@ const RecentTickMs = 16'i32
 const RecentPreviewGap = 16'i32
 const RecentPreviewStrut = 192'i32
 const RecentPreviewMinSize = 16'i32
+const RecentPreviewBorder = 2'i32
+const RecentPreviewFallbackW = 800'i32
+const RecentPreviewFallbackH = 600'i32
 
 type RecentWindowPreview* = object
   winId*: core_types.WindowId
@@ -152,6 +155,7 @@ proc selectNearestRecent(model: var Model, candidates: seq[core_types.WindowId])
   false
 
 proc advanceRecentSelection*(model: var Model, direction: RecentWindowDirection): bool =
+  result = model.unfreezeRecentWindowsView()
   let candidates = model.currentRecentCandidates()
   if candidates.len == 0:
     return model.closeRecentWindows()
@@ -164,7 +168,7 @@ proc advanceRecentSelection*(model: var Model, direction: RecentWindowDirection)
       idx = (idx + 1) mod candidates.len
     of RecentWindowDirection.Backward:
       idx = (idx + candidates.len - 1) mod candidates.len
-  model.setRecentWindowsSelected(candidates[idx])
+  result = model.setRecentWindowsSelected(candidates[idx]) or result
 
 proc openOrAdvanceRecentWindow*(
     model: var Model,
@@ -180,6 +184,7 @@ proc openOrAdvanceRecentWindow*(
     discard model.commitRecentFocus(model.pendingRecentFocusWindow)
 
   if not model.recentWindowsActive:
+    discard model.unfreezeRecentWindowsView()
     let nextScope =
       if scopeSet:
         scope
@@ -212,6 +217,7 @@ proc openOrAdvanceRecentWindow*(
 
   result = model.setRecentFilterFromCommand(filter, filterSet)
   if scopeSet:
+    result = model.unfreezeRecentWindowsView() or result
     result = model.setRecentWindowsScope(scope) or result
     result = model.selectNearestRecent(model.currentRecentCandidates()) or result
   result = model.advanceRecentSelection(direction) or result
@@ -228,34 +234,38 @@ proc cancelRecentWindows*(model: var Model): bool =
 proc selectFirstRecentWindow*(model: var Model): bool =
   if not model.recentWindowsActive:
     return false
+  result = model.unfreezeRecentWindowsView()
   let candidates = model.currentRecentCandidates()
   if candidates.len == 0:
     return model.closeRecentWindows()
-  model.setRecentWindowsSelected(candidates[0])
+  result = model.setRecentWindowsSelected(candidates[0]) or result
 
 proc selectLastRecentWindow*(model: var Model): bool =
   if not model.recentWindowsActive:
     return false
+  result = model.unfreezeRecentWindowsView()
   let candidates = model.currentRecentCandidates()
   if candidates.len == 0:
     return model.closeRecentWindows()
-  model.setRecentWindowsSelected(candidates[^1])
+  result = model.setRecentWindowsSelected(candidates[^1]) or result
 
 proc cycleRecentWindowScope*(model: var Model): bool =
   if not model.recentWindowsActive:
     return false
+  result = model.unfreezeRecentWindowsView()
   let next =
     case model.recentWindowsScope
     of RecentWindowScope.All: RecentWindowScope.Workspace
     of RecentWindowScope.Workspace: RecentWindowScope.Output
     of RecentWindowScope.Output: RecentWindowScope.All
-  result = model.setRecentWindowsScope(next)
+  result = model.setRecentWindowsScope(next) or result
   result = model.selectNearestRecent(model.currentRecentCandidates()) or result
 
 proc setRecentWindowScopeCommand*(model: var Model, scope: RecentWindowScope): bool =
   if not model.recentWindowsActive:
     return false
-  result = model.setRecentWindowsScope(scope)
+  result = model.unfreezeRecentWindowsView()
+  result = model.setRecentWindowsScope(scope) or result
   result = model.selectNearestRecent(model.currentRecentCandidates()) or result
 
 proc recentWindowAt*(model: Model, x, y: int32): core_types.WindowId =
@@ -268,14 +278,17 @@ proc recentWindowAt*(model: Model, x, y: int32): core_types.WindowId =
   NullWindowId
 
 proc selectRecentWindowAt*(model: var Model, x, y: int32): bool =
+  let previews = model.recentWindowPreviews(model.recentPrimaryScreen())
   let winId = model.recentWindowAt(x, y)
   if winId == NullWindowId:
     if model.recentWindowsPointerSelectedWindow != NullWindowId:
       model.recentWindowsPointerSelectedWindow = NullWindowId
       return true
     return false
+  if not model.recentWindowsViewFrozen and previews.len > 0:
+    result = model.freezeRecentWindowsView(previews[0].geom.x) or result
   model.recentWindowsPointerSelectedWindow = winId
-  model.setRecentWindowsSelected(winId)
+  result = model.setRecentWindowsSelected(winId) or result
 
 proc closeCurrentRecentWindow*(model: var Model): core_types.WindowId =
   if not model.recentWindowsActive:
@@ -309,23 +322,45 @@ proc recentWindowPreviews*(model: Model, screen: rv.Rect): seq[RecentWindowPrevi
 
   var widths: seq[int32] = @[]
   var heights: seq[int32] = @[]
-  var totalW = 0'i32
+  var stripW = 0'i32
   let maxHeight = max(RecentPreviewMinSize, model.recentWindows.previews.maxHeight)
   let maxScale = max(0.01'f32, model.recentWindows.previews.maxScale)
+  let outputMaxH = max(RecentPreviewMinSize, int32(round(float32(screen.h) * maxScale)))
+  let boundedMaxH = min(maxHeight, outputMaxH)
+  let aspectMaxW =
+    if screen.h > 0:
+      max(
+        RecentPreviewMinSize,
+        int32(round(float32(boundedMaxH * screen.w) / float32(screen.h))),
+      )
+    else:
+      boundedMaxH
   for winId in candidates:
     let winOpt = model.windowData(winId)
-    var sourceW = 800'i32
-    var sourceH = 600'i32
-    if winOpt.isSome:
+    var sourceW = RecentPreviewFallbackW
+    var sourceH = RecentPreviewFallbackH
+    if winOpt.isSome and winOpt.get().actualW > RecentPreviewMinSize * 2 and
+        winOpt.get().actualH > RecentPreviewMinSize * 2:
       sourceW = max(RecentPreviewMinSize, winOpt.get().actualW)
       sourceH = max(RecentPreviewMinSize, winOpt.get().actualH)
-    let scale = min(maxScale, float32(maxHeight) / float32(max(1'i32, sourceH)))
+    let minScale =
+      min(1'f32, float32(RecentPreviewMinSize) / float32(max(sourceW, sourceH)))
+    let thumbScale = min(
+      min(
+        float32(aspectMaxW) / float32(sourceW), float32(boundedMaxH) / float32(sourceH)
+      ),
+      maxScale,
+    )
+    let scale = max(minScale, thumbScale)
     let w = max(RecentPreviewMinSize, int32(round(float32(sourceW) * scale)))
     let h = max(RecentPreviewMinSize, int32(round(float32(sourceH) * scale)))
     widths.add(w)
     heights.add(h)
-    totalW += w
-  totalW += int32(max(0, candidates.len - 1)) * RecentPreviewGap
+    stripW += w
+  let chromePad =
+    max(0'i32, model.recentWindows.highlight.padding) + RecentPreviewBorder
+  let previewGap = chromePad * 2 + RecentPreviewGap
+  stripW += int32(max(0, candidates.len - 1)) * previewGap
 
   let selected = model.selectedRecentWindow()
   var selectedIdx = candidates.find(selected)
@@ -333,15 +368,17 @@ proc recentWindowPreviews*(model: Model, screen: rv.Rect): seq[RecentWindowPrevi
     selectedIdx = 0
   var selectedCenter = 0'i32
   for idx in 0 ..< selectedIdx:
-    selectedCenter += widths[idx] + RecentPreviewGap
+    selectedCenter += widths[idx] + previewGap
   selectedCenter += widths[selectedIdx] div 2
 
   var startX = screen.x + screen.w div 2 - selectedCenter
-  if totalW > screen.w:
+  if model.recentWindowsViewFrozen:
+    startX = model.recentWindowsFrozenStartX
+  elif stripW > screen.w:
     startX = min(screen.x + RecentPreviewStrut, startX)
-    startX = max(screen.x + screen.w - totalW - RecentPreviewStrut, startX)
+    startX = max(screen.x + screen.w - stripW - RecentPreviewStrut, startX)
   else:
-    startX = screen.x + (screen.w - totalW) div 2
+    startX = screen.x + (screen.w - stripW) div 2
 
   var x = startX
   for idx, winId in candidates:
@@ -374,7 +411,7 @@ proc recentWindowPreviews*(model: Model, screen: rv.Rect): seq[RecentWindowPrevi
         selected: winId == selected,
       )
     )
-    x += widths[idx] + RecentPreviewGap
+    x += widths[idx] + previewGap
 
 proc recentWindowLayoutInstructions*(
     model: Model, screen: rv.Rect
