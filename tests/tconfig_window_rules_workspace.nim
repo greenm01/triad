@@ -14,6 +14,7 @@ window-rule {
   open-maximized-to-edges #false
   open-on-all-workspaces #false
   open-overlay #false
+  open-unmanaged-global #false
   terminal #false
   allow-swallow #false
   maximize-policy "ignore"
@@ -46,6 +47,8 @@ window-rule {
     check not config.windowRules[0].openOnAllWorkspaces
     check config.windowRules[0].openOverlaySet
     check not config.windowRules[0].openOverlay
+    check config.windowRules[0].openUnmanagedGlobalSet
+    check not config.windowRules[0].openUnmanagedGlobal
     check config.windowRules[0].terminalSet
     check not config.windowRules[0].terminal
     check config.windowRules[0].allowSwallowSet

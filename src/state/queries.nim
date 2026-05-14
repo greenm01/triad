@@ -68,13 +68,13 @@ proc sortedSlots*(model: Model): seq[uint32] =
 
 proc tagHasLiveWindows*(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
-    if win.windowAdmitted():
+    if not win.isUnmanagedGlobal and win.windowAdmitted():
       return true
   false
 
 proc tagHasNonStickyLiveWindows*(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
-    if not win.isSticky and win.windowAdmitted():
+    if not win.isSticky and not win.isUnmanagedGlobal and win.windowAdmitted():
       return true
   false
 
@@ -130,7 +130,8 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
     if tagId == NullTagId:
       continue
     for winId, win in model.windowsOnTagWithId(tagId):
-      if not win.isMinimized and win.windowAdmitted() and result.find(winId) == -1:
+      if not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted() and
+          result.find(winId) == -1:
         result.add(winId)
 
 proc initialOverviewWindow*(model: Model): WindowId =
@@ -153,7 +154,7 @@ proc initialOverviewWindow*(model: Model): WindowId =
 proc overviewWindowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
   for candidate, win in model.windowsOnTagWithId(tagId):
     if candidate == winId:
-      return not win.isMinimized and win.windowAdmitted()
+      return not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted()
   false
 
 proc activeOverviewWindow(model: Model): WindowId =

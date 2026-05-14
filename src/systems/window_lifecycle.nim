@@ -248,7 +248,9 @@ proc applyPendingRestore(
     restoredExternalId == model.restoreFocusedWindowId()
   let restoredScratchpad =
     restored.slot == 0 and model.restoredScratchpadContains(restoredExternalId)
-  if not restoredScratchpad and targetSlot != 0:
+  if restored.isUnmanagedGlobal:
+    discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
+  elif not restoredScratchpad and targetSlot != 0:
     discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
     discard model.placeRestoredWindow(targetSlot, restoredExternalId, externalId, winId)
     if restored.isSticky:
@@ -471,6 +473,9 @@ proc createWindowForExternal*(
   let ruleMatch = model.windowRuleFor(appId, title)
   let parentedRole =
     if ruleMatch.found: ruleMatch.rule.parentedRole else: ParentedRole.Dialog
+  let ruleOpensUnmanagedGlobal =
+    ruleMatch.found and not hasRestoredWindow and ruleMatch.rule.openUnmanagedGlobalSet and
+    ruleMatch.rule.openUnmanagedGlobal
   let ruleTargetSlots =
     if ruleMatch.found and ruleMatch.rule.defaultSlots.len > 0:
       ruleMatch.rule.defaultSlots
@@ -481,7 +486,7 @@ proc createWindowForExternal*(
   let ruleForcesSlot = ruleTargetSlots.len > 0
   let opensNamedScratchpad =
     ruleMatch.found and not hasRestoredWindow and not hasRestoredTag and
-    ruleMatch.rule.openNamedScratchpad.len > 0
+    not ruleOpensUnmanagedGlobal and ruleMatch.rule.openNamedScratchpad.len > 0
   if ruleForcesSlot and not hasRestoredTag:
     targetSlot = ruleTargetSlots[0]
   elif ruleMatch.found and not hasRestoredTag:
@@ -504,6 +509,7 @@ proc createWindowForExternal*(
   let openSticky =
     ruleMatch.found and ruleMatch.rule.openOnAllWorkspacesSet and
     ruleMatch.rule.openOnAllWorkspaces and not opensNamedScratchpad and
+    not ruleOpensUnmanagedGlobal and
     (not parentKnown or parentedRole == ParentedRole.Plain)
 
   var isFullscreen = false
@@ -527,6 +533,7 @@ proc createWindowForExternal*(
   var isFloating = false
   var isSticky = false
   var isOverlay = false
+  var isUnmanagedGlobal = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
   var idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone
@@ -547,6 +554,8 @@ proc createWindowForExternal*(
     allowSwallow = ruleMatch.rule.allowSwallow
     if ruleMatch.rule.openOverlaySet:
       isOverlay = ruleMatch.rule.openOverlay
+    if ruleMatch.rule.openUnmanagedGlobalSet:
+      isUnmanagedGlobal = ruleMatch.rule.openUnmanagedGlobal
     if not hasRestoredWindow:
       if ruleMatch.rule.defaultWindowWidthSet:
         widthProportion = ruleMatch.rule.defaultWindowWidth
@@ -561,14 +570,29 @@ proc createWindowForExternal*(
   if hasRestoredWindow:
     isFloating = restored.isFloating
     isSticky = restored.isSticky
+    isUnmanagedGlobal = restored.isUnmanagedGlobal
     floatingGeom = restored.floatingGeom
   elif openSticky:
     isSticky = true
+  elif ruleOpensUnmanagedGlobal:
+    isFloating = true
+    isSticky = false
+    isOverlay = false
+    floatingGeom = model.defaultFloatingGeom()
   elif parentKnown and parentOpensFloating:
     isFloating = true
   if isFullscreen or isMaximized or openColumnMaximized:
     isFloating = false
     floatingGeom = GeometryRect()
+  if isUnmanagedGlobal:
+    isFloating = true
+    isFullscreen = false
+    isMaximized = false
+    isSticky = false
+    isOverlay = false
+    openColumnMaximized = false
+    if floatingGeom.w == 0 or floatingGeom.h == 0:
+      floatingGeom = model.defaultFloatingGeom()
   let parentAutoFloating =
     parentKnown and isFloating and parentedRole == ParentedRole.Dialog and
     not hasRestoredWindow and not (ruleMatch.found and ruleMatch.rule.openFloatingSet)
@@ -595,6 +619,7 @@ proc createWindowForExternal*(
     isMaximized = isMaximized,
     isSticky = isSticky,
     isOverlay = isOverlay,
+    isUnmanagedGlobal = isUnmanagedGlobal,
     fullscreenOutput = fullscreenOutput,
     floatingGeom = floatingGeom,
     parentAutoFloating = parentAutoFloating,
@@ -657,7 +682,9 @@ proc createWindowForExternal*(
     hasRestoredWindow and restored.slot == 0 and
     model.restoredScratchpadContains(restoredExternalId)
 
-  if opensNamedScratchpad:
+  if isUnmanagedGlobal:
+    discard model.removeWindowFromAllTagsAndRefreshFocus(result)
+  elif opensNamedScratchpad:
     discard model.addScratchpadRef(result)
     discard model.setNamedScratchpadRef(ruleMatch.rule.openNamedScratchpad, result)
     discard model.hideScratchpadRef()

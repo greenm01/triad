@@ -87,7 +87,7 @@ external window manager.
 | Window state | Maximize to edges | `togglemaximizescreen` | maximize request/capability | `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize` | X | Client-visible maximized state. |
 | Window state | Sticky/global window | `toggleglobal`, `isglobal` | WM policy | `window-rule open-on-all-workspaces` | X | Exposed as declarative open policy. Triad does not yet expose an imperative toggle command. |
 | Window state | Managed overlay | `toggleoverlay`, `isoverlay` | WM policy | `window-rule open-overlay` | X | Declarative managed stacking policy; not floating, sticky, or unmanaged. |
-| Window state | Global unmanaged | `isunglobal` | Layer/shell primitives | | | Not exposed by Triad. |
+| Window state | Global unmanaged | `isunglobal` | Layer/shell primitives | `window-rule open-unmanaged-global` | X | Triad keeps the surface River-managed but gives it unmanaged-like global render and no workspace placement/focus/occupancy. |
 | Window state | Center floating window | `centerwin`, `no_force_center` | WM policy | `window-rule center-floating`, `floating { x-ratio; y-ratio; ... }` | X | Rule-level centering controls generated floating geometry; Triad has no separate center command. |
 | Window movement | Swap/move by direction | `exchange_client` | WM policy | `move-window-*`, `swap-window-up/down` | X | Triad separates moves and stack swaps. |
 | Window movement | Stack exchange | `exchange_stack_client` | WM policy | `swap-window-up/down` | X | |

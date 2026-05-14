@@ -55,6 +55,7 @@ window-rule {
   open-maximized-to-edges #false
   open-on-all-workspaces #true
   open-overlay #true
+  open-unmanaged-global #true
   respect-size-hints #false
   center-floating #true
   parented-role "tool"
@@ -194,6 +195,8 @@ bindings {
     check config.windowRules[0].openOnAllWorkspaces
     check config.windowRules[0].openOverlaySet
     check config.windowRules[0].openOverlay
+    check config.windowRules[0].openUnmanagedGlobalSet
+    check config.windowRules[0].openUnmanagedGlobal
     check config.windowRules[0].respectSizeHintsSet
     check not config.windowRules[0].respectSizeHints
     check config.windowRules[0].centerFloatingSet

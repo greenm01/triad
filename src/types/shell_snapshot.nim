@@ -47,6 +47,7 @@ type
     isMinimized*: bool
     isSticky*: bool
     isOverlay*: bool
+    isUnmanagedGlobal*: bool
     fullscreenOutput*: uint32
     widthProportion*: float32
     heightProportion*: float32

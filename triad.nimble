@@ -28,7 +28,7 @@ proc runCoreSuites() =
     "tests/tcore_restore_identity.nim", "tests/tcore_window_rules_placement.nim",
     "tests/tcore_output_sticky_scratchpad.nim", "tests/tcore_presentation_overview.nim",
     "tests/tcore_overview.nim", "tests/tcore_overview_interactions.nim",
-    "tests/tcore_shell_snapshot_ipc.nim",
+    "tests/tcore_shell_snapshot_ipc.nim", "tests/tcore_unmanaged_global.nim",
   ]:
     runTestSuite(path)
 
@@ -66,9 +66,9 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tcore_window_rules_placement", "tests/tcore_output_sticky_scratchpad",
     "tests/tcore_presentation_overview", "tests/tcore_overview",
     "tests/tcore_overview_interactions", "tests/tcore_shell_snapshot_ipc",
-    "tests/tstate", "tests/thardening", "tests/tlayouts", "tests/tlogging",
-    "tests/tprotocol", "tests/tstress", "triad-live-smoke.events",
-    "triad-live-smoke.log", "triad-live-smoke.out",
+    "tests/tcore_unmanaged_global", "tests/tstate", "tests/thardening",
+    "tests/tlayouts", "tests/tlogging", "tests/tprotocol", "tests/tstress",
+    "triad-live-smoke.events", "triad-live-smoke.log", "triad-live-smoke.out",
   ]:
     if fileExists(path):
       rmFile(path)

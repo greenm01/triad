@@ -135,7 +135,7 @@ These are gap-analysis categories, not target config names.
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Partial | Rule-level border, focused-only focus-ring width/colors, and clip-to-geometry exist; shadows, blur, radius, opacity, and per-window animation policy remain gaps. |
-| Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening, sticky workspace placement, and managed overlay stacking exist. Unmanaged-global behavior remains a gap. Keep these as separate concepts; do not collapse into floating. |
+| Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Pass | Named scratchpad opening, sticky workspace placement, managed overlay stacking, and unmanaged-global windows exist as separate concepts; do not collapse them into floating. |
 | Terminal swallowing | `isterm`, `noswallow` | Pass | Implemented as explicit `terminal` and `allow-swallow` rules. Swallowing requires a terminal host PID and a new child PID that descends from it; missing PID data never guesses. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit, idle inhibit, and focused-window `presentation-mode` exist. Global keybinding policy remains a gap. |
 
@@ -147,7 +147,6 @@ can be implemented with the current runtime model.
 
 | Priority | Gap | Classification | Decision |
 | :---: | :--- | :--- | :--- |
-| P1 | Unmanaged-global windows: `isunglobal` | Design needed | Keep distinct from sticky, managed overlay, floating, scratchpad, and layer-shell behavior. Do not implement until the lifecycle and render semantics are specified. |
 | P3 | True output serial matching | Protocol/data blocked | Current output identity stores connector name, make/model, and description. Keep `open-on-output` partial until serial data is available. |
 | P3 | Urgent matcher: `is-urgent` | Protocol/data blocked | Native Triad and niri-compatible state currently report urgency as false. Implement only after Triad has a real urgent-window signal. |
 | P3 | Cast-target matcher: `is-window-cast-target` | Protocol/data blocked | No current state or protocol source identifies cast targets. |
@@ -179,6 +178,12 @@ can be implemented with the current runtime model.
   sticky, scratchpad, unmanaged-global, or layer-shell behavior; it only keeps
   matching windows above normal managed windows and preserves backing
   fullscreen/maximized presentation while focused.
+- `open-unmanaged-global` is an unmanaged-like global rule for desktop pets,
+  camera previews, and similar windows. Triad keeps the surface River-managed,
+  but excludes it from workspace placement, focus traversal, overview previews,
+  and dynamic workspace occupancy while rendering it globally above normal
+  managed windows. It does not imply sticky, overlay, scratchpad, or layer-shell
+  behavior.
 - `dialog-viewport-jump` is a Triad-specific opt-in for parented dialogs that
   should retarget the viewport immediately.
 - `keyboard-shortcuts-inhibit` is a Triad-specific rule for shortcut inhibit

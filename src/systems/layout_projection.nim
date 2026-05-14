@@ -100,7 +100,8 @@ proc addFloatingInstructions(
   let activeRoot = model.popupRoot(model.activeFocus())
   var floating: seq[tuple[id: core_types.WindowId, win: model_types.WindowData]] = @[]
   for winId, win in model.windowsOnTagWithId(tagId):
-    if win.windowAdmitted() and win.isFloating and not win.isMinimized:
+    if win.windowAdmitted() and win.isFloating and not win.isUnmanagedGlobal and
+        not win.isMinimized:
       floating.add((id: winId, win: win))
   floating.sort(
     proc(a, b: tuple[id: core_types.WindowId, win: model_types.WindowData]): int =
@@ -147,6 +148,7 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
       isMinimized: win.isMinimized,
       isSticky: win.isSticky,
       isOverlay: win.isOverlay,
+      isUnmanagedGlobal: win.isUnmanagedGlobal,
       fullscreenOutput: uint32(win.fullscreenOutput),
       parentId: rv.WindowId(uint32(win.parentExternalId)),
       identifier: win.identifier,
@@ -194,7 +196,7 @@ proc projectedTag(
     var windows: seq[rv.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(column.id):
       if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
-          not model.windowHiddenByGroup(winId):
+          not win.isUnmanagedGlobal and not model.windowHiddenByGroup(winId):
         windows.add(model.externalWindowId(winId))
     if windows.len > 0:
       result.tag.columns.add(
@@ -244,6 +246,29 @@ proc layoutForTag(
   of rv.LayoutMode.TGMix:
     layoutTGMix(tag, screen, outerGap, innerGap)
 
+proc upsertInstruction(
+    instructions: var seq[rv.RenderInstruction], instruction: rv.RenderInstruction
+) =
+  for idx, existing in instructions.mpairs:
+    if existing.windowId == instruction.windowId:
+      instructions[idx] = instruction
+      return
+  instructions.add(instruction)
+
+proc addUnmanagedGlobalInstructions(
+    model: Model, screen: rv.Rect, instructions: var seq[rv.RenderInstruction]
+) =
+  for winId, win in model.windowsWithId():
+    if not win.windowAdmitted() or not win.isUnmanagedGlobal or win.isMinimized:
+      continue
+    var geom = win.floatingGeom
+    if geom.w == 0 or geom.h == 0:
+      geom = model.defaultFloatingGeom()
+    geom = win.applyFloatingSizeHints(geom).clampToScreen(screen)
+    instructions.upsertInstruction(
+      rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: geom)
+    )
+
 proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   if model.activeTag == NullTagId:
     return
@@ -279,15 +304,7 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   )
 
   model.addFloatingInstructions(model.activeTag, screen, result)
-
-proc upsertInstruction(
-    instructions: var seq[rv.RenderInstruction], instruction: rv.RenderInstruction
-) =
-  for idx, existing in instructions.mpairs:
-    if existing.windowId == instruction.windowId:
-      instructions[idx] = instruction
-      return
-  instructions.add(instruction)
+  model.addUnmanagedGlobalInstructions(screen, result)
 
 proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
@@ -409,6 +426,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
 
   if model.overviewActive:
     result = model.layoutWorkspaceStripOverview(windows, screen)
+    model.addUnmanagedGlobalInstructions(screen, result.instructions)
     return
 
   if model.activeTag == NullTagId:
@@ -469,6 +487,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
         @[rv.RenderInstruction(windowId: model.externalWindowId(focused), geom: screen)]
 
   model.addFloatingInstructions(model.activeTag, screen, result.instructions)
+  model.addUnmanagedGlobalInstructions(screen, result.instructions)
 
   let winId = model.activeScratchpadWindow()
   if winId != NullWindowId:

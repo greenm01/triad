@@ -112,6 +112,7 @@ type
     isMinimized*: bool
     isSticky*: bool
     isOverlay*: bool
+    isUnmanagedGlobal*: bool
     fullscreenOutput*: uint32
     parentId*: WindowId
     identifier*: string
@@ -208,6 +209,8 @@ type
     openOnAllWorkspaces*: bool
     openOverlaySet*: bool
     openOverlay*: bool
+    openUnmanagedGlobalSet*: bool
+    openUnmanagedGlobal*: bool
     terminalSet*: bool
     terminal*: bool
     allowSwallowSet*: bool
@@ -374,6 +377,7 @@ type
     isMaximized*: bool
     isMinimized*: bool
     isSticky*: bool
+    isUnmanagedGlobal*: bool
     fullscreenOutput*: uint32
     floatingGeom*: Rect
     manualFloatingPosition*: bool

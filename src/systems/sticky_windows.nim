@@ -2,7 +2,8 @@ import std/options
 import ../state/engine
 
 proc isLocalFocusable(win: WindowData): bool =
-  win.windowAdmitted() and not win.isMinimized and not win.isSticky
+  win.windowAdmitted() and not win.isMinimized and not win.isSticky and
+    not win.isUnmanagedGlobal
 
 proc tagHasLocalFocusableWindow(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):

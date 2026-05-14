@@ -19,6 +19,7 @@ proc addWindow*(
     isMinimized = false,
     isSticky = false,
     isOverlay = false,
+    isUnmanagedGlobal = false,
     fullscreenOutput = NullExternalOutputId,
     parentExternalId = NullExternalWindowId,
     identifier = "",
@@ -62,6 +63,7 @@ proc addWindow*(
       isMinimized: isMinimized,
       isSticky: isSticky,
       isOverlay: isOverlay,
+      isUnmanagedGlobal: isUnmanagedGlobal,
       fullscreenOutput: fullscreenOutput,
       parentExternalId: parentExternalId,
       identifier: identifier,
@@ -151,6 +153,7 @@ proc setWindowCreatedState*(
     isMaximized = false,
     isSticky = false,
     isOverlay = false,
+    isUnmanagedGlobal = false,
     fullscreenOutput = NullExternalOutputId,
     floatingGeom = Rect(),
     parentAutoFloating = false,
@@ -185,6 +188,8 @@ proc setWindowCreatedState*(
     isMinimized: if preserveRuntimeState: current.isMinimized else: false,
     isSticky: if preserveRuntimeState: current.isSticky else: isSticky,
     isOverlay: if preserveRuntimeState: current.isOverlay else: isOverlay,
+    isUnmanagedGlobal:
+      if preserveRuntimeState: current.isUnmanagedGlobal else: isUnmanagedGlobal,
     fullscreenOutput:
       if preserveRuntimeState: current.fullscreenOutput else: fullscreenOutput,
     actualW: if preserveRuntimeState: current.actualW else: 0'i32,
@@ -271,6 +276,7 @@ proc preserveWindowRuntimeAttributes*(
       current.isMaximized == source.isMaximized and
       current.isMinimized == source.isMinimized and current.isSticky == source.isSticky and
       current.isOverlay == source.isOverlay and
+      current.isUnmanagedGlobal == source.isUnmanagedGlobal and
       current.fullscreenOutput == source.fullscreenOutput and
       current.actualW == source.actualW and current.actualH == source.actualH and
       current.clientMinWidth == source.clientMinWidth and
@@ -304,6 +310,7 @@ proc preserveWindowRuntimeAttributes*(
   win.isMinimized = source.isMinimized
   win.isSticky = source.isSticky
   win.isOverlay = source.isOverlay
+  win.isUnmanagedGlobal = source.isUnmanagedGlobal
   win.fullscreenOutput = source.fullscreenOutput
   win.actualW = source.actualW
   win.actualH = source.actualH
@@ -399,15 +406,20 @@ proc setWindowRestoredState*(
     return false
   model.windows.mEntity(winId).widthProportion = restored.widthProportion
   model.windows.mEntity(winId).heightProportion = restored.heightProportion
-  model.windows.mEntity(winId).isFloating = restored.isFloating
+  model.windows.mEntity(winId).isFloating =
+    restored.isFloating or restored.isUnmanagedGlobal
   model.windows.mEntity(winId).parentAutoFloating = false
   model.windows.mEntity(winId).manualFloatingPosition = restored.manualFloatingPosition
   model.windows.mEntity(winId).admissionState = WindowAdmissionState.Admitted
   model.windows.mEntity(winId).focusAfterAdmission = false
-  model.windows.mEntity(winId).isFullscreen = restored.isFullscreen
-  model.windows.mEntity(winId).isMaximized = restored.isMaximized
+  model.windows.mEntity(winId).isFullscreen =
+    restored.isFullscreen and not restored.isUnmanagedGlobal
+  model.windows.mEntity(winId).isMaximized =
+    restored.isMaximized and not restored.isUnmanagedGlobal
   model.windows.mEntity(winId).isMinimized = restored.isMinimized
-  model.windows.mEntity(winId).isSticky = restored.isSticky
+  model.windows.mEntity(winId).isSticky =
+    restored.isSticky and not restored.isUnmanagedGlobal
+  model.windows.mEntity(winId).isUnmanagedGlobal = restored.isUnmanagedGlobal
   model.windows.mEntity(winId).fullscreenOutput = restored.fullscreenOutput
   model.windows.mEntity(winId).floatingGeom = restored.floatingGeom
   if restored.parentExternalId != NullExternalWindowId:

@@ -17,7 +17,7 @@ proc shellColumns(model: Model, tagId: TagId): seq[ShellColumn] =
   for columnId, column in model.columnsOnTagWithId(tagId):
     var windows: seq[runtime_values.WindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(columnId):
-      if win.windowAdmitted() and not win.isFloating:
+      if win.windowAdmitted() and not win.isFloating and not win.isUnmanagedGlobal:
         windows.add(model.externalWindowId(winId))
     if windows.len == 0:
       continue
@@ -160,6 +160,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         isMinimized: win.isMinimized,
         isSticky: win.isSticky,
         isOverlay: win.isOverlay,
+        isUnmanagedGlobal: win.isUnmanagedGlobal,
         fullscreenOutput: uint32(win.fullscreenOutput),
         widthProportion: win.widthProportion,
         heightProportion: win.heightProportion,

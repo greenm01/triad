@@ -132,6 +132,7 @@ proc triadWindowJson(win: ShellWindow): JsonNode =
     "is_minimized": win.isMinimized,
     "is_sticky": win.isSticky,
     "is_overlay": win.isOverlay,
+    "is_unmanaged_global": win.isUnmanagedGlobal,
     "is_fullscreen": win.isFullscreen,
     "fullscreen_output":
       if win.fullscreenOutput == 0:

@@ -217,6 +217,8 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
     win.isMinimized = boolFromJson(node["is_minimized"])
   if node.hasKey("is_sticky"):
     win.isSticky = boolFromJson(node["is_sticky"])
+  if node.hasKey("is_unmanaged_global"):
+    win.isUnmanagedGlobal = boolFromJson(node["is_unmanaged_global"])
   if node.hasKey("fullscreen_output"):
     let output = uint32FromJson(node["fullscreen_output"])
     if output.isSome:

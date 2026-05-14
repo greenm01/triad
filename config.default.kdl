@@ -290,6 +290,13 @@ window-rule {
 //     scroller-proportion { proportion 0.65 }
 //     scroller-single-proportion { proportion 0.80 }
 // }
+//
+// Example unmanaged-global window for camera previews or desktop pets:
+// window-rule {
+//     match app-id="cheese|camera"
+//     open-unmanaged-global #true
+//     default-floating-position x=24 y=24 relative-to="bottom-right"
+// }
 
 window-rule {
     match app-id="fuzzel"

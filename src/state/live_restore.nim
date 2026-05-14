@@ -49,6 +49,7 @@ proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
     isMaximized: source.isMaximized,
     isMinimized: source.isMinimized,
     isSticky: source.isSticky,
+    isUnmanagedGlobal: source.isUnmanagedGlobal,
     fullscreenOutput: ExternalOutputId(source.fullscreenOutput),
     floatingGeom: source.floatingGeom,
     manualFloatingPosition: source.manualFloatingPosition,
@@ -169,7 +170,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       for winId in model.windowsForColumn(colId):
         let winOpt = model.windowData(winId)
         if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
-            winOpt.get().isSticky:
+            winOpt.get().isSticky or winOpt.get().isUnmanagedGlobal:
           continue
         let external = model.externalWindowId(winId)
         if external == 0:
@@ -216,6 +217,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       isMaximized: win.isMaximized,
       isMinimized: win.isMinimized,
       isSticky: win.isSticky,
+      isUnmanagedGlobal: win.isUnmanagedGlobal,
       fullscreenOutput: uint32(win.fullscreenOutput),
       floatingGeom: win.floatingGeom,
       manualFloatingPosition: win.manualFloatingPosition,
@@ -279,6 +281,7 @@ proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode 
     "is_maximized": win.isMaximized,
     "is_minimized": win.isMinimized,
     "is_sticky": win.isSticky,
+    "is_unmanaged_global": win.isUnmanagedGlobal,
     "fullscreen_output": win.fullscreenOutput,
     "floating_geom": rectJson(win.floatingGeom),
     "manual_floating_position": win.manualFloatingPosition,

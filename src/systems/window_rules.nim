@@ -276,6 +276,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.openOverlaySet:
     result.openOverlaySet = true
     result.openOverlay = rule.openOverlay
+  if rule.openUnmanagedGlobalSet:
+    result.openUnmanagedGlobalSet = true
+    result.openUnmanagedGlobal = rule.openUnmanagedGlobal
   if rule.terminalSet:
     result.terminalSet = true
     result.terminal = rule.terminal

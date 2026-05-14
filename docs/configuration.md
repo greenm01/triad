@@ -49,6 +49,7 @@ The supported KDL nodes are:
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   all-workspace sticky behavior, managed overlay behavior, focus behavior,
+  unmanaged-global behavior,
   parented-dialog viewport jump behavior, terminal swallowing policy, size-hint
   policy, shortcut inhibition, presentation mode,
   border/focus-ring/clip policy, and forced layout.
@@ -147,6 +148,12 @@ window-rule {
   match app-id="waybar|quickshell"
   open-on-all-workspaces #true
   open-focused #false
+}
+
+window-rule {
+  match app-id="cheese|camera"
+  open-unmanaged-global #true
+  default-floating-position x=24 y=24 relative-to="bottom-right"
 }
 
 window-rule {
@@ -270,6 +277,11 @@ window-rule {
   `#false`. Focused overlay windows preserve the fullscreen or maximized
   presentation of the backing workspace the same way focused floating popups
   do.
+- `open-unmanaged-global #true|#false`: opens matching windows as
+  unmanaged-like global floats. They are visible on every workspace, render
+  above normal managed windows, and are excluded from workspace layout, focus
+  traversal, overview previews, and dynamic workspace occupancy. This is
+  distinct from sticky, overlay, scratchpad, and layer-shell behavior.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently
   visible on the named output. Targets match connector names such as
   `HDMI-A-1`, shell fallback names such as `river-2`, niri-style

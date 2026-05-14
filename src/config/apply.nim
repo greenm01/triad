@@ -131,6 +131,8 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       openOnAllWorkspaces: rule.openOnAllWorkspaces,
       openOverlaySet: rule.openOverlaySet or rule.openOverlay,
       openOverlay: rule.openOverlay,
+      openUnmanagedGlobalSet: rule.openUnmanagedGlobalSet or rule.openUnmanagedGlobal,
+      openUnmanagedGlobal: rule.openUnmanagedGlobal,
       terminalSet: rule.terminalSet or rule.terminal,
       terminal: rule.terminal,
       allowSwallowSet: rule.allowSwallowSet,

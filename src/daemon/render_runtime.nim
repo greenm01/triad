@@ -85,34 +85,35 @@ proc logicalWindowSortKey(daemon: TriadDaemon, id: WindowId): uint32 =
     return uint32(logicalId)
   uint32(id)
 
-proc windowOrAncestorOverlay(daemon: TriadDaemon, id: WindowId): bool =
+proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: WindowId): int =
   if id == 0:
-    return false
+    return 0
   var current = id
   var depth = 0
   while current != 0 and depth < 64:
     let winOpt = daemon.currentModel.windowDataForRiverId(current)
     if winOpt.isNone:
-      return false
+      return 0
     let win = winOpt.get()
+    if win.isUnmanagedGlobal:
+      return 2
     if win.isOverlay:
-      return true
+      result = max(result, 1)
     let parent = WindowId(uint32(win.parentExternalId))
     if parent == 0:
-      return false
+      return
     current = parent
     inc depth
-  false
 
 proc desiredStackCmp(daemon: TriadDaemon, a, b: WindowId): int =
   if daemon.isDescendantRiverWindow(a, b):
     return 1
   if daemon.isDescendantRiverWindow(b, a):
     return -1
-  let aOverlay = daemon.windowOrAncestorOverlay(a)
-  let bOverlay = daemon.windowOrAncestorOverlay(b)
-  if aOverlay != bOverlay:
-    return cmp(ord(aOverlay), ord(bOverlay))
+  let aLayer = daemon.windowOrAncestorStackLayer(a)
+  let bLayer = daemon.windowOrAncestorStackLayer(b)
+  if aLayer != bLayer:
+    return cmp(aLayer, bLayer)
   cmp(daemon.logicalWindowSortKey(a), daemon.logicalWindowSortKey(b))
 
 proc orderedDesiredIds*(daemon: TriadDaemon): seq[WindowId] =
@@ -293,7 +294,11 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         daemon.windowNodes[id].placeTop()
 
   for id in ids:
-    if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorOverlay(id):
+    if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 1:
+      daemon.windowNodes[id].placeTop()
+
+  for id in ids:
+    if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 2:
       daemon.windowNodes[id].placeTop()
 
   if highlighted != 0 and daemon.windowNodes.hasKey(highlighted):
