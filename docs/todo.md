@@ -15,9 +15,9 @@
   model, while keeping public config workspace-oriented.
 - Evaluate remaining Mango-informed window-rule gaps for Triad-native
   equivalents: unmanaged-global windows, overlay windows, named app scratchpad
-  rules, terminal swallowing, idle inhibit, global keybinding policy, and
-  layout-family size hints. Sticky/global workspace placement is implemented as
-  `open-on-all-workspaces`.
+  rules, terminal swallowing, global keybinding policy, and layout-family size
+  hints. Sticky/global workspace placement is implemented as
+  `open-on-all-workspaces`; idle inhibit is implemented as `idle-inhibit`.
 - If Triad exposes Mango-like floating modes, keep overlay, global/sticky, and
   unmanaged-global behavior separate instead of collapsing them into one flag.
 - Revisit target-viewport layout projection only if compositor-owned animation

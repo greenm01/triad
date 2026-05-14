@@ -6,7 +6,9 @@ import ../ipc/[quickshell_compat, socket]
 import ../systems/runtime_facade
 import ../types/[model, shell_snapshot]
 import ../utils/behavior_log
-import bindings_runtime, live_restore_runtime, process_runner, quickshell_runner, state
+import
+  bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
+  quickshell_runner, state
 
 proc setupConfig*(daemon: var TriadDaemon) =
   daemon.configPath = defaultConfigPath()
@@ -154,6 +156,7 @@ proc applyConfigReload*(
     return false
 
   daemon.quickshellState.spawnPending = false
+  daemon.syncIdleInhibitFromRuntime()
   writeBehaviorEvent(
     "config_reload_applied",
     %*{

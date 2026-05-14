@@ -18,6 +18,7 @@ type
     EffOpEnd
     EffSetFullscreen
     EffSetMaximized
+    EffSetIdleInhibit
     EffInformResizeStart
     EffInformResizeEnd
     EffSpawnScreenLock
@@ -60,6 +61,8 @@ type
     of EffectKind.EffSetMaximized:
       maxWinId*: WindowId
       isMaximized*: bool
+    of EffectKind.EffSetIdleInhibit:
+      idleInhibitActive*: bool
     of EffectKind.EffInformResizeStart, EffectKind.EffInformResizeEnd:
       resizeLifecycleWinId*: WindowId
     of EffectKind.EffSpawnScreenLock:

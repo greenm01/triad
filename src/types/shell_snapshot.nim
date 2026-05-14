@@ -1,5 +1,5 @@
 import std/options
-from runtime_values import LayoutMode, Rect, WindowId
+from runtime_values import LayoutMode, Rect, WindowId, WindowRuleIdleInhibitMode
 
 const TriadIpcVersion* = 1
 
@@ -17,6 +17,7 @@ type
     name*: string
     layoutMode*: LayoutMode
     isActive*: bool
+    isOutputVisible*: bool
     focusedWindow*: WindowId
     occupied*: bool
     outputName*: string
@@ -51,6 +52,7 @@ type
     actualH*: int32
     floatingGeom*: Rect
     keyboardShortcutsInhibit*: bool
+    idleInhibitMode*: WindowRuleIdleInhibitMode
 
   ShellOutput* = object
     id*: uint32
@@ -64,6 +66,9 @@ type
     activeWorkspaceIdx*: uint32
     overviewActive*: bool
     overviewSelectedWindow*: WindowId
+    activeScratchpadWindow*: WindowId
+    sessionLocked*: bool
+    layerFocusExclusive*: bool
     layoutCycle*: seq[LayoutMode]
     workspaces*: seq[ShellWorkspace]
     windows*: seq[ShellWindow]

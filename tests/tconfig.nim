@@ -733,6 +733,7 @@ window-rule {
   center-floating #false
   dialog-viewport-jump #false
   keyboard-shortcuts-inhibit #false
+  idle-inhibit "none"
   presentation-mode "default"
   border { width 0 }
   focus-ring { width 0 }
@@ -765,6 +766,9 @@ window-rule {
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet
     check not config.windowRules[0].keyboardShortcutsInhibit
+    check config.windowRules[0].idleInhibitModeSet
+    check config.windowRules[0].idleInhibitMode ==
+      WindowRuleIdleInhibitMode.IdleInhibitNone
     check config.windowRules[0].presentationModeSet
     check config.windowRules[0].presentationMode == PresentationMode.PresentationDefault
     check config.windowRules[0].border.widthSet

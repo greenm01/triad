@@ -82,6 +82,11 @@ proc hasMaximizedEffect(effects: seq[Effect], id: uint32, maximized: bool): bool
       it.isMaximized == maximized
   )
 
+proc hasIdleInhibitEffect(effects: seq[Effect], active: bool): bool =
+  effects.anyIt(
+    it.kind == EffectKind.EffSetIdleInhibit and it.idleInhibitActive == active
+  )
+
 proc viewport(model: Model, slot: uint32): ViewportState =
   let tagId = model.tagForSlot(slot)
   let tag = model.tagData(tagId).get()
@@ -2128,6 +2133,8 @@ suite "Core Runtime Logic":
               dialogViewportJump: false,
               keyboardShortcutsInhibitSet: true,
               keyboardShortcutsInhibit: false,
+              idleInhibitModeSet: true,
+              idleInhibitMode: WindowRuleIdleInhibitMode.IdleInhibitNone,
               presentationModeSet: true,
               presentationMode: PresentationMode.PresentationDefault,
               border: WindowRuleBorderConfig(
@@ -2165,6 +2172,7 @@ suite "Core Runtime Logic":
     check rule.rule.parentedRole == ParentedRole.Dialog
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
+    check rule.rule.idleInhibitMode == WindowRuleIdleInhibitMode.IdleInhibitNone
     check rule.rule.presentationModeSet
     check rule.rule.presentationMode == PresentationMode.PresentationDefault
     check rule.rule.border.widthSet
@@ -2247,6 +2255,77 @@ suite "Core Runtime Logic":
     policy = model.effectivePresentationMode()
     check policy.hasPreference
     check policy.mode == PresentationMode.PresentationAsync
+
+  test "Window rule idle-inhibit focused follows active focus":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "video",
+              idleInhibitModeSet: true,
+              idleInhibitMode: WindowRuleIdleInhibitMode.IdleInhibitFocused,
+            )
+          ]
+      )
+    ).model
+
+    var effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "video", title: "Video")
+    )
+    check effects.hasIdleInhibitEffect(true)
+    check model.shellSnapshot().windows[0].idleInhibitMode ==
+      WindowRuleIdleInhibitMode.IdleInhibitFocused
+
+    effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "docs", title: "Docs")
+    )
+    check effects.hasIdleInhibitEffect(false)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    check effects.hasIdleInhibitEffect(true)
+
+    effects = model.updateModel(Msg(kind: MsgKind.WlLayerFocusExclusive))
+    check effects.hasIdleInhibitEffect(false)
+
+  test "Window rule idle-inhibit visible tracks output-visible workspaces":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "video",
+              idleInhibitModeSet: true,
+              idleInhibitMode: WindowRuleIdleInhibitMode.IdleInhibitVisible,
+            )
+          ],
+      )
+    ).model
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    var effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "video", title: "Video")
+    )
+    check effects.hasIdleInhibitEffect(true)
+
+    let secondOutput = model.outputForExternal(ExternalOutputId(2))
+    discard model.setOutputTag(secondOutput, model.tagForSlot(2))
+    effects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    check not effects.hasIdleInhibitEffect(false)
+
+    effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowMinimizeRequested, minimizeRequestId: 1)
+    )
+    check effects.hasIdleInhibitEffect(false)
 
   test "Window rule border uses global defaults without focused match":
     var model = initRuntimeStateFromConfig(

@@ -104,6 +104,7 @@ layout family.
 | Dynamic | `max-height` | Override effective maximum height | `max-height <px>` | Pass | Nonzero max below min normalizes to min. |
 | Dynamic | Maximize request policy | Mango-style fake or ignored maximize | `maximize-policy "edge"|"column"|"ignore"` | Pass | Applies to maximize actions after open; opening presentation rules remain separate. |
 | Dynamic | `variable-refresh-rate` | Opt matching windows into VRR policy | `presentation-mode "default"|"vsync"|"async"` | Partial | Triad lets a focused matching window request River output presentation mode, falling back to the global `presentation-mode`. River exposes output-level policy, not true per-surface VRR. |
+| Dynamic | Idle inhibit | Prevent compositor idle while matching windows matter | `idle-inhibit "none"|"focused"|"visible"` | Pass | Uses `zwp_idle_inhibit_manager_v1` when available. `focused` follows active focus or active scratchpad; `visible` follows non-minimized matching windows on output-visible workspaces or active scratchpad. Disabled while locked or while exclusive layer focus is active. |
 | Dynamic | `scroll-factor` | Override scroll factor per window | | Gap | |
 | Dynamic | `tiled-state` | Control client-visible tiled state | `tiled-state #true/#false` | Pass | Sends River tiled edges as a client hint only; it does not change Triad placement. |
 | Visual | `focus-ring` | Override focus ring appearance | `focus-ring { width; active-color }` | Partial | Triad maps focus ring to a focused-only override of River borders. It is not a separate render layer. |
@@ -135,7 +136,7 @@ These are gap-analysis categories, not target config names.
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Partial | Rule-level border, focused-only focus-ring width/colors, and clip-to-geometry exist; shadows, blur, radius, opacity, and per-window animation policy remain gaps. |
 | Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening and sticky workspace placement exist. Overlay and unmanaged-global behavior remain gaps. Keep these as separate concepts; do not collapse into floating. |
 | Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
-| Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit exists. `presentation-mode` gives focused matching windows output-level vsync/async policy; idle inhibit and global keybinding policy remain gaps. |
+| Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit, idle inhibit, and focused-window `presentation-mode` exist. Global keybinding policy remains a gap. |
 
 ## Triad-Specific Notes
 
@@ -159,6 +160,10 @@ These are gap-analysis categories, not target config names.
   should retarget the viewport immediately.
 - `keyboard-shortcuts-inhibit` is a Triad-specific rule for shortcut inhibit
   policy, paired with the runtime `toggle-keyboard-shortcuts-inhibit` command.
+- `idle-inhibit` is a Triad-specific power policy. Use `"focused"` for media
+  and games that should inhibit idle only while focused, and `"visible"` for
+  monitoring or playback windows that should inhibit idle while visible on any
+  output workspace.
 - `presentation-mode` is a focused-window performance policy. It maps matching
   focused windows to River output presentation mode and falls back to the
   global top-level setting when no focused rule applies.

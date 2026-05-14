@@ -161,6 +161,7 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
       floatingGeom: win.floatingGeom,
       keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
       keyboardShortcutsInhibitBypass: win.keyboardShortcutsInhibitBypass,
+      idleInhibitMode: win.idleInhibitMode,
     )
 
 proc projectedTag(

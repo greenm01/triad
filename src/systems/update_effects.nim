@@ -3,7 +3,7 @@ import ../core/[effects, msg, niri_state, triad_state]
 import ../state/engine
 import ../types/shell_snapshot
 from ../types/runtime_values import nil
-import presentation_policy
+import idle_inhibit, presentation_policy
 
 type UpdateStep* = object
   dirty*: bool
@@ -468,6 +468,15 @@ proc addPostUpdateEffects*(
   let overviewWorkspaceChanged = overviewPreview and before.activeTag != after.activeTag
   let workspaceSnapshotChanged =
     collapsed or pruned or before.workspaceSnapshotChanged(after)
+
+  let beforeIdleInhibitActive = before.idleInhibitActive()
+  let afterIdleInhibitActive = after.idleInhibitActive()
+  if beforeIdleInhibitActive != afterIdleInhibitActive:
+    effects.add(
+      Effect(
+        kind: EffectKind.EffSetIdleInhibit, idleInhibitActive: afterIdleInhibitActive
+      )
+    )
 
   if before.activeTag != after.activeTag and after.activeTag != 0:
     effects.add(broadcastWorkspaceActivated(after))

@@ -1,7 +1,7 @@
 import std/[json, options]
 import layout_mode_codec
 import ../types/shell_snapshot
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import LayoutMode, WindowRuleIdleInhibitMode
 
 export shell_snapshot
 
@@ -82,6 +82,12 @@ proc triadOutputJson(output: ShellOutput): JsonNode =
     "geometry": {"x": output.x, "y": output.y, "width": output.w, "height": output.h},
   }
 
+proc idleInhibitModeId(mode: WindowRuleIdleInhibitMode): string =
+  case mode
+  of WindowRuleIdleInhibitMode.IdleInhibitNone: "none"
+  of WindowRuleIdleInhibitMode.IdleInhibitFocused: "focused"
+  of WindowRuleIdleInhibitMode.IdleInhibitVisible: "visible"
+
 proc triadWindowJson(win: ShellWindow): JsonNode =
   %*{
     "id": win.id,
@@ -136,6 +142,7 @@ proc triadWindowJson(win: ShellWindow): JsonNode =
       "height": win.floatingGeom.h,
     },
     "keyboard_shortcuts_inhibit": win.keyboardShortcutsInhibit,
+    "idle_inhibit": idleInhibitModeId(win.idleInhibitMode),
   }
 
 proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =

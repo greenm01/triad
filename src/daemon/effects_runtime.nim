@@ -7,8 +7,8 @@ import ../ipc/socket
 import ../systems/daemon_view
 import ../types/runtime_values
 import
-  live_restore_runtime, manage_requests, process_runner, protocol_surface_runtime,
-  quickshell_runner, render_runtime, screenshot_runner, state
+  idle_inhibit_runtime, live_restore_runtime, manage_requests, process_runner,
+  protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner, state
 
 proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
   case eff.kind
@@ -77,6 +77,8 @@ proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
         daemon.windowPointers[eff.maxWinId].informMaximized()
       else:
         daemon.windowPointers[eff.maxWinId].informUnmaximized()
+  of EffectKind.EffSetIdleInhibit:
+    daemon.setIdleInhibit(eff.idleInhibitActive)
   else:
     discard
 
@@ -168,6 +170,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       EffectKind.EffSetFullscreen, EffectKind.EffSetMaximized,
       EffectKind.EffInformResizeStart, EffectKind.EffInformResizeEnd:
     daemon.queueManageEffect(eff)
+  of EffectKind.EffSetIdleInhibit:
+    daemon.setIdleInhibit(eff.idleInhibitActive)
   of EffectKind.EffSetPosition:
     if daemon.riverPhase == RiverPhase.RiverRender and
         daemon.windowNodes.hasKey(eff.windowId):

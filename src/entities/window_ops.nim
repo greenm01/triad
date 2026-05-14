@@ -3,7 +3,7 @@ import group_ops, history_ops, placement_ops, scratchpad_ops
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/core except Rect
 import ../types/model
-from ../types/runtime_values import Rect
+from ../types/runtime_values import Rect, WindowRuleIdleInhibitMode
 
 proc addWindow*(
     model: var Model,
@@ -37,6 +37,7 @@ proc addWindow*(
     focusAfterAdmission = false,
     keyboardShortcutsInhibit = false,
     keyboardShortcutsInhibitBypass = false,
+    idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone,
 ): WindowId =
   if externalId != NullExternalWindowId and model.externalWindowIds.hasKey(externalId):
     return model.externalWindowIds[externalId]
@@ -79,6 +80,7 @@ proc addWindow*(
       focusAfterAdmission: focusAfterAdmission,
       keyboardShortcutsInhibit: keyboardShortcutsInhibit,
       keyboardShortcutsInhibitBypass: keyboardShortcutsInhibitBypass,
+      idleInhibitMode: idleInhibitMode,
     )
   )
   if externalId != NullExternalWindowId:
@@ -147,6 +149,7 @@ proc setWindowCreatedState*(
     focusAfterAdmission = false,
     parentExternalId = NullExternalWindowId,
     keyboardShortcutsInhibit = false,
+    idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone,
     preserveRuntimeState = false,
 ): bool =
   let currentOpt = model.windows.entity(winId)
@@ -199,6 +202,8 @@ proc setWindowCreatedState*(
     keyboardShortcutsInhibit: keyboardShortcutsInhibit,
     keyboardShortcutsInhibitBypass:
       if preserveRuntimeState: current.keyboardShortcutsInhibitBypass else: false,
+    idleInhibitMode:
+      if preserveRuntimeState: current.idleInhibitMode else: idleInhibitMode,
   )
   true
 
@@ -265,7 +270,8 @@ proc preserveWindowRuntimeAttributes*(
       current.manualFloatingPosition == source.manualFloatingPosition and
       current.parentExternalId == source.parentExternalId and
       current.keyboardShortcutsInhibit == source.keyboardShortcutsInhibit and
-      current.keyboardShortcutsInhibitBypass == source.keyboardShortcutsInhibitBypass:
+      current.keyboardShortcutsInhibitBypass == source.keyboardShortcutsInhibitBypass and
+      current.idleInhibitMode == source.idleInhibitMode:
     return false
 
   var win = model.windows.mEntity(winId)
@@ -297,6 +303,7 @@ proc preserveWindowRuntimeAttributes*(
   win.parentExternalId = source.parentExternalId
   win.keyboardShortcutsInhibit = source.keyboardShortcutsInhibit
   win.keyboardShortcutsInhibitBypass = source.keyboardShortcutsInhibitBypass
+  win.idleInhibitMode = source.idleInhibitMode
   true
 
 proc setWindowWidthProportion*(
@@ -507,6 +514,16 @@ proc setWindowKeyboardShortcutsInhibit*(
     return false
   model.windows.mEntity(winId).keyboardShortcutsInhibit = inhibited
   model.windows.mEntity(winId).keyboardShortcutsInhibitBypass = inhibited and bypass
+  true
+
+proc setWindowIdleInhibitMode*(
+    model: var Model, winId: WindowId, mode: WindowRuleIdleInhibitMode
+): bool =
+  if model.windows.entity(winId).isNone:
+    return false
+  if model.windows.mEntity(winId).idleInhibitMode == mode:
+    return false
+  model.windows.mEntity(winId).idleInhibitMode = mode
   true
 
 proc toggleWindowKeyboardShortcutsInhibit*(model: var Model, winId: WindowId): bool =

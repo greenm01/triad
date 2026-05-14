@@ -409,6 +409,19 @@ proc parsePresentationMode(value: string): tuple[valid: bool, mode: Presentation
   else:
     (false, PresentationMode.PresentationDefault)
 
+proc parseIdleInhibitMode(
+    value: string
+): tuple[valid: bool, mode: WindowRuleIdleInhibitMode] =
+  case value.toLowerAscii()
+  of "none":
+    (true, WindowRuleIdleInhibitMode.IdleInhibitNone)
+  of "focused":
+    (true, WindowRuleIdleInhibitMode.IdleInhibitFocused)
+  of "visible":
+    (true, WindowRuleIdleInhibitMode.IdleInhibitVisible)
+  else:
+    (false, WindowRuleIdleInhibitMode.IdleInhibitNone)
+
 proc defaultKeyBindings*(): seq[KeyBindingConfig] =
   @[
     hotkeyOverlayFallbackBinding(),
@@ -747,6 +760,14 @@ proc loadConfig*(path: string): Config =
             elif child.name == "keyboard-shortcuts-inhibit" and child.args.len > 0:
               rule.keyboardShortcutsInhibitSet = true
               rule.keyboardShortcutsInhibit = child.args[0].kBool()
+            elif child.name == "idle-inhibit" and child.args.len > 0:
+              let parsed = parseIdleInhibitMode(child.args[0].kString())
+              if parsed.valid:
+                rule.idleInhibitModeSet = true
+                rule.idleInhibitMode = parsed.mode
+              else:
+                warn "Ignoring invalid window rule idle inhibit mode",
+                  value = child.args[0].kString()
             elif child.name == "presentation-mode" and child.args.len > 0:
               let parsed = parsePresentationMode(child.args[0].kString())
               if parsed.valid:

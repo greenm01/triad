@@ -3,7 +3,7 @@ import
   focus, outputs, placement, popup_tree, sticky_windows, window_policy, scratchpad,
   window_rules, window_state, workspaces
 import ../state/engine
-from ../types/runtime_values import LayoutMode, ParentedRole
+from ../types/runtime_values import LayoutMode, ParentedRole, WindowRuleIdleInhibitMode
 
 proc supportsOpenColumnMaximize(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
@@ -430,6 +430,7 @@ proc createWindowForExternal*(
   var isSticky = false
   var floatingGeom = GeometryRect()
   var shortcutInhibit = false
+  var idleInhibitMode = WindowRuleIdleInhibitMode.IdleInhibitNone
   var widthProportion = model.defaultWindowWidth()
   var heightProportion = model.defaultWindowHeight()
   var columnWidthProportion = 0.0'f32
@@ -440,6 +441,7 @@ proc createWindowForExternal*(
     if isFloating:
       floatingGeom = model.defaultFloatingGeom()
     shortcutInhibit = ruleMatch.rule.keyboardShortcutsInhibit
+    idleInhibitMode = ruleMatch.rule.idleInhibitMode
     if not hasRestoredWindow:
       if ruleMatch.rule.defaultWindowWidthSet:
         widthProportion = ruleMatch.rule.defaultWindowWidth
@@ -497,6 +499,7 @@ proc createWindowForExternal*(
     focusAfterAdmission = false,
     parentExternalId = parentExternalId,
     keyboardShortcutsInhibit = shortcutInhibit,
+    idleInhibitMode = idleInhibitMode,
     preserveRuntimeState = existingWindow and not hasRestoredWindow,
   )
   discard model.applyWindowRuleBounds(result)

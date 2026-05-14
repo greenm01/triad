@@ -51,6 +51,11 @@ type
     Column
     Ignore
 
+  WindowRuleIdleInhibitMode* {.pure.} = enum
+    IdleInhibitNone
+    IdleInhibitFocused
+    IdleInhibitVisible
+
   FloatingPositionAnchor* {.pure.} = enum
     TopLeft
     TopRight
@@ -117,6 +122,7 @@ type
     floatingGeom*: Rect
     keyboardShortcutsInhibit*: bool
     keyboardShortcutsInhibitBypass*: bool
+    idleInhibitMode*: WindowRuleIdleInhibitMode
 
   GroupState* = object
     id*: uint32
@@ -215,6 +221,8 @@ type
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
     keyboardShortcutsInhibit*: bool
+    idleInhibitModeSet*: bool
+    idleInhibitMode*: WindowRuleIdleInhibitMode
     presentationModeSet*: bool
     presentationMode*: PresentationMode
     tiledStateSet*: bool

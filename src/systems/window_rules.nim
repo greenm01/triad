@@ -2,7 +2,7 @@ import std/[options, re]
 import ../state/engine
 from ../types/runtime_values import
   ParentedRole, PresentationMode, WindowRuleBorderConfig, WindowRuleFloatingConfig,
-  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig
+  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode
 
 type WindowRuleMatchContext = object
   winId: WindowId
@@ -297,6 +297,8 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:
     result.keyboardShortcutsInhibit = rule.keyboardShortcutsInhibit
+  if rule.idleInhibitModeSet:
+    result.idleInhibitMode = rule.idleInhibitMode
   if rule.presentationModeSet:
     result.presentationModeSet = true
     result.presentationMode = rule.presentationMode
@@ -346,6 +348,20 @@ proc windowKeyboardShortcutsInhibit*(model: Model, appId, title: string): bool =
 proc windowKeyboardShortcutsInhibit*(model: Model, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(win)
   ruleMatch.found and ruleMatch.rule.keyboardShortcutsInhibit
+
+proc windowIdleInhibitMode*(
+    model: Model, appId, title: string
+): WindowRuleIdleInhibitMode =
+  let ruleMatch = model.windowRuleFor(appId, title)
+  if ruleMatch.found:
+    return ruleMatch.rule.idleInhibitMode
+  WindowRuleIdleInhibitMode.IdleInhibitNone
+
+proc windowIdleInhibitMode*(model: Model, win: WindowData): WindowRuleIdleInhibitMode =
+  let ruleMatch = model.windowRuleFor(win)
+  if ruleMatch.found:
+    return ruleMatch.rule.idleInhibitMode
+  WindowRuleIdleInhibitMode.IdleInhibitNone
 
 proc windowClipToGeometry*(model: Model, winId: WindowId): bool =
   if winId == NullWindowId:
@@ -449,4 +465,6 @@ proc refreshWindowRuleDerivedState*(model: var Model): bool =
         model.setWindowKeyboardShortcutsInhibit(
           winId, inhibited, win.keyboardShortcutsInhibitBypass
         ) or result
+    let idleInhibitMode = model.windowIdleInhibitMode(win)
+    result = model.setWindowIdleInhibitMode(winId, idleInhibitMode) or result
     result = model.applyWindowRuleBounds(winId) or result

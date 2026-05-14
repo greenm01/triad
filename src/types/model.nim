@@ -7,7 +7,7 @@ from runtime_values import
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
   WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleFocusRingConfig, WindowRuleMaximizePolicy
+  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -43,6 +43,7 @@ type
     focusAfterAdmission*: bool
     keyboardShortcutsInhibit*: bool
     keyboardShortcutsInhibitBypass*: bool
+    idleInhibitMode*: WindowRuleIdleInhibitMode
 
   TagData* = object
     id*: TagId
@@ -162,6 +163,8 @@ type
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
     keyboardShortcutsInhibit*: bool
+    idleInhibitModeSet*: bool
+    idleInhibitMode*: WindowRuleIdleInhibitMode
     presentationModeSet*: bool
     presentationMode*: PresentationMode
     tiledStateSet*: bool
@@ -219,6 +222,7 @@ type
     clipToGeometry*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
+    idleInhibitMode*: WindowRuleIdleInhibitMode
     presentationModeSet*: bool
     presentationMode*: PresentationMode
     tiledStateSet*: bool

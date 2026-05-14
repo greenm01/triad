@@ -6,10 +6,11 @@ import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
+import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import ../core/msg
 import
-  bindings_runtime, manage_requests, message_queue, protocol_surface_runtime,
-  river_manager_runtime, river_outputs_runtime, state
+  bindings_runtime, idle_inhibit_runtime, manage_requests, message_queue,
+  protocol_surface_runtime, river_manager_runtime, river_outputs_runtime, state
 
 proc handleGlobal*(
     data: pointer,
@@ -44,6 +45,7 @@ proc handleGlobal*(
     ))
     info "Bound to wl_compositor", name = name, advertisedVersion = version
     daemon[].ensureOwnedShellSurface()
+    daemon[].applyIdleInhibitDesired()
   elif interfaceName == "wl_shm":
     daemon.shm = cast[ptr Shm](registry.`bind`(
       name, wlCore.wl_shm_interface.addr, min(version, 1'u32)
@@ -99,6 +101,15 @@ proc handleGlobal*(
     ))
     info "Bound to wp_single_pixel_buffer_manager_v1",
       name = name, advertisedVersion = version
+    daemon[].applyIdleInhibitDesired()
+  elif interfaceName == "zwp_idle_inhibit_manager_v1":
+    daemon.idleInhibitManager = cast[ptr idle.ZwpIdleInhibitManagerV1](registry.`bind`(
+      name, idle.zwp_idle_inhibit_manager_v1_interface.addr, min(version, 1'u32)
+    ))
+    daemon.idleInhibitGlobalName = name
+    info "Bound to zwp_idle_inhibit_manager_v1",
+      name = name, advertisedVersion = version
+    daemon[].applyIdleInhibitDesired()
 
 proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
   let daemon = daemonFromData(data)
@@ -107,6 +118,14 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
     return
 
   debug "Wayland global removed", name = name
+  if daemon.idleInhibitGlobalName == name:
+    let desiredIdleInhibit = daemon.idleInhibitDesired
+    daemon[].destroyIdleInhibitRuntime()
+    if daemon.idleInhibitManager != nil:
+      daemon.idleInhibitManager.destroy()
+    daemon.idleInhibitManager = nil
+    daemon.idleInhibitGlobalName = 0
+    daemon.idleInhibitDesired = desiredIdleInhibit
   if daemon.wlOutputPointers.hasKey(name):
     daemon.wlOutputPointers[name].release()
     daemon.wlOutputPointers.del(name)

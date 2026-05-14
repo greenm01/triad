@@ -54,6 +54,9 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       model.externalWindowId(model.selectedOverviewWindow())
     else:
       0'u32
+  result.activeScratchpadWindow = model.externalWindowId(model.activeScratchpadWindow())
+  result.sessionLocked = model.sessionLocked
+  result.layerFocusExclusive = model.layerFocusExclusive
   result.layoutCycle =
     if model.layoutCycle.len > 0:
       model.layoutCycle
@@ -89,6 +92,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         name: tag.name,
         layoutMode: tag.layoutMode,
         isActive: slot == model.activeSlot,
+        isOutputVisible: tagId != NullTagId and model.tagVisibleOnOutput(tagId),
         focusedWindow: model.externalWindowId(tag.focusedWindow),
         occupied: tagId != NullTagId and model.tagHasNonStickyLiveWindows(tagId),
         outputName:
@@ -159,6 +163,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         actualH: win.actualH,
         floatingGeom: win.floatingGeom,
         keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
+        idleInhibitMode: win.idleInhibitMode,
       )
     )
 

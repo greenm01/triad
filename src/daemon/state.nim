@@ -5,6 +5,7 @@ import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
+import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
 import ../types/[runtime_state, runtime_values]
@@ -45,6 +46,13 @@ type
     compositor*: ptr Compositor
     shm*: ptr Shm
     singlePixelManager*: ptr singlepixel.WpSinglePixelBufferManagerV1
+    idleInhibitManager*: ptr idle.ZwpIdleInhibitManagerV1
+    idleInhibitGlobalName*: uint32
+    idleInhibitor*: ptr idle.ZwpIdleInhibitorV1
+    idleInhibitSurface*: ptr Surface
+    idleInhibitBuffer*: ptr Buffer
+    idleInhibitDesired*: bool
+    idleInhibitUnavailableWarned*: bool
     riverPhase*: RiverPhase
     bindingsConfigured*: bool
     bindingsReconfigurePending*: bool

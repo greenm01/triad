@@ -350,6 +350,16 @@ proc outputActiveTag*(model: Model, outputId: OutputId): TagId =
 proc tagHasOutput*(model: Model, tagId: TagId): bool =
   model.tagOutputs.getOrDefault(tagId, NullOutputId) != NullOutputId
 
+proc tagVisibleOnOutput*(model: Model, tagId: TagId): bool =
+  if tagId == NullTagId:
+    return false
+  if tagId == model.activeTag:
+    return true
+  for _, outputTag in model.outputTagsWithId():
+    if outputTag == tagId:
+      return true
+  false
+
 proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
   let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
   if mappedOutput != NullOutputId and model.outputData(mappedOutput).isSome:
