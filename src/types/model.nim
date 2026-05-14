@@ -7,7 +7,7 @@ from runtime_values import
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
   WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleMaximizePolicy
+  WindowRuleFocusRingConfig, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -149,6 +149,7 @@ type
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     border*: WindowRuleBorderConfig
+    focusRing*: WindowRuleFocusRingConfig
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
@@ -203,6 +204,7 @@ type
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     border*: WindowRuleBorderConfig
+    focusRing*: WindowRuleFocusRingConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     presentationModeSet*: bool

@@ -29,7 +29,7 @@ proc applyBorder(
     edges: uint32,
 ) =
   let logicalId = daemon.currentModel.windowForRiverId(id)
-  let border = daemon.currentModel.effectiveWindowBorder(logicalId)
+  let border = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
   let color =
     if focused:
       premulColor(border.activeColor)
@@ -231,13 +231,14 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       lastNode = node
       if daemon.windowPointers.hasKey(id):
         let logicalId = daemon.currentModel.windowForRiverId(id)
-        let border = daemon.currentModel.effectiveWindowBorder(logicalId)
+        let focused = id == highlighted
+        let border = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
         let visibility = renderVisibility(geom, screen, max(border.width * 2, 4'i32))
         daemon.windowPointers[id].applyVisibility(
           visibility, daemon.placementNeedsCellClip(id, geom), border.width
         )
         daemon.applyBorder(
-          id, daemon.windowPointers[id], id == highlighted, visibility.borderEdges
+          id, daemon.windowPointers[id], focused, visibility.borderEdges
         )
 
   for id, win in daemon.windowPointers.pairs:

@@ -2095,6 +2095,12 @@ suite "Core Runtime Logic":
                 activeColorSet: true,
                 activeColor: 0xff0000ff'u32,
               ),
+              focusRing: WindowRuleFocusRingConfig(
+                widthSet: true,
+                width: 8,
+                activeColorSet: true,
+                activeColor: 0x0000ffff'u32,
+              ),
               tiledState: true,
             ),
             WindowRule(
@@ -2128,6 +2134,7 @@ suite "Core Runtime Logic":
                 inactiveColorSet: true,
                 inactiveColor: 0x00ff00ff'u32,
               ),
+              focusRing: WindowRuleFocusRingConfig(widthSet: true, width: 9),
               tiledStateSet: true,
               tiledState: false,
             ),
@@ -2162,6 +2169,10 @@ suite "Core Runtime Logic":
     check rule.rule.border.activeColor == 0xff0000ff'u32
     check rule.rule.border.inactiveColorSet
     check rule.rule.border.inactiveColor == 0x00ff00ff'u32
+    check rule.rule.focusRing.widthSet
+    check rule.rule.focusRing.width == 9
+    check rule.rule.focusRing.activeColorSet
+    check rule.rule.focusRing.activeColor == 0x0000ffff'u32
     check rule.rule.tiledStateSet
     check not rule.rule.tiledState
 
@@ -2327,6 +2338,117 @@ suite "Core Runtime Logic":
 
     check model.effectiveWindowBorder(WindowId(1)).width == 0
     check model.effectiveWindowBorder(WindowId(2)).width == 4
+
+  test "Window rule focus-ring overrides only focused border rendering":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          borderWidth: 2,
+          focusedBorderColor: 0x111111ff'u32,
+          unfocusedBorderColor: 0x222222ff'u32,
+        ),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "app",
+              border: WindowRuleBorderConfig(
+                widthSet: true,
+                width: 3,
+                activeColorSet: true,
+                activeColor: 0x333333ff'u32,
+                inactiveColorSet: true,
+                inactiveColor: 0x444444ff'u32,
+              ),
+              focusRing: WindowRuleFocusRingConfig(
+                widthSet: true,
+                width: 6,
+                activeColorSet: true,
+                activeColor: 0xabcdef80'u32,
+              ),
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "App")
+    )
+
+    let unfocused = model.effectiveWindowBorder(WindowId(1), focused = false)
+    check unfocused.width == 3
+    check unfocused.activeColor == 0x333333ff'u32
+    check unfocused.inactiveColor == 0x444444ff'u32
+
+    let focused = model.effectiveWindowBorder(WindowId(1), focused = true)
+    check focused.width == 6
+    check focused.activeColor == 0xabcdef80'u32
+    check focused.inactiveColor == 0x444444ff'u32
+
+  test "Window rule focus-ring can make active-only borders":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          borderWidth: 2,
+          focusedBorderColor: 0x111111ff'u32,
+          unfocusedBorderColor: 0x222222ff'u32,
+        ),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "app",
+              border: WindowRuleBorderConfig(widthSet: true, width: 0),
+              focusRing: WindowRuleFocusRingConfig(
+                widthSet: true,
+                width: 4,
+                activeColorSet: true,
+                activeColor: 0xff8800ff'u32,
+              ),
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "App")
+    )
+
+    check model.effectiveWindowBorder(WindowId(1), focused = false).width == 0
+    let focused = model.effectiveWindowBorder(WindowId(1), focused = true)
+    check focused.width == 4
+    check focused.activeColor == 0xff8800ff'u32
+
+  test "Window rule focus-ring fields merge independently":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          borderWidth: 2,
+          focusedBorderColor: 0x111111ff'u32,
+          unfocusedBorderColor: 0x222222ff'u32,
+        ),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "app",
+              focusRing: WindowRuleFocusRingConfig(
+                activeColorSet: true, activeColor: 0xabcdef80'u32
+              ),
+            ),
+            WindowRule(
+              appIdMatch: "app",
+              titleMatch: "Dialog",
+              focusRing: WindowRuleFocusRingConfig(widthSet: true, width: 8),
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Dialog")
+    )
+
+    let focused = model.effectiveWindowBorder(WindowId(1), focused = true)
+    check focused.width == 8
+    check focused.activeColor == 0xabcdef80'u32
 
   test "Window rules match regex entries with OR and exclude semantics":
     var model = initRuntimeStateFromConfig(

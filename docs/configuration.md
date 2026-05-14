@@ -49,7 +49,8 @@ The supported KDL nodes are:
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   focus behavior, parented-dialog viewport jump behavior, size-hint policy,
-  shortcut inhibition, presentation mode, border policy, and forced layout.
+  shortcut inhibition, presentation mode, border/focus-ring policy, and forced
+  layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -149,6 +150,10 @@ window-rule {
     active-color "#7fc8ff"
     inactive-color "#505050"
   }
+  focus-ring {
+    width 6
+    active-color "#ffbf7f"
+  }
 }
 ```
 
@@ -217,6 +222,11 @@ window-rule {
   config. `width` is clamped to `0..64`; `width 0` disables borders for
   matching windows. Colors use the same `#rrggbb` or `#rrggbbaa` syntax as
   global border colors.
+- `focus-ring { width <px>; active-color "<rgba>" }`: overrides the rendered
+  border only while the matching window is focused or highlighted in overview.
+  It uses River's same border primitive, so unfocused rendering keeps the
+  normal `border` or top-level `layout.border` policy. To get active-only
+  rings, combine `border { width 0 }` with a nonzero `focus-ring` width.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
 - `default-workspaces <n>...`: opens matching windows on multiple workspaces.

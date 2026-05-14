@@ -722,6 +722,15 @@ proc loadConfig*(path: string): Config =
                   rule.border.inactiveColorSet = true
                   rule.border.inactiveColor =
                     parseColor(borderChild.args[0].kString(), rule.border.inactiveColor)
+            elif child.name == "focus-ring":
+              for ringChild in child.children:
+                if ringChild.name == "width" and ringChild.args.len > 0:
+                  rule.focusRing.widthSet = true
+                  rule.focusRing.width = clamp32(int32(ringChild.args[0].kInt()), 0, 64)
+                elif ringChild.name == "active-color" and ringChild.args.len > 0:
+                  rule.focusRing.activeColorSet = true
+                  rule.focusRing.activeColor =
+                    parseColor(ringChild.args[0].kString(), rule.focusRing.activeColor)
             elif child.name == "dialog-viewport-jump" and child.args.len > 0:
               rule.dialogViewportJumpSet = true
               rule.dialogViewportJump = child.args[0].kBool()

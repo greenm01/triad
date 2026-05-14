@@ -88,6 +88,12 @@ type
     inactiveColorSet*: bool
     inactiveColor*: uint32
 
+  WindowRuleFocusRingConfig* = object
+    widthSet*: bool
+    width*: int32
+    activeColorSet*: bool
+    activeColor*: uint32
+
   WindowData* = object
     id*: WindowId
     title*: string
@@ -199,6 +205,7 @@ type
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     border*: WindowRuleBorderConfig
+    focusRing*: WindowRuleFocusRingConfig
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool

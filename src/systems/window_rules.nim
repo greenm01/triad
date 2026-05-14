@@ -2,7 +2,7 @@ import std/[options, re]
 import ../state/engine
 from ../types/runtime_values import
   ParentedRole, PresentationMode, WindowRuleBorderConfig, WindowRuleFloatingConfig,
-  WindowRuleFloatingPositionConfig
+  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig
 
 type WindowRuleMatchContext = object
   winId: WindowId
@@ -207,6 +207,16 @@ proc mergeBorderRule(
     target.inactiveColorSet = true
     target.inactiveColor = source.inactiveColor
 
+proc mergeFocusRingRule(
+    target: var WindowRuleFocusRingConfig, source: WindowRuleFocusRingConfig
+) =
+  if source.widthSet:
+    target.widthSet = true
+    target.width = source.width
+  if source.activeColorSet:
+    target.activeColorSet = true
+    target.activeColor = source.activeColor
+
 proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.defaultSlots.len > 0:
     result.defaultSlots = rule.defaultSlots
@@ -276,6 +286,7 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   result.floating.mergeFloatingRule(rule.floating)
   result.defaultFloatingPosition.mergeFloatingPositionRule(rule.defaultFloatingPosition)
   result.border.mergeBorderRule(rule.border)
+  result.focusRing.mergeFocusRingRule(rule.focusRing)
   if rule.dialogViewportJumpSet:
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:
@@ -352,7 +363,7 @@ proc effectivePresentationMode*(
   )
 
 proc effectiveWindowBorder*(
-    model: Model, winId: WindowId
+    model: Model, winId: WindowId, focused = false
 ): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
   result.width = model.borderWidth
   result.activeColor = model.focusedBorderColor
@@ -370,6 +381,11 @@ proc effectiveWindowBorder*(
       result.activeColor = ruleMatch.rule.border.activeColor
     if ruleMatch.rule.border.inactiveColorSet:
       result.inactiveColor = ruleMatch.rule.border.inactiveColor
+    if focused:
+      if ruleMatch.rule.focusRing.widthSet:
+        result.width = ruleMatch.rule.focusRing.width
+      if ruleMatch.rule.focusRing.activeColorSet:
+        result.activeColor = ruleMatch.rule.focusRing.activeColor
 
 proc windowRespectsSizeHints*(model: Model, winId: WindowId, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(winId, win)
