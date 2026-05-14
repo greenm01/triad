@@ -137,6 +137,7 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       openNamedScratchpad: rule.openNamedScratchpad,
       floating: rule.floating,
       defaultFloatingPosition: rule.defaultFloatingPosition,
+      border: rule.border,
       dialogViewportJumpSet: rule.dialogViewportJumpSet or rule.dialogViewportJump,
       dialogViewportJump: rule.dialogViewportJump,
       keyboardShortcutsInhibitSet:

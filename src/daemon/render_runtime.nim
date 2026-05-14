@@ -22,16 +22,20 @@ template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.ownedShellSurfaceId
 
 proc applyBorder(
-    daemon: TriadDaemon, win: ptr RiverWindowV1, focused: bool, edges: uint32
+    daemon: TriadDaemon,
+    id: runtime_values.WindowId,
+    win: ptr RiverWindowV1,
+    focused: bool,
+    edges: uint32,
 ) =
+  let logicalId = daemon.currentModel.windowForRiverId(id)
+  let border = daemon.currentModel.effectiveWindowBorder(logicalId)
   let color =
     if focused:
-      premulColor(daemon.currentModel.focusedBorderColor)
+      premulColor(border.activeColor)
     else:
-      premulColor(daemon.currentModel.unfocusedBorderColor)
-  win.setBorders(
-    edges, daemon.currentModel.borderWidth, color.r, color.g, color.b, color.a
-  )
+      premulColor(border.inactiveColor)
+  win.setBorders(edges, border.width, color.r, color.g, color.b, color.a)
 
 proc supportedCapabilities*(model: Model): uint32 =
   const
@@ -226,16 +230,14 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         node.placeAbove(lastNode)
       lastNode = node
       if daemon.windowPointers.hasKey(id):
-        let visibility = renderVisibility(
-          geom, screen, max(daemon.currentModel.borderWidth * 2, 4'i32)
-        )
+        let logicalId = daemon.currentModel.windowForRiverId(id)
+        let border = daemon.currentModel.effectiveWindowBorder(logicalId)
+        let visibility = renderVisibility(geom, screen, max(border.width * 2, 4'i32))
         daemon.windowPointers[id].applyVisibility(
-          visibility,
-          daemon.placementNeedsCellClip(id, geom),
-          daemon.currentModel.borderWidth,
+          visibility, daemon.placementNeedsCellClip(id, geom), border.width
         )
         daemon.applyBorder(
-          daemon.windowPointers[id], id == highlighted, visibility.borderEdges
+          id, daemon.windowPointers[id], id == highlighted, visibility.borderEdges
         )
 
   for id, win in daemon.windowPointers.pairs:

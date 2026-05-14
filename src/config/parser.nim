@@ -709,6 +709,19 @@ proc loadConfig*(path: string): Config =
                 position.relativeTo =
                   parseFloatingPositionAnchor(child.props["relative-to"].kString())
               rule.defaultFloatingPosition = position
+            elif child.name == "border":
+              for borderChild in child.children:
+                if borderChild.name == "width" and borderChild.args.len > 0:
+                  rule.border.widthSet = true
+                  rule.border.width = clamp32(int32(borderChild.args[0].kInt()), 0, 64)
+                elif borderChild.name == "active-color" and borderChild.args.len > 0:
+                  rule.border.activeColorSet = true
+                  rule.border.activeColor =
+                    parseColor(borderChild.args[0].kString(), rule.border.activeColor)
+                elif borderChild.name == "inactive-color" and borderChild.args.len > 0:
+                  rule.border.inactiveColorSet = true
+                  rule.border.inactiveColor =
+                    parseColor(borderChild.args[0].kString(), rule.border.inactiveColor)
             elif child.name == "dialog-viewport-jump" and child.args.len > 0:
               rule.dialogViewportJumpSet = true
               rule.dialogViewportJump = child.args[0].kBool()

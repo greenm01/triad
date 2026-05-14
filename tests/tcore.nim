@@ -2089,6 +2089,12 @@ suite "Core Runtime Logic":
               keyboardShortcutsInhibit: true,
               presentationModeSet: true,
               presentationMode: PresentationMode.PresentationAsync,
+              border: WindowRuleBorderConfig(
+                widthSet: true,
+                width: 7,
+                activeColorSet: true,
+                activeColor: 0xff0000ff'u32,
+              ),
               tiledState: true,
             ),
             WindowRule(
@@ -2116,6 +2122,12 @@ suite "Core Runtime Logic":
               keyboardShortcutsInhibit: false,
               presentationModeSet: true,
               presentationMode: PresentationMode.PresentationDefault,
+              border: WindowRuleBorderConfig(
+                widthSet: true,
+                width: 0,
+                inactiveColorSet: true,
+                inactiveColor: 0x00ff00ff'u32,
+              ),
               tiledStateSet: true,
               tiledState: false,
             ),
@@ -2144,6 +2156,12 @@ suite "Core Runtime Logic":
     check not rule.rule.keyboardShortcutsInhibit
     check rule.rule.presentationModeSet
     check rule.rule.presentationMode == PresentationMode.PresentationDefault
+    check rule.rule.border.widthSet
+    check rule.rule.border.width == 0
+    check rule.rule.border.activeColorSet
+    check rule.rule.border.activeColor == 0xff0000ff'u32
+    check rule.rule.border.inactiveColorSet
+    check rule.rule.border.inactiveColor == 0x00ff00ff'u32
     check rule.rule.tiledStateSet
     check not rule.rule.tiledState
 
@@ -2212,6 +2230,103 @@ suite "Core Runtime Logic":
     policy = model.effectivePresentationMode()
     check policy.hasPreference
     check policy.mode == PresentationMode.PresentationAsync
+
+  test "Window rule border uses global defaults without focused match":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          borderWidth: 3,
+          focusedBorderColor: 0x112233ff'u32,
+          unfocusedBorderColor: 0x445566ff'u32,
+        ),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "other",
+              border: WindowRuleBorderConfig(widthSet: true, width: 0),
+            )
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "plain", title: "Plain")
+    )
+
+    let border = model.effectiveWindowBorder(WindowId(1))
+    check border.width == 3
+    check border.activeColor == 0x112233ff'u32
+    check border.inactiveColor == 0x445566ff'u32
+
+  test "Window rule border merges width and colors independently":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          borderWidth: 2,
+          focusedBorderColor: 0x111111ff'u32,
+          unfocusedBorderColor: 0x222222ff'u32,
+        ),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "app",
+              border: WindowRuleBorderConfig(
+                activeColorSet: true,
+                activeColor: 0xabcdef80'u32,
+                inactiveColorSet: true,
+                inactiveColor: 0x123456ff'u32,
+              ),
+            ),
+            WindowRule(
+              appIdMatch: "app",
+              titleMatch: "Dialog",
+              border: WindowRuleBorderConfig(widthSet: true, width: 6),
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Dialog")
+    )
+
+    let border = model.effectiveWindowBorder(WindowId(1))
+    check border.width == 6
+    check border.activeColor == 0xabcdef80'u32
+    check border.inactiveColor == 0x123456ff'u32
+
+  test "Window rule border width zero disables and later rule can re-enable":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          borderWidth: 2,
+          focusedBorderColor: 0x111111ff'u32,
+          unfocusedBorderColor: 0x222222ff'u32,
+        ),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "app",
+              border: WindowRuleBorderConfig(widthSet: true, width: 0),
+            ),
+            WindowRule(
+              appIdMatch: "app",
+              titleMatch: "Main",
+              border: WindowRuleBorderConfig(widthSet: true, width: 4),
+            ),
+          ],
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Dialog")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Main")
+    )
+
+    check model.effectiveWindowBorder(WindowId(1)).width == 0
+    check model.effectiveWindowBorder(WindowId(2)).width == 4
 
   test "Window rules match regex entries with OR and exclude semantics":
     var model = initRuntimeStateFromConfig(

@@ -1,7 +1,7 @@
 import std/[options, re]
 import ../state/engine
 from ../types/runtime_values import
-  ParentedRole, PresentationMode, WindowRuleFloatingConfig,
+  ParentedRole, PresentationMode, WindowRuleBorderConfig, WindowRuleFloatingConfig,
   WindowRuleFloatingPositionConfig
 
 type WindowRuleMatchContext = object
@@ -194,6 +194,19 @@ proc mergeFloatingPositionRule(
   if source.set:
     target = source
 
+proc mergeBorderRule(
+    target: var WindowRuleBorderConfig, source: WindowRuleBorderConfig
+) =
+  if source.widthSet:
+    target.widthSet = true
+    target.width = source.width
+  if source.activeColorSet:
+    target.activeColorSet = true
+    target.activeColor = source.activeColor
+  if source.inactiveColorSet:
+    target.inactiveColorSet = true
+    target.inactiveColor = source.inactiveColor
+
 proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.defaultSlots.len > 0:
     result.defaultSlots = rule.defaultSlots
@@ -262,6 +275,7 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
     result.openNamedScratchpad = rule.openNamedScratchpad
   result.floating.mergeFloatingRule(rule.floating)
   result.defaultFloatingPosition.mergeFloatingPositionRule(rule.defaultFloatingPosition)
+  result.border.mergeBorderRule(rule.border)
   if rule.dialogViewportJumpSet:
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:
@@ -336,6 +350,26 @@ proc effectivePresentationMode*(
     hasPreference: model.presentationMode != PresentationMode.PresentationDefault,
     mode: model.presentationMode,
   )
+
+proc effectiveWindowBorder*(
+    model: Model, winId: WindowId
+): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
+  result.width = model.borderWidth
+  result.activeColor = model.focusedBorderColor
+  result.inactiveColor = model.unfocusedBorderColor
+  if winId == NullWindowId:
+    return
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return
+  let ruleMatch = model.windowRuleFor(winId, winOpt.get())
+  if ruleMatch.found:
+    if ruleMatch.rule.border.widthSet:
+      result.width = ruleMatch.rule.border.width
+    if ruleMatch.rule.border.activeColorSet:
+      result.activeColor = ruleMatch.rule.border.activeColor
+    if ruleMatch.rule.border.inactiveColorSet:
+      result.inactiveColor = ruleMatch.rule.border.inactiveColor
 
 proc windowRespectsSizeHints*(model: Model, winId: WindowId, win: WindowData): bool =
   let ruleMatch = model.windowRuleFor(winId, win)

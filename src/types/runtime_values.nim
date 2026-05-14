@@ -80,6 +80,14 @@ type
     x*, y*: int32
     relativeTo*: FloatingPositionAnchor
 
+  WindowRuleBorderConfig* = object
+    widthSet*: bool
+    width*: int32
+    activeColorSet*: bool
+    activeColor*: uint32
+    inactiveColorSet*: bool
+    inactiveColor*: uint32
+
   WindowData* = object
     id*: WindowId
     title*: string
@@ -190,6 +198,7 @@ type
     openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
+    border*: WindowRuleBorderConfig
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool

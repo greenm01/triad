@@ -49,7 +49,7 @@ The supported KDL nodes are:
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   focus behavior, parented-dialog viewport jump behavior, size-hint policy,
-  shortcut inhibition, presentation mode, and forced layout.
+  shortcut inhibition, presentation mode, border policy, and forced layout.
 - `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
@@ -144,6 +144,11 @@ window-rule {
 window-rule {
   match app-id="^steam_app_"
   presentation-mode "async"
+  border {
+    width 4
+    active-color "#7fc8ff"
+    inactive-color "#505050"
+  }
 }
 ```
 
@@ -206,6 +211,12 @@ window-rule {
   and falls back to the top-level setting or backend default. River exposes
   this as output-level policy, so background matching windows do not change the
   output mode.
+- `border { width <px>; active-color "<rgba>"; inactive-color "<rgba>" }`:
+  overrides compositor-drawn border policy for matching windows. Fields merge
+  independently in rule order and fall back to the top-level `layout.border`
+  config. `width` is clamped to `0..64`; `width 0` disables borders for
+  matching windows. Colors use the same `#rrggbb` or `#rrggbbaa` syntax as
+  global border colors.
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
 - `default-workspaces <n>...`: opens matching windows on multiple workspaces.

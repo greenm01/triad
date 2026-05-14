@@ -6,7 +6,8 @@ from runtime_values import
   CursorConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
-  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleMaximizePolicy
+  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
+  WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -147,6 +148,7 @@ type
     openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
+    border*: WindowRuleBorderConfig
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
@@ -200,6 +202,7 @@ type
     openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
+    border*: WindowRuleBorderConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     presentationModeSet*: bool

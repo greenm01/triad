@@ -317,6 +317,11 @@ window-rule {
   center-floating #true
   parented-role "tool"
   presentation-mode "async"
+  border {
+    width 5
+    active-color "#abcdef"
+    inactive-color "#12345680"
+  }
   default-floating-position x=32 y=48 relative-to="bottom-left"
   dialog-viewport-jump #true
   floating {
@@ -445,6 +450,12 @@ bindings {
     check config.windowRules[0].parentedRole == ParentedRole.Tool
     check config.windowRules[0].presentationModeSet
     check config.windowRules[0].presentationMode == PresentationMode.PresentationAsync
+    check config.windowRules[0].border.widthSet
+    check config.windowRules[0].border.width == 5
+    check config.windowRules[0].border.activeColorSet
+    check config.windowRules[0].border.activeColor == 0xabcdefff'u32
+    check config.windowRules[0].border.inactiveColorSet
+    check config.windowRules[0].border.inactiveColor == 0x12345680'u32
     check config.windowRules[0].defaultFloatingPosition.set
     check config.windowRules[0].defaultFloatingPosition.x == 32
     check config.windowRules[0].defaultFloatingPosition.y == 48
@@ -707,6 +718,7 @@ window-rule {
   dialog-viewport-jump #false
   keyboard-shortcuts-inhibit #false
   presentation-mode "default"
+  border { width 0 }
   tiled-state #false
 }
 """,
@@ -735,6 +747,8 @@ window-rule {
     check not config.windowRules[0].keyboardShortcutsInhibit
     check config.windowRules[0].presentationModeSet
     check config.windowRules[0].presentationMode == PresentationMode.PresentationDefault
+    check config.windowRules[0].border.widthSet
+    check config.windowRules[0].border.width == 0
     check config.windowRules[0].tiledStateSet
     check not config.windowRules[0].tiledState
 
