@@ -42,7 +42,11 @@ proc onOutputRemoved(data: pointer, output: ptr RiverOutputV1) =
     layerOutput.destroy()
   daemon.outputPointers.del(id)
   if daemon.outputWlNames.hasKey(id):
-    daemon.outputGlobalOwners.del(daemon.outputWlNames[id])
+    let globalName = daemon.outputWlNames[id]
+    daemon.outputGlobalOwners.del(globalName)
+    daemon.outputGlobalNames.del(globalName)
+    daemon.outputGlobalIdentities.del(globalName)
+    daemon.outputGlobalDescriptions.del(globalName)
     daemon.outputWlNames.del(id)
   daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
   output.destroy()
@@ -63,6 +67,24 @@ proc onOutputWlOutput(data: pointer, output: ptr RiverOutputV1, name: uint32) =
         outputName: daemon.outputGlobalNames[name],
       )
     )
+  if daemon.outputGlobalIdentities.hasKey(name):
+    let identity = daemon.outputGlobalIdentities[name]
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputIdentity,
+        identityOutputId: outputId,
+        outputMake: identity.make,
+        outputModel: identity.modelName,
+      )
+    )
+  if daemon.outputGlobalDescriptions.hasKey(name):
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputDescription,
+        descriptionOutputId: outputId,
+        outputDescription: daemon.outputGlobalDescriptions[name],
+      )
+    )
 
 proc onWlOutputGeometry(
     data: pointer,
@@ -76,7 +98,22 @@ proc onWlOutputGeometry(
     model: cstring,
     transform: int32,
 ) =
-  discard
+  let listenerData = cast[ptr WlOutputListenerData](data)
+  if listenerData == nil or listenerData.daemon == nil:
+    warn "Ignoring wl_output geometry without daemon context"
+    return
+  let daemon = listenerData.daemon
+  let globalName = listenerData.globalName
+  daemon.outputGlobalIdentities[globalName] = (make: $make, modelName: $model)
+  if daemon.outputGlobalOwners.hasKey(globalName):
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputIdentity,
+        identityOutputId: daemon.outputGlobalOwners[globalName],
+        outputMake: $make,
+        outputModel: $model,
+      )
+    )
 
 proc onWlOutputMode(
     data: pointer,
@@ -114,7 +151,21 @@ proc onWlOutputName(data: pointer, output: ptr Output, name: cstring) =
     )
 
 proc onWlOutputDescription(data: pointer, output: ptr Output, description: cstring) =
-  discard
+  let listenerData = cast[ptr WlOutputListenerData](data)
+  if listenerData == nil or listenerData.daemon == nil:
+    warn "Ignoring wl_output description without daemon context"
+    return
+  let daemon = listenerData.daemon
+  let globalName = listenerData.globalName
+  daemon.outputGlobalDescriptions[globalName] = $description
+  if daemon.outputGlobalOwners.hasKey(globalName):
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputDescription,
+        descriptionOutputId: daemon.outputGlobalOwners[globalName],
+        outputDescription: $description,
+      )
+    )
 
 proc onOutputPosition(data: pointer, output: ptr RiverOutputV1, x: int32, y: int32) =
   let daemon = callbackDaemon(data, "output position")

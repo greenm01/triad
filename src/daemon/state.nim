@@ -86,6 +86,8 @@ type
     outputWlNames*: Table[uint32, uint32]
     outputGlobalOwners*: Table[uint32, uint32]
     outputGlobalNames*: Table[uint32, string]
+    outputGlobalIdentities*: Table[uint32, tuple[make, modelName: string]]
+    outputGlobalDescriptions*: Table[uint32, string]
     wlOutputPointers*: Table[uint32, ptr Output]
     wlOutputListenerData*: Table[uint32, ref WlOutputListenerData]
     seatWlNames*: Table[uint32, uint32]

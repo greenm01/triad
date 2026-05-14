@@ -241,11 +241,14 @@ window-rule {
   switching focus or moving the camera. Later matching rules replace the whole
   workspace list. Duplicate workspace numbers are ignored.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently
-  visible on the named output. When combined with `default-workspace` or
-  `default-workspaces`, Triad may move the primary target workspace's
-  non-primary output mapping to the named output, but it never switches the
-  active workspace just because a window opened. Unknown outputs fall back to
-  the normal active-workspace behavior.
+  visible on the named output. Targets match connector names such as
+  `HDMI-A-1`, shell fallback names such as `river-2`, niri-style
+  `make model serial` strings with `Unknown` for unavailable serials, and the
+  raw Wayland output description when present. When combined with
+  `default-workspace` or `default-workspaces`, Triad may move the primary
+  target workspace's non-primary output mapping to the named output, but it
+  never switches the active workspace just because a window opened. Unknown
+  outputs fall back to the normal active-workspace behavior.
 - `open-named-scratchpad "<name>"`: opens matching new windows as hidden named
   scratchpads. The window is untagged until `toggle-named-scratchpad <name>` is
   run. Empty names are ignored; live restore takes precedence; config reloads

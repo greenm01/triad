@@ -44,6 +44,28 @@ proc setOutputNameForExternal*(
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
 
+proc setOutputIdentityForExternal*(
+    model: var Model, externalId: ExternalOutputId, make, modelName: string
+): bool =
+  if externalId == NullExternalOutputId:
+    return false
+
+  let outputId = model.upsertOutputForExternal(externalId)
+  result = model.setOutputIdentity(outputId, make.strip(), modelName.strip())
+  model.syncPrimaryOutput()
+  discard model.syncPrimaryOutputTag()
+
+proc setOutputDescriptionForExternal*(
+    model: var Model, externalId: ExternalOutputId, description: string
+): bool =
+  if externalId == NullExternalOutputId:
+    return false
+
+  let outputId = model.upsertOutputForExternal(externalId)
+  result = model.setOutputDescription(outputId, description.strip())
+  model.syncPrimaryOutput()
+  discard model.syncPrimaryOutputTag()
+
 proc setOutputPositionForExternal*(
     model: var Model, externalId: ExternalOutputId, x, y: int32
 ): bool =

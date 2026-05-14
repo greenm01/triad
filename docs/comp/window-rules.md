@@ -86,7 +86,7 @@ layout family.
 | Opening | Scroller initial column proportion | Mango-specific scroller sizing | `scroller-proportion { proportion ... }` | Pass | Scroller-only rule; overrides `default-column-width` for matching newly created columns. |
 | Opening | Scroller single-column proportion | Mango-specific one-column scroller sizing | `scroller-single-proportion { proportion ... }` | Pass | Applies only when `Scroller` or `VerticalScroller` has one tiled column; ignored by multi-column scrollers and non-scroller layouts. |
 | Opening | `default-window-height` | Set initial tiled window height | `default-window-height { proportion ... }` | Pass | Triad also supports rule-level `default-window-width`. |
-| Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output. With `default-workspace`, Triad can silently map a non-primary output to that workspace without changing the active workspace. Stable monitor make/model/serial matching remains a gap. |
+| Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output. Matches connector names, shell fallback names, niri-style make/model/serial strings with unknown serials, and raw Wayland descriptions. True serial matching remains a gap. |
 | Opening | `open-on-workspace` | Open matching window on a named workspace | `default-workspace <n>` | Pass | Triad uses numeric workspace slots. |
 | Opening | Multi-workspace placement | Mango-style multi-tag opening placement | `default-workspaces <n>...` | Pass | Triad places one window on multiple workspace tags using normal per-tag placement rows. The first target is the primary snapshot/focus target. |
 | Opening | `open-maximized` | Open matching window maximized | `open-maximized #true/#false` | Pass | Maps to full-width column in scroller layouts, not client-visible maximize. |
@@ -127,7 +127,7 @@ These are gap-analysis categories, not target config names.
 
 | Mango rule family | Examples | Triad status | Layout note |
 | :--- | :--- | :---: | :--- |
-| Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Single and multi-workspace placement, open focus, and name-based output placement exist; tag-silent semantics and stable monitor identity matching remain gaps. |
+| Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Single and multi-workspace placement, open focus, name-based output placement, and make/model output identity matching exist; tag-silent semantics and true serial matching remain gaps. |
 | Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Pass | Triad supports open floating, ratio sizing, fixed pixel sizing, anchored pixel position, opt-in centering, and rule-level client size-hint policy. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
@@ -186,7 +186,8 @@ These are gap-analysis categories, not target config names.
 - `open-on-output` is intentionally silent when paired with
   `default-workspace` or `default-workspaces`: it can make a non-primary output
   show the primary target workspace, but it will not switch the active
-  workspace or remap parented child windows.
+  workspace or remap parented child windows. Output targets match connector,
+  shell fallback, make/model/`Unknown` serial, and raw description strings.
 - `default-workspaces` is Triad's workspace-oriented form of Mango-style
   multi-tag placement. It is opening-only; config reload does not move existing
   windows. The first listed workspace remains the canonical snapshot position.

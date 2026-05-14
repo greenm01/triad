@@ -51,6 +51,14 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.setOutputNameForExternal(
       msg.nameOutputId.externalOutputId(), msg.outputName
     )
+  of MsgKind.WlOutputIdentity:
+    result.dirty = model.setOutputIdentityForExternal(
+      msg.identityOutputId.externalOutputId(), msg.outputMake, msg.outputModel
+    )
+  of MsgKind.WlOutputDescription:
+    result.dirty = model.setOutputDescriptionForExternal(
+      msg.descriptionOutputId.externalOutputId(), msg.outputDescription
+    )
   of MsgKind.WlOutputPosition:
     result.dirty = model.setOutputPositionForExternal(
       msg.positionOutputId.externalOutputId(), msg.outputX, msg.outputY

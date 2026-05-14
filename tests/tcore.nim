@@ -5245,7 +5245,7 @@ suite "Core Runtime Logic":
           @[
             WindowRule(
               appIdMatch: "chat",
-              openOnOutput: "HDMI-A-1",
+              openOnOutput: "hdmi-a-1",
               openFocusedSet: true,
               openFocused: false,
             )
@@ -5275,6 +5275,129 @@ suite "Core Runtime Logic":
     check model.activeTag == model.tagForSlot(1)
     check model.focusedWindowId() == 0
     check not effects.hasFocusEffect(3)
+
+  test "Output identity events store make model and description":
+    var model = initRuntimeStateFromConfig(Config()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputIdentity,
+        identityOutputId: 2,
+        outputMake: "Dell Inc.",
+        outputModel: "DELL U2720Q",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputDescription,
+        descriptionOutputId: 2,
+        outputDescription: "Dell Inc. 27 inch",
+      )
+    )
+
+    let output = model.outputData(model.outputForExternal(ExternalOutputId(2))).get()
+    check output.make == "Dell Inc."
+    check output.model == "DELL U2720Q"
+    check output.description == "Dell Inc. 27 inch"
+
+  test "Window rule open-on-output matches stable output identity":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "chat",
+              openOnOutput: "Dell Inc. DELL U2720Q Unknown",
+              openFocusedSet: true,
+              openFocused: false,
+            ),
+            WindowRule(
+              appIdMatch: "docs",
+              openOnOutput: "benq pd3220u",
+              openFocusedSet: true,
+              openFocused: false,
+            ),
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputIdentity,
+        identityOutputId: 2,
+        outputMake: "Dell Inc.",
+        outputModel: "DELL U2720Q",
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 900, height: 700)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputDescription,
+        descriptionOutputId: 3,
+        outputDescription: "BenQ PD3220U",
+      )
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(3)), model.tagForSlot(3)
+    )
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 4, appId: "chat"))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 5, appId: "docs"))
+
+    check model.snapshotWindow(4).workspaceIdx == 2
+    check model.snapshotWindow(5).workspaceIdx == 3
+
+  test "Window rule open-on-output ignores unknown-only identity":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "chat",
+              openOnOutput: "Unknown Unknown Unknown",
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputIdentity,
+        identityOutputId: 2,
+        outputMake: "Unknown",
+        outputModel: "Unknown",
+      )
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "chat", title: "Main")
+    )
+
+    check model.snapshotWindow(3).workspaceIdx == 1
 
   test "Window rule open-on-output falls back when output is unknown":
     var model = initRuntimeStateFromConfig(

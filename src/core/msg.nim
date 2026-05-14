@@ -38,6 +38,8 @@ type
     WlSessionUnlocked
     WlOutputDimensions
     WlOutputName
+    WlOutputIdentity
+    WlOutputDescription
     WlOutputPosition
     WlOutputUsable
     WlOutputRemoved
@@ -206,6 +208,13 @@ type
     of MsgKind.WlOutputName:
       nameOutputId*: uint32
       outputName*: string
+    of MsgKind.WlOutputIdentity:
+      identityOutputId*: uint32
+      outputMake*: string
+      outputModel*: string
+    of MsgKind.WlOutputDescription:
+      descriptionOutputId*: uint32
+      outputDescription*: string
     of MsgKind.WlOutputPosition:
       positionOutputId*: uint32
       outputX*: int32

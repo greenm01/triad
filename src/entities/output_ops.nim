@@ -7,6 +7,9 @@ proc addOutput*(
     externalId: ExternalOutputId,
     wlName = 0'u32,
     name = "",
+    make = "",
+    modelName = "",
+    description = "",
     x = 0'i32,
     y = 0'i32,
     w = 0'i32,
@@ -27,6 +30,9 @@ proc addOutput*(
       externalId: externalId,
       wlName: wlName,
       name: name,
+      make: make,
+      model: modelName,
+      description: description,
       x: x,
       y: y,
       w: w,
@@ -53,6 +59,23 @@ proc setOutputName*(model: var Model, outputId: OutputId, name: string): bool =
   if model.outputs.entity(outputId).isNone:
     return false
   model.outputs.mEntity(outputId).name = name
+  true
+
+proc setOutputIdentity*(
+    model: var Model, outputId: OutputId, make, modelName: string
+): bool =
+  if model.outputs.entity(outputId).isNone:
+    return false
+  model.outputs.mEntity(outputId).make = make
+  model.outputs.mEntity(outputId).model = modelName
+  true
+
+proc setOutputDescription*(
+    model: var Model, outputId: OutputId, description: string
+): bool =
+  if model.outputs.entity(outputId).isNone:
+    return false
+  model.outputs.mEntity(outputId).description = description
   true
 
 proc setOutputPosition*(model: var Model, outputId: OutputId, x, y: int32): bool =

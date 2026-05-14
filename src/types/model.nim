@@ -70,6 +70,9 @@ type
     externalId*: ExternalOutputId
     wlName*: uint32
     name*: string
+    make*: string
+    model*: string
+    description*: string
     x*, y*, w*, h*: int32
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
