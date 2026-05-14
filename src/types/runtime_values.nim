@@ -20,6 +20,8 @@ type
   RenderInstruction* = object
     windowId*: WindowId
     geom*: Rect
+    clipSet*: bool
+    clip*: Rect
 
   LayoutMode* {.pure.} = enum
     Scroller

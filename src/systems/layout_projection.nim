@@ -372,6 +372,7 @@ proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]
     if instr.windowId == externalId:
       instr.geom.x += op.totalDX
       instr.geom.y += op.totalDY
+      instr.clipSet = false
       return
 
 proc columnHasMaximizedWindow(
@@ -436,6 +437,8 @@ proc layoutWorkspaceStripOverview(
         rv.RenderInstruction(
           windowId: instr.windowId,
           geom: scaledOverviewRect(workspaceScreen, preview, instr.geom, zoom),
+          clipSet: true,
+          clip: preview,
         )
       )
   model.applyOverviewDrag(result.instructions)

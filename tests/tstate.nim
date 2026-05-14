@@ -574,6 +574,50 @@ suite "Runtime state primitives":
     check state.model.columnData(restoredColumnId).get().scrollerSingleProportion ==
       0.55'f32
 
+  test "runtime live restore preserves persisted empty dynamic workspace":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    var restore = LiveRestoreState(activeTag: 2)
+    restore.tags[4] = RestoredTagState(
+      tagId: 4,
+      name: "chat",
+      layoutMode: LayoutMode.Deck,
+      masterCount: 1,
+      masterSplitRatio: 0.5,
+    )
+    restore.workspaceHistory = @[4'u32, 2'u32]
+
+    check state.applyRuntimeLiveRestore(restore)
+    let tagId = state.model.tagForSlot(4)
+    check tagId != NullTagId
+    let tag = state.model.tagData(tagId).get()
+    check tag.name == "chat"
+    check tag.layoutMode == LayoutMode.Deck
+    check state.readRuntimeLiveRestoreJson().contains("\"id\":4")
+
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "Term")
+    )
+    check state.model.tagForSlot(4) != NullTagId
+
+  test "runtime live restore keeps active empty dynamic workspace":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    var restore = LiveRestoreState(activeTag: 4)
+    restore.tags[4] = RestoredTagState(
+      tagId: 4,
+      name: "chat",
+      layoutMode: LayoutMode.Monocle,
+      masterCount: 1,
+      masterSplitRatio: 0.5,
+    )
+
+    check state.applyRuntimeLiveRestore(restore)
+    let snapshot = state.readRuntimeSnapshot()
+    check snapshot.activeTag == 4
+    check state.model.activeSlot == 4
+    check state.model.tagData(state.model.activeTag).get().name == "chat"
+    check state.model.tagData(state.model.activeTag).get().layoutMode ==
+      LayoutMode.Monocle
+
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())
     discard state.applyRuntimeUpdate(

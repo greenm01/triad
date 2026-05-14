@@ -146,6 +146,12 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[runtime_values.WindowId] =
   )
 
 proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
+  proc desiredInstruction(id: runtime_values.WindowId): RenderInstruction =
+    result = RenderInstruction(windowId: id, geom: daemon.desiredPlacements[id])
+    if daemon.desiredPlacementClips.hasKey(id):
+      result.clipSet = true
+      result.clip = daemon.desiredPlacementClips[id]
+
   let highlighted =
     if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
       daemon.currentModel.highlightRiverId()
@@ -153,13 +159,9 @@ proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
       0'u32
   for id in daemon.orderedDesiredIds():
     if id != highlighted:
-      result.add(RenderInstruction(windowId: id, geom: daemon.desiredPlacements[id]))
+      result.add(desiredInstruction(id))
   if highlighted != 0 and daemon.desiredPlacements.hasKey(highlighted):
-    result.add(
-      RenderInstruction(
-        windowId: highlighted, geom: daemon.desiredPlacements[highlighted]
-      )
-    )
+    result.add(desiredInstruction(highlighted))
 
 proc overviewWindowAtPointer*(
     daemon: TriadDaemon, seat: ptr RiverSeatV1
@@ -207,11 +209,16 @@ proc recordDesiredPlacement*(daemon: var TriadDaemon, instr: RenderInstruction) 
       daemon.desiredPlacementOrder.delete(existingIdx)
   daemon.desiredPlacementOrder.add(instr.windowId)
   daemon.desiredPlacements[instr.windowId] = instr.geom
+  if instr.clipSet:
+    daemon.desiredPlacementClips[instr.windowId] = instr.clip
+  else:
+    daemon.desiredPlacementClips.del(instr.windowId)
 
 proc recordDesiredPlacements*(
     daemon: var TriadDaemon, instructions: seq[RenderInstruction]
 ) =
   daemon.desiredPlacements.clear()
+  daemon.desiredPlacementClips.clear()
   daemon.desiredPlacementOrder.setLen(0)
   for instr in instructions:
     daemon.recordDesiredPlacement(instr)
@@ -279,9 +286,16 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         let logicalId = daemon.currentModel.windowForRiverId(id)
         let focused = id == highlighted
         let border = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
-        let visibility = renderVisibility(geom, screen, max(border.width * 2, 4'i32))
+        let hasClip = daemon.desiredPlacementClips.hasKey(id)
+        let visibilityBounds =
+          if hasClip:
+            daemon.desiredPlacementClips[id]
+          else:
+            screen
+        let visibility =
+          renderVisibility(geom, visibilityBounds, max(border.width * 2, 4'i32))
         let forceClip =
-          daemon.currentModel.windowClipToGeometry(logicalId) or
+          hasClip or daemon.currentModel.windowClipToGeometry(logicalId) or
           daemon.placementNeedsCellClip(id, geom)
         daemon.windowPointers[id].applyVisibility(visibility, forceClip, border.width)
         daemon.applyBorder(

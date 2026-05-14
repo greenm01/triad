@@ -311,6 +311,8 @@ proc applyRestoredFallbackScreen(model: var Model, state: PendingRestoreState) =
 proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
   discard model.loadRestoreState(state)
   model.applyRestoredFallbackScreen(state)
+  for slot, _ in state.tags.pairs:
+    discard model.materializeRestoredTarget(slot)
   var targetSlot = state.activeSlot
   if targetSlot != 0:
     var activeHasRestoredWindow = false
@@ -318,7 +320,8 @@ proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
       if slot == targetSlot:
         activeHasRestoredWindow = true
         break
-    if not activeHasRestoredWindow and targetSlot > model.defaultWorkspaceCount():
+    if not activeHasRestoredWindow and not state.tags.hasKey(targetSlot) and
+        targetSlot > model.defaultWorkspaceCount():
       let fallback = model.lowerWorkspaceFallback(targetSlot)
       if fallback != 0 and fallback != targetSlot:
         targetSlot = fallback
@@ -331,7 +334,6 @@ proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
   model.syncRestoreOutputTags()
   model.syncRestoredSwallowRelations()
   discard model.syncPrimaryOutputTag()
-  discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()
 
 proc newWindowColumnIndex(model: Model, tagId: TagId, isFloating: bool): int =

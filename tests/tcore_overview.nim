@@ -49,6 +49,26 @@ suite "Core Runtime Logic: overview navigation":
     check overviewHitTest(instructions, 220, 70) == 3
     check overviewHitTest(instructions, 400, 400) == 0
 
+  test "Overview hit testing ignores clipped preview overflow":
+    let instructions =
+      @[
+        RenderInstruction(
+          windowId: 1,
+          geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 200),
+          clipSet: true,
+          clip: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100),
+        ),
+        RenderInstruction(
+          windowId: 2,
+          geom: runtime_values.Rect(x: 0, y: 100, w: 100, h: 100),
+          clipSet: true,
+          clip: runtime_values.Rect(x: 0, y: 100, w: 100, h: 100),
+        ),
+      ]
+
+    check overviewHitTest(instructions, 10, 50) == 1
+    check overviewHitTest(instructions, 10, 150) == 2
+
   test "Scroller overview projects workspace previews":
     var model = configuredModel()
     model.applyMsg(
@@ -81,6 +101,48 @@ suite "Core Runtime Logic: overview navigation":
     check two.y >= secondPreview.y
     check two.x + two.w <= secondPreview.x + secondPreview.w
     check two.y + two.h <= secondPreview.y + secondPreview.h
+
+  test "Overview clips overflowing workspace preview contents":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    for id in 2'u32 .. 4'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.setViewport(
+      2, targetX = 0.0, currentX = 0.0, targetY = -700.0, currentY = -700.0
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let projection = model.layoutProjection()
+    let secondPreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
+    let workspaceTwo =
+      projection.instructions.filterIt(uint32(it.windowId) in @[2'u32, 3'u32, 4'u32])
+
+    check workspaceTwo.len == 3
+    check workspaceTwo.allIt(it.clipSet)
+    check workspaceTwo.allIt(it.clip == secondPreview)
+    check workspaceTwo.anyIt(
+      it.geom.y < secondPreview.y or
+        it.geom.y + it.geom.h > secondPreview.y + secondPreview.h
+    )
 
   test "Non-scroller overview projects workspace previews":
     var model = configuredModel()

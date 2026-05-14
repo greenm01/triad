@@ -223,6 +223,10 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
     if tagId == NullTagId or slot <= defaultCount or slot == activeSlot or
         slot == trailing:
       continue
+    let tagOpt = model.tagData(tagId)
+    if model.restoreTag(slot).isSome or
+        (tagOpt.isSome and model.hasDurableTagState(tagOpt.get())):
+      continue
     if model.tagHasNonStickyLiveWindows(tagId):
       continue
     if model.destroyTag(tagId):

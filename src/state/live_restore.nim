@@ -116,12 +116,19 @@ proc hasOutputTag(model: Model, tagId: TagId): bool =
       return true
   false
 
-proc shouldPersistTag(model: Model, tag: TagData): bool =
-  if tag.slot <= model.defaultWorkspaceCount:
-    return true
-  if tag.id == model.activeTag or model.tagHasNonStickyLiveWindows(tag.id) or
-      model.hasOutputTag(tag.id):
-    return true
+proc restoreDefaultMasterCount(model: Model): int =
+  if model.defaultMasterCount > 0:
+    max(1, model.defaultMasterCount)
+  else:
+    DefaultMasterCount
+
+proc restoreDefaultMasterRatio(model: Model): float32 =
+  if model.defaultMasterRatio > 0:
+    clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
+  else:
+    DefaultMasterRatio
+
+proc hasDurableTagState*(model: Model, tag: TagData): bool =
   if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller:
     return true
   if tag.focusedWindow != NullWindowId and model.tagHasNonStickyLiveWindows(tag.id):
@@ -129,7 +136,16 @@ proc shouldPersistTag(model: Model, tag: TagData): bool =
   if tag.targetViewportXOffset != 0 or tag.currentViewportXOffset != 0 or
       tag.targetViewportYOffset != 0 or tag.currentViewportYOffset != 0:
     return true
-  tag.masterCount != DefaultMasterCount or tag.masterSplitRatio != DefaultMasterRatio
+  tag.masterCount != model.restoreDefaultMasterCount() or
+    tag.masterSplitRatio != model.restoreDefaultMasterRatio()
+
+proc shouldPersistTag*(model: Model, tag: TagData): bool =
+  if tag.slot <= model.defaultWorkspaceCount:
+    return true
+  if tag.id == model.activeTag or model.tagHasNonStickyLiveWindows(tag.id) or
+      model.hasOutputTag(tag.id):
+    return true
+  model.hasDurableTagState(tag)
 
 proc liveRestoreState*(model: Model): LiveRestoreState =
   result.activeTag = model.activeSlot

@@ -118,6 +118,7 @@ type
     msgQueue*: Deque[Msg]
     pendingManageEffects*: seq[Effect]
     desiredPlacements*: Table[WindowId, Rect]
+    desiredPlacementClips*: Table[WindowId, Rect]
     desiredPlacementOrder*: seq[WindowId]
     lastPointerOpSeat*: pointer
     pendingMaximizedAcks*: Table[WindowId, bool]
