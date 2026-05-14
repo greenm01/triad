@@ -24,6 +24,20 @@ Current River is non-monolithic. It supplies compositor configuration,
 startup, and protocol primitives, while window-management policy belongs to the
 external window manager.
 
+## Ongoing Config Work
+
+These workstreams track the next config areas from the Niri and Mango review.
+They are grouped by user-facing capability rather than by implementation module.
+
+| Priority | Workstream | Target Triad surface | Niri/Mango reference | Current status | First milestone |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| P1 | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Default config and hot reload exist; composition, alternate launch path, and standalone validation are missing. | Add include parsing with recursion safety and strict validation without starting the daemon. |
+| P1 | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Triad exposes binding layout overrides but no keyboard repeat, XKB, lock-state, or libinput device config. | Generate/bind River input, XKB, and libinput protocols; apply keyboard repeat, XKB layout/options, numlock, and basic pointer settings. |
+| P1 | Output rules | `output "name" { ... }` or `output-rules { output ... }` | Niri `output`; Mango `monitorrule` | Triad tracks output identity and supports workspace/output affinity, but has no output layout or mode config. | Add identity-matched output rules for focus/workspace affinity and document which mode/scale/position fields require output-management protocol support. |
+| P2 | Binding event types | `axis-bind`, then `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key and pointer button bindings exist; global wheel, gesture, and hardware switch bindings are missing. | Add config-level axis bindings for wheel-driven commands using existing pointer-axis event handling. |
+| P2 | Session environment | `environment { KEY "value"; KEY null }` | Niri `environment`; Mango `env` | Triad startup/spawn commands inherit the daemon environment only. | Apply configured variables to Triad-spawned processes and clearly document that this does not retroactively change external systemd/dbus-launched processes. |
+| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Add the smallest user-visible polish items first: cursor hide timeout and config reload notification controls. |
+
 ## Feature Matrix
 
 | Area | Functionality | Mango name(s) | River surface | Triad name(s) | Triad | Notes |
