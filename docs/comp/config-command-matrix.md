@@ -31,7 +31,7 @@ They are grouped by user-facing capability rather than by implementation module.
 
 | Priority | Workstream | Target Triad surface | Niri/Mango reference | Current status | First milestone |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| P1 | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Default config and hot reload exist; composition, alternate launch path, and standalone validation are missing. | Add include parsing with recursion safety and strict validation without starting the daemon. |
+| Done | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Implemented with in-place include expansion, recursion safety, include hot reload watching, `TRIAD_CONFIG`, `--config`, `-c`, and standalone validation. | Keep validating against real configs while future config work expands. |
 | P1 | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Triad exposes binding layout overrides but no keyboard repeat, XKB, lock-state, or libinput device config. | Generate/bind River input, XKB, and libinput protocols; apply keyboard repeat, XKB layout/options, numlock, and basic pointer settings. |
 | P1 | Output rules | `output "name" { ... }` or `output-rules { output ... }` | Niri `output`; Mango `monitorrule` | Triad tracks output identity and supports workspace/output affinity, but has no output layout or mode config. | Add identity-matched output rules for focus/workspace affinity and document which mode/scale/position fields require output-management protocol support. |
 | P2 | Binding event types | `axis-bind`, then `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key and pointer button bindings exist; global wheel, gesture, and hardware switch bindings are missing. | Add config-level axis bindings for wheel-driven commands using existing pointer-axis event handling. |
@@ -43,9 +43,9 @@ They are grouped by user-facing capability rather than by implementation module.
 | Area | Functionality | Mango name(s) | River surface | Triad name(s) | Triad | Notes |
 | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
 | Config lifecycle | Default config file | `~/.config/mango/config.conf` | `$XDG_CONFIG_HOME/river/init` or `~/.config/river/init` | `$XDG_CONFIG_HOME/triad/config.kdl` | X | Triad creates a fallback config when missing. |
-| Config lifecycle | Custom config on launch | `mango -c` | `river -c` shell command | | | Triad currently uses the default config path. |
-| Config lifecycle | Config validation | `mango -c ... -p` | | | | No standalone Triad config-check command. |
-| Config lifecycle | Config includes | `source`, `source-optional` | Shell script can source files | | | Triad KDL has no include directive. |
+| Config lifecycle | Custom config on launch | `mango -c` | `river -c` shell command | `TRIAD_CONFIG`, `triad --config`, `triad -c` | X | Triad can start from a non-default root config path. |
+| Config lifecycle | Config validation | `mango -c ... -p` | | `triad validate-config` | X | Validates KDL syntax, includes, and strict window-rule regex checks without starting the daemon. |
+| Config lifecycle | Config includes | `source`, `source-optional` | Shell script can source files | `include`, `include optional=#true` | X | Includes expand in place, resolve relative to the parent file, reject recursion, and participate in hot reload after a successful load. |
 | Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config in-process; full Triad reload snapshots state and restarts through the session manager path. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
 | Startup | Environment variables | `env` | Init script environment | | | Triad does not set arbitrary env vars from config. |
@@ -294,6 +294,7 @@ Window-management protocol requests used as the comparable River surface:
 
 KDL config nodes and fields:
 
+- `include`: required and optional in-place config includes.
 - `layout`: `gaps`, `center-focused-column`, `default-column-width`,
   `default-window-width`, `default-window-height`, `master.count`,
   `master.split-ratio`, `border.width`, `border.active-color`,
@@ -390,3 +391,10 @@ Native JSON IPC requests:
 - `set-layout`
 - `switch-layout`
 - `event-stream`
+
+CLI and environment:
+
+- `TRIAD_CONFIG`, `triad --config <path>`, and `triad -c <path>` select a
+  non-default root config path.
+- `triad validate-config [--config <path>]` checks config syntax, includes, and
+  strict window-rule regex validation without starting the daemon.

@@ -10,8 +10,12 @@ import
   bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
   quickshell_runner, state
 
-proc setupConfig*(daemon: var TriadDaemon) =
-  daemon.configPath = defaultConfigPath()
+proc setupConfig*(daemon: var TriadDaemon, configPath = "") =
+  daemon.configPath =
+    if configPath.len > 0:
+      configPath.absoluteConfigPath()
+    else:
+      defaultConfigPath().absoluteConfigPath()
   let configDir = daemon.configPath.splitFile().dir
   if not dirExists(configDir):
     createDir(configDir)
@@ -116,7 +120,6 @@ proc applyConfigReload*(
       },
     )
     return false
-
   let restore = daemon.writeCurrentLiveRestoreState()
   if not restore.ok:
     warn "Config reload rejected; live restore snapshot could not be written",
@@ -206,6 +209,7 @@ proc applyConfigReload*(
     )
 
   daemon.requestBindingReconfigure("config reload")
+  daemon.configWatchPaths = loaded.configPaths
   info "Config reloaded", path = configPath
   daemon.postManageBroadcastPending = true
   daemon.postManageBroadcastReason = "config reload"

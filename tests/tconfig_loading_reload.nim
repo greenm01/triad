@@ -150,6 +150,98 @@ window-rule {
     check not loaded.ok
     check loaded.error.contains("window-rule[0].match[0] app-id")
 
+  test "Config includes merge in place and root settings can override":
+    let dir = getTempDir() / ("triad-config-include-" & $getCurrentProcessId())
+    createDir(dir)
+    let included = dir / "base.kdl"
+    let root = dir / "root.kdl"
+    writeFile(
+      included,
+      """
+layout {
+  gaps 8
+}
+
+workspaces {
+  default-count 5
+}
+""",
+    )
+    writeFile(
+      root,
+      """
+include "base.kdl"
+
+layout {
+  gaps 24
+}
+""",
+    )
+
+    let loaded = loadConfigStrict(root)
+    check loaded.ok
+    check loaded.config.layout.gaps == 24
+    check loaded.config.workspaces.defaultCount == 5
+    check loaded.configPaths ==
+      @[root.absoluteConfigPath(), included.absoluteConfigPath()]
+
+    removeFile(root)
+    removeFile(included)
+    removeDir(dir)
+
+  test "Optional missing config include is accepted":
+    let dir = getTempDir() / ("triad-config-optional-include-" & $getCurrentProcessId())
+    createDir(dir)
+    let root = dir / "root.kdl"
+    writeFile(
+      root,
+      """
+include "missing.kdl" optional=#true
+
+layout {
+  gaps 12
+}
+""",
+    )
+
+    let loaded = loadConfigStrict(root)
+    check loaded.ok
+    check loaded.config.layout.gaps == 12
+    check loaded.configPaths == @[root.absoluteConfigPath()]
+
+    removeFile(root)
+    removeDir(dir)
+
+  test "Required missing config include is rejected":
+    let dir = getTempDir() / ("triad-config-missing-include-" & $getCurrentProcessId())
+    createDir(dir)
+    let root = dir / "root.kdl"
+    writeFile(root, "include \"missing.kdl\"\n")
+
+    let loaded = loadConfigStrict(root)
+    check not loaded.ok
+    check loaded.error.contains("included config not found")
+
+    removeFile(root)
+    removeDir(dir)
+
+  test "Recursive config include is rejected":
+    let dir =
+      getTempDir() / ("triad-config-recursive-include-" & $getCurrentProcessId())
+    createDir(dir)
+    let root = dir / "root.kdl"
+    let child = dir / "child.kdl"
+    writeFile(root, "include \"child.kdl\"\n")
+    writeFile(child, "include \"root.kdl\"\n")
+
+    let loaded = loadConfigStrict(root)
+    check not loaded.ok
+    check loaded.error.contains("recursive config include")
+
+    removeFile(root)
+    removeFile(child)
+    removeDir(dir)
+
   test "Text command parser accepts targeted window recovery commands":
     let focus = parseTextCommand("focus-window 42")
     check focus.isSome

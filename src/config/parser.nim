@@ -3,6 +3,8 @@ import chronicles, kdl
 import defaults
 import ../types/runtime_values
 
+const MaxConfigIncludeDepth* = 10
+
 type
   Config* = object
     layout*: LayoutConfig
@@ -49,7 +51,12 @@ type
   ConfigLoadResult* = object
     ok*: bool
     config*: Config
+    configPaths*: seq[string]
     error*: string
+
+  ConfigDocument* = object
+    nodes*: KdlDoc
+    paths*: seq[string]
 
 proc clamp32(value, lo, hi: int32): int32 =
   min(hi, max(lo, value))
@@ -580,6 +587,63 @@ proc defaultConfigPath*(): string =
   let configHome = getEnv("XDG_CONFIG_HOME", getHomeDir() / ".config")
   return configHome / "triad" / "config.kdl"
 
+proc expandConfigPath*(path: string): string =
+  let stripped = path.strip()
+  if stripped == "~":
+    getHomeDir()
+  elif stripped.startsWith("~/"):
+    getHomeDir() / stripped[2 ..^ 1]
+  else:
+    stripped
+
+proc absoluteConfigPath*(path: string, baseDir = ""): string =
+  let expanded = path.expandConfigPath()
+  let candidate =
+    if expanded.isAbsolute():
+      expanded
+    elif baseDir.len > 0:
+      baseDir / expanded
+    else:
+      expanded
+  candidate.absolutePath().normalizedPath()
+
+proc addUnique(paths: var seq[string], path: string) =
+  if paths.find(path) < 0:
+    paths.add(path)
+
+proc includeOptional(node: KdlNode): bool =
+  node.props.hasKey("optional") and node.props["optional"].kBool()
+
+proc appendConfigNodes(
+    path: string, nodes: var KdlDoc, paths: var seq[string], stack: var seq[string]
+) =
+  let configPath = path.absoluteConfigPath()
+  if stack.find(configPath) >= 0:
+    raise newException(ValueError, "recursive config include: " & configPath)
+  if stack.len >= MaxConfigIncludeDepth:
+    raise newException(ValueError, "config include depth exceeded: " & configPath)
+
+  stack.add(configPath)
+  paths.addUnique(configPath)
+  let doc = parseKdlFile(configPath)
+  let baseDir = configPath.splitFile().dir
+  for node in doc:
+    if node.name == "include":
+      if node.args.len == 0:
+        raise newException(ValueError, "include requires a path: " & configPath)
+      let includePath = node.args[0].kString().absoluteConfigPath(baseDir)
+      if fileExists(includePath):
+        appendConfigNodes(includePath, nodes, paths, stack)
+      elif not node.includeOptional():
+        raise newException(IOError, "included config not found: " & includePath)
+    else:
+      nodes.add(node)
+  stack.setLen(stack.len - 1)
+
+proc loadConfigDocument*(path: string): ConfigDocument =
+  var stack: seq[string] = @[]
+  appendConfigNodes(path, result.nodes, result.paths, stack)
+
 proc loadConfig*(path: string): Config =
   var recentWindowBindings = defaultRecentWindowBindings()
   # Default values
@@ -637,7 +701,7 @@ proc loadConfig*(path: string): Config =
   result.protocolSurfaces.enabled = true
 
   try:
-    let doc = parseKdlFile(path)
+    let doc = loadConfigDocument(path).nodes
     for node in doc:
       if node.name == "layout":
         for child in node.children:
@@ -1249,8 +1313,9 @@ proc loadConfig*(path: string): Config =
     result.pointerBindings = defaultPointerBindings()
 
 proc loadConfigStrict*(path: string): ConfigLoadResult =
+  var document: ConfigDocument
   try:
-    discard parseKdlFile(path)
+    document = loadConfigDocument(path)
   except CatchableError as e:
     return ConfigLoadResult(ok: false, error: e.msg)
 
@@ -1259,4 +1324,4 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
   if regexError.len > 0:
     return ConfigLoadResult(ok: false, error: regexError)
 
-  result = ConfigLoadResult(ok: true, config: config)
+  result = ConfigLoadResult(ok: true, config: config, configPaths: document.paths)

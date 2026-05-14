@@ -115,6 +115,7 @@ type
     pendingWindows*: Table[WindowId, WindowData]
 
     configPath*: string
+    configWatchPaths*: seq[string]
     watcher*: Watcher
     configReloadDebouncer*: ConfigReloadDebouncer
     shouldExit*: bool

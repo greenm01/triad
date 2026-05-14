@@ -24,6 +24,34 @@ proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
 
+proc configPathFromArgs(args: seq[string]): string =
+  result = getEnv("TRIAD_CONFIG", "")
+  var i = 0
+  while i < args.len:
+    let arg = args[i]
+    if arg in ["-c", "--config"]:
+      if i + 1 >= args.len:
+        failCli(arg & " requires a config path")
+      result = args[i + 1]
+      inc i
+    elif arg.startsWith("--config="):
+      result = arg["--config=".len ..^ 1]
+    inc i
+
+  if result.len > 0:
+    result = result.absoluteConfigPath()
+  else:
+    result = defaultConfigPath().absoluteConfigPath()
+
+proc validateConfigFromArgs(args: seq[string]) =
+  let configPath = configPathFromArgs(args)
+  let loaded = loadConfigStrict(configPath)
+  if not loaded.ok:
+    stderr.writeLine("triad: config invalid: " & loaded.error)
+    quit 1
+  stdout.writeLine("triad: config valid: " & configPath)
+  quit 0
+
 proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
   daemon.runtimeState.applyRuntimeUpdate(msg)
 
@@ -41,7 +69,7 @@ proc startStartupWindowRulesExpiry() {.async.} =
   {.cast(gcsafe).}:
     daemon.enqueue(Msg(kind: MsgKind.CmdExpireStartupWindowRules))
 
-proc processQueuedMessages(configPath, niriSocketPath: string) =
+proc processQueuedMessages(configPath, niriSocketPath: string): bool =
   while daemon.hasQueuedMessages():
     let msg = daemon.popQueuedMessage()
 
@@ -57,7 +85,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string) =
       continue
 
     if msg.kind == MsgKind.CmdConfigReload:
-      discard daemon.applyConfigReload(configPath, niriSocketPath)
+      if daemon.applyConfigReload(configPath, niriSocketPath):
+        result = true
       continue
 
     if msg.kind == MsgKind.CmdTick:
@@ -156,10 +185,19 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 # --- Main Loop ---
 
 proc main*() =
-  configureLogging()
+  let args = commandLineParams()
+  if args.len > 0 and args[0] in ["validate-config", "check-config"]:
+    let validateArgs =
+      if args.len > 1:
+        args[1 ..^ 1]
+      else:
+        @[]
+    validateConfigFromArgs(validateArgs)
 
-  if paramCount() >= 2 and paramStr(1) == "msg":
-    let cmdPart = paramStr(2)
+  if args.len >= 1 and args[0] == "msg":
+    if args.len < 2:
+      failCli("missing msg command")
+    let cmdPart = args[1]
     if cmdPart == "event-stream":
       # Subscription client
       let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
@@ -177,10 +215,10 @@ proc main*() =
       return
 
     var cmd = ""
-    for i in 2 .. paramCount():
-      if i > 2:
+    for i in 1 ..< args.len:
+      if i > 1:
         cmd.add(" ")
-      cmd.add(paramStr(i))
+      cmd.add(args[i])
     try:
       if cmd == "dump-live-restore-state":
         let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
@@ -190,6 +228,8 @@ proc main*() =
     except CatchableError as e:
       failCli("socket request failed: " & e.msg)
     return
+
+  configureLogging()
 
   info "Triad process starting",
     pid = getCurrentProcessId(),
@@ -233,8 +273,17 @@ proc main*() =
     quit 1
 
   # Setup and Load Config
-  daemon.setupConfig()
-  let initialConfig = loadConfig(daemon.configPath)
+  daemon.setupConfig(configPathFromArgs(args))
+  let initialLoaded = loadConfigStrict(daemon.configPath)
+  let initialConfig =
+    if initialLoaded.ok:
+      daemon.configWatchPaths = initialLoaded.configPaths
+      initialLoaded.config
+    else:
+      warn "Initial config strict validation failed; falling back to permissive load",
+        path = daemon.configPath, error = initialLoaded.error
+      daemon.configWatchPaths = @[daemon.configPath]
+      loadConfig(daemon.configPath)
   daemon.runtimeState = initRuntimeStateFromConfig(initialConfig)
   info "Initial config loaded", path = daemon.configPath
 
@@ -277,7 +326,16 @@ proc main*() =
     {.cast(gcsafe).}:
       daemon.configReloadDebouncer.schedule(int64(epochTime() * 1000.0))
 
-  daemon.watcher.register(daemon.configPath, onConfigChange)
+  proc configureConfigWatcher() =
+    daemon.watcher = initWatcher()
+    let paths =
+      if daemon.configWatchPaths.len > 0:
+        daemon.configWatchPaths
+      else:
+        @[daemon.configPath]
+    daemon.watcher.register(paths, onConfigChange, treatAsFile = true)
+
+  configureConfigWatcher()
 
   # Start IPC Server
   proc queueMsg(msg: Msg) {.gcsafe.} =
@@ -336,7 +394,8 @@ proc main*() =
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
 
     # Process Message Queue
-    processQueuedMessages(daemon.configPath, niriSocketPath)
+    if processQueuedMessages(daemon.configPath, niriSocketPath):
+      configureConfigWatcher()
     if daemon.shouldExit:
       running = false
       continue

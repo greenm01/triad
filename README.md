@@ -5,6 +5,8 @@ It is written in Nim and built around a data-oriented runtime model. River
 keeps the display alive. Triad decides where windows go. Shells get clean
 state projections. Everyone has a job. Everyone stays in their lane.
 
+Need a good screen lock? See LockMe at https://github.com/greenm01/lockme.
+
 ### The Triad
 
 Triad's architecture has three parts:

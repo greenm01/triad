@@ -4,9 +4,32 @@ Triad is configured with KDL at `$XDG_CONFIG_HOME/triad/config.kdl`, or
 `~/.config/triad/config.kdl` when `XDG_CONFIG_HOME` is unset. If no user config
 exists, Triad creates one from the embedded fallback config.
 
+Set `TRIAD_CONFIG=/path/to/config.kdl` or start Triad with
+`triad --config /path/to/config.kdl` to use a different root config. The short
+form `triad -c /path/to/config.kdl` is equivalent.
+
+Validate config without starting the daemon with:
+
+```sh
+triad validate-config
+triad validate-config --config ~/.config/triad/config.kdl
+```
+
 The config is hot-reloaded. `config-reload` reloads the KDL document without
 restarting Triad. Shell startup, binding rebuilds, and River side effects happen
 after the config has parsed successfully.
+
+Config files can include other KDL files in place. Relative include paths resolve
+against the file that contains the include. `~/` expands to the user's home
+directory.
+
+```kdl
+include "bindings.kdl"
+include optional=#true "~/.config/triad/local.kdl"
+```
+
+Included files are also watched for hot reload after a successful startup or
+config reload. Recursive includes and required missing includes are rejected.
 
 ## Naming Policy
 
@@ -43,6 +66,7 @@ Examples:
 
 The supported KDL nodes are:
 
+- `include`: in-place config composition with optional includes.
 - `layout`: gaps, column/window proportions, master settings, borders,
   scroller centering, animation settings, smart gaps, and layout cycle.
 - `workspaces`: default workspace floor and fallback default layout.
