@@ -1966,6 +1966,35 @@ suite "Core Runtime Logic":
     check rule.rule.floating.widthRatio == 0.40'f32
     check not rule.rule.floating.heightRatioSet
 
+  test "Window rules merge broad floating size and specific anchor":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "dropdown",
+              floating: WindowRuleFloatingConfig(widthRatioSet: true, widthRatio: 0.80),
+            ),
+            WindowRule(
+              appIdMatch: "dropdown",
+              titleMatch: "Top",
+              defaultFloatingPosition: WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.Top, x: 10, y: 20
+              ),
+            ),
+          ]
+      )
+    ).model
+
+    let rule = model.windowRuleFor("dropdown", "Top Terminal")
+    check rule.found
+    check rule.rule.floating.widthRatioSet
+    check rule.rule.floating.widthRatio == 0.80'f32
+    check rule.rule.defaultFloatingPosition.set
+    check rule.rule.defaultFloatingPosition.relativeTo == FloatingPositionAnchor.Top
+    check rule.rule.defaultFloatingPosition.x == 10
+    check rule.rule.defaultFloatingPosition.y == 20
+
   test "Window rules let later explicit fields override earlier matches":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -2372,6 +2401,147 @@ suite "Core Runtime Logic":
     check moved.x == initial.x + 10
     check moved.y == initial.y + 20
     check model.instructionGeom(2) == moved
+
+  test "Floating anchor positions unparented float from screen edge":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "pip",
+              openFloatingSet: true,
+              openFloating: true,
+              floating: WindowRuleFloatingConfig(
+                widthRatioSet: true,
+                widthRatio: 0.20,
+                heightRatioSet: true,
+                heightRatio: 0.25,
+              ),
+              defaultFloatingPosition: WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.BottomLeft, x: 32, y: 48
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 800)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "pip", title: "PiP")
+    )
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    check model.windowData(winId).get().floatingGeom ==
+      runtime_values.Rect(x: 32, y: 552, w: 200, h: 200)
+
+  test "Single-edge floating anchor centers on the other axis":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "dropdown",
+              openFloatingSet: true,
+              openFloating: true,
+              floating: WindowRuleFloatingConfig(
+                widthRatioSet: true,
+                widthRatio: 0.50,
+                heightRatioSet: true,
+                heightRatio: 0.25,
+              ),
+              defaultFloatingPosition: WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.Top, x: 10, y: 20
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 800)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "dropdown", title: "Drop")
+    )
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    check model.windowData(winId).get().floatingGeom ==
+      runtime_values.Rect(x: 260, y: 20, w: 500, h: 200)
+
+  test "Dialog parent anchoring ignores default floating position":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "pinentry",
+              defaultFloatingPosition: WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.BottomRight, x: 0, y: 0
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "editor", title: "Doc")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 2,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Dialog",
+      )
+    )
+
+    let parentGeom = model.instructionGeom(1)
+    let childId = model.windowForExternal(ExternalWindowId(2))
+    let childGeom = model.windowData(childId).get().floatingGeom
+    check childGeom.x == parentGeom.x + (parentGeom.w - childGeom.w) div 2
+    check childGeom.y == parentGeom.y + (parentGeom.h - childGeom.h) div 2
+
+  test "Toggle floating uses matching rule anchor":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "scratch",
+              floating: WindowRuleFloatingConfig(
+                widthRatioSet: true,
+                widthRatio: 0.25,
+                heightRatioSet: true,
+                heightRatio: 0.50,
+              ),
+              defaultFloatingPosition: WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.TopRight, x: 25, y: 30
+              ),
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 800)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated, windowId: 1, appId: "scratch", title: "Scratch"
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    check model.windowData(winId).get().floatingGeom ==
+      runtime_values.Rect(x: 725, y: 30, w: 250, h: 400)
 
   test "Lead floating startup window anchors same-app main window":
     var model = initRuntimeStateFromConfig(

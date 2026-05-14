@@ -8,6 +8,11 @@ type ParentedWindowIntent* {.pure.} = enum
   Float
   Tile
 
+type LeadFloatingAnchor* = object
+  found*: bool
+  winId*: WindowId
+  columnId*: ColumnId
+
 const LargeParentedRatio = 0.9'f32
 
 proc parentRenderRect(
@@ -36,29 +41,112 @@ proc parentWorkspaceSlot*(model: Model, parentExternalId: ExternalWindowId): uin
     return position.slot
   0'u32
 
-proc floatingGeomFromRule(model: Model, win: WindowData): runtime_values.Rect =
+proc tagHasSameAppNormal(
+    model: Model, tagId: TagId, appId: string, exceptWinId: WindowId
+): bool =
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if winId != exceptWinId and win.windowAdmitted() and not win.isFloating and
+        not win.isMinimized and win.appId == appId:
+      return true
+
+proc leadFloatingAnchorFor*(
+    model: Model,
+    tagId: TagId,
+    winId: WindowId,
+    appId: string,
+    isFloating: bool,
+    parentExternalId: ExternalWindowId,
+    pendingAdmission: bool,
+): LeadFloatingAnchor =
+  if isFloating or pendingAdmission or parentExternalId != NullExternalWindowId or
+      tagId == NullTagId or tagId != model.activeTag or appId.len == 0:
+    return
+
+  let focused = model.focusedOnActiveTag()
+  if focused == NullWindowId or focused == winId:
+    return
+
+  let focusedOpt = model.windowData(focused)
+  if focusedOpt.isNone:
+    return
+
+  let lead = focusedOpt.get()
+  if not lead.windowAdmitted() or not lead.isFloating or lead.isMinimized or
+      lead.parentExternalId != NullExternalWindowId or lead.appId != appId:
+    return
+  if model.tagHasSameAppNormal(tagId, appId, winId):
+    return
+
+  let placementOpt = model.placementForWindowOnTag(tagId, focused)
+  if placementOpt.isNone:
+    return
+
+  LeadFloatingAnchor(found: true, winId: focused, columnId: placementOpt.get().columnId)
+
+proc instructionGeomFor(model: Model, winId: WindowId): GeometryRect =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return
+  let externalId = uint32(winOpt.get().externalId)
+  let projection = model.layoutProjection()
+  for instr in projection.instructions:
+    if uint32(instr.windowId) == externalId:
+      return instr.geom
+
+proc floatingGeomForWindow*(
+  model: Model, winId: WindowId, parentExternalId = NullExternalWindowId
+): runtime_values.Rect
+
+proc recenterLeadFloatingAnchor*(
+    model: var Model, anchor: LeadFloatingAnchor, mainWinId: WindowId
+): bool =
+  if not anchor.found:
+    return false
+  let leadOpt = model.windowData(anchor.winId)
+  if leadOpt.isNone:
+    return false
+
+  let mainGeom = model.instructionGeomFor(mainWinId)
+  if mainGeom.w <= 0 or mainGeom.h <= 0:
+    return false
+
+  var leadGeom = leadOpt.get().floatingGeom
+  if leadGeom.w <= 0 or leadGeom.h <= 0:
+    leadGeom = model.floatingGeomForWindow(anchor.winId)
+
+  let centered = mainGeom
+    .centeredIn(leadOpt.get().applyFloatingSizeHints(leadGeom))
+    .clampToScreen(model.primaryScreen())
+  model.setWindowFloatingGeom(anchor.winId, centered)
+
+proc floatingGeomFromRule(
+    model: Model, win: WindowData
+): tuple[
+  geom: runtime_values.Rect, position: runtime_values.WindowRuleFloatingPositionConfig
+] =
   let screenW = max(0'i32, model.screenWidth)
   let screenH = max(0'i32, model.screenHeight)
-  result = model.defaultFloatingGeom()
+  result.geom = model.defaultFloatingGeom()
   let ruleMatch = model.windowRuleFor(win)
   if ruleMatch.found:
     let floating = ruleMatch.rule.floating
     if floating.xRatioSet:
-      result.x = int32(float32(screenW) * floating.xRatio)
+      result.geom.x = int32(float32(screenW) * floating.xRatio)
     if floating.yRatioSet:
-      result.y = int32(float32(screenH) * floating.yRatio)
+      result.geom.y = int32(float32(screenH) * floating.yRatio)
     if floating.widthRatioSet:
-      result.w = max(
+      result.geom.w = max(
         model.effectiveFloatingMinWidth(), int32(float32(screenW) * floating.widthRatio)
       )
     if floating.heightRatioSet:
-      result.h = max(
+      result.geom.h = max(
         model.effectiveFloatingMinHeight(),
         int32(float32(screenH) * floating.heightRatio),
       )
+    result.position = ruleMatch.rule.defaultFloatingPosition
 
 proc floatingGeomForWindow*(
-    model: Model, winId: WindowId, parentExternalId = NullExternalWindowId
+    model: Model, winId: WindowId, parentExternalId: ExternalWindowId
 ): runtime_values.Rect =
   let screen = model.primaryScreen()
   result = model.defaultFloatingGeom()
@@ -66,11 +154,15 @@ proc floatingGeomForWindow*(
   if winOpt.isNone:
     return result.clampToScreen(screen)
   let win = winOpt.get()
-  result = model.floatingGeomFromRule(win)
+  let resolved = model.floatingGeomFromRule(win)
+  result = resolved.geom
   let parent = model.parentRenderRect(parentExternalId)
   if parent.found and model.parentedRoleFor(win) == runtime_values.ParentedRole.Dialog:
     return win.anchoredFloatingGeom(parent.rect, result, screen)
-  result = win.applyFloatingSizeHints(result).clampToScreen(screen)
+  result = win.applyFloatingSizeHints(result)
+  if resolved.position.set:
+    result = screen.positionedByAnchor(result, resolved.position)
+  result = result.clampToScreen(screen)
 
 proc nearSize(size, bounds: int32): bool =
   size > 0 and bounds > 0 and float32(size) >= float32(bounds) * LargeParentedRatio

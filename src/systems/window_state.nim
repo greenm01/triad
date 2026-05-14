@@ -1,5 +1,5 @@
 import std/options
-import floating_policy, window_rules
+import window_policy, window_rules
 import ../state/engine
 
 proc chooseFullscreenOutput*(
@@ -176,7 +176,7 @@ proc toggleFloatingFocused*(model: var Model): bool =
     winId,
     nextFloating,
     if nextFloating:
-      model.defaultFloatingGeom()
+      model.floatingGeomForWindow(winId, win.get().parentExternalId)
     else:
       GeometryRect(),
   )

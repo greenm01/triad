@@ -92,7 +92,7 @@ layout family.
 | Opening | `open-floating` | Force matching window to open floating or tiled | `open-floating #true/#false` | Pass | Explicit `#false` can override parented dialog floating defaults. |
 | Opening | `open-focused` | Allow or prevent initial focus | `open-focused #true/#false` | Pass | |
 | Opening | `default-column-display` | Set normal or tabbed column display | | Gap | Triad has no tabbed-column display mode. |
-| Opening | `default-floating-position` | Set initial floating position relative to an edge or corner | `floating { x-ratio; y-ratio }` | Partial | Triad uses screen-relative ratios and has fewer anchors. |
+| Opening | `default-floating-position` | Set initial floating position relative to an edge or corner | `default-floating-position x=<px> y=<px> relative-to="<anchor>"` | Pass | Supports Niri-style corner and single-edge anchors; existing ratio placement remains a fallback. |
 | Dynamic | `min-width` | Override effective minimum width | `min-width <px>` | Pass | Rule bounds constrain geometry but do not change tiled/floating placement. |
 | Dynamic | `min-height` | Override effective minimum height | `min-height <px>` | Pass | Rule bounds are re-evaluated on metadata, hint, and config changes. |
 | Dynamic | `max-width` | Override effective maximum width | `max-width <px>` | Pass | `0` clears a broader matching rule's bound. |
@@ -123,7 +123,7 @@ These are gap-analysis categories, not target config names.
 | Mango rule family | Examples | Triad status | Layout note |
 | :--- | :--- | :---: | :--- |
 | Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement and open focus exist; monitor placement and tag-silent semantics are gaps. |
-| Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating and ratio geometry; per-window fixed pixel geometry and no-center policy are gaps. |
+| Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating, ratio sizing, and anchored pixel position; fixed pixel size and no-center policy are gaps. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Gap | Applies only to scroller layouts unless generalized into Triad size hints. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Partial | Triad has runtime fullscreen/maximize commands but few rule-level equivalents. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Gap | Mostly compositor/render policy; Triad has global border and animation config. |
@@ -140,6 +140,9 @@ These are gap-analysis categories, not target config names.
 - Parented dialog behavior is policy-driven. Parented windows float by default,
   adopt the parent workspace unless an explicit `default-workspace` overrides
   it, and anchor to the parent's projected geometry.
+- Window policy is centralized: rules provide declarative defaults, fixed-size
+  and parented-window heuristics provide conservative built-ins, and IPC/scripts
+  remain the escape hatch for conditional behavior.
 - `parented-role "dialog"|"tool"|"plain"` is a Triad-specific rule that
   separates transient dialogs from persistent parented floats.
 - `dialog-viewport-jump` is a Triad-specific opt-in for parented dialogs that
@@ -161,6 +164,9 @@ These are gap-analysis categories, not target config names.
   precedence over full-width column.
 - Fixed-size unparented windows can open floating by policy, similar to niri's
   fixed-height floating default.
+- `default-floating-position` controls initial position for unparented,
+  `tool`, and `plain` floats and for later toggle-to-floating placement.
+  Parented `dialog` windows keep parent-relative placement.
 - Lead floating startup windows are handled by Triad policy: a focused
   unparented floating lead window can anchor the first same-app unparented
   normal window without inventing a parent relationship.

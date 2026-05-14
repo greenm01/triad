@@ -108,6 +108,7 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       parentedRoleSet: rule.parentedRoleSet or rule.parentedRole != ParentedRole.Dialog,
       parentedRole: rule.parentedRole,
       floating: rule.floating,
+      defaultFloatingPosition: rule.defaultFloatingPosition,
       dialogViewportJumpSet: rule.dialogViewportJumpSet or rule.dialogViewportJump,
       dialogViewportJump: rule.dialogViewportJump,
       keyboardShortcutsInhibitSet:

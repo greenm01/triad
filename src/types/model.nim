@@ -6,7 +6,7 @@ from runtime_values import
   CursorConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
-  WindowRuleFloatingConfig
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -130,6 +130,7 @@ type
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
     floating*: WindowRuleFloatingConfig
+    defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool
@@ -168,6 +169,7 @@ type
     openMaximizedToEdges*: bool
     parentedRole*: ParentedRole
     floating*: WindowRuleFloatingConfig
+    defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     dialogViewportJump*: bool
     keyboardShortcutsInhibit*: bool
     tiledStateSet*: bool

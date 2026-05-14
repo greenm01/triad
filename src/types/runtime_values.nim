@@ -46,6 +46,16 @@ type
     Tool
     Plain
 
+  FloatingPositionAnchor* {.pure.} = enum
+    TopLeft
+    TopRight
+    BottomLeft
+    BottomRight
+    Top
+    Bottom
+    Left
+    Right
+
   WindowRuleFloatingConfig* = object
     xRatioSet*: bool
     xRatio*: float32
@@ -55,6 +65,11 @@ type
     widthRatio*: float32
     heightRatioSet*: bool
     heightRatio*: float32
+
+  WindowRuleFloatingPositionConfig* = object
+    set*: bool
+    x*, y*: int32
+    relativeTo*: FloatingPositionAnchor
 
   WindowData* = object
     id*: WindowId
@@ -150,6 +165,7 @@ type
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
     floating*: WindowRuleFloatingConfig
+    defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     dialogViewportJumpSet*: bool
     dialogViewportJump*: bool
     keyboardShortcutsInhibitSet*: bool

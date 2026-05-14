@@ -1,6 +1,6 @@
 import std/options
 import ../state/engine
-import floating_policy, focus
+import focus, window_policy
 
 proc flushPendingDialogFocus*(model: var Model): bool =
   if model.overviewActive or model.sessionLocked or

@@ -106,6 +106,7 @@ window-rule {
   parented-role "tool"
   open-focused #false
   open-on-output "HDMI-A-1"
+  default-floating-position x=32 y=48 relative-to="bottom-left"
   floating {
     x-ratio 0.02
     y-ratio 0.08
@@ -177,12 +178,22 @@ window-rule {
   `^org\\.gimp\\.GIMP$`.
 - `floating { x-ratio; y-ratio; width-ratio; height-ratio }`: overrides the
   global floating defaults for this window rule. `x-ratio` and `y-ratio` place
-  tool, plain, and unparented floats. Dialogs still center on the parent, but
-  `width-ratio` and `height-ratio` can set their desired size before clamping.
-  Missing fields fall back to the top-level `floating` defaults.
+  tool, plain, and unparented floats when `default-floating-position` is not
+  set. Dialogs still center on the parent, but `width-ratio` and
+  `height-ratio` can set their desired size before clamping. Missing fields
+  fall back to the top-level `floating` defaults.
+- `default-floating-position x=<px> y=<px> relative-to="<anchor>"`: sets the
+  initial position for tool, plain, and unparented floats. Anchors are
+  `top-left`, `top-right`, `bottom-left`, `bottom-right`, `top`, `bottom`,
+  `left`, and `right`; single-edge anchors center on the other axis. `x` and
+  `y` are logical pixel offsets from that edge or corner and are clamped to
+  `-65535..65535`. Parented dialogs still use parent anchoring for position,
+  while rule/global floating size still applies.
 - Rule-level `floating` fields merge independently. A later matching rule can
   override only `width-ratio` while keeping `x-ratio` and `y-ratio` from an
   earlier broad rule.
+- Rule-level `default-floating-position` merges atomically. A later matching
+  rule replaces the earlier anchor and both offsets.
 - Rule-level opening sizing fields merge independently. A later matching rule
   can override only `default-window-height` while keeping an earlier
   `default-column-width`.

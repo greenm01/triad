@@ -164,6 +164,27 @@ proc parseParentedRole(name: string): ParentedRole =
   else:
     raise newException(ValueError, "invalid parented-role: " & name)
 
+proc parseFloatingPositionAnchor(name: string): FloatingPositionAnchor =
+  case name.toLowerAscii()
+  of "top-left":
+    FloatingPositionAnchor.TopLeft
+  of "top-right":
+    FloatingPositionAnchor.TopRight
+  of "bottom-left":
+    FloatingPositionAnchor.BottomLeft
+  of "bottom-right":
+    FloatingPositionAnchor.BottomRight
+  of "top":
+    FloatingPositionAnchor.Top
+  of "bottom":
+    FloatingPositionAnchor.Bottom
+  of "left":
+    FloatingPositionAnchor.Left
+  of "right":
+    FloatingPositionAnchor.Right
+  else:
+    raise newException(ValueError, "invalid default-floating-position anchor: " & name)
+
 proc modifierValue(name: string): uint32 =
   case name
   of "Shift", "shift", "SHIFT":
@@ -619,6 +640,18 @@ proc loadConfig*(path: string): Config =
             elif child.name == "parented-role" and child.args.len > 0:
               rule.parentedRoleSet = true
               rule.parentedRole = parseParentedRole(child.args[0].kString())
+            elif child.name == "default-floating-position":
+              var position = WindowRuleFloatingPositionConfig(
+                set: true, relativeTo: FloatingPositionAnchor.TopLeft
+              )
+              if child.props.hasKey("x"):
+                position.x = clamp32(int32(child.props["x"].kInt()), -65535, 65535)
+              if child.props.hasKey("y"):
+                position.y = clamp32(int32(child.props["y"].kInt()), -65535, 65535)
+              if child.props.hasKey("relative-to"):
+                position.relativeTo =
+                  parseFloatingPositionAnchor(child.props["relative-to"].kString())
+              rule.defaultFloatingPosition = position
             elif child.name == "dialog-viewport-jump" and child.args.len > 0:
               rule.dialogViewportJumpSet = true
               rule.dialogViewportJump = child.args[0].kBool()

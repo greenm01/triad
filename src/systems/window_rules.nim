@@ -1,6 +1,7 @@
 import std/[options, re]
 import ../state/engine
-from ../types/runtime_values import ParentedRole, WindowRuleFloatingConfig
+from ../types/runtime_values import
+  ParentedRole, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig
 
 type WindowRuleMatchContext = object
   winId: WindowId
@@ -139,6 +140,13 @@ proc mergeFloatingRule(
     target.heightRatioSet = true
     target.heightRatio = source.heightRatio
 
+proc mergeFloatingPositionRule(
+    target: var WindowRuleFloatingPositionConfig,
+    source: WindowRuleFloatingPositionConfig,
+) =
+  if source.set:
+    target = source
+
 proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.defaultSlot != 0:
     result.defaultSlot = rule.defaultSlot
@@ -183,6 +191,7 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.parentedRoleSet:
     result.parentedRole = rule.parentedRole
   result.floating.mergeFloatingRule(rule.floating)
+  result.defaultFloatingPosition.mergeFloatingPositionRule(rule.defaultFloatingPosition)
   if rule.dialogViewportJumpSet:
     result.dialogViewportJump = rule.dialogViewportJump
   if rule.keyboardShortcutsInhibitSet:

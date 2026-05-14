@@ -75,6 +75,36 @@ proc centeredIn*(bounds, geom: rv.Rect): rv.Rect =
   result.x = bounds.x + (bounds.w - geom.w) div 2
   result.y = bounds.y + (bounds.h - geom.h) div 2
 
+proc positionedByAnchor*(
+    bounds, geom: rv.Rect, position: rv.WindowRuleFloatingPositionConfig
+): rv.Rect =
+  result = geom
+  case position.relativeTo
+  of rv.FloatingPositionAnchor.TopLeft:
+    result.x = bounds.x + position.x
+    result.y = bounds.y + position.y
+  of rv.FloatingPositionAnchor.TopRight:
+    result.x = bounds.x + bounds.w - geom.w - position.x
+    result.y = bounds.y + position.y
+  of rv.FloatingPositionAnchor.BottomLeft:
+    result.x = bounds.x + position.x
+    result.y = bounds.y + bounds.h - geom.h - position.y
+  of rv.FloatingPositionAnchor.BottomRight:
+    result.x = bounds.x + bounds.w - geom.w - position.x
+    result.y = bounds.y + bounds.h - geom.h - position.y
+  of rv.FloatingPositionAnchor.Top:
+    result.x = bounds.x + (bounds.w - geom.w) div 2 + position.x
+    result.y = bounds.y + position.y
+  of rv.FloatingPositionAnchor.Bottom:
+    result.x = bounds.x + (bounds.w - geom.w) div 2 + position.x
+    result.y = bounds.y + bounds.h - geom.h - position.y
+  of rv.FloatingPositionAnchor.Left:
+    result.x = bounds.x + position.x
+    result.y = bounds.y + (bounds.h - geom.h) div 2 + position.y
+  of rv.FloatingPositionAnchor.Right:
+    result.x = bounds.x + bounds.w - geom.w - position.x
+    result.y = bounds.y + (bounds.h - geom.h) div 2 + position.y
+
 proc anchoredFloatingGeom*(
     win: model_types.WindowData, parentGeom, fallbackGeom, screen: rv.Rect
 ): rv.Rect =

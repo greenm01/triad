@@ -54,7 +54,7 @@ signals are not enough:
 | Role | Behavior |
 |---|---|
 | `dialog` | Default for parented floats; joins popup-tree focus hiding, adopts the parent workspace unless `default-workspace` overrides it, anchors to the parent, and defers focus when the parent is not ready. |
-| `tool` | Persistent parent-associated float; adopts the parent workspace but does not join popup-tree hiding and does not anchor to the parent. Use rule `floating` geometry for panels and palettes. |
+| `tool` | Persistent parent-associated float; adopts the parent workspace but does not join popup-tree hiding and does not anchor to the parent. Use rule `floating` size and `default-floating-position` for panels and palettes. |
 | `plain` | Ordinary float despite having a parent; no parent workspace adoption, popup-tree hiding, parent anchoring, or deferred dialog focus. |
 
 `open-floating #false` overrides all roles and tiles the window.
@@ -94,16 +94,17 @@ that workspace.
 
 1. `xdg_popup` → always float
 2. `xdg_toplevel` + `set_parent` + dialog/utility/small intent → float, centered on parent
-3. `xdg_toplevel` + `set_parent` + `parented-role "tool"` → persistent float using rule/default floating geometry
-4. `xdg_toplevel` + `set_parent` + `parented-role "plain"` → ordinary float using rule/default floating geometry
+3. `xdg_toplevel` + `set_parent` + `parented-role "tool"` → persistent float using rule/default floating geometry and anchors
+4. `xdg_toplevel` + `set_parent` + `parented-role "plain"` → ordinary float using rule/default floating geometry and anchors
 5. `xdg_toplevel` + `set_parent` + primary-surface intent (NORMAL type, large size) → tile
 6. `xdg_toplevel`, no parent → tile
 
 The parent's layout state (maximized, tiled, fullscreen) is irrelevant to this decision. What matters is whether the child signals transient dialog intent or primary workspace intent. The per-layout table below governs where floats are anchored and what edge cases apply per layout; the float/tile decision itself is made upstream of layout entirely.
 
 Rule-level `floating` geometry is a placement escape hatch. For `tool`,
-`plain`, and unparented floats, `x-ratio` and `y-ratio` set the initial
-position and `width-ratio` and `height-ratio` set the initial size. For
+`plain`, and unparented floats, `default-floating-position` sets initial
+anchored pixel position when present, with `x-ratio` and `y-ratio` as the
+fallback position. `width-ratio` and `height-ratio` set the initial size. For
 dialogs, `width-ratio` and `height-ratio` can set desired size, but default
 placement still centers on the parent. Manually dragging a dialog switches it
 to a free screen position while keeping popup-tree and parent-workspace policy.

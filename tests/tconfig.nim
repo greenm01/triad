@@ -313,6 +313,7 @@ window-rule {
   open-maximized #true
   open-maximized-to-edges #false
   parented-role "tool"
+  default-floating-position x=32 y=48 relative-to="bottom-left"
   dialog-viewport-jump #true
   floating {
     x-ratio 0.02
@@ -433,6 +434,11 @@ bindings {
     check not config.windowRules[0].openMaximizedToEdges
     check config.windowRules[0].parentedRoleSet
     check config.windowRules[0].parentedRole == ParentedRole.Tool
+    check config.windowRules[0].defaultFloatingPosition.set
+    check config.windowRules[0].defaultFloatingPosition.x == 32
+    check config.windowRules[0].defaultFloatingPosition.y == 48
+    check config.windowRules[0].defaultFloatingPosition.relativeTo ==
+      FloatingPositionAnchor.BottomLeft
     check config.windowRules[0].dialogViewportJumpSet
     check config.windowRules[0].dialogViewportJump
     check config.windowRules[0].floating.xRatioSet
