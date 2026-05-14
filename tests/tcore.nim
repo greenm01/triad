@@ -4361,6 +4361,7 @@ suite "Core Runtime Logic":
               defaultWindowWidth: 0.40,
               defaultWindowHeightSet: true,
               defaultWindowHeight: 0.50,
+              openNamedScratchpad: "files",
             )
           ],
       )
@@ -4398,6 +4399,8 @@ suite "Core Runtime Logic":
     check win.workspaceIdx == 1
     check win.widthProportion == 0.8'f32
     check win.heightProportion == 0.6'f32
+    check model.scratchpadWindowCount() == 0
+    check model.namedScratchpadWindow("files") == NullWindowId
     check placement.found
     let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
     check model.columnData(columnId).get().widthProportion == 0.7'f32
@@ -5952,6 +5955,36 @@ suite "Core Runtime Logic":
     check focused[0].id == 1
     check focused[0].workspaceIdx == 2
     model.requireTagShellSemantics("scratchpad restored scenario")
+
+  test "Window rule opens named scratchpad hidden until toggled":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules: @[WindowRule(appIdMatch: "st-yazi", openNamedScratchpad: "files")],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "st-yazi", title: "Files")
+    )
+
+    let winId = model.windowForExternal(ExternalWindowId(10))
+    check winId != NullWindowId
+    check model.scratchpadWindowCount() == 1
+    check model.namedScratchpadWindow("files") == winId
+    check not model.scratchpadVisible()
+    check not model.firstWindowPosition(winId).found
+    check model.shellSnapshot().windows.anyIt(uint32(it.id) == 10 and it.tagId.isNone)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleNamedScratchpad, scratchpadName: "files"))
+
+    check model.scratchpadVisible()
+    check model.activeScratchpadWindow() == winId
+    check model.instructionGeom(10).w > 0
+    model.requireTagShellSemantics("named scratchpad rule scenario")
 
   test "Closing transient window keeps focus on active workspace":
     var model = configuredModel()

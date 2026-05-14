@@ -640,6 +640,8 @@ proc loadConfig*(path: string): Config =
             elif child.name == "parented-role" and child.args.len > 0:
               rule.parentedRoleSet = true
               rule.parentedRole = parseParentedRole(child.args[0].kString())
+            elif child.name == "open-named-scratchpad" and child.args.len > 0:
+              rule.openNamedScratchpad = child.args[0].kString().strip()
             elif child.name == "default-floating-position":
               var position = WindowRuleFloatingPositionConfig(
                 set: true, relativeTo: FloatingPositionAnchor.TopLeft

@@ -314,6 +314,9 @@ proc createWindowForExternal*(
   let parentedRole =
     if ruleMatch.found: ruleMatch.rule.parentedRole else: ParentedRole.Dialog
   let ruleForcesSlot = ruleMatch.found and ruleMatch.rule.defaultSlot != 0
+  let opensNamedScratchpad =
+    ruleMatch.found and not hasRestoredWindow and not hasRestoredTag and
+    ruleMatch.rule.openNamedScratchpad.len > 0
   if ruleMatch.found and ruleMatch.rule.defaultSlot != 0 and not hasRestoredTag:
     targetSlot = ruleMatch.rule.defaultSlot
   elif ruleMatch.found and not hasRestoredTag:
@@ -446,7 +449,11 @@ proc createWindowForExternal*(
     hasRestoredWindow and restored.slot == 0 and
     model.restoredScratchpadContains(restoredExternalId)
 
-  if not restoredScratchpad:
+  if opensNamedScratchpad:
+    discard model.addScratchpadRef(result)
+    discard model.setNamedScratchpadRef(ruleMatch.rule.openNamedScratchpad, result)
+    discard model.hideScratchpadRef()
+  elif not restoredScratchpad:
     if hasRestoredTag:
       discard
         model.placeRestoredWindow(targetSlot, restoredExternalId, externalId, result)

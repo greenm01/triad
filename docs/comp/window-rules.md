@@ -91,6 +91,7 @@ layout family.
 | Opening | `open-fullscreen` | Open matching window fullscreen | `open-fullscreen #true/#false` | Pass | Fullscreen wins over other opening presentation states. |
 | Opening | `open-floating` | Force matching window to open floating or tiled | `open-floating #true/#false` | Pass | Explicit `#false` can override parented dialog floating defaults. |
 | Opening | `open-focused` | Allow or prevent initial focus | `open-focused #true/#false` | Pass | |
+| Opening | Named scratchpad | Open matching window hidden in a named scratchpad | `open-named-scratchpad "<name>"` | Pass | Triad-specific opening rule. Restore state takes precedence; config reload does not move existing windows. |
 | Opening | `default-column-display` | Set normal or tabbed column display | | Gap | Triad has no tabbed-column display mode. |
 | Opening | `default-floating-position` | Set initial floating position relative to an edge or corner | `default-floating-position x=<px> y=<px> relative-to="<anchor>"` | Pass | Supports Niri-style corner and single-edge anchors; existing ratio placement remains a fallback. |
 | Dynamic | `min-width` | Override effective minimum width | `min-width <px>` | Pass | Rule bounds constrain geometry but do not change tiled/floating placement. |
@@ -127,7 +128,7 @@ These are gap-analysis categories, not target config names.
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Gap | Applies only to scroller layouts unless generalized into Triad size hints. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Partial | Triad has runtime fullscreen/maximize commands but few rule-level equivalents. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Gap | Mostly compositor/render policy; Triad has global border and animation config. |
-| Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Gap | Keep these as separate concepts; do not collapse into floating. |
+| Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening exists; global and overlay rules remain gaps. Keep these as separate concepts; do not collapse into floating. |
 | Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit exists; per-window idle, tearing, and global keybinding policy are gaps. |
 
@@ -153,6 +154,9 @@ These are gap-analysis categories, not target config names.
   a window between Triad's tiled and floating placement.
 - `forced-layout` is a Triad-specific rule that can select the workspace layout
   used for a matching new window.
+- `open-named-scratchpad` is a Triad-specific opening rule for tools that
+  should be available through `toggle-named-scratchpad` without first occupying
+  a workspace. It is intentionally opening-only, and live restore wins.
 - `default-window-width` is a Triad-specific companion to niri's
   `default-window-height`; it controls the initial stored window width
   proportion.

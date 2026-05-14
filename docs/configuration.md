@@ -119,6 +119,11 @@ window-rule {
   match app-id="qemu" is-focused=#true
   keyboard-shortcuts-inhibit #true
 }
+
+window-rule {
+  match app-id="^st-yazi$"
+  open-named-scratchpad "files"
+}
 ```
 
 - `match` and `exclude`: support `app-id="<regex>"`, `title="<regex>"`,
@@ -164,6 +169,10 @@ window-rule {
   visible on the named output. This does not switch workspaces or reassign
   outputs. Unknown outputs fall back to the normal active-workspace behavior,
   and `default-workspace` takes precedence.
+- `open-named-scratchpad "<name>"`: opens matching new windows as hidden named
+  scratchpads. The window is untagged until `toggle-named-scratchpad <name>` is
+  run. Empty names are ignored; live restore takes precedence; config reloads
+  do not move existing windows into or out of scratchpads.
 - `default-column-width { proportion <n> }`: sets the initial width of a newly
   created tiled column for matching windows. Values are clamped to `0.05..1.0`.
 - `default-window-width { proportion <n> }` and

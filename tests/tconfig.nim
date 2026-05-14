@@ -300,6 +300,7 @@ window-rule {
   match app-id="qemu"
   default-workspace 3
   open-on-output "HDMI-A-1"
+  open-named-scratchpad "files"
   default-column-width { proportion 0.65 }
   default-window-width { proportion 0.75 }
   default-window-height { proportion 0.85 }
@@ -408,6 +409,7 @@ bindings {
     check not config.windowRules[0].matches[0].titleSet
     check config.windowRules[0].defaultWorkspace == 3
     check config.windowRules[0].openOnOutput == "HDMI-A-1"
+    check config.windowRules[0].openNamedScratchpad == "files"
     check config.windowRules[0].defaultColumnWidthSet
     check config.windowRules[0].defaultColumnWidth == 0.65'f32
     check config.windowRules[0].defaultWindowWidthSet
@@ -748,6 +750,23 @@ window-rule {
     check config.windowRules[0].floating.width == 1
     check config.windowRules[0].floating.heightSet
     check config.windowRules[0].floating.height == 65535
+
+  test "Window rule parser ignores empty named scratchpad targets":
+    let path = getTempDir() / "triad-window-rule-empty-scratchpad.kdl"
+    writeFile(
+      path,
+      """
+window-rule {
+  match app-id="demo"
+  open-named-scratchpad ""
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.windowRules.len == 1
+    check config.windowRules[0].openNamedScratchpad.len == 0
 
   test "Window rule parser lets latest floating size field win per axis":
     let path = getTempDir() / "triad-window-rule-floating-size-order.kdl"

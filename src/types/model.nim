@@ -130,6 +130,7 @@ type
     openMaximizedToEdges*: bool
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
+    openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     dialogViewportJumpSet*: bool
@@ -169,6 +170,7 @@ type
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
     parentedRole*: ParentedRole
+    openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig
     defaultFloatingPosition*: WindowRuleFloatingPositionConfig
     dialogViewportJump*: bool

@@ -208,6 +208,8 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
     result.openMaximizedToEdges = rule.openMaximizedToEdges
   if rule.parentedRoleSet:
     result.parentedRole = rule.parentedRole
+  if rule.openNamedScratchpad.len > 0:
+    result.openNamedScratchpad = rule.openNamedScratchpad
   result.floating.mergeFloatingRule(rule.floating)
   result.defaultFloatingPosition.mergeFloatingPositionRule(rule.defaultFloatingPosition)
   if rule.dialogViewportJumpSet:
