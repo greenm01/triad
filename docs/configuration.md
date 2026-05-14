@@ -96,6 +96,8 @@ window-rule {
   open-maximized #true
   tiled-state #true
   default-column-width { proportion 0.65 }
+  scroller-proportion { proportion 0.70 }
+  scroller-single-proportion { proportion 0.80 }
   default-window-height { proportion 0.90 }
   min-width 640
   max-height 1200
@@ -182,6 +184,13 @@ window-rule {
   do not move existing windows into or out of scratchpads.
 - `default-column-width { proportion <n> }`: sets the initial width of a newly
   created tiled column for matching windows. Values are clamped to `0.05..1.0`.
+- `scroller-proportion { proportion <n> }`: sets the initial primary-axis size
+  of a newly created scroller column and overrides `default-column-width` when
+  both match. Horizontal scrollers use width; vertical scrollers use height.
+- `scroller-single-proportion { proportion <n> }`: when the matching window is
+  the only tiled scroller column, centers that column on the scroller primary
+  axis at the requested proportion. Multi-column scrollers ignore this field
+  and keep normal per-column scroller sizing.
 - `default-window-width { proportion <n> }` and
   `default-window-height { proportion <n> }`: set the matching window's initial
   stored width and height proportions. Values are clamped to `0.05..1.0`.

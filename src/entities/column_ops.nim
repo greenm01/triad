@@ -3,7 +3,11 @@ import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
 
 proc addColumn*(
-    model: var Model, tagId: TagId, widthProportion = 1.0'f32, isFullWidth = false
+    model: var Model,
+    tagId: TagId,
+    widthProportion = 1.0'f32,
+    isFullWidth = false,
+    scrollerSingleProportion = 0.0'f32,
 ): ColumnId =
   if model.tags.entity(tagId).isNone:
     raise newException(ValueError, "column tag does not exist: " & $tagId)
@@ -14,6 +18,7 @@ proc addColumn*(
       id: id,
       tagId: tagId,
       widthProportion: max(0.05'f32, min(1.0'f32, widthProportion)),
+      scrollerSingleProportion: clamp(scrollerSingleProportion, 0.0'f32, 1.0'f32),
       isFullWidth: isFullWidth,
       focusedWindow: NullWindowId,
     )
@@ -28,8 +33,10 @@ proc insertColumn*(
     index: int,
     widthProportion = 1.0'f32,
     isFullWidth = false,
+    scrollerSingleProportion = 0.0'f32,
 ): ColumnId =
-  result = model.addColumn(tagId, widthProportion, isFullWidth)
+  result =
+    model.addColumn(tagId, widthProportion, isFullWidth, scrollerSingleProportion)
   let lastIdx = model.columnsByTag[tagId].len - 1
   let targetIdx = clamp(index, 0, lastIdx)
   if targetIdx != lastIdx:
@@ -52,6 +59,21 @@ proc setColumnFullWidth*(model: var Model, columnId: ColumnId, fullWidth: bool):
   if model.columns.mEntity(columnId).isFullWidth == fullWidth:
     return false
   model.columns.mEntity(columnId).isFullWidth = fullWidth
+  true
+
+proc setColumnScrollerSingleProportion*(
+    model: var Model, columnId: ColumnId, proportion: float32
+): bool =
+  if model.columns.entity(columnId).isNone:
+    return false
+  let normalized =
+    if proportion > 0.0'f32:
+      clamp(proportion, 0.05'f32, 1.0'f32)
+    else:
+      0.0'f32
+  if model.columns.mEntity(columnId).scrollerSingleProportion == normalized:
+    return false
+  model.columns.mEntity(columnId).scrollerSingleProportion = normalized
   true
 
 proc setColumnFocus*(model: var Model, columnId: ColumnId, winId: WindowId): bool =

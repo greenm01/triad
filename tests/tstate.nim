@@ -435,7 +435,10 @@ suite "Runtime state primitives":
       columns:
         @[
           RestoredColumnState(
-            windows: @[WindowId(50)], widthProportion: 0.75, isFullWidth: true
+            windows: @[WindowId(50)],
+            widthProportion: 0.75,
+            scrollerSingleProportion: 0.55,
+            isFullWidth: true,
           )
         ],
       masterCount: 1,
@@ -488,6 +491,10 @@ suite "Runtime state primitives":
       runtime_values.Rect(x: 100, y: 80, w: 640, h: 480)
     let restoredWinId = state.model.windowForExternal(ExternalWindowId(50))
     check state.model.windowData(restoredWinId).get().manualFloatingPosition
+    let restoredTagId = state.model.tagForSlot(2)
+    let restoredColumnId = state.model.columnAt(restoredTagId, 0)
+    check state.model.columnData(restoredColumnId).get().scrollerSingleProportion ==
+      0.55'f32
 
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())

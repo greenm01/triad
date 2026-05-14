@@ -28,6 +28,7 @@ proc triadColumnJson(col: ShellColumn): JsonNode =
   %*{
     "idx": col.idx,
     "width_proportion": col.widthProportion,
+    "scroller_single_proportion": col.scrollerSingleProportion,
     "is_full_width": col.isFullWidth,
     "windows": windows,
   }

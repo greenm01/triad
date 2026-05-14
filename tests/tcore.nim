@@ -4049,6 +4049,108 @@ suite "Core Runtime Logic":
     check win.widthProportion == 0.75'f32
     check win.heightProportion == 0.85'f32
 
+  test "Scroller window rule proportion overrides default column width":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          defaultColumnWidth: 0.4, defaultWindowWidth: 0.5, defaultWindowHeight: 1.0
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "sized",
+              defaultColumnWidthSet: true,
+              defaultColumnWidth: 0.30,
+              scrollerProportionSet: true,
+              scrollerProportion: 0.65,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "sized", title: "Main")
+    )
+    let placement =
+      model.firstWindowPosition(model.windowForExternal(ExternalWindowId(2)))
+    let columnId = model.columnAt(placement.tagId, int(placement.colIdx) - 1)
+
+    check placement.found
+    check model.columnData(columnId).get().widthProportion == 0.65'f32
+
+  test "Scroller single proportion centers only a single horizontal column":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          defaultColumnWidth: 0.4, defaultWindowWidth: 0.5, defaultWindowHeight: 1.0
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "single",
+              scrollerSingleProportionSet: true,
+              scrollerSingleProportion: 0.8,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "single", title: "Main")
+    )
+    let singleGeom = model.instructionGeom(2)
+    check singleGeom.x == 100
+    check singleGeom.w == 800
+    check singleGeom.y == 0
+    check singleGeom.h == 700
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "plain", title: "Second")
+    )
+    let multiGeom = model.instructionGeom(2)
+    check multiGeom.x == 0
+    check multiGeom.w == 400
+
+  test "Scroller single proportion centers only a single vertical column":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          defaultColumnWidth: 0.4, defaultWindowWidth: 0.5, defaultWindowHeight: 1.0
+        ),
+        workspaces:
+          WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.VerticalScroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "single",
+              scrollerSingleProportionSet: true,
+              scrollerSingleProportion: 0.5,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "single", title: "Main")
+    )
+    let geom = model.instructionGeom(2)
+
+    check geom.x == 0
+    check geom.w == 1000
+    check geom.y == 175
+    check geom.h == 350
+
   test "Window rule opening sizing fields merge independently":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -6247,7 +6349,7 @@ suite "Core Runtime Logic":
   "focused_window": 10,
   "tags": [
     {"id": 2, "layout_mode": "Deck", "columns": [
-      {"windows": [10], "width_proportion": 0.6, "is_full_width": true}
+      {"windows": [10], "width_proportion": 0.6, "scroller_single_proportion": 0.7, "is_full_width": true}
     ]}
   ],
   "windows": [
@@ -6261,6 +6363,7 @@ suite "Core Runtime Logic":
     check native.get().activeTag == 2
     check native.get().tags[2].layoutMode == LayoutMode.Deck
     check native.get().tags[2].columns[0].isFullWidth
+    check native.get().tags[2].columns[0].scrollerSingleProportion == 0.7'f32
     check native.get().windows[10].appId == "term"
     check native.get().windows[10].manualFloatingPosition
     check not native.get().windows[11].manualFloatingPosition

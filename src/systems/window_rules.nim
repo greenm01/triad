@@ -201,6 +201,14 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.defaultColumnWidthSet:
     result.defaultColumnWidthSet = true
     result.defaultColumnWidth = rule.defaultColumnWidth
+  if rule.scrollerProportionSet:
+    result.scrollerProportionSet = true
+    result.scrollerProportion = rule.scrollerProportion
+    result.defaultColumnWidthSet = true
+    result.defaultColumnWidth = rule.scrollerProportion
+  if rule.scrollerSingleProportionSet:
+    result.scrollerSingleProportionSet = true
+    result.scrollerSingleProportion = rule.scrollerSingleProportion
   if rule.defaultWindowWidthSet:
     result.defaultWindowWidthSet = true
     result.defaultWindowWidth = rule.defaultWindowWidth

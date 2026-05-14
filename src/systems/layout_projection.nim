@@ -195,6 +195,7 @@ proc projectedTag(
         rv.Column(
           windows: windows,
           widthProportion: column.widthProportion,
+          scrollerSingleProportion: column.scrollerSingleProportion,
           isFullWidth: column.isFullWidth,
         )
       )

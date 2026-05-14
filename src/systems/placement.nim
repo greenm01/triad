@@ -34,13 +34,15 @@ proc addPlacedWindowColumn*(
     index = high(int),
     widthProportion = 0.0'f32,
     isFullWidth = false,
+    scrollerSingleProportion = 0.0'f32,
 ): ColumnId =
   let width =
     if widthProportion > 0.0'f32:
       widthProportion
     else:
       model.defaultColumnWidth()
-  result = model.insertColumn(tagId, index, width, isFullWidth)
+  result =
+    model.insertColumn(tagId, index, width, isFullWidth, scrollerSingleProportion)
   discard model.moveWindowToColumn(tagId, winId, result, 0)
 
 proc sourceWorkspaceFallbackFocus(model: var Model, tagId: TagId): WindowId =
@@ -205,11 +207,13 @@ proc moveWindowToSlot*(
   let sourcePlacement = model.placementForWindowOnTag(sourceTag, winId)
   var sourceColumnWidth = model.defaultColumnWidth()
   var sourceColumnFullWidth = false
+  var sourceScrollerSingleProportion = 0.0'f32
   if sourcePlacement.isSome:
     let sourceColumn = model.column(sourcePlacement.get().columnId)
     if sourceColumn.isSome:
       sourceColumnWidth = sourceColumn.get().widthProportion
       sourceColumnFullWidth = sourceColumn.get().isFullWidth
+      sourceScrollerSingleProportion = sourceColumn.get().scrollerSingleProportion
 
   discard model.removeWindowFromAllTagsAndRefreshFocus(winId)
   if not model.overviewActive:
@@ -220,6 +224,7 @@ proc moveWindowToSlot*(
     winId,
     widthProportion = sourceColumnWidth,
     isFullWidth = sourceColumnFullWidth,
+    scrollerSingleProportion = sourceScrollerSingleProportion,
   )
   if sourceWindowState.isSome:
     discard model.preserveWindowRuntimeAttributes(winId, sourceWindowState.get())

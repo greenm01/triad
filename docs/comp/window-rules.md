@@ -83,6 +83,8 @@ layout family.
 | Matching | `is-urgent` | Match urgent state | | Gap | |
 | Matching | `at-startup` | Match only startup or non-startup windows | `match at-startup=#true/#false` | Pass | Triad follows niri's broad startup phase: true for the first 60 seconds of a daemon process, then dynamic rule effects are recomputed. |
 | Opening | `default-column-width` | Set initial column width | `default-column-width { proportion ... }` | Pass | Rule-level value overrides the global layout default for newly created columns. |
+| Opening | Scroller initial column proportion | Mango-specific scroller sizing | `scroller-proportion { proportion ... }` | Pass | Scroller-only rule; overrides `default-column-width` for matching newly created columns. |
+| Opening | Scroller single-column proportion | Mango-specific one-column scroller sizing | `scroller-single-proportion { proportion ... }` | Pass | Applies only when `Scroller` or `VerticalScroller` has one tiled column; ignored by multi-column scrollers and non-scroller layouts. |
 | Opening | `default-window-height` | Set initial tiled window height | `default-window-height { proportion ... }` | Pass | Triad also supports rule-level `default-window-width`. |
 | Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output; it does not move workspaces between outputs. |
 | Opening | `open-on-workspace` | Open matching window on a named workspace | `default-workspace <n>` | Pass | Triad uses numeric workspace slots. |
@@ -125,7 +127,7 @@ These are gap-analysis categories, not target config names.
 | :--- | :--- | :---: | :--- |
 | Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement and open focus exist; monitor placement and tag-silent semantics are gaps. |
 | Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating, ratio sizing, fixed pixel sizing, and anchored pixel position; no-center policy and size-hint bypass are gaps. |
-| Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Gap | Applies only to scroller layouts unless generalized into Triad size hints. |
+| Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Partial | Triad has runtime fullscreen/maximize commands but few rule-level equivalents. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Gap | Mostly compositor/render policy; Triad has global border and animation config. |
 | Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening exists; global and overlay rules remain gaps. Keep these as separate concepts; do not collapse into floating. |
@@ -160,6 +162,10 @@ These are gap-analysis categories, not target config names.
 - `default-window-width` is a Triad-specific companion to niri's
   `default-window-height`; it controls the initial stored window width
   proportion.
+- `scroller-proportion` and `scroller-single-proportion` are Mango-informed
+  Triad names. They are intentionally scoped to `Scroller` and
+  `VerticalScroller`; other layouts preserve the stored column value but do not
+  consume it.
 - Rule-level size bounds are dynamic geometry constraints. They intentionally do
   not participate in Triad's fixed-size floating heuristic; that heuristic
   still uses raw client hints.

@@ -603,6 +603,16 @@ proc loadConfig*(path: string): Config =
               if proportion.found:
                 rule.defaultColumnWidthSet = true
                 rule.defaultColumnWidth = proportion.value
+            elif child.name == "scroller-proportion":
+              let proportion = child.proportionChild()
+              if proportion.found:
+                rule.scrollerProportionSet = true
+                rule.scrollerProportion = proportion.value
+            elif child.name == "scroller-single-proportion":
+              let proportion = child.proportionChild()
+              if proportion.found:
+                rule.scrollerSingleProportionSet = true
+                rule.scrollerSingleProportion = proportion.value
             elif child.name == "default-window-width":
               let proportion = child.proportionChild()
               if proportion.found:

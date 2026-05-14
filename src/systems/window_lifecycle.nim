@@ -90,7 +90,9 @@ proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
       masterSplitRatio = restored.masterSplitRatio,
     )
     for col in restored.columns:
-      discard model.addColumn(result, col.widthProportion, col.isFullWidth)
+      discard model.addColumn(
+        result, col.widthProportion, col.isFullWidth, col.scrollerSingleProportion
+      )
   else:
     result = model.ensureWorkspaceSlot(slot)
 
@@ -115,11 +117,19 @@ proc ensureRestoredColumn(
     let fullWidth =
       columnCount < restoredTag.columns.len and
       restoredTag.columns[columnCount].isFullWidth
-    discard model.addColumn(tagId, width, fullWidth)
+    let scrollerSingle =
+      if columnCount < restoredTag.columns.len:
+        restoredTag.columns[columnCount].scrollerSingleProportion
+      else:
+        0.0'f32
+    discard model.addColumn(tagId, width, fullWidth, scrollerSingle)
   result = model.columnAt(tagId, colIdx)
   if colIdx < restoredTag.columns.len:
     discard model.setColumnWidth(result, restoredTag.columns[colIdx].widthProportion)
     discard model.setColumnFullWidth(result, restoredTag.columns[colIdx].isFullWidth)
+    discard model.setColumnScrollerSingleProportion(
+      result, restoredTag.columns[colIdx].scrollerSingleProportion
+    )
 
 proc placeRestoredWindow(
     model: var Model,
@@ -361,6 +371,7 @@ proc createWindowForExternal*(
   var widthProportion = model.defaultWindowWidth()
   var heightProportion = model.defaultWindowHeight()
   var columnWidthProportion = 0.0'f32
+  var columnScrollerSingleProportion = 0.0'f32
   if ruleMatch.found:
     if ruleMatch.rule.openFloatingSet:
       isFloating = ruleMatch.rule.openFloating
@@ -374,6 +385,10 @@ proc createWindowForExternal*(
         heightProportion = ruleMatch.rule.defaultWindowHeight
       if ruleMatch.rule.defaultColumnWidthSet:
         columnWidthProportion = ruleMatch.rule.defaultColumnWidth
+      if ruleMatch.rule.scrollerProportionSet:
+        columnWidthProportion = ruleMatch.rule.scrollerProportion
+      if ruleMatch.rule.scrollerSingleProportionSet:
+        columnScrollerSingleProportion = ruleMatch.rule.scrollerSingleProportion
   if hasRestoredWindow:
     isFloating = restored.isFloating
     floatingGeom = restored.floatingGeom
@@ -484,6 +499,7 @@ proc createWindowForExternal*(
           result,
           model.newWindowColumnIndex(targetTag, isFloating),
           columnWidthProportion,
+          scrollerSingleProportion = columnScrollerSingleProportion,
         )
       if openColumnMaximized:
         discard model.applyOpenColumnMaximize(targetTag, placedColumn)

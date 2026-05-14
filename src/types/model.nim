@@ -60,6 +60,7 @@ type
     id*: ColumnId
     tagId*: TagId
     widthProportion*: float32
+    scrollerSingleProportion*: float32
     isFullWidth*: bool
     focusedWindow*: WindowId
 
@@ -108,6 +109,10 @@ type
     openOnOutput*: string
     defaultColumnWidthSet*: bool
     defaultColumnWidth*: float32
+    scrollerProportionSet*: bool
+    scrollerProportion*: float32
+    scrollerSingleProportionSet*: bool
+    scrollerSingleProportion*: float32
     defaultWindowWidthSet*: bool
     defaultWindowWidth*: float32
     defaultWindowHeightSet*: bool
@@ -149,6 +154,10 @@ type
     openOnOutput*: string
     defaultColumnWidthSet*: bool
     defaultColumnWidth*: float32
+    scrollerProportionSet*: bool
+    scrollerProportion*: float32
+    scrollerSingleProportionSet*: bool
+    scrollerSingleProportion*: float32
     defaultWindowWidthSet*: bool
     defaultWindowWidth*: float32
     defaultWindowHeightSet*: bool
@@ -207,6 +216,7 @@ type
   RestoredColumnData* = object
     windows*: seq[ExternalWindowId]
     widthProportion*: float32
+    scrollerSingleProportion*: float32
     isFullWidth*: bool
 
   RestoredTagData* = object

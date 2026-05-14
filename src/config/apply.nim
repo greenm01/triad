@@ -84,6 +84,11 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       openOnOutput: rule.openOnOutput,
       defaultColumnWidthSet: rule.defaultColumnWidthSet or rule.defaultColumnWidth > 0,
       defaultColumnWidth: rule.defaultColumnWidth,
+      scrollerProportionSet: rule.scrollerProportionSet or rule.scrollerProportion > 0,
+      scrollerProportion: rule.scrollerProportion,
+      scrollerSingleProportionSet:
+        rule.scrollerSingleProportionSet or rule.scrollerSingleProportion > 0,
+      scrollerSingleProportion: rule.scrollerSingleProportion,
       defaultWindowWidthSet: rule.defaultWindowWidthSet or rule.defaultWindowWidth > 0,
       defaultWindowWidth: rule.defaultWindowWidth,
       defaultWindowHeightSet:

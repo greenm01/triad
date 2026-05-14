@@ -7,6 +7,14 @@ proc clampProportion(value: float32, lo = 0.05'f32, hi = 1.0'f32): float32 =
 proc effectiveColumnProportion(col: Column): float32 =
   if col.isFullWidth: 1.0'f32 else: col.widthProportion
 
+proc effectiveSingleColumnProportion(col: Column): float32 =
+  if col.isFullWidth:
+    1.0'f32
+  elif col.scrollerSingleProportion > 0.0'f32:
+    col.scrollerSingleProportion
+  else:
+    col.effectiveColumnProportion()
+
 proc layoutScroller*(
     tag: var TagState,
     windows: Table[WindowId, WindowData],
@@ -25,6 +33,49 @@ proc layoutScroller*(
   let safeInnerGap = max(0'i32, innerGap)
   let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
   let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
+
+  if tag.columns.len == 1 and tag.columns[0].scrollerSingleProportion > 0.0'f32:
+    tag.targetViewportXOffset = 0.0'f32
+    let col = tag.columns[0]
+    if col.windows.len == 0:
+      return instructions
+
+    let colWidth = int32(
+      float32(usableWidth) * clampProportion(col.effectiveSingleColumnProportion())
+    )
+    let currentX = screen.x + safeOuterGap + ((usableWidth - colWidth) div 2)
+    let numWindows = col.windows.len
+    let totalInnerGaps = int32(numWindows - 1) * safeInnerGap
+    let usableColHeight = max(0'i32, usableHeight - totalInnerGaps)
+
+    var totalHeightProp: float32 = 0.0
+    for winId in col.windows:
+      if windows.hasKey(winId):
+        totalHeightProp += clampProportion(windows[winId].heightProportion)
+      else:
+        totalHeightProp += 1.0
+    if totalHeightProp <= 0:
+      totalHeightProp = 1.0
+
+    var currentY = screen.y + safeOuterGap
+    for winId in col.windows:
+      let winProp =
+        if windows.hasKey(winId):
+          clampProportion(windows[winId].heightProportion)
+        else:
+          1.0'f32
+      let winHeight =
+        max(0'i32, int32(float32(usableColHeight) * (winProp / totalHeightProp)))
+
+      instructions.add(
+        RenderInstruction(
+          windowId: winId,
+          geom: Rect(x: currentX, y: currentY, w: colWidth, h: winHeight),
+        )
+      )
+      currentY += winHeight + safeInnerGap
+
+    return instructions
 
   # Calculate virtual positions and find focused column
   var virtualX: seq[int32] = @[]
@@ -127,6 +178,49 @@ proc layoutVerticalScroller*(
   let safeInnerGap = max(0'i32, innerGap)
   let usableWidth = max(0'i32, screen.w - 2 * safeOuterGap)
   let usableHeight = max(0'i32, screen.h - 2 * safeOuterGap)
+
+  if tag.columns.len == 1 and tag.columns[0].scrollerSingleProportion > 0.0'f32:
+    tag.targetViewportYOffset = 0.0'f32
+    let col = tag.columns[0]
+    if col.windows.len == 0:
+      return instructions
+
+    let colHeight = int32(
+      float32(usableHeight) * clampProportion(col.effectiveSingleColumnProportion())
+    )
+    let currentY = screen.y + safeOuterGap + ((usableHeight - colHeight) div 2)
+    let numWindows = col.windows.len
+    let totalInnerGaps = int32(numWindows - 1) * safeInnerGap
+    let usableColWidth = max(0'i32, usableWidth - totalInnerGaps)
+
+    var totalWidthProp: float32 = 0.0
+    for winId in col.windows:
+      if windows.hasKey(winId):
+        totalWidthProp += clampProportion(windows[winId].widthProportion)
+      else:
+        totalWidthProp += 1.0
+    if totalWidthProp <= 0:
+      totalWidthProp = 1.0
+
+    var currentX = screen.x + safeOuterGap
+    for winId in col.windows:
+      let winProp =
+        if windows.hasKey(winId):
+          clampProportion(windows[winId].widthProportion)
+        else:
+          1.0'f32
+      let winWidth =
+        max(0'i32, int32(float32(usableColWidth) * (winProp / totalWidthProp)))
+
+      instructions.add(
+        RenderInstruction(
+          windowId: winId,
+          geom: Rect(x: currentX, y: currentY, w: winWidth, h: colHeight),
+        )
+      )
+      currentX += winWidth + safeInnerGap
+
+    return instructions
 
   # Calculate virtual positions and find focused column
   var virtualY: seq[int32] = @[]

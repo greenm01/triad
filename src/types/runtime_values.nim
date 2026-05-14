@@ -106,6 +106,7 @@ type
   Column* = object
     windows*: seq[WindowId]
     widthProportion*: float32
+    scrollerSingleProportion*: float32
     isFullWidth*: bool
 
   TagState* = object
@@ -146,6 +147,10 @@ type
     openOnOutput*: string
     defaultColumnWidthSet*: bool
     defaultColumnWidth*: float32
+    scrollerProportionSet*: bool
+    scrollerProportion*: float32
+    scrollerSingleProportionSet*: bool
+    scrollerSingleProportion*: float32
     defaultWindowWidthSet*: bool
     defaultWindowWidth*: float32
     defaultWindowHeightSet*: bool
@@ -319,6 +324,7 @@ type
   RestoredColumnState* = object
     windows*: seq[WindowId]
     widthProportion*: float32
+    scrollerSingleProportion*: float32
     isFullWidth*: bool
 
   RestoredTagState* = object

@@ -97,7 +97,7 @@ external window manager.
 | Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | |
 | Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |
 | Layouts | Master ratio | `setmfact`, `default_mfact`, `mfact` | WM policy | `master-ratio`, `adjust-master-ratio`, `layout.master.split-ratio` | X | |
-| Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width` | X | Triad uses column/window width proportions. |
+| Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width`, `scroller-proportion`, `scroller-single-proportion` | X | Triad uses column/window width proportions; scroller rule proportions apply at new-window placement time. |
 | Layouts | Scroller focus centering | `scroller_focus_center`, `scroller_prefer_center` | WM policy | `scroller-focus-center`, `scroller-prefer-center` | X | |
 | Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | | | Not exposed by Triad. |
 | Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
@@ -116,7 +116,7 @@ external window manager.
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Open fullscreen/maximized | `isfullscreen`, `isfakefullscreen`, `noopenmaximized` | WM policy | `open-fullscreen`, `open-maximized`, `open-maximized-to-edges` | X | `open-maximized` means full-width scroller column; `open-maximized-to-edges` means client-visible maximize. |
-| Window rules | Open sizing/output | `width`, `height`, `monitor`, `scroller_proportion` | WM policy | `open-on-output`, `default-column-width`, `default-window-width`, `default-window-height` | X | `open-on-output` targets the workspace currently visible on that output. |
+| Window rules | Open sizing/output | `width`, `height`, `monitor`, `scroller_proportion`, `scroller_proportion_single` | WM policy | `open-on-output`, `default-column-width`, `scroller-proportion`, `scroller-single-proportion`, `default-window-width`, `default-window-height` | X | `scroller-proportion` overrides `default-column-width` for new scroller columns; `scroller-single-proportion` centers a single scroller column only. |
 | Window rules | Open named scratchpad | `isnamedscratchpad`, `single_scratchpad` | WM policy | `open-named-scratchpad`, `toggle-named-scratchpad` | X | New matching windows open hidden and untagged until toggled; live restore wins over the rule. |
 | Window rules | Size bounds | `width`, `height`, `isnosizehint` | size-hint policy | `min-width`, `min-height`, `max-width`, `max-height` | X | Rule bounds constrain geometry without changing placement. |
 | Window rules | Parented float role | `isfloating`, `isoverlay`, app rules | WM policy | `window-rule parented-role` | X | `dialog`, `tool`, and `plain` separate transient dialogs from persistent parented floats without using overlay/global state. |
@@ -285,8 +285,8 @@ KDL config nodes and fields:
 - `window-rule`: `match app-id=... title=... is-focused=... is-active=...
   is-active-in-column=... is-floating=... at-startup=...`, matching `exclude` properties,
   `default-workspace`,
-  `open-on-output`, `default-column-width`, `default-window-width`,
-  `default-window-height`,
+  `open-on-output`, `default-column-width`, `scroller-proportion`,
+  `scroller-single-proportion`, `default-window-width`, `default-window-height`,
   `open-named-scratchpad`,
   `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,

@@ -26,6 +26,7 @@ proc shellColumns(model: Model, tagId: TagId): seq[ShellColumn] =
       ShellColumn(
         idx: idx,
         widthProportion: column.widthProportion,
+        scrollerSingleProportion: column.scrollerSingleProportion,
         isFullWidth: column.isFullWidth,
         windows: windows,
       )

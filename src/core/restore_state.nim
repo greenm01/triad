@@ -144,6 +144,9 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
       if colNode.hasKey("width_proportion"):
         col.widthProportion =
           float32FromJson(colNode["width_proportion"], DefaultColumnWidth)
+      if colNode.hasKey("scroller_single_proportion"):
+        col.scrollerSingleProportion =
+          float32FromJson(colNode["scroller_single_proportion"], 0.0'f32)
       if colNode.hasKey("is_full_width"):
         col.isFullWidth = boolFromJson(colNode["is_full_width"])
       if colNode.hasKey("windows") and colNode["windows"].kind == JArray:

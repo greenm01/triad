@@ -67,7 +67,9 @@ proc restoredTagData*(source: rv.RestoredTagState): RestoredTagData =
   )
   for col in source.columns:
     var restoredCol = RestoredColumnData(
-      widthProportion: col.widthProportion, isFullWidth: col.isFullWidth
+      widthProportion: col.widthProportion,
+      scrollerSingleProportion: col.scrollerSingleProportion,
+      isFullWidth: col.isFullWidth,
     )
     for winId in col.windows:
       restoredCol.windows.add(ExternalWindowId(uint32(winId)))
@@ -149,6 +151,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
         continue
       var restoredCol = rv.RestoredColumnState(
         widthProportion: colOpt.get().widthProportion,
+        scrollerSingleProportion: colOpt.get().scrollerSingleProportion,
         isFullWidth: colOpt.get().isFullWidth,
       )
       for winId in model.windowsForColumn(colId):
@@ -268,6 +271,7 @@ proc tagStateJson(tag: rv.RestoredTagState): JsonNode =
       %*{
         "windows": windows,
         "width_proportion": col.widthProportion,
+        "scroller_single_proportion": col.scrollerSingleProportion,
         "is_full_width": col.isFullWidth,
       }
     )

@@ -273,6 +273,13 @@ window-rule {
     keyboard-shortcuts-inhibit #true
 }
 
+// Example scroller-specific sizing rule:
+// window-rule {
+//     match app-id="^org\\.wezfurlong\\.wezterm$"
+//     scroller-proportion { proportion 0.65 }
+//     scroller-single-proportion { proportion 0.80 }
+// }
+
 window-rule {
     match app-id="fuzzel"
     open-floating #true

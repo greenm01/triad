@@ -726,6 +726,8 @@ window-rule {
   match app-id="demo"
   open-on-output "DP-1"
   default-column-width { proportion 2.0 }
+  scroller-proportion { proportion 0.65 }
+  scroller-single-proportion { proportion 0.0 }
   default-window-width { proportion 0.0 }
   default-window-height { proportion 0.4 }
   floating {
@@ -742,6 +744,10 @@ window-rule {
     check config.windowRules[0].openOnOutput == "DP-1"
     check config.windowRules[0].defaultColumnWidthSet
     check config.windowRules[0].defaultColumnWidth == 1.0'f32
+    check config.windowRules[0].scrollerProportionSet
+    check config.windowRules[0].scrollerProportion == 0.65'f32
+    check config.windowRules[0].scrollerSingleProportionSet
+    check config.windowRules[0].scrollerSingleProportion == 0.05'f32
     check config.windowRules[0].defaultWindowWidthSet
     check config.windowRules[0].defaultWindowWidth == 0.05'f32
     check config.windowRules[0].defaultWindowHeightSet
