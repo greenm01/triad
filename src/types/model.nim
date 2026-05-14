@@ -6,7 +6,7 @@ from runtime_values import
   CursorConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, Rect, ScreenshotConfig, TerminalConfig,
-  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -135,6 +135,8 @@ type
     openMaximized*: bool
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
+    maximizePolicySet*: bool
+    maximizePolicy*: WindowRuleMaximizePolicy
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
     openNamedScratchpad*: string
@@ -180,6 +182,8 @@ type
     openMaximized*: bool
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
+    maximizePolicySet*: bool
+    maximizePolicy*: WindowRuleMaximizePolicy
     parentedRole*: ParentedRole
     openNamedScratchpad*: string
     floating*: WindowRuleFloatingConfig

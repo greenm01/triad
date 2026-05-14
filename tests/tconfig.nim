@@ -692,6 +692,7 @@ window-rule {
   open-fullscreen #false
   open-maximized #false
   open-maximized-to-edges #false
+  maximize-policy "ignore"
   dialog-viewport-jump #false
   keyboard-shortcuts-inhibit #false
   tiled-state #false
@@ -710,6 +711,8 @@ window-rule {
     check not config.windowRules[0].openMaximized
     check config.windowRules[0].openMaximizedToEdgesSet
     check not config.windowRules[0].openMaximizedToEdges
+    check config.windowRules[0].maximizePolicySet
+    check config.windowRules[0].maximizePolicy == WindowRuleMaximizePolicy.Ignore
     check config.windowRules[0].dialogViewportJumpSet
     check not config.windowRules[0].dialogViewportJump
     check config.windowRules[0].keyboardShortcutsInhibitSet

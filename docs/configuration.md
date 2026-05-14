@@ -94,6 +94,7 @@ window-rule {
   exclude title="Private"
   default-workspace 4
   open-maximized #true
+  maximize-policy "column"
   tiled-state #true
   default-column-width { proportion 0.65 }
   scroller-proportion { proportion 0.70 }
@@ -157,6 +158,11 @@ window-rule {
 - `open-maximized-to-edges #true|#false`: opens matching windows in Triad's
   client-visible edge-maximized state. This forces tiled placement if it
   conflicts with `open-floating`.
+- `maximize-policy "edge"|"column"|"ignore"`: controls later maximize actions
+  for matching windows. `edge` is the default client-visible maximize behavior.
+  `column` maps maximize actions to a full-width scroller column without
+  setting client-visible maximize state. `ignore` refuses maximize-on actions;
+  unmaximize and toggle-off still clear existing maximize state.
 - `parented-role "dialog"|"tool"|"plain"`: controls how a matching parented
   floating window participates in child-window policy. `dialog` is the default:
   it joins the popup tree, adopts the parent workspace unless `default-workspace`
@@ -232,6 +238,8 @@ window-rule {
   geometry.
 - When multiple opening states are true, fullscreen wins over edge maximize,
   and edge maximize wins over full-width column.
+- `maximize-policy` applies after a window exists. It does not change
+  `open-fullscreen`, `open-maximized`, or `open-maximized-to-edges`.
 
 ## Cursor
 

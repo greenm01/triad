@@ -100,6 +100,7 @@ layout family.
 | Dynamic | `min-height` | Override effective minimum height | `min-height <px>` | Pass | Rule bounds are re-evaluated on metadata, hint, and config changes. |
 | Dynamic | `max-width` | Override effective maximum width | `max-width <px>` | Pass | `0` clears a broader matching rule's bound. |
 | Dynamic | `max-height` | Override effective maximum height | `max-height <px>` | Pass | Nonzero max below min normalizes to min. |
+| Dynamic | Maximize request policy | Mango-style fake or ignored maximize | `maximize-policy "edge"|"column"|"ignore"` | Pass | Applies to maximize actions after open; opening presentation rules remain separate. |
 | Dynamic | `variable-refresh-rate` | Opt matching windows into VRR policy | `presentation-mode` | Gap | Triad has global presentation mode, not per-window VRR. |
 | Dynamic | `scroll-factor` | Override scroll factor per window | | Gap | |
 | Dynamic | `tiled-state` | Control client-visible tiled state | `tiled-state #true/#false` | Pass | Sends River tiled edges as a client hint only; it does not change Triad placement. |
@@ -128,7 +129,7 @@ These are gap-analysis categories, not target config names.
 | Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement and open focus exist; monitor placement and tag-silent semantics are gaps. |
 | Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Partial | Triad supports open floating, ratio sizing, fixed pixel sizing, and anchored pixel position; no-center policy and size-hint bypass are gaps. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
-| Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Partial | Triad has runtime fullscreen/maximize commands but few rule-level equivalents. |
+| Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
 | Visual/decor policy | `noblur`, `isnoborder`, `isnoshadow`, `isnoradius`, opacity, animation flags | Gap | Mostly compositor/render policy; Triad has global border and animation config. |
 | Scratch/global/overlay | `isglobal`, `isoverlay`, `isunglobal`, `isnamedscratchpad`, `single_scratchpad` | Partial | Named scratchpad opening exists; global and overlay rules remain gaps. Keep these as separate concepts; do not collapse into floating. |
 | Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
@@ -154,6 +155,9 @@ These are gap-analysis categories, not target config names.
   policy, paired with the runtime `toggle-keyboard-shortcuts-inhibit` command.
 - `tiled-state` controls the client-visible River tiled hint. It does not move
   a window between Triad's tiled and floating placement.
+- `maximize-policy` controls maximize actions after the window exists. `edge`
+  keeps the client-visible maximized model, `column` maps maximize to
+  full-width scroller columns, and `ignore` refuses maximize-on requests.
 - `forced-layout` is a Triad-specific rule that can select the workspace layout
   used for a matching new window.
 - `open-named-scratchpad` is a Triad-specific opening rule for tools that

@@ -164,6 +164,17 @@ proc parseParentedRole(name: string): ParentedRole =
   else:
     raise newException(ValueError, "invalid parented-role: " & name)
 
+proc parseMaximizePolicy(name: string): WindowRuleMaximizePolicy =
+  case name.toLowerAscii()
+  of "edge":
+    WindowRuleMaximizePolicy.Edge
+  of "column":
+    WindowRuleMaximizePolicy.Column
+  of "ignore":
+    WindowRuleMaximizePolicy.Ignore
+  else:
+    raise newException(ValueError, "invalid maximize-policy: " & name)
+
 proc parseFloatingPositionAnchor(name: string): FloatingPositionAnchor =
   case name.toLowerAscii()
   of "top-left":
@@ -650,6 +661,9 @@ proc loadConfig*(path: string): Config =
             elif child.name == "open-maximized-to-edges" and child.args.len > 0:
               rule.openMaximizedToEdgesSet = true
               rule.openMaximizedToEdges = child.args[0].kBool()
+            elif child.name == "maximize-policy" and child.args.len > 0:
+              rule.maximizePolicySet = true
+              rule.maximizePolicy = parseMaximizePolicy(child.args[0].kString())
             elif child.name == "parented-role" and child.args.len > 0:
               rule.parentedRoleSet = true
               rule.parentedRole = parseParentedRole(child.args[0].kString())

@@ -242,6 +242,9 @@ proc applyWindowRule(result: var ResolvedWindowRuleData, rule: WindowRuleData) =
   if rule.openMaximizedToEdgesSet:
     result.openMaximizedToEdgesSet = true
     result.openMaximizedToEdges = rule.openMaximizedToEdges
+  if rule.maximizePolicySet:
+    result.maximizePolicySet = true
+    result.maximizePolicy = rule.maximizePolicy
   if rule.parentedRoleSet:
     result.parentedRole = rule.parentedRole
   if rule.openNamedScratchpad.len > 0:

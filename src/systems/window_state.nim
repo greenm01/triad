@@ -1,6 +1,7 @@
 import std/options
 import window_policy, window_rules
 import ../state/engine
+from ../types/runtime_values import LayoutMode, WindowRuleMaximizePolicy
 
 proc chooseFullscreenOutput*(
     model: Model, requested: ExternalOutputId
@@ -135,15 +136,79 @@ proc toggleFullscreenForExternal*(
       NullExternalOutputId,
   )
 
+proc maximizePolicyFor(
+    model: Model, winId: WindowId, win: WindowData
+): WindowRuleMaximizePolicy =
+  let ruleMatch = model.windowRuleFor(winId, win)
+  if ruleMatch.found and ruleMatch.rule.maximizePolicySet:
+    ruleMatch.rule.maximizePolicy
+  else:
+    WindowRuleMaximizePolicy.Edge
+
+proc firstPolicyColumnPosition(
+    model: Model, winId: WindowId
+): tuple[found: bool, tagId: TagId, columnId: ColumnId] =
+  let position = model.firstWindowPosition(winId)
+  if not position.found:
+    return (false, NullTagId, NullColumnId)
+  let tagOpt = model.tagData(position.tagId)
+  if tagOpt.isNone or
+      tagOpt.get().layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+    return (false, NullTagId, NullColumnId)
+  let placement = model.placementForWindowOnTag(position.tagId, winId)
+  if placement.isNone:
+    return (false, NullTagId, NullColumnId)
+  (true, position.tagId, placement.get().columnId)
+
+proc setPolicyColumnFullWidth(
+    model: var Model, winId: WindowId, fullWidth: bool
+): bool =
+  let position = model.firstPolicyColumnPosition(winId)
+  if not position.found:
+    return false
+  result = model.setColumnFullWidth(position.columnId, fullWidth)
+  if result and position.tagId == model.activeTag:
+    discard model.requestTagViewportRetarget(position.tagId)
+
+proc policyColumnFullWidth(model: Model, winId: WindowId): bool =
+  let position = model.firstPolicyColumnPosition(winId)
+  if not position.found:
+    return false
+  let columnOpt = model.columnData(position.columnId)
+  columnOpt.isSome and columnOpt.get().isFullWidth
+
+proc applyMaximizePolicy*(model: var Model, winId: WindowId): bool =
+  let win = model.window(winId)
+  if win.isNone:
+    return false
+  case model.maximizePolicyFor(winId, win.get())
+  of WindowRuleMaximizePolicy.Edge:
+    result = model.setWindowMaximized(winId, true)
+  of WindowRuleMaximizePolicy.Column:
+    let columnChanged = model.setPolicyColumnFullWidth(winId, true)
+    if columnChanged or model.policyColumnFullWidth(winId):
+      result = model.setWindowMaximized(winId, false) or columnChanged
+  of WindowRuleMaximizePolicy.Ignore:
+    result = false
+
+proc clearMaximizePolicy*(model: var Model, winId: WindowId): bool =
+  let win = model.window(winId)
+  if win.isNone:
+    return false
+  let policy = model.maximizePolicyFor(winId, win.get())
+  result = model.setWindowMaximized(winId, false)
+  if policy in {WindowRuleMaximizePolicy.Column, WindowRuleMaximizePolicy.Ignore}:
+    result = model.setPolicyColumnFullWidth(winId, false) or result
+
 proc requestMaximizeForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
-  winId != NullWindowId and model.setWindowMaximized(winId, true)
+  winId != NullWindowId and model.applyMaximizePolicy(winId)
 
 proc requestUnmaximizeForExternal*(
     model: var Model, externalId: ExternalWindowId
 ): bool =
   let winId = model.windowForExternal(externalId)
-  winId != NullWindowId and model.setWindowMaximized(winId, false)
+  winId != NullWindowId and model.clearMaximizePolicy(winId)
 
 proc requestMinimizeForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
@@ -201,6 +266,11 @@ proc toggleMaximizedFocused*(model: var Model): bool =
   let win = model.window(winId)
   if win.isNone:
     return false
+  let policy = model.maximizePolicyFor(winId, win.get())
+  if policy in {WindowRuleMaximizePolicy.Column, WindowRuleMaximizePolicy.Ignore}:
+    if win.get().isMaximized or model.policyColumnFullWidth(winId):
+      return model.clearMaximizePolicy(winId)
+    return model.applyMaximizePolicy(winId)
   if model.columnFullWidthForWindowOnTag(model.activeTag, winId):
     let placement = model.placementForWindowOnTag(model.activeTag, winId)
     if placement.isSome:

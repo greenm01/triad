@@ -2006,6 +2006,8 @@ suite "Core Runtime Logic":
               openFullscreen: true,
               openMaximized: true,
               openMaximizedToEdges: true,
+              maximizePolicySet: true,
+              maximizePolicy: WindowRuleMaximizePolicy.Ignore,
               parentedRole: ParentedRole.Tool,
               dialogViewportJump: true,
               keyboardShortcutsInhibit: true,
@@ -2022,6 +2024,8 @@ suite "Core Runtime Logic":
               openMaximized: false,
               openMaximizedToEdgesSet: true,
               openMaximizedToEdges: false,
+              maximizePolicySet: true,
+              maximizePolicy: WindowRuleMaximizePolicy.Edge,
               parentedRoleSet: true,
               parentedRole: ParentedRole.Dialog,
               dialogViewportJumpSet: true,
@@ -2045,6 +2049,8 @@ suite "Core Runtime Logic":
     check not rule.rule.openMaximized
     check rule.rule.openMaximizedToEdgesSet
     check not rule.rule.openMaximizedToEdges
+    check rule.rule.maximizePolicySet
+    check rule.rule.maximizePolicy == WindowRuleMaximizePolicy.Edge
     check rule.rule.parentedRole == ParentedRole.Dialog
     check not rule.rule.dialogViewportJump
     check not rule.rule.keyboardShortcutsInhibit
@@ -3497,6 +3503,157 @@ suite "Core Runtime Logic":
     check not model.columnData(columnId).get().isFullWidth
     check not model.snapshotWindow(1).isMaximized
     check effects.len == 0
+
+  test "Window rule maximize-policy ignore blocks maximize and clears existing state":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "docs",
+              maximizePolicySet: true,
+              maximizePolicy: WindowRuleMaximizePolicy.Ignore,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "docs", title: "Manual")
+    )
+    let winId = model.windowForExternal(ExternalWindowId(1))
+    let columnId = model.columnAt(model.activeTag, 0)
+
+    let requestEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    check not model.snapshotWindow(1).isMaximized
+    check not model.columnData(columnId).get().isFullWidth
+    check not requestEffects.hasMaximizedEffect(1, true)
+
+    let toggleEffects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check not model.snapshotWindow(1).isMaximized
+    check not model.columnData(columnId).get().isFullWidth
+    check not toggleEffects.hasMaximizedEffect(1, true)
+
+    discard model.setWindowMaximized(winId, true)
+    let clearEdgeEffects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check not model.snapshotWindow(1).isMaximized
+    check clearEdgeEffects.hasMaximizedEffect(1, false)
+
+    discard model.setColumnFullWidth(columnId, true)
+    let clearColumnEffects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check not model.columnData(columnId).get().isFullWidth
+    check not clearColumnEffects.hasMaximizedEffect(1, true)
+
+  test "Window rule maximize-policy column uses full-width scroller column":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "docs",
+              maximizePolicySet: true,
+              maximizePolicy: WindowRuleMaximizePolicy.Column,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "docs", title: "Manual")
+    )
+    let columnId = model.columnAt(model.activeTag, 0)
+    let beforeGeom = model.instructionGeom(1)
+
+    let requestEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    let afterGeom = model.instructionGeom(1)
+
+    check model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+    check afterGeom.w > beforeGeom.w
+    check not requestEffects.hasMaximizedEffect(1, true)
+
+    let clearEffects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check not model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+    check not clearEffects.hasMaximizedEffect(1, true)
+
+    let commandEffects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+    check not commandEffects.hasMaximizedEffect(1, true)
+
+  test "Window rule maximize-policy column supports vertical scroller":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces:
+          WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.VerticalScroller),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "docs",
+              maximizePolicySet: true,
+              maximizePolicy: WindowRuleMaximizePolicy.Column,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "docs", title: "Manual")
+    )
+    let columnId = model.columnAt(model.activeTag, 0)
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    check model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+    check model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+    check not effects.hasMaximizedEffect(1, true)
+
+  test "Window rule maximize-policy column is no-op outside scroller layouts":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Grid),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "docs",
+              maximizePolicySet: true,
+              maximizePolicy: WindowRuleMaximizePolicy.Column,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "docs", title: "Manual")
+    )
+    let columnId = model.columnAt(model.activeTag, 0)
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleMaximized))
+
+    check not model.columnData(columnId).get().isFullWidth
+    check not model.snapshotWindow(1).isMaximized
+    check not effects.hasMaximizedEffect(1, true)
 
   test "Column resize clears maximize column state":
     var model = cameraModel()

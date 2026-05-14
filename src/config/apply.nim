@@ -112,6 +112,8 @@ proc windowRuleData(rule: rv.WindowRule, ruleIdx: int): Option[WindowRuleData] =
       openMaximized: rule.openMaximized,
       openMaximizedToEdgesSet: rule.openMaximizedToEdgesSet or rule.openMaximizedToEdges,
       openMaximizedToEdges: rule.openMaximizedToEdges,
+      maximizePolicySet: rule.maximizePolicySet,
+      maximizePolicy: rule.maximizePolicy,
       parentedRoleSet: rule.parentedRoleSet or rule.parentedRole != ParentedRole.Dialog,
       parentedRole: rule.parentedRole,
       openNamedScratchpad: rule.openNamedScratchpad,

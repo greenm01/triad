@@ -116,6 +116,7 @@ external window manager.
 | Window rules | Open floating | `windowrule isfloating` | WM policy | `window-rule open-floating` | X | Explicit `#false` can override parented dialog floating defaults. |
 | Window rules | Open focused | `windowrule isopensilent` | WM policy | `window-rule open-focused` | X | Triad uses positive Niri-style naming for Mango's open-silent escape hatch. |
 | Window rules | Open fullscreen/maximized | `isfullscreen`, `isfakefullscreen`, `noopenmaximized` | WM policy | `open-fullscreen`, `open-maximized`, `open-maximized-to-edges` | X | `open-maximized` means full-width scroller column; `open-maximized-to-edges` means client-visible maximize. |
+| Window rules | Maximize action policy | `force_fakemaximize`, `ignore_maximize` | WM policy | `maximize-policy` | X | `edge` keeps client-visible maximize, `column` maps maximize actions to full-width scroller columns, and `ignore` refuses maximize-on actions. |
 | Window rules | Open sizing/output | `width`, `height`, `monitor`, `scroller_proportion`, `scroller_proportion_single` | WM policy | `open-on-output`, `default-column-width`, `scroller-proportion`, `scroller-single-proportion`, `default-window-width`, `default-window-height` | X | `scroller-proportion` overrides `default-column-width` for new scroller columns; `scroller-single-proportion` centers a single scroller column only. |
 | Window rules | Open named scratchpad | `isnamedscratchpad`, `single_scratchpad` | WM policy | `open-named-scratchpad`, `toggle-named-scratchpad` | X | New matching windows open hidden and untagged until toggled; live restore wins over the rule. |
 | Window rules | Size bounds | `width`, `height`, `isnosizehint` | size-hint policy | `min-width`, `min-height`, `max-width`, `max-height` | X | Rule bounds constrain geometry without changing placement. |
@@ -290,7 +291,7 @@ KDL config nodes and fields:
   `open-named-scratchpad`,
   `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,
-  `open-maximized-to-edges`, `parented-role`,
+  `open-maximized-to-edges`, `maximize-policy`, `parented-role`,
   `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `tiled-state`,
   `forced-layout`, nested `floating` with ratio or fixed pixel size fields.
 - `spawn-at-startup`, `window-menu-command`.

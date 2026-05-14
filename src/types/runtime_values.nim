@@ -46,6 +46,11 @@ type
     Tool
     Plain
 
+  WindowRuleMaximizePolicy* {.pure.} = enum
+    Edge
+    Column
+    Ignore
+
   FloatingPositionAnchor* {.pure.} = enum
     TopLeft
     TopRight
@@ -173,6 +178,8 @@ type
     openMaximized*: bool
     openMaximizedToEdgesSet*: bool
     openMaximizedToEdges*: bool
+    maximizePolicySet*: bool
+    maximizePolicy*: WindowRuleMaximizePolicy
     parentedRoleSet*: bool
     parentedRole*: ParentedRole
     openNamedScratchpad*: string
