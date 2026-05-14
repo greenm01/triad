@@ -139,6 +139,25 @@ These are gap-analysis categories, not target config names.
 | Terminal swallowing | `isterm`, `noswallow` | Gap | Not part of current Triad lifecycle policy. |
 | Performance and input policy | `allow_shortcuts_inhibit`, `indleinhibit_when_focus`, `force_tearing`, `globalkeybinding` | Partial | Shortcut inhibit, idle inhibit, and focused-window `presentation-mode` exist. Global keybinding policy remains a gap. |
 
+## Remaining Gap Triage
+
+This table is the working priority list for future window-rule work. It keeps
+blocked compositor/protocol features separate from Triad-native features that
+can be implemented with the current runtime model.
+
+| Priority | Gap | Classification | Decision |
+| :---: | :--- | :--- | :--- |
+| P1 | Terminal swallowing: `isterm`, `noswallow` | Implementable next | Best next code slice. Requires terminal identification, spawned-child association, and restore/unhide behavior, but does not require new River protocol support. |
+| P2 | Unmanaged-global windows: `isunglobal` | Design needed | Keep distinct from sticky, managed overlay, floating, scratchpad, and layer-shell behavior. Do not implement until the lifecycle and render semantics are specified. |
+| P3 | True output serial matching | Protocol/data blocked | Current output identity stores connector name, make/model, and description. Keep `open-on-output` partial until serial data is available. |
+| P3 | Urgent matcher: `is-urgent` | Protocol/data blocked | Native Triad and niri-compatible state currently report urgency as false. Implement only after Triad has a real urgent-window signal. |
+| P3 | Cast-target matcher: `is-window-cast-target` | Protocol/data blocked | No current state or protocol source identifies cast targets. |
+| P3 | Per-window `scroll-factor` | Protocol-shape blocked | River exposes input-device scroll factor, not a current per-window rule primitive in Triad. Revisit only with a clear input policy design. |
+| P3 | Global keybinding policy | Design/protocol needed | Keep separate from shortcut inhibit. Needs a model for app-scoped global shortcuts before adding rules. |
+| P4 | Opacity, shadow, blur, radius, background effects, popup visual effects | Protocol/render blocked | River/Triad currently expose borders, decorations, clips, and protocol surfaces, not compositor scene effects for managed windows. |
+| P4 | Tabbed column display and tab indicator | Out of scope | Do not add rule fields without a real tabbed-column layout model. |
+| P4 | Render-target blocking: `block-out-from` | Out of scope | Screenshot/cast target filtering is not part of the current render model. |
+
 ## Triad-Specific Notes
 
 - Rule matching uses regex search semantics. All matching rules are merged in

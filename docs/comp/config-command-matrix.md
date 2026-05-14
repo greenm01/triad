@@ -290,15 +290,17 @@ KDL config nodes and fields:
   open-on-output=...`.
 - `window-rule`: `match app-id=... title=... is-focused=... is-active=...
   is-active-in-column=... is-floating=... at-startup=...`, matching `exclude` properties,
-  `default-workspace`,
+  `default-workspace`, `default-workspaces`,
   `open-on-output`, `default-column-width`, `scroller-proportion`,
   `scroller-single-proportion`, `default-window-width`, `default-window-height`,
-  `open-named-scratchpad`, `open-on-all-workspaces`,
+  `open-named-scratchpad`, `open-on-all-workspaces`, `open-overlay`,
   `min-width`, `min-height`, `max-width`, `max-height`,
   `open-floating`, `open-focused`, `open-fullscreen`, `open-maximized`,
   `open-maximized-to-edges`, `maximize-policy`, `parented-role`,
-  `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `tiled-state`,
-  `forced-layout`, nested `floating` with ratio or fixed pixel size fields.
+  `dialog-viewport-jump`, `keyboard-shortcuts-inhibit`, `idle-inhibit`,
+  `presentation-mode`, `border`, `focus-ring`, `clip-to-geometry`,
+  `tiled-state`, `forced-layout`, nested `floating` with ratio or fixed pixel
+  size fields, and `default-floating-position`.
 - `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, plus
   `layout`, `mode`, `allow-inhibiting`, and `hotkey-overlay-title`
