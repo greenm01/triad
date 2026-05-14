@@ -9,6 +9,7 @@ type
   Config* = object
     layout*: LayoutConfig
     workspaces*: WorkspaceConfig
+    outputRules*: seq[OutputRule]
     tagRules*: seq[TagRule]
     windowRules*: seq[WindowRule]
     startupCommands*: seq[seq[string]]
@@ -937,6 +938,24 @@ proc loadConfig*(path: string): Config =
           except CatchableError as e:
             warn "Ignoring invalid workspace config field",
               field = child.name, error = e.msg
+      elif node.name == "output" and node.args.len > 0:
+        try:
+          var rule = OutputRule(target: node.args[0].kString().strip())
+          for child in node.children:
+            try:
+              if child.name == "focus-at-startup":
+                rule.focusAtStartup = child.childFlagEnabled()
+              elif child.name == "workspaces":
+                rule.workspaceSlots = child.workspaceTargets()
+              else:
+                warn "Ignoring unsupported output rule field", field = child.name
+            except CatchableError as e:
+              warn "Ignoring invalid output rule field",
+                field = child.name, error = e.msg
+          if rule.target.len > 0:
+            result.outputRules.add(rule)
+        except CatchableError as e:
+          warn "Ignoring invalid output rule", error = e.msg
       elif node.name == "workspace-rules":
         for child in node.children:
           if child.name == "workspace" and child.args.len > 0:

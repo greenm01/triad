@@ -250,6 +250,11 @@ type
     defaultLayout*: LayoutMode
     openOnOutput*: string
 
+  OutputRule* = object
+    target*: string
+    focusAtStartup*: bool
+    workspaceSlots*: seq[uint32]
+
   WorkspaceConfig* = object
     defaultCount*: uint32
     defaultLayout*: LayoutMode

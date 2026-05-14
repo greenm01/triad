@@ -73,6 +73,35 @@ proc restoreWorkspaceOutputsFor*(model: var Model, outputId: OutputId): bool =
       else:
         result = model.setOutputTag(outputId, tagId) or result
 
+proc focusStartupOutput*(model: var Model, outputId: OutputId): bool =
+  if outputId == NullOutputId or model.outputData(outputId).isNone:
+    return false
+
+  result = model.setActiveOutput(outputId)
+  var tagId = model.outputActiveTag(outputId)
+  if tagId == NullTagId:
+    for candidateTagId, mappedOutputId in model.tagOutputs.pairs:
+      if mappedOutputId == outputId:
+        tagId = candidateTagId
+        break
+  if tagId != NullTagId and model.tagData(tagId).isSome:
+    result = model.setActiveWorkspace(tagId) or result
+
+proc applyStartupOutputFocus*(model: var Model): bool =
+  if model.outputStartupFocusResolved:
+    return false
+  for rule in model.outputRules:
+    if rule.focusAtStartup and rule.target.len > 0:
+      let outputId = model.outputForTarget(rule.target)
+      if outputId != NullOutputId:
+        result = model.focusStartupOutput(outputId)
+        model.outputStartupFocusResolved = true
+        return
+
+proc syncConfiguredOutputState*(model: var Model, outputId: OutputId): bool =
+  result = model.restoreWorkspaceOutputsFor(outputId)
+  result = model.applyStartupOutputFocus() or result
+
 proc syncPrimaryOutput*(model: var Model) =
   if model.outputsCount() == 0:
     model.primaryOutput = NullOutputId
@@ -107,7 +136,7 @@ proc setOutputDimensionsForExternal*(
   result = model.setOutputDimensions(outputId, w, h)
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
-  result = model.restoreWorkspaceOutputsFor(outputId) or result
+  result = model.syncConfiguredOutputState(outputId) or result
 
 proc setOutputNameForExternal*(
     model: var Model, externalId: ExternalOutputId, name: string
@@ -119,7 +148,7 @@ proc setOutputNameForExternal*(
   result = model.setOutputName(outputId, name.strip())
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
-  result = model.restoreWorkspaceOutputsFor(outputId) or result
+  result = model.syncConfiguredOutputState(outputId) or result
 
 proc setOutputIdentityForExternal*(
     model: var Model, externalId: ExternalOutputId, make, modelName: string
@@ -131,7 +160,7 @@ proc setOutputIdentityForExternal*(
   result = model.setOutputIdentity(outputId, make.strip(), modelName.strip())
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
-  result = model.restoreWorkspaceOutputsFor(outputId) or result
+  result = model.syncConfiguredOutputState(outputId) or result
 
 proc setOutputDescriptionForExternal*(
     model: var Model, externalId: ExternalOutputId, description: string
@@ -143,7 +172,7 @@ proc setOutputDescriptionForExternal*(
   result = model.setOutputDescription(outputId, description.strip())
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
-  result = model.restoreWorkspaceOutputsFor(outputId) or result
+  result = model.syncConfiguredOutputState(outputId) or result
 
 proc setOutputPositionForExternal*(
     model: var Model, externalId: ExternalOutputId, x, y: int32
@@ -155,7 +184,7 @@ proc setOutputPositionForExternal*(
   result = model.setOutputPosition(outputId, x, y)
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
-  result = model.restoreWorkspaceOutputsFor(outputId) or result
+  result = model.syncConfiguredOutputState(outputId) or result
 
 proc setOutputUsableForExternal*(
     model: var Model, externalId: ExternalOutputId, x, y, w, h: int32
@@ -167,7 +196,7 @@ proc setOutputUsableForExternal*(
   result = model.setOutputUsable(outputId, x, y, w, h)
   model.syncPrimaryOutput()
   discard model.syncPrimaryOutputTag()
-  result = model.restoreWorkspaceOutputsFor(outputId) or result
+  result = model.syncConfiguredOutputState(outputId) or result
 
 proc removeOutputForExternal*(
     model: var Model, externalId: ExternalOutputId

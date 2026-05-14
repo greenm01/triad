@@ -32,6 +32,13 @@ workspaces {
   default-count 4
   default-layout "scroller"
 }
+output "HDMI-A-1" {
+  focus-at-startup
+  workspaces 2 4 -1 2
+}
+output "DP-1" {
+  workspaces "invalid"
+}
 workspace-rules {
   workspace 1 name="term"
   workspace 2 name="web" default-layout="grid" open-on-output="HDMI-A-1"
@@ -217,6 +224,12 @@ bindings {
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
     check config.workspaces.defaultLayout == LayoutMode.Scroller
+    check config.outputRules.len == 2
+    check config.outputRules[0].target == "HDMI-A-1"
+    check config.outputRules[0].focusAtStartup
+    check config.outputRules[0].workspaceSlots == @[2'u32, 4'u32]
+    check config.outputRules[1].target == "DP-1"
+    check config.outputRules[1].workspaceSlots.len == 0
     check config.tagRules.len == 2
     check config.tagRules[0].tagId == 1
     check config.tagRules[0].name == "term"

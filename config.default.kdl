@@ -51,6 +51,11 @@ workspaces {
     default-layout "scroller"
 }
 
+// output "HDMI-A-1" {
+//     focus-at-startup
+//     workspaces 2 4
+// }
+
 workspace-rules {
     // Workspaces 1 and 3 inherit the global scroller default.
     workspace 1 name="main"

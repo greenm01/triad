@@ -177,6 +177,13 @@ proc tagRuleData(rule: rv.TagRule): TagRuleData =
     openOnOutput: rule.openOnOutput.strip(),
   )
 
+proc outputRuleData(rule: rv.OutputRule): OutputRuleData =
+  OutputRuleData(
+    target: rule.target.strip(),
+    focusAtStartup: rule.focusAtStartup,
+    workspaceSlots: rule.workspaceSlots,
+  )
+
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
@@ -206,6 +213,9 @@ proc applyConfig*(model: var Model, config: Config) =
   for tagId in pinnedTagOutputs:
     discard model.clearTagHomeOutput(tagId)
 
+  model.outputRules = @[]
+  for rule in config.outputRules:
+    model.outputRules.add(rule.outputRuleData())
   model.tagRules = @[]
   for rule in config.tagRules:
     model.tagRules.add(rule.tagRuleData())
@@ -287,6 +297,16 @@ proc applyConfig*(model: var Model, config: Config) =
   for slot in 1'u32 .. model.defaultWorkspaceCount:
     discard model.ensureWorkspaceSlot(slot)
 
+  for rule in model.outputRules:
+    if rule.target.len > 0:
+      for slot in rule.workspaceSlots:
+        let tagId = model.ensureWorkspaceSlot(slot)
+        if tagId != NullTagId:
+          discard model.setTagHomeOutput(tagId, rule.target, pinned = true)
+          let outputId = model.outputForTarget(rule.target)
+          if outputId != NullOutputId:
+            discard model.setTagOutput(tagId, outputId)
+
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
     let tagOpt = model.tagData(tagId)
@@ -319,3 +339,4 @@ proc applyConfig*(model: var Model, config: Config) =
 
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()
+  discard model.applyStartupOutputFocus()

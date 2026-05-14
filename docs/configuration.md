@@ -70,6 +70,7 @@ The supported KDL nodes are:
 - `layout`: gaps, column/window proportions, master settings, borders,
   scroller centering, animation settings, smart gaps, and layout cycle.
 - `workspaces`: default workspace floor and fallback default layout.
+- `output`: startup focus and workspace affinity by output identity.
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   all-workspace sticky behavior, managed overlay behavior, focus behavior,
@@ -482,6 +483,11 @@ workspaces {
   default-layout "scroller"
 }
 
+output "HDMI-A-1" {
+  focus-at-startup
+  workspaces 2 4
+}
+
 workspace-rules {
   workspace 1 name="term"
   workspace 2 name="web"
@@ -503,6 +509,31 @@ workspace-rules {
   description matching as window-rule `open-on-output`. Dynamic output
   reconnects restore the workspace to that output when the target reappears.
 - Workspace rules beyond `default-count` are valid dynamic workspace templates.
+
+## Output Rules
+
+Output rules use Niri-style top-level output blocks for output-centered startup
+and workspace placement policy:
+
+```kdl
+output "HDMI-A-1" {
+  focus-at-startup
+  workspaces 2 4
+}
+```
+
+- `output "<target>"`: matches the same connector, shell fallback,
+  make/model/unknown-serial identity, or description strings used by
+  `open-on-output`.
+- `focus-at-startup`: focuses the first connected matching output during the
+  initial Triad startup only. Config reloads and later reconnects do not steal
+  focus.
+- `workspaces <n>...`: pins the listed workspace slots to this output target.
+  Later output blocks win for the same slot, and explicit
+  `workspace-rules` `open-on-output` entries override output-rule affinity.
+- Monitor mode, scale, transform, position, and power fields are not supported
+  until Triad has an output-management protocol path for those compositor
+  settings.
 
 ## Recent Windows
 

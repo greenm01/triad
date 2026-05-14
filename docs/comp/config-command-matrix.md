@@ -33,7 +33,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Done | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Implemented with in-place include expansion, recursion safety, include hot reload watching, `TRIAD_CONFIG`, `--config`, `-c`, and standalone validation. | Keep validating against real configs while future config work expands. |
 | Done | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Implemented through River input, XKB, and libinput config protocols for keyboard repeat, XKB keymaps/options, lock state, and basic mouse/touchpad/trackpoint/trackball settings. | Keep validating against live hardware; keyboard layout cycling remains separate command work. |
-| P1 | Output rules | `output "name" { ... }` or `output-rules { output ... }` | Niri `output`; Mango `monitorrule` | Triad tracks output identity and supports workspace/output affinity, but has no output layout or mode config. | Add identity-matched output rules for focus/workspace affinity and document which mode/scale/position fields require output-management protocol support. |
+| Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | P2 | Binding event types | `axis-bind`, then `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key and pointer button bindings exist; global wheel, gesture, and hardware switch bindings are missing. | Add config-level axis bindings for wheel-driven commands using existing pointer-axis event handling. |
 | P2 | Session environment | `environment { KEY "value"; KEY null }` | Niri `environment`; Mango `env` | Triad startup/spawn commands inherit the daemon environment only. | Apply configured variables to Triad-spawned processes and clearly document that this does not retroactively change external systemd/dbus-launched processes. |
 | P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Add the smallest user-visible polish items first: cursor hide timeout and config reload notification controls. |
@@ -47,6 +47,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Config lifecycle | Config validation | `mango -c ... -p` | | `triad validate-config` | X | Validates KDL syntax, includes, and strict window-rule regex checks without starting the daemon. |
 | Config lifecycle | Config includes | `source`, `source-optional` | Shell script can source files | `include`, `include optional=#true` | X | Includes expand in place, resolve relative to the parent file, reject recursion, and participate in hot reload after a successful load. |
 | Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config in-process; full Triad reload snapshots state and restarts through the session manager path. |
+| Config lifecycle | Reload notifications | | Shell/WM policy | | | Triad logs reload behavior but has no user-facing config for success/error notifications. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
 | Startup | Environment variables | `env` | Init script environment | | | Triad does not set arbitrary env vars from config. |
 | Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
@@ -73,10 +74,11 @@ They are grouped by user-facing capability rather than by implementation module.
 | Input | Tap/click/drag settings | `tap_to_click`, `click_method`, `tap_and_drag`, `drag_lock` | libinput config requests | `input.touchpad.tap`, `click-method`, `drag`, `drag-lock` | X | Touchpad-only settings are gated by libinput capability reports. |
 | Input | Left-handed/middle emulation | `left_handed`, `middle_button_emulation` | libinput config requests | `input.*.left-handed`, `input.*.middle-emulation` | X | Supported for pointer class sections. |
 | Input | Scroll factor/button/method | `axis_scroll_factor`, `scroll_button`, `scroll_method` | input/libinput config requests | `input.*.scroll-factor`, `scroll-button`, `scroll-method` | X | Scroll method/button uses libinput config; scroll factor uses River input device config. |
-| Output | Monitor rules | `monitorrule` | Init script or external tools | | | Triad tracks River outputs but has no monitor layout config. |
+| Output | Monitor rules | `monitorrule` | Init script or external tools | `output "name"` | X | Triad supports output startup focus and workspace affinity. Monitor mode, scale, transform, position, and power remain unavailable without output-management protocol support. |
 | Output | Monitor power | `disable_monitor`, `enable_monitor`, `toggle_monitor` | External output management | | | Not exposed by Triad. |
 | Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports global vsync/async presentation mode. |
 | Output | Cursor theme/size/find | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size; shake-to-find }` | X | Applied through River seat protocol. Shake-to-find temporarily reapplies the configured theme at a larger size. |
+| Output | Cursor inactivity hiding | `cursor_hide_timeout` | Compositor/seat policy | | | Triad can configure cursor theme, size, and shake-to-find, but does not hide the cursor after inactivity or typing. |
 | Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
 | Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad follows the moved window and also has `move-to-workspace`. |
@@ -84,8 +86,8 @@ They are grouped by user-facing capability rather than by implementation module.
 | Tags | Rename tags | | WM policy | `rename-tag`, `workspace-rules { workspace ... name=... }` | X | Runtime commands use tags; config uses workspace language. |
 | Tags | Tag rules | `tagrule` | WM policy | `workspace-rules { workspace ... }` | X | Triad supports workspace name and default layout rules backed by internal tags. |
 | Monitor focus | Focus monitor | `focusmon` | WM policy | `focus-output` | X | Accepts connector/identity targets plus `left`, `right`, `up`, `down`, `next`, and `previous`. |
-| Monitor focus | Move workspace/window to monitor | `tagmon`, `toggletagmon` | WM policy | `move-workspace-to-output`, `move-to-output` | X | Workspaces keep output affinity and restore to reconnected outputs. |
-| Monitor focus | Move window to monitor | `tagmon`, `tagcrossmon`, `viewcrossmon` | WM policy | | | No Triad config command. |
+| Monitor focus | Move workspace to monitor | `tagmon`, `toggletagmon` | WM policy | `move-workspace-to-output` | X | Workspaces keep output affinity and restore to reconnected outputs. |
+| Monitor focus | Move window to monitor | `tagmon`, `tagcrossmon`, `viewcrossmon` | WM policy | `move-to-output` | X | Moves the focused window to the workspace currently visible on the target output. |
 | Focus | Directional focus | `focusdir` | `river_seat_v1.focus_window` primitive | `focus-left/right/up/down` | X | Triad maps to model focus commands. |
 | Focus | Stack/next/previous focus | `focusstack` | WM policy | `focus-next`, `focus-prev` | X | |
 | Focus | Last focus | `focuslast` | WM policy | `focus-last` | X | |
@@ -302,6 +304,7 @@ KDL config nodes and fields:
   `scroller-prefer-center`, `enable-animations`, `animation-speed`,
   `smart-gaps`, `layout-cycle`.
 - `workspaces`: `default-count`, `default-layout`.
+- `output`: `focus-at-startup`, `workspaces`.
 - `workspace-rules`: `workspace <id> name=... default-layout=...
   open-on-output=...`.
 - `window-rule`: `match app-id=... title=... is-focused=... is-active=...
@@ -326,7 +329,7 @@ KDL config nodes and fields:
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
-- `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`.
+- `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`, `hot-corners`.
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.
@@ -348,7 +351,7 @@ Text IPC and bind commands:
   `focus-occupied-tag-right`, `focus-column-first`,
   `focus-column-last`, `focus-window-or-workspace-up`,
   `focus-window-or-workspace-down`, `focus-window`,
-  `focus-workspace`, `focus-tag`, `focus-shell-ui`,
+  `focus-workspace`, `focus-tag`, `focus-output`, `focus-shell-ui`,
   `recent-window-next`, `recent-window-prev`, `recent-window-confirm`,
   `recent-window-cancel`, `recent-window-first`, `recent-window-last`,
   `recent-window-scope`, `recent-window-cycle-scope`,
@@ -372,8 +375,9 @@ Text IPC and bind commands:
   `adjust-master-ratio`, `maximize-column`, `resize-width`, `resize-height`,
   `set-column-width`, `adjust-gaps`, `toggle-gaps`, `zoom`.
 - Tags, movement, and groups: `move-to-tag-left`, `move-to-tag-right`,
-  `move-to-tag`, `move-to-workspace`, `swap-to-tag`, `rename-tag`,
-  `move-floating`, `resize-floating`, `consume-window`,
+  `move-to-tag`, `move-to-workspace`, `move-workspace-to-output`,
+  `move-to-output`, `swap-to-tag`, `rename-tag`, `move-floating`,
+  `resize-floating`, `consume-window`,
   `expel-window`, `move-column-left`, `move-column-right`,
   `move-column-to-first`, `move-column-to-last`, `move-window-left`,
   `move-window-right`, `move-window-up`, `move-window-down`,

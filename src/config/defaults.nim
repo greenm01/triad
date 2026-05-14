@@ -59,6 +59,11 @@ screenshot {
     show-pointer #false
 }
 
+// output "HDMI-A-1" {
+//     focus-at-startup
+//     workspaces 2 4
+// }
+
 workspace-rules {
     workspace 1 name="term"
     workspace 2 name="web"

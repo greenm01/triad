@@ -49,6 +49,109 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.workspaceOutput(tagId) == outputId
     check model.tagHomeOutputTargets[tagId] == "HDMI-A-1"
 
+  test "Output rules pin workspace home output after output appears":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules: @[OutputRule(target: "HDMI-A-1", workspaceSlots: @[2'u32])],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+
+    let tagId = model.tagForSlot(2)
+    let outputId = model.outputForExternal(ExternalOutputId(2))
+    check model.workspaceOutput(tagId) == outputId
+    check model.tagHomeOutputTargets[tagId] == "HDMI-A-1"
+
+  test "Workspace rules override output rule workspace affinity":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules: @[OutputRule(target: "HDMI-A-1", workspaceSlots: @[2'u32])],
+        tagRules: @[TagRule(tagId: 2, openOnOutput: "DP-1")],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 900, height: 600)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-1"))
+
+    let tagId = model.tagForSlot(2)
+    let outputId = model.outputForExternal(ExternalOutputId(3))
+    check model.workspaceOutput(tagId) == outputId
+    check model.tagHomeOutputTargets[tagId] == "DP-1"
+
+  test "Output focus-at-startup focuses configured output once":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules:
+          @[
+            OutputRule(
+              target: "HDMI-A-1", focusAtStartup: true, workspaceSlots: @[2'u32]
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+
+    let outputId = model.outputForExternal(ExternalOutputId(2))
+    check model.outputStartupFocusResolved
+    check model.activeOutput == outputId
+    check model.activeSlot == 2
+
+  test "Output focus-at-startup does not run on config reload":
+    var state =
+      initRuntimeStateFromConfig(Config(workspaces: WorkspaceConfig(defaultCount: 3)))
+    state.model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    state.model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "eDP-1")
+    )
+    state.model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    state.model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    let originalOutput = state.model.activeOutput
+
+    discard state.applyRuntimeConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules: @[OutputRule(target: "HDMI-A-1", focusAtStartup: true)],
+      )
+    )
+
+    check state.model.outputStartupFocusResolved
+    check state.model.activeOutput == originalOutput
+
   test "Output commands focus and move active workspace by target":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

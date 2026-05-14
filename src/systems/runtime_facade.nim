@@ -27,6 +27,7 @@ proc applyRuntimeLayoutProjection*(state: var TriadRuntimeState): LayoutProjecti
   state.model.applyLayoutProjection(result)
 
 proc applyRuntimeConfig*(state: var TriadRuntimeState, config: Config): bool =
+  state.model.outputStartupFocusResolved = true
   state.model.applyConfig(config)
   true
 

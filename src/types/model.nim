@@ -258,6 +258,11 @@ type
     defaultLayout*: LayoutMode
     openOnOutput*: string
 
+  OutputRuleData* = object
+    target*: string
+    focusAtStartup*: bool
+    workspaceSlots*: seq[uint32]
+
   RestoredWindowData* = object
     slot*: uint32
     parentExternalId*: ExternalWindowId
@@ -368,6 +373,7 @@ type
     activeSlot*: uint32
     activeOutput*: OutputId
     primaryOutput*: OutputId
+    outputStartupFocusResolved*: bool
     defaultWorkspaceCount*: uint32
     defaultWorkspaceLayout*: LayoutMode
     visibleSlots*: seq[uint32]
@@ -443,6 +449,7 @@ type
     windowMenuCommand*: seq[string]
     allowExitSession*: bool
     startupWindowRulesActive*: bool
+    outputRules*: seq[OutputRuleData]
     windowRules*: seq[WindowRuleData]
     tagRules*: seq[TagRuleData]
     restoreActiveSlot*: uint32
