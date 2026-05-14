@@ -6,9 +6,9 @@ import ../config/[parser, reload_policy]
 import ../ipc/[quickshell_compat, socket]
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
 import
-  bindings_runtime, effects_runtime, live_restore_runtime, manage_requests,
-  message_queue, process_runner, quickshell_runner, registry_runtime, reload_runtime,
-  render_runtime, state
+  bindings_runtime, effects_runtime, input_runtime, live_restore_runtime,
+  manage_requests, message_queue, process_runner, quickshell_runner, registry_runtime,
+  reload_runtime, render_runtime, state
 from ../types/runtime_values import
   nil, BindingMode, KeyBindingConfig, PointerBindingConfig, PointerOpKind,
   PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
@@ -285,6 +285,9 @@ proc main*() =
       daemon.configWatchPaths = @[daemon.configPath]
       loadConfig(daemon.configPath)
   daemon.runtimeState = initRuntimeStateFromConfig(initialConfig)
+  daemon.installInputRuntimeHooks()
+  daemon.configureXkbKeymap("initial config")
+  daemon.applyAllInputConfig("initial config")
   info "Initial config loaded", path = daemon.configPath
 
   daemon.pendingLiveRestore = loadLiveRestoreState(daemon.pendingLiveRestorePath)

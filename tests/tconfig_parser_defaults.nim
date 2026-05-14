@@ -94,6 +94,55 @@ screenshot {
   clipboard-command "wl-copy --type image/png"
   show-pointer #true
 }
+input {
+  keyboard {
+    repeat-rate 40
+    repeat-delay 300
+    numlock
+    capslock #false
+    xkb {
+      rules "evdev"
+      model "pc105"
+      layout "us,us"
+      variant ",dvorak"
+      options "grp:alt_shift_toggle,ctrl:nocaps"
+    }
+  }
+  mouse {
+    natural-scroll
+    accel-profile "flat"
+    accel-speed -0.25
+    scroll-method "on-button-down"
+    scroll-button 274
+    scroll-button-lock
+    left-handed #false
+    middle-emulation
+    scroll-factor 1.5
+  }
+  touchpad {
+    tap
+    tap-button-map "left-middle-right"
+    drag #false
+    drag-lock
+    dwt
+    dwtp #false
+    natural-scroll
+    click-method "clickfinger"
+    accel-profile "adaptive"
+    accel-speed 0.2
+    scroll-method "two-finger"
+    disabled-on-external-mouse
+  }
+  trackpoint {
+    off #false
+    scroll-method "on-button-down"
+    middle-emulation
+  }
+  trackball {
+    accel-profile "none"
+    scroll-factor 0.75
+  }
+}
 screen-lock { command "swaylock" }
 window-menu-command "bemenu"
 scratchpad {
@@ -258,6 +307,74 @@ bindings {
     check config.screenshot.regionSelectorCommand == "slurp -d"
     check config.screenshot.clipboardCommand == "wl-copy --type image/png"
     check config.screenshot.showPointer
+    check config.input.keyboard.repeatRateSet
+    check config.input.keyboard.repeatRate == 40
+    check config.input.keyboard.repeatDelaySet
+    check config.input.keyboard.repeatDelay == 300
+    check config.input.keyboard.numlockSet
+    check config.input.keyboard.numlock
+    check config.input.keyboard.capslockSet
+    check not config.input.keyboard.capslock
+    check config.input.keyboard.xkb.rulesSet
+    check config.input.keyboard.xkb.rules == "evdev"
+    check config.input.keyboard.xkb.modelSet
+    check config.input.keyboard.xkb.model == "pc105"
+    check config.input.keyboard.xkb.layoutSet
+    check config.input.keyboard.xkb.layout == "us,us"
+    check config.input.keyboard.xkb.variantSet
+    check config.input.keyboard.xkb.variant == ",dvorak"
+    check config.input.keyboard.xkb.optionsSet
+    check config.input.keyboard.xkb.options == "grp:alt_shift_toggle,ctrl:nocaps"
+    check config.input.mouse.naturalScrollSet
+    check config.input.mouse.naturalScroll
+    check config.input.mouse.accelProfileSet
+    check config.input.mouse.accelProfile == InputAccelProfile.AccelFlat
+    check config.input.mouse.accelSpeedSet
+    check config.input.mouse.accelSpeed == -0.25'f32
+    check config.input.mouse.scrollMethodSet
+    check config.input.mouse.scrollMethod == InputScrollMethod.ScrollOnButtonDown
+    check config.input.mouse.scrollButtonSet
+    check config.input.mouse.scrollButton == 274'u32
+    check config.input.mouse.scrollButtonLockSet
+    check config.input.mouse.scrollButtonLock
+    check config.input.mouse.leftHandedSet
+    check not config.input.mouse.leftHanded
+    check config.input.mouse.middleEmulationSet
+    check config.input.mouse.middleEmulation
+    check config.input.mouse.scrollFactorSet
+    check config.input.mouse.scrollFactor == 1.5'f32
+    check config.input.touchpad.tapSet
+    check config.input.touchpad.tap
+    check config.input.touchpad.tapButtonMapSet
+    check config.input.touchpad.tapButtonMap == InputButtonMap.ButtonMapLeftMiddleRight
+    check config.input.touchpad.dragSet
+    check not config.input.touchpad.drag
+    check config.input.touchpad.dragLockSet
+    check config.input.touchpad.dragLock
+    check config.input.touchpad.dwtSet
+    check config.input.touchpad.dwt
+    check config.input.touchpad.dwtpSet
+    check not config.input.touchpad.dwtp
+    check config.input.touchpad.pointer.naturalScrollSet
+    check config.input.touchpad.pointer.naturalScroll
+    check config.input.touchpad.clickMethodSet
+    check config.input.touchpad.clickMethod == InputClickMethod.ClickFinger
+    check config.input.touchpad.pointer.accelProfileSet
+    check config.input.touchpad.pointer.accelProfile == InputAccelProfile.AccelAdaptive
+    check config.input.touchpad.pointer.accelSpeedSet
+    check config.input.touchpad.pointer.accelSpeed == 0.2'f32
+    check config.input.touchpad.pointer.scrollMethodSet
+    check config.input.touchpad.pointer.scrollMethod == InputScrollMethod.ScrollTwoFinger
+    check config.input.touchpad.disabledOnExternalMouseSet
+    check config.input.touchpad.disabledOnExternalMouse
+    check config.input.trackpoint.offSet
+    check not config.input.trackpoint.off
+    check config.input.trackpoint.scrollMethod == InputScrollMethod.ScrollOnButtonDown
+    check config.input.trackpoint.middleEmulation
+    check config.input.trackball.accelProfileSet
+    check config.input.trackball.accelProfile == InputAccelProfile.AccelNone
+    check config.input.trackball.scrollFactorSet
+    check config.input.trackball.scrollFactor == 0.75'f32
     check config.screenLock.command == @["swaylock"]
     check config.windowMenu.command == @["bemenu"]
     check config.scratchpad.widthRatio == 0.7'f32

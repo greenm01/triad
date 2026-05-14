@@ -84,6 +84,37 @@ screenshot {
     show-pointer #false
 }
 
+input {
+    keyboard {
+        // repeat-rate 40
+        // repeat-delay 300
+        // numlock
+        xkb {
+            // layout "us"
+            // options "ctrl:nocaps"
+        }
+    }
+    mouse {
+        // accel-profile "flat"
+        // accel-speed 0.0
+        // natural-scroll #false
+    }
+    touchpad {
+        // tap
+        // natural-scroll
+        // click-method "clickfinger"
+        // scroll-method "two-finger"
+    }
+    trackpoint {
+        // scroll-method "on-button-down"
+        // middle-emulation
+    }
+    trackball {
+        // accel-profile "none"
+        // scroll-factor 0.75
+    }
+}
+
 screen-lock {
     command "sh" "-lc" "command -v lockme >/dev/null 2>&1 && exec lockme; command -v swaylock >/dev/null 2>&1 && exec swaylock -f; command -v gtklock >/dev/null 2>&1 && exec gtklock; exit 0"
 }

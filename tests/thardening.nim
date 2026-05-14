@@ -1,7 +1,9 @@
 import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
-import ../src/daemon/[bindings_runtime, cursor_shake, reload_runtime]
+import
+  ../src/daemon/
+    [bindings_runtime, cursor_shake, input_device_classification, reload_runtime]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
@@ -112,6 +114,18 @@ suite "Crash hardening":
     check state.observeCursorMotion(disabled, 20, 0, 10) == CursorShakeAction.Restore
     check not state.enlarged
     check large.cursorShakeSize() == 512'u32
+
+  test "input pointer classification prefers explicit names and touchpad support":
+    check pointerClassFor("Kensington Expert Trackball", 0, false, false) ==
+      PointerDeviceClass.Trackball
+    check pointerClassFor("TPPS/2 IBM TrackPoint", 0, false, false) ==
+      PointerDeviceClass.Trackpoint
+    check pointerClassFor("ELAN Touchpad", 0, false, false) ==
+      PointerDeviceClass.Touchpad
+    check pointerClassFor("Generic pointer", 2, false, false) ==
+      PointerDeviceClass.Touchpad
+    check pointerClassFor("Logitech USB Receiver", 0, false, false) ==
+      PointerDeviceClass.Mouse
 
   test "config reload defers binding reconfigure to manage":
     let base = getTempDir() / "triad-config-reload-" & $getCurrentProcessId()

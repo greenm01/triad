@@ -10,7 +10,7 @@ import ../types/runtime_values
 from ../types/runtime_values import WindowId
 import ../utils/process_tree
 import
-  bindings_runtime, live_restore_runtime, manage_requests, message_queue,
+  bindings_runtime, input_runtime, live_restore_runtime, manage_requests, message_queue,
   protocol_surface_runtime, river_outputs_runtime, river_windows, state, wayland_helpers
 
 proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
@@ -51,6 +51,7 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
 
   daemon.destroyBindings()
   daemon.destroyXkbSeats()
+  daemon.destroyInputRuntime()
   daemon.xkbSeatAteUnbound.clear()
 
   let seats = daemon.seatPointers

@@ -223,6 +223,7 @@ proc applyConfig*(model: var Model, config: Config) =
     model.quickshell.command = DefaultQuickshellCommand
   model.terminal = config.terminal
   model.screenshot = config.screenshot
+  model.input = config.input
   if model.screenshot.directory.strip().len == 0:
     model.screenshot.directory = DefaultScreenshotDirectory
   if model.screenshot.filenamePrefix.strip().len == 0:

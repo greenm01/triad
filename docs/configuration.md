@@ -81,7 +81,8 @@ The supported KDL nodes are:
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
-- `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`, `cursor`.
+- `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`,
+  `input`, `cursor`.
 - Top-level flags and settings: `presentation-mode`, `allow-exit-session`,
   `protocol-surfaces`, and `hotkey-overlay`.
 
@@ -382,6 +383,76 @@ window-rule {
   and edge maximize wins over full-width column.
 - `maximize-policy` applies after a window exists. It does not change
   `open-fullscreen`, `open-maximized`, or `open-maximized-to-edges`.
+
+## Input Devices
+
+Triad can apply keyboard and libinput device settings through River's input,
+XKB, and libinput configuration protocols. Omitted fields preserve compositor
+and device defaults.
+
+```kdl
+input {
+  keyboard {
+    repeat-rate 40
+    repeat-delay 300
+    numlock
+    capslock #false
+    xkb {
+      rules "evdev"
+      model "pc105"
+      layout "us"
+      variant ""
+      options "ctrl:nocaps"
+    }
+  }
+
+  mouse {
+    natural-scroll #false
+    accel-profile "flat"
+    accel-speed 0.0
+    scroll-factor 1.0
+  }
+
+  touchpad {
+    tap
+    natural-scroll
+    click-method "clickfinger"
+    scroll-method "two-finger"
+    disabled-on-external-mouse
+  }
+
+  trackpoint {
+    scroll-method "on-button-down"
+    middle-emulation
+  }
+
+  trackball {
+    accel-profile "none"
+    scroll-factor 0.75
+  }
+}
+```
+
+- `keyboard.repeat-rate <hz>` and `keyboard.repeat-delay <ms>` configure key
+  repeat for keyboards exposed by River input management.
+- `keyboard.numlock #true|#false` and `keyboard.capslock #true|#false`
+  request initial lock state.
+- `keyboard.xkb` supports `rules`, `model`, `layout`, `variant`, and
+  `options`. Triad builds the keymap with libxkbcommon and sends it to River;
+  binding-level `layout=<index>` still controls per-binding layout overrides.
+- Pointer sections are `mouse`, `touchpad`, `trackpoint`, and `trackball`.
+  Triad applies the matching section to devices by River/libinput capabilities;
+  trackpoint and trackball selection also uses common device-name matching.
+- Common pointer fields are `off`, `natural-scroll`, `accel-profile`
+  (`"none"`, `"flat"`, `"adaptive"`), `accel-speed -1.0..1.0`,
+  `scroll-method` (`"no-scroll"`, `"two-finger"`, `"edge"`,
+  `"on-button-down"`), `scroll-button <button-code>`,
+  `scroll-button-lock`, `left-handed`, `middle-emulation`, and
+  `scroll-factor 0.0..100.0`.
+- Touchpad-only fields are `tap`, `tap-button-map`
+  (`"left-right-middle"` or `"left-middle-right"`), `drag`, `drag-lock`,
+  `dwt`, `dwtp`, `click-method` (`"button-areas"` or `"clickfinger"`), and
+  `disabled-on-external-mouse`.
 
 ## Cursor
 

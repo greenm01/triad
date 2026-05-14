@@ -159,6 +159,8 @@ proc applyConfigReload*(
     return false
 
   daemon.quickshellState.spawnPending = false
+  if daemon.inputConfigReloadHook != nil:
+    daemon.inputConfigReloadHook(addr daemon, "config reload")
   daemon.syncIdleInhibitFromRuntime()
   writeBehaviorEvent(
     "config_reload_applied",

@@ -2,14 +2,17 @@ import std/tables
 import chronicles
 import wayland/native/client
 import protocols/river/client as river
+import protocols/river_input_management/client as riverInput
+import protocols/river_libinput_config/client as riverLibinput
 import protocols/river_layer_shell/client as riverLayer
+import protocols/river_xkb_config/client as riverXkbConfig
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import ../core/msg
 import
-  bindings_runtime, idle_inhibit_runtime, manage_requests, message_queue,
+  bindings_runtime, idle_inhibit_runtime, input_runtime, manage_requests, message_queue,
   protocol_surface_runtime, river_manager_runtime, river_outputs_runtime, state
 
 proc handleGlobal*(
@@ -93,6 +96,28 @@ proc handleGlobal*(
     daemon.bindingsConfigured = false
     daemon[].requestManage("xkb bindings discovered")
     info "Bound to river_xkb_bindings_v1", name = name, advertisedVersion = version
+  elif interfaceName == "river_input_manager_v1":
+    let manager = cast[ptr riverInput.RiverInputManagerV1](registry.`bind`(
+      name, riverInput.river_input_manager_v1_interface.addr, min(version, 2'u32)
+    ))
+    daemon.riverInputManager = cast[pointer](manager)
+    discard manager.addListener(inputManagerListener.addr, daemonData(daemon[]))
+    info "Bound to river_input_manager_v1", name = name, advertisedVersion = version
+  elif interfaceName == "river_xkb_config_v1":
+    let config = cast[ptr riverXkbConfig.RiverXkbConfigV1](registry.`bind`(
+      name, riverXkbConfig.river_xkb_config_v1_interface.addr, min(version, 2'u32)
+    ))
+    daemon.riverXkbConfig = cast[pointer](config)
+    discard config.addListener(xkbConfigListener.addr, daemonData(daemon[]))
+    daemon[].configureXkbKeymap("xkb config discovered")
+    info "Bound to river_xkb_config_v1", name = name, advertisedVersion = version
+  elif interfaceName == "river_libinput_config_v1":
+    let config = cast[ptr riverLibinput.RiverLibinputConfigV1](registry.`bind`(
+      name, riverLibinput.river_libinput_config_v1_interface.addr, min(version, 2'u32)
+    ))
+    daemon.riverLibinputConfig = cast[pointer](config)
+    discard config.addListener(libinputConfigListener.addr, daemonData(daemon[]))
+    info "Bound to river_libinput_config_v1", name = name, advertisedVersion = version
   elif interfaceName == "wp_single_pixel_buffer_manager_v1":
     daemon.singlePixelManager = cast[ptr singlepixel.WpSinglePixelBufferManagerV1](registry.`bind`(
       name,

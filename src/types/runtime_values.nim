@@ -337,6 +337,96 @@ type
     size*: uint32
     shakeToFind*: bool
 
+  InputAccelProfile* {.pure.} = enum
+    AccelNone
+    AccelFlat
+    AccelAdaptive
+
+  InputScrollMethod* {.pure.} = enum
+    ScrollNone
+    ScrollTwoFinger
+    ScrollEdge
+    ScrollOnButtonDown
+
+  InputClickMethod* {.pure.} = enum
+    ClickButtonAreas
+    ClickFinger
+
+  InputButtonMap* {.pure.} = enum
+    ButtonMapLeftRightMiddle
+    ButtonMapLeftMiddleRight
+
+  InputXkbConfig* = object
+    rulesSet*: bool
+    rules*: string
+    modelSet*: bool
+    model*: string
+    layoutSet*: bool
+    layout*: string
+    variantSet*: bool
+    variant*: string
+    optionsSet*: bool
+    options*: string
+
+  InputKeyboardConfig* = object
+    repeatRateSet*: bool
+    repeatRate*: int32
+    repeatDelaySet*: bool
+    repeatDelay*: int32
+    numlockSet*: bool
+    numlock*: bool
+    capslockSet*: bool
+    capslock*: bool
+    xkb*: InputXkbConfig
+
+  InputPointerConfig* = object
+    offSet*: bool
+    off*: bool
+    naturalScrollSet*: bool
+    naturalScroll*: bool
+    accelProfileSet*: bool
+    accelProfile*: InputAccelProfile
+    accelSpeedSet*: bool
+    accelSpeed*: float32
+    scrollMethodSet*: bool
+    scrollMethod*: InputScrollMethod
+    scrollButtonSet*: bool
+    scrollButton*: uint32
+    scrollButtonLockSet*: bool
+    scrollButtonLock*: bool
+    leftHandedSet*: bool
+    leftHanded*: bool
+    middleEmulationSet*: bool
+    middleEmulation*: bool
+    scrollFactorSet*: bool
+    scrollFactor*: float32
+
+  InputTouchpadConfig* = object
+    pointer*: InputPointerConfig
+    tapSet*: bool
+    tap*: bool
+    tapButtonMapSet*: bool
+    tapButtonMap*: InputButtonMap
+    dragSet*: bool
+    drag*: bool
+    dragLockSet*: bool
+    dragLock*: bool
+    dwtSet*: bool
+    dwt*: bool
+    dwtpSet*: bool
+    dwtp*: bool
+    clickMethodSet*: bool
+    clickMethod*: InputClickMethod
+    disabledOnExternalMouseSet*: bool
+    disabledOnExternalMouse*: bool
+
+  InputConfig* = object
+    keyboard*: InputKeyboardConfig
+    mouse*: InputPointerConfig
+    touchpad*: InputTouchpadConfig
+    trackpoint*: InputPointerConfig
+    trackball*: InputPointerConfig
+
   HotkeyOverlayConfig* = object
     skipAtStartup*: bool
     hideNotBound*: bool

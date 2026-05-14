@@ -32,7 +32,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Priority | Workstream | Target Triad surface | Niri/Mango reference | Current status | First milestone |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Done | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Implemented with in-place include expansion, recursion safety, include hot reload watching, `TRIAD_CONFIG`, `--config`, `-c`, and standalone validation. | Keep validating against real configs while future config work expands. |
-| P1 | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Triad exposes binding layout overrides but no keyboard repeat, XKB, lock-state, or libinput device config. | Generate/bind River input, XKB, and libinput protocols; apply keyboard repeat, XKB layout/options, numlock, and basic pointer settings. |
+| Done | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Implemented through River input, XKB, and libinput config protocols for keyboard repeat, XKB keymaps/options, lock state, and basic mouse/touchpad/trackpoint/trackball settings. | Keep validating against live hardware; keyboard layout cycling remains separate command work. |
 | P1 | Output rules | `output "name" { ... }` or `output-rules { output ... }` | Niri `output`; Mango `monitorrule` | Triad tracks output identity and supports workspace/output affinity, but has no output layout or mode config. | Add identity-matched output rules for focus/workspace affinity and document which mode/scale/position fields require output-management protocol support. |
 | P2 | Binding event types | `axis-bind`, then `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key and pointer button bindings exist; global wheel, gesture, and hardware switch bindings are missing. | Add config-level axis bindings for wheel-driven commands using existing pointer-axis event handling. |
 | P2 | Session environment | `environment { KEY "value"; KEY null }` | Niri `environment`; Mango `env` | Triad startup/spawn commands inherit the daemon environment only. | Apply configured variables to Triad-spawned processes and clearly document that this does not retroactively change external systemd/dbus-launched processes. |
@@ -64,15 +64,15 @@ They are grouped by user-facing capability rather than by implementation module.
 | Pointer | Touchpad gestures | `gesturebind` | Libinput/Wayland input events | | | Triad has no gesture binding surface. |
 | Pointer | Lid/switch bindings | `switchbind` | Input events/protocols | | | Triad has no switch binding surface. |
 | Pointer | Pointer warp | `warpcursor` | `river_seat_v1.pointer_warp` | `warp-pointer` | X | Triad exposes explicit IPC. |
-| Input | Keyboard repeat | `repeat_rate`, `repeat_delay` | `river_input_device_v1.set_repeat_info` | | | River has protocol support; Triad does not expose config. |
-| Input | XKB rules/layout/options | `xkb_rules_*` | `river_xkb_config_v1` | | | Triad binds can set per-binding layout override only. |
+| Input | Keyboard repeat | `repeat_rate`, `repeat_delay` | `river_input_device_v1.set_repeat_info` | `input.keyboard.repeat-rate`, `input.keyboard.repeat-delay` | X | Applied to keyboard devices when the River input management protocol is available. |
+| Input | XKB rules/layout/options | `xkb_rules_*` | `river_xkb_config_v1` | `input.keyboard.xkb` | X | Triad builds keymaps with libxkbcommon; binds can still set per-binding layout override. |
 | Input | Keyboard layout switch | `switch_keyboard_layout` | `set_layout_by_index/name` | `bind ... layout=<index>` | | Triad binds may override layout, but cannot cycle XKB layouts. |
-| Input | NumLock/CapsLock | `numlockon` | `numlock_enable`, `capslock_enable` | | | No Triad config. |
-| Input | Pointer acceleration | `mouse_accel_*`, `trackpad_accel_*` | `set_accel_profile`, `set_accel_speed` | | | No Triad config. |
-| Input | Natural scroll | `mouse_natural_scrolling`, `trackpad_natural_scrolling` | `set_natural_scroll` | | | No Triad config. |
-| Input | Tap/click/drag settings | `tap_to_click`, `click_method`, `tap_and_drag`, `drag_lock` | libinput config requests | | | No Triad config. |
-| Input | Left-handed/middle emulation | `left_handed`, `middle_button_emulation` | libinput config requests | | | No Triad config. |
-| Input | Scroll factor/button/method | `axis_scroll_factor`, `scroll_button`, `scroll_method` | input/libinput config requests | | | No Triad config. |
+| Input | NumLock/CapsLock | `numlockon` | `numlock_enable`, `capslock_enable` | `input.keyboard.numlock`, `input.keyboard.capslock` | X | Applies requested initial lock state through River XKB config. |
+| Input | Pointer acceleration | `mouse_accel_*`, `trackpad_accel_*` | `set_accel_profile`, `set_accel_speed` | `input.mouse/touchpad/trackpoint/trackball.accel-profile`, `accel-speed` | X | Applies only when the device reports matching libinput support. |
+| Input | Natural scroll | `mouse_natural_scrolling`, `trackpad_natural_scrolling` | `set_natural_scroll` | `input.*.natural-scroll` | X | Supported for mouse, touchpad, trackpoint, and trackball sections. |
+| Input | Tap/click/drag settings | `tap_to_click`, `click_method`, `tap_and_drag`, `drag_lock` | libinput config requests | `input.touchpad.tap`, `click-method`, `drag`, `drag-lock` | X | Touchpad-only settings are gated by libinput capability reports. |
+| Input | Left-handed/middle emulation | `left_handed`, `middle_button_emulation` | libinput config requests | `input.*.left-handed`, `input.*.middle-emulation` | X | Supported for pointer class sections. |
+| Input | Scroll factor/button/method | `axis_scroll_factor`, `scroll_button`, `scroll_method` | input/libinput config requests | `input.*.scroll-factor`, `scroll-button`, `scroll-method` | X | Scroll method/button uses libinput config; scroll factor uses River input device config. |
 | Output | Monitor rules | `monitorrule` | Init script or external tools | | | Triad tracks River outputs but has no monitor layout config. |
 | Output | Monitor power | `disable_monitor`, `enable_monitor`, `toggle_monitor` | External output management | | | Not exposed by Triad. |
 | Output | Presentation/tearing | `allow_tearing`, `force_tearing`, `vrr` | `river_output_v1.set_presentation_mode` | `presentation-mode` | X | Triad supports global vsync/async presentation mode. |
@@ -330,6 +330,8 @@ KDL config nodes and fields:
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.
+- `input`: `keyboard`, `mouse`, `touchpad`, `trackpoint`, `trackball`,
+  including keyboard repeat, XKB, lock-state, and libinput pointer fields.
 - `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,
   `min-width`, `min-height`.
 - `screenshot`: `directory`, `filename-prefix`, `capture-command`,

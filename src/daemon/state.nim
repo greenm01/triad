@@ -37,10 +37,43 @@ type
     horizontal120*: int32
     vertical120*: int32
 
+  InputDeviceRuntime* = object
+    pointer*: pointer
+    deviceType*: uint32
+    name*: string
+
+  LibinputDeviceRuntime* = object
+    pointer*: pointer
+    inputDeviceId*: uint32
+    sendEventsSupport*: uint32
+    tapFingerCount*: int32
+    accelProfilesSupport*: uint32
+    naturalScrollSupport*: bool
+    leftHandedSupport*: bool
+    clickMethodsSupport*: uint32
+    middleEmulationSupport*: bool
+    scrollMethodsSupport*: uint32
+    dwtSupport*: bool
+    dwtpSupport*: bool
+
+  XkbKeyboardRuntime* = object
+    pointer*: pointer
+    inputDeviceId*: uint32
+
+  XkbKeymapRuntime* = object
+    pointer*: pointer
+    fd*: int32
+    successful*: bool
+
+  RuntimeReasonHook* = proc(daemon: pointer, reason: string) {.nimcall.}
+
   TriadDaemon* = object
     display*: ptr Display
     registry*: ptr Registry
     riverManager*: ptr RiverWindowManagerV1
+    riverInputManager*: pointer
+    riverLibinputConfig*: pointer
+    riverXkbConfig*: pointer
     riverLayerShell*: ptr riverLayer.RiverLayerShellV1
     riverXkbBindings*: ptr riverXkb.RiverXkbBindingsV1
     compositor*: ptr Compositor
@@ -111,6 +144,11 @@ type
     pointerPositionBySeat*: Table[uint32, Rect]
     pointerHotCornerInsideBySeat*: Table[uint32, bool]
     cursorShakeBySeat*: Table[uint32, CursorShakeState]
+    inputDevices*: Table[uint32, InputDeviceRuntime]
+    libinputDevices*: Table[uint32, LibinputDeviceRuntime]
+    xkbConfigKeyboards*: Table[uint32, XkbKeyboardRuntime]
+    xkbConfigKeymap*: XkbKeymapRuntime
+    libinputResultDescriptions*: Table[uint32, string]
     windowUnreliablePids*: Table[WindowId, int32]
     pendingWindows*: Table[WindowId, WindowData]
 
@@ -118,6 +156,7 @@ type
     configWatchPaths*: seq[string]
     watcher*: Watcher
     configReloadDebouncer*: ConfigReloadDebouncer
+    inputConfigReloadHook*: RuntimeReasonHook
     shouldExit*: bool
     quickshellState*: QuickshellRunner
     startupCommandsPending*: bool

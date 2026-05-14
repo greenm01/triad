@@ -15,6 +15,7 @@ type
     quickshell*: QuickshellConfig
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig
+    input*: InputConfig
     overview*: OverviewConfig
     recentWindows*: RecentWindowsConfig
     floating*: FloatingConfig
@@ -212,6 +213,48 @@ proc parseFloatingPositionAnchor(name: string): FloatingPositionAnchor =
   else:
     raise newException(ValueError, "invalid default-floating-position anchor: " & name)
 
+proc parseInputAccelProfile(name: string): InputAccelProfile =
+  case name.normalize()
+  of "none":
+    InputAccelProfile.AccelNone
+  of "flat":
+    InputAccelProfile.AccelFlat
+  of "adaptive":
+    InputAccelProfile.AccelAdaptive
+  else:
+    raise newException(ValueError, "invalid input accel-profile: " & name)
+
+proc parseInputScrollMethod(name: string): InputScrollMethod =
+  case name.normalize()
+  of "no-scroll", "none":
+    InputScrollMethod.ScrollNone
+  of "two-finger":
+    InputScrollMethod.ScrollTwoFinger
+  of "edge":
+    InputScrollMethod.ScrollEdge
+  of "on-button-down":
+    InputScrollMethod.ScrollOnButtonDown
+  else:
+    raise newException(ValueError, "invalid input scroll-method: " & name)
+
+proc parseInputClickMethod(name: string): InputClickMethod =
+  case name.normalize()
+  of "button-areas":
+    InputClickMethod.ClickButtonAreas
+  of "clickfinger":
+    InputClickMethod.ClickFinger
+  else:
+    raise newException(ValueError, "invalid input click-method: " & name)
+
+proc parseInputButtonMap(name: string): InputButtonMap =
+  case name.normalize()
+  of "left-right-middle", "lrm":
+    InputButtonMap.ButtonMapLeftRightMiddle
+  of "left-middle-right", "lmr":
+    InputButtonMap.ButtonMapLeftMiddleRight
+  else:
+    raise newException(ValueError, "invalid input button map: " & name)
+
 proc modifierValue(name: string): uint32 =
   case name
   of "Shift", "shift", "SHIFT":
@@ -284,6 +327,114 @@ proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
 
 proc childFlagEnabled(node: KdlNode): bool =
   node.args.len == 0 or node.args[0].kBool()
+
+proc parseInputXkbConfig(config: var InputXkbConfig, node: KdlNode) =
+  for child in node.children:
+    try:
+      if child.name == "rules" and child.args.len > 0:
+        config.rulesSet = true
+        config.rules = child.args[0].kString()
+      elif child.name == "model" and child.args.len > 0:
+        config.modelSet = true
+        config.model = child.args[0].kString()
+      elif child.name == "layout" and child.args.len > 0:
+        config.layoutSet = true
+        config.layout = child.args[0].kString()
+      elif child.name == "variant" and child.args.len > 0:
+        config.variantSet = true
+        config.variant = child.args[0].kString()
+      elif child.name == "options" and child.args.len > 0:
+        config.optionsSet = true
+        config.options = child.args[0].kString()
+    except CatchableError as e:
+      warn "Ignoring invalid input xkb field", field = child.name, error = e.msg
+
+proc parseInputKeyboardConfig(config: var InputKeyboardConfig, node: KdlNode) =
+  for child in node.children:
+    try:
+      if child.name == "repeat-rate" and child.args.len > 0:
+        config.repeatRateSet = true
+        config.repeatRate = clamp32(int32(child.args[0].kInt()), 0, 1000)
+      elif child.name == "repeat-delay" and child.args.len > 0:
+        config.repeatDelaySet = true
+        config.repeatDelay = clamp32(int32(child.args[0].kInt()), 0, 20000)
+      elif child.name == "numlock":
+        config.numlockSet = true
+        config.numlock = child.childFlagEnabled()
+      elif child.name == "capslock":
+        config.capslockSet = true
+        config.capslock = child.childFlagEnabled()
+      elif child.name == "xkb":
+        config.xkb.parseInputXkbConfig(child)
+    except CatchableError as e:
+      warn "Ignoring invalid input keyboard field", field = child.name, error = e.msg
+
+proc parseInputPointerConfig(config: var InputPointerConfig, node: KdlNode) =
+  for child in node.children:
+    try:
+      if child.name == "off":
+        config.offSet = true
+        config.off = child.childFlagEnabled()
+      elif child.name == "natural-scroll":
+        config.naturalScrollSet = true
+        config.naturalScroll = child.childFlagEnabled()
+      elif child.name == "accel-profile" and child.args.len > 0:
+        config.accelProfileSet = true
+        config.accelProfile = parseInputAccelProfile(child.args[0].kString())
+      elif child.name == "accel-speed" and child.args.len > 0:
+        config.accelSpeedSet = true
+        config.accelSpeed = clampF32(float32(child.args[0].kFloat()), -1.0, 1.0)
+      elif child.name == "scroll-method" and child.args.len > 0:
+        config.scrollMethodSet = true
+        config.scrollMethod = parseInputScrollMethod(child.args[0].kString())
+      elif child.name == "scroll-button" and child.args.len > 0:
+        config.scrollButtonSet = true
+        config.scrollButton = uint32(max(0, child.args[0].kInt()))
+      elif child.name == "scroll-button-lock":
+        config.scrollButtonLockSet = true
+        config.scrollButtonLock = child.childFlagEnabled()
+      elif child.name == "left-handed":
+        config.leftHandedSet = true
+        config.leftHanded = child.childFlagEnabled()
+      elif child.name == "middle-emulation":
+        config.middleEmulationSet = true
+        config.middleEmulation = child.childFlagEnabled()
+      elif child.name == "scroll-factor" and child.args.len > 0:
+        config.scrollFactorSet = true
+        config.scrollFactor = clampF32(float32(child.args[0].kFloat()), 0.0, 100.0)
+    except CatchableError as e:
+      warn "Ignoring invalid input pointer field", field = child.name, error = e.msg
+
+proc parseInputTouchpadConfig(config: var InputTouchpadConfig, node: KdlNode) =
+  config.pointer.parseInputPointerConfig(node)
+  for child in node.children:
+    try:
+      if child.name == "tap":
+        config.tapSet = true
+        config.tap = child.childFlagEnabled()
+      elif child.name == "tap-button-map" and child.args.len > 0:
+        config.tapButtonMapSet = true
+        config.tapButtonMap = parseInputButtonMap(child.args[0].kString())
+      elif child.name == "drag":
+        config.dragSet = true
+        config.drag = child.childFlagEnabled()
+      elif child.name == "drag-lock":
+        config.dragLockSet = true
+        config.dragLock = child.childFlagEnabled()
+      elif child.name == "dwt":
+        config.dwtSet = true
+        config.dwt = child.childFlagEnabled()
+      elif child.name == "dwtp":
+        config.dwtpSet = true
+        config.dwtp = child.childFlagEnabled()
+      elif child.name == "click-method" and child.args.len > 0:
+        config.clickMethodSet = true
+        config.clickMethod = parseInputClickMethod(child.args[0].kString())
+      elif child.name == "disabled-on-external-mouse":
+        config.disabledOnExternalMouseSet = true
+        config.disabledOnExternalMouse = child.childFlagEnabled()
+    except CatchableError as e:
+      warn "Ignoring invalid input touchpad field", field = child.name, error = e.msg
 
 proc windowRuleMatcher(node: KdlNode): WindowRuleMatcher =
   if node.props.hasKey("app-id"):
@@ -1250,6 +1401,21 @@ proc loadConfig*(path: string): Config =
               result.screenshot.showPointer = child.args[0].kBool()
           except CatchableError as e:
             warn "Ignoring invalid screenshot field", field = child.name, error = e.msg
+      elif node.name == "input":
+        for child in node.children:
+          try:
+            if child.name == "keyboard":
+              result.input.keyboard.parseInputKeyboardConfig(child)
+            elif child.name == "mouse":
+              result.input.mouse.parseInputPointerConfig(child)
+            elif child.name == "touchpad":
+              result.input.touchpad.parseInputTouchpadConfig(child)
+            elif child.name == "trackpoint":
+              result.input.trackpoint.parseInputPointerConfig(child)
+            elif child.name == "trackball":
+              result.input.trackball.parseInputPointerConfig(child)
+          except CatchableError as e:
+            warn "Ignoring invalid input field", field = child.name, error = e.msg
       elif node.name == "cursor":
         for child in node.children:
           try:
