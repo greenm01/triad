@@ -48,12 +48,24 @@ type
     inputDeviceId*: uint32
     done*: bool
     sendEventsSupport*: uint32
+    sendEventsCurrent*: uint32
+    sendEventsCurrentSet*: bool
     tapFingerCount*: int32
     accelProfilesSupport*: uint32
+    accelProfileCurrent*: uint32
+    accelProfileCurrentSet*: bool
+    accelSpeedCurrent*: float32
+    accelSpeedCurrentSet*: bool
     naturalScrollSupport*: bool
+    naturalScrollCurrent*: bool
+    naturalScrollCurrentSet*: bool
     leftHandedSupport*: bool
+    leftHandedCurrent*: bool
+    leftHandedCurrentSet*: bool
     clickMethodsSupport*: uint32
     middleEmulationSupport*: bool
+    middleEmulationCurrent*: bool
+    middleEmulationCurrentSet*: bool
     scrollMethodsSupport*: uint32
     dwtSupport*: bool
     dwtpSupport*: bool

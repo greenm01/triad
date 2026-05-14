@@ -191,6 +191,18 @@ proc boolState(enabled: bool): uint32 =
 proc fixedFromFloat(value: float32): Fixed =
   Fixed(int32(cdouble(value) * 256.0))
 
+proc floatChanged(a, b: float32): bool =
+  abs(a - b) > 0.0001'f32
+
+proc firstDouble(value: ptr Array, output: var float32): bool =
+  if value == nil:
+    return false
+  let array = cast[ptr tuple[size: csize_t, alloc: csize_t, payload: pointer]](value)[]
+  if array.payload == nil or array.size < csize_t(sizeof(cdouble)):
+    return false
+  output = float32(cast[ptr cdouble](array.payload)[])
+  true
+
 proc inputDeviceName(daemon: TriadDaemon, inputDeviceId: uint32): string =
   if daemon.inputDevices.hasKey(inputDeviceId):
     daemon.inputDevices[inputDeviceId].name
@@ -237,35 +249,46 @@ proc applyPointerCommon(
       (runtime.sendEventsSupport and LibinputSendEventsDisabled) != 0:
     let mode =
       if pointerConfig.off: LibinputSendEventsDisabled else: LibinputSendEventsEnabled
-    daemon.addResultListener(device.setSendEvents(mode), "input send-events")
-  if pointerConfig.naturalScrollSet and runtime.naturalScrollSupport:
+    if runtime.sendEventsCurrentSet and runtime.sendEventsCurrent != mode:
+      daemon.addResultListener(device.setSendEvents(mode), "input send-events")
+  if pointerConfig.naturalScrollSet and runtime.naturalScrollSupport and
+      runtime.naturalScrollCurrentSet and
+      runtime.naturalScrollCurrent != pointerConfig.naturalScroll:
     daemon.addResultListener(
       device.setNaturalScroll(pointerConfig.naturalScroll.boolState()),
       "input natural-scroll",
     )
-  if pointerConfig.leftHandedSet and runtime.leftHandedSupport:
+  if pointerConfig.leftHandedSet and runtime.leftHandedSupport and
+      runtime.leftHandedCurrentSet and
+      runtime.leftHandedCurrent != pointerConfig.leftHanded:
     daemon.addResultListener(
       device.setLeftHanded(pointerConfig.leftHanded.boolState()), "input left-handed"
     )
-  if pointerConfig.middleEmulationSet and runtime.middleEmulationSupport:
+  if pointerConfig.middleEmulationSet and runtime.middleEmulationSupport and
+      runtime.middleEmulationCurrentSet and
+      runtime.middleEmulationCurrent != pointerConfig.middleEmulation:
     daemon.addResultListener(
       device.setMiddleEmulation(pointerConfig.middleEmulation.boolState()),
       "input middle-emulation",
     )
   if pointerConfig.accelProfileSet:
     let profile = pointerConfig.accelProfile.accelProfileValue()
-    if (runtime.accelProfilesSupport and profile) != 0 or profile == LibinputAccelNone:
+    if runtime.accelProfileCurrentSet and runtime.accelProfileCurrent != profile and
+        (
+          (runtime.accelProfilesSupport and profile) != 0 or profile == LibinputAccelNone
+        ):
       daemon.addResultListener(device.setAccelProfile(profile), "input accel-profile")
-  if pointerConfig.accelSpeedSet:
-    if runtime.accelProfilesSupport != 0:
-      var array: Array
-      array.init()
-      try:
-        let speed = array.add(cdouble)
-        speed[] = cdouble(pointerConfig.accelSpeed)
-        daemon.addResultListener(device.setAccelSpeed(addr array), "input accel-speed")
-      finally:
-        array.release()
+  if pointerConfig.accelSpeedSet and runtime.accelProfilesSupport != 0 and
+      runtime.accelSpeedCurrentSet and
+      runtime.accelSpeedCurrent.floatChanged(pointerConfig.accelSpeed):
+    var array: Array
+    array.init()
+    try:
+      let speed = array.add(cdouble)
+      speed[] = cdouble(pointerConfig.accelSpeed)
+      daemon.addResultListener(device.setAccelSpeed(addr array), "input accel-speed")
+    finally:
+      array.release()
   if pointerConfig.scrollMethodSet:
     let scrollMethod = pointerConfig.scrollMethod.scrollMethodValue()
     if (runtime.scrollMethodsSupport and scrollMethod) != 0 or
@@ -282,7 +305,7 @@ proc applyPointerCommon(
       device.setScrollButtonLock(pointerConfig.scrollButtonLock.boolState()),
       "input scroll-button-lock",
     )
-  if pointerConfig.scrollFactorSet:
+  if pointerConfig.scrollFactorSet and pointerConfig.scrollFactor.floatChanged(1.0'f32):
     inputRuntime.inputDevicePtr().setScrollFactor(
       pointerConfig.scrollFactor.fixedFromFloat()
     )
@@ -657,6 +680,16 @@ proc onLibinputSendEventsSupport(
       runtime.sendEventsSupport = modes,
   )
 
+proc onLibinputSendEventsCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, mode: uint32
+) =
+  callbackDaemon(data, "libinput send-events current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.sendEventsCurrent = mode
+      runtime.sendEventsCurrentSet = true,
+  )
+
 proc onLibinputTapSupport(
     data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, fingerCount: int32
 ) =
@@ -675,6 +708,29 @@ proc onLibinputAccelSupport(
       runtime.accelProfilesSupport = profiles,
   )
 
+proc onLibinputAccelProfileCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, profile: uint32
+) =
+  callbackDaemon(data, "libinput accel-profile current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.accelProfileCurrent = profile
+      runtime.accelProfileCurrentSet = true,
+  )
+
+proc onLibinputAccelSpeedCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, speed: ptr Array
+) =
+  var current = 0'f32
+  if not speed.firstDouble(current):
+    return
+  callbackDaemon(data, "libinput accel-speed current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.accelSpeedCurrent = current
+      runtime.accelSpeedCurrentSet = true,
+  )
+
 proc onLibinputNaturalScrollSupport(
     data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, supported: int32
 ) =
@@ -684,6 +740,16 @@ proc onLibinputNaturalScrollSupport(
       runtime.naturalScrollSupport = supported != 0,
   )
 
+proc onLibinputNaturalScrollCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, enabled: uint32
+) =
+  callbackDaemon(data, "libinput natural-scroll current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.naturalScrollCurrent = enabled == LibinputBoolEnabled
+      runtime.naturalScrollCurrentSet = true,
+  )
+
 proc onLibinputLeftHandedSupport(
     data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, supported: int32
 ) =
@@ -691,6 +757,16 @@ proc onLibinputLeftHandedSupport(
     device,
     proc(runtime: var LibinputDeviceRuntime) =
       runtime.leftHandedSupport = supported != 0,
+  )
+
+proc onLibinputLeftHandedCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, enabled: uint32
+) =
+  callbackDaemon(data, "libinput left-handed current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.leftHandedCurrent = enabled == LibinputBoolEnabled
+      runtime.leftHandedCurrentSet = true,
   )
 
 proc onLibinputClickSupport(
@@ -709,6 +785,16 @@ proc onLibinputMiddleSupport(
     device,
     proc(runtime: var LibinputDeviceRuntime) =
       runtime.middleEmulationSupport = supported != 0,
+  )
+
+proc onLibinputMiddleCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, enabled: uint32
+) =
+  callbackDaemon(data, "libinput middle-emulation current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.middleEmulationCurrent = enabled == LibinputBoolEnabled
+      runtime.middleEmulationCurrentSet = true,
   )
 
 proc onLibinputScrollSupport(
@@ -768,7 +854,7 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   inputDevice: onLibinputInputDevice,
   sendEventsSupport: onLibinputSendEventsSupport,
   sendEventsDefault: ignoreLibinputUint,
-  sendEventsCurrent: ignoreLibinputUint,
+  sendEventsCurrent: onLibinputSendEventsCurrent,
   tapSupport: onLibinputTapSupport,
   tapDefault: ignoreLibinputUint,
   tapCurrent: ignoreLibinputUint,
@@ -786,15 +872,15 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   calibrationMatrixCurrent: ignoreLibinputArray,
   accelProfilesSupport: onLibinputAccelSupport,
   accelProfileDefault: ignoreLibinputUint,
-  accelProfileCurrent: ignoreLibinputUint,
+  accelProfileCurrent: onLibinputAccelProfileCurrent,
   accelSpeedDefault: ignoreLibinputArray,
-  accelSpeedCurrent: ignoreLibinputArray,
+  accelSpeedCurrent: onLibinputAccelSpeedCurrent,
   naturalScrollSupport: onLibinputNaturalScrollSupport,
   naturalScrollDefault: ignoreLibinputUint,
-  naturalScrollCurrent: ignoreLibinputUint,
+  naturalScrollCurrent: onLibinputNaturalScrollCurrent,
   leftHandedSupport: onLibinputLeftHandedSupport,
   leftHandedDefault: ignoreLibinputUint,
-  leftHandedCurrent: ignoreLibinputUint,
+  leftHandedCurrent: onLibinputLeftHandedCurrent,
   clickMethodSupport: onLibinputClickSupport,
   clickMethodDefault: ignoreLibinputUint,
   clickMethodCurrent: ignoreLibinputUint,
@@ -802,7 +888,7 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   clickfingerButtonMapCurrent: ignoreLibinputUint,
   middleEmulationSupport: onLibinputMiddleSupport,
   middleEmulationDefault: ignoreLibinputUint,
-  middleEmulationCurrent: ignoreLibinputUint,
+  middleEmulationCurrent: onLibinputMiddleCurrent,
   scrollMethodSupport: onLibinputScrollSupport,
   scrollMethodDefault: ignoreLibinputUint,
   scrollMethodCurrent: ignoreLibinputUint,
