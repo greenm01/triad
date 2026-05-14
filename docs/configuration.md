@@ -78,7 +78,8 @@ The supported KDL nodes are:
   parented-dialog viewport jump behavior, terminal swallowing policy, size-hint
   policy, shortcut inhibition, presentation mode,
   border/focus-ring/clip policy, and forced layout.
-- `bindings`: keyboard bindings, pointer bindings, HJKL/arrow mirroring,
+- `bindings`: keyboard bindings, pointer button and wheel bindings,
+  HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
@@ -534,6 +535,35 @@ output "HDMI-A-1" {
 - Monitor mode, scale, transform, position, and power fields are not supported
   until Triad has an output-management protocol path for those compositor
   settings.
+
+## Bindings
+
+`bindings` stores keyboard, pointer button, and wheel-axis command bindings:
+
+```kdl
+bindings {
+  bind "Super+Return" "spawn-terminal"
+  pointer-bind "Super+left" "move"
+  pointer-bind "Super+right" "resize"
+  axis-bind "Super+wheel-up" "focus-left"
+  axis-bind "Super+wheel-down" "focus-right" mode="overview" allow-inhibiting=#false
+}
+```
+
+- `bind "<modifiers+key>" "<command>"`: binds a keyboard command. Keyboard
+  binds also support `layout=<index>` and `hotkey-overlay-title`.
+- `pointer-bind "<modifiers+button>" "<command>"`: binds mouse buttons. `move`
+  and `resize` start River pointer operations; other commands are parsed as
+  normal Triad commands and target the window under the pointer when the
+  command is window-specific.
+- `axis-bind "<modifiers+wheel-direction>" "<command>"`: binds wheel detents.
+  Supported directions are `wheel-up`, `wheel-down`, `wheel-left`, and
+  `wheel-right`. Large scroll events run once per accumulated 120-unit wheel
+  detent.
+- `mode="normal"|"overview"|"recent"` limits a binding to that mode. Omitted
+  mode means always active.
+- `allow-inhibiting=#false` lets a binding bypass a focused client's keyboard
+  shortcuts inhibition.
 
 ## Recent Windows
 

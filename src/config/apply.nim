@@ -292,6 +292,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.protocolSurfaces = config.protocolSurfaces
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
+  model.axisBindings = config.axisBindings
   model.layoutCycle = runtimeLayoutCycle(config.layout.layoutCycle)
 
   for slot in 1'u32 .. model.defaultWorkspaceCount:

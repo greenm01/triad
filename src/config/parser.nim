@@ -31,6 +31,7 @@ type
     mirrorHjklArrows*: bool
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
+    axisBindings*: seq[AxisBindingConfig]
 
   LayoutConfig* = object
     gaps*: int32
@@ -495,6 +496,14 @@ proc parsePointerOp(value: string): PointerOpKind =
   of "move", "Move": PointerOpKind.OpMove
   of "resize", "Resize": PointerOpKind.OpResize
   else: PointerOpKind.OpNone
+
+proc axisDirectionValue(name: string): AxisBindingDirection =
+  case name.toLowerAscii()
+  of "wheel-up": AxisBindingDirection.AxisUp
+  of "wheel-down": AxisBindingDirection.AxisDown
+  of "wheel-left": AxisBindingDirection.AxisLeft
+  of "wheel-right": AxisBindingDirection.AxisRight
+  else: AxisBindingDirection.AxisNone
 
 proc parseBindingMode(value: string): BindingMode =
   case value.normalize()
@@ -1234,6 +1243,23 @@ proc loadConfig*(path: string): Config =
                   binding.bypassShortcutsInhibit =
                     not child.props["allow-inhibiting"].kBool()
                 result.pointerBindings.add(binding)
+            elif child.name == "axis-bind" and child.args.len >= 2:
+              let spec = parseKeySpec(child.args[0].kString())
+              let direction = axisDirectionValue(spec.key)
+              let command = child.args[1].kString()
+              if direction != AxisBindingDirection.AxisNone and command.len > 0:
+                var binding = AxisBindingConfig(
+                  direction: direction,
+                  modifiers: spec.modifiers,
+                  command: command,
+                  mode: BindingMode.BindAlways,
+                )
+                if child.props.hasKey("mode"):
+                  binding.mode = parseBindingMode(child.props["mode"].kString())
+                if child.props.hasKey("allow-inhibiting"):
+                  binding.bypassShortcutsInhibit =
+                    not child.props["allow-inhibiting"].kBool()
+                result.axisBindings.add(binding)
           except CatchableError as e:
             warn "Ignoring invalid binding config field",
               field = child.name, error = e.msg

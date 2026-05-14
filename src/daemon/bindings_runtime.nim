@@ -44,6 +44,10 @@ proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
 proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc destroyBindings*(daemon: var TriadDaemon)
+proc enqueuePointerCommand(
+  daemon: var TriadDaemon, seatId: uint32, seat: ptr RiverSeatV1, msg: Msg
+)
+
 proc requestBindingReconfigure*(daemon: var TriadDaemon, reason: string)
 
 proc tiledEdgesForWindow*(runtimeModel: Model, data: model.WindowData): uint32 =
@@ -233,6 +237,36 @@ proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): b
       not binding.bypassShortcutsInhibit:
     return false
   true
+
+proc axisBindingActive(daemon: TriadDaemon, binding: AxisBindingConfig): bool =
+  if not daemon.bindingModeActive(binding.mode):
+    return false
+  if daemon.currentModel.keyboardShortcutsInhibited() and
+      not binding.bypassShortcutsInhibit:
+    return false
+  true
+
+proc axisDirectionForWheelTicks*(
+    horizontalAxis: bool, ticks: int32
+): AxisBindingDirection =
+  if ticks == 0:
+    return AxisBindingDirection.AxisNone
+  if horizontalAxis:
+    if ticks > 0: AxisBindingDirection.AxisRight else: AxisBindingDirection.AxisLeft
+  elif ticks > 0:
+    AxisBindingDirection.AxisDown
+  else:
+    AxisBindingDirection.AxisUp
+
+proc activeAxisBinding(
+    daemon: TriadDaemon, direction: AxisBindingDirection
+): Option[AxisBindingConfig] =
+  let modifiers = daemon.currentModel.activeModifiers
+  for binding in daemon.currentModel.axisBindings:
+    if binding.direction == direction and binding.modifiers == modifiers and
+        daemon.axisBindingActive(binding):
+      return some(binding)
+  none(AxisBindingConfig)
 
 proc overviewHotCornerCanOpen(daemon: TriadDaemon): bool =
   not daemon.currentModel.overviewActive and not daemon.currentModel.sessionLocked and
@@ -608,6 +642,30 @@ proc onWlPointerAxisValue120(
     frame.vertical120 += value120
   daemon.wlPointerWheelFrames[pointerId] = frame
 
+proc riverSeatPointerById(daemon: TriadDaemon, seatId: uint32): ptr RiverSeatV1 =
+  for seat in daemon.seatPointers:
+    if seat != nil and seat.id() == seatId:
+      return seat
+  nil
+
+proc dispatchAxisBindingTicks*(
+    daemon: var TriadDaemon, seatId: uint32, ticks: int32, horizontalAxis: bool
+): bool =
+  let direction = axisDirectionForWheelTicks(horizontalAxis, ticks)
+  if direction == AxisBindingDirection.AxisNone:
+    return false
+  let binding = daemon.activeAxisBinding(direction)
+  if binding.isNone:
+    return false
+  let msg = parseTextCommand(binding.get().command)
+  if msg.isNone:
+    return false
+
+  let seat = daemon.riverSeatPointerById(seatId)
+  for _ in 0 ..< abs(ticks).int:
+    daemon.enqueuePointerCommand(seatId, seat, msg.get())
+  true
+
 proc onWlPointerFrame(data: pointer, pointer: ptr Pointer) =
   let daemon = callbackDaemon(data, "wl_pointer frame")
   if daemon == nil:
@@ -635,17 +693,26 @@ proc onWlPointerFrame(data: pointer, pointer: ptr Pointer) =
 
   if horizontal == 0 and vertical == 0:
     return
+
+  let point = daemon.pointerPositionBySeat[seatId]
+  var overviewHorizontal = horizontal
+  var overviewVertical = vertical
+  if daemon[].dispatchAxisBindingTicks(seatId, horizontal, horizontalAxis = true):
+    overviewHorizontal = 0
+  if daemon[].dispatchAxisBindingTicks(seatId, vertical, horizontalAxis = false):
+    overviewVertical = 0
+  if overviewHorizontal == 0 and overviewVertical == 0:
+    return
   if not daemon[].currentModel.overviewUsesWorkspacePreviews():
     return
 
-  let point = daemon.pointerPositionBySeat[seatId]
   daemon.enqueue(
     Msg(
       kind: MsgKind.WlOverviewWheel,
       overviewWheelX: point.x,
       overviewWheelY: point.y,
-      overviewWheelHorizontal: horizontal,
-      overviewWheelVertical: vertical,
+      overviewWheelHorizontal: overviewHorizontal,
+      overviewWheelVertical: overviewVertical,
     )
   )
 
@@ -776,6 +843,50 @@ var xkbSeatListener* = riverXkb.RiverXkbBindingsSeatV1Listener(
   ateUnboundKey: onXkbSeatAteUnboundKey, modifiersUpdate: onXkbSeatModifiersUpdate
 )
 
+proc pointerCommandTarget(
+    daemon: TriadDaemon, seatId: uint32, seat: ptr RiverSeatV1
+): WindowId =
+  let focused = daemon.currentModel.activeFocusRiverId()
+  if daemon.currentModel.overviewActive:
+    if seat == nil:
+      return 0
+    daemon.overviewWindowAtPointer(seat)
+  else:
+    daemon.pointerWindowBySeat.getOrDefault(seatId, focused)
+
+proc enqueuePointerCommand(
+    daemon: var TriadDaemon, seatId: uint32, seat: ptr RiverSeatV1, msg: Msg
+) =
+  let target = daemon.pointerCommandTarget(seatId, seat)
+  case msg.kind
+  of MsgKind.CmdCloseWindow:
+    if target != 0:
+      daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: target))
+    elif not daemon.currentModel.overviewActive:
+      daemon.enqueue(msg)
+  of MsgKind.CmdCloseWindowById:
+    if target != 0 and daemon.currentModel.overviewActive:
+      daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: target))
+    else:
+      daemon.enqueue(msg)
+  of MsgKind.CmdSelectWindow:
+    if daemon.currentModel.overviewActive and target != 0:
+      daemon.queueWindowFocus(target)
+      daemon.enqueue(msg)
+    elif not daemon.currentModel.overviewActive:
+      daemon.enqueue(msg)
+  of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleMaximized,
+      MsgKind.CmdMaximizeColumn, MsgKind.CmdMinimize, MsgKind.CmdMoveToScratchpad,
+      MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdMoveFloating,
+      MsgKind.CmdResizeFloating:
+    if target != 0:
+      daemon.queueWindowFocus(target)
+      daemon.enqueue(msg)
+    elif not daemon.currentModel.overviewActive:
+      daemon.enqueue(msg)
+  else:
+    daemon.enqueue(msg)
+
 proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) =
   let daemon = callbackDaemon(data, "pointer binding pressed")
   if daemon == nil:
@@ -785,8 +896,9 @@ proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) 
   if not daemon.pointerBindingSeats.hasKey(id):
     return
   let seat = daemon.pointerBindingSeats[id]
+  let seatId = seat.id()
   let button = daemon.pointerBindingButtons.getOrDefault(id, 0'u32)
-  let point = daemon.pointerPositionBySeat.getOrDefault(seat.id(), Rect())
+  let point = daemon.pointerPositionBySeat.getOrDefault(seatId, Rect())
   if daemon[].currentModel.overviewUsesWorkspacePreviews():
     if button == 0x110'u32:
       let target = daemon[].overviewWindowAtPointer(seat)
@@ -812,12 +924,7 @@ proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) 
         )
       )
       return
-  let focused = daemon[].currentModel.activeFocusRiverId()
-  let target =
-    if daemon[].currentModel.overviewActive:
-      daemon[].overviewWindowAtPointer(seat)
-    else:
-      daemon.pointerWindowBySeat.getOrDefault(seat.id(), focused)
+  let target = daemon[].pointerCommandTarget(seatId, seat)
   if daemon.pointerBindingKinds.hasKey(id):
     if daemon[].currentModel.overviewActive:
       return
@@ -841,35 +948,7 @@ proc onPointerBindingPressed(data: pointer, binding: ptr RiverPointerBindingV1) 
         PointerOpKind.OpOverviewScroll:
       discard
   elif daemon.pointerBindings.hasKey(id):
-    let msg = daemon.pointerBindings[id]
-    case msg.kind
-    of MsgKind.CmdCloseWindow:
-      if target != 0:
-        daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: target))
-      elif not daemon[].currentModel.overviewActive:
-        daemon.enqueue(msg)
-    of MsgKind.CmdCloseWindowById:
-      if target != 0 and daemon[].currentModel.overviewActive:
-        daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: target))
-      else:
-        daemon.enqueue(msg)
-    of MsgKind.CmdSelectWindow:
-      if daemon[].currentModel.overviewActive and target != 0:
-        daemon[].queueWindowFocus(target)
-        daemon.enqueue(msg)
-      elif not daemon[].currentModel.overviewActive:
-        daemon.enqueue(msg)
-    of MsgKind.CmdToggleFloating, MsgKind.CmdToggleFullscreen,
-        MsgKind.CmdToggleMaximized, MsgKind.CmdMaximizeColumn, MsgKind.CmdMinimize,
-        MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
-        MsgKind.CmdMoveFloating, MsgKind.CmdResizeFloating:
-      if target != 0:
-        daemon[].queueWindowFocus(target)
-        daemon.enqueue(msg)
-      elif not daemon[].currentModel.overviewActive:
-        daemon.enqueue(msg)
-    else:
-      daemon.enqueue(msg)
+    daemon[].enqueuePointerCommand(seatId, seat, daemon.pointerBindings[id])
 
 proc onPointerBindingReleased(data: pointer, binding: ptr RiverPointerBindingV1) =
   let daemon = callbackDaemon(data, "pointer binding released")

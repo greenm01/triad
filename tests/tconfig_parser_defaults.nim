@@ -210,6 +210,9 @@ bindings {
   pointer-bind "Super+middle" "toggle-maximized"
   pointer-bind "right" "close-window" mode="overview"
   pointer-bind "Super+btn_back" "focus-last"
+  axis-bind "Super+wheel-up" "focus-column-left"
+  axis-bind "Super+wheel-down" "focus-column-right" mode="overview" allow-inhibiting=#false
+  axis-bind "Super+up" "focus-up"
 }
 """,
     )
@@ -450,6 +453,16 @@ bindings {
     )
     check config.pointerBindings.anyIt(
       it.button == 0x116'u32 and it.command == "focus-last"
+    )
+    check config.axisBindings.len == 2
+    check config.axisBindings.anyIt(
+      it.direction == AxisBindingDirection.AxisUp and it.modifiers == Super and
+        it.command == "focus-column-left"
+    )
+    check config.axisBindings.anyIt(
+      it.direction == AxisBindingDirection.AxisDown and it.modifiers == Super and
+        it.command == "focus-column-right" and it.mode == BindingMode.BindOverview and
+        it.bypassShortcutsInhibit
     )
 
   test "HJKL mirroring preserves binding settings":

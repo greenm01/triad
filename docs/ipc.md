@@ -106,25 +106,29 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.
 
 #### Pointer Bindings
-`pointer-bind` entries in `config.kdl` use the same command strings as IPC and
-keyboard bindings:
+`pointer-bind` and `axis-bind` entries in `config.kdl` use the same command
+strings as IPC and keyboard bindings:
 
 ```kdl
 pointer-bind "Super+left" "move"
 pointer-bind "Super+right" "resize"
 pointer-bind "Super+middle" "toggle-maximized"
 pointer-bind "right" "close-window" mode="overview"
+axis-bind "Super+wheel-up" "focus-left"
+axis-bind "Super+wheel-down" "focus-right"
 ```
 
 `move` and `resize` start River pointer operations. Other commands are parsed
 as normal Triad commands and target the window under the pointer when the
-command is window-specific. In overview, unmodified left-drag moves a window
+command is window-specific. `axis-bind` supports `wheel-up`, `wheel-down`,
+`wheel-left`, and `wheel-right`, and runs once per accumulated 120-unit wheel
+detent. In overview, unmodified left-drag moves a window
 preview to the hovered workspace, unmodified right-drag pans the hovered
 workspace camera, unmodified vertical wheel switches workspace previews,
 unmodified horizontal wheel focuses columns, and Shift+vertical wheel focuses
-columns. The drag overrides overview right-click close while overview is open.
-Configurable mouse-wheel and touchpad gesture bindings are not part of the
-current River input surface Triad receives.
+columns when no configured `axis-bind` consumes that wheel direction. The drag
+overrides overview right-click close while overview is open. Touchpad gesture
+bindings are not part of the current River input surface Triad receives.
 
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.

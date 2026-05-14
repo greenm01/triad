@@ -95,6 +95,14 @@ suite "KDL Configuration Parser: loading reload":
             command: "move",
           )
         ],
+      axisBindings:
+        @[
+          AxisBindingConfig(
+            direction: AxisBindingDirection.AxisUp,
+            modifiers: 64'u32,
+            command: "focus-left",
+          )
+        ],
     )
 
     check state.applyRuntimeConfig(config)
@@ -108,6 +116,7 @@ suite "KDL Configuration Parser: loading reload":
     check state.model.terminal.command == @["kitty"]
     check state.model.overviewZoom == 0.25'f32
     check state.model.keyBindings.len == 1
+    check state.model.axisBindings.len == 1
 
     let snapshot = state.model.shellSnapshot()
     check snapshot.windows.len == 1

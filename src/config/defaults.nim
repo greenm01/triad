@@ -128,6 +128,8 @@ bindings {
     bind "Super+4" "focus-workspace 4"
     pointer-bind "Super+left" "move"
     pointer-bind "Super+right" "resize"
+    // axis-bind "Super+wheel-up" "focus-left"
+    // axis-bind "Super+wheel-down" "focus-right"
 }
 
 window-rule {

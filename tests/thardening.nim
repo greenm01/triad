@@ -2,8 +2,10 @@ import std/[json, options, os, sequtils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
-  ../src/daemon/
-    [bindings_runtime, cursor_shake, input_device_classification, reload_runtime]
+  ../src/daemon/[
+    bindings_runtime, cursor_shake, input_device_classification, message_queue,
+    reload_runtime,
+  ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
 import ../src/layouts/[scroller, tiling]
@@ -46,6 +48,41 @@ suite "Crash hardening":
     check not daemon.consumeMaximizedAck(42, true)
     check daemon.consumeMaximizedAck(42, false)
     check not daemon.consumeMaximizedAck(42, false)
+
+  test "axis bindings dispatch matching wheel detents":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        axisBindings:
+          @[
+            AxisBindingConfig(
+              direction: AxisBindingDirection.AxisUp,
+              modifiers: 64'u32,
+              command: "focus-left",
+            ),
+            AxisBindingConfig(
+              direction: AxisBindingDirection.AxisRight,
+              modifiers: 64'u32,
+              command: "focus-right",
+              mode: BindingMode.BindOverview,
+            ),
+          ]
+      )
+    )
+    daemon.runtimeState.model.activeModifiers = 64'u32
+
+    check axisDirectionForWheelTicks(horizontalAxis = false, ticks = -1) ==
+      AxisBindingDirection.AxisUp
+    check daemon.dispatchAxisBindingTicks(1'u32, -2, horizontalAxis = false)
+    check daemon.hasQueuedMessages()
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+    check not daemon.hasQueuedMessages()
+
+    check not daemon.dispatchAxisBindingTicks(1'u32, 1, horizontalAxis = true)
+    daemon.runtimeState.model.overviewActive = true
+    check daemon.dispatchAxisBindingTicks(1'u32, 1, horizontalAxis = true)
+    check daemon.popQueuedMessage().direction == Direction.DirRight
 
   test "daemon overview hot corner opens once and rearms after leave":
     var daemon = initTriadDaemon()

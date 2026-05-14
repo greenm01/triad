@@ -34,7 +34,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Config lifecycle | `include`, `include optional=true`, custom config path, `triad validate-config` | Niri `include` and `validate`; Mango `source`, `source-optional`, `mango -c`, `mango -c ... -p` | Implemented with in-place include expansion, recursion safety, include hot reload watching, `TRIAD_CONFIG`, `--config`, `-c`, and standalone validation. | Keep validating against real configs while future config work expands. |
 | Done | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Implemented through River input, XKB, and libinput config protocols for keyboard repeat, XKB keymaps/options, lock state, and basic mouse/touchpad/trackpoint/trackball settings. | Keep validating against live hardware; keyboard layout cycling remains separate command work. |
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
-| P2 | Binding event types | `axis-bind`, then `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key and pointer button bindings exist; global wheel, gesture, and hardware switch bindings are missing. | Add config-level axis bindings for wheel-driven commands using existing pointer-axis event handling. |
+| P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, pointer button, and wheel-axis bindings exist; gesture and hardware switch bindings are missing. | Add the next narrow event source after confirming the available compositor/input protocol path. |
 | P2 | Session environment | `environment { KEY "value"; KEY null }` | Niri `environment`; Mango `env` | Triad startup/spawn commands inherit the daemon environment only. | Apply configured variables to Triad-spawned processes and clearly document that this does not retroactively change external systemd/dbus-launched processes. |
 | P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Add the smallest user-visible polish items first: cursor hide timeout and config reload notification controls. |
 
@@ -61,7 +61,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
 | Bindings | Eat next key | | `ensure_next_key_eaten` | `eat-next-key`, `cancel-eat-next-key` | X | Useful for modal shell interactions. |
 | Pointer | Mouse button bindings | `mousebind` | `river_seat_v1.get_pointer_binding` | `bindings { pointer-bind ... }` | X | Triad supports configured move/resize pointer bindings. |
-| Pointer | Scroll wheel bindings | `axisbind` | Pointer axis from Wayland, policy in WM | | | Triad has no config-level axis binding. |
+| Pointer | Scroll wheel bindings | `axisbind` | Pointer axis from Wayland, policy in WM | `bindings { axis-bind ... }` | X | Triad supports wheel-up/down/left/right command bindings using raw pointer-axis events. |
 | Pointer | Touchpad gestures | `gesturebind` | Libinput/Wayland input events | | | Triad has no gesture binding surface. |
 | Pointer | Lid/switch bindings | `switchbind` | Input events/protocols | | | Triad has no switch binding surface. |
 | Pointer | Pointer warp | `warpcursor` | `river_seat_v1.pointer_warp` | `warp-pointer` | X | Triad exposes explicit IPC. |
@@ -322,7 +322,7 @@ KDL config nodes and fields:
   `tiled-state`, `forced-layout`, nested `floating` with ratio or fixed pixel
   size fields, and `default-floating-position`.
 - `spawn-at-startup`, `window-menu-command`.
-- `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, plus
+- `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, `axis-bind`, plus
   `layout`, `mode`, `allow-inhibiting`, and `hotkey-overlay-title`
   properties.
 - `quickshell`: `enabled`, `command`, `theme`, `args`.

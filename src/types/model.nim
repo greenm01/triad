@@ -3,12 +3,13 @@ from core import
   ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
   IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import
-  CursorConfig, InputConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig,
-  ParentedRole, OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind,
-  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter,
-  RecentWindowScope, RecentWindowsConfig, Rect, ScreenshotConfig, TerminalConfig,
-  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  AxisBindingConfig, CursorConfig, InputConfig, KeyBindingConfig, LayoutMode,
+  HotkeyOverlayConfig, ParentedRole, OverviewHotCornersConfig, PointerBindingConfig,
+  PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
+  RecentWindowFilter, RecentWindowScope, RecentWindowsConfig, Rect, ScreenshotConfig,
+  TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
+  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -444,6 +445,7 @@ type
     protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
+    axisBindings*: seq[AxisBindingConfig]
     pointerOp*: PointerOpData
     screenLockCommand*: seq[string]
     windowMenuCommand*: seq[string]

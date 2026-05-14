@@ -458,6 +458,13 @@ type
     BindOverview
     BindRecent
 
+  AxisBindingDirection* {.pure.} = enum
+    AxisNone
+    AxisUp
+    AxisDown
+    AxisLeft
+    AxisRight
+
   KeyBindingConfig* = object
     key*: string
     modifiers*: uint32
@@ -473,6 +480,13 @@ type
     button*: uint32
     modifiers*: uint32
     op*: PointerOpKind
+    command*: string
+    mode*: BindingMode
+    bypassShortcutsInhibit*: bool
+
+  AxisBindingConfig* = object
+    direction*: AxisBindingDirection
+    modifiers*: uint32
     command*: string
     mode*: BindingMode
     bypassShortcutsInhibit*: bool

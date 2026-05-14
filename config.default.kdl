@@ -323,6 +323,10 @@ bindings {
     pointer-bind "Super+middle" "toggle-maximized"
     pointer-bind "Super+Ctrl+right" "close-window"
     pointer-bind "right" "close-window" mode="overview"
+
+    // Wheel command examples.
+    // axis-bind "Super+wheel-up" "focus-left"
+    // axis-bind "Super+wheel-down" "focus-right"
 }
 
 window-rule {
