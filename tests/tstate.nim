@@ -84,6 +84,16 @@ proc testArgb(value: uint32): uint32 =
   let a = value and 0xff
   (a shl 24) or (r shl 16) or (g shl 8) or b
 
+proc premultiplyArgb(value: uint32): uint32 =
+  let
+    alpha = (value shr 24) and 0xff
+    red = (value shr 16) and 0xff
+    green = (value shr 8) and 0xff
+    blue = value and 0xff
+  (alpha shl 24) or (((red * alpha + 127'u32) div 255'u32) shl 16) or
+    (((green * alpha + 127'u32) div 255'u32) shl 8) or
+    ((blue * alpha + 127'u32) div 255'u32)
+
 proc pixelAt(buf: PixelBuffer, x, y: int32): uint32 =
   if x < 0 or y < 0 or x >= buf.width or y >= buf.height:
     return 0
@@ -351,6 +361,15 @@ suite "Runtime state primitives":
       selected.geom.x - screen.x - config.recentWindows.highlight.padding,
       selected.geom.y - screen.y - config.recentWindows.highlight.padding,
     ) == testArgb(config.recentWindows.highlight.activeColor)
+    check rendered.pixelAt(
+      selected.geom.x - screen.x + selected.geom.w div 2,
+      selected.geom.y - screen.y + selected.geom.h + 1,
+    ) ==
+      premultiplyArgb(
+        testArgb(
+          (config.recentWindows.highlight.activeColor and 0xffffff00'u32) or 0x55'u32
+        )
+      )
 
   test "overview overlay frames empty workspace previews":
     var config = baseConfig()

@@ -28,6 +28,19 @@ proc scopeText(model: Model): string =
 proc rgbaWithAlpha(value, alpha: uint32): uint32 =
   (value and 0xffffff00'u32) or min(alpha, value and 0xff'u32)
 
+proc premultiplyArgb(value: uint32): uint32 =
+  let
+    alpha = (value shr 24) and 0xff
+    red = (value shr 16) and 0xff
+    green = (value shr 8) and 0xff
+    blue = value and 0xff
+  (alpha shl 24) or (((red * alpha + 127'u32) div 255'u32) shl 16) or
+    (((green * alpha + 127'u32) div 255'u32) shl 8) or
+    ((blue * alpha + 127'u32) div 255'u32)
+
+proc selectedChromeHeight(preview: RecentWindowPreview, padding: int32): int32 =
+  preview.geom.h + padding * 2 + TitleGap + TitleStyle.textHeight() - padding div 2
+
 proc fillSelectedChrome(
     buf: var PixelBuffer,
     preview: RecentWindowPreview,
@@ -37,11 +50,10 @@ proc fillSelectedChrome(
 ) =
   if padding <= 0:
     return
-  let titleH = TitleStyle.textHeight()
   let x = preview.geom.x - screen.x - padding
   let y = preview.geom.y - screen.y - padding
   let w = preview.geom.w + padding * 2
-  let h = preview.geom.h + padding * 2 + TitleGap + titleH
+  let h = preview.selectedChromeHeight(padding)
   buf.fillRect(x, y, w, padding, color)
   buf.fillRect(x, y + padding + preview.geom.h, w, h - padding - preview.geom.h, color)
   buf.fillRect(x, y + padding, padding, preview.geom.h, color)
@@ -60,8 +72,9 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
   let previews = model.recentWindowPreviews(screen)
   let borderColor = rgbaColorToArgb(model.recentWindows.highlight.activeColor)
   let selectedFillColor = rgbaColorToArgb(
-    model.recentWindows.highlight.activeColor.rgbaWithAlpha(SelectedFillAlpha)
-  )
+      model.recentWindows.highlight.activeColor.rgbaWithAlpha(SelectedFillAlpha)
+    )
+    .premultiplyArgb()
   let padding = max(0'i32, model.recentWindows.highlight.padding)
   for preview in previews:
     if preview.selected:
@@ -70,7 +83,7 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
         preview.geom.x - screen.x - padding,
         preview.geom.y - screen.y - padding,
         preview.geom.w + padding * 2,
-        preview.geom.h + padding * 2 + TitleGap + TitleStyle.textHeight(),
+        preview.selectedChromeHeight(padding),
         SelectedBorderWidth,
         borderColor,
       )
