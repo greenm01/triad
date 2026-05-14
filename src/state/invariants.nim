@@ -51,14 +51,25 @@ proc validateInvariants*(model: Model): InvariantReport =
     if model.tags.entity(tagId).isNone:
       result.addError("outputTags references missing tag: " & $tagId)
 
+  for tagId, outputId in model.tagOutputs.pairs:
+    if model.tags.entity(tagId).isNone:
+      result.addError("tagOutputs references missing tag: " & $tagId)
+    if model.outputs.entity(outputId).isNone:
+      result.addError("tagOutputs references missing output: " & $outputId)
+
+  if model.activeOutput != NullOutputId and
+      model.outputs.entity(model.activeOutput).isNone:
+    result.addError("active output is missing: " & $model.activeOutput)
+
   if model.primaryOutput != NullOutputId:
     if model.outputs.entity(model.primaryOutput).isNone:
       result.addError("primary output is missing: " & $model.primaryOutput)
-    elif model.activeTag != NullTagId:
-      if not model.outputTags.hasKey(model.primaryOutput):
-        result.addError("primary output has no active tag mapping")
-      elif model.outputTags[model.primaryOutput] != model.activeTag:
-        result.addError("primary output tag does not match active tag")
+
+  if model.activeOutput != NullOutputId and model.activeTag != NullTagId:
+    if not model.outputTags.hasKey(model.activeOutput):
+      result.addError("active output has no active tag mapping")
+    elif model.outputTags[model.activeOutput] != model.activeTag:
+      result.addError("active output tag does not match active tag")
 
   for _, column in model.columnsWithId():
     if model.tags.entity(column.tagId).isNone:

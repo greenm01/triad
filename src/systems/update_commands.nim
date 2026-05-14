@@ -2,8 +2,8 @@ import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import Direction
 import
-  dialog_focus, focus, placement, runtime, scratchpad, update_effects, window_state,
-  window_rules, workspaces
+  dialog_focus, focus, output_navigation, placement, runtime, scratchpad,
+  update_effects, window_state, window_rules, workspaces
 
 proc closeOverview(model: var Model): bool =
   result = model.setOverviewActive(false)
@@ -96,6 +96,12 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.focusWorkspaceSlot(msg.focusTag)
   of MsgKind.CmdFocusWorkspaceIndex:
     result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
+  of MsgKind.CmdFocusOutput:
+    result.dirty = model.focusOutputTarget(msg.outputTarget)
+  of MsgKind.CmdMoveWorkspaceToOutput:
+    result.dirty = model.moveActiveWorkspaceToOutputTarget(msg.outputTarget)
+  of MsgKind.CmdMoveToOutput:
+    result.dirty = model.moveFocusedWindowToOutputTarget(msg.outputTarget)
   of MsgKind.CmdFocusWindowById:
     result.dirty = model.focusExternalWindow(msg.focusWindowId.externalWindowId())
   of MsgKind.CmdMoveToTag:

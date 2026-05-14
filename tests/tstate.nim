@@ -573,7 +573,7 @@ suite "Runtime state primitives":
     check not report.ok
     check report.errors.anyIt(it.message.contains("tag focused window is minimized"))
 
-  test "invariants reject primary output tag drift":
+  test "invariants reject active output tag drift":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (outputModel, _) = model.update(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
@@ -584,11 +584,11 @@ suite "Runtime state primitives":
     )
     model = next
 
-    let primary = model.primaryOutput
-    model.outputTags[primary] = model.tagForSlot(2)
+    let activeOutput = model.activeOutput
+    model.outputTags[activeOutput] = model.tagForSlot(2)
 
     let report = model.validateInvariants()
     check not report.ok
     check report.errors.anyIt(
-      it.message.contains("primary output tag does not match active tag")
+      it.message.contains("active output tag does not match active tag")
     )

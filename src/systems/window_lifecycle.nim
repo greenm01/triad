@@ -1,7 +1,7 @@
-import std/[options, strutils, tables]
+import std/[options, tables]
 import
-  focus, placement, popup_tree, window_policy, scratchpad, window_rules, window_state,
-  workspaces
+  focus, outputs, placement, popup_tree, window_policy, scratchpad, window_rules,
+  window_state, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole
 
@@ -44,44 +44,8 @@ proc placeSecondaryRuleTarget(
     discard model.setTagFocus(targetTag, winId)
   true
 
-proc knownOutputIdentity(value: string): string =
-  result = value.strip()
-  if result.cmpIgnoreCase("Unknown") == 0:
-    result = ""
-
-proc outputMakeModelSerial(output: OutputData): string =
-  let make = output.make.knownOutputIdentity()
-  let modelName = output.model.knownOutputIdentity()
-  if make.len == 0 and modelName.len == 0:
-    return ""
-  (if make.len > 0: make else: "Unknown") & " " &
-    (if modelName.len > 0: modelName else: "Unknown") & " Unknown"
-
-proc outputMatchesRuleName(
-    model: Model, outputId: OutputId, output: OutputData, name: string
-): bool =
-  let target = name.strip()
-  if target.len == 0:
-    return false
-  if output.name.cmpIgnoreCase(target) == 0:
-    return true
-  if model.shellOutputName(outputId).cmpIgnoreCase(target) == 0:
-    return true
-  let stableName = output.outputMakeModelSerial()
-  if stableName.len > 0 and stableName.cmpIgnoreCase(target) == 0:
-    return true
-  output.description.len > 0 and output.description.cmpIgnoreCase(target) == 0
-
-proc outputForRuleName(model: Model, name: string): OutputId =
-  if name.strip().len == 0:
-    return NullOutputId
-  for outputId, output in model.outputsWithId():
-    if model.outputMatchesRuleName(outputId, output, name):
-      return outputId
-  NullOutputId
-
 proc visibleSlotForOutputRule(model: Model, name: string): uint32 =
-  let outputId = model.outputForRuleName(name)
+  let outputId = model.outputForTarget(name)
   if outputId == NullOutputId:
     return 0
   for mappedOutputId, tagId in model.outputTagsWithId():
@@ -102,7 +66,7 @@ proc remapWindowRuleOutput(
   if parentKnown or hasRestoredTag or hasRestoredWindow:
     return false
 
-  let outputId = model.outputForRuleName(outputName)
+  let outputId = model.outputForTarget(outputName)
   if outputId == NullOutputId or outputId == model.primaryOutput:
     return false
 
@@ -568,6 +532,8 @@ proc createWindowForExternal*(
           targetTag, ruleMatch.rule.openOnOutput, parentKnown, hasRestoredTag,
           hasRestoredWindow,
         )
+      else:
+        discard model.learnTagOutputFromActive(targetTag)
       if forcedLayout != 0:
         discard model.setTagLayout(
           targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)

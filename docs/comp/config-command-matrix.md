@@ -68,7 +68,8 @@ external window manager.
 | Tags | Toggle/multi-tag view | `toggletag`, `toggleview`, `comboview` | WM policy | | | Triad uses canonical tag masks internally but exposes single-target commands. |
 | Tags | Rename tags | | WM policy | `rename-tag`, `workspace-rules { workspace ... name=... }` | X | Runtime commands use tags; config uses workspace language. |
 | Tags | Tag rules | `tagrule` | WM policy | `workspace-rules { workspace ... }` | X | Triad supports workspace name and default layout rules backed by internal tags. |
-| Monitor focus | Focus monitor | `focusmon` | WM policy | | | Triad is currently single-seat/output-oriented in command surface. |
+| Monitor focus | Focus monitor | `focusmon` | WM policy | `focus-output` | X | Accepts connector/identity targets plus `left`, `right`, `up`, `down`, `next`, and `previous`. |
+| Monitor focus | Move workspace/window to monitor | `tagmon`, `toggletagmon` | WM policy | `move-workspace-to-output`, `move-to-output` | X | Workspaces keep output affinity and restore to reconnected outputs. |
 | Monitor focus | Move window to monitor | `tagmon`, `tagcrossmon`, `viewcrossmon` | WM policy | | | No Triad config command. |
 | Focus | Directional focus | `focusdir` | `river_seat_v1.focus_window` primitive | `focus-left/right/up/down` | X | Triad maps to model focus commands. |
 | Focus | Stack/next/previous focus | `focusstack` | WM policy | `focus-next`, `focus-prev` | X | |
@@ -283,7 +284,8 @@ KDL config nodes and fields:
   `scroller-prefer-center`, `enable-animations`, `animation-speed`,
   `smart-gaps`, `layout-cycle`.
 - `workspaces`: `default-count`, `default-layout`.
-- `workspace-rules`: `workspace <id> name=... default-layout=...`.
+- `workspace-rules`: `workspace <id> name=... default-layout=...
+  open-on-output=...`.
 - `window-rule`: `match app-id=... title=... is-focused=... is-active=...
   is-active-in-column=... is-floating=... at-startup=...`, matching `exclude` properties,
   `default-workspace`,

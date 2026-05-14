@@ -224,6 +224,7 @@ type
     name*: string
     defaultLayoutSet*: bool
     defaultLayout*: LayoutMode
+    openOnOutput*: string
 
   WorkspaceConfig* = object
     defaultCount*: uint32

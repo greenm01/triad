@@ -63,7 +63,7 @@ workspace-rules {
     workspace 1 name="term"
     workspace 2 name="web"
     workspace 3 name="files"
-    workspace 4 name="chat" default-layout="monocle"
+    workspace 4 name="chat" default-layout="monocle" open-on-output="HDMI-A-1"
 }
 
 // cursor {

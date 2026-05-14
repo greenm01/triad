@@ -3,12 +3,14 @@ import ../state/entity_manager
 import ../types/[core, model]
 
 proc syncPrimaryOutputTag*(model: var Model): bool =
-  if model.primaryOutput == NullOutputId or model.activeTag == NullTagId:
+  let outputId =
+    if model.activeOutput != NullOutputId: model.activeOutput else: model.primaryOutput
+  if outputId == NullOutputId or model.activeTag == NullTagId:
     return false
-  if model.outputs.entity(model.primaryOutput).isNone or
-      model.tags.entity(model.activeTag).isNone:
+  if model.outputs.entity(outputId).isNone or model.tags.entity(model.activeTag).isNone:
     return false
-  model.outputTags[model.primaryOutput] = model.activeTag
+  model.outputTags[outputId] = model.activeTag
+  model.tagOutputs[model.activeTag] = outputId
   true
 
 proc setActiveWorkspace*(model: var Model, tagId: TagId): bool =
@@ -17,6 +19,12 @@ proc setActiveWorkspace*(model: var Model, tagId: TagId): bool =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
     return false
+  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  if mappedOutput != NullOutputId and model.outputs.entity(mappedOutput).isSome:
+    model.activeOutput = mappedOutput
+  elif model.activeOutput == NullOutputId and model.primaryOutput != NullOutputId and
+      model.outputs.entity(model.primaryOutput).isSome:
+    model.activeOutput = model.primaryOutput
   model.activeTag = tagId
   model.activeSlot = tagOpt.get().slot
   discard model.syncPrimaryOutputTag()

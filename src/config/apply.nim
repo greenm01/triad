@@ -1,8 +1,9 @@
-import std/[options, re, strutils]
+import std/[options, re, sets, strutils]
 import chronicles
 import parser
 import defaults
 import ../state/engine
+import ../systems/outputs
 import ../systems/window_rules
 import ../systems/workspaces
 import ../types/runtime_values as rv
@@ -161,6 +162,7 @@ proc tagRuleData(rule: rv.TagRule): TagRuleData =
     name: rule.name,
     defaultLayoutSet: rule.defaultLayoutSet,
     defaultLayout: rule.defaultLayout,
+    openOnOutput: rule.openOnOutput.strip(),
   )
 
 proc applyConfig*(model: var Model, config: Config) =
@@ -185,6 +187,12 @@ proc applyConfig*(model: var Model, config: Config) =
   model.smartGaps = config.layout.smartGaps
   model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
   model.defaultWorkspaceLayout = config.workspaces.defaultLayout
+
+  var pinnedTagOutputs: seq[TagId] = @[]
+  for tagId in model.tagHomeOutputPinned:
+    pinnedTagOutputs.add(tagId)
+  for tagId in pinnedTagOutputs:
+    discard model.clearTagHomeOutput(tagId)
 
   model.tagRules = @[]
   for rule in config.tagRules:
@@ -274,6 +282,12 @@ proc applyConfig*(model: var Model, config: Config) =
         )
       if tagRule.found:
         discard model.setTagName(tagId, tagRule.rule.name)
+        if tagRule.rule.openOnOutput.len > 0:
+          discard
+            model.setTagHomeOutput(tagId, tagRule.rule.openOnOutput, pinned = true)
+          let outputId = model.outputForTarget(tagRule.rule.openOnOutput)
+          if outputId != NullOutputId:
+            discard model.setTagOutput(tagId, outputId)
 
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()

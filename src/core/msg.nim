@@ -125,6 +125,9 @@ type
     CmdFocusTag
     CmdFocusWorkspaceIndex
     CmdMoveToWorkspaceIndex
+    CmdFocusOutput
+    CmdMoveWorkspaceToOutput
+    CmdMoveToOutput
     CmdFocusWindowById
     CmdCloseWindowById
     CmdSpawn
@@ -288,6 +291,8 @@ type
       focusTag*: uint32
     of MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdMoveToWorkspaceIndex:
       workspaceIndex*: uint32
+    of MsgKind.CmdFocusOutput, MsgKind.CmdMoveWorkspaceToOutput, MsgKind.CmdMoveToOutput:
+      outputTarget*: string
     of MsgKind.CmdFocusWindowById:
       focusWindowId*: WindowId
     of MsgKind.CmdCloseWindowById:

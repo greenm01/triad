@@ -337,11 +337,24 @@ proc shellOutputName*(model: Model, outputId: OutputId): string =
       return "river-" & $uint32(output.externalId)
   "triad-0"
 
+proc outputActiveTag*(model: Model, outputId: OutputId): TagId =
+  model.outputTags.getOrDefault(outputId, NullTagId)
+
+proc tagHasOutput*(model: Model, tagId: TagId): bool =
+  model.tagOutputs.getOrDefault(tagId, NullOutputId) != NullOutputId
+
 proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
-  result = model.primaryOutput
+  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  if mappedOutput != NullOutputId and model.outputData(mappedOutput).isSome:
+    return mappedOutput
   for outputId, outputTag in model.outputTagsWithId():
     if outputTag == tagId:
       return outputId
+  result =
+    if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
+      model.activeOutput
+    else:
+      model.primaryOutput
 
 proc shellWorkspaceOutputName*(model: Model, tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))

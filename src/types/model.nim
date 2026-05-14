@@ -225,6 +225,7 @@ type
     name*: string
     defaultLayoutSet*: bool
     defaultLayout*: LayoutMode
+    openOnOutput*: string
 
   RestoredWindowData* = object
     slot*: uint32
@@ -311,6 +312,10 @@ type
     windowsByColumn*: Table[ColumnId, seq[WindowId]]
     placementByTagWindow*: Table[(TagId, WindowId), WindowPlacement]
     outputTags*: Table[OutputId, TagId]
+    tagOutputs*: Table[TagId, OutputId]
+    tagHomeOutputTargets*: Table[TagId, string]
+    tagHomeOutputPinned*: HashSet[TagId]
+    outputLastActiveSlots*: Table[string, uint32]
     groupByWindow*: Table[WindowId, GroupId]
     scratchpadWindows*: seq[WindowId]
     namedScratchpads*: Table[string, WindowId]
@@ -319,6 +324,7 @@ type
 
     activeTag*: TagId
     activeSlot*: uint32
+    activeOutput*: OutputId
     primaryOutput*: OutputId
     defaultWorkspaceCount*: uint32
     defaultWorkspaceLayout*: LayoutMode

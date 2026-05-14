@@ -321,6 +321,25 @@ proc parseTextCommand*(line: string): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
+  of "focus-output":
+    if parts.len >= 2:
+      some(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: parts[1 ..^ 1].join(" ")))
+    else:
+      none(Msg)
+  of "move-workspace-to-output":
+    if parts.len >= 2:
+      some(
+        Msg(
+          kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: parts[1 ..^ 1].join(" ")
+        )
+      )
+    else:
+      none(Msg)
+  of "move-to-output":
+    if parts.len >= 2:
+      some(Msg(kind: MsgKind.CmdMoveToOutput, outputTarget: parts[1 ..^ 1].join(" ")))
+    else:
+      none(Msg)
   of "focus-workspace":
     if parts.len >= 2:
       let index = parseUInt32Arg(parts[1])

@@ -5302,6 +5302,94 @@ suite "Core Runtime Logic":
     check output.model == "DELL U2720Q"
     check output.description == "Dell Inc. 27 inch"
 
+  test "Workspace rules pin workspace home output after output appears":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules: @[TagRule(tagId: 2, openOnOutput: "HDMI-A-1")],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+
+    let tagId = model.tagForSlot(2)
+    let outputId = model.outputForExternal(ExternalOutputId(2))
+    check model.workspaceOutput(tagId) == outputId
+    check model.tagHomeOutputTargets[tagId] == "HDMI-A-1"
+
+  test "Output commands focus and move active workspace by target":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputPosition, positionOutputId: 1, outputX: 0, outputY: 0)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "HDMI-A-1")
+    )
+
+    let outputId = model.outputForExternal(ExternalOutputId(2))
+    check model.activeOutput == outputId
+    check model.workspaceOutput(model.tagForSlot(2)) == outputId
+    check model.outputTags[outputId] == model.tagForSlot(2)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "left"))
+    check model.activeOutput == model.outputForExternal(ExternalOutputId(1))
+
+  test "Moved workspace restores to reconnected output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "HDMI-A-1")
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 2))
+
+    check model.workspaceOutput(model.tagForSlot(2)) == model.primaryOutput
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+
+    let outputId = model.outputForExternal(ExternalOutputId(2))
+    check model.workspaceOutput(model.tagForSlot(2)) == outputId
+    check model.outputTags[outputId] == model.tagForSlot(2)
+
   test "Window rule open-on-output matches stable output identity":
     var model = initRuntimeStateFromConfig(
       Config(

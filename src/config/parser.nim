@@ -598,12 +598,16 @@ proc loadConfig*(path: string): Config =
                 layoutSet = true
                 layout =
                   parseLayoutName(child.props["default-layout"].kString(), layout)
+              var openOnOutput = ""
+              if child.props.hasKey("open-on-output"):
+                openOnOutput = child.props["open-on-output"].kString().strip()
               result.tagRules.add(
                 TagRule(
                   tagId: id,
                   defaultLayoutSet: layoutSet,
                   defaultLayout: layout,
                   name: tagName,
+                  openOnOutput: openOnOutput,
                 )
               )
             except CatchableError as e:

@@ -341,7 +341,7 @@ workspace-rules {
   workspace 1 name="term"
   workspace 2 name="web"
   workspace 3 name="files"
-  workspace 4 name="chat" default-layout="deck"
+  workspace 4 name="chat" default-layout="deck" open-on-output="HDMI-A-1"
 }
 ```
 
@@ -353,6 +353,10 @@ workspace-rules {
 - `workspace <n> default-layout="..."`: gives that workspace slot an explicit
   layout default. Explicit workspace-rule layouts override
   `workspaces.default-layout`.
+- `workspace <n> open-on-output="..."`: pins the workspace's home output.
+  Targets use the same connector, shell fallback, make/model identity, or
+  description matching as window-rule `open-on-output`. Dynamic output
+  reconnects restore the workspace to that output when the target reappears.
 - Workspace rules beyond `default-count` are valid dynamic workspace templates.
 
 ## Hotkey Overlay

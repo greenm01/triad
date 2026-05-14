@@ -1,4 +1,5 @@
 import std/[algorithm, options]
+import outputs
 import ../state/engine
 
 proc activeWorkspaceSlot*(model: Model): uint32 =
@@ -35,6 +36,13 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
     masterCount = model.defaultMasterCount(),
     masterSplitRatio = model.defaultMasterRatio(),
   )
+  if tagRule.found and tagRule.rule.openOnOutput.len > 0:
+    discard model.setTagHomeOutput(result, tagRule.rule.openOnOutput, pinned = true)
+    let outputId = model.outputForTarget(tagRule.rule.openOnOutput)
+    if outputId != NullOutputId:
+      discard model.setTagOutput(result, outputId)
+  else:
+    discard model.learnTagOutputFromActive(result)
 
 proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
   let defaultCount = model.defaultWorkspaceCount()

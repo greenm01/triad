@@ -180,6 +180,9 @@ proc destroyTag*(model: var Model, tagId: TagId): bool =
       outputIds.add(outputId)
   for outputId in outputIds:
     model.outputTags.del(outputId)
+  model.tagOutputs.del(tagId)
+  model.tagHomeOutputTargets.del(tagId)
+  model.tagHomeOutputPinned.excl(tagId)
 
   discard model.removeWorkspaceHistoryRef(tagId)
   discard model.clearActiveWorkspaceIfTag(tagId)

@@ -294,7 +294,7 @@ workspaces {
 }
 workspace-rules {
   workspace 1 name="term"
-  workspace 2 name="web" default-layout="grid"
+  workspace 2 name="web" default-layout="grid" open-on-output="HDMI-A-1"
 }
 window-rule {
   match app-id="qemu"
@@ -415,6 +415,7 @@ bindings {
     check config.tagRules[1].tagId == 2
     check config.tagRules[1].defaultLayoutSet
     check config.tagRules[1].defaultLayout == LayoutMode.Grid
+    check config.tagRules[1].openOnOutput == "HDMI-A-1"
     check config.windowRules.len == 1
     check config.windowRules[0].matches.len == 1
     check config.windowRules[0].matches[0].appIdSet
