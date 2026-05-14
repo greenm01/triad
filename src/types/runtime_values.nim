@@ -470,6 +470,20 @@ type
     AxisLeft
     AxisRight
 
+  GestureBindingDirection* {.pure.} = enum
+    GestureNone
+    GestureSwipeLeft
+    GestureSwipeRight
+    GestureSwipeUp
+    GestureSwipeDown
+
+  SwitchEventKind* {.pure.} = enum
+    SwitchNone
+    SwitchLidClose
+    SwitchLidOpen
+    SwitchTabletModeOn
+    SwitchTabletModeOff
+
   KeyBindingConfig* = object
     key*: string
     modifiers*: uint32
@@ -495,6 +509,18 @@ type
     command*: string
     mode*: BindingMode
     bypassShortcutsInhibit*: bool
+
+  GestureBindingConfig* = object
+    direction*: GestureBindingDirection
+    fingers*: uint32
+    modifiers*: uint32
+    command*: string
+    mode*: BindingMode
+    bypassShortcutsInhibit*: bool
+
+  SwitchEventConfig* = object
+    kind*: SwitchEventKind
+    command*: string
 
   ProtocolSurfacesConfig* = object
     enabled*: bool

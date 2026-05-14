@@ -294,6 +294,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.keyBindings = config.keyBindings
   model.pointerBindings = config.pointerBindings
   model.axisBindings = config.axisBindings
+  model.gestureBindings = config.gestureBindings
+  model.switchEvents = config.switchEvents
   model.layoutCycle = runtimeLayoutCycle(config.layout.layoutCycle)
 
   for slot in 1'u32 .. model.defaultWorkspaceCount:

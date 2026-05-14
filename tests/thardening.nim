@@ -109,6 +109,64 @@ suite "Crash hardening":
     check daemon.dispatchAxisBindingTicks(1'u32, 1, horizontalAxis = true)
     check daemon.popQueuedMessage().direction == Direction.DirRight
 
+  test "gesture bindings dispatch matching synthetic swipes":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        gestureBindings:
+          @[
+            GestureBindingConfig(
+              direction: GestureBindingDirection.GestureSwipeLeft,
+              fingers: 3,
+              modifiers: 64'u32,
+              command: "focus-left",
+            ),
+            GestureBindingConfig(
+              direction: GestureBindingDirection.GestureSwipeUp,
+              fingers: 4,
+              modifiers: 64'u32,
+              command: "toggle-overview",
+              mode: BindingMode.BindOverview,
+            ),
+          ]
+      )
+    )
+    daemon.runtimeState.model.activeModifiers = 64'u32
+
+    check not daemon.dispatchGestureBinding(
+      1'u32, GestureBindingDirection.GestureSwipeLeft, 4
+    )
+    check daemon.dispatchGestureBinding(
+      1'u32, GestureBindingDirection.GestureSwipeLeft, 3
+    )
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+    check not daemon.dispatchGestureBinding(
+      1'u32, GestureBindingDirection.GestureSwipeUp, 4
+    )
+    daemon.runtimeState.model.overviewActive = true
+    check daemon.dispatchGestureBinding(
+      1'u32, GestureBindingDirection.GestureSwipeUp, 4
+    )
+    check daemon.popQueuedMessage().kind == MsgKind.CmdToggleOverview
+
+  test "switch events dispatch configured commands while session is locked":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        switchEvents:
+          @[
+            SwitchEventConfig(
+              kind: SwitchEventKind.SwitchLidOpen, command: "focus-right"
+            )
+          ]
+      )
+    )
+    daemon.runtimeState.model.sessionLocked = true
+
+    check not daemon.dispatchSwitchEvent(SwitchEventKind.SwitchLidClose)
+    check daemon.dispatchSwitchEvent(SwitchEventKind.SwitchLidOpen)
+    check daemon.popQueuedMessage().direction == Direction.DirRight
+
   test "daemon overview hot corner opens once and rearms after leave":
     var daemon = initTriadDaemon()
     daemon.runtimeState = initRuntimeStateFromConfig(

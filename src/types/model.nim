@@ -4,12 +4,12 @@ from core import
   IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, CursorConfig, EnvironmentEntryConfig, InputConfig,
-  KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
+  GestureBindingConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter, RecentWindowScope,
-  RecentWindowsConfig, Rect, ScreenshotConfig, TerminalConfig, WindowRuleBorderConfig,
-  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
-  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  RecentWindowsConfig, Rect, ScreenshotConfig, SwitchEventConfig, TerminalConfig,
+  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
+  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -447,6 +447,8 @@ type
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
     axisBindings*: seq[AxisBindingConfig]
+    gestureBindings*: seq[GestureBindingConfig]
+    switchEvents*: seq[SwitchEventConfig]
     pointerOp*: PointerOpData
     screenLockCommand*: seq[string]
     windowMenuCommand*: seq[string]

@@ -33,6 +33,8 @@ type
     keyBindings*: seq[KeyBindingConfig]
     pointerBindings*: seq[PointerBindingConfig]
     axisBindings*: seq[AxisBindingConfig]
+    gestureBindings*: seq[GestureBindingConfig]
+    switchEvents*: seq[SwitchEventConfig]
 
   LayoutConfig* = object
     gaps*: int32
@@ -516,6 +518,22 @@ proc axisDirectionValue(name: string): AxisBindingDirection =
   of "wheel-right": AxisBindingDirection.AxisRight
   else: AxisBindingDirection.AxisNone
 
+proc gestureDirectionValue(name: string): GestureBindingDirection =
+  case name.toLowerAscii()
+  of "swipe-left": GestureBindingDirection.GestureSwipeLeft
+  of "swipe-right": GestureBindingDirection.GestureSwipeRight
+  of "swipe-up": GestureBindingDirection.GestureSwipeUp
+  of "swipe-down": GestureBindingDirection.GestureSwipeDown
+  else: GestureBindingDirection.GestureNone
+
+proc switchEventKindValue(name: string): SwitchEventKind =
+  case name.toLowerAscii()
+  of "lid-close": SwitchEventKind.SwitchLidClose
+  of "lid-open": SwitchEventKind.SwitchLidOpen
+  of "tablet-mode-on": SwitchEventKind.SwitchTabletModeOn
+  of "tablet-mode-off": SwitchEventKind.SwitchTabletModeOff
+  else: SwitchEventKind.SwitchNone
+
 proc parseBindingMode(value: string): BindingMode =
   case value.normalize()
   of "normal": BindingMode.BindNormal
@@ -693,6 +711,13 @@ proc ensureHotkeyOverlayFallback(bindings: var seq[KeyBindingConfig]) =
   let fallback = hotkeyOverlayFallbackBinding()
   if not bindings.hasHotkeyOverlayCommand() and not bindings.hasKeySlot(fallback):
     bindings.add(fallback)
+
+proc setSwitchEvent(events: var seq[SwitchEventConfig], event: SwitchEventConfig) =
+  for i, existing in events.mpairs:
+    if existing.kind == event.kind:
+      events[i] = event
+      return
+  events.add(event)
 
 proc parsePresentationMode(value: string): tuple[valid: bool, mode: PresentationMode] =
   case value.toLowerAscii()
@@ -1290,11 +1315,52 @@ proc loadConfig*(path: string): Config =
                   binding.bypassShortcutsInhibit =
                     not child.props["allow-inhibiting"].kBool()
                 result.axisBindings.add(binding)
+            elif child.name == "gesture-bind" and child.args.len >= 2:
+              let spec = parseKeySpec(child.args[0].kString())
+              let direction = gestureDirectionValue(spec.key)
+              let fingers =
+                if child.props.hasKey("fingers"):
+                  child.props["fingers"].kInt()
+                else:
+                  0
+              let command = child.args[1].kString()
+              if direction != GestureBindingDirection.GestureNone and fingers in 3 .. 4 and
+                  command.len > 0:
+                var binding = GestureBindingConfig(
+                  direction: direction,
+                  fingers: uint32(fingers),
+                  modifiers: spec.modifiers,
+                  command: command,
+                  mode: BindingMode.BindAlways,
+                )
+                if child.props.hasKey("mode"):
+                  binding.mode = parseBindingMode(child.props["mode"].kString())
+                if child.props.hasKey("allow-inhibiting"):
+                  binding.bypassShortcutsInhibit =
+                    not child.props["allow-inhibiting"].kBool()
+                result.gestureBindings.add(binding)
           except CatchableError as e:
             warn "Ignoring invalid binding config field",
               field = child.name, error = e.msg
         if result.mirrorHjklArrows:
           result.keyBindings.mirrorHjklArrowBindings()
+      elif node.name == "switch-events":
+        for child in node.children:
+          try:
+            let kind = switchEventKindValue(child.name)
+            if kind == SwitchEventKind.SwitchNone:
+              warn "Ignoring invalid switch event config field", field = child.name
+              continue
+            if child.args.len == 0:
+              continue
+            let command = child.args[0].kString()
+            if command.len > 0:
+              result.switchEvents.setSwitchEvent(
+                SwitchEventConfig(kind: kind, command: command)
+              )
+          except CatchableError as e:
+            warn "Ignoring invalid switch event config field",
+              field = child.name, error = e.msg
       elif node.name == "quickshell":
         for child in node.children:
           try:

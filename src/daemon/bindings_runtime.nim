@@ -246,6 +246,14 @@ proc axisBindingActive(daemon: TriadDaemon, binding: AxisBindingConfig): bool =
     return false
   true
 
+proc gestureBindingActive(daemon: TriadDaemon, binding: GestureBindingConfig): bool =
+  if not daemon.bindingModeActive(binding.mode):
+    return false
+  if daemon.currentModel.keyboardShortcutsInhibited() and
+      not binding.bypassShortcutsInhibit:
+    return false
+  true
+
 proc axisDirectionForWheelTicks*(
     horizontalAxis: bool, ticks: int32
 ): AxisBindingDirection =
@@ -267,6 +275,24 @@ proc activeAxisBinding(
         daemon.axisBindingActive(binding):
       return some(binding)
   none(AxisBindingConfig)
+
+proc activeGestureBinding(
+    daemon: TriadDaemon, direction: GestureBindingDirection, fingers: uint32
+): Option[GestureBindingConfig] =
+  let modifiers = daemon.currentModel.activeModifiers
+  for binding in daemon.currentModel.gestureBindings:
+    if binding.direction == direction and binding.fingers == fingers and
+        binding.modifiers == modifiers and daemon.gestureBindingActive(binding):
+      return some(binding)
+  none(GestureBindingConfig)
+
+proc activeSwitchEvent(
+    daemon: TriadDaemon, kind: SwitchEventKind
+): Option[SwitchEventConfig] =
+  for event in daemon.currentModel.switchEvents:
+    if event.kind == kind:
+      return some(event)
+  none(SwitchEventConfig)
 
 proc overviewHotCornerCanOpen(daemon: TriadDaemon): bool =
   not daemon.currentModel.overviewActive and not daemon.currentModel.sessionLocked and
@@ -664,6 +690,37 @@ proc dispatchAxisBindingTicks*(
   let seat = daemon.riverSeatPointerById(seatId)
   for _ in 0 ..< abs(ticks).int:
     daemon.enqueuePointerCommand(seatId, seat, msg.get())
+  true
+
+proc dispatchGestureBinding*(
+    daemon: var TriadDaemon,
+    seatId: uint32,
+    direction: GestureBindingDirection,
+    fingers: uint32,
+): bool =
+  if direction == GestureBindingDirection.GestureNone:
+    return false
+  let binding = daemon.activeGestureBinding(direction, fingers)
+  if binding.isNone:
+    return false
+  let msg = parseTextCommand(binding.get().command)
+  if msg.isNone:
+    return false
+
+  let seat = daemon.riverSeatPointerById(seatId)
+  daemon.enqueuePointerCommand(seatId, seat, msg.get())
+  true
+
+proc dispatchSwitchEvent*(daemon: var TriadDaemon, kind: SwitchEventKind): bool =
+  if kind == SwitchEventKind.SwitchNone:
+    return false
+  let event = daemon.activeSwitchEvent(kind)
+  if event.isNone:
+    return false
+  let msg = parseTextCommand(event.get().command)
+  if msg.isNone:
+    return false
+  daemon.enqueue(msg.get())
   true
 
 proc onWlPointerFrame(data: pointer, pointer: ptr Pointer) =

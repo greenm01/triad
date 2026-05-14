@@ -108,6 +108,21 @@ suite "KDL Configuration Parser: loading reload":
             command: "focus-left",
           )
         ],
+      gestureBindings:
+        @[
+          GestureBindingConfig(
+            direction: GestureBindingDirection.GestureSwipeLeft,
+            fingers: 3,
+            modifiers: 64'u32,
+            command: "focus-left",
+          )
+        ],
+      switchEvents:
+        @[
+          SwitchEventConfig(
+            kind: SwitchEventKind.SwitchLidClose, command: "lock-session"
+          )
+        ],
     )
 
     check state.applyRuntimeConfig(config)
@@ -123,6 +138,8 @@ suite "KDL Configuration Parser: loading reload":
     check state.model.overviewZoom == 0.25'f32
     check state.model.keyBindings.len == 1
     check state.model.axisBindings.len == 1
+    check state.model.gestureBindings.len == 1
+    check state.model.switchEvents.len == 1
 
     let snapshot = state.model.shellSnapshot()
     check snapshot.windows.len == 1

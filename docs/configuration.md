@@ -78,9 +78,11 @@ The supported KDL nodes are:
   parented-dialog viewport jump behavior, terminal swallowing policy, size-hint
   policy, shortcut inhibition, presentation mode,
   border/focus-ring/clip policy, and forced layout.
-- `bindings`: keyboard bindings, pointer button and wheel bindings,
+- `bindings`: keyboard bindings, pointer button, wheel, and gesture bindings,
   HJKL/arrow mirroring,
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
+- `switch-events`: dormant hardware switch command bindings for lid and tablet
+  mode events.
 - `environment`, `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
 - `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`,
@@ -562,7 +564,8 @@ output "HDMI-A-1" {
 
 ## Bindings
 
-`bindings` stores keyboard, pointer button, and wheel-axis command bindings:
+`bindings` stores keyboard, pointer button, wheel-axis, and dormant gesture
+command bindings:
 
 ```kdl
 bindings {
@@ -571,6 +574,8 @@ bindings {
   pointer-bind "Super+right" "resize"
   axis-bind "Super+wheel-up" "focus-left"
   axis-bind "Super+wheel-down" "focus-right" mode="overview" allow-inhibiting=#false
+  gesture-bind "Super+swipe-left" "focus-left" fingers=3
+  gesture-bind "Super+swipe-up" "toggle-overview" fingers=4
 }
 ```
 
@@ -584,10 +589,34 @@ bindings {
   Supported directions are `wheel-up`, `wheel-down`, `wheel-left`, and
   `wheel-right`. Large scroll events run once per accumulated 120-unit wheel
   detent.
+- `gesture-bind "<modifiers+swipe-direction>" "<command>" fingers=<3|4>`:
+  stores a touchpad swipe binding. Supported directions are `swipe-left`,
+  `swipe-right`, `swipe-up`, and `swipe-down`. The config and synthetic runtime
+  dispatcher exist, but live hardware gesture delivery still needs a compositor
+  or input event source.
 - `mode="normal"|"overview"|"recent"` limits a binding to that mode. Omitted
   mode means always active.
 - `allow-inhibiting=#false` lets a binding bypass a focused client's keyboard
   shortcuts inhibition.
+
+## Switch Events
+
+`switch-events` stores dormant hardware switch command bindings:
+
+```kdl
+switch-events {
+  lid-close "lock-session"
+  lid-open "spawn notify-send lid-open"
+  tablet-mode-on "spawn onboard"
+  tablet-mode-off "spawn pkill onboard"
+}
+```
+
+Supported events are `lid-close`, `lid-open`, `tablet-mode-on`, and
+`tablet-mode-off`. Switch events are dispatched independently of binding mode,
+shortcut inhibition, and session lock once a live event source is connected.
+The config surface and synthetic runtime dispatcher exist now; live hardware
+delivery still needs a compositor or input event source.
 
 ## Recent Windows
 

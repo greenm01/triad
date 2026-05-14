@@ -220,6 +220,17 @@ bindings {
   axis-bind "Super+wheel-up" "focus-column-left"
   axis-bind "Super+wheel-down" "focus-column-right" mode="overview" allow-inhibiting=#false
   axis-bind "Super+up" "focus-up"
+  gesture-bind "Super+swipe-left" "focus-left" fingers=3
+  gesture-bind "Super+swipe-up" "toggle-overview" fingers=4 mode="normal" allow-inhibiting=#false
+  gesture-bind "Super+pinch-in" "focus-up" fingers=3
+  gesture-bind "Super+swipe-down" "focus-down" fingers=2
+}
+switch-events {
+  lid-open "spawn notify-send open"
+  lid-open "spawn notify-send opened"
+  lid-close "lock-session"
+  tablet-mode-on "spawn onboard"
+  unknown-switch "spawn ignored"
 }
 """,
     )
@@ -479,6 +490,27 @@ bindings {
       it.direction == AxisBindingDirection.AxisDown and it.modifiers == Super and
         it.command == "focus-column-right" and it.mode == BindingMode.BindOverview and
         it.bypassShortcutsInhibit
+    )
+    check config.gestureBindings.len == 2
+    check config.gestureBindings.anyIt(
+      it.direction == GestureBindingDirection.GestureSwipeLeft and it.fingers == 3 and
+        it.modifiers == Super and it.command == "focus-left"
+    )
+    check config.gestureBindings.anyIt(
+      it.direction == GestureBindingDirection.GestureSwipeUp and it.fingers == 4 and
+        it.modifiers == Super and it.command == "toggle-overview" and
+        it.mode == BindingMode.BindNormal and it.bypassShortcutsInhibit
+    )
+    check config.switchEvents.len == 3
+    check config.switchEvents.anyIt(
+      it.kind == SwitchEventKind.SwitchLidOpen and
+        it.command == "spawn notify-send opened"
+    )
+    check config.switchEvents.anyIt(
+      it.kind == SwitchEventKind.SwitchLidClose and it.command == "lock-session"
+    )
+    check config.switchEvents.anyIt(
+      it.kind == SwitchEventKind.SwitchTabletModeOn and it.command == "spawn onboard"
     )
 
   test "HJKL mirroring preserves binding settings":
