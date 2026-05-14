@@ -83,6 +83,23 @@ proc remapWindowRuleOutput(
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   model.windowForExternal(externalId)
 
+proc restoredIdentityConflicts(
+    restored: RestoredWindowData, appId, title, identifier: string
+): bool =
+  if restored.identifier.len > 0 and identifier.len > 0 and
+      restored.identifier != identifier:
+    return true
+  if restored.appId.len > 0 and appId.len > 0 and restored.appId != appId:
+    return true
+  if restored.title.len > 0 and title.len > 0 and restored.title != title:
+    return true
+  false
+
+proc directRestoreCompatible(
+    restored: RestoredWindowData, appId, title, identifier: string
+): bool =
+  not restored.restoredIdentityConflicts(appId, title, identifier)
+
 proc resolveRestoreHistories(model: var Model) =
   var focusHistory: seq[WindowId] = @[]
   for externalId in model.restoreFocusHistoryIds():
@@ -231,12 +248,14 @@ proc applyPendingRestore(
     return false
 
   var targetSlot = restored.slot
-  let externalSlot = model.consumeRestoreTagSlot(externalId)
-  if externalSlot.found:
-    targetSlot = externalSlot.slot
-  let restoredSlot = model.consumeRestoreTagSlot(restoredExternalId)
-  if restoredSlot.found:
-    targetSlot = restoredSlot.slot
+  if restoredExternalId == externalId:
+    let externalSlot = model.consumeRestoreTagSlot(externalId)
+    if externalSlot.found:
+      targetSlot = externalSlot.slot
+  else:
+    let restoredSlot = model.consumeRestoreTagSlot(restoredExternalId)
+    if restoredSlot.found:
+      targetSlot = restoredSlot.slot
 
   discard model.consumeRestoreWindow(restoredExternalId)
   model.applyRestoredWindowState(winId, restored)
@@ -455,14 +474,7 @@ proc createWindowForExternal*(
     else:
       model.activeWorkspaceSlot()
 
-  let directRestore = model.consumeRestoreWindow(externalId)
-  if directRestore.isSome:
-    restored = directRestore.get()
-    hasRestoredWindow = true
-    if restored.slot != 0:
-      targetSlot = restored.slot
-      hasRestoredTag = true
-  elif model.restoreWindowCount() > 0:
+  if model.restoreWindowCount() > 0:
     let matched = model.findRestoredWindowByIdentity(appId, title, identifier)
     if matched != NullExternalWindowId:
       let matchedRestore = model.consumeRestoreWindow(matched)
@@ -474,13 +486,26 @@ proc createWindowForExternal*(
       if restored.slot != 0:
         targetSlot = restored.slot
         hasRestoredTag = true
+    else:
+      let directRestore = model.restoreWindow(externalId)
+      if directRestore.isSome and
+          directRestore.get().directRestoreCompatible(appId, title, identifier):
+        let consumed = model.consumeRestoreWindow(externalId)
+        if consumed.isNone:
+          return NullWindowId
+        restored = consumed.get()
+        hasRestoredWindow = true
+        if restored.slot != 0:
+          targetSlot = restored.slot
+          hasRestoredTag = true
 
-  let externalSlot = model.consumeRestoreTagSlot(externalId)
-  if externalSlot.found:
-    targetSlot = externalSlot.slot
-    hasRestoredTag = targetSlot != 0
-    restoredExternalId = externalId
-  elif restoredExternalId != externalId:
+  if hasRestoredWindow and restoredExternalId == externalId:
+    let externalSlot = model.consumeRestoreTagSlot(externalId)
+    if externalSlot.found:
+      targetSlot = externalSlot.slot
+      hasRestoredTag = targetSlot != 0
+      restoredExternalId = externalId
+  elif hasRestoredWindow and restoredExternalId != externalId:
     let restoredSlot = model.consumeRestoreTagSlot(restoredExternalId)
     if restoredSlot.found:
       targetSlot = restoredSlot.slot

@@ -144,6 +144,113 @@ suite "Core Runtime Logic: restore identity":
     check win.isMaximized
     check effects.hasMaximizedEffect(70, true)
 
+  test "Live restore prefers stable identity over colliding external ids":
+    var restore =
+      PendingRestoreState(activeSlot: 2, focusedWindow: ExternalWindowId(133))
+    restore.addRestoredWindow(
+      ExternalWindowId(132),
+      1,
+      "brave-origin-nightly",
+      "Inbox",
+      isMaximized = true,
+      identifier = "brave-id",
+    )
+    restore.addRestoredWindow(
+      ExternalWindowId(133), 2, "kitty", "spinner-old", identifier = "kitty-main"
+    )
+    restore.addRestoredWindow(
+      ExternalWindowId(136), 2, "kitty", "editor", identifier = "kitty-editor"
+    )
+    restore.tags[1] = RestoredTagData(
+      slot: 1,
+      layoutMode: LayoutMode.Scroller,
+      focusedWindow: ExternalWindowId(132),
+      columns:
+        @[RestoredColumnData(windows: @[ExternalWindowId(132)], widthProportion: 0.5)],
+      masterCount: 1,
+      masterSplitRatio: 0.5,
+    )
+    restore.tags[2] = RestoredTagData(
+      slot: 2,
+      layoutMode: LayoutMode.Scroller,
+      focusedWindow: ExternalWindowId(133),
+      columns:
+        @[
+          RestoredColumnData(windows: @[ExternalWindowId(133)], widthProportion: 0.5),
+          RestoredColumnData(windows: @[ExternalWindowId(136)], widthProportion: 0.5),
+        ],
+      targetViewportXOffset: 300.0,
+      currentViewportXOffset: 120.0,
+      masterCount: 1,
+      masterSplitRatio: 0.5,
+    )
+
+    var model = cameraModel()
+    model.applyLiveRestore(restore)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 132, appId: "kitty", title: "new")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowIdentifier,
+        identifierWindowId: 132,
+        identifier: "kitty-main",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 131,
+        appId: "brave-origin-nightly",
+        title: "Inbox",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowIdentifier,
+        identifierWindowId: 131,
+        identifier: "brave-id",
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 133, appId: "kitty", title: "editor")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowIdentifier,
+        identifierWindowId: 133,
+        identifier: "kitty-editor",
+      )
+    )
+
+    check model.snapshotWindow(131).workspaceIdx == 1
+    check model.snapshotWindow(131).isMaximized
+    check model.snapshotWindow(132).workspaceIdx == 2
+    check model.snapshotWindow(133).workspaceIdx == 2
+    check model.columnHeads(1) == @[131'u32]
+    check model.columnHeads(2) == @[132'u32, 133'u32]
+    check model.viewport(2).currentViewportXOffset == 120.0'f32
+
+  test "Non-scroller layouts render with workspace viewport offsets":
+    for mode in [LayoutMode.Grid, LayoutMode.Deck]:
+      var baseline = cameraModel()
+      baseline.seedCameraWindows(3)
+      baseline.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: mode))
+      let baselineGeom = baseline.instructionGeom(1)
+
+      var shifted = cameraModel()
+      shifted.seedCameraWindows(3)
+      shifted.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: mode))
+      shifted.setViewport(
+        1, targetX = 100.0, currentX = 100.0, targetY = 25.0, currentY = 25.0
+      )
+      let shiftedGeom = shifted.instructionGeom(1)
+
+      check shifted.viewport(1).currentViewportXOffset == 100.0'f32
+      check shifted.viewport(1).currentViewportYOffset == 25.0'f32
+      check shiftedGeom.x == baselineGeom.x - 100
+      check shiftedGeom.y == baselineGeom.y - 25
+
   test "Rule-placed new window does not steal active camera":
     var model = initRuntimeStateFromConfig(
       Config(

@@ -247,6 +247,23 @@ proc layoutForTag(
   of rv.LayoutMode.TGMix:
     layoutTGMix(tag, screen, outerGap, innerGap)
 
+proc layoutUsesNativeViewport(mode: rv.LayoutMode): bool =
+  mode in {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}
+
+proc applyLayoutViewportOffset(
+    tag: rv.TagState, instructions: var seq[rv.RenderInstruction]
+) =
+  if tag.layoutMode.layoutUsesNativeViewport():
+    return
+  if tag.currentViewportXOffset == 0.0'f32 and tag.currentViewportYOffset == 0.0'f32:
+    return
+
+  let xOffset = int32(tag.currentViewportXOffset)
+  let yOffset = int32(tag.currentViewportYOffset)
+  for instruction in instructions.mitems:
+    instruction.geom.x -= xOffset
+    instruction.geom.y -= yOffset
+
 proc upsertInstruction(
     instructions: var seq[rv.RenderInstruction], instruction: rv.RenderInstruction
 ) =
@@ -303,6 +320,7 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
     retargetViewport and model.scrollerPreferCenter,
     if retargetViewport: model.centerFocusedColumn else: "never",
   )
+  tagForLayout.applyLayoutViewportOffset(result)
 
   model.addFloatingInstructions(model.activeTag, screen, result)
   model.addUnmanagedGlobalInstructions(screen, result)
@@ -402,6 +420,7 @@ proc layoutWorkspaceStripOverview(
       retargetViewport and model.scrollerPreferCenter,
       if retargetViewport: model.centerFocusedColumn else: "never",
     )
+    projected.tag.applyLayoutViewportOffset(instructions)
     if projected.tag.columns.len > 0:
       result.viewportTargets.add(
         LayoutViewportTarget(
@@ -465,6 +484,7 @@ proc layoutProjection*(model: Model): LayoutProjection =
     retargetViewport and model.scrollerPreferCenter,
     if retargetViewport: model.centerFocusedColumn else: "never",
   )
+  tagForLayout.applyLayoutViewportOffset(result.instructions)
   if tagForLayout.columns.len > 0:
     result.viewportTargets.add(
       LayoutViewportTarget(
