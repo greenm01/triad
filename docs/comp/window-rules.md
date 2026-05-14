@@ -81,7 +81,7 @@ layout family.
 | Matching | `is-floating` | Match current floating state | `match is-floating=#true/#false` | Pass | Initial/opening rule evaluation treats unmapped windows as non-floating to avoid a cycle with `open-floating`; dynamic fields refresh after state changes. |
 | Matching | `is-window-cast-target` | Match window cast target state | | Gap | |
 | Matching | `is-urgent` | Match urgent state | | Gap | |
-| Matching | `at-startup` | Match only startup or non-startup windows | | Gap | |
+| Matching | `at-startup` | Match only startup or non-startup windows | `match at-startup=#true/#false` | Pass | Triad follows niri's broad startup phase: true for the first 60 seconds of a daemon process, then dynamic rule effects are recomputed. |
 | Opening | `default-column-width` | Set initial column width | `default-column-width { proportion ... }` | Pass | Rule-level value overrides the global layout default for newly created columns. |
 | Opening | `default-window-height` | Set initial tiled window height | `default-window-height { proportion ... }` | Pass | Triad also supports rule-level `default-window-width`. |
 | Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output; it does not move workspaces between outputs. |

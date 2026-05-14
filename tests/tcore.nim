@@ -2089,6 +2089,76 @@ suite "Core Runtime Logic":
     check not privateWelcome.found
     check not titleMiss.found
 
+  test "Window rule at-startup matcher follows startup phase":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true, appId: "^app$", atStartupSet: true, atStartup: true
+                  )
+                ],
+              defaultWorkspace: 2,
+            ),
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true, appId: "^app$", atStartupSet: true, atStartup: false
+                  )
+                ],
+              defaultWorkspace: 3,
+            ),
+          ],
+      )
+    ).model
+
+    check model.startupWindowRulesActive
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Early")
+    )
+    check model.snapshotWindow(1).workspaceIdx == 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdExpireStartupWindowRules))
+    check not model.startupWindowRulesActive
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Late")
+    )
+    check model.snapshotWindow(2).workspaceIdx == 3
+
+  test "Window rule at-startup matcher refreshes derived state on expiry":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true, appId: "^app$", atStartupSet: true, atStartup: true
+                  )
+                ],
+              keyboardShortcutsInhibitSet: true,
+              keyboardShortcutsInhibit: true,
+            )
+          ]
+      )
+    ).model
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Early")
+    )
+    check model.windowData(WindowId(1)).get().keyboardShortcutsInhibit
+
+    model.applyMsg(Msg(kind: MsgKind.CmdExpireStartupWindowRules))
+
+    check not model.startupWindowRulesActive
+    check not model.windowData(WindowId(1)).get().keyboardShortcutsInhibit
+
   test "Window rule state matchers use focused and active window state":
     var model = initRuntimeStateFromConfig(
       Config(

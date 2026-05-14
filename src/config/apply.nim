@@ -48,6 +48,8 @@ proc windowRuleMatcherData(
         isActiveInColumn: matcher.isActiveInColumn,
         isFloatingSet: matcher.isFloatingSet,
         isFloating: matcher.isFloating,
+        atStartupSet: matcher.atStartupSet,
+        atStartup: matcher.atStartup,
       )
     )
   except RegexError as e:

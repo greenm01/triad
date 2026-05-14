@@ -139,6 +139,7 @@ type
     CmdHideHotkeyOverlay
     CmdToggleHotkeyOverlay
     CmdTick
+    CmdExpireStartupWindowRules
     CmdConfigReload
     CmdTriadReload
     CmdSwitchLayout

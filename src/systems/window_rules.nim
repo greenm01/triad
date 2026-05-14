@@ -16,7 +16,7 @@ proc windowContext(winId: WindowId, win: WindowData): WindowRuleMatchContext =
 
 proc stateMatcherSet(matcher: WindowRuleMatcherData): bool =
   matcher.isActiveSet or matcher.isFocusedSet or matcher.isActiveInColumnSet or
-    matcher.isFloatingSet
+    matcher.isFloatingSet or matcher.atStartupSet
 
 proc usesStateMatchers(rule: WindowRuleData): bool =
   for matcher in rule.matches:
@@ -26,10 +26,32 @@ proc usesStateMatchers(rule: WindowRuleData): bool =
     if matcher.stateMatcherSet():
       return true
 
+proc startupMatcherSet(matcher: WindowRuleMatcherData): bool =
+  matcher.atStartupSet
+
+proc usesStartupMatchers(rule: WindowRuleData): bool =
+  for matcher in rule.matches:
+    if matcher.startupMatcherSet():
+      return true
+  for matcher in rule.excludes:
+    if matcher.startupMatcherSet():
+      return true
+
 proc windowRuleStateMatchersEnabled*(model: Model): bool =
   for rule in model.windowRules:
     if rule.usesStateMatchers():
       return true
+
+proc windowRuleStartupMatchersEnabled*(model: Model): bool =
+  for rule in model.windowRules:
+    if rule.usesStartupMatchers():
+      return true
+
+proc expireStartupWindowRules*(model: var Model): bool =
+  let hadStartupRules = model.windowRuleStartupMatchersEnabled()
+  if not model.setStartupWindowRulesActive(false):
+    return false
+  hadStartupRules
 
 proc ruleFocusedWindow(model: Model): WindowId =
   if model.layerFocusExclusive:
@@ -99,6 +121,10 @@ proc contextIsFloating(model: Model, context: WindowRuleMatchContext): bool =
   let winOpt = model.windowData(context.winId)
   winOpt.isSome and winOpt.get().isFloating
 
+proc contextIsAtStartup(model: Model, context: WindowRuleMatchContext): bool =
+  discard context
+  model.startupWindowRulesActive
+
 proc matches(
     matcher: WindowRuleMatcherData, model: Model, context: WindowRuleMatchContext
 ): bool =
@@ -114,6 +140,8 @@ proc matches(
       matcher.isActiveInColumn != model.contextIsActiveInColumn(context):
     return false
   if matcher.isFloatingSet and matcher.isFloating != model.contextIsFloating(context):
+    return false
+  if matcher.atStartupSet and matcher.atStartup != model.contextIsAtStartup(context):
     return false
   true
 

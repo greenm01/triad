@@ -73,9 +73,9 @@ maps against Mango and River.
 launch policy. Multiple `match` children are OR-ed, fields within one `match`
 are AND-ed, and any matching `exclude` child skips the rule. Matchers can also
 use boolean state properties: `is-focused`, `is-active`,
-`is-active-in-column`, and `is-floating`. All matching rules are merged in file
-order: broad app rules can set defaults, and later specific title or state
-rules can override individual fields.
+`is-active-in-column`, `is-floating`, and `at-startup`. All matching rules are
+merged in file order: broad app rules can set defaults, and later specific
+title or state rules can override individual fields.
 
 ```kdl
 window-rule {
@@ -124,17 +124,24 @@ window-rule {
   match app-id="^st-yazi$"
   open-named-scratchpad "files"
 }
+
+window-rule {
+  match app-id="^org\\.keepassxc\\.KeePassXC$" at-startup=#true
+  default-workspace 2
+}
 ```
 
 - `match` and `exclude`: support `app-id="<regex>"`, `title="<regex>"`,
   `is-focused=#true|#false`, `is-active=#true|#false`,
-  `is-active-in-column=#true|#false`, and `is-floating=#true|#false`.
+  `is-active-in-column=#true|#false`, `is-floating=#true|#false`, and
+  `at-startup=#true|#false`.
   `is-active` matches the focused window of any workspace the window belongs
   to. `is-active-in-column` uses the last focused tiled window in that column,
   falling back to the first visible tiled window when history is missing or
   stale. Initial opening evaluation treats windows as unfocused, inactive,
   non-floating, and active in column, matching Niri's cycle-avoidance behavior
-  for `open-floating`.
+  for `open-floating`. `at-startup` is true during the first 60 seconds of a
+  Triad daemon process, then existing dynamic rule effects are recomputed.
 - `open-floating #true|#false`: explicitly opens matching windows floating or
   tiled. Parented dialogs open floating by default unless this rule is set.
 - `open-focused #true|#false`: explicitly allows or prevents focusing matching

@@ -134,6 +134,8 @@ type
     isActiveInColumn*: bool
     isFloatingSet*: bool
     isFloating*: bool
+    atStartupSet*: bool
+    atStartup*: bool
 
   WindowRule* = object
     appIdMatch*: string

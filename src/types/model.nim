@@ -98,6 +98,8 @@ type
     isActiveInColumn*: bool
     isFloatingSet*: bool
     isFloating*: bool
+    atStartupSet*: bool
+    atStartup*: bool
 
   WindowRuleData* = object
     matches*: seq[WindowRuleMatcherData]
@@ -340,6 +342,7 @@ type
     screenLockCommand*: seq[string]
     windowMenuCommand*: seq[string]
     allowExitSession*: bool
+    startupWindowRulesActive*: bool
     windowRules*: seq[WindowRuleData]
     tagRules*: seq[TagRuleData]
     restoreActiveSlot*: uint32

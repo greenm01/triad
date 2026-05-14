@@ -85,6 +85,12 @@ proc setActiveModifiersState*(model: var Model, modifiers: uint32): bool =
   model.activeModifiers = modifiers
   true
 
+proc setStartupWindowRulesActive*(model: var Model, active: bool): bool =
+  if model.startupWindowRulesActive == active:
+    return false
+  model.startupWindowRulesActive = active
+  true
+
 proc setPointerOpState*(model: var Model, pointerOp: PointerOpData): bool =
   model.pointerOp = pointerOp
   true

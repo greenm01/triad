@@ -10,7 +10,7 @@ export runtime_state
 proc initRuntimeStateFromConfig*(
     config: Config, activeTag: uint32 = 1
 ): TriadRuntimeState =
-  var model = Model(activeSlot: activeTag)
+  var model = Model(activeSlot: activeTag, startupWindowRulesActive: true)
   model.applyConfig(config)
   discard model.ensureActiveWorkspace()
   if model.shouldShowHotkeyOverlayAtStartup():

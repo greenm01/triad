@@ -3,7 +3,7 @@ import ../state/engine
 from ../types/runtime_values import Direction
 import
   dialog_focus, focus, placement, runtime, scratchpad, update_effects, window_state,
-  workspaces
+  window_rules, workspaces
 
 proc closeOverview(model: var Model): bool =
   result = model.setOverviewActive(false)
@@ -220,6 +220,8 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.tickAnimations()
     result.dirty = model.tickOverviewPointerHold() or result.dirty
     result.dirty = model.flushPendingDialogFocus() or result.dirty
+  of MsgKind.CmdExpireStartupWindowRules:
+    result.dirty = model.expireStartupWindowRules()
   of MsgKind.CmdLockSession:
     if model.screenLockCommand.len > 0:
       result.effects.add(

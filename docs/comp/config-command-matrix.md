@@ -283,7 +283,7 @@ KDL config nodes and fields:
 - `workspaces`: `default-count`, `default-layout`.
 - `workspace-rules`: `workspace <id> name=... default-layout=...`.
 - `window-rule`: `match app-id=... title=... is-focused=... is-active=...
-  is-active-in-column=... is-floating=...`, matching `exclude` properties,
+  is-active-in-column=... is-floating=... at-startup=...`, matching `exclude` properties,
   `default-workspace`,
   `open-on-output`, `default-column-width`, `default-window-width`,
   `default-window-height`,

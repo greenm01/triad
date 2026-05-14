@@ -36,6 +36,11 @@ proc startAnimationLoop() {.async.} =
       daemon.enqueue(Msg(kind: MsgKind.CmdTick))
     await sleepAsync(16) # ~60fps
 
+proc startStartupWindowRulesExpiry() {.async.} =
+  await sleepAsync(60_000)
+  {.cast(gcsafe).}:
+    daemon.enqueue(Msg(kind: MsgKind.CmdExpireStartupWindowRules))
+
 proc processQueuedMessages(configPath, niriSocketPath: string) =
   while daemon.hasQueuedMessages():
     let msg = daemon.popQueuedMessage()
@@ -303,6 +308,7 @@ proc main*() =
 
   # Start Animation Loop
   asyncCheck startAnimationLoop()
+  asyncCheck startStartupWindowRulesExpiry()
 
   # Spawn startup commands after River accepts the initial manage pass.
   daemon.scheduleStartupCommands(daemon.runtimeState.model)

@@ -828,9 +828,9 @@ window-rule {
       path,
       """
 window-rule {
-  match app-id="^org\\.gimp\\." title="Welcome" is-focused=#true is-active=#false
+  match app-id="^org\\.gimp\\." title="Welcome" is-focused=#true is-active=#false at-startup=#true
   match app-id="^gimp-tool$" is-floating=#true is-active-in-column=#false
-  exclude title="Private" is-floating=#false
+  exclude title="Private" is-floating=#false at-startup=#false
   default-workspace 4
 }
 """,
@@ -848,6 +848,8 @@ window-rule {
     check config.windowRules[0].matches[0].isFocused
     check config.windowRules[0].matches[0].isActiveSet
     check not config.windowRules[0].matches[0].isActive
+    check config.windowRules[0].matches[0].atStartupSet
+    check config.windowRules[0].matches[0].atStartup
     check config.windowRules[0].matches[1].appIdSet
     check config.windowRules[0].matches[1].appId == "^gimp-tool$"
     check config.windowRules[0].matches[1].isFloatingSet
@@ -859,6 +861,8 @@ window-rule {
     check config.windowRules[0].excludes[0].title == "Private"
     check config.windowRules[0].excludes[0].isFloatingSet
     check not config.windowRules[0].excludes[0].isFloating
+    check config.windowRules[0].excludes[0].atStartupSet
+    check not config.windowRules[0].excludes[0].atStartup
 
   test "workspace config uses global default layout and explicit overrides":
     var model = initRuntimeStateFromConfig(

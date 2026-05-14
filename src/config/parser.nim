@@ -277,6 +277,9 @@ proc windowRuleMatcher(node: KdlNode): WindowRuleMatcher =
   if node.props.hasKey("is-floating"):
     result.isFloatingSet = true
     result.isFloating = node.props["is-floating"].kBool()
+  if node.props.hasKey("at-startup"):
+    result.atStartupSet = true
+    result.atStartup = node.props["at-startup"].kBool()
 
 proc validateWindowRuleRegex(pattern, context: string): string =
   try:
