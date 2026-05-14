@@ -117,13 +117,7 @@ proc blendPremulSourceOverArgb(dst, srcR, srcG, srcB, srcA: uint32): uint32 =
     outPremulG = srcG + (dstPremulG * invA + 127'u32) div 255'u32
     outPremulB = srcB + (dstPremulB * invA + 127'u32) div 255'u32
 
-  if outA == 0:
-    return 0
-  let
-    outR = min(255'u32, (outPremulR * 255'u32 + outA div 2) div outA)
-    outG = min(255'u32, (outPremulG * 255'u32 + outA div 2) div outA)
-    outB = min(255'u32, (outPremulB * 255'u32 + outA div 2) div outA)
-  (outA shl 24) or (outR shl 16) or (outG shl 8) or outB
+  (outA shl 24) or (outPremulR shl 16) or (outPremulG shl 8) or outPremulB
 
 proc blitTextImage(buf: var PixelBuffer, x, y: int32, image: Image) =
   for py in 0 ..< image.height:
@@ -157,7 +151,9 @@ proc drawText*(
   let imageH = max(1'i32, metrics.height + 2'i32)
   try:
     let image = newImage(int(imageW), int(imageH))
-    image.fillText(font, text, bounds = vec2(float32(imageW), float32(imageH)))
+    let arrangement =
+      font.typeset(text, bounds = vec2(float32(imageW), float32(imageH)), wrap = false)
+    image.fillText(arrangement)
     buf.blitTextImage(x, y, image)
   except PixieError:
     buf.drawBitmapText(x, y, maxW, text, style.color)

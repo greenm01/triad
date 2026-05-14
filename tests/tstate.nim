@@ -313,6 +313,17 @@ suite "Runtime state primitives":
       check rendered.pixels.anyIt(
         ((it shr 24) and 0xff) > 0 and ((it shr 24) and 0xff) < 0xff
       )
+      var premulEdgeFound = false
+      for pixel in rendered.pixels:
+        let
+          alpha = (pixel shr 24) and 0xff
+          red = (pixel shr 16) and 0xff
+          green = (pixel shr 8) and 0xff
+          blue = pixel and 0xff
+        if alpha > 0 and alpha < 0xff and red <= alpha and green <= alpha and
+            blue <= alpha:
+          premulEdgeFound = true
+      check premulEdgeFound
 
   test "recent windows chrome converts RGBA config colors to ARGB pixels":
     var config = baseConfig()
