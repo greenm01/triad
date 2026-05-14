@@ -206,6 +206,12 @@ hotkey-overlay {
   skip-at-startup
   hide-not-bound
 }
+config-notification {
+  reload-succeeded "notify-send" "Triad" "Config reloaded"
+  reload-failed "notify-send Triad failed"
+  reload-rolled-back "notify-send" "Triad" "Config rolled back"
+  unknown-notification "notify-send" "ignored"
+}
 bindings {
   mirror-hjkl-arrows #true
   bind "Super+Return" "spawn-terminal"
@@ -447,6 +453,11 @@ switch-events {
     check config.protocolSurfaces.enabled
     check config.hotkeyOverlay.skipAtStartup
     check config.hotkeyOverlay.hideNotBound
+    check config.configNotification.reloadSucceeded ==
+      @["notify-send", "Triad", "Config reloaded"]
+    check config.configNotification.reloadFailed == @["notify-send", "Triad", "failed"]
+    check config.configNotification.reloadRolledBack ==
+      @["notify-send", "Triad", "Config rolled back"]
     check config.keyBindings.len > 0
     check config.commandForBinding("c", Super + Ctrl) == "layout-center-tile"
     let uppercaseBindings =

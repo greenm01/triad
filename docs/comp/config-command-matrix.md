@@ -36,7 +36,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
 | P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, pointer button, wheel-axis, dormant gesture, and dormant switch-event binding surfaces exist. Live gesture/switch hardware delivery is still blocked on a compositor or input event source. | Connect the next narrow event source without changing the user-facing config syntax. |
-| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Add the smallest user-visible polish items first: cursor hide timeout and config reload notification controls. |
+| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Config reload notification commands, cursor theme/size/shake, overview, recent windows, hotkey overlay, and coarse animations exist; cursor hiding and advanced polish remain partial or blocked. | Confirm whether cursor hiding needs a compositor-side protocol before adding the next polish item. |
 
 ## Feature Matrix
 
@@ -47,7 +47,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Config lifecycle | Config validation | `mango -c ... -p` | | `triad validate-config` | X | Validates KDL syntax, includes, and strict window-rule regex checks without starting the daemon. |
 | Config lifecycle | Config includes | `source`, `source-optional` | Shell script can source files | `include`, `include optional=#true` | X | Includes expand in place, resolve relative to the parent file, reject recursion, and participate in hot reload after a successful load. |
 | Config lifecycle | Hot reload | `reload_config`, `exec` | WM process policy | `config-reload`, `triad-reload` | X | Triad reloads config in-process; full Triad reload snapshots state and restarts through the session manager path. |
-| Config lifecycle | Reload notifications | | Shell/WM policy | | | Triad logs reload behavior but has no user-facing config for success/error notifications. |
+| Config lifecycle | Reload notifications | | Shell/WM policy | `config-notification` | X | Optional commands run on config reload success, failure, or rollback. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
 | Startup | Environment variables | `env` | Init script environment | `environment` | X | Applies literal set/unset entries to future Triad-spawned user-facing processes. |
 | Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
@@ -335,6 +335,8 @@ KDL config nodes and fields:
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.
+- `config-notification`: `reload-succeeded`, `reload-failed`,
+  `reload-rolled-back`.
 - `input`: `keyboard`, `mouse`, `touchpad`, `trackpoint`, `trackball`,
   including keyboard repeat, XKB, lock-state, and libinput pointer fields.
 - `floating`: `x-ratio`, `y-ratio`, `width-ratio`, `height-ratio`,

@@ -3,13 +3,14 @@ from core import
   ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
   IdCounters, OutputId, TagId, TagMask, WindowId
 from runtime_values import
-  AxisBindingConfig, CursorConfig, EnvironmentEntryConfig, InputConfig,
-  GestureBindingConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig, ParentedRole,
-  OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
-  ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter, RecentWindowScope,
-  RecentWindowsConfig, Rect, ScreenshotConfig, SwitchEventConfig, TerminalConfig,
-  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
+  InputConfig, GestureBindingConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig,
+  ParentedRole, OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind,
+  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter,
+  RecentWindowScope, RecentWindowsConfig, Rect, ScreenshotConfig, SwitchEventConfig,
+  TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
+  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -441,6 +442,7 @@ type
     input*: InputConfig
     cursor*: CursorConfig
     hotkeyOverlay*: HotkeyOverlayConfig
+    configNotification*: ConfigNotificationConfig
     recentWindows*: RecentWindowsConfig
     presentationMode*: PresentationMode
     protocolSurfaces*: ProtocolSurfacesConfig

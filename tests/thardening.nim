@@ -15,6 +15,16 @@ from ../src/types/model import Model
 import ../src/types/[runtime_values, shell_snapshot]
 import ../src/utils/session_env
 
+var observedConfigNotificationEvent: ConfigNotificationEvent
+var observedConfigNotificationCommand: seq[string]
+
+proc recordConfigNotification(
+    daemon: pointer, event: ConfigNotificationEvent, command: seq[string]
+) {.nimcall.} =
+  discard daemon
+  observedConfigNotificationEvent = event
+  observedConfigNotificationCommand = command
+
 proc baseSnapshot(): ShellSnapshot =
   ShellSnapshot(
     version: 1,
@@ -275,6 +285,49 @@ workspaces {
     check daemon.liveRestoreCommitPending
     check fileExists(restorePath)
     check not liveRestoreStateApplied(restorePath)
+
+    if fileExists(configPath):
+      removeFile(configPath)
+    if fileExists(restorePath):
+      removeFile(restorePath)
+
+  test "config reload notifications use success and failure commands":
+    let base = getTempDir() / "triad-config-notify-" & $getCurrentProcessId()
+    let configPath = base & ".kdl"
+    let restorePath = base & ".json"
+    writeFile(
+      configPath,
+      """
+config-notification {
+  reload-succeeded "notify-send" "Triad" "reloaded"
+  reload-failed "notify-send" "Triad" "failed"
+}
+""",
+    )
+
+    var daemon = initTriadDaemon()
+    daemon.pendingLiveRestorePath = restorePath
+    daemon.configNotificationHook = recordConfigNotification
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        configNotification:
+          ConfigNotificationConfig(reloadFailed: @["notify-send", "old-failed"])
+      )
+    )
+
+    observedConfigNotificationEvent = ConfigNotificationEvent.ConfigNotifyNone
+    observedConfigNotificationCommand = @[]
+    check daemon.applyConfigReload(configPath, "")
+    check observedConfigNotificationEvent ==
+      ConfigNotificationEvent.ConfigReloadSucceeded
+    check observedConfigNotificationCommand == @["notify-send", "Triad", "reloaded"]
+
+    writeFile(configPath, "layout { gaps ")
+    observedConfigNotificationEvent = ConfigNotificationEvent.ConfigNotifyNone
+    observedConfigNotificationCommand = @[]
+    check not daemon.applyConfigReload(configPath, "")
+    check observedConfigNotificationEvent == ConfigNotificationEvent.ConfigReloadFailed
+    check observedConfigNotificationCommand == @["notify-send", "Triad", "failed"]
 
     if fileExists(configPath):
       removeFile(configPath)

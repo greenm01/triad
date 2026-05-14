@@ -83,12 +83,14 @@ The supported KDL nodes are:
   binding mode, layout override, inhibition policy, and hotkey overlay titles.
 - `switch-events`: dormant hardware switch command bindings for lid and tablet
   mode events.
+- `config-notification`: optional reload success, failure, and rollback
+  notification commands.
 - `environment`, `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
 - `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`,
   `input`, `cursor`.
 - Top-level flags and settings: `presentation-mode`, `allow-exit-session`,
-  `protocol-surfaces`, and `hotkey-overlay`.
+  `protocol-surfaces`, `hotkey-overlay`, and `config-notification`.
 
 For command details, see `docs/ipc.md`. For the Mango/River/Triad comparison
 matrix, see `docs/comp/config-command-matrix.md`.
@@ -691,6 +693,29 @@ bindings {
 Triad adds `Super+Shift+Slash` as a fallback `toggle-hotkey-overlay` binding
 when no overlay binding is configured and that key slot is free. `Slash`, `/`,
 `Question`, and `?` are accepted key names for slash/question bindings.
+
+## Config Notifications
+
+`config-notification` runs optional user commands when `config-reload` succeeds,
+fails before applying, or rolls back because the reload would disturb live
+window state:
+
+```kdl
+config-notification {
+  reload-succeeded "notify-send" "Triad" "Config reloaded"
+  reload-failed "notify-send" "Triad" "Config reload failed"
+  reload-rolled-back "notify-send" "Triad" "Config reload rolled back"
+}
+```
+
+- Commands are argv-style KDL strings. The first value is the executable and
+  later values are arguments.
+- `reload-failed` uses the currently active config because a failed reload does
+  not produce a new config.
+- `reload-rolled-back` uses the previously active config after Triad restores
+  the model.
+- `reload-succeeded` uses the newly applied config.
+- Omitted commands do nothing.
 
 ## Overview Hot Corners
 

@@ -484,6 +484,12 @@ type
     SwitchTabletModeOn
     SwitchTabletModeOff
 
+  ConfigNotificationEvent* {.pure.} = enum
+    ConfigNotifyNone
+    ConfigReloadSucceeded
+    ConfigReloadFailed
+    ConfigReloadRolledBack
+
   KeyBindingConfig* = object
     key*: string
     modifiers*: uint32
@@ -521,6 +527,11 @@ type
   SwitchEventConfig* = object
     kind*: SwitchEventKind
     command*: string
+
+  ConfigNotificationConfig* = object
+    reloadSucceeded*: seq[string]
+    reloadFailed*: seq[string]
+    reloadRolledBack*: seq[string]
 
   ProtocolSurfacesConfig* = object
     enabled*: bool

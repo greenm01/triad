@@ -5,6 +5,7 @@ import ../core/niri_state
 import ../ipc/[quickshell_compat, socket]
 import ../systems/runtime_facade
 import ../types/[model, shell_snapshot]
+from ../types/runtime_values import ConfigNotificationEvent
 import ../utils/behavior_log
 import
   bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
@@ -97,6 +98,33 @@ proc configReloadPreservationProblem(before, after: ShellSnapshot): string =
       return "window appeared during config reload"
   ""
 
+proc configNotificationCommand(
+    model: Model, event: ConfigNotificationEvent
+): seq[string] =
+  case event
+  of ConfigNotificationEvent.ConfigReloadSucceeded:
+    model.configNotification.reloadSucceeded
+  of ConfigNotificationEvent.ConfigReloadFailed:
+    model.configNotification.reloadFailed
+  of ConfigNotificationEvent.ConfigReloadRolledBack:
+    model.configNotification.reloadRolledBack
+  of ConfigNotificationEvent.ConfigNotifyNone:
+    @[]
+
+proc dispatchConfigNotification(
+    daemon: var TriadDaemon, model: Model, event: ConfigNotificationEvent
+) =
+  let command = model.configNotificationCommand(event)
+  if command.len == 0:
+    return
+  writeBehaviorEvent(
+    "config_notification_requested", %*{"event": $event, "command": command}
+  )
+  if daemon.configNotificationHook != nil:
+    daemon.configNotificationHook(addr daemon, event, command)
+  else:
+    spawnConfigNotification(model, event, command)
+
 proc applyConfigReload*(
     daemon: var TriadDaemon, configPath, niriSocketPath: string
 ): bool =
@@ -119,6 +147,9 @@ proc applyConfigReload*(
         "before": beforeSnapshot.snapshotBehaviorPayload(),
       },
     )
+    daemon.dispatchConfigNotification(
+      daemon.runtimeState.model, ConfigNotificationEvent.ConfigReloadFailed
+    )
     return false
   let restore = daemon.writeCurrentLiveRestoreState()
   if not restore.ok:
@@ -132,6 +163,9 @@ proc applyConfigReload*(
         "error": restore.error,
         "before": beforeSnapshot.snapshotBehaviorPayload(),
       },
+    )
+    daemon.dispatchConfigNotification(
+      daemon.runtimeState.model, ConfigNotificationEvent.ConfigReloadFailed
     )
     return false
   daemon.liveRestoreCommitPending = true
@@ -155,6 +189,9 @@ proc applyConfigReload*(
         "candidate": appliedSnapshot.snapshotBehaviorPayload(),
         "restored": daemon.readModelSnapshot().snapshotBehaviorPayload(),
       },
+    )
+    daemon.dispatchConfigNotification(
+      previousModel, ConfigNotificationEvent.ConfigReloadRolledBack
     )
     return false
 
@@ -213,6 +250,9 @@ proc applyConfigReload*(
   daemon.requestBindingReconfigure("config reload")
   daemon.configWatchPaths = loaded.configPaths
   info "Config reloaded", path = configPath
+  daemon.dispatchConfigNotification(
+    daemon.runtimeState.model, ConfigNotificationEvent.ConfigReloadSucceeded
+  )
   daemon.postManageBroadcastPending = true
   daemon.postManageBroadcastReason = "config reload"
   broadcastNiriSnapshot(daemon.readModelSnapshot())

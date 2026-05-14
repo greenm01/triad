@@ -26,6 +26,7 @@ type
     scratchpad*: ScratchpadConfig
     cursor*: CursorConfig
     hotkeyOverlay*: HotkeyOverlayConfig
+    configNotification*: ConfigNotificationConfig
     presentationMode*: PresentationMode
     allowExitSession*: bool
     protocolSurfaces*: ProtocolSurfacesConfig
@@ -718,6 +719,15 @@ proc setSwitchEvent(events: var seq[SwitchEventConfig], event: SwitchEventConfig
       events[i] = event
       return
   events.add(event)
+
+proc commandArgsFromNode(node: KdlNode): seq[string] =
+  for arg in node.args:
+    let value = arg.kString()
+    if node.args.len == 1:
+      for part in value.splitWhitespace():
+        result.add(part)
+    else:
+      result.add(value)
 
 proc parsePresentationMode(value: string): tuple[valid: bool, mode: PresentationMode] =
   case value.toLowerAscii()
@@ -1581,6 +1591,24 @@ proc loadConfig*(path: string): Config =
                 child.args.len == 0 or child.args[0].kBool()
           except CatchableError as e:
             warn "Ignoring invalid hotkey-overlay field",
+              field = child.name, error = e.msg
+      elif node.name == "config-notification":
+        for child in node.children:
+          try:
+            let command = child.commandArgsFromNode()
+            if command.len == 0:
+              continue
+            case child.name
+            of "reload-succeeded":
+              result.configNotification.reloadSucceeded = command
+            of "reload-failed":
+              result.configNotification.reloadFailed = command
+            of "reload-rolled-back":
+              result.configNotification.reloadRolledBack = command
+            else:
+              warn "Ignoring invalid config-notification field", field = child.name
+          except CatchableError as e:
+            warn "Ignoring invalid config-notification field",
               field = child.name, error = e.msg
       elif node.name == "presentation-mode" and node.args.len > 0:
         try:

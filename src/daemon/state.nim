@@ -80,6 +80,9 @@ type
     successful*: bool
 
   RuntimeReasonHook* = proc(daemon: pointer, reason: string) {.nimcall.}
+  ConfigNotificationHook* = proc(
+    daemon: pointer, event: ConfigNotificationEvent, command: seq[string]
+  ) {.nimcall.}
 
   TriadDaemon* = object
     display*: ptr Display
@@ -171,6 +174,7 @@ type
     watcher*: Watcher
     configReloadDebouncer*: ConfigReloadDebouncer
     inputConfigReloadHook*: RuntimeReasonHook
+    configNotificationHook*: ConfigNotificationHook
     shouldExit*: bool
     quickshellState*: QuickshellRunner
     startupCommandsPending*: bool

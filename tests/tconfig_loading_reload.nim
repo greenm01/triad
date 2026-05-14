@@ -79,6 +79,8 @@ suite "KDL Configuration Parser: loading reload":
         ],
       scratchpad: ScratchpadConfig(widthRatio: 0.7, heightRatio: 0.6),
       cursor: CursorConfig(theme: "Bibata", size: 32),
+      configNotification:
+        ConfigNotificationConfig(reloadSucceeded: @["notify-send", "reloaded"]),
       presentationMode: PresentationMode.PresentationAsync,
       allowExitSession: true,
       protocolSurfaces: ProtocolSurfacesConfig(enabled: true),
@@ -136,6 +138,7 @@ suite "KDL Configuration Parser: loading reload":
     check state.model.terminal.command == @["kitty"]
     check state.model.environment.len == 2
     check state.model.overviewZoom == 0.25'f32
+    check state.model.configNotification.reloadSucceeded == @["notify-send", "reloaded"]
     check state.model.keyBindings.len == 1
     check state.model.axisBindings.len == 1
     check state.model.gestureBindings.len == 1

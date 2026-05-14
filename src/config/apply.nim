@@ -273,6 +273,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.scratchpadHeightRatio = configClampF32(config.scratchpad.heightRatio, 0.1, 1.0)
   model.cursor = config.cursor
   model.hotkeyOverlay = config.hotkeyOverlay
+  model.configNotification = config.configNotification
   model.recentWindows = config.recentWindows
   model.recentWindows.debounceMs =
     configClamp32(model.recentWindows.debounceMs, 0, 60000)

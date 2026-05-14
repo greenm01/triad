@@ -1,7 +1,7 @@
 import std/[os, osproc, strtabs, strutils, times]
 import chronicles
 import ../types/model
-from ../types/runtime_values import WindowId
+from ../types/runtime_values import ConfigNotificationEvent, WindowId
 import ../utils/terminal
 
 proc commandArgs(command: seq[string]): seq[string] =
@@ -93,6 +93,25 @@ proc spawnWindowMenu*(
   except CatchableError as e:
     warn "Failed to spawn window menu",
       cmd = command[0], windowId = windowId, error = e.msg
+
+proc spawnConfigNotification*(
+    model: Model, event: ConfigNotificationEvent, command: seq[string]
+) =
+  if command.len == 0:
+    return
+
+  try:
+    let p = startProcess(
+      command[0],
+      args = command.commandArgs(),
+      env = model.configuredProcessEnv(),
+      options = {poUsePath},
+    )
+    info "Spawned config notification",
+      event = $event, cmd = command[0], pid = p.processID
+  except CatchableError as e:
+    warn "Failed to spawn config notification",
+      event = $event, cmd = command[0], error = e.msg
 
 proc spawnTerminal*(model: Model) =
   let env = model.configuredProcessEnv()
