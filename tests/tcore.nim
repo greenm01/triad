@@ -4822,7 +4822,7 @@ suite "Core Runtime Logic":
 
     check model.snapshotWindow(3).workspaceIdx == 1
 
-  test "Window rule default workspace wins over open-on-output":
+  test "Window rule default workspace remaps safe open-on-output":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3),
@@ -4858,6 +4858,133 @@ suite "Core Runtime Logic":
     )
 
     check model.snapshotWindow(3).workspaceIdx == 3
+    check model.workspaceOutput(model.tagForSlot(3)) ==
+      model.outputForExternal(ExternalOutputId(2))
+    check model.activeTag == model.tagForSlot(1)
+
+  test "Window rule output remap moves workspace between non-primary outputs":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 4),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "chat",
+              defaultWorkspace: 3,
+              openOnOutput: "DP-2",
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-2"))
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(3)
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(3)), model.tagForSlot(2)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "chat", title: "Main")
+    )
+
+    let hdmi = model.outputForExternal(ExternalOutputId(2))
+    let dp = model.outputForExternal(ExternalOutputId(3))
+    check model.snapshotWindow(3).workspaceIdx == 3
+    check model.workspaceOutput(model.tagForSlot(3)) == dp
+    check model.outputTags[dp] == model.tagForSlot(3)
+    check model.outputTags.getOrDefault(hdmi, NullTagId) != model.tagForSlot(3)
+
+  test "Window rule output remap does not change active primary workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "chat",
+              defaultWorkspace: 2,
+              openOnOutput: "eDP-1",
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "eDP-1")
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "chat", title: "Main")
+    )
+
+    check model.snapshotWindow(3).workspaceIdx == 2
+    check model.activeTag == model.tagForSlot(1)
+    check model.outputTags[model.primaryOutput] == model.tagForSlot(1)
+
+  test "Parented windows do not remap outputs for workspace rules":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "dialog",
+              defaultWorkspace: 3,
+              openOnOutput: "HDMI-A-1",
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "HDMI-A-1")
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "parent", title: "Main")
+    )
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 11,
+        createdParentWindowId: 10,
+        appId: "dialog",
+        title: "Dialog",
+      )
+    )
+
+    check model.snapshotWindow(11).workspaceIdx == 3
+    check model.outputTags[model.outputForExternal(ExternalOutputId(2))] ==
+      model.tagForSlot(2)
 
   test "Live restore state wins over opening sizing and output rules":
     var model = initRuntimeStateFromConfig(

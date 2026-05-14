@@ -36,6 +36,31 @@ proc visibleSlotForOutputRule(model: Model, name: string): uint32 =
         return tagOpt.get().slot
   0
 
+proc remapWindowRuleOutput(
+    model: var Model,
+    targetTag: TagId,
+    outputName: string,
+    parentKnown, hasRestoredTag, hasRestoredWindow: bool,
+): bool =
+  if outputName.len == 0 or targetTag == NullTagId or targetTag == model.activeTag:
+    return false
+  if parentKnown or hasRestoredTag or hasRestoredWindow:
+    return false
+
+  let outputId = model.outputForRuleName(outputName)
+  if outputId == NullOutputId or outputId == model.primaryOutput:
+    return false
+
+  var duplicateOutputs: seq[OutputId] = @[]
+  for mappedOutputId, mappedTagId in model.outputTagsWithId():
+    if mappedOutputId != outputId and mappedOutputId != model.primaryOutput and
+        mappedTagId == targetTag:
+      duplicateOutputs.add(mappedOutputId)
+  for mappedOutputId in duplicateOutputs:
+    discard model.clearOutputTag(mappedOutputId)
+
+  model.setOutputTag(outputId, targetTag)
+
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   model.windowForExternal(externalId)
 
@@ -476,6 +501,11 @@ proc createWindowForExternal*(
       let targetTag = model.ensureWorkspaceSlot(targetSlot, forcedLayout)
       if targetTag == NullTagId:
         return NullWindowId
+      if ruleForcesSlot and ruleMatch.rule.openOnOutput.len > 0:
+        discard model.remapWindowRuleOutput(
+          targetTag, ruleMatch.rule.openOnOutput, parentKnown, hasRestoredTag,
+          hasRestoredWindow,
+        )
       if forcedLayout != 0:
         discard model.setTagLayout(
           targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)

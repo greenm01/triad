@@ -192,9 +192,10 @@ window-rule {
 - `default-workspace <n>`: opens matching windows on a workspace. For parented
   dialogs, this explicit workspace overrides the parent workspace.
 - `open-on-output "<name>"`: opens matching windows on the workspace currently
-  visible on the named output. This does not switch workspaces or reassign
-  outputs. Unknown outputs fall back to the normal active-workspace behavior,
-  and `default-workspace` takes precedence.
+  visible on the named output. When combined with `default-workspace`, Triad
+  may move that workspace's non-primary output mapping to the named output, but
+  it never switches the active workspace just because a window opened. Unknown
+  outputs fall back to the normal active-workspace behavior.
 - `open-named-scratchpad "<name>"`: opens matching new windows as hidden named
   scratchpads. The window is untagged until `toggle-named-scratchpad <name>` is
   run. Empty names are ignored; live restore takes precedence; config reloads

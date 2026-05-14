@@ -78,6 +78,12 @@ proc setOutputTag*(model: var Model, outputId: OutputId, tagId: TagId): bool =
   model.outputTags[outputId] = tagId
   true
 
+proc clearOutputTag*(model: var Model, outputId: OutputId): bool =
+  if not model.outputTags.hasKey(outputId):
+    return false
+  model.outputTags.del(outputId)
+  true
+
 proc destroyOutput*(model: var Model, outputId: OutputId): bool =
   let outputOpt = model.outputs.entity(outputId)
   if outputOpt.isNone:

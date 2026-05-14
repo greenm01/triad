@@ -86,7 +86,7 @@ layout family.
 | Opening | Scroller initial column proportion | Mango-specific scroller sizing | `scroller-proportion { proportion ... }` | Pass | Scroller-only rule; overrides `default-column-width` for matching newly created columns. |
 | Opening | Scroller single-column proportion | Mango-specific one-column scroller sizing | `scroller-single-proportion { proportion ... }` | Pass | Applies only when `Scroller` or `VerticalScroller` has one tiled column; ignored by multi-column scrollers and non-scroller layouts. |
 | Opening | `default-window-height` | Set initial tiled window height | `default-window-height { proportion ... }` | Pass | Triad also supports rule-level `default-window-width`. |
-| Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output; it does not move workspaces between outputs. |
+| Opening | `open-on-output` | Open matching window on a named output | `open-on-output "<name>"` | Partial | Targets the workspace currently visible on that output. With `default-workspace`, Triad can silently map a non-primary output to that workspace without changing the active workspace. Stable monitor make/model/serial matching remains a gap. |
 | Opening | `open-on-workspace` | Open matching window on a named workspace | `default-workspace <n>` | Pass | Triad uses numeric workspace slots. |
 | Opening | `open-maximized` | Open matching window maximized | `open-maximized #true/#false` | Pass | Maps to full-width column in scroller layouts, not client-visible maximize. |
 | Opening | `open-maximized-to-edges` | Open matching window maximized to edges | `open-maximized-to-edges #true/#false` | Pass | Uses Triad's client-visible maximized state. |
@@ -126,7 +126,7 @@ These are gap-analysis categories, not target config names.
 
 | Mango rule family | Examples | Triad status | Layout note |
 | :--- | :--- | :---: | :--- |
-| Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement and open focus exist; monitor placement and tag-silent semantics are gaps. |
+| Placement and focus | `tags`, `monitor`, `isopensilent`, `istagsilent` | Partial | Workspace placement, open focus, and name-based output placement exist; tag-silent semantics and stable monitor identity matching remain gaps. |
 | Floating geometry | `isfloating`, `width`, `height`, `offsetx`, `offsety`, `no_force_center`, `isnosizehint` | Pass | Triad supports open floating, ratio sizing, fixed pixel sizing, anchored pixel position, opt-in centering, and rule-level client size-hint policy. |
 | Scroller proportion | `scroller_proportion`, `scroller_proportion_single` | Pass | `scroller-proportion` sets new scroller column primary-axis size; `scroller-single-proportion` centers a one-column scroller without changing multi-column behavior. |
 | Fullscreen and maximize policy | `isfullscreen`, `isfakefullscreen`, `force_fakemaximize`, `ignore_maximize`, `noopenmaximized`, `force_tiled_state` | Pass | Opening fullscreen/maximize rules, `maximize-policy`, and `tiled-state` cover Triad's chosen model. Fake maximize maps to full-width scroller columns. |
@@ -169,6 +169,10 @@ These are gap-analysis categories, not target config names.
 - `open-named-scratchpad` is a Triad-specific opening rule for tools that
   should be available through `toggle-named-scratchpad` without first occupying
   a workspace. It is intentionally opening-only, and live restore wins.
+- `open-on-output` is intentionally silent when paired with
+  `default-workspace`: it can make a non-primary output show the target
+  workspace, but it will not switch the active workspace or remap parented
+  child windows.
 - `default-window-width` is a Triad-specific companion to niri's
   `default-window-height`; it controls the initial stored window width
   proportion.
