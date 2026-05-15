@@ -261,6 +261,10 @@ fields are not added to the Niri protocol. This keeps the compatibility layer
 predictable while giving new shells a richer protocol they can adopt when they
 are ready.
 
+Window and output IDs on IPC surfaces are numeric external compositor IDs. They
+are stable for the lifetime of the compositor object, but they are not Triad's
+internal logical `WindowId` or `OutputId` values.
+
 ### Shell State
 
 Request:
