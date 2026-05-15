@@ -331,6 +331,16 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
       result.effects.add(
         Effect(kind: EffectKind.EffLog, msg: "exit-session is disabled by config")
       )
+  of MsgKind.CmdExitSessionImmediate:
+    if model.allowExitSession:
+      result.dirty = model.setHotkeyOverlayOpen(false) or result.dirty
+      result.dirty = model.cancelRecentWindows() or result.dirty
+      result.dirty = model.setExitSessionConfirmOpen(false) or result.dirty
+      result.effects.add(Effect(kind: EffectKind.EffExitSession))
+    else:
+      result.effects.add(
+        Effect(kind: EffectKind.EffLog, msg: "exit-session is disabled by config")
+      )
   of MsgKind.CmdConfirmExitSession:
     let wasOpen = model.exitSessionConfirmOpen
     result.dirty = model.setExitSessionConfirmOpen(false)

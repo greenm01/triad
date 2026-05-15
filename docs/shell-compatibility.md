@@ -83,6 +83,11 @@ Output mutation commands such as `niri msg output DP-1 scale 1.25` are not
 implemented. Triad refuses those rather than pretending to update compositor
 monitor state it does not own.
 
+Niri `Quit` actions are mapped to Triad session exit. A plain `Quit` opens
+Triad's exit confirmation, while `Quit` with `skip_confirmation` exits
+immediately through the same `allow-exit-session` guard used by native Triad
+commands. This matches Noctalia-shell's session menu logout action.
+
 The compatibility tests in `tests/tcompat.nim` encode this decision:
 
 - Niri JSON requests return the fields Noctalia reads.

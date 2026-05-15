@@ -166,6 +166,18 @@ suite "Core Runtime Logic: smoke":
     check not model.exitSessionConfirmOpen
     check effects.anyIt(it.kind == EffectKind.EffExitSession)
 
+  test "Immediate exit session command bypasses confirmation with config guard":
+    var model = Model(allowExitSession: true)
+
+    var effects = model.updateModel(Msg(kind: MsgKind.CmdExitSessionImmediate))
+    check not model.exitSessionConfirmOpen
+    check effects.anyIt(it.kind == EffectKind.EffExitSession)
+
+    model.allowExitSession = false
+    effects = model.updateModel(Msg(kind: MsgKind.CmdExitSessionImmediate))
+    check not effects.anyIt(it.kind == EffectKind.EffExitSession)
+    check effects.anyIt(it.kind == EffectKind.EffLog)
+
   test "Exit session confirmation can dismiss and respects config guard":
     var model = Model(allowExitSession: true)
 

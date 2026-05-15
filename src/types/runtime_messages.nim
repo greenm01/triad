@@ -156,6 +156,7 @@ type
     CmdToggleKeyboardShortcutsInhibit
     CmdStopManager
     CmdExitSession
+    CmdExitSessionImmediate
     CmdConfirmExitSession
     CmdDismissExitSessionConfirm
     CmdFocusShellUi

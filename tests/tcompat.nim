@@ -415,6 +415,15 @@ suite "Shell compatibility contracts":
     check screenshotWindow.messages[0].screenshotPointerMode ==
       ScreenshotPointerMode.PointerHide
 
+    let quitConfirm = handleNiriRequest("""{"Action":{"Quit":{}}}""", snapshot)
+    check quitConfirm.messages.len == 1
+    check quitConfirm.messages[0].kind == MsgKind.CmdExitSession
+
+    let quitImmediate =
+      handleNiriRequest("""{"Action":{"Quit":{"skip_confirmation":true}}}""", snapshot)
+    check quitImmediate.messages.len == 1
+    check quitImmediate.messages[0].kind == MsgKind.CmdExitSessionImmediate
+
   test "Triad native reads and layout commands use shell snapshots":
     var snapshot = snapshotForShell()
     snapshot.overviewActive = true
@@ -529,6 +538,12 @@ suite "Shell compatibility contracts":
     check screenshotForwarded.messages[0].screenshotPointerMode ==
       ScreenshotPointerMode.PointerShow
     check screenshotForwarded.messages[0].screenshotWriteToDisk
+
+    let quit = buildNiriCliRequest(@["msg", "action", "quit", "--skip-confirmation"])
+    check quit.kind == NiriCliKind.NckRequest
+    let quitForwarded = handleNiriRequest(quit.socketPayload, snapshotForShell())
+    check quitForwarded.messages.len == 1
+    check quitForwarded.messages[0].kind == MsgKind.CmdExitSessionImmediate
 
   test "Quickshell compatibility environment is private":
     let tmp = getTempDir() / ("triad-compat-" & $getCurrentProcessId())

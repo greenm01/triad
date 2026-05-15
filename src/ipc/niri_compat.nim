@@ -223,6 +223,12 @@ proc actionMessages(
     return (true, @[])
   elif action.hasKey("ToggleWindowFloating"):
     return (true, @[Msg(kind: MsgKind.CmdToggleFloating)])
+  elif action.hasKey("Quit"):
+    let payload = action["Quit"]
+    if payload.kind == JObject and
+        boolFromEitherField(payload, "skip_confirmation", "skip-confirmation", false):
+      return (true, @[Msg(kind: MsgKind.CmdExitSessionImmediate)])
+    return (true, @[Msg(kind: MsgKind.CmdExitSession)])
   elif action.hasKey("Screenshot"):
     let payload = action["Screenshot"]
     return (
@@ -278,9 +284,9 @@ proc actionMessages(
       ],
     )
   elif action.hasKey("DoScreenTransition") or action.hasKey("PowerOffMonitors") or
-      action.hasKey("PowerOnMonitors") or action.hasKey("Quit") or
-      action.hasKey("MoveWorkspaceToIndex") or action.hasKey("CenterColumn") or
-      action.hasKey("CenterVisibleColumns") or action.hasKey("SwitchPresetColumnWidth") or
+      action.hasKey("PowerOnMonitors") or action.hasKey("MoveWorkspaceToIndex") or
+      action.hasKey("CenterColumn") or action.hasKey("CenterVisibleColumns") or
+      action.hasKey("SwitchPresetColumnWidth") or
       action.hasKey("SwitchPresetWindowHeight") or
       action.hasKey("ToggleColumnTabbedDisplay"):
     return (true, @[])
