@@ -1,5 +1,7 @@
-import std/math
+import std/[math, options]
 import ../state/engine
+import ../types/core as core_types
+import ../types/model as model_types
 import ../types/runtime_values as rv
 import ../types/system_views
 import workspaces
@@ -59,6 +61,170 @@ proc workspacePreviewRect*(
   let baseY = screen.y + (screen.h - size.h) div 2
   let y = baseY + int32(idx - activeIdx) * (size.h + gap)
   rv.Rect(x: baseX, y: y, w: size.w, h: size.h)
+
+proc overviewClampProportion(value: float32): float32 =
+  clamp(value, 0.05'f32, 1.0'f32)
+
+proc overviewScaledGap(model: Model, gap: int32): int32 =
+  int32(round(float32(max(0'i32, gap)) * model.effectiveOverviewZoom()))
+
+proc previewUsableRect(model: Model, preview: rv.Rect): rv.Rect =
+  let outerGap = model.overviewScaledGap(model.outerGaps)
+  rv.Rect(
+    x: preview.x + outerGap,
+    y: preview.y + outerGap,
+    w: max(0'i32, preview.w - 2 * outerGap),
+    h: max(0'i32, preview.h - 2 * outerGap),
+  )
+
+proc overviewTiledWindowVisible(
+    model: Model, winId: core_types.WindowId, win: model_types.WindowData
+): bool =
+  win.windowAdmitted() and not win.isFloating and not win.isMinimized and
+    not win.isUnmanagedGlobal and not model.windowHiddenByGroup(winId)
+
+proc overviewTiledWindowCount(model: Model, tagId: TagId): int =
+  for columnId, _ in model.columnsOnTagWithId(tagId):
+    for winId, win in model.windowsOnColumnWithId(columnId):
+      if model.overviewTiledWindowVisible(winId, win):
+        inc result
+
+proc overviewVisibleColumnProportions(
+    model: Model, tagId: TagId
+): seq[tuple[widthProportion, scrollerSingleProportion: float32, fullWidth: bool]] =
+  for columnId, column in model.columnsOnTagWithId(tagId):
+    var visibleWindows = 0
+    for winId, win in model.windowsOnColumnWithId(columnId):
+      if model.overviewTiledWindowVisible(winId, win):
+        inc visibleWindows
+    if visibleWindows > 0:
+      result.add(
+        (
+          widthProportion: column.widthProportion,
+          scrollerSingleProportion: column.scrollerSingleProportion,
+          fullWidth: column.isFullWidth,
+        )
+      )
+
+proc effectiveOverviewColumnProportion(
+    column: tuple[widthProportion, scrollerSingleProportion: float32, fullWidth: bool]
+): float32 =
+  if column.fullWidth:
+    1.0'f32
+  else:
+    overviewClampProportion(column.widthProportion)
+
+proc overviewHiddenCountBadge*(
+    model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
+): OverviewHiddenCountBadge =
+  if idx < 0 or idx >= slots.len:
+    return
+  let slot = slots[idx]
+  let tagId = model.tagForSlot(slot)
+  if tagId == NullTagId:
+    return
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return
+
+  let tag = tagOpt.get()
+  let windowCount = model.overviewTiledWindowCount(tagId)
+  if windowCount <= 1:
+    return
+
+  let preview = model.workspacePreviewRect(screen, slots, idx)
+  let usable = model.previewUsableRect(preview)
+  let innerGap = model.overviewScaledGap(model.innerGaps)
+  let masterCount = min(windowCount, max(1, tag.masterCount))
+
+  result.slot = slot
+  case tag.layoutMode
+  of rv.LayoutMode.Monocle:
+    result.count = windowCount - 1
+    result.rect = usable
+  of rv.LayoutMode.Deck:
+    let stackCount = windowCount - masterCount
+    if stackCount <= 1:
+      return OverviewHiddenCountBadge()
+    let masterWidth =
+      int32(float32(usable.w) * clamp(tag.masterSplitRatio, 0.05'f32, 0.95'f32))
+    result.count = stackCount - 1
+    result.rect = rv.Rect(
+      x: usable.x + masterWidth + innerGap,
+      y: usable.y,
+      w: max(0'i32, usable.w - masterWidth - innerGap),
+      h: usable.h,
+    )
+  of rv.LayoutMode.VerticalDeck:
+    let stackCount = windowCount - masterCount
+    if stackCount <= 1:
+      return OverviewHiddenCountBadge()
+    let masterHeight =
+      int32(float32(usable.h) * clamp(tag.masterSplitRatio, 0.05'f32, 0.95'f32))
+    result.count = stackCount - 1
+    result.rect = rv.Rect(
+      x: usable.x,
+      y: usable.y + masterHeight + innerGap,
+      w: usable.w,
+      h: max(0'i32, usable.h - masterHeight - innerGap),
+    )
+  else:
+    result = OverviewHiddenCountBadge()
+
+proc overviewScrollIndicator*(
+    model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
+): OverviewScrollIndicator =
+  if idx < 0 or idx >= slots.len:
+    return
+  let slot = slots[idx]
+  let tagId = model.tagForSlot(slot)
+  if tagId == NullTagId:
+    return
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return
+
+  let tag = tagOpt.get()
+  if tag.layoutMode notin {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}:
+    return
+
+  let columns = model.overviewVisibleColumnProportions(tagId)
+  if columns.len <= 1 and
+      (columns.len == 0 or columns[0].scrollerSingleProportion > 0.0'f32):
+    return
+
+  let preview = model.workspacePreviewRect(screen, slots, idx)
+  let usable = model.previewUsableRect(preview)
+  let innerGap = model.overviewScaledGap(model.innerGaps)
+
+  result.slot = slot
+  result.rect = preview
+  case tag.layoutMode
+  of rv.LayoutMode.Scroller:
+    var totalWidth = 0'i32
+    for column in columns:
+      totalWidth += int32(
+        float32(usable.w) * column.effectiveOverviewColumnProportion()
+      )
+    let offset = int32(round(tag.currentViewportXOffset))
+    result.axis = OverviewScrollAxis.Horizontal
+    result.before = offset > 0
+    result.after = totalWidth - offset > usable.w + innerGap
+    if not result.before and not result.after:
+      result = OverviewScrollIndicator()
+  of rv.LayoutMode.VerticalScroller:
+    var totalHeight = 0'i32
+    for column in columns:
+      totalHeight +=
+        int32(float32(usable.h) * column.effectiveOverviewColumnProportion()) + innerGap
+    let offset = int32(round(tag.currentViewportYOffset))
+    result.axis = OverviewScrollAxis.Vertical
+    result.before = offset > 0
+    result.after = totalHeight - offset > usable.h + innerGap
+    if not result.before and not result.after:
+      result = OverviewScrollIndicator()
+  else:
+    result = OverviewScrollIndicator()
 
 proc rectContains(rect: rv.Rect, x, y: int32): bool =
   x >= rect.x and y >= rect.y and x < rect.x + rect.w and y < rect.y + rect.h

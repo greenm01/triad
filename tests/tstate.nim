@@ -24,6 +24,8 @@ const DeletedRuntimeModules = [
 ]
 
 const OverviewEmptyWorkspaceFill = 0xcc000000'u32
+const OverviewHiddenBadgeFill = 0xdd000000'u32
+const OverviewScrollIndicatorColor = 0xccffffff'u32
 
 proc baseConfig(): Config =
   Config(
@@ -529,6 +531,99 @@ suite "Runtime state primitives":
       OverviewEmptyWorkspaceFill
     check rendered.pixelAt(activePreview.x, activePreview.y) ==
       testArgb(config.layout.focusedBorderColor)
+
+  test "overview overlay badges hidden deck stack windows":
+    var config = baseConfig()
+    config.layout.defaultMasterCount = 2
+    config.layout.defaultMasterRatio = 0.55
+    var model = initRuntimeStateFromConfig(config).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 4, appId: "app", title: "Four"),
+      Msg(kind: MsgKind.CmdOpenOverview),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let badge = model.overviewHiddenCountBadge(screen, slots, slots.find(1'u32))
+    let rendered = model.renderOverviewOverlayBuffer(screen)
+
+    check badge.count == 1
+    check badge.rect.w > 0
+    check rendered.pixels.anyIt(it == OverviewHiddenBadgeFill)
+
+  test "overview overlay badges hidden monocle windows":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Monocle),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three"),
+      Msg(kind: MsgKind.CmdOpenOverview),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let badge = model.overviewHiddenCountBadge(screen, slots, slots.find(1'u32))
+
+    check badge.count == 2
+    check badge.rect.w > 0
+
+  test "overview overlay renders horizontal scroller overflow indicators":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three"),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+    discard model.setTagViewportCurrent(model.activeTag, 100.0'f32, 0.0'f32)
+    let (next, _) = model.update(Msg(kind: MsgKind.CmdOpenOverview))
+    model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let indicator = model.overviewScrollIndicator(screen, slots, slots.find(1'u32))
+    let rendered = model.renderOverviewOverlayBuffer(screen)
+
+    check indicator.axis == OverviewScrollAxis.Horizontal
+    check indicator.before
+    check indicator.after
+    check rendered.pixels.anyIt(it == OverviewScrollIndicatorColor)
+
+  test "overview overlay renders vertical scroller overflow indicators":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three"),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+    discard model.setTagViewportCurrent(model.activeTag, 100.0'f32, 100.0'f32)
+    let (next, _) = model.update(Msg(kind: MsgKind.CmdOpenOverview))
+    model = next
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let indicator = model.overviewScrollIndicator(screen, slots, slots.find(1'u32))
+
+    check indicator.axis == OverviewScrollAxis.Vertical
+    check indicator.before
+    check indicator.after
 
   test "runtime update mutates model and returns effects":
     var state = initRuntimeStateFromConfig(baseConfig())

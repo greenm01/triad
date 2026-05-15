@@ -1,40 +1,16 @@
 # Triad TODO
 
-## Overview
+## Architecture Cleanup
 
-- Add cyclic overview hidden-window count badges for Deck, Vertical Deck, and
-  Monocle.
-- Add open-axis scroll indicators for Scroller and Vertical Scroller workspace
-  previews.
+- Reconcile duplicate canonical/runtime/projection value types inside
+  `src/types`.
 
-## Runtime
+## Blocked / Watchlist
 
-- (done) Native Triad IPC action surface completed. Logical IDs remain
-  internal; external IDs are the stable public projection.
-- (done) Add multi-workspace window-rule placement backed by the DOD tag mask
-  model, while keeping public config workspace-oriented.
-- Continue Mango-informed window-rule work only when the needed substrate
-  exists. Terminal swallowing is implemented as `terminal`/`allow-swallow`;
-  sticky/global workspace placement is implemented as
-  `open-on-all-workspaces`; managed overlay is implemented as `open-overlay`;
-  unmanaged global windows are implemented as `open-unmanaged-global`; named
-  app scratchpad rules are implemented as `open-named-scratchpad`; idle inhibit
-  is implemented as `idle-inhibit`. Remaining gaps are blocked or deferred by
-  missing protocol/data/render/layout support: true output serial matching,
-  urgency, cast targets, per-window scroll factor, global keybinding policy,
-  visual effects, tabbed display, and render-target blocking.
-- If Triad exposes Mango-like floating modes, keep overlay, global/sticky, and
-  unmanaged-global behavior separate instead of collapsing them into one flag.
+- Continue Mango-informed window-rule work only when the needed protocol,
+  runtime state, render, or layout substrate exists. See
+  `docs/comp/window-rules.md`.
+- Keep overlay, global/sticky, and unmanaged-global behavior separate if Triad
+  adds more Mango-like floating modes.
 - Revisit target-viewport layout projection only if compositor-owned animation
   or another projection consumer needs final-position coordinates.
-
-## DOD / Type Placement Cleanup
-
-- (done) Move config parser data shapes into `src/types`.
-- (done) Move runtime `Msg`, `Effect`, and live-restore state shapes into
-  `src/types`.
-- (done) Move IPC command schema types and command specs into `src/types`.
-- (done) Move exported system view/result shapes into `src/types` or make them
-  private.
-- (done) Make handwritten protocol coverage enums pure.
-- Reconcile duplicate canonical/runtime value types inside `src/types`.

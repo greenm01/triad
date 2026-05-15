@@ -36,3 +36,19 @@ type
   OverviewDropTarget* = object
     kind*: OverviewDropKind
     slot*: uint32
+
+  OverviewHiddenCountBadge* = object
+    slot*: uint32
+    count*: int
+    rect*: rv.Rect
+
+  OverviewScrollAxis* {.pure.} = enum
+    Horizontal
+    Vertical
+
+  OverviewScrollIndicator* = object
+    slot*: uint32
+    axis*: OverviewScrollAxis
+    before*: bool
+    after*: bool
+    rect*: rv.Rect
