@@ -201,11 +201,16 @@ type
     theme*: string
     args*: seq[string]
 
+  JanetManifestAlias* = object
+    appId*: string
+    manifest*: string
+
   JanetConfig* = object
     enabled*: bool
     manifestDir*: string
     systemManifestDir*: string
     fuelLimit*: int32
+    manifestAliases*: seq[JanetManifestAlias]
 
   TerminalConfig* = object
     command*: seq[string]

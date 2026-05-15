@@ -72,6 +72,11 @@ proc validManifestAppId(appId: string): bool =
   appId.len > 0 and appId.find('/') == -1 and appId.find('\\') == -1 and
     appId.find("..") == -1
 
+proc validManifestName(name: string): bool =
+  let stripped = name.strip()
+  stripped.len > 0 and stripped.find('/') == -1 and stripped.find('\\') == -1 and
+    stripped.find("..") == -1
+
 proc expandManifestDir(path: string): string =
   let stripped = path.strip()
   if stripped == "~":
@@ -81,11 +86,24 @@ proc expandManifestDir(path: string): string =
   else:
     stripped
 
+proc aliasManifestNames(config: JanetConfig, appId: string): seq[string] =
+  for alias in config.manifestAliases:
+    let manifest = alias.manifest.strip()
+    if alias.appId == appId and manifest.validManifestName():
+      result.add(manifest)
+
+proc addCandidatePath(paths: var seq[string], path: string) =
+  if path notin paths:
+    paths.add(path)
+
 proc candidateManifestPaths(runtime: JanetRuntime, appId: string): seq[string] =
+  let aliasNames = runtime.config.aliasManifestNames(appId)
   for dir in [runtime.config.manifestDir, runtime.config.systemManifestDir]:
     let expanded = dir.expandManifestDir()
     if expanded.len > 0:
-      result.add(expanded / (appId & ".janet"))
+      result.addCandidatePath(expanded / (appId & ".janet"))
+      for aliasName in aliasNames:
+        result.addCandidatePath(expanded / (aliasName & ".janet"))
 
 proc manifestEntry(
     runtime: var JanetRuntime, appId: string

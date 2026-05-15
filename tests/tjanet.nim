@@ -407,6 +407,138 @@ suite "embedded Janet runtime":
     check ignored.ok
     check ignored.messages.len == 0
 
+  test "bundled Vesktop manifest targets chat workspace":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+    let manifest = readFile("manifests/vesktop.janet")
+
+    let mainWindow = runtime.evalSource(
+      testSnapshot(),
+      manifest,
+      "manifests/vesktop.janet",
+      some(ShellWindow(id: 18, title: "Discord", appId: "vesktop")),
+    )
+
+    check mainWindow.ok
+    check mainWindow.messages.len == 4
+    check mainWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check mainWindow.messages[0].moveWindowId == 18
+    check mainWindow.messages[0].moveTargetTag == 4
+    check mainWindow.messages[0].moveFollowWindow
+    check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
+    check mainWindow.messages[1].layoutTargetTag == 4
+    check mainWindow.messages[1].newLayout == LayoutMode.Deck
+    check mainWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
+    check mainWindow.messages[2].floatingWindowId == 18
+    check not mainWindow.messages[2].windowFloating
+    check mainWindow.messages[3].kind == MsgKind.CmdSetWindowMaximizedById
+    check mainWindow.messages[3].maximizedWindowId == 18
+    check mainWindow.messages[3].windowMaximized
+
+    let parentedDialog = runtime.evalSource(
+      testSnapshot(),
+      manifest,
+      "manifests/vesktop.janet",
+      some(
+        ShellWindow(
+          id: 19, parentId: 18, title: "Open File", appId: "dev.vencord.Vesktop"
+        )
+      ),
+    )
+
+    check parentedDialog.ok
+    check parentedDialog.messages.len == 3
+    check parentedDialog.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check parentedDialog.messages[0].moveWindowId == 19
+    check parentedDialog.messages[0].moveTargetTag == 4
+    check parentedDialog.messages[0].moveFollowWindow
+    check parentedDialog.messages[1].kind == MsgKind.CmdSetLayout
+    check parentedDialog.messages[1].layoutTargetTag == 4
+    check parentedDialog.messages[1].newLayout == LayoutMode.Deck
+    check parentedDialog.messages[2].kind == MsgKind.CmdSetWindowFloatingById
+    check parentedDialog.messages[2].floatingWindowId == 19
+    check parentedDialog.messages[2].windowFloating
+
+    let ignored = runtime.evalSource(
+      testSnapshot(),
+      manifest,
+      "manifests/vesktop.janet",
+      some(ShellWindow(id: 20, title: "Terminal", appId: "kitty")),
+    )
+
+    check ignored.ok
+    check ignored.messages.len == 0
+
+  test "bundled Telegram manifest targets chat workspace":
+    let dir = getTempDir() / ("triad-telegram-manifest-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(dir / "telegram.janet", readFile("manifests/telegram.janet"))
+    var config = testConfig(dir)
+    config.manifestAliases.add(
+      JanetManifestAlias(appId: "org.telegram.desktop", manifest: "telegram")
+    )
+    config.manifestAliases.add(
+      JanetManifestAlias(appId: "TelegramDesktop", manifest: "telegram")
+    )
+
+    var runtime = initJanetRuntime(config)
+    defer:
+      runtime.close()
+      if fileExists(dir / "telegram.janet"):
+        removeFile(dir / "telegram.janet")
+      removeDir(dir)
+
+    let mainWindow = runtime.evalManifestDetailed(
+      "org.telegram.desktop",
+      testSnapshot(),
+      some(ShellWindow(id: 21, title: "Telegram", appId: "org.telegram.desktop")),
+    )
+
+    check mainWindow.outcome == ManifestOutcome.Evaluated
+    check mainWindow.path == dir / "telegram.janet"
+    check mainWindow.messages.len == 4
+    check mainWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check mainWindow.messages[0].moveWindowId == 21
+    check mainWindow.messages[0].moveTargetTag == 4
+    check mainWindow.messages[0].moveFollowWindow
+    check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
+    check mainWindow.messages[1].layoutTargetTag == 4
+    check mainWindow.messages[1].newLayout == LayoutMode.Deck
+    check mainWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
+    check mainWindow.messages[2].floatingWindowId == 21
+    check not mainWindow.messages[2].windowFloating
+    check mainWindow.messages[3].kind == MsgKind.CmdSetWindowMaximizedById
+    check mainWindow.messages[3].maximizedWindowId == 21
+    check mainWindow.messages[3].windowMaximized
+
+    let parentedDialog = runtime.evalManifestDetailed(
+      "TelegramDesktop",
+      testSnapshot(),
+      some(
+        ShellWindow(id: 22, parentId: 21, title: "Open File", appId: "TelegramDesktop")
+      ),
+    )
+
+    check parentedDialog.outcome == ManifestOutcome.Evaluated
+    check parentedDialog.path == dir / "telegram.janet"
+    check parentedDialog.messages.len == 3
+    check parentedDialog.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check parentedDialog.messages[0].moveWindowId == 22
+    check parentedDialog.messages[0].moveTargetTag == 4
+    check parentedDialog.messages[0].moveFollowWindow
+    check parentedDialog.messages[1].kind == MsgKind.CmdSetLayout
+    check parentedDialog.messages[1].layoutTargetTag == 4
+    check parentedDialog.messages[1].newLayout == LayoutMode.Deck
+    check parentedDialog.messages[2].kind == MsgKind.CmdSetWindowFloatingById
+    check parentedDialog.messages[2].floatingWindowId == 22
+    check parentedDialog.messages[2].windowFloating
+
+    let missing = runtime.evalManifestDetailed("kitty", testSnapshot())
+
+    check missing.outcome == ManifestOutcome.Missing
+    check missing.messages.len == 0
+
   test "sandbox blocks host access":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
@@ -443,6 +575,55 @@ suite "embedded Janet runtime":
     check messages.len == 1
     check messages[0].kind == MsgKind.CmdMoveToWorkspaceIndex
     check messages[0].workspaceIndex == 2
+
+  test "manifest aliases map app ids without overriding exact matches":
+    let dir = getTempDir() / ("triad-janet-alias-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "telegram.janet", """(triad/command "move-window-to-tag" 12 4 true)"""
+    )
+    writeFile(
+      dir / "org.telegram.desktop.janet",
+      """(triad/command "move-window-to-tag" 12 9 true)""",
+    )
+
+    var config = testConfig(dir)
+    config.manifestAliases.add(
+      JanetManifestAlias(appId: "org.telegram.desktop", manifest: "telegram")
+    )
+    config.manifestAliases.add(
+      JanetManifestAlias(appId: "bad-app", manifest: "../telegram")
+    )
+
+    var runtime = initJanetRuntime(config)
+    defer:
+      runtime.close()
+      if fileExists(dir / "telegram.janet"):
+        removeFile(dir / "telegram.janet")
+      if fileExists(dir / "org.telegram.desktop.janet"):
+        removeFile(dir / "org.telegram.desktop.janet")
+      removeDir(dir)
+
+    let exact = runtime.evalManifestDetailed("org.telegram.desktop", testSnapshot())
+    check exact.outcome == ManifestOutcome.Evaluated
+    check exact.path == dir / "org.telegram.desktop.janet"
+    check exact.candidatePaths[0] == dir / "org.telegram.desktop.janet"
+    check exact.candidatePaths[1] == dir / "telegram.janet"
+    check exact.messages.len == 1
+    check exact.messages[0].moveTargetTag == 9
+
+    removeFile(dir / "org.telegram.desktop.janet")
+    runtime.configure(config)
+
+    let alias = runtime.evalManifestDetailed("org.telegram.desktop", testSnapshot())
+    check alias.outcome == ManifestOutcome.Evaluated
+    check alias.path == dir / "telegram.janet"
+    check alias.messages.len == 1
+    check alias.messages[0].moveTargetTag == 4
+
+    let invalidAlias = runtime.evalManifestDetailed("bad-app", testSnapshot())
+    check invalidAlias.outcome == ManifestOutcome.Missing
+    check invalidAlias.candidatePaths.len == 2
 
   test "manifest detailed result records lookup outcomes":
     let dir = getTempDir() / ("triad-janet-detail-" & $getCurrentProcessId())

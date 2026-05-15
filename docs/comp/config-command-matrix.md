@@ -330,7 +330,8 @@ KDL config nodes and fields:
 - `switch-events`: `lid-close`, `lid-open`, `tablet-mode-on`,
   `tablet-mode-off`.
 - `quickshell`: `enabled`, `command`, `theme`, `args`.
-- `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `fuel-limit`.
+- `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `fuel-limit`,
+  `manifest-alias`.
   Manifests receive `triad/snapshot` and `triad/current-window`, and can emit
   every registered user command through `triad/command`.
 - `terminal`: `command`.

@@ -112,11 +112,15 @@ janet {
   manifest-dir "~/.config/triad/manifests"
   system-manifest-dir "/usr/share/triad/manifests"
   fuel-limit 500000
+  manifest-alias "org.telegram.desktop" "telegram"
 }
 ```
 
 When enabled, Triad evaluates `{manifest-dir}/{app-id}.janet` when a matching
-window opens. A manifest receives a read-only `triad/snapshot` value plus
+window opens. `manifest-alias` maps an app id to a canonical manifest basename,
+so `org.telegram.desktop` can load `telegram.janet` without duplicating files.
+Exact app-id manifests are tried before aliases. A manifest receives a read-only
+`triad/snapshot` value plus
 `triad/current-window` for the opening window, and can emit normal Triad
 commands through `triad/command`, which mirrors the command names accepted by
 `triad msg` and config bindings. Manifest output re-enters the normal reducer

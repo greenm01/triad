@@ -303,7 +303,21 @@ window.
 Triad looks for manifests in order:
 
 1. `{manifest-dir}/{app-id}.janet` (config-specified directory)
-2. `{system-manifest-dir}/{app-id}.janet` (system-installed)
+2. `{manifest-dir}/{alias}.janet` for any matching configured `manifest-alias`
+3. `{system-manifest-dir}/{app-id}.janet` (system-installed)
+4. `{system-manifest-dir}/{alias}.janet` for any matching configured
+   `manifest-alias`
+
+Aliases are configured in KDL, not compiled into Triad:
+
+```kdl
+janet {
+  manifest-alias "org.telegram.desktop" "telegram"
+}
+```
+
+Exact app-id files win over alias targets. Alias targets are manifest basenames,
+not paths.
 
 Manifest source is read on first match and cached with the file modification
 time. Editing a manifest takes effect on the next matching window open, no
