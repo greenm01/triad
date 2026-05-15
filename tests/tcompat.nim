@@ -125,6 +125,24 @@ proc sampleCommand(
   of CommandArgShape.OptionalWindowId, CommandArgShape.RequiredWindowId:
     result.textCommand = spec.name & " 42"
     result.payload["id"] = %42
+  of CommandArgShape.WindowTagFollow:
+    result.textCommand = spec.name & " 42 3 true"
+    result.payload["id"] = %42
+    result.payload["tag"] = %3
+    result.payload["follow"] = %true
+  of CommandArgShape.WindowWorkspaceFollow:
+    result.textCommand = spec.name & " 42 2 true"
+    result.payload["id"] = %42
+    result.payload["workspace_idx"] = %2
+    result.payload["follow"] = %true
+  of CommandArgShape.WindowBool:
+    result.textCommand = spec.name & " 42 true"
+    result.payload["id"] = %42
+    result.payload["value"] = %true
+  of CommandArgShape.TagLayout:
+    result.textCommand = spec.name & " 3 grid"
+    result.payload["tag"] = %3
+    result.payload["layout"] = %"grid"
   of CommandArgShape.RequiredTag:
     result.textCommand = spec.name & " 3"
     result.payload["tag"] = %3

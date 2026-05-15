@@ -55,8 +55,8 @@
   (when (and window (gimp-app? (window :app-id)))
     (let [follow (or (main-window? window)
                      (not (has-other-gimp-window? (window :id))))]
-      (triad/move-window-to-tag (window :id) target-workspace follow)
-      (triad/set-layout-for-workspace target-workspace "scroller")
+      (triad/command "move-window-to-tag" (window :id) target-workspace follow)
+      (triad/command "set-layout-for-workspace" target-workspace "scroller")
       (if (main-window? window)
-        (triad/set-window-maximized (window :id) true)
-        (triad/set-window-floating (window :id) true)))))
+        (triad/command "set-window-maximized" (window :id) true)
+        (triad/command "set-window-floating" (window :id) true)))))

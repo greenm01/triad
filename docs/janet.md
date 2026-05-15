@@ -83,8 +83,8 @@ reducer.
 # ~/.config/triad/manifests/firefox.janet
 (let [tag (triad/find-tag-by-name "web")]
   (if tag
-    (triad/move-to-tag (tag :tag-id))
-    (triad/move-to-tag (triad/active-tag-id))))
+    (triad/command "move-to-tag" (tag :tag-id))
+    (triad/command "move-to-tag" (triad/active-tag-id))))
 ```
 
 This is the executable successor to ICCCM/EWMH placement hints. KDL window
@@ -102,12 +102,12 @@ Long-running hooks that react to compositor events in real time:
 (triad/on :window-opened
   (fn [ev]
     (when (= (ev :app-id) "pavucontrol")
-      (triad/toggle-floating))))
+      (triad/command "toggle-floating"))))
 
 (triad/on :tag-changed
   (fn [ev]
     (when (= (ev :tag-name) "game")
-      (triad/set-layout "monocle"))))
+      (triad/command "layout-monocle"))))
 ```
 
 ### Custom layout functions (future)
@@ -213,7 +213,7 @@ src/
     binding.nim       ← compiles vendored janet.c and the C API wrapper
     runtime.nim       ← JanetRuntime lifecycle, sandboxed eval, manifest cache
     snapshot_api.nim  ← registers triad/snapshot and shorthand query functions
-    command_api.nim   ← registers triad/move-to-tag etc., writes to Msg queue
+    command_api.nim   ← translates triad/command actions into Msg values
     hooks.nim         ← future triad/on registration, fiber-per-hook dispatch
 ```
 
@@ -231,7 +231,7 @@ sandbox is enforced structurally, not by policy documentation.
 ### Environment construction
 
 The embedded environment removes host-facing APIs and exposes only the Triad
-snapshot helpers and command functions. The vendored Janet build is compiled
+snapshot helpers and `triad/command`. The vendored Janet build is compiled
 with dynamic modules, FFI, network, and process support disabled.
 
 Exposed namespaces:
@@ -243,18 +243,7 @@ triad/active-tag-id       shorthand query → uint32
 triad/find-tag-by-name    shorthand query → struct | nil
 triad/windows-on-tag      shorthand query → tuple of structs
 triad/window-by-id        shorthand query → struct | nil
-triad/move-to-tag         emit CmdMoveToTag Msg
-triad/move-to-workspace   emit CmdMoveToWorkspaceIndex Msg
-triad/toggle-floating     emit CmdToggleFloating Msg
-triad/move-window-to-tag  emit targeted CmdMoveWindowToTag Msg
-triad/move-window-to-workspace emit targeted CmdMoveWindowToWorkspaceIndex Msg
-triad/set-window-floating emit targeted CmdSetWindowFloatingById Msg
-triad/set-window-maximized emit targeted CmdSetWindowMaximizedById Msg
-triad/set-layout-for-workspace emit targeted CmdSetLayout Msg
-triad/focus-window        emit CmdFocusWindowById Msg
-triad/set-layout          emit CmdSetLayout Msg
-triad/focus-tag           emit CmdFocusTag Msg
-triad/spawn               emit CmdSpawn Msg
+triad/command             emit any registered user command by name + args
 triad/on                  future event hook registration
 ```
 
@@ -284,12 +273,28 @@ returns, `collectMsgs()` drains that queue into the daemon's message queue.
 Janet cannot observe the model change as a result of its own output — it
 receives only the snapshot that existed when evaluation began.
 
+`triad/command` is the complete command surface. It accepts the same canonical
+command names and aliases used by `triad msg` and config bindings:
+
+```janet
+(triad/command "focus-workspace" 8)
+(triad/command "layout-grid")
+(triad/command "maximize-window-to-edges")
+(triad/command "move-window-to-tag" (triad/current-window :id) 8 true)
+(triad/command "set-window-maximized" (triad/current-window :id) true)
+(triad/command "recent-window-next" "--scope" "output" "--filter" "app-id")
+(triad/command "spawn" "foot" "--working-directory" "/tmp")
+```
+
+Arguments are argv-style values, not shell strings. Use one Janet argument per
+command argument; names that contain spaces can be passed as one string.
+
 Targeted window commands take the compositor-facing window id exposed in
 `triad/current-window` or `triad/snapshot :windows`. This lets manifests place
 or change state on a newly opened window without relying on the currently
-focused window. The optional final boolean on `triad/move-window-to-tag` and
-`triad/move-window-to-workspace` controls whether Triad follows focus to the
-moved window.
+focused window. The optional final boolean on `move-window-to-tag` and
+`move-window-to-workspace` controls whether Triad follows focus to the moved
+window.
 
 ---
 

@@ -86,6 +86,13 @@ proc boolFromField(node: JsonNode, field: string): Option[bool] =
     return some(node[field].getBool())
   none(bool)
 
+proc boolStringFromField(node: JsonNode, field: string): Option[string] =
+  let value = boolFromField(node, field)
+  if value.isSome:
+    some($value.get())
+  else:
+    none(string)
+
 proc numberStringFromField(node: JsonNode, field: string): Option[string] =
   if node.kind != JObject or not node.hasKey(field):
     return none(string)
@@ -142,6 +149,48 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
     let id = uintFromField(payload, "id")
     if id.isSome:
       parts.add($id.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of CommandArgShape.WindowTagFollow:
+    let id = uintStringFromField(payload, "id")
+    let tag = uintStringFromField(payload, "tag")
+    if id.isSome and tag.isSome:
+      parts.add(id.get())
+      parts.add(tag.get())
+      let follow = boolStringFromField(payload, "follow")
+      if follow.isSome:
+        parts.add(follow.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of CommandArgShape.WindowWorkspaceFollow:
+    let id = uintStringFromField(payload, "id")
+    let index = uintStringFromField(payload, "workspace_idx")
+    if id.isSome and index.isSome:
+      parts.add(id.get())
+      parts.add(index.get())
+      let follow = boolStringFromField(payload, "follow")
+      if follow.isSome:
+        parts.add(follow.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of CommandArgShape.WindowBool:
+    let id = uintStringFromField(payload, "id")
+    let value = boolStringFromField(payload, "value")
+    if id.isSome and value.isSome:
+      parts.add(id.get())
+      parts.add(value.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of CommandArgShape.TagLayout:
+    let tag = uintStringFromField(payload, "tag")
+    let layout = stringFromField(payload, "layout")
+    if tag.isSome and layout.len > 0:
+      parts.add(tag.get())
+      parts.add(layout)
       some(parts)
     else:
       none(seq[string])

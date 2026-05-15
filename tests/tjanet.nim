@@ -1,7 +1,8 @@
-import std/[options, os, unittest]
+import std/[options, os, strutils, unittest]
 import ../src/core/msg
+import ../src/ipc/commands
 import ../src/janet/runtime
-import ../src/types/[janet_manifest, runtime_values, shell_snapshot]
+import ../src/types/[ipc_commands, janet_manifest, runtime_values, shell_snapshot]
 
 proc testConfig(dir: string): JanetConfig =
   JanetConfig(
@@ -40,8 +41,83 @@ proc testSnapshot(): ShellSnapshot =
     outputs: @[ShellOutput(id: 1, name: "HDMI-A-1", w: 1920, h: 1080, isPrimary: true)],
   )
 
+proc sampleCommandParts(spec: CommandSpec): seq[string] =
+  result = @[spec.name]
+  case spec.argShape
+  of CommandArgShape.NoArgs:
+    discard
+  of CommandArgShape.OptionalWindowId, CommandArgShape.RequiredWindowId:
+    result.add("42")
+  of CommandArgShape.WindowTagFollow:
+    result.add("42")
+    result.add("3")
+    result.add("true")
+  of CommandArgShape.WindowWorkspaceFollow:
+    result.add("42")
+    result.add("2")
+    result.add("true")
+  of CommandArgShape.WindowBool:
+    result.add("42")
+    result.add("true")
+  of CommandArgShape.TagLayout:
+    result.add("3")
+    result.add("grid")
+  of CommandArgShape.RequiredTag:
+    result.add("3")
+  of CommandArgShape.RequiredWorkspaceIdx:
+    result.add("2")
+  of CommandArgShape.RequiredName:
+    result.add("named scratch")
+  of CommandArgShape.RequiredOutput:
+    result.add("HDMI-A-1")
+  of CommandArgShape.RequiredFloatDelta:
+    result.add("-0.25")
+  of CommandArgShape.RequiredFloatValue:
+    result.add("0.75")
+  of CommandArgShape.RequiredIntCount:
+    result.add("2")
+  of CommandArgShape.RequiredIntDelta:
+    result.add("-1")
+  of CommandArgShape.OptionalIntDelta:
+    result.add("-1")
+  of CommandArgShape.MoveDelta:
+    result.add("12")
+    result.add("-34")
+  of CommandArgShape.ResizeDelta:
+    result.add("12")
+    result.add("-34")
+  of CommandArgShape.RecentAdvance:
+    result.add("--scope")
+    result.add("output")
+    result.add("--filter")
+    result.add("app-id")
+  of CommandArgShape.RecentScope:
+    result.add("workspace")
+  of CommandArgShape.SpawnArgv:
+    result.add("sh")
+    result.add("-lc")
+    result.add("echo")
+  of CommandArgShape.WarpPointer:
+    result.add("12")
+    result.add("34")
+  of CommandArgShape.Screenshot:
+    result.add("--path")
+    result.add("/tmp/triad.png")
+    result.add("--show-pointer")
+    result.add("--clipboard-only")
+
+proc janetStringLiteral(value: string): string =
+  "\"" & value.replace("\\", "\\\\").replace("\"", "\\\"") & "\""
+
+proc janetCommandSource(parts: seq[string]): string =
+  result = "(triad/command"
+  for part in parts:
+    result.add(" ")
+    result.add(part.janetStringLiteral())
+  result.add(")")
+
 suite "embedded Janet runtime":
-  test "command functions emit reducer messages":
+  test "generic command function emits reducer messages":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
       runtime.close()
@@ -49,15 +125,15 @@ suite "embedded Janet runtime":
     let evaluated = runtime.evalSource(
       testSnapshot(),
       """
-(triad/move-to-tag 2)
-(triad/set-layout "grid")
-(triad/toggle-floating)
-(triad/move-window-to-tag 12 8 true)
-(triad/move-window-to-workspace 12 2 false)
-(triad/set-window-floating 12 true)
-(triad/set-window-maximized 12 true)
-(triad/set-layout-for-workspace 8 "scroller")
-(triad/focus-window 12)
+(triad/command "move-to-tag" 2)
+(triad/command "layout-grid")
+(triad/command "toggle-floating")
+(triad/command "move-window-to-tag" 12 8 true)
+(triad/command "move-window-to-workspace" 12 2 false)
+(triad/command "set-window-floating" 12 true)
+(triad/command "set-window-maximized" 12 true)
+(triad/command "set-layout-for-workspace" 8 "scroller")
+(triad/command "focus-window" 12)
 """,
     )
 
@@ -88,6 +164,73 @@ suite "embedded Janet runtime":
     check evaluated.messages[8].kind == MsgKind.CmdFocusWindowById
     check evaluated.messages[8].focusWindowId == 12
 
+  test "generic command dispatcher mirrors every registered command":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+
+    for spec in CommandSpecs:
+      let parts = sampleCommandParts(spec)
+      let expected = parseCommandParts(parts)
+      check expected.isSome
+      let evaluated = runtime.evalSource(testSnapshot(), janetCommandSource(parts))
+      check evaluated.ok
+      check evaluated.messages.len == 1
+      check repr(evaluated.messages[0]) == repr(expected.get())
+
+      if spec.aliases.len > 0:
+        for alias in spec.aliases.split('|'):
+          var aliasParts = parts
+          aliasParts[0] = alias
+          let aliasExpected = parseCommandParts(aliasParts)
+          check aliasExpected.isSome
+          let aliasEvaluated =
+            runtime.evalSource(testSnapshot(), janetCommandSource(aliasParts))
+          check aliasEvaluated.ok
+          check aliasEvaluated.messages.len == 1
+          check repr(aliasEvaluated.messages[0]) == repr(aliasExpected.get())
+
+  test "generic command dispatcher accepts numeric args and rejects bad commands":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+
+    let highId = 4278190142'u32
+    let numeric = runtime.evalSource(
+      testSnapshot(),
+      """
+(triad/command "focus-window" 4278190142)
+(triad/command "set-column-width" 0.75)
+(triad/command "move-window-to-tag" 4278190142 8 true)
+(triad/command "set-window-maximized" 4278190142 true)
+""",
+    )
+
+    check numeric.ok
+    check numeric.messages.len == 4
+    check numeric.messages[0].kind == MsgKind.CmdFocusWindowById
+    check numeric.messages[0].focusWindowId == highId
+    check numeric.messages[1].kind == MsgKind.CmdSetColumnWidth
+    check numeric.messages[1].targetWidth == 0.75'f32
+    check numeric.messages[2].kind == MsgKind.CmdMoveWindowToTag
+    check numeric.messages[2].moveWindowId == highId
+    check numeric.messages[2].moveTargetTag == 8
+    check numeric.messages[2].moveFollowWindow
+    check numeric.messages[3].kind == MsgKind.CmdSetWindowMaximizedById
+    check numeric.messages[3].maximizedWindowId == highId
+    check numeric.messages[3].windowMaximized
+
+    let invalid = runtime.evalSource(
+      testSnapshot(),
+      """
+(triad/command "not-a-command")
+(triad/command "focus-window" "bad")
+""",
+    )
+
+    check invalid.ok
+    check invalid.messages.len == 0
+
   test "snapshot query helpers expose current state":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
@@ -97,7 +240,7 @@ suite "embedded Janet runtime":
       testSnapshot(),
       """
 (let [tag (triad/find-tag-by-name "web")]
-  (triad/focus-tag (tag :tag-id)))
+  (triad/command "focus-tag" (tag :tag-id)))
 """,
     )
 
@@ -115,7 +258,7 @@ suite "embedded Janet runtime":
       testSnapshot(),
       """
 (when (= "toolbox" (triad/current-window :identifier))
-  (triad/move-window-to-tag (triad/current-window :id) 8))
+  (triad/command "move-window-to-tag" (triad/current-window :id) 8))
 """,
       currentWindow = some(
         ShellWindow(id: 12, title: "Toolbox", appId: "gimp", identifier: "toolbox")
@@ -137,10 +280,10 @@ suite "embedded Janet runtime":
     let evaluated = runtime.evalSource(
       testSnapshot(),
       """
-(triad/move-window-to-tag (triad/current-window :id) 8 true)
-(triad/set-window-floating (triad/current-window :id) true)
-(triad/set-window-maximized (triad/current-window :id) true)
-(triad/focus-window (triad/current-window :id))
+(triad/command "move-window-to-tag" (triad/current-window :id) 8 true)
+(triad/command "set-window-floating" (triad/current-window :id) true)
+(triad/command "set-window-maximized" (triad/current-window :id) true)
+(triad/command "focus-window" (triad/current-window :id))
 """,
       currentWindow = some(ShellWindow(id: highId, title: "GIMP", appId: "gimp")),
     )
@@ -221,7 +364,7 @@ suite "embedded Janet runtime":
   test "manifest lookup emits messages for matching app id":
     let dir = getTempDir() / "triad-janet-tests"
     createDir(dir)
-    writeFile(dir / "firefox.janet", """(triad/move-to-workspace 2)""")
+    writeFile(dir / "firefox.janet", """(triad/command "move-to-workspace" 2)""")
 
     var runtime = initJanetRuntime(testConfig(dir))
     defer:
@@ -238,7 +381,7 @@ suite "embedded Janet runtime":
   test "manifest detailed result records lookup outcomes":
     let dir = getTempDir() / ("triad-janet-detail-" & $getCurrentProcessId())
     createDir(dir)
-    writeFile(dir / "gimp.janet", """(triad/move-window-to-tag 12 8 true)""")
+    writeFile(dir / "gimp.janet", """(triad/command "move-window-to-tag" 12 8 true)""")
 
     var runtime = initJanetRuntime(testConfig(dir))
     defer:

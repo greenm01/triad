@@ -18,6 +18,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.
+*   `focus-window <id>`: Focuses a specific compositor window ID.
 *   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent visible
     workspace, creating the next dynamic workspace when appropriate. In
     overview, these wrap through every visible workspace preview, including
@@ -67,11 +68,18 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `layout-vertical-deck`: Sets the active tag to a top master with deck-stack below.
 *   `layout-tgmix`: Sets the active tag to tile mode for up to three windows,
     then grid mode for larger sets.
+*   `set-layout-for-workspace <tag> <layout>`: Sets a stable tag id to a
+    canonical layout id without changing focus.
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
 
 #### Manipulation
 *   `move-to-tag <id>`: Moves the focused window to the specified tag and focuses that tag.
 *   `move-to-workspace <index>`: Moves the focused window to the compact Niri-style workspace index and focuses that workspace.
+*   `move-window-to-tag <id> <tag> [follow]`: Moves a specific compositor
+    window ID to a tag. `follow` defaults to `false`.
+*   `move-window-to-workspace <id> <index> [follow]`: Moves a specific
+    compositor window ID to a compact workspace index. `follow` defaults to
+    `false`.
 *   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent visible workspace and focuses it, creating the next dynamic workspace when appropriate.
 *   `move-to-scratchpad`: Moves the focused window to the scratchpad.
 *   `move-to-named-scratchpad <name>`: Moves the focused window to a named scratchpad.
@@ -80,8 +88,12 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `ungroup-window`: Dissolves the group, granting the focused window its independence.
 *   `focus-next-in-group`: Cycles focus through the windows of a tabbed group.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
+*   `set-window-floating <id> true|false`: Sets floating state for a specific
+    compositor window ID.
 *   `fullscreen-window`, `toggle-fullscreen`: Commands the window to occupy the entire screen.
 *   `maximize-window-to-edges`, `toggle-maximized`: Toggles client-visible window maximize.
+*   `set-window-maximized <id> true|false`: Sets client-visible maximize state
+    for a specific compositor window ID.
 *   `move-floating <dx> <dy>`: Displaces a floating window by the specified pixel deltas.
 *   `resize-floating <dw> <dh>`: Adjusts the physical dimensions of a floating window.
 *   `zoom`: Swaps the focused window with the primary window in the master position.
@@ -399,6 +411,10 @@ use structured fields:
 
 - `id` for window-id commands such as `focus-window`, `close-window`,
   `fullscreen-window`, `toggle-fullscreen`, and `exit-fullscreen`.
+- `id` plus `tag`, `workspace_idx`, `follow`, or `value` for targeted window
+  actions such as `move-window-to-tag`, `move-window-to-workspace`,
+  `set-window-floating`, and `set-window-maximized`.
+- `tag` plus `layout` for `set-layout-for-workspace`.
 - `tag` for tag commands and `workspace_idx` for shell workspace commands.
 - `name` for `rename-tag`, `move-to-named-scratchpad`, and
   `toggle-named-scratchpad`.

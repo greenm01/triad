@@ -1,4 +1,5 @@
 import std/[options, strutils]
+import ../core/layout_mode_codec
 import ../core/msg
 import ../types/runtime_values
 import command_registry
@@ -23,6 +24,15 @@ proc parseFloat32Arg(s: string): Option[float32] =
     some(float32(parseFloat(s)))
   except CatchableError:
     none(float32)
+
+proc parseBoolArg(s: string): Option[bool] =
+  case s.normalize()
+  of "true", "#true", "yes", "on", "1":
+    some(true)
+  of "false", "#false", "no", "off", "0":
+    some(false)
+  else:
+    none(bool)
 
 proc parseScreenshotCommand(parts: seq[string], kind: ScreenshotKind): Option[Msg] =
   var path = ""
@@ -179,6 +189,98 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
         some(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: uint32(win.get())))
+      else:
+        none(Msg)
+    else:
+      none(Msg)
+  of CommandId.CidMoveWindowToTag:
+    if parts.len in 3 .. 4:
+      let win = parseUInt32Arg(parts[1])
+      let tag = parseUInt32Arg(parts[2])
+      let follow =
+        if parts.len == 4:
+          parseBoolArg(parts[3])
+        else:
+          some(false)
+      if win.isSome and tag.isSome and follow.isSome:
+        some(
+          Msg(
+            kind: MsgKind.CmdMoveWindowToTag,
+            moveWindowId: win.get(),
+            moveTargetTag: tag.get(),
+            moveFollowWindow: follow.get(),
+          )
+        )
+      else:
+        none(Msg)
+    else:
+      none(Msg)
+  of CommandId.CidMoveWindowToWorkspace:
+    if parts.len in 3 .. 4:
+      let win = parseUInt32Arg(parts[1])
+      let index = parseUInt32Arg(parts[2])
+      let follow =
+        if parts.len == 4:
+          parseBoolArg(parts[3])
+        else:
+          some(false)
+      if win.isSome and index.isSome and follow.isSome:
+        some(
+          Msg(
+            kind: MsgKind.CmdMoveWindowToWorkspaceIndex,
+            moveWorkspaceWindowId: win.get(),
+            moveWorkspaceIndex: index.get(),
+            moveWorkspaceFollowWindow: follow.get(),
+          )
+        )
+      else:
+        none(Msg)
+    else:
+      none(Msg)
+  of CommandId.CidSetWindowFloating:
+    if parts.len == 3:
+      let win = parseUInt32Arg(parts[1])
+      let floating = parseBoolArg(parts[2])
+      if win.isSome and floating.isSome:
+        some(
+          Msg(
+            kind: MsgKind.CmdSetWindowFloatingById,
+            floatingWindowId: win.get(),
+            windowFloating: floating.get(),
+          )
+        )
+      else:
+        none(Msg)
+    else:
+      none(Msg)
+  of CommandId.CidSetWindowMaximized:
+    if parts.len == 3:
+      let win = parseUInt32Arg(parts[1])
+      let maximized = parseBoolArg(parts[2])
+      if win.isSome and maximized.isSome:
+        some(
+          Msg(
+            kind: MsgKind.CmdSetWindowMaximizedById,
+            maximizedWindowId: win.get(),
+            windowMaximized: maximized.get(),
+          )
+        )
+      else:
+        none(Msg)
+    else:
+      none(Msg)
+  of CommandId.CidSetLayoutForWorkspace:
+    if parts.len == 3:
+      let tag = parseUInt32Arg(parts[1])
+      let layout = parseLayoutModeId(parts[2])
+      if tag.isSome and layout.isSome:
+        some(
+          Msg(
+            kind: MsgKind.CmdSetLayout,
+            layoutTargetTag: tag.get(),
+            newLayout: layout.get(),
+          )
+        )
       else:
         none(Msg)
     else:

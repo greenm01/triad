@@ -118,12 +118,10 @@ janet {
 When enabled, Triad evaluates `{manifest-dir}/{app-id}.janet` when a matching
 window opens. A manifest receives a read-only `triad/snapshot` value plus
 `triad/current-window` for the opening window, and can emit normal Triad
-commands such as `triad/move-to-tag`, `triad/move-to-workspace`,
-`triad/focus-tag`, `triad/set-layout`, `triad/toggle-floating`, `triad/spawn`,
-and targeted window commands such as `triad/move-window-to-tag`,
-`triad/set-window-floating`, `triad/set-window-maximized`, and
-`triad/focus-window`. Manifest output re-enters the normal reducer message path;
-scripts do not receive direct model or compositor handles. See `docs/janet.md`.
+commands through `triad/command`, which mirrors the command names accepted by
+`triad msg` and config bindings. Manifest output re-enters the normal reducer
+message path; scripts do not receive direct model or compositor handles. See
+`docs/janet.md`.
 
 ## Session Environment
 

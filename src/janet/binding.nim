@@ -6,19 +6,7 @@
 {.compile: "../../vendor/janet/janet.c".}
 {.compile: "binding.c".}
 
-const
-  JanetActionMoveToTag* = 1
-  JanetActionMoveToWorkspace* = 2
-  JanetActionFocusTag* = 3
-  JanetActionSetLayout* = 4
-  JanetActionToggleFloating* = 5
-  JanetActionSpawn* = 6
-  JanetActionMoveWindowToTag* = 7
-  JanetActionMoveWindowToWorkspace* = 8
-  JanetActionSetWindowFloating* = 9
-  JanetActionSetLayoutForWorkspace* = 10
-  JanetActionFocusWindow* = 11
-  JanetActionSetWindowMaximized* = 12
+const JanetActionCommand* = 1
 
 type JanetHandle* = pointer
 
@@ -39,22 +27,6 @@ proc triadJanetActionCount*(
 proc triadJanetActionKind*(
   runtime: JanetHandle, index: cint
 ): cint {.importc: "triad_janet_action_kind".}
-
-proc triadJanetActionU32*(
-  runtime: JanetHandle, index: cint
-): uint32 {.importc: "triad_janet_action_u32".}
-
-proc triadJanetActionU32B*(
-  runtime: JanetHandle, index: cint
-): uint32 {.importc: "triad_janet_action_u32_b".}
-
-proc triadJanetActionBool*(
-  runtime: JanetHandle, index: cint
-): cint {.importc: "triad_janet_action_bool".}
-
-proc triadJanetActionText*(
-  runtime: JanetHandle, index: cint
-): cstring {.importc: "triad_janet_action_text".}
 
 proc triadJanetActionArgc*(
   runtime: JanetHandle, index: cint

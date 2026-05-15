@@ -19,6 +19,11 @@ type
     CidMoveToTagRight
     CidCloseWindow
     CidFocusWindow
+    CidMoveWindowToTag
+    CidMoveWindowToWorkspace
+    CidSetWindowFloating
+    CidSetWindowMaximized
+    CidSetLayoutForWorkspace
     CidConfigReload
     CidLayoutScroller
     CidLayoutVerticalScroller
@@ -118,6 +123,10 @@ type
     NoArgs
     OptionalWindowId
     RequiredWindowId
+    WindowTagFollow
+    WindowWorkspaceFollow
+    WindowBool
+    TagLayout
     RequiredTag
     RequiredWorkspaceIdx
     RequiredName
@@ -188,6 +197,31 @@ const CommandSpecs* = [
   ),
   CommandSpec(
     id: CommandId.CidFocusWindow, name: "focus-window", argShape: RequiredWindowId
+  ),
+  CommandSpec(
+    id: CommandId.CidMoveWindowToTag,
+    name: "move-window-to-tag",
+    argShape: WindowTagFollow,
+  ),
+  CommandSpec(
+    id: CommandId.CidMoveWindowToWorkspace,
+    name: "move-window-to-workspace",
+    argShape: WindowWorkspaceFollow,
+  ),
+  CommandSpec(
+    id: CommandId.CidSetWindowFloating,
+    name: "set-window-floating",
+    argShape: WindowBool,
+  ),
+  CommandSpec(
+    id: CommandId.CidSetWindowMaximized,
+    name: "set-window-maximized",
+    argShape: WindowBool,
+  ),
+  CommandSpec(
+    id: CommandId.CidSetLayoutForWorkspace,
+    name: "set-layout-for-workspace",
+    argShape: TagLayout,
   ),
   CommandSpec(id: CommandId.CidConfigReload, name: "config-reload", argShape: NoArgs),
   CommandSpec(
