@@ -102,6 +102,12 @@ recent-windows {
     }
 }
 
+hotkey-overlay {
+    skip-at-startup #false
+    hide-not-bound
+    position "center"
+}
+
 // environment {
 //     GTK_THEME "Adwaita:dark"
 //     SSH_AUTH_SOCK #null

@@ -698,9 +698,9 @@ Triad can render a native keyboard helper popup from the active config:
 
 ```kdl
 hotkey-overlay {
-  skip-at-startup
+  skip-at-startup #false
   hide-not-bound
-  position "top"
+  position "center"
   columns 2
 }
 
@@ -710,12 +710,12 @@ bindings {
 }
 ```
 
-- `skip-at-startup`: prevents the helper from appearing on startup.
-  This is the default, so reloads never show the helper unless the user opens
-  it explicitly.
+- `skip-at-startup`: when true, prevents the helper from appearing on startup.
+  Omitted configs default to true; the generated default config sets this false.
 - `hide-not-bound`: omits built-in helper rows that have no configured key.
 - `position "top"|"center"|"bottom"`: places the helper popup on screen.
-  The default is `"top"`.
+  Omitted configs default to `"top"`; the generated default config uses
+  `"center"`.
 - `columns <1..4>`: wraps helper rows into multiple columns. The default is
   `2`.
 - `hotkey-overlay-title="..."`: shows a binding in the helper with the

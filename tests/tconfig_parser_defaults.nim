@@ -678,6 +678,18 @@ cursor {
 
     check not explicitFalse.cursor.shakeToFind
 
+  test "Fallback config shows centered hotkey overlay at startup":
+    let path = getCurrentDir() / "test_config_fallback_defaults.kdl"
+    writeFile(path, FallbackConfigContent)
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check not config.hotkeyOverlay.skipAtStartup
+    check config.hotkeyOverlay.hideNotBound
+    check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
+    check config.hotkeyOverlay.columns == 2
+    check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
+
   test "Default bindings follow Niri-style movement and scratchpad chords":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")
 
@@ -711,6 +723,10 @@ cursor {
     check config.commandForBinding("Print", Alt) == "screenshot-window"
     check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
+    check not config.hotkeyOverlay.skipAtStartup
+    check config.hotkeyOverlay.hideNotBound
+    check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
+    check config.hotkeyOverlay.columns == 2
     check config.msgKindForBinding("Tab", Alt, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowNext
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
