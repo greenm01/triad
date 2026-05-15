@@ -3,6 +3,19 @@ import focus, workspaces
 import ../state/engine
 from ../types/runtime_values import LayoutMode
 
+proc resetNonScrollerViewport(model: var Model, tagId: TagId, mode: LayoutMode): bool =
+  if mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+    return false
+  result = model.setTagViewportTarget(tagId, 0.0'f32, 0.0'f32) or result
+  result = model.setTagViewportCurrent(tagId, 0.0'f32, 0.0'f32) or result
+  result = model.clearTagViewportRetarget(tagId) or result
+  result = model.clearTagViewportSnap(tagId) or result
+
+proc setCommandLayout(model: var Model, tagId: TagId, mode: LayoutMode): bool =
+  result = model.setTagLayout(tagId, mode)
+  if result:
+    result = model.resetNonScrollerViewport(tagId, mode) or result
+
 proc focusedPosition(
     model: var Model
 ): tuple[
@@ -63,7 +76,7 @@ proc setLayoutForSlot*(model: var Model, slot: uint32, mode: LayoutMode): bool =
   if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
       not model.tagHasNonStickyLiveWindows(tagId):
     return false
-  tagId != NullTagId and model.setTagLayout(tagId, mode)
+  tagId != NullTagId and model.setCommandLayout(tagId, mode)
 
 proc switchLayout*(model: var Model): bool =
   let tagId = model.ensureActiveWorkspace()
@@ -77,7 +90,7 @@ proc switchLayout*(model: var Model): bool =
       0
     else:
       (idx + 1) mod cycle.len
-  model.setTagLayout(tagId, cycle[nextIdx])
+  model.setCommandLayout(tagId, cycle[nextIdx])
 
 proc setMasterCount*(model: var Model, count: int): bool =
   let tagId = model.ensureActiveWorkspace()
