@@ -24,6 +24,14 @@ proc uintFromNode(node: JsonNode): Option[uint32] =
     discard
   none(uint32)
 
+proc uintFromNodeAllowZero(node: JsonNode): Option[uint32] =
+  try:
+    if node.kind == JInt and node.getInt() >= 0 and node.getInt() <= int(high(uint32)):
+      return some(uint32(node.getInt()))
+  except CatchableError:
+    discard
+  none(uint32)
+
 proc boolFromNode(node: JsonNode, fallback = false): bool =
   try:
     if node.kind == JBool:
@@ -37,6 +45,14 @@ proc stringFromField(node: JsonNode, field: string): string =
     node[field].getStr()
   else:
     ""
+
+proc stringSeqFromNode(node: JsonNode): seq[string] =
+  if node.kind != JArray:
+    return @[]
+  for item in node:
+    if item.kind != JString:
+      return @[]
+    result.add(item.getStr())
 
 proc boolFromField(node: JsonNode, field: string, fallback = false): bool =
   if node.kind == JObject and node.hasKey(field):
@@ -95,6 +111,38 @@ proc toggleMaximizeMessage(snapshot: ShellSnapshot, winId: uint32): Option[Msg] 
     return
       some(Msg(kind: MsgKind.WlWindowUnmaximizeRequested, unmaximizeRequestId: winId))
   some(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: winId))
+
+proc switchKeyboardLayoutMessage(payload: JsonNode): Msg =
+  var layout = newJNull()
+  if payload.kind == JObject and payload.hasKey("layout"):
+    layout = payload["layout"]
+  if layout.kind == JString:
+    case layout.getStr().normalize()
+    of "next":
+      return Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: 1,
+        keyboardLayoutIndex: -1,
+      )
+    of "prev", "previous":
+      return Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: -1,
+        keyboardLayoutIndex: -1,
+      )
+    else:
+      discard
+  elif layout.kind == JObject and layout.hasKey("Index"):
+    let index = uintFromNodeAllowZero(layout["Index"])
+    if index.isSome:
+      return Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout, keyboardLayoutIndex: int32(index.get())
+      )
+  Msg(
+    kind: MsgKind.CmdSwitchKeyboardLayout,
+    keyboardLayoutDelta: 1,
+    keyboardLayoutIndex: -1,
+  )
 
 proc actionMessages(
     action: JsonNode, snapshot: ShellSnapshot
@@ -195,7 +243,20 @@ proc actionMessages(
         )
     return (true, @[Msg(kind: MsgKind.CmdCloseWindow)])
   elif action.hasKey("SwitchLayout"):
-    return (true, @[Msg(kind: MsgKind.CmdSwitchLayout)])
+    return (true, @[switchKeyboardLayoutMessage(action["SwitchLayout"])])
+  elif action.hasKey("Spawn"):
+    let payload = action["Spawn"]
+    if payload.kind == JObject and payload.hasKey("command"):
+      let command = stringSeqFromNode(payload["command"])
+      if command.len > 0:
+        return (true, @[Msg(kind: MsgKind.CmdSpawn, spawnCommand: command)])
+    return (true, @[])
+  elif action.hasKey("SpawnSh"):
+    let command = stringFromField(action["SpawnSh"], "command")
+    if command.len > 0:
+      return
+        (true, @[Msg(kind: MsgKind.CmdSpawn, spawnCommand: @["sh", "-c", command])])
+    return (true, @[])
   elif action.hasKey("SetWorkspaceName"):
     let payload = action["SetWorkspaceName"]
     return (
@@ -204,6 +265,25 @@ proc actionMessages(
     )
   elif action.hasKey("UnsetWorkspaceName"):
     return (true, @[Msg(kind: MsgKind.CmdRenameTag, newName: "")])
+  elif action.hasKey("MoveWorkspaceToIndex"):
+    let payload = action["MoveWorkspaceToIndex"]
+    if payload.kind == JObject and payload.hasKey("index") and
+        payload.hasKey("reference") and payload["reference"].kind == JObject and
+        payload["reference"].hasKey("Index"):
+      let target = uintFromNode(payload["index"])
+      let source = uintFromNode(payload["reference"]["Index"])
+      if source.isSome and target.isSome:
+        return (
+          true,
+          @[
+            Msg(
+              kind: MsgKind.CmdReorderWorkspaceIndex,
+              reorderWorkspaceIndex: source.get(),
+              reorderTargetIndex: target.get(),
+            )
+          ],
+        )
+    return (true, @[])
   elif action.hasKey("FullscreenWindow"):
     return (true, @[Msg(kind: MsgKind.CmdToggleFullscreen)])
   elif action.hasKey("MaximizeColumn"):
@@ -284,9 +364,8 @@ proc actionMessages(
       ],
     )
   elif action.hasKey("DoScreenTransition") or action.hasKey("PowerOffMonitors") or
-      action.hasKey("PowerOnMonitors") or action.hasKey("MoveWorkspaceToIndex") or
-      action.hasKey("CenterColumn") or action.hasKey("CenterVisibleColumns") or
-      action.hasKey("SwitchPresetColumnWidth") or
+      action.hasKey("PowerOnMonitors") or action.hasKey("CenterColumn") or
+      action.hasKey("CenterVisibleColumns") or action.hasKey("SwitchPresetColumnWidth") or
       action.hasKey("SwitchPresetWindowHeight") or
       action.hasKey("ToggleColumnTabbedDisplay"):
     return (true, @[])
@@ -327,7 +406,9 @@ proc handleNiriRequest*(line: string, snapshot: ShellSnapshot): NiriIpcResult =
     of "OverviewState":
       result.reply = okReply(%*{"OverviewState": niriOverviewJson(snapshot)})
     of "KeyboardLayouts":
-      result.reply = okReply(%*{"KeyboardLayouts": niriKeyboardLayoutsJson()})
+      result.reply = okReply(%*{"KeyboardLayouts": niriKeyboardLayoutsJson(snapshot)})
+    of "Casts":
+      result.reply = okReply(%*{"Casts": niriCastsJson()})
     of "EventStream":
       result.subscribe = true
       result.reply = okReply(%*{"Handled": {}})

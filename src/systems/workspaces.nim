@@ -85,8 +85,41 @@ proc visibleWorkspaceSlots(model: Model): seq[uint32] =
     result.add(trailing)
     result.sort()
 
+proc preserveVisibleWorkspaceOrder(model: Model, slots: seq[uint32]): seq[uint32] =
+  for slot in model.visibleSlots:
+    if slots.find(slot) != -1 and result.find(slot) == -1:
+      result.add(slot)
+  for slot in slots:
+    if result.find(slot) == -1:
+      result.add(slot)
+
 proc refreshVisibleWorkspaceSlots*(model: var Model) =
-  discard model.replaceVisibleWorkspaceSlots(model.visibleWorkspaceSlots())
+  let slots = model.visibleWorkspaceSlots()
+  let ordered =
+    if model.visibleSlots.len > 0:
+      model.preserveVisibleWorkspaceOrder(slots)
+    else:
+      slots
+  discard model.replaceVisibleWorkspaceSlots(ordered)
+
+proc reorderWorkspaceIndex*(model: var Model, sourceIndex, targetIndex: uint32): bool =
+  if sourceIndex == 0 or targetIndex == 0:
+    return false
+  var slots =
+    if model.visibleSlots.len > 0:
+      model.visibleSlots
+    else:
+      model.visibleWorkspaceSlots()
+  let source = int(sourceIndex) - 1
+  let target = int(targetIndex) - 1
+  if source < 0 or source >= slots.len or target < 0 or target >= slots.len or
+      source == target:
+    return false
+  let slot = slots[source]
+  slots.delete(source)
+  slots.insert(slot, target)
+  discard model.replaceVisibleWorkspaceSlots(slots)
+  true
 
 proc ensureActiveWorkspace*(model: var Model): TagId =
   let activeOpt = model.tagData(model.activeTag)

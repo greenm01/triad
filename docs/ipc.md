@@ -71,6 +71,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `set-layout-for-workspace <tag> <layout>`: Sets a stable tag id to a
     canonical layout id without changing focus.
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
+    Niri-compatible `SwitchLayout` is separate keyboard-layout vocabulary and
+    switches configured River XKB keyboard layouts instead of triggering this
+    command.
 
 #### Manipulation
 *   `move-to-tag <id>`: Moves the focused window to the specified tag and focuses that tag.
@@ -426,7 +429,8 @@ use structured fields:
 - `delta`, `value`, `count`, `dx`, `dy`, `dw`, and `dh` for sizing and layout
   adjustment commands.
 - `scope` and `filter` for recent-window actions.
-- `argv` for `spawn`.
+- `argv` for `spawn`. Niri-compatible `Spawn` and `SpawnSh` actions use the
+  same configured-process spawn path for shell clients.
 - `x` and `y` for `warp-pointer`.
 - Screenshot actions accept `path`, `show_pointer`, `write_to_disk`, and
   `copy_to_clipboard`.

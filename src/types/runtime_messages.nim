@@ -140,6 +140,7 @@ type
     CmdSelectWindow
     CmdFocusTag
     CmdFocusWorkspaceIndex
+    CmdReorderWorkspaceIndex
     CmdMoveToWorkspaceIndex
     CmdMoveWindowToWorkspaceIndex
     CmdFocusOutput
@@ -153,6 +154,7 @@ type
     CmdWarpPointer
     CmdEatNextKey
     CmdCancelEatNextKey
+    CmdSwitchKeyboardLayout
     CmdToggleKeyboardShortcutsInhibit
     CmdStopManager
     CmdExitSession
@@ -333,6 +335,9 @@ type
       focusTag*: uint32
     of MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdMoveToWorkspaceIndex:
       workspaceIndex*: uint32
+    of MsgKind.CmdReorderWorkspaceIndex:
+      reorderWorkspaceIndex*: uint32
+      reorderTargetIndex*: uint32
     of MsgKind.CmdMoveWindowToWorkspaceIndex:
       moveWorkspaceWindowId*: uint32
       moveWorkspaceIndex*: uint32
@@ -355,6 +360,9 @@ type
       spawnCommand*: seq[string]
     of MsgKind.CmdWarpPointer:
       warpX*, warpY*: int32
+    of MsgKind.CmdSwitchKeyboardLayout:
+      keyboardLayoutDelta*: int32
+      keyboardLayoutIndex*: int32
     of MsgKind.CmdScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string

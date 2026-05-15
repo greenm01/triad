@@ -1,4 +1,4 @@
-import std/options
+import std/[options, strutils]
 import iterators, queries
 import ../core/defaults
 import ../types/[core, model, shell_snapshot]
@@ -44,6 +44,15 @@ proc snapshotDefaultMasterRatio(model: Model): float32 =
   else:
     DefaultMasterRatio
 
+proc keyboardLayoutNames(model: Model): seq[string] =
+  let xkb = model.input.keyboard.xkb
+  if not xkb.layoutSet:
+    return @[]
+  for name in xkb.layout.split(','):
+    let stripped = name.strip()
+    if stripped.len > 0:
+      result.add(stripped)
+
 proc shellSnapshot*(model: Model): ShellSnapshot =
   result.version = TriadIpcVersion
   result.activeTag = model.activeSlot
@@ -66,6 +75,12 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid,
         LayoutMode.Monocle, LayoutMode.VerticalScroller,
       ]
+  result.keyboardLayoutNames = model.keyboardLayoutNames()
+  result.keyboardLayoutIndex =
+    if result.keyboardLayoutNames.len == 0:
+      0'u32
+    else:
+      min(model.keyboardLayoutIndex, uint32(result.keyboardLayoutNames.len - 1))
 
   for idx, slot in model.visibleWorkspaceSlots():
     let tagId = model.tagForSlot(slot)

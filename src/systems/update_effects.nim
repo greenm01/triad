@@ -100,6 +100,24 @@ proc broadcastOutputsChanged*(snapshot: ShellSnapshot): Effect =
     jsonPayload: $(%*{"OutputsChanged": {"outputs": niriOutputsJson(snapshot)}}),
   )
 
+proc broadcastKeyboardLayoutsChanged*(snapshot: ShellSnapshot): Effect =
+  Effect(
+    kind: EffectKind.EffBroadcastJson,
+    jsonPayload:
+      $(
+        %*{
+          "KeyboardLayoutsChanged":
+            {"keyboard_layouts": niriKeyboardLayoutsJson(snapshot)}
+        }
+      ),
+  )
+
+proc broadcastKeyboardLayoutSwitched*(index: uint32): Effect =
+  Effect(
+    kind: EffectKind.EffBroadcastJson,
+    jsonPayload: $(%*{"KeyboardLayoutSwitched": {"idx": index}}),
+  )
+
 proc broadcastOverview*(open: bool): Effect =
   Effect(
     kind: EffectKind.EffBroadcastJson,

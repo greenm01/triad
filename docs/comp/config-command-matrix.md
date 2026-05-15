@@ -50,7 +50,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Config lifecycle | Reload notifications | | Shell/WM policy | `config-notification` | X | Optional commands run on config reload success, failure, or rollback. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
 | Startup | Environment variables | `env` | Init script environment | `environment` | X | Applies literal set/unset entries to future Triad-spawned user-facing processes. |
-| Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
+| Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. Niri-compatible `Spawn` and `SpawnSh` actions map to the same configured-process spawn path for Quickshell clients. |
 | Session | Quit manager | `quit` | `river_window_manager_v1.stop` | `stop-manager` | X | Triad also has `exit-session` behind config. |
 | Session | Exit compositor session | `quit` | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config; default configs bind `Ctrl+Alt+Delete` and require Enter confirmation before exit. Niri `Quit` with `skip_confirmation` bypasses the dialog for shell session menus. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
@@ -67,7 +67,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Pointer | Pointer warp | `warpcursor` | `river_seat_v1.pointer_warp` | `warp-pointer` | X | Triad exposes explicit IPC. |
 | Input | Keyboard repeat | `repeat_rate`, `repeat_delay` | `river_input_device_v1.set_repeat_info` | `input.keyboard.repeat-rate`, `input.keyboard.repeat-delay` | X | Applied to keyboard devices when the River input management protocol is available. |
 | Input | XKB rules/layout/options | `xkb_rules_*` | `river_xkb_config_v1` | `input.keyboard.xkb` | X | Triad builds keymaps with libxkbcommon; binds can still set per-binding layout override. |
-| Input | Keyboard layout switch | `switch_keyboard_layout` | `set_layout_by_index/name` | `bind ... layout=<index>` | | Triad binds may override layout, but cannot cycle XKB layouts. |
+| Input | Keyboard layout switch | `switch_keyboard_layout` | `set_layout_by_index/name` | `bind ... layout=<index>` | X | Triad binds may override layout, and Niri-compatible `SwitchLayout` cycles configured `input.keyboard.xkb.layout` entries through River XKB config. |
 | Input | NumLock/CapsLock | `numlockon` | `numlock_enable`, `capslock_enable` | `input.keyboard.numlock`, `input.keyboard.capslock` | X | Applies requested initial lock state through River XKB config. |
 | Input | Pointer acceleration | `mouse_accel_*`, `trackpad_accel_*` | `set_accel_profile`, `set_accel_speed` | `input.mouse/touchpad/trackpoint/trackball.accel-profile`, `accel-speed` | X | Applies only when the device reports matching libinput support. |
 | Input | Natural scroll | `mouse_natural_scrolling`, `trackpad_natural_scrolling` | `set_natural_scroll` | `input.*.natural-scroll` | X | Supported for mouse, touchpad, trackpoint, and trackball sections. |

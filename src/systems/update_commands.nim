@@ -1,3 +1,4 @@
+import std/strutils
 import ../core/[effects, msg]
 import ../state/engine
 from ../types/runtime_values import Direction, RecentWindowDirection
@@ -20,6 +21,31 @@ proc openOverview(model: var Model): bool =
 proc recomputeAllTagFocus(model: var Model) =
   for tagId, _ in model.tagsWithId():
     discard model.recomputeVisibleFocus(tagId)
+
+proc configuredKeyboardLayoutCount(model: Model): uint32 =
+  let xkb = model.input.keyboard.xkb
+  if not xkb.layoutSet:
+    return 0
+  for name in xkb.layout.split(','):
+    if name.strip().len > 0:
+      inc result
+
+proc switchKeyboardLayout(
+    model: var Model, delta: int32, index: int32
+): tuple[changed: bool, activeIndex: uint32] =
+  let count = model.configuredKeyboardLayoutCount()
+  if count == 0:
+    return (false, 0'u32)
+  let current = min(model.keyboardLayoutIndex, count - 1)
+  let next =
+    if index >= 0:
+      min(uint32(index), count - 1)
+    else:
+      uint32((int32(current) + delta + int32(count)) mod int32(count))
+  if next == model.keyboardLayoutIndex:
+    return (false, next)
+  model.keyboardLayoutIndex = next
+  (true, next)
 
 proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   case msg.kind
@@ -97,6 +123,9 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.focusWorkspaceSlot(msg.focusTag)
   of MsgKind.CmdFocusWorkspaceIndex:
     result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
+  of MsgKind.CmdReorderWorkspaceIndex:
+    result.dirty =
+      model.reorderWorkspaceIndex(msg.reorderWorkspaceIndex, msg.reorderTargetIndex)
   of MsgKind.CmdFocusOutput:
     result.dirty = model.focusOutputTarget(msg.outputTarget)
   of MsgKind.CmdMoveWorkspaceToOutput:
@@ -318,6 +347,20 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.effects.add(Effect(kind: EffectKind.EffEnsureNextKeyEaten))
   of MsgKind.CmdCancelEatNextKey:
     result.effects.add(Effect(kind: EffectKind.EffCancelEnsureNextKeyEaten))
+  of MsgKind.CmdSwitchKeyboardLayout:
+    let switched =
+      model.switchKeyboardLayout(msg.keyboardLayoutDelta, msg.keyboardLayoutIndex)
+    if switched.changed:
+      result.dirty = true
+      let snapshot = shellSnapshot(model)
+      result.effects.add(
+        Effect(
+          kind: EffectKind.EffSetKeyboardLayout,
+          keyboardLayoutIndex: switched.activeIndex,
+        )
+      )
+      result.effects.add(broadcastKeyboardLayoutsChanged(snapshot))
+      result.effects.add(broadcastKeyboardLayoutSwitched(switched.activeIndex))
   of MsgKind.CmdStopManager:
     result.effects.add(Effect(kind: EffectKind.EffStopManager))
   of MsgKind.CmdTriadReload:

@@ -79,6 +79,8 @@ type
     sessionLocked*: bool
     layerFocusExclusive*: bool
     layoutCycle*: seq[LayoutMode]
+    keyboardLayoutNames*: seq[string]
+    keyboardLayoutIndex*: uint32
     workspaces*: seq[ShellWorkspace]
     windows*: seq[ShellWindow]
     outputs*: seq[ShellOutput]

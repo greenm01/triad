@@ -49,6 +49,55 @@ suite "Core Runtime Logic: smoke":
     check effects[0].screenshotWriteToDisk
     check not effects[0].screenshotCopyToClipboard
 
+  test "Workspace reorder changes visible workspace order":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    check model.shellSnapshot().workspaces.mapIt(it.tagId) == @[1'u32, 2, 3]
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.CmdReorderWorkspaceIndex,
+        reorderWorkspaceIndex: 1,
+        reorderTargetIndex: 3,
+      )
+    )
+
+    check model.shellSnapshot().workspaces.mapIt(it.tagId) == @[2'u32, 3, 1]
+    model.refreshVisibleWorkspaceSlots()
+    check model.shellSnapshot().workspaces.mapIt(it.tagId) == @[2'u32, 3, 1]
+
+  test "Keyboard layout switch updates snapshot and emits layout effect":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        input: InputConfig(
+          keyboard:
+            InputKeyboardConfig(xkb: InputXkbConfig(layoutSet: true, layout: "us,de"))
+        )
+      )
+    ).model
+    var snapshot = model.shellSnapshot()
+    check snapshot.keyboardLayoutNames == @["us", "de"]
+    check snapshot.keyboardLayoutIndex == 0
+
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: 1,
+        keyboardLayoutIndex: -1,
+      )
+    )
+    snapshot = model.shellSnapshot()
+
+    check snapshot.keyboardLayoutIndex == 1
+    check effects.anyIt(
+      it.kind == EffectKind.EffSetKeyboardLayout and it.keyboardLayoutIndex == 1
+    )
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("KeyboardLayoutSwitched")
+    )
+
   test "Screenshot command builder preserves shell snippets and quotes data":
     let config = ScreenshotConfig(
       captureCommand: "grim -t png",

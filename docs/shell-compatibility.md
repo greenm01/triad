@@ -83,10 +83,25 @@ Output mutation commands such as `niri msg output DP-1 scale 1.25` are not
 implemented. Triad refuses those rather than pretending to update compositor
 monitor state it does not own.
 
+Niri `Spawn` and `SpawnSh` actions map to Triad's normal configured-process
+spawn path, so Quickshell launchers, docks, and taskbars can start applications
+through the same environment-aware plumbing as native Triad `spawn` commands.
+
+Niri `SwitchLayout` means "switch keyboard layout", not Triad's window layout
+cycle command. Triad exposes configured `input.keyboard.xkb.layout` names in
+the Niri keyboard-layout state and switches River XKB keyboards by index for
+`SwitchLayout`. `PowerOffMonitors` and `PowerOnMonitors` are still acknowledged
+without side effects because monitor power is not exposed by Triad today.
+
+Niri screencast state is represented as an empty `CastsChanged` event and empty
+`Casts` response. This gives shells such as DankMaterialShell an explicit
+"nothing is casting" state until Triad owns a real screencast backend.
+
 Niri `Quit` actions are mapped to Triad session exit. A plain `Quit` opens
 Triad's exit confirmation, while `Quit` with `skip_confirmation` exits
 immediately through the same `allow-exit-session` guard used by native Triad
-commands. This matches Noctalia-shell's session menu logout action.
+commands. This is generic Niri-compatible session plumbing; Noctalia-shell's
+session menu is one client of it.
 
 The compatibility tests in `tests/tcompat.nim` encode this decision:
 

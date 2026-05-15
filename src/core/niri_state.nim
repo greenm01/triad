@@ -145,8 +145,11 @@ proc niriOutputsJson*(snapshot: ShellSnapshot): JsonNode =
   for output in snapshot.outputs:
     result[output.name] = niriOutputJson(output)
 
-proc niriKeyboardLayoutsJson*(): JsonNode =
-  %*{"names": [], "current_idx": 0}
+proc niriKeyboardLayoutsJson*(snapshot: ShellSnapshot): JsonNode =
+  %*{"names": snapshot.keyboardLayoutNames, "current_idx": snapshot.keyboardLayoutIndex}
+
+proc niriCastsJson*(): JsonNode =
+  newJArray()
 
 proc niriOverviewJson*(snapshot: ShellSnapshot): JsonNode =
   %*{"is_open": snapshot.overviewActive}
@@ -157,6 +160,12 @@ proc initialNiriEvents*(snapshot: ShellSnapshot): seq[string] =
     $(%*{"WindowsChanged": {"windows": niriWindowsJson(snapshot)}}),
     $(%*{"OutputsChanged": {"outputs": niriOutputsJson(snapshot)}}),
     $(%*{"OverviewOpenedOrClosed": {"is_open": snapshot.overviewActive}}),
-    $(%*{"KeyboardLayoutsChanged": {"keyboard_layouts": niriKeyboardLayoutsJson()}}),
+    $(
+      %*{
+        "KeyboardLayoutsChanged":
+          {"keyboard_layouts": niriKeyboardLayoutsJson(snapshot)}
+      }
+    ),
     $(%*{"ConfigLoaded": {"failed": false}}),
+    $(%*{"CastsChanged": {"casts": niriCastsJson()}}),
   ]

@@ -449,6 +449,7 @@ type
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig
     input*: InputConfig
+    keyboardLayoutIndex*: uint32
     cursor*: CursorConfig
     hotkeyOverlay*: HotkeyOverlayConfig
     configNotification*: ConfigNotificationConfig

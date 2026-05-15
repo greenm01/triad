@@ -41,6 +41,15 @@ proc pointerFlagValue(args: seq[string], fallback: bool): bool =
 proc writeToDiskValue(args: seq[string]): bool =
   not args.hasFlag("--no-write-to-disk")
 
+proc argsAfterTerminator(args: seq[string]): seq[string] =
+  if args.len <= 1:
+    return @[]
+  if args[1] == "--":
+    if args.len <= 2:
+      return @[]
+    return args[2 ..^ 1]
+  args[1 ..^ 1]
+
 proc requestName(command: string): Option[string] =
   case command.normalize()
   of "outputs":
@@ -55,6 +64,8 @@ proc requestName(command: string): Option[string] =
     some("OverviewState")
   of "keyboardlayouts", "keyboard-layouts":
     some("KeyboardLayouts")
+  of "casts":
+    some("Casts")
   else:
     none(string)
 
@@ -147,6 +158,14 @@ proc actionPayload(args: seq[string]): Option[JsonNode] =
     return some(%*{"Action": {"PowerOffMonitors": {}}})
   of "poweronmonitors", "power-on-monitors":
     return some(%*{"Action": {"PowerOnMonitors": {}}})
+  of "spawn":
+    let command = args.argsAfterTerminator()
+    if command.len > 0:
+      return some(%*{"Action": {"Spawn": {"command": command}}})
+  of "spawnsh", "spawn-sh":
+    let command = args.argsAfterTerminator()
+    if command.len > 0:
+      return some(%*{"Action": {"SpawnSh": {"command": command.join(" ")}}})
   of "switchlayout", "switch-layout":
     let layout = if args.len >= 2 and args[1].normalize() == "next": "Next" else: "Prev"
     return some(%*{"Action": {"SwitchLayout": {"layout": layout}}})
@@ -246,6 +265,11 @@ proc buildNiriCliRequest*(args: seq[string]): NiriCliRequest =
       kind: NiriCliKind.NckRequest,
       jsonOutput: jsonOutput,
       socketPayload: $payload.get(),
+    )
+
+  if msgArgs[0] == "output":
+    return NiriCliRequest(
+      kind: NiriCliKind.NckInvalid, error: "Triad does not support Niri output mutation"
     )
 
   let req = requestName(msgArgs[0])

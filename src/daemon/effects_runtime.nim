@@ -2,6 +2,7 @@ import std/[asyncdispatch, options, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_xkb_bindings/client as riverXkb
+import protocols/river_xkb_config/client as riverXkbConfig
 import ../core/effects
 import ../ipc/socket
 import ../systems/daemon_view
@@ -132,6 +133,11 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffPointerWarp:
     for seat in daemon.seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)
+  of EffectKind.EffSetKeyboardLayout:
+    for runtime in daemon.xkbConfigKeyboards.values:
+      let keyboard = cast[ptr riverXkbConfig.RiverXkbKeyboardV1](runtime.pointer)
+      if keyboard != nil:
+        keyboard.setLayoutByIndex(int32(eff.keyboardLayoutIndex))
   of EffectKind.EffEnsureNextKeyEaten, EffectKind.EffCancelEnsureNextKeyEaten:
     daemon.queueManageEffect(eff)
   of EffectKind.EffStopManager:

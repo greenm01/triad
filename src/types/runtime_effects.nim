@@ -24,6 +24,7 @@ type
     EffSpawnWindowMenu
     EffSpawn
     EffPointerWarp
+    EffSetKeyboardLayout
     EffEnsureNextKeyEaten
     EffCancelEnsureNextKeyEaten
     EffStopManager
@@ -75,6 +76,8 @@ type
       spawnCommand*: seq[string]
     of EffectKind.EffPointerWarp:
       warpX*, warpY*: int32
+    of EffectKind.EffSetKeyboardLayout:
+      keyboardLayoutIndex*: uint32
     of EffectKind.EffScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string

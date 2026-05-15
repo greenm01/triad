@@ -34,6 +34,8 @@ proc snapshotForShell(): ShellSnapshot =
     activeTag: 1,
     activeWorkspaceIdx: 1,
     layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid, LayoutMode.Monocle],
+    keyboardLayoutNames: @["us", "de"],
+    keyboardLayoutIndex: 0,
     workspaces:
       @[
         ShellWorkspace(
@@ -259,6 +261,16 @@ suite "Shell compatibility contracts":
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
 
+    let keyboardLayouts = parseJson(
+      handleNiriRequest("\"KeyboardLayouts\"", snapshot).reply
+    )["Ok"]["KeyboardLayouts"]
+    check keyboardLayouts["names"].len == 2
+    check keyboardLayouts["names"][0].getStr() == "us"
+    check keyboardLayouts["current_idx"].getInt() == 0
+
+    let casts = parseJson(handleNiriRequest("\"Casts\"", snapshot).reply)["Ok"]["Casts"]
+    check casts.len == 0
+
   test "Niri focused window prefers active workspace focus":
     var snapshot = snapshotForShell()
     snapshot.workspaces[0].isActive = false
@@ -365,6 +377,42 @@ suite "Shell compatibility contracts":
     check closeWin.messages.len == 1
     check closeWin.messages[0].kind == MsgKind.CmdCloseWindowById
     check closeWin.messages[0].closeWindowId == 10
+
+    let spawn = handleNiriRequest(
+      """{"Action":{"Spawn":{"command":["foot","-e","htop"]}}}""", snapshot
+    )
+    check spawn.messages.len == 1
+    check spawn.messages[0].kind == MsgKind.CmdSpawn
+    check spawn.messages[0].spawnCommand == @["foot", "-e", "htop"]
+
+    let spawnSh = handleNiriRequest(
+      """{"Action":{"SpawnSh":{"command":"notify-send triad"}}}""", snapshot
+    )
+    check spawnSh.messages.len == 1
+    check spawnSh.messages[0].kind == MsgKind.CmdSpawn
+    check spawnSh.messages[0].spawnCommand == @["sh", "-c", "notify-send triad"]
+
+    let switchKeyboardLayout =
+      handleNiriRequest("""{"Action":{"SwitchLayout":{"layout":"Next"}}}""", snapshot)
+    check switchKeyboardLayout.messages.len == 1
+    check switchKeyboardLayout.messages[0].kind == MsgKind.CmdSwitchKeyboardLayout
+    check switchKeyboardLayout.messages[0].keyboardLayoutDelta == 1
+    check switchKeyboardLayout.messages[0].keyboardLayoutIndex == -1
+    check parseJson(switchKeyboardLayout.reply).hasKey("Ok")
+
+    let powerOffMonitors =
+      handleNiriRequest("""{"Action":{"PowerOffMonitors":{}}}""", snapshot)
+    check powerOffMonitors.messages.len == 0
+    check parseJson(powerOffMonitors.reply).hasKey("Ok")
+
+    let reorderWorkspace = handleNiriRequest(
+      """{"Action":{"MoveWorkspaceToIndex":{"index":2,"reference":{"Index":1}}}}""",
+      snapshot,
+    )
+    check reorderWorkspace.messages.len == 1
+    check reorderWorkspace.messages[0].kind == MsgKind.CmdReorderWorkspaceIndex
+    check reorderWorkspace.messages[0].reorderWorkspaceIndex == 1
+    check reorderWorkspace.messages[0].reorderTargetIndex == 2
 
     let maximizeColumn =
       handleNiriRequest("""{"Action":{"MaximizeColumn":{}}}""", snapshot)
@@ -499,8 +547,9 @@ suite "Shell compatibility contracts":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())
     check niri.handled
     check niri.subscribe
-    check niri.initialEvents.len >= 5
+    check niri.initialEvents.len >= 7
     check parseJson(niri.initialEvents[0]).hasKey("WorkspacesChanged")
+    check parseJson(niri.initialEvents[^1]).hasKey("CastsChanged")
 
     let triad = handleTriadRequest(
       """{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}""",
@@ -544,6 +593,24 @@ suite "Shell compatibility contracts":
     let quitForwarded = handleNiriRequest(quit.socketPayload, snapshotForShell())
     check quitForwarded.messages.len == 1
     check quitForwarded.messages[0].kind == MsgKind.CmdExitSessionImmediate
+
+    let spawn =
+      buildNiriCliRequest(@["msg", "action", "spawn", "--", "foot", "-e", "htop"])
+    check spawn.kind == NiriCliKind.NckRequest
+    let spawnForwarded = handleNiriRequest(spawn.socketPayload, snapshotForShell())
+    check spawnForwarded.messages.len == 1
+    check spawnForwarded.messages[0].kind == MsgKind.CmdSpawn
+    check spawnForwarded.messages[0].spawnCommand == @["foot", "-e", "htop"]
+
+    let casts = buildNiriCliRequest(@["msg", "-j", "casts"])
+    check casts.kind == NiriCliKind.NckRequest
+    let castsForwarded = handleNiriRequest(casts.socketPayload, snapshotForShell())
+    check parseJson(castsForwarded.reply)["Ok"]["Casts"].len == 0
+
+    let outputMutation =
+      buildNiriCliRequest(@["msg", "output", "DP-1", "scale", "1.25"])
+    check outputMutation.kind == NiriCliKind.NckInvalid
+    check outputMutation.error.contains("output mutation")
 
   test "Quickshell compatibility environment is private":
     let tmp = getTempDir() / ("triad-compat-" & $getCurrentProcessId())
