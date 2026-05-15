@@ -26,6 +26,7 @@ layout {
   scroller-proportion-presets 1.2 0.25 0.5 0.5
   enable-animations #false
   animation-speed 0.4
+  animation-snap-threshold 2.5
   smart-gaps #true
   layout-cycle "scroller" "deck" "vertical-grid"
 }
@@ -255,6 +256,7 @@ switch-events {
     check config.layout.centerFocusedColumn == "always"
     check config.layout.scrollerProportionPresets ==
       @[1.0'f32, 0.25'f32, 0.5'f32, 0.5'f32]
+    check config.layout.animationSnapThreshold == 2.5'f32
     check config.layout.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
@@ -703,6 +705,7 @@ cursor {
           defaultMasterCount: 0,
           defaultMasterRatio: 2.0,
           animationSpeed: 5.0,
+          animationSnapThreshold: 100.0,
         ),
         workspaces: WorkspaceConfig(defaultCount: 0),
         overview: OverviewConfig(
@@ -723,6 +726,7 @@ cursor {
     check model.defaultMasterCount == 1
     check model.defaultMasterRatio == 0.95'f32
     check model.animationSpeed == 1.0'f32
+    check model.animationSnapThreshold == 64.0'f32
     check model.defaultWorkspaceCount == DefaultWorkspaceCount
     check model.defaultWorkspaceLayout == LayoutMode.Scroller
     check model.overviewOuterGap == DefaultOverviewOuterGap

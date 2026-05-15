@@ -36,7 +36,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
 | P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, release-triggered key, locked-session key, pointer button, wheel-axis, touchpad swipe gesture, and Linux evdev lid/tablet switch-event delivery surfaces exist. Compositor-native switch events remain absent. | Keep validating live hardware delivery and add compositor-native switch events if River exposes them. |
-| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Pick the next small polish surface: richer animation tuning, layer rules, or overview/hotkey refinements. |
+| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay, coarse animation speed, and viewport snap-threshold tuning exist; advanced polish remains partial or blocked. | Pick the next small polish surface: layer rules, richer animation semantics, or overview/hotkey refinements. |
 
 ## Feature Matrix
 
@@ -148,7 +148,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Window rules | Client tiled hint | `force_tiled_state` | `river_window_v1.set_tiled` | `window-rule tiled-state` | X | Controls the client-visible tiled state only; Triad placement is unchanged. |
 | Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-workspace` | X | `open-focused #false` covers open-silent; explicit `default-workspace` is the workspace placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `window-rule floating`, `center-floating`, `default-floating-position` | X | Rule-level floating ratios or fixed pixel sizes override global default size; `center-floating` centers generated geometry and `default-floating-position` provides anchored pixel placement. |
-| Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `border`, `focus-ring`, `clip-to-geometry`, `enable-animations`, `animation-speed` | | Rule-level border, focused-only focus-ring width/colors, and geometry clipping are supported; opacity, blur, shadows, radius, and per-window animation policy are not. |
+| Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `border`, `focus-ring`, `clip-to-geometry`, `enable-animations`, `animation-speed`, `animation-snap-threshold` | | Rule-level border, focused-only focus-ring width/colors, geometry clipping, and global viewport animation tuning are supported; opacity, blur, shadows, radius, and per-window animation policy are not. |
 | Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy and process ancestry | `window-rule terminal`, `window-rule allow-swallow` | X | Explicit rules only: terminal hosts must be marked with `terminal #true`; child windows swallow by default unless `allow-swallow #false`, and missing PID data disables swallowing. |
 | Window rules | Global keybinding | `globalkeybinding` | WM policy | | | Not implemented. |
 | Layer rules | Layer shell rules | `layerrule` | Layer shell protocols | | | Triad handles shell/layer focus but has no rule config. |
@@ -302,6 +302,7 @@ KDL config nodes and fields:
   `master.split-ratio`, `border.width`, `border.active-color`,
   `border.inactive-color`, `scroller-focus-center`,
   `scroller-prefer-center`, `enable-animations`, `animation-speed`,
+  `animation-snap-threshold`,
   `smart-gaps`, `layout-cycle`.
 - `workspaces`: `default-count`, `default-layout`.
 - `output`: `focus-at-startup`, `workspaces`.

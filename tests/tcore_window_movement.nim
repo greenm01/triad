@@ -1,6 +1,45 @@
 import tcore_support
+import ../src/systems/runtime
 
 suite "Core Runtime Logic: window movement":
+  test "Viewport animation uses configured snap threshold":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          enableAnimations: true, animationSpeed: 0.5, animationSnapThreshold: 10.0
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 1),
+      )
+    ).model
+    model.setViewport(1, targetX = 100.0, currentX = 0.0)
+
+    check model.tickAnimations()
+    check model.viewport(1).currentViewportXOffset == 50.0'f32
+
+    model.setViewport(1, targetX = 100.0, currentX = 95.0)
+    check model.tickAnimations()
+    check model.viewport(1).currentViewportXOffset == 100.0'f32
+    check not model.tickAnimations()
+
+  test "Zero animation speed snaps without repeated dirty ticks":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          enableAnimations: true, animationSpeed: 0.0, animationSnapThreshold: 0.5
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 1),
+      )
+    ).model
+    model.setViewport(
+      1, targetX = 100.0, currentX = 0.0, targetY = 50.0, currentY = 0.0
+    )
+
+    check model.tickAnimations()
+    let viewport = model.viewport(1)
+    check viewport.currentViewportXOffset == 100.0'f32
+    check viewport.currentViewportYOffset == 50.0'f32
+    check not model.tickAnimations()
+
   test "New active-tag window focuses after live restore settles":
     var model = cameraModel()
     model.applyMsg(

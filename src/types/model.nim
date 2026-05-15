@@ -430,6 +430,7 @@ type
     defaultMasterRatio*: float32
     enableAnimations*: bool
     animationSpeed*: float32
+    animationSnapThreshold*: float32
     floatingXRatio*: float32
     floatingYRatio*: float32
     floatingWidthRatio*: float32

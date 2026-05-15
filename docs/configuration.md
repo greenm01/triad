@@ -132,6 +132,12 @@ used by `switch-proportion-preset`. Values are clamped to `0.05..1.0`; empty
 lists fall back to `0.33 0.5 0.67 1.0`. Triad does not bind
 `switch-proportion-preset` by default.
 
+`layout { enable-animations #true; animation-speed 0.15; animation-snap-threshold 0.5 }`
+controls viewport camera animation. `animation-speed` is clamped to `0.0..1.0`;
+`0.0` snaps immediately. `animation-snap-threshold` is a pixel distance clamped
+to `0.01..64.0`; once the camera is within that distance of the target, Triad
+snaps to the exact target coordinate.
+
 ## Window Rules
 
 `window-rule` entries match windows by app id and/or title regex and apply

@@ -368,6 +368,14 @@ proc groupFocusedWindow*(model: var Model): bool =
     return false
   model.addGroup(@[focused], focused) != NullGroupId
 
+proc animatedViewportOffset(
+    current, target, speed, snapThreshold: float32
+): tuple[value: float32, changed: bool] =
+  let delta = target - current
+  if speed <= 0.0'f32 or abs(delta) <= snapThreshold:
+    return (target, abs(delta) > 0.0'f32)
+  (current + delta * speed, true)
+
 proc tickAnimations*(model: var Model): bool =
   if not model.enableAnimations:
     return false
@@ -380,7 +388,7 @@ proc tickAnimations*(model: var Model): bool =
     else:
       @[]
   let speed = model.animationSpeed
-  let epsilon = 0.5'f32
+  let snapThreshold = max(model.animationSnapThreshold, 0.01'f32)
   for tagId, tag in model.tagsWithId():
     if tickOverviewPreviews:
       if previewSlots.find(tag.slot) == -1:
@@ -389,19 +397,13 @@ proc tickAnimations*(model: var Model): bool =
       continue
     var currentX = tag.currentViewportXOffset
     var currentY = tag.currentViewportYOffset
-    let dx = tag.targetViewportXOffset - currentX
-    let dy = tag.targetViewportYOffset - currentY
-    var changed = false
-    if abs(dx) > epsilon:
-      currentX += dx * speed
-      changed = true
-    else:
-      currentX = tag.targetViewportXOffset
-    if abs(dy) > epsilon:
-      currentY += dy * speed
-      changed = true
-    else:
-      currentY = tag.targetViewportYOffset
+    let nextX =
+      animatedViewportOffset(currentX, tag.targetViewportXOffset, speed, snapThreshold)
+    let nextY =
+      animatedViewportOffset(currentY, tag.targetViewportYOffset, speed, snapThreshold)
+    currentX = nextX.value
+    currentY = nextY.value
+    let changed = nextX.changed or nextY.changed
     if changed:
       discard model.setTagViewportCurrent(tagId, currentX, currentY)
       result = true

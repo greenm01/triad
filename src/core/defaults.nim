@@ -14,6 +14,7 @@ const
   DefaultMasterCount* = 1
   DefaultMasterRatio* = 0.55'f32
   DefaultAnimationSpeed* = 0.15'f32
+  DefaultAnimationSnapThreshold* = 0.5'f32
   DefaultScratchpadWidthRatio* = 0.8'f32
   DefaultScratchpadHeightRatio* = 0.9'f32
   DefaultOverviewOuterGap* = 64'i32

@@ -53,6 +53,7 @@ type
     scrollerProportionPresets*: seq[float32]
     enableAnimations*: bool
     animationSpeed*: float32
+    animationSnapThreshold*: float32
     smartGaps*: bool
     layoutCycle*: seq[LayoutMode]
 
@@ -878,6 +879,7 @@ proc loadConfig*(path: string): Config =
   result.layout.scrollerPreferCenter = false
   result.layout.enableAnimations = true
   result.layout.animationSpeed = DefaultAnimationSpeed
+  result.layout.animationSnapThreshold = DefaultAnimationSnapThreshold
   result.layout.smartGaps = false
   result.layout.layoutCycle =
     @[
@@ -985,6 +987,9 @@ proc loadConfig*(path: string): Config =
             elif child.name == "animation-speed" and child.args.len > 0:
               result.layout.animationSpeed =
                 clampF32(float32(child.args[0].kFloat()), 0.0, 1.0)
+            elif child.name == "animation-snap-threshold" and child.args.len > 0:
+              result.layout.animationSnapThreshold =
+                clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
             elif child.name == "smart-gaps" and child.args.len > 0:
               result.layout.smartGaps = child.args[0].kBool()
             elif child.name == "layout-cycle":
