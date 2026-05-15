@@ -159,6 +159,79 @@ suite "Crash hardening":
     )
     check daemon.popQueuedMessage().kind == MsgKind.CmdToggleOverview
 
+  test "touchpad swipe direction uses threshold and major axis":
+    check gestureDirectionForSwipe(-15.0, 0.0, cancelled = false) ==
+      GestureBindingDirection.GestureNone
+    check gestureDirectionForSwipe(-20.0, 2.0, cancelled = false) ==
+      GestureBindingDirection.GestureSwipeLeft
+    check gestureDirectionForSwipe(20.0, 2.0, cancelled = false) ==
+      GestureBindingDirection.GestureSwipeRight
+    check gestureDirectionForSwipe(2.0, -20.0, cancelled = false) ==
+      GestureBindingDirection.GestureSwipeUp
+    check gestureDirectionForSwipe(2.0, 20.0, cancelled = false) ==
+      GestureBindingDirection.GestureSwipeDown
+    check gestureDirectionForSwipe(20.0, -20.0, cancelled = false) ==
+      GestureBindingDirection.GestureSwipeUp
+    check gestureDirectionForSwipe(-40.0, 0.0, cancelled = true) ==
+      GestureBindingDirection.GestureNone
+
+  test "live touchpad swipe dispatches configured command on end":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        gestureBindings:
+          @[
+            GestureBindingConfig(
+              direction: GestureBindingDirection.GestureSwipeLeft,
+              fingers: 3,
+              modifiers: 64'u32,
+              command: "focus-left",
+            )
+          ]
+      )
+    )
+    daemon.runtimeState.model.activeModifiers = 64'u32
+    daemon.wlPointerRiverSeats[77'u32] = 1'u32
+
+    daemon.beginSwipeGesture(77'u32, 3'u32)
+    daemon.updateSwipeGesture(77'u32, -12.0, 0.0)
+    check not daemon.endSwipeGesture(77'u32, cancelled = false)
+    check not daemon.hasQueuedMessages()
+
+    daemon.beginSwipeGesture(77'u32, 3'u32)
+    daemon.updateSwipeGesture(77'u32, -20.0, 2.0)
+    check daemon.endSwipeGesture(77'u32, cancelled = false)
+    check not daemon.wlSwipeStates.getOrDefault(77'u32).active
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+    check not daemon.endSwipeGesture(77'u32, cancelled = false)
+    check not daemon.hasQueuedMessages()
+
+  test "live touchpad swipe ignores cancelled or unmapped gestures":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        gestureBindings:
+          @[
+            GestureBindingConfig(
+              direction: GestureBindingDirection.GestureSwipeLeft,
+              fingers: 3,
+              command: "focus-left",
+            )
+          ]
+      )
+    )
+
+    daemon.wlPointerRiverSeats[77'u32] = 1'u32
+    daemon.beginSwipeGesture(77'u32, 3'u32)
+    daemon.updateSwipeGesture(77'u32, -20.0, 0.0)
+    check not daemon.endSwipeGesture(77'u32, cancelled = true)
+    check not daemon.hasQueuedMessages()
+
+    daemon.beginSwipeGesture(78'u32, 3'u32)
+    daemon.updateSwipeGesture(78'u32, -20.0, 0.0)
+    check not daemon.endSwipeGesture(78'u32, cancelled = false)
+    check not daemon.hasQueuedMessages()
+
   test "switch events dispatch configured commands while session is locked":
     var daemon = initTriadDaemon()
     daemon.runtimeState = initRuntimeStateFromConfig(

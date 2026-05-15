@@ -5,6 +5,7 @@ import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import wayland/native/client
 import wayland/protocols/staging/cursorshape/v1/client as cursorShape
+import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../config/[keysyms, parser]
 import ../core/msg
 import ../ipc/commands
@@ -27,6 +28,7 @@ const
   WlPointerAxisHorizontal = 1'u32
   WlPointerAxisSourceWheel = 0'u32
   WlWheelClick120 = 120'i32
+  WlSwipeThreshold = 16.0
 
 template currentModel(daemon: TriadDaemon): untyped =
   daemon.runtimeState.model
@@ -45,7 +47,10 @@ proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1)
 proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32)
 proc attachCursorShapePointer*(daemon: var TriadDaemon, pointerId: uint32)
+proc attachWlSwipePointer*(daemon: var TriadDaemon, pointerId: uint32)
+proc detachWlSwipePointer*(daemon: var TriadDaemon, pointerId: uint32)
 proc destroyCursorShapeRuntime*(daemon: var TriadDaemon)
+proc destroyPointerGesturesRuntime*(daemon: var TriadDaemon)
 proc destroyBindings*(daemon: var TriadDaemon)
 proc enqueuePointerCommand(
   daemon: var TriadDaemon, seatId: uint32, seat: ptr RiverSeatV1, msg: Msg
@@ -107,6 +112,26 @@ proc wheelTicks(total120: int32, discrete: int32, remainder: var int32): int32 =
     remainder = -((-total) mod WlWheelClick120)
   else:
     remainder = total
+
+func fixedToFloat(value: Fixed): float64 =
+  float64(value) / 256.0
+
+func gestureDirectionForSwipe*(
+    dx, dy: float64, cancelled: bool
+): GestureBindingDirection =
+  if cancelled:
+    return GestureBindingDirection.GestureNone
+  if dx * dx + dy * dy < WlSwipeThreshold * WlSwipeThreshold:
+    return GestureBindingDirection.GestureNone
+  if abs(dx) > abs(dy):
+    if dx < 0:
+      GestureBindingDirection.GestureSwipeLeft
+    else:
+      GestureBindingDirection.GestureSwipeRight
+  elif dy < 0:
+    GestureBindingDirection.GestureSwipeUp
+  else:
+    GestureBindingDirection.GestureSwipeDown
 
 proc clearWlPointerFrame(daemon: var TriadDaemon, pointerId: uint32) =
   daemon.wlPointerWheelFrames[pointerId] = WlPointerWheelFrame()
@@ -839,6 +864,34 @@ proc dispatchGestureBinding*(
   daemon.enqueuePointerCommand(seatId, seat, msg.get())
   true
 
+proc beginSwipeGesture*(daemon: var TriadDaemon, pointerId, fingers: uint32) =
+  daemon.wlSwipeStates[pointerId] =
+    WlSwipeState(active: true, fingers: fingers, dx: 0, dy: 0)
+
+proc updateSwipeGesture*(daemon: var TriadDaemon, pointerId: uint32, dx, dy: float64) =
+  var state = daemon.wlSwipeStates.getOrDefault(pointerId)
+  if not state.active:
+    return
+  state.dx += dx
+  state.dy += dy
+  daemon.wlSwipeStates[pointerId] = state
+
+proc endSwipeGesture*(
+    daemon: var TriadDaemon, pointerId: uint32, cancelled: bool
+): bool =
+  let state = daemon.wlSwipeStates.getOrDefault(pointerId)
+  daemon.wlSwipeStates[pointerId] = WlSwipeState()
+  if not state.active:
+    return false
+  let direction = gestureDirectionForSwipe(state.dx, state.dy, cancelled)
+  if direction == GestureBindingDirection.GestureNone:
+    return false
+  if not daemon.wlPointerRiverSeats.hasKey(pointerId):
+    return false
+  daemon.dispatchGestureBinding(
+    daemon.wlPointerRiverSeats[pointerId], direction, state.fingers
+  )
+
 proc dispatchSwitchEvent*(daemon: var TriadDaemon, kind: SwitchEventKind): bool =
   if kind == SwitchEventKind.SwitchNone:
     return false
@@ -900,6 +953,66 @@ proc onWlPointerFrame(data: pointer, pointer: ptr Pointer) =
       overviewWheelVertical: overviewVertical,
     )
   )
+
+proc pointerIdForSwipeGesture(
+    daemon: TriadDaemon, swipe: ptr pointerGestures.ZwpPointerGestureSwipeV1
+): uint32 =
+  if swipe == nil:
+    return 0
+  daemon.wlSwipePointerIds.getOrDefault(swipe.id(), 0'u32)
+
+proc onWlSwipeBegin(
+    data: pointer,
+    swipe: ptr pointerGestures.ZwpPointerGestureSwipeV1,
+    serial: uint32,
+    time: uint32,
+    surface: ptr Surface,
+    fingers: uint32,
+) =
+  let daemon = callbackDaemon(data, "pointer swipe begin")
+  if daemon == nil:
+    return
+  let pointerId = daemon[].pointerIdForSwipeGesture(swipe)
+  if pointerId == 0:
+    return
+  daemon[].beginSwipeGesture(pointerId, fingers)
+  trace "Pointer swipe begin", pointerId = pointerId, fingers = fingers
+
+proc onWlSwipeUpdate(
+    data: pointer,
+    swipe: ptr pointerGestures.ZwpPointerGestureSwipeV1,
+    time: uint32,
+    dx: Fixed,
+    dy: Fixed,
+) =
+  let daemon = callbackDaemon(data, "pointer swipe update")
+  if daemon == nil:
+    return
+  let pointerId = daemon[].pointerIdForSwipeGesture(swipe)
+  if pointerId == 0:
+    return
+  daemon[].updateSwipeGesture(pointerId, dx.fixedToFloat(), dy.fixedToFloat())
+
+proc onWlSwipeEnd(
+    data: pointer,
+    swipe: ptr pointerGestures.ZwpPointerGestureSwipeV1,
+    serial: uint32,
+    time: uint32,
+    cancelled: int32,
+) =
+  let daemon = callbackDaemon(data, "pointer swipe end")
+  if daemon == nil:
+    return
+  let pointerId = daemon[].pointerIdForSwipeGesture(swipe)
+  if pointerId == 0:
+    return
+  let dispatched = daemon[].endSwipeGesture(pointerId, cancelled != 0)
+  trace "Pointer swipe end",
+    pointerId = pointerId, cancelled = cancelled != 0, dispatched = dispatched
+
+var wlSwipeListener* = pointerGestures.ZwpPointerGestureSwipeV1Listener(
+  begin: onWlSwipeBegin, update: onWlSwipeUpdate, `end`: onWlSwipeEnd
+)
 
 proc ignoreWlPointerEnter(
     data: pointer,
@@ -1219,6 +1332,7 @@ proc attachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   daemon.wlPointerWheelRemainders[pointer.id()] = WlPointerWheelRemainder()
   daemon.mapWlPointerRiverSeat(globalName)
   daemon.attachCursorShapePointer(pointer.id())
+  daemon.attachWlSwipePointer(pointer.id())
   discard pointer.addListener(wlPointerListener.addr, daemonData(daemon))
 
 proc attachCursorShapePointer*(daemon: var TriadDaemon, pointerId: uint32) =
@@ -1229,11 +1343,36 @@ proc attachCursorShapePointer*(daemon: var TriadDaemon, pointerId: uint32) =
     return
   daemon.cursorShapeDevices[pointerId] = daemon.cursorShapeManager.getPointer(pointer)
 
+proc attachWlSwipePointer*(daemon: var TriadDaemon, pointerId: uint32) =
+  if daemon.pointerGestures == nil or daemon.wlSwipePointers.hasKey(pointerId):
+    return
+  let pointer = daemon.wlPointerById(pointerId)
+  if pointer == nil:
+    return
+  let swipe = daemon.pointerGestures.getSwipeGesture(pointer)
+  if swipe == nil:
+    return
+  daemon.wlSwipePointers[pointerId] = swipe
+  daemon.wlSwipePointerIds[swipe.id()] = pointerId
+  daemon.wlSwipeStates[pointerId] = WlSwipeState()
+  discard swipe.addListener(wlSwipeListener.addr, daemonData(daemon))
+
+proc detachWlSwipePointer*(daemon: var TriadDaemon, pointerId: uint32) =
+  if not daemon.wlSwipePointers.hasKey(pointerId):
+    daemon.wlSwipeStates.del(pointerId)
+    return
+  let swipe = daemon.wlSwipePointers[pointerId]
+  daemon.wlSwipePointerIds.del(swipe.id())
+  daemon.wlSwipePointers.del(pointerId)
+  daemon.wlSwipeStates.del(pointerId)
+  swipe.destroy()
+
 proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   if not daemon.wlPointerPointers.hasKey(globalName):
     return
   let pointer = daemon.wlPointerPointers[globalName]
   let pointerId = pointer.id()
+  daemon.detachWlSwipePointer(pointerId)
   if daemon.cursorShapeDevices.hasKey(pointerId):
     daemon.cursorShapeDevices[pointerId].destroy()
     daemon.cursorShapeDevices.del(pointerId)
@@ -1245,6 +1384,20 @@ proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   daemon.wlPointerRiverSeats.del(pointerId)
   daemon.wlPointerWheelFrames.del(pointerId)
   daemon.wlPointerWheelRemainders.del(pointerId)
+
+proc destroyPointerGesturesRuntime*(daemon: var TriadDaemon) =
+  for swipe in daemon.wlSwipePointers.values:
+    swipe.destroy()
+  daemon.wlSwipePointers.clear()
+  daemon.wlSwipePointerIds.clear()
+  daemon.wlSwipeStates.clear()
+  if daemon.pointerGestures != nil:
+    if daemon.pointerGestures.getVersion() >= 2'u32:
+      daemon.pointerGestures.release()
+    else:
+      daemon.pointerGestures.destroy()
+  daemon.pointerGestures = nil
+  daemon.pointerGesturesGlobalName = 0'u32
 
 proc destroyCursorShapeRuntime*(daemon: var TriadDaemon) =
   for device in daemon.cursorShapeDevices.values:

@@ -128,8 +128,9 @@ preview to the hovered workspace, unmodified right-drag pans the hovered
 workspace camera, unmodified vertical wheel switches workspace previews,
 unmodified horizontal wheel focuses columns, and Shift+vertical wheel focuses
 columns when no configured `axis-bind` consumes that wheel direction. The drag
-overrides overview right-click close while overview is open. Touchpad gesture
-bindings are not part of the current River input surface Triad receives.
+overrides overview right-click close while overview is open. `gesture-bind`
+uses live touchpad swipe events when the compositor advertises
+`zwp_pointer_gestures_v1`.
 
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.

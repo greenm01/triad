@@ -607,10 +607,9 @@ bindings {
   `wheel-right`. Large scroll events run once per accumulated 120-unit wheel
   detent.
 - `gesture-bind "<modifiers+swipe-direction>" "<command>" fingers=<3|4>`:
-  stores a touchpad swipe binding. Supported directions are `swipe-left`,
-  `swipe-right`, `swipe-up`, and `swipe-down`. The config and synthetic runtime
-  dispatcher exist, but live hardware gesture delivery still needs a compositor
-  or input event source.
+  binds touchpad swipe gestures when the compositor advertises
+  `zwp_pointer_gestures_v1`. Supported directions are `swipe-left`,
+  `swipe-right`, `swipe-up`, and `swipe-down`.
 - `mode="normal"|"overview"|"recent"` limits a binding to that mode. Omitted
   mode means always active.
 - `allow-inhibiting=#false` lets a binding bypass a focused client's keyboard

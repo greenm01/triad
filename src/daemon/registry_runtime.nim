@@ -11,6 +11,7 @@ import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
+import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../core/msg
 import
   bindings_runtime, idle_inhibit_runtime, input_runtime, manage_requests, message_queue,
@@ -64,6 +65,14 @@ proc handleGlobal*(
     for pointer in daemon.wlPointerPointers.values:
       daemon[].attachCursorShapePointer(pointer.id())
     info "Bound to wp_cursor_shape_manager_v1", name = name, advertisedVersion = version
+  elif interfaceName == "zwp_pointer_gestures_v1":
+    daemon.pointerGestures = cast[ptr pointerGestures.ZwpPointerGesturesV1](registry.`bind`(
+      name, pointerGestures.zwp_pointer_gestures_v1_interface.addr, min(version, 3'u32)
+    ))
+    daemon.pointerGesturesGlobalName = name
+    for pointer in daemon.wlPointerPointers.values:
+      daemon[].attachWlSwipePointer(pointer.id())
+    info "Bound to zwp_pointer_gestures_v1", name = name, advertisedVersion = version
   elif interfaceName == "wl_output":
     let wlOutput = cast[ptr Output](registry.`bind`(
       name, wlCore.wl_output_interface.addr, min(version, 4'u32)
@@ -155,6 +164,8 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
   debug "Wayland global removed", name = name
   if daemon.cursorShapeGlobalName == name:
     daemon[].destroyCursorShapeRuntime()
+  if daemon.pointerGesturesGlobalName == name:
+    daemon[].destroyPointerGesturesRuntime()
   if daemon.idleInhibitGlobalName == name:
     let desiredIdleInhibit = daemon.idleInhibitDesired
     daemon[].destroyIdleInhibitRuntime()

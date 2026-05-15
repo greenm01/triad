@@ -7,6 +7,7 @@ import protocols/river_xkb_bindings/client as riverXkb
 import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
+import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
 import ../types/[runtime_state, runtime_values]
@@ -37,6 +38,12 @@ type
   WlPointerWheelRemainder* = object
     horizontal120*: int32
     vertical120*: int32
+
+  WlSwipeState* = object
+    active*: bool
+    fingers*: uint32
+    dx*: float64
+    dy*: float64
 
   InputDeviceRuntime* = object
     pointer*: pointer
@@ -98,6 +105,8 @@ type
     shm*: ptr Shm
     cursorShapeManager*: ptr cursorShape.WpCursorShapeManagerV1
     cursorShapeGlobalName*: uint32
+    pointerGestures*: ptr pointerGestures.ZwpPointerGesturesV1
+    pointerGesturesGlobalName*: uint32
     singlePixelManager*: ptr singlepixel.WpSinglePixelBufferManagerV1
     idleInhibitManager*: ptr idle.ZwpIdleInhibitManagerV1
     idleInhibitGlobalName*: uint32
@@ -164,6 +173,9 @@ type
     wlPointerRiverSeats*: Table[uint32, uint32]
     wlPointerWheelFrames*: Table[uint32, WlPointerWheelFrame]
     wlPointerWheelRemainders*: Table[uint32, WlPointerWheelRemainder]
+    wlSwipePointers*: Table[uint32, ptr pointerGestures.ZwpPointerGestureSwipeV1]
+    wlSwipePointerIds*: Table[uint32, uint32]
+    wlSwipeStates*: Table[uint32, WlSwipeState]
     cursorShapeDevices*: Table[uint32, ptr cursorShape.WpCursorShapeDeviceV1]
     cursorHiddenPointers*: Table[uint32, bool]
     cursorLastMotionMsByPointer*: Table[uint32, int64]
