@@ -635,9 +635,10 @@ switch-events {
 
 Supported events are `lid-close`, `lid-open`, `tablet-mode-on`, and
 `tablet-mode-off`. Switch events are dispatched independently of binding mode,
-shortcut inhibition, and session lock once a live event source is connected.
-The config surface and synthetic runtime dispatcher exist now; live hardware
-delivery still needs a compositor or input event source.
+shortcut inhibition, and session lock. On Linux, Triad reads readable
+`/dev/input/event*` devices for lid and tablet-mode switch events; if the
+session cannot read those devices, Triad logs the issue and continues without
+live switch delivery. Compositor-native switch delivery is not available yet.
 
 ## Recent Windows
 

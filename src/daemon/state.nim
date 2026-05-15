@@ -87,6 +87,10 @@ type
     fd*: int32
     successful*: bool
 
+  SwitchEventDeviceRuntime* = object
+    fd*: int32
+    path*: string
+
   RuntimeReasonHook* = proc(daemon: pointer, reason: string) {.nimcall.}
   ConfigNotificationHook* = proc(
     daemon: pointer, event: ConfigNotificationEvent, command: seq[string]
@@ -188,6 +192,7 @@ type
     xkbConfigKeyboards*: Table[uint32, XkbKeyboardRuntime]
     xkbConfigKeymap*: XkbKeymapRuntime
     libinputResultDescriptions*: Table[uint32, string]
+    switchEventDevices*: seq[SwitchEventDeviceRuntime]
     windowUnreliablePids*: Table[WindowId, int32]
     pendingWindows*: Table[WindowId, WindowData]
 

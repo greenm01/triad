@@ -4,7 +4,7 @@ import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, cursor_shake, input_device_classification, message_queue,
-    process_runner, reload_runtime,
+    process_runner, reload_runtime, switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
@@ -249,6 +249,35 @@ suite "Crash hardening":
     check not daemon.dispatchSwitchEvent(SwitchEventKind.SwitchLidClose)
     check daemon.dispatchSwitchEvent(SwitchEventKind.SwitchLidOpen)
     check daemon.popQueuedMessage().direction == Direction.DirRight
+
+  test "evdev switch events map to switch event kinds":
+    check switchEventKindForEvdev(0x05'u16, 0x00'u16, 1) ==
+      SwitchEventKind.SwitchLidClose
+    check switchEventKindForEvdev(0x05'u16, 0x00'u16, 0) == SwitchEventKind.SwitchLidOpen
+    check switchEventKindForEvdev(0x05'u16, 0x01'u16, 1) ==
+      SwitchEventKind.SwitchTabletModeOn
+    check switchEventKindForEvdev(0x05'u16, 0x01'u16, 0) ==
+      SwitchEventKind.SwitchTabletModeOff
+    check switchEventKindForEvdev(0x05'u16, 0x02'u16, 1) == SwitchEventKind.SwitchNone
+    check switchEventKindForEvdev(0x01'u16, 0x00'u16, 1) == SwitchEventKind.SwitchNone
+
+  test "parsed evdev switch event dispatches configured command":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        switchEvents:
+          @[
+            SwitchEventConfig(
+              kind: SwitchEventKind.SwitchLidClose, command: "lock-session"
+            )
+          ]
+      )
+    )
+
+    check daemon.dispatchEvdevSwitchEvent(0x05'u16, 0x00'u16, 1)
+    check daemon.popQueuedMessage().kind == MsgKind.CmdLockSession
+    check not daemon.dispatchEvdevSwitchEvent(0x05'u16, 0x01'u16, 1)
+    check not daemon.hasQueuedMessages()
 
   test "daemon overview hot corner opens once and rearms after leave":
     var daemon = initTriadDaemon()

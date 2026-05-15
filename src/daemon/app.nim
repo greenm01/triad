@@ -8,7 +8,7 @@ import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, effects_runtime, input_runtime, live_restore_runtime,
   manage_requests, message_queue, process_runner, quickshell_runner, registry_runtime,
-  reload_runtime, render_runtime, state
+  reload_runtime, render_runtime, state, switch_event_runtime
 from ../types/runtime_values import
   nil, BindingMode, KeyBindingConfig, PointerBindingConfig, PointerOpKind,
   PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
@@ -86,6 +86,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     if msg.kind == MsgKind.CmdConfigReload:
       if daemon.applyConfigReload(configPath, niriSocketPath):
+        daemon.configureSwitchEventRuntime("config reload")
         result = true
       continue
 
@@ -289,6 +290,7 @@ proc main*() =
   daemon.installInputRuntimeHooks()
   daemon.configureXkbKeymap("initial config")
   daemon.applyAllInputConfig("initial config")
+  daemon.configureSwitchEventRuntime("initial config")
   info "Initial config loaded", path = daemon.configPath
 
   daemon.pendingLiveRestore = loadLiveRestoreState(daemon.pendingLiveRestorePath)
@@ -390,6 +392,7 @@ proc main*() =
 
     # Poll watcher (non-blocking)
     daemon.watcher.poll(0)
+    daemon.pollSwitchEventDevices()
 
     # Poll async (IPC)
     asyncdispatch.poll(16)
@@ -424,6 +427,8 @@ proc main*() =
         running = false
     else:
       daemon.display.cancel_read()
+
+  daemon.closeSwitchEventDevices()
 
 if isMainModule:
   main()
