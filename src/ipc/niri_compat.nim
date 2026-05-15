@@ -13,6 +13,9 @@ type NiriIpcResult* = object
 proc okReply(payload: JsonNode): string =
   $(%*{"Ok": payload})
 
+proc handledReply(): string =
+  $(%*{"Ok": "Handled"})
+
 proc errReply(message: string): string =
   $(%*{"Err": message})
 
@@ -411,7 +414,7 @@ proc handleNiriRequest*(line: string, snapshot: ShellSnapshot): NiriIpcResult =
       result.reply = okReply(%*{"Casts": niriCastsJson()})
     of "EventStream":
       result.subscribe = true
-      result.reply = okReply(%*{"Handled": {}})
+      result.reply = handledReply()
       result.initialEvents = initialNiriEvents(snapshot)
     else:
       result.reply = errReply("unsupported niri request: " & request.getStr())

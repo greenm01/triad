@@ -64,7 +64,7 @@ workspace-rules {
 }
 
 quickshell {
-    enabled #true
+    enabled #false
     command "qs"
     theme "noctalia-shell"
 }
@@ -174,6 +174,7 @@ spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
 spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"
 spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev/null 2>&1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE NIRI_SOCKET TRIAD_SOCKET || true"
+spawn-at-startup "sh" "-lc" "command -v waybar >/dev/null 2>&1 || exit 0; pkill -x waybar >/dev/null 2>&1 || true; NIRI_SOCKET=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/triad-niri.sock\" TRIAD_SOCKET=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/triad.sock\" exec waybar"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"

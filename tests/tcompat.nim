@@ -547,6 +547,7 @@ suite "Shell compatibility contracts":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())
     check niri.handled
     check niri.subscribe
+    check niri.reply == """{"Ok":"Handled"}"""
     check niri.initialEvents.len >= 7
     check parseJson(niri.initialEvents[0]).hasKey("WorkspacesChanged")
     check parseJson(niri.initialEvents[^1]).hasKey("CastsChanged")
