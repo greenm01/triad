@@ -5,10 +5,62 @@ proc geomWithinPreview(geom, preview: runtime_values.Rect): bool =
   geom.x >= preview.x and geom.y >= preview.y and
     geom.x + geom.w <= preview.x + preview.w and geom.y + geom.h <= preview.y + preview.h
 
+proc rectsIntersect(a, b: runtime_values.Rect): bool =
+  a.x < b.x + b.w and a.x + a.w > b.x and a.y < b.y + b.h and a.y + a.h > b.y
+
+proc intersection(a, b: runtime_values.Rect): runtime_values.Rect =
+  let x1 = max(a.x, b.x)
+  let y1 = max(a.y, b.y)
+  let x2 = min(a.x + a.w, b.x + b.w)
+  let y2 = min(a.y + a.h, b.y + b.h)
+  if x2 <= x1 or y2 <= y1:
+    return runtime_values.Rect(x: x1, y: y1, w: 0, h: 0)
+  runtime_values.Rect(x: x1, y: y1, w: x2 - x1, h: y2 - y1)
+
+proc positiveArea(geom: runtime_values.Rect): bool =
+  geom.w > 0 and geom.h > 0
+
+proc aspectRatio(geom: runtime_values.Rect): float32 =
+  float32(geom.w) / float32(max(1'i32, geom.h))
+
+proc aspectRatioClose(
+    geom: runtime_values.Rect, expected: float32, tolerance = 0.02'f32
+): bool =
+  abs(geom.aspectRatio() - expected) <= tolerance
+
 proc markColumnsFullWidth(model: var Model, slot: uint32) =
   let tagId = model.tagForSlot(slot)
   for columnId, _ in model.columnsOnTagWithId(tagId):
     discard model.setColumnFullWidth(columnId, true)
+
+proc includesId(ids: openArray[uint32], id: uint32): bool =
+  for candidate in ids:
+    if candidate == id:
+      return true
+
+proc overviewInstructionsFor(
+    instructions: openArray[RenderInstruction], ids: openArray[uint32]
+): seq[RenderInstruction] =
+  for instr in instructions:
+    if ids.includesId(uint32(instr.windowId)):
+      result.add(instr)
+
+proc checkOverviewGroup(
+    instructions: openArray[RenderInstruction],
+    ids: openArray[uint32],
+    clip: runtime_values.Rect,
+    otherPreviews: openArray[runtime_values.Rect],
+    requireRawInsideClip = true,
+): seq[RenderInstruction] =
+  result = instructions.overviewInstructionsFor(ids)
+  check result.len == ids.len
+  check result.allIt(it.clipSet)
+  check result.allIt(it.clip == clip)
+  if requireRawInsideClip:
+    check result.allIt(it.geom.geomWithinPreview(clip))
+  check result.allIt(it.geom.intersection(clip).geomWithinPreview(clip))
+  for otherPreview in otherPreviews:
+    check result.allIt(not it.geom.intersection(clip).rectsIntersect(otherPreview))
 
 suite "Core Runtime Logic: overview navigation":
   test "Opening overview initializes visible selection":
@@ -134,6 +186,12 @@ suite "Core Runtime Logic: overview navigation":
     let slots = model.previewSlots()
     let projection = model.layoutProjection()
     let activePreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let activeLane = runtime_values.Rect(
+      x: screen.x, y: activePreview.y, w: screen.w, h: activePreview.h
+    )
+    let usableWidth = max(1'i32, screen.w - 2 * model.outerGaps)
+    let usableHeight = max(1'i32, screen.h - 2 * model.outerGaps)
+    let expectedAspect = float32(usableWidth - model.innerGaps) / float32(usableHeight)
     let workspaceOne =
       projection.instructions.filterIt(uint32(it.windowId) in @[1'u32, 2'u32, 3'u32])
     var geoms = workspaceOne.mapIt(it.geom)
@@ -144,10 +202,15 @@ suite "Core Runtime Logic: overview navigation":
 
     check workspaceOne.len == 3
     check workspaceOne.allIt(it.clipSet)
-    check workspaceOne.allIt(it.clip == activePreview)
-    check geoms.allIt(it.geomWithinPreview(activePreview))
+    check workspaceOne.allIt(it.clip == activeLane)
+    check workspaceOne.allIt(
+      it.geom.intersection(activeLane).geomWithinPreview(activeLane)
+    )
+    check workspaceOne.countIt(it.geom.intersection(activeLane).positiveArea()) >= 2
+    check geoms.anyIt(it.h >= activePreview.h - 20)
     check geoms[0].x < geoms[1].x
     check geoms[1].x < geoms[2].x
+    check geoms.allIt(it.aspectRatioClose(expectedAspect))
 
   test "Vertical scroller overview fits the full vertical strip":
     var model = configuredModel()
@@ -176,6 +239,9 @@ suite "Core Runtime Logic: overview navigation":
     let slots = model.previewSlots()
     let projection = model.layoutProjection()
     let activePreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let usableWidth = max(1'i32, screen.w - 2 * model.outerGaps)
+    let usableHeight = max(1'i32, screen.h - 2 * model.outerGaps)
+    let expectedAspect = float32(usableWidth) / float32(usableHeight - model.innerGaps)
     let workspaceOne =
       projection.instructions.filterIt(uint32(it.windowId) in @[1'u32, 2'u32, 3'u32])
     var geoms = workspaceOne.mapIt(it.geom)
@@ -190,6 +256,78 @@ suite "Core Runtime Logic: overview navigation":
     check geoms.allIt(it.geomWithinPreview(activePreview))
     check geoms[0].y < geoms[1].y
     check geoms[1].y < geoms[2].y
+    check geoms.allIt(it.aspectRatioClose(expectedAspect))
+
+  test "Mixed layout overview previews stay isolated":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    for id in 1'u32 .. 3'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Scroller " & $id,
+        )
+      )
+    model.markColumnsFullWidth(1)
+    model.setViewport(1, targetX = 1000.0, currentX = 1000.0)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    for id in 4'u32 .. 6'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Vertical " & $id,
+        )
+      )
+    model.markColumnsFullWidth(2)
+    model.setViewport(
+      2, targetX = 0.0, currentX = 0.0, targetY = 700.0, currentY = 700.0
+    )
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    for id in 7'u32 .. 9'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Grid " & $id,
+        )
+      )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let projection = model.layoutProjection()
+    let scrollerPreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let scrollerLane = runtime_values.Rect(
+      x: screen.x, y: scrollerPreview.y, w: screen.w, h: scrollerPreview.h
+    )
+    let verticalPreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
+    let gridPreview = model.workspacePreviewRect(screen, slots, slots.find(3'u32))
+
+    discard projection.instructions.checkOverviewGroup(
+      [1'u32, 2'u32, 3'u32],
+      scrollerLane,
+      [verticalPreview, gridPreview],
+      requireRawInsideClip = false,
+    )
+    discard projection.instructions.checkOverviewGroup(
+      [4'u32, 5'u32, 6'u32], verticalPreview, [scrollerLane, gridPreview]
+    )
+    discard projection.instructions.checkOverviewGroup(
+      [7'u32, 8'u32, 9'u32], gridPreview, [scrollerLane, verticalPreview]
+    )
 
   test "Overview clips overflowing workspace preview contents":
     var model = configuredModel()

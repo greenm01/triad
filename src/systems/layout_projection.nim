@@ -9,6 +9,11 @@ import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
 
+type OverviewTransform = object
+  source: rv.Rect
+  dest: rv.Rect
+  clip: rv.Rect
+
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
@@ -353,12 +358,25 @@ proc preserveBackingPresentation(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: screen)
       )
 
-proc scaledOverviewRect(source, dest, geom: rv.Rect, zoom: float32): rv.Rect =
+proc scaledOverviewRect(source, dest, geom: rv.Rect, maxZoom: float32): rv.Rect =
+  let sourceW = max(1'i32, source.w)
+  let sourceH = max(1'i32, source.h)
+  let scale = max(
+    0.0001'f32,
+    min(
+      maxZoom,
+      min(float32(dest.w) / float32(sourceW), float32(dest.h) / float32(sourceH)),
+    ),
+  )
+  let scaledSourceW = int32(round(float32(sourceW) * scale))
+  let scaledSourceH = int32(round(float32(sourceH) * scale))
+  let originX = dest.x + (dest.w - scaledSourceW) div 2
+  let originY = dest.y + (dest.h - scaledSourceH) div 2
   rv.Rect(
-    x: dest.x + int32(round(float32(geom.x - source.x) * zoom)),
-    y: dest.y + int32(round(float32(geom.y - source.y) * zoom)),
-    w: max(1'i32, int32(round(float32(max(1'i32, geom.w)) * zoom))),
-    h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * zoom))),
+    x: originX + int32(round(float32(geom.x - source.x) * scale)),
+    y: originY + int32(round(float32(geom.y - source.y) * scale)),
+    w: max(1'i32, int32(round(float32(max(1'i32, geom.w)) * scale))),
+    h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * scale))),
   )
 
 proc instructionBounds(instructions: openArray[rv.RenderInstruction]): Option[rv.Rect] =
@@ -398,26 +416,58 @@ proc scrollerOverviewSource(
   else:
     fallback
 
-proc scaledFitOverviewRect(source, dest, geom: rv.Rect, maxZoom: float32): rv.Rect =
-  let sourceW = max(1'i32, source.w)
-  let sourceH = max(1'i32, source.h)
-  let scale = max(
-    0.0001'f32,
-    min(
-      maxZoom,
-      min(float32(dest.w) / float32(sourceW), float32(dest.h) / float32(sourceH)),
-    ),
-  )
-  let scaledSourceW = int32(round(float32(sourceW) * scale))
-  let scaledSourceH = int32(round(float32(sourceH) * scale))
-  let originX = dest.x + (dest.w - scaledSourceW) div 2
-  let originY = dest.y + (dest.h - scaledSourceH) div 2
-  rv.Rect(
-    x: originX + int32(round(float32(geom.x - source.x) * scale)),
-    y: originY + int32(round(float32(geom.y - source.y) * scale)),
-    w: max(1'i32, int32(round(float32(max(1'i32, geom.w)) * scale))),
-    h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * scale))),
-  )
+proc focusedInstructionCenterX(
+    tag: rv.TagState, instructions: openArray[rv.RenderInstruction], fallback: rv.Rect
+): int32 =
+  for instr in instructions:
+    if instr.windowId == tag.focusedWindow:
+      return instr.geom.x + instr.geom.w div 2
+  fallback.x + fallback.w div 2
+
+proc horizontalScrollerOverviewSource(
+    tag: rv.TagState,
+    instructions: openArray[rv.RenderInstruction],
+    fallback, lane: rv.Rect,
+    zoom: float32,
+): rv.Rect =
+  let bounds = instructions.instructionBounds()
+  let rect =
+    if bounds.isSome:
+      bounds.get()
+    else:
+      fallback
+  let sourceW = max(fallback.w, int32(ceil(float32(max(1'i32, lane.w)) / zoom)))
+  let focusedCenter = tag.focusedInstructionCenterX(instructions, rect)
+  var sourceX = focusedCenter - sourceW div 2
+  let minX = rect.x
+  let maxX = rect.x + rect.w - sourceW
+  if maxX >= minX:
+    sourceX = clamp(sourceX, minX, maxX)
+  else:
+    sourceX = rect.x + (rect.w - sourceW) div 2
+  rv.Rect(x: sourceX, y: fallback.y, w: sourceW, h: fallback.h)
+
+proc overviewTransform(
+    mode: rv.LayoutMode,
+    tag: rv.TagState,
+    instructions: openArray[rv.RenderInstruction],
+    workspaceScreen, screen, preview: rv.Rect,
+    zoom: float32,
+): OverviewTransform =
+  result = OverviewTransform(source: workspaceScreen, dest: preview, clip: preview)
+  case mode
+  of rv.LayoutMode.Scroller:
+    let lane = rv.Rect(x: screen.x, y: preview.y, w: screen.w, h: preview.h)
+    result = OverviewTransform(
+      source:
+        tag.horizontalScrollerOverviewSource(instructions, workspaceScreen, lane, zoom),
+      dest: lane,
+      clip: lane,
+    )
+  of rv.LayoutMode.VerticalScroller:
+    result.source = scrollerOverviewSource(mode, instructions, workspaceScreen)
+  else:
+    discard
 
 proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]) =
   let op = model.pointerOp
@@ -490,7 +540,6 @@ proc layoutWorkspaceStripOverview(
         )
       )
 
-    var overviewSource = workspaceScreen
     let overviewNeedsFullStrip = projected.tag.layoutMode.layoutUsesNativeViewport()
     if overviewNeedsFullStrip:
       var overviewTag = projected.tag
@@ -500,20 +549,20 @@ proc layoutWorkspaceStripOverview(
         overviewTag, windows, workspaceScreen, model.outerGaps, model.innerGaps, false,
         false, "never",
       )
-      overviewSource =
-        scrollerOverviewSource(overviewTag.layoutMode, instructions, workspaceScreen)
 
-    model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     let preview = model.workspacePreviewRect(screen, slots, idx)
+    let transform = overviewTransform(
+      projected.tag.layoutMode, projected.tag, instructions, workspaceScreen, screen,
+      preview, zoom,
+    )
+    model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     for instr in instructions:
-      let geom =
-        if overviewNeedsFullStrip:
-          scaledFitOverviewRect(overviewSource, preview, instr.geom, zoom)
-        else:
-          scaledOverviewRect(workspaceScreen, preview, instr.geom, zoom)
       result.instructions.add(
         rv.RenderInstruction(
-          windowId: instr.windowId, geom: geom, clipSet: true, clip: preview
+          windowId: instr.windowId,
+          geom: scaledOverviewRect(transform.source, transform.dest, instr.geom, zoom),
+          clipSet: true,
+          clip: transform.clip,
         )
       )
   model.applyOverviewDrag(result.instructions)
