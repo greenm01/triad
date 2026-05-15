@@ -262,6 +262,23 @@ proc setFloatingForExternal*(
       GeometryRect(),
   )
 
+proc setMaximizedForExternal*(
+    model: var Model, externalId: ExternalWindowId, maximized: bool
+): bool =
+  let winId = model.windowForExternal(externalId)
+  if winId == NullWindowId:
+    return false
+  let position = model.firstWindowPosition(winId)
+  let tagId = if position.found: position.tagId else: NullTagId
+  if maximized and tagId == model.activeTag and
+      model.columnFullWidthForWindowOnTag(tagId, winId):
+    let placement = model.placementForWindowOnTag(tagId, winId)
+    if placement.isSome:
+      result = model.setColumnFullWidth(placement.get().columnId, false)
+      if result:
+        discard model.requestTagViewportRetarget(tagId)
+  result = model.setWindowMaximized(winId, maximized) or result
+
 proc toggleFullscreenFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   let win = model.window(winId)

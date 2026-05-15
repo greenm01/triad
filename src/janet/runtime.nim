@@ -1,7 +1,7 @@
 import std/[options, os, strutils, tables, times]
 import chronicles
 import ../core/msg
-import ../types/[runtime_values, shell_snapshot]
+import ../types/[janet_manifest, runtime_values, shell_snapshot]
 import command_api, snapshot_api, binding
 
 type
@@ -10,6 +10,7 @@ type
     modified*: Time
     source*: string
     failed*: bool
+    error*: string
 
   JanetRuntime* = object
     handle*: JanetHandle
@@ -106,24 +107,43 @@ proc manifestEntry(
       entry.source = readFile(path)
     except CatchableError as e:
       entry.failed = true
+      entry.error = e.msg
       warn "Failed to read Janet manifest", path = path, error = e.msg
     runtime.manifests[path] = entry
     return some(entry)
 
   none(ManifestCacheEntry)
 
-proc evalManifest*(
+proc evalManifestDetailed*(
     runtime: var JanetRuntime,
     appId: string,
     snapshot: ShellSnapshot,
     currentWindow = none(ShellWindow),
-): seq[Msg] =
+): ManifestEvalResult =
+  result.appId = appId
+  result.currentWindow = currentWindow
   if runtime.handle == nil:
-    return @[]
+    result.outcome = ManifestOutcome.Disabled
+    return
 
+  if not appId.validManifestAppId():
+    result.outcome = ManifestOutcome.InvalidAppId
+    return
+
+  result.candidatePaths = runtime.candidateManifestPaths(appId)
   let entry = runtime.manifestEntry(appId)
-  if entry.isNone or entry.get().failed:
-    return @[]
+  if entry.isNone:
+    result.outcome = ManifestOutcome.Missing
+    return
+  result.path = entry.get().path
+  if entry.get().failed:
+    result.outcome =
+      if entry.get().source.len == 0:
+        ManifestOutcome.ReadFailed
+      else:
+        ManifestOutcome.CachedFailed
+    result.error = entry.get().error
+    return
 
   let evaluated =
     runtime.evalSource(snapshot, entry.get().source, entry.get().path, currentWindow)
@@ -132,7 +152,19 @@ proc evalManifest*(
       appId = appId, path = entry.get().path, error = evaluated.error
     var failedEntry = entry.get()
     failedEntry.failed = true
+    failedEntry.error = evaluated.error
     runtime.manifests[failedEntry.path] = failedEntry
-    return @[]
+    result.outcome = ManifestOutcome.EvalFailed
+    result.error = evaluated.error
+    return
 
-  evaluated.messages
+  result.outcome = ManifestOutcome.Evaluated
+  result.messages = evaluated.messages
+
+proc evalManifest*(
+    runtime: var JanetRuntime,
+    appId: string,
+    snapshot: ShellSnapshot,
+    currentWindow = none(ShellWindow),
+): seq[Msg] =
+  runtime.evalManifestDetailed(appId, snapshot, currentWindow).messages

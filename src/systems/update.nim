@@ -6,6 +6,7 @@ import update_commands, update_effects, update_events, update_maintenance, windo
 
 proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
   kind in {
+    MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlWindowAppId,
     MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
     MsgKind.WlWindowMinimizeRequested, MsgKind.WlSessionLocked,
     MsgKind.WlSessionUnlocked, MsgKind.WlFocusChanged, MsgKind.CmdFocusTag,
@@ -15,10 +16,10 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdSetLayout,
     MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleFloating,
-    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdToggleMaximized,
-    MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
-    MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
-    MsgKind.CmdRestoreScratchpad,
+    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
+    MsgKind.CmdToggleMaximized, MsgKind.CmdMoveToScratchpad,
+    MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleScratchpad,
+    MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
   }
 
 proc updateSnapshotSummary(snapshot: ShellSnapshot, model: Model): JsonNode =
@@ -44,8 +45,14 @@ proc addTrackedWindowId(ids: var seq[uint32], id: uint32) =
 
 proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
   case msg.kind
+  of MsgKind.WlWindowCreated:
+    ids.addTrackedWindowId(msg.windowId)
+  of MsgKind.WlWindowDestroyed:
+    ids.addTrackedWindowId(msg.destroyedId)
   of MsgKind.WlFocusChanged:
     ids.addTrackedWindowId(msg.newFocusedId)
+  of MsgKind.WlWindowAppId:
+    ids.addTrackedWindowId(msg.appIdWindowId)
   of MsgKind.WlWindowMaximizeRequested:
     ids.addTrackedWindowId(msg.maximizeRequestId)
   of MsgKind.WlWindowUnmaximizeRequested:
@@ -58,6 +65,8 @@ proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
     ids.addTrackedWindowId(msg.moveWorkspaceWindowId)
   of MsgKind.CmdSetWindowFloatingById:
     ids.addTrackedWindowId(msg.floatingWindowId)
+  of MsgKind.CmdSetWindowMaximizedById:
+    ids.addTrackedWindowId(msg.maximizedWindowId)
   else:
     discard
 

@@ -130,6 +130,7 @@ type
     CmdRecentWindowCloseCurrent
     CmdToggleFloating
     CmdSetWindowFloatingById
+    CmdSetWindowMaximizedById
     CmdToggleFullscreen
     CmdToggleFullscreenById
     CmdExitFullscreenById
@@ -342,6 +343,9 @@ type
     of MsgKind.CmdSetWindowFloatingById:
       floatingWindowId*: uint32
       windowFloating*: bool
+    of MsgKind.CmdSetWindowMaximizedById:
+      maximizedWindowId*: uint32
+      windowMaximized*: bool
     of MsgKind.CmdCloseWindowById:
       closeWindowId*: uint32
     of MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById:

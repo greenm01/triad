@@ -334,7 +334,7 @@ KDL config nodes and fields:
   Manifests receive `triad/snapshot` and `triad/current-window`, and can emit
   focused commands plus targeted window commands such as
   `move-window-to-tag`, `move-window-to-workspace`, `set-window-floating`,
-  `set-layout-for-workspace`, and `focus-window`.
+  `set-window-maximized`, `set-layout-for-workspace`, and `focus-window`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.

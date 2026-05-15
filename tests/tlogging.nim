@@ -99,6 +99,49 @@ suite "Runtime logging":
     check event["after"].hasKey("workspace_distribution")
     check event["window_states"]["after"].kind == JArray
 
+  test "runtime update behavior event records window birth and app id":
+    let dir = getTempDir() / ("triad-behavior-window-birth-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 1))
+    ).model
+    let created = Msg(
+      kind: MsgKind.WlWindowCreated,
+      windowId: 42,
+      createdParentWindowId: 0,
+      createdSwallowHostWindowId: 0,
+      createdPid: 123'i32,
+      appId: "",
+      title: "Opening",
+      createdIdentifier: "",
+      deferAdmission: false,
+    )
+    let (afterCreated, _) = model.update(created)
+    model = afterCreated
+    discard model.update(
+      Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 42, updatedAppId: "gimp")
+    )
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 2
+    let birth = parseJson(lines[0])
+    check birth["event"].getStr() == "runtime_update"
+    check birth["kind"].getStr() == "WlWindowCreated"
+    check birth["tracked_windows"]["after"][0]["id"].getInt() == 42
+    let appId = parseJson(lines[1])
+    check appId["event"].getStr() == "runtime_update"
+    check appId["kind"].getStr() == "WlWindowAppId"
+    check appId["tracked_windows"]["after"][0]["app_id"].getStr() == "gimp"
+
   test "runtime update behavior event records layout transition":
     let dir = getTempDir() / ("triad-behavior-layout-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
@@ -160,8 +203,8 @@ suite "Runtime logging":
     discard state.applyRuntimeLayoutProjection("test render", "CmdSwitchLayout")
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
-    check lines.len == 1
-    let event = parseJson(lines[0])
+    check lines.len >= 1
+    let event = parseJson(lines[^1])
     check event["event"].getStr() == "layout_projection"
     check event["context"].getStr() == "test render"
     check event["msg_kind"].getStr() == "CmdSwitchLayout"
@@ -199,15 +242,19 @@ suite "Runtime logging":
       model.update(Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 9))
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
-    check lines.len == 1
-    let event = parseJson(lines[0])
+    check lines.len >= 1
+    let event = parseJson(lines[^1])
     check event["event"].getStr() == "runtime_update"
     check event["kind"].getStr() == "WlWindowMaximizeRequested"
     check event["tracked_windows"]["after"][0]["id"].getInt() == 9
     check event["tracked_windows"]["after"][0]["maximized"].getBool()
-    check event["effects"][0]["kind"].getStr() == "EffSetMaximized"
-    check event["effects"][0]["window_id"].getInt() == 9
-    check event["effects"][0]["maximized"].getBool()
+    var maxEffect = newJNull()
+    for effect in event["effects"]:
+      if effect["kind"].getStr() == "EffSetMaximized":
+        maxEffect = effect
+    check maxEffect.kind != JNull
+    check maxEffect["window_id"].getInt() == 9
+    check maxEffect["maximized"].getBool()
 
   test "runtime update behavior event records session lock transition":
     let dir = getTempDir() / ("triad-behavior-session-" & $getCurrentProcessId())

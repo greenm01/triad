@@ -48,10 +48,15 @@
   (or (> (window :parent-id) 0)
       (title-matches? (window :title) utility-title-fragments)))
 
+(defn main-window? [window]
+  (not (utility-window? window)))
+
 (let [window triad/current-window]
   (when (and window (gimp-app? (window :app-id)))
-    (let [follow (not (has-other-gimp-window? (window :id)))]
+    (let [follow (or (main-window? window)
+                     (not (has-other-gimp-window? (window :id))))]
       (triad/move-window-to-tag (window :id) target-workspace follow)
       (triad/set-layout-for-workspace target-workspace "scroller")
-      (when (utility-window? window)
+      (if (main-window? window)
+        (triad/set-window-maximized (window :id) true)
         (triad/set-window-floating (window :id) true)))))

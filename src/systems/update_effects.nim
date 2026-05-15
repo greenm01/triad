@@ -146,10 +146,11 @@ proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
       MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
       MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
       MsgKind.CmdRestoreScratchpad, MsgKind.CmdToggleFloating,
-      MsgKind.CmdSetWindowFloatingById, MsgKind.CmdToggleFullscreen,
-      MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById,
-      MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdSelectWindow,
-      MsgKind.CmdRecentWindowConfirm, MsgKind.CmdFocusTag, MsgKind.CmdFocusWindowById:
+      MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
+      MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
+      MsgKind.CmdExitFullscreenById, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
+      MsgKind.CmdSelectWindow, MsgKind.CmdRecentWindowConfirm, MsgKind.CmdFocusTag,
+      MsgKind.CmdFocusWindowById:
     true
   else:
     false
@@ -172,9 +173,9 @@ proc shouldBroadcastNiriWindowsChanged*(kind: MsgKind): bool =
       MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
       MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
       MsgKind.CmdRestoreScratchpad, MsgKind.CmdToggleFloating,
-      MsgKind.CmdSetWindowFloatingById, MsgKind.CmdToggleFullscreen,
-      MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById,
-      MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize:
+      MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
+      MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
+      MsgKind.CmdExitFullscreenById, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize:
     true
   else:
     false
@@ -210,9 +211,9 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
       MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleScratchpad,
       MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
       MsgKind.CmdToggleFloating, MsgKind.CmdSetWindowFloatingById,
-      MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
-      MsgKind.CmdExitFullscreenById, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
-      MsgKind.CmdSelectWindow:
+      MsgKind.CmdSetWindowMaximizedById, MsgKind.CmdToggleFullscreen,
+      MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById,
+      MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdSelectWindow:
     true
   else:
     false
@@ -425,9 +426,9 @@ proc shouldSyncMaximizedPresentation(
     MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
     MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn,
     MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdToggleFloating,
-    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdToggleOverview,
-    MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview, MsgKind.CmdOverviewTab,
-    MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
+    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
+    MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
+    MsgKind.CmdOverviewTab, MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
   }
 
 proc addMaximizedPresentationSync(

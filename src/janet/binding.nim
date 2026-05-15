@@ -18,6 +18,7 @@ const
   JanetActionSetWindowFloating* = 9
   JanetActionSetLayoutForWorkspace* = 10
   JanetActionFocusWindow* = 11
+  JanetActionSetWindowMaximized* = 12
 
 type JanetHandle* = pointer
 

@@ -138,6 +138,8 @@ type
     desiredPlacementOrder*: seq[uint32]
     lastPointerOpSeat*: pointer
     pendingMaximizedAcks*: Table[uint32, bool]
+    pendingManifestAppIdWindows*: Table[uint32, bool]
+    pendingManifestAdmissionWindows*: Table[uint32, string]
 
     windowPointers*: Table[uint32, ptr RiverWindowV1]
     windowNodes*: Table[uint32, ptr RiverNodeV1]

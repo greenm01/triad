@@ -142,6 +142,15 @@ suite "Core Runtime Logic: window movement":
 
     discard model.updateModel(
       Msg(
+        kind: MsgKind.CmdSetWindowMaximizedById,
+        maximizedWindowId: 2,
+        windowMaximized: true,
+      )
+    )
+    check model.snapshotWindow(2).isMaximized
+
+    discard model.updateModel(
+      Msg(
         kind: MsgKind.CmdMoveWindowToWorkspaceIndex,
         moveWorkspaceWindowId: 2,
         moveWorkspaceIndex: 2,

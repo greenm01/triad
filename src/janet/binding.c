@@ -1,4 +1,5 @@
 #include <janet.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,7 +15,8 @@ enum {
   TRIAD_JANET_MOVE_WINDOW_TO_WORKSPACE = 8,
   TRIAD_JANET_SET_WINDOW_FLOATING = 9,
   TRIAD_JANET_SET_LAYOUT_FOR_WORKSPACE = 10,
-  TRIAD_JANET_FOCUS_WINDOW = 11
+  TRIAD_JANET_FOCUS_WINDOW = 11,
+  TRIAD_JANET_SET_WINDOW_MAXIMIZED = 12
 };
 
 typedef struct {
@@ -98,8 +100,10 @@ static int append_action(TriadJanetRuntime *runtime, TriadJanetAction action) {
 }
 
 static uint32_t get_u32_arg(Janet *argv, int32_t n) {
-  int32_t value = janet_getinteger(argv, n);
-  if (value <= 0) janet_panic("expected a positive integer");
+  double value = janet_getnumber(argv, n);
+  if (value <= 0 || value > 4294967295.0 || floor(value) != value) {
+    janet_panic("expected a positive 32 bit unsigned integer");
+  }
   return (uint32_t) value;
 }
 
@@ -218,6 +222,17 @@ static Janet c_set_window_floating(int32_t argc, Janet *argv) {
   return janet_wrap_nil();
 }
 
+static Janet c_set_window_maximized(int32_t argc, Janet *argv) {
+  janet_arity(argc, 2, 2);
+  TriadJanetAction action;
+  memset(&action, 0, sizeof(action));
+  action.kind = TRIAD_JANET_SET_WINDOW_MAXIMIZED;
+  action.u32_value = get_u32_arg(argv, 0);
+  action.bool_value = janet_getboolean(argv, 1) ? 1 : 0;
+  if (!append_action(current_runtime, action)) janet_panic("failed to append action");
+  return janet_wrap_nil();
+}
+
 static Janet c_set_layout_for_workspace(int32_t argc, Janet *argv) {
   janet_arity(argc, 2, 2);
   TriadJanetAction action;
@@ -252,6 +267,7 @@ static const JanetReg triad_cfuns[] = {
   {"triad/move-window-to-tag", c_move_window_to_tag, NULL},
   {"triad/move-window-to-workspace", c_move_window_to_workspace, NULL},
   {"triad/set-window-floating", c_set_window_floating, NULL},
+  {"triad/set-window-maximized", c_set_window_maximized, NULL},
   {"triad/set-layout-for-workspace", c_set_layout_for_workspace, NULL},
   {"triad/focus-window", c_focus_window, NULL},
   {NULL, NULL, NULL}

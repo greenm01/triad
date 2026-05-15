@@ -244,6 +244,10 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.setFloatingForExternal(
       ExternalWindowId(msg.floatingWindowId), msg.windowFloating
     )
+  of MsgKind.CmdSetWindowMaximizedById:
+    result.dirty = model.setMaximizedForExternal(
+      ExternalWindowId(msg.maximizedWindowId), msg.windowMaximized
+    )
   of MsgKind.CmdMoveFloating:
     result.dirty = model.moveFloatingFocused(msg.moveDX, msg.moveDY)
   of MsgKind.CmdResizeFloating:

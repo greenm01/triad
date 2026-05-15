@@ -8,9 +8,10 @@ import ../ipc/[quickshell_compat, socket]
 import ../janet/runtime as janet_runtime
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
 import
-  bindings_runtime, effects_runtime, input_runtime, live_restore_runtime,
-  manage_requests, message_queue, process_runner, quickshell_runner, registry_runtime,
-  reload_runtime, render_runtime, state, switch_event_runtime
+  bindings_runtime, effects_runtime, input_runtime, janet_manifest_runtime,
+  live_restore_runtime, manage_requests, message_queue, process_runner,
+  quickshell_runner, registry_runtime, reload_runtime, render_runtime, state,
+  switch_event_runtime
 from ../types/runtime_values import
   nil, BindingMode, KeyBindingConfig, PointerBindingConfig, PointerOpKind,
   PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, TerminalConfig
@@ -106,7 +107,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let effects = syncRuntimeUpdate("message", msg)
     if msg.kind == MsgKind.WlWindowCreated:
       let snapshot = daemon.readModelSnapshot()
-      var currentWindow = ShellWindow(
+      let fallbackWindow = ShellWindow(
         id: msg.windowId,
         pid: msg.createdPid,
         parentId: msg.createdParentWindowId,
@@ -114,13 +115,47 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         appId: msg.appId,
         identifier: msg.createdIdentifier,
       )
-      for win in snapshot.windows:
-        if win.id == msg.windowId:
-          currentWindow = win
-          break
-      daemon.enqueueNext(
-        daemon.janetRuntime.evalManifest(msg.appId, snapshot, some(currentWindow))
-      )
+      let currentWindow = snapshot.snapshotWindow(msg.windowId, fallbackWindow)
+      let manifestResult =
+        daemon.runWindowManifest(msg.appId, snapshot, currentWindow, "window_created")
+      if manifestResult.messages.len > 0 and not snapshot.snapshotHasWindow(
+        msg.windowId
+      ):
+        daemon.pendingManifestAdmissionWindows[msg.windowId] = msg.appId
+      if not msg.appId.manifestAppIdReady():
+        daemon.pendingManifestAppIdWindows[msg.windowId] = true
+    elif msg.kind == MsgKind.WlWindowAppId:
+      if daemon.pendingManifestAppIdWindows.hasKey(msg.appIdWindowId) and
+          msg.updatedAppId.manifestAppIdReady():
+        daemon.pendingManifestAppIdWindows.del(msg.appIdWindowId)
+        let snapshot = daemon.readModelSnapshot()
+        let fallbackWindow = ShellWindow(id: msg.appIdWindowId, appId: msg.updatedAppId)
+        let currentWindow = snapshot.snapshotWindow(msg.appIdWindowId, fallbackWindow)
+        let manifestResult = daemon.runWindowManifest(
+          msg.updatedAppId, snapshot, currentWindow, "window_app_id"
+        )
+        if manifestResult.messages.len > 0 and
+            not snapshot.snapshotHasWindow(msg.appIdWindowId):
+          daemon.pendingManifestAdmissionWindows[msg.appIdWindowId] = msg.updatedAppId
+    elif msg.kind == MsgKind.WlWindowAdmissionSettled:
+      if daemon.pendingManifestAdmissionWindows.hasKey(msg.admissionWindowId):
+        let pendingAppId = daemon.pendingManifestAdmissionWindows[msg.admissionWindowId]
+        daemon.pendingManifestAdmissionWindows.del(msg.admissionWindowId)
+        let snapshot = daemon.readModelSnapshot()
+        let fallbackWindow = ShellWindow(id: msg.admissionWindowId, appId: pendingAppId)
+        let currentWindow =
+          snapshot.snapshotWindow(msg.admissionWindowId, fallbackWindow)
+        let appId =
+          if currentWindow.appId.manifestAppIdReady():
+            currentWindow.appId
+          else:
+            pendingAppId
+        if appId.manifestAppIdReady():
+          discard
+            daemon.runWindowManifest(appId, snapshot, currentWindow, "window_admitted")
+    elif msg.kind == MsgKind.WlWindowDestroyed:
+      daemon.pendingManifestAppIdWindows.del(msg.destroyedId)
+      daemon.pendingManifestAdmissionWindows.del(msg.destroyedId)
     let recentModifiersChanged =
       daemon.runtimeState.model.recentWindowsActive and
       previousActiveModifiers != daemon.runtimeState.model.activeModifiers

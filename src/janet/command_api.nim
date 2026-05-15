@@ -96,6 +96,14 @@ proc actionMsg*(runtime: JanetHandle, index: int): Option[Msg] =
         windowFloating: triadJanetActionBool(runtime, cint(index)) != 0,
       )
     )
+  of JanetActionSetWindowMaximized:
+    some(
+      Msg(
+        kind: MsgKind.CmdSetWindowMaximizedById,
+        maximizedWindowId: triadJanetActionU32(runtime, cint(index)),
+        windowMaximized: triadJanetActionBool(runtime, cint(index)) != 0,
+      )
+    )
   of JanetActionSetLayoutForWorkspace:
     let layout = layoutFromName($triadJanetActionText(runtime, cint(index)))
     if layout.isSome:
