@@ -154,6 +154,34 @@ suite "Core Runtime Logic: smoke":
     check not model.hotkeyOverlayOpen
     check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
+  test "Exit session command opens confirmation before exiting":
+    var model = Model(allowExitSession: true)
+
+    var effects = model.updateModel(Msg(kind: MsgKind.CmdExitSession))
+    check model.exitSessionConfirmOpen
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check not effects.anyIt(it.kind == EffectKind.EffExitSession)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdConfirmExitSession))
+    check not model.exitSessionConfirmOpen
+    check effects.anyIt(it.kind == EffectKind.EffExitSession)
+
+  test "Exit session confirmation can dismiss and respects config guard":
+    var model = Model(allowExitSession: true)
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdExitSession))
+    let dismissed = model.updateModel(Msg(kind: MsgKind.CmdDismissExitSessionConfirm))
+    check not model.exitSessionConfirmOpen
+    check not dismissed.anyIt(it.kind == EffectKind.EffExitSession)
+
+    let closedConfirm = model.updateModel(Msg(kind: MsgKind.CmdConfirmExitSession))
+    check not closedConfirm.anyIt(it.kind == EffectKind.EffExitSession)
+
+    model.allowExitSession = false
+    let disabled = model.updateModel(Msg(kind: MsgKind.CmdExitSession))
+    check not model.exitSessionConfirmOpen
+    check disabled.anyIt(it.kind == EffectKind.EffLog)
+
   test "Hotkey overlay rows honor custom and hidden binding titles":
     var model = initRuntimeStateFromConfig(
       Config(

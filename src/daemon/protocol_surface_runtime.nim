@@ -7,8 +7,8 @@ import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/[hotkey_overlay, recent_windows]
 import ../types/runtime_values
 import
-  hotkey_overlay_render, overview_overlay_render, protocol_surfaces,
-  recent_windows_overlay_render, state, wayland_helpers
+  exit_session_dialog_render, hotkey_overlay_render, overview_overlay_render,
+  protocol_surfaces, recent_windows_overlay_render, state, wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -22,6 +22,9 @@ template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
 
 template hotkeyOverlaySurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.hotkeyOverlaySurfaceId
+
+template exitSessionConfirmSurfaceId(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.exitSessionConfirmSurfaceId
 
 template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
@@ -56,6 +59,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
     of ProtocolSurfaceKind.PskShell:
       0x3aa5ff00'u32 or alpha
     of ProtocolSurfaceKind.PskHotkeyOverlay:
+      0x11111100'u32 or alpha
+    of ProtocolSurfaceKind.PskExitSessionConfirm:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskRecentWindows:
       0x11111100'u32 or alpha
@@ -211,6 +216,31 @@ proc ensureHotkeyOverlaySurface*(daemon: var TriadDaemon) =
   debug "Created hotkey overlay shell surface",
     shellSurfaceId = daemon.hotkeyOverlaySurfaceId
 
+proc ensureExitSessionConfirmSurface*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    return
+  if daemon.exitSessionConfirmSurfaceId != 0 and
+      daemon.surfaceTable.hasKey(daemon.exitSessionConfirmSurfaceId):
+    return
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskExitSessionConfirm)
+  if surf.surface == nil:
+    warn "Unable to create exit-session confirmation wl_surface"
+    return
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create exit-session confirmation shell surface"
+    daemon.destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  daemon.exitSessionConfirmSurfaceId = surf.shellSurface.id()
+  daemon.shellSurfacePointers[daemon.exitSessionConfirmSurfaceId] = surf.shellSurface
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[daemon.exitSessionConfirmSurfaceId] = surf
+  debug "Created exit-session confirmation shell surface",
+    shellSurfaceId = daemon.exitSessionConfirmSurfaceId
+
 proc ensureRecentWindowsSurface*(daemon: var TriadDaemon) =
   if not daemon.currentModel.protocolSurfaces.enabled:
     return
@@ -349,6 +379,45 @@ proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
     surf.node.placeTop()
   daemon.surfaceTable[daemon.hotkeyOverlaySurfaceId] = surf
 
+proc syncExitSessionConfirmSurface*(daemon: var TriadDaemon, screen: Rect) =
+  if not daemon.currentModel.exitSessionConfirmOpen:
+    if daemon.exitSessionConfirmSurfaceId != 0 and
+        daemon.surfaceTable.hasKey(daemon.exitSessionConfirmSurfaceId):
+      var surf = daemon.surfaceTable[daemon.exitSessionConfirmSurfaceId]
+      surf.inputW = 0
+      surf.inputH = 0
+      let buffer =
+        daemon.createProtocolBuffer(ProtocolSurfaceKind.PskExitSessionConfirm)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, 1, 1)
+      if surf.node != nil:
+        surf.node.placeBottom()
+      daemon.commitProtocolSurface(surf)
+      daemon.surfaceTable[daemon.exitSessionConfirmSurfaceId] = surf
+    return
+
+  daemon.ensureExitSessionConfirmSurface()
+  if daemon.exitSessionConfirmSurfaceId == 0 or
+      not daemon.surfaceTable.hasKey(daemon.exitSessionConfirmSurfaceId):
+    return
+
+  let rendered = renderExitSessionDialogBuffer(screen)
+  var surf = daemon.surfaceTable[daemon.exitSessionConfirmSurfaceId]
+  let buffer = daemon.createArgbShmBuffer(rendered)
+  if buffer != nil:
+    surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+  else:
+    warn "Exit-session confirmation buffer unavailable"
+    return
+  surf.inputW = surf.bufferW
+  surf.inputH = surf.bufferH
+  daemon.commitProtocolSurface(surf)
+  if surf.node != nil:
+    let placement = exitSessionDialogPlacement(screen, surf.bufferW, surf.bufferH)
+    surf.node.setPosition(placement.x, placement.y)
+    surf.node.placeTop()
+  daemon.surfaceTable[daemon.exitSessionConfirmSurfaceId] = surf
+
 proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
   if not daemon.currentModel.recentWindowsVisible():
     if daemon.recentWindowsSurfaceId != 0 and
@@ -486,6 +555,7 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
     daemon.destroyProtocolSurface(surf)
   daemon.ownedShellSurfaceId = 0
   daemon.hotkeyOverlaySurfaceId = 0
+  daemon.exitSessionConfirmSurfaceId = 0
   daemon.recentWindowsSurfaceId = 0
   daemon.recentWindowsChromeSurfaceId = 0
   daemon.windowDecorationAbove.clear()

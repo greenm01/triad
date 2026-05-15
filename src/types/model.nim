@@ -386,6 +386,7 @@ type
     overviewTabModeModifiers*: uint32
     hotkeyOverlayOpen*: bool
     hotkeyOverlayShownOnce*: bool
+    exitSessionConfirmOpen*: bool
     overviewSelectedWindow*: WindowId
     recentWindowsActive*: bool
     recentWindowsOpenElapsedMs*: int32

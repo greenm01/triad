@@ -97,6 +97,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
+    let previousExitSessionConfirm = daemon.runtimeState.model.exitSessionConfirmOpen
     let previousActiveModifiers = daemon.runtimeState.model.activeModifiers
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
@@ -107,6 +108,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     if previousOverview != daemon.runtimeState.model.overviewActive or
         previousRecentWindows != daemon.runtimeState.model.recentWindowsActive or
         previousSessionLocked != daemon.runtimeState.model.sessionLocked or
+        previousExitSessionConfirm != daemon.runtimeState.model.exitSessionConfirmOpen or
         recentModifiersChanged or
         previousShortcutsInhibited !=
         daemon.runtimeState.model.keyboardShortcutsInhibited():

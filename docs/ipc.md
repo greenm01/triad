@@ -104,7 +104,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
     manager so the normal session restart path can start a replacement.
 *   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus history, sizing, and window state.
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
-*   `exit-session`: Sends `river_window_manager_v1.exit_session` only when `allow-exit-session #true` is configured.
+*   `exit-session`: Opens a confirmation dialog, then sends `river_window_manager_v1.exit_session` after Enter only when `allow-exit-session #true` is configured.
 
 #### Pointer Bindings
 `pointer-bind` and `axis-bind` entries in `config.kdl` use the same command

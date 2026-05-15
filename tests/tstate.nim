@@ -2,6 +2,7 @@ import std/[json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
+import ../src/daemon/exit_session_dialog_render
 import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
 import ../src/daemon/recent_windows_overlay_render
@@ -330,6 +331,19 @@ suite "Runtime state primitives":
     check top == runtime_values.Rect(x: 260, y: 68, w: 300, h: 200)
     check center == runtime_values.Rect(x: 260, y: 220, w: 300, h: 200)
     check bottom == runtime_values.Rect(x: 260, y: 372, w: 300, h: 200)
+
+  test "exit-session dialog renderer is centered with red ring":
+    let screen = runtime_values.Rect(x: 10, y: 20, w: 800, h: 600)
+    let rendered = renderExitSessionDialogBuffer(screen)
+    let placement = exitSessionDialogPlacement(screen, rendered.width, rendered.height)
+
+    check rendered.width >= 420
+    check rendered.width <= screen.w - 96
+    check rendered.height > 0
+    check placement.x == screen.x + (screen.w - rendered.width) div 2
+    check placement.y == screen.y + (screen.h - rendered.height) div 2
+    check pixelAt(rendered, 0, 0) == 0xffff3b30'u32
+    check pixelAt(rendered, rendered.width - 1, 0) == 0xffff3b30'u32
 
   test "overlay text renderer measures clips and draws text":
     let style = OverlayTextStyle(sizePx: 14.0, color: 0xffffffff'u32)

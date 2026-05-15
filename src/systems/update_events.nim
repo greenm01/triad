@@ -175,6 +175,7 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.setLayerFocusExclusive(false)
   of MsgKind.WlSessionLocked:
     result.dirty = model.setSessionLocked(true)
+    result.dirty = model.setExitSessionConfirmOpen(false) or result.dirty
   of MsgKind.WlSessionUnlocked:
     result.dirty = model.setSessionLocked(false)
     result.dirty = model.setLayerFocusExclusive(false) or result.dirty

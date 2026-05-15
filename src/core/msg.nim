@@ -152,6 +152,8 @@ type
     CmdToggleKeyboardShortcutsInhibit
     CmdStopManager
     CmdExitSession
+    CmdConfirmExitSession
+    CmdDismissExitSessionConfirm
     CmdFocusShellUi
     CmdShowHotkeyOverlay
     CmdHideHotkeyOverlay

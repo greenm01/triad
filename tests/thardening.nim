@@ -455,6 +455,57 @@ suite "Crash hardening":
     let dismissMsg = daemon.popQueuedMessage()
     check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
 
+  test "Exit-session confirmation routes Enter to confirm":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true))
+    )
+    daemon.runtimeState.model.exitSessionConfirmOpen = true
+    daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdConfirmExitSession)
+
+    daemon.handleXkbBindingPressed(1'u32)
+
+    check daemon.hasQueuedMessages()
+    let confirmMsg = daemon.popQueuedMessage()
+    check confirmMsg.kind == MsgKind.CmdConfirmExitSession
+    check not daemon.hasQueuedMessages()
+
+  test "Exit-session confirmation dismisses other bound and unbound keys":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true))
+    )
+    daemon.runtimeState.model.exitSessionConfirmOpen = true
+    daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
+
+    daemon.handleXkbBindingPressed(1'u32)
+
+    check daemon.hasQueuedMessages()
+    var dismissMsg = daemon.popQueuedMessage()
+    check dismissMsg.kind == MsgKind.CmdDismissExitSessionConfirm
+    check not daemon.hasQueuedMessages()
+
+    daemon.runtimeState.model.exitSessionConfirmOpen = true
+    daemon.handleXkbSeatAteUnboundKey(7'u32)
+
+    check daemon.hasQueuedMessages()
+    dismissMsg = daemon.popQueuedMessage()
+    check dismissMsg.kind == MsgKind.CmdDismissExitSessionConfirm
+
+  test "Exit-session confirmation arms key capture":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true))
+    )
+    daemon.runtimeState.model.exitSessionConfirmOpen = true
+
+    daemon.syncHotkeyOverlayKeyCapture()
+    check daemon.hotkeyOverlayKeyEatArmed
+
+    daemon.runtimeState.model.exitSessionConfirmOpen = false
+    daemon.syncHotkeyOverlayKeyCapture()
+    check not daemon.hotkeyOverlayKeyEatArmed
+
   test "eat-next-key effects defer to manage phase":
     var daemon = initTriadDaemon()
 

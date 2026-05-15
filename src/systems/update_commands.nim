@@ -303,11 +303,24 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.effects.add(Effect(kind: EffectKind.EffTriadReload))
   of MsgKind.CmdExitSession:
     if model.allowExitSession:
-      result.effects.add(Effect(kind: EffectKind.EffExitSession))
+      result.dirty = model.setHotkeyOverlayOpen(false) or result.dirty
+      result.dirty = model.cancelRecentWindows() or result.dirty
+      result.dirty = model.setExitSessionConfirmOpen(true) or result.dirty
     else:
       result.effects.add(
         Effect(kind: EffectKind.EffLog, msg: "exit-session is disabled by config")
       )
+  of MsgKind.CmdConfirmExitSession:
+    let wasOpen = model.exitSessionConfirmOpen
+    result.dirty = model.setExitSessionConfirmOpen(false)
+    if wasOpen and model.allowExitSession:
+      result.effects.add(Effect(kind: EffectKind.EffExitSession))
+    elif wasOpen:
+      result.effects.add(
+        Effect(kind: EffectKind.EffLog, msg: "exit-session is disabled by config")
+      )
+  of MsgKind.CmdDismissExitSessionConfirm:
+    result.dirty = model.setExitSessionConfirmOpen(false)
   of MsgKind.CmdFocusShellUi:
     if not model.sessionLocked and not model.layerFocusExclusive:
       result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))

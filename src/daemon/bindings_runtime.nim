@@ -308,6 +308,8 @@ proc recentOpenCommandForBinding(binding: KeyBindingConfig): string =
     ""
 
 proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
+  if daemon.currentModel.exitSessionConfirmOpen:
+    return false
   if daemon.currentModel.sessionLocked and not binding.whileLocked:
     return false
   if daemon.currentModel.recentWindowsActive and binding.mode != BindingMode.BindRecent and
@@ -353,6 +355,13 @@ proc enqueueHotkeyOverlayDismiss(daemon: var TriadDaemon): bool =
   daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
   true
 
+proc enqueueExitSessionConfirmDismiss(daemon: var TriadDaemon): bool =
+  if not daemon.currentModel.exitSessionConfirmOpen:
+    return false
+  daemon.hotkeyOverlayKeyEatArmed = false
+  daemon.enqueue(Msg(kind: MsgKind.CmdDismissExitSessionConfirm))
+  true
+
 proc enqueueXkbBindingCommand(daemon: var TriadDaemon, id: uint32) =
   if daemon.xkbBindings.hasKey(id):
     let msg = daemon.xkbBindings[id]
@@ -363,6 +372,14 @@ proc enqueueXkbBindingCommand(daemon: var TriadDaemon, id: uint32) =
 proc handleXkbBindingPressed*(daemon: var TriadDaemon, id: uint32) =
   daemon.xkbBindingPressed[id] = true
   daemon.xkbBindingReleaseArmed[id] = false
+  if daemon.currentModel.exitSessionConfirmOpen:
+    daemon.hotkeyOverlayKeyEatArmed = false
+    if daemon.xkbBindings.hasKey(id) and
+        daemon.xkbBindings[id].kind == MsgKind.CmdConfirmExitSession:
+      daemon.enqueue(daemon.xkbBindings[id])
+    else:
+      daemon.enqueue(Msg(kind: MsgKind.CmdDismissExitSessionConfirm))
+    return
   if daemon.xkbBindings.hasKey(id) and daemon.enqueueHotkeyOverlayDismiss():
     return
   if not daemon.liveXkbBindingActive(id):
@@ -385,10 +402,11 @@ proc handleXkbSeatAteUnboundKey*(daemon: var TriadDaemon, id: uint32) =
   daemon.xkbSeatAteUnbound[id] =
     daemon.xkbSeatAteUnbound.getOrDefault(id, 0'u32) + 1'u32
   trace "XKB seat ate unbound key", xkbSeatId = id, count = daemon.xkbSeatAteUnbound[id]
-  discard daemon.enqueueHotkeyOverlayDismiss()
+  if not daemon.enqueueExitSessionConfirmDismiss():
+    discard daemon.enqueueHotkeyOverlayDismiss()
 
 proc syncHotkeyOverlayKeyCapture*(daemon: var TriadDaemon) =
-  if daemon.currentModel.hotkeyOverlayOpen:
+  if daemon.currentModel.hotkeyOverlayOpen or daemon.currentModel.exitSessionConfirmOpen:
     for xkbSeat in daemon.xkbSeatPointers.values:
       xkbSeat.ensureNextKeyEaten()
     daemon.hotkeyOverlayKeyEatArmed = true
@@ -398,6 +416,8 @@ proc syncHotkeyOverlayKeyCapture*(daemon: var TriadDaemon) =
     daemon.hotkeyOverlayKeyEatArmed = false
 
 proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): bool =
+  if daemon.currentModel.exitSessionConfirmOpen:
+    return false
   if daemon.currentModel.sessionLocked:
     return false
   if not daemon.bindingModeActive(binding.mode):
@@ -408,6 +428,8 @@ proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): b
   true
 
 proc axisBindingActive(daemon: TriadDaemon, binding: AxisBindingConfig): bool =
+  if daemon.currentModel.exitSessionConfirmOpen:
+    return false
   if daemon.currentModel.sessionLocked:
     return false
   if not daemon.bindingModeActive(binding.mode):
@@ -418,6 +440,8 @@ proc axisBindingActive(daemon: TriadDaemon, binding: AxisBindingConfig): bool =
   true
 
 proc gestureBindingActive(daemon: TriadDaemon, binding: GestureBindingConfig): bool =
+  if daemon.currentModel.exitSessionConfirmOpen:
+    return false
   if daemon.currentModel.sessionLocked:
     return false
   if not daemon.bindingModeActive(binding.mode):
@@ -1519,6 +1543,9 @@ proc addPointerBinding(
   discard binding.addListener(pointerBindingListener.addr, daemonData(daemon))
   binding.enable()
 
+proc exitSessionConfirmKeyBinding(): KeyBindingConfig =
+  KeyBindingConfig(key: "Return", modifiers: 0'u32, mode: BindingMode.BindAlways)
+
 proc setupDefaultBindings*(daemon: var TriadDaemon) =
   if daemon.bindingsConfigured:
     return
@@ -1527,6 +1554,17 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
 
   for seat in daemon.seatPointers:
     daemon.attachXkbSeat(seat)
+
+    if daemon.currentModel.exitSessionConfirmOpen:
+      let binding = exitSessionConfirmKeyBinding()
+      daemon.addXkbBinding(
+        seat,
+        binding,
+        keySymForBinding(binding.key, binding.modifiers),
+        binding.modifiers,
+        Msg(kind: MsgKind.CmdConfirmExitSession),
+      )
+      continue
 
     for binding in daemon.currentModel.keyBindings:
       if not daemon.keyBindingActive(binding):

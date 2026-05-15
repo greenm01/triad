@@ -97,6 +97,12 @@ proc setHotkeyOverlayOpen*(model: var Model, open: bool): bool =
     model.hotkeyOverlayShownOnce = true
   true
 
+proc setExitSessionConfirmOpen*(model: var Model, open: bool): bool =
+  if model.exitSessionConfirmOpen == open:
+    return false
+  model.exitSessionConfirmOpen = open
+  true
+
 proc shouldShowHotkeyOverlayAtStartup*(model: Model): bool =
   not model.hotkeyOverlay.skipAtStartup and not model.hotkeyOverlayShownOnce
 
