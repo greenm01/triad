@@ -361,6 +361,64 @@ proc scaledOverviewRect(source, dest, geom: rv.Rect, zoom: float32): rv.Rect =
     h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * zoom))),
   )
 
+proc instructionBounds(instructions: openArray[rv.RenderInstruction]): Option[rv.Rect] =
+  if instructions.len == 0:
+    return none(rv.Rect)
+
+  var minX = instructions[0].geom.x
+  var minY = instructions[0].geom.y
+  var maxX = instructions[0].geom.x + instructions[0].geom.w
+  var maxY = instructions[0].geom.y + instructions[0].geom.h
+  for idx in 1 ..< instructions.len:
+    let instr = instructions[idx]
+    minX = min(minX, instr.geom.x)
+    minY = min(minY, instr.geom.y)
+    maxX = max(maxX, instr.geom.x + instr.geom.w)
+    maxY = max(maxY, instr.geom.y + instr.geom.h)
+
+  some(
+    rv.Rect(x: minX, y: minY, w: max(1'i32, maxX - minX), h: max(1'i32, maxY - minY))
+  )
+
+proc scrollerOverviewSource(
+    mode: rv.LayoutMode,
+    instructions: openArray[rv.RenderInstruction],
+    fallback: rv.Rect,
+): rv.Rect =
+  let bounds = instructions.instructionBounds()
+  if bounds.isNone:
+    return fallback
+
+  let rect = bounds.get()
+  case mode
+  of rv.LayoutMode.Scroller:
+    rv.Rect(x: rect.x, y: fallback.y, w: rect.w, h: fallback.h)
+  of rv.LayoutMode.VerticalScroller:
+    rv.Rect(x: fallback.x, y: rect.y, w: fallback.w, h: rect.h)
+  else:
+    fallback
+
+proc scaledFitOverviewRect(source, dest, geom: rv.Rect, maxZoom: float32): rv.Rect =
+  let sourceW = max(1'i32, source.w)
+  let sourceH = max(1'i32, source.h)
+  let scale = max(
+    0.0001'f32,
+    min(
+      maxZoom,
+      min(float32(dest.w) / float32(sourceW), float32(dest.h) / float32(sourceH)),
+    ),
+  )
+  let scaledSourceW = int32(round(float32(sourceW) * scale))
+  let scaledSourceH = int32(round(float32(sourceH) * scale))
+  let originX = dest.x + (dest.w - scaledSourceW) div 2
+  let originY = dest.y + (dest.h - scaledSourceH) div 2
+  rv.Rect(
+    x: originX + int32(round(float32(geom.x - source.x) * scale)),
+    y: originY + int32(round(float32(geom.y - source.y) * scale)),
+    w: max(1'i32, int32(round(float32(max(1'i32, geom.w)) * scale))),
+    h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * scale))),
+  )
+
 proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]) =
   let op = model.pointerOp
   if op.kind != rv.PointerOpKind.OpOverviewDrag:
@@ -411,8 +469,9 @@ proc layoutWorkspaceStripOverview(
     model.applyPopupLayoutFocus(projected.tag, model.activeFocus())
     projected.tag.applyOverviewMaximizedColumnSizing(windows)
     let retargetViewport = model.viewportRetargetRequested(tagId)
+    var targetTag = projected.tag
     var instructions = layoutForTag(
-      projected.tag,
+      targetTag,
       windows,
       workspaceScreen,
       model.outerGaps,
@@ -421,24 +480,40 @@ proc layoutWorkspaceStripOverview(
       retargetViewport and model.scrollerPreferCenter,
       if retargetViewport: model.centerFocusedColumn else: "never",
     )
-    projected.tag.applyLayoutViewportOffset(instructions)
-    if projected.tag.columns.len > 0:
+    targetTag.applyLayoutViewportOffset(instructions)
+    if targetTag.columns.len > 0:
       result.viewportTargets.add(
         LayoutViewportTarget(
-          tagSlot: projected.tag.tagId,
-          targetX: projected.tag.targetViewportXOffset,
-          targetY: projected.tag.targetViewportYOffset,
+          tagSlot: targetTag.tagId,
+          targetX: targetTag.targetViewportXOffset,
+          targetY: targetTag.targetViewportYOffset,
         )
       )
+
+    var overviewSource = workspaceScreen
+    let overviewNeedsFullStrip = projected.tag.layoutMode.layoutUsesNativeViewport()
+    if overviewNeedsFullStrip:
+      var overviewTag = projected.tag
+      overviewTag.currentViewportXOffset = 0.0'f32
+      overviewTag.currentViewportYOffset = 0.0'f32
+      instructions = layoutForTag(
+        overviewTag, windows, workspaceScreen, model.outerGaps, model.innerGaps, false,
+        false, "never",
+      )
+      overviewSource =
+        scrollerOverviewSource(overviewTag.layoutMode, instructions, workspaceScreen)
+
     model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     let preview = model.workspacePreviewRect(screen, slots, idx)
     for instr in instructions:
+      let geom =
+        if overviewNeedsFullStrip:
+          scaledFitOverviewRect(overviewSource, preview, instr.geom, zoom)
+        else:
+          scaledOverviewRect(workspaceScreen, preview, instr.geom, zoom)
       result.instructions.add(
         rv.RenderInstruction(
-          windowId: instr.windowId,
-          geom: scaledOverviewRect(workspaceScreen, preview, instr.geom, zoom),
-          clipSet: true,
-          clip: preview,
+          windowId: instr.windowId, geom: geom, clipSet: true, clip: preview
         )
       )
   model.applyOverviewDrag(result.instructions)

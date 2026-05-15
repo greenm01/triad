@@ -1,4 +1,14 @@
+import std/algorithm
 import tcore_support
+
+proc geomWithinPreview(geom, preview: runtime_values.Rect): bool =
+  geom.x >= preview.x and geom.y >= preview.y and
+    geom.x + geom.w <= preview.x + preview.w and geom.y + geom.h <= preview.y + preview.h
+
+proc markColumnsFullWidth(model: var Model, slot: uint32) =
+  let tagId = model.tagForSlot(slot)
+  for columnId, _ in model.columnsOnTagWithId(tagId):
+    discard model.setColumnFullWidth(columnId, true)
 
 suite "Core Runtime Logic: overview navigation":
   test "Opening overview initializes visible selection":
@@ -102,6 +112,85 @@ suite "Core Runtime Logic: overview navigation":
     check two.x + two.w <= secondPreview.x + secondPreview.w
     check two.y + two.h <= secondPreview.y + secondPreview.h
 
+  test "Scroller overview fits the full horizontal strip":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    for id in 1'u32 .. 3'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.markColumnsFullWidth(1)
+    model.setViewport(1, targetX = 1000.0, currentX = 1000.0)
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let projection = model.layoutProjection()
+    let activePreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let workspaceOne =
+      projection.instructions.filterIt(uint32(it.windowId) in @[1'u32, 2'u32, 3'u32])
+    var geoms = workspaceOne.mapIt(it.geom)
+    geoms.sort(
+      proc(a, b: runtime_values.Rect): int =
+        cmp(a.x, b.x)
+    )
+
+    check workspaceOne.len == 3
+    check workspaceOne.allIt(it.clipSet)
+    check workspaceOne.allIt(it.clip == activePreview)
+    check geoms.allIt(it.geomWithinPreview(activePreview))
+    check geoms[0].x < geoms[1].x
+    check geoms[1].x < geoms[2].x
+
+  test "Vertical scroller overview fits the full vertical strip":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    for id in 1'u32 .. 3'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.markColumnsFullWidth(1)
+    model.setViewport(
+      1, targetX = 0.0, currentX = 0.0, targetY = 700.0, currentY = 700.0
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let projection = model.layoutProjection()
+    let activePreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let workspaceOne =
+      projection.instructions.filterIt(uint32(it.windowId) in @[1'u32, 2'u32, 3'u32])
+    var geoms = workspaceOne.mapIt(it.geom)
+    geoms.sort(
+      proc(a, b: runtime_values.Rect): int =
+        cmp(a.y, b.y)
+    )
+
+    check workspaceOne.len == 3
+    check workspaceOne.allIt(it.clipSet)
+    check workspaceOne.allIt(it.clip == activePreview)
+    check geoms.allIt(it.geomWithinPreview(activePreview))
+    check geoms[0].y < geoms[1].y
+    check geoms[1].y < geoms[2].y
+
   test "Overview clips overflowing workspace preview contents":
     var model = configuredModel()
     model.applyMsg(
@@ -139,10 +228,7 @@ suite "Core Runtime Logic: overview navigation":
     check workspaceTwo.len == 3
     check workspaceTwo.allIt(it.clipSet)
     check workspaceTwo.allIt(it.clip == secondPreview)
-    check workspaceTwo.anyIt(
-      it.geom.y < secondPreview.y or
-        it.geom.y + it.geom.h > secondPreview.y + secondPreview.h
-    )
+    check workspaceTwo.allIt(it.geom.geomWithinPreview(secondPreview))
 
   test "Non-scroller overview projects workspace previews":
     var model = configuredModel()
