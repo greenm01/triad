@@ -1,6 +1,7 @@
 import std/[options, strutils]
 import ../core/msg
 import ../types/runtime_values
+import command_registry
 
 proc parseInt32Arg(s: string): Option[int32] =
   try:
@@ -125,42 +126,46 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
   if parts.len == 0:
     return none(Msg)
 
-  case parts[0]
-  of "focus-next":
+  let spec = resolveCommandSpec(parts[0])
+  if spec.isNone:
+    return none(Msg)
+
+  case spec.get().id
+  of CommandId.CidFocusNext:
     some(Msg(kind: MsgKind.CmdFocusNext))
-  of "focus-prev":
+  of CommandId.CidFocusPrev:
     some(Msg(kind: MsgKind.CmdFocusPrev))
-  of "focus-left":
+  of CommandId.CidFocusLeft:
     some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
-  of "focus-right":
+  of CommandId.CidFocusRight:
     some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
-  of "focus-up":
+  of CommandId.CidFocusUp:
     some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp))
-  of "focus-down":
+  of CommandId.CidFocusDown:
     some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
-  of "focus-last":
+  of CommandId.CidFocusLast:
     some(Msg(kind: MsgKind.CmdFocusLast))
-  of "focus-tag-left":
+  of CommandId.CidFocusTagLeft:
     some(Msg(kind: MsgKind.CmdFocusTagLeft))
-  of "focus-tag-right":
+  of CommandId.CidFocusTagRight:
     some(Msg(kind: MsgKind.CmdFocusTagRight))
-  of "focus-occupied-tag-left":
+  of CommandId.CidFocusOccupiedTagLeft:
     some(Msg(kind: MsgKind.CmdFocusOccupiedTagLeft))
-  of "focus-occupied-tag-right":
+  of CommandId.CidFocusOccupiedTagRight:
     some(Msg(kind: MsgKind.CmdFocusOccupiedTagRight))
-  of "focus-column-first":
+  of CommandId.CidFocusColumnFirst:
     some(Msg(kind: MsgKind.CmdFocusColumnFirst))
-  of "focus-column-last":
+  of CommandId.CidFocusColumnLast:
     some(Msg(kind: MsgKind.CmdFocusColumnLast))
-  of "focus-window-or-workspace-up":
+  of CommandId.CidFocusWindowOrWorkspaceUp:
     some(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp))
-  of "focus-window-or-workspace-down":
+  of CommandId.CidFocusWindowOrWorkspaceDown:
     some(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-  of "move-to-tag-left":
+  of CommandId.CidMoveToTagLeft:
     some(Msg(kind: MsgKind.CmdMoveToTagLeft))
-  of "move-to-tag-right":
+  of CommandId.CidMoveToTagRight:
     some(Msg(kind: MsgKind.CmdMoveToTagRight))
-  of "close-window":
+  of CommandId.CidCloseWindow:
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
@@ -169,7 +174,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       some(Msg(kind: MsgKind.CmdCloseWindow))
-  of "focus-window":
+  of CommandId.CidFocusWindow:
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
@@ -178,53 +183,53 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "config-reload":
+  of CommandId.CidConfigReload:
     some(Msg(kind: MsgKind.CmdConfigReload))
-  of "layout-scroller":
+  of CommandId.CidLayoutScroller:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Scroller))
-  of "layout-vertical-scroller":
+  of CommandId.CidLayoutVerticalScroller:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller))
-  of "layout-tile":
+  of CommandId.CidLayoutTile:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.MasterStack))
-  of "layout-grid":
+  of CommandId.CidLayoutGrid:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
-  of "layout-monocle":
+  of CommandId.CidLayoutMonocle:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Monocle))
-  of "layout-deck":
+  of CommandId.CidLayoutDeck:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck))
-  of "layout-center-tile":
+  of CommandId.CidLayoutCenterTile:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.CenterTile))
-  of "layout-right-tile":
+  of CommandId.CidLayoutRightTile:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.RightTile))
-  of "layout-vertical-tile":
+  of CommandId.CidLayoutVerticalTile:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalTile))
-  of "layout-vertical-grid":
+  of CommandId.CidLayoutVerticalGrid:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalGrid))
-  of "layout-vertical-deck":
+  of CommandId.CidLayoutVerticalDeck:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalDeck))
-  of "layout-tgmix":
+  of CommandId.CidLayoutTGMix:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.TGMix))
-  of "switch-layout":
+  of CommandId.CidSwitchLayout:
     some(Msg(kind: MsgKind.CmdSwitchLayout))
-  of "toggle-overview":
+  of CommandId.CidToggleOverview:
     some(Msg(kind: MsgKind.CmdToggleOverview))
-  of "open-overview":
+  of CommandId.CidOpenOverview:
     some(Msg(kind: MsgKind.CmdOpenOverview))
-  of "close-overview":
+  of CommandId.CidCloseOverview:
     some(Msg(kind: MsgKind.CmdCloseOverview))
-  of "recent-window-next":
+  of CommandId.CidRecentWindowNext:
     parseRecentAdvanceCommand(parts, MsgKind.CmdRecentWindowNext)
-  of "recent-window-prev":
+  of CommandId.CidRecentWindowPrev:
     parseRecentAdvanceCommand(parts, MsgKind.CmdRecentWindowPrev)
-  of "recent-window-confirm":
+  of CommandId.CidRecentWindowConfirm:
     some(Msg(kind: MsgKind.CmdRecentWindowConfirm))
-  of "recent-window-cancel":
+  of CommandId.CidRecentWindowCancel:
     some(Msg(kind: MsgKind.CmdRecentWindowCancel))
-  of "recent-window-first":
+  of CommandId.CidRecentWindowFirst:
     some(Msg(kind: MsgKind.CmdRecentWindowFirst))
-  of "recent-window-last":
+  of CommandId.CidRecentWindowLast:
     some(Msg(kind: MsgKind.CmdRecentWindowLast))
-  of "recent-window-scope":
+  of CommandId.CidRecentWindowScope:
     if parts.len == 2:
       let scope = parseRecentScope(parts[1])
       if scope.isSome:
@@ -233,13 +238,13 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "recent-window-cycle-scope":
+  of CommandId.CidRecentWindowCycleScope:
     some(Msg(kind: MsgKind.CmdRecentWindowCycleScope))
-  of "recent-window-close-current":
+  of CommandId.CidRecentWindowCloseCurrent:
     some(Msg(kind: MsgKind.CmdRecentWindowCloseCurrent))
-  of "toggle-floating":
+  of CommandId.CidToggleFloating:
     some(Msg(kind: MsgKind.CmdToggleFloating))
-  of "fullscreen-window", "toggle-fullscreen":
+  of CommandId.CidToggleFullscreen:
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
@@ -253,7 +258,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       some(Msg(kind: MsgKind.CmdToggleFullscreen))
-  of "exit-fullscreen":
+  of CommandId.CidExitFullscreen:
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
@@ -266,26 +271,26 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "maximize-window-to-edges", "toggle-maximized", "toggle-maximize":
+  of CommandId.CidToggleMaximized:
     some(Msg(kind: MsgKind.CmdToggleMaximized))
-  of "minimize", "minimize-window":
+  of CommandId.CidMinimize:
     some(Msg(kind: MsgKind.CmdMinimize))
-  of "screenshot":
+  of CommandId.CidScreenshot:
     parseScreenshotCommand(parts, ScreenshotKind.ShotRegion)
-  of "screenshot-screen":
+  of CommandId.CidScreenshotScreen:
     parseScreenshotCommand(parts, ScreenshotKind.ShotScreen)
-  of "screenshot-window":
+  of CommandId.CidScreenshotWindow:
     parseScreenshotCommand(parts, ScreenshotKind.ShotWindow)
-  of "spawn":
+  of CommandId.CidSpawn:
     if parts.len >= 2:
       some(Msg(kind: MsgKind.CmdSpawn, spawnCommand: parts[1 ..^ 1]))
     else:
       none(Msg)
-  of "spawn-terminal":
+  of CommandId.CidSpawnTerminal:
     some(Msg(kind: MsgKind.CmdSpawnTerminal))
-  of "lock-session":
+  of CommandId.CidLockSession:
     some(Msg(kind: MsgKind.CmdLockSession))
-  of "warp-pointer":
+  of CommandId.CidWarpPointer:
     if parts.len >= 3:
       let x = parseInt32Arg(parts[1])
       let y = parseInt32Arg(parts[2])
@@ -295,29 +300,29 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "eat-next-key":
+  of CommandId.CidEatNextKey:
     some(Msg(kind: MsgKind.CmdEatNextKey))
-  of "cancel-eat-next-key":
+  of CommandId.CidCancelEatNextKey:
     some(Msg(kind: MsgKind.CmdCancelEatNextKey))
-  of "toggle-keyboard-shortcuts-inhibit", "keyboard-shortcuts-inhibit":
+  of CommandId.CidToggleKeyboardShortcutsInhibit:
     some(Msg(kind: MsgKind.CmdToggleKeyboardShortcutsInhibit))
-  of "stop-manager":
+  of CommandId.CidStopManager:
     some(Msg(kind: MsgKind.CmdStopManager))
-  of "triad-reload":
+  of CommandId.CidTriadReload:
     some(Msg(kind: MsgKind.CmdTriadReload))
-  of "exit-session":
+  of CommandId.CidExitSession:
     some(Msg(kind: MsgKind.CmdExitSession))
-  of "focus-shell-ui":
+  of CommandId.CidFocusShellUi:
     some(Msg(kind: MsgKind.CmdFocusShellUi))
-  of "show-hotkey-overlay":
+  of CommandId.CidShowHotkeyOverlay:
     some(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
-  of "hide-hotkey-overlay":
+  of CommandId.CidHideHotkeyOverlay:
     some(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
-  of "toggle-hotkey-overlay":
+  of CommandId.CidToggleHotkeyOverlay:
     some(Msg(kind: MsgKind.CmdToggleHotkeyOverlay))
-  of "move-to-scratchpad":
+  of CommandId.CidMoveToScratchpad:
     some(Msg(kind: MsgKind.CmdMoveToScratchpad))
-  of "move-to-named-scratchpad":
+  of CommandId.CidMoveToNamedScratchpad:
     if parts.len >= 2:
       some(
         Msg(
@@ -327,9 +332,9 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       )
     else:
       none(Msg)
-  of "toggle-scratchpad":
+  of CommandId.CidToggleScratchpad:
     some(Msg(kind: MsgKind.CmdToggleScratchpad))
-  of "toggle-named-scratchpad":
+  of CommandId.CidToggleNamedScratchpad:
     if parts.len >= 2:
       some(
         Msg(
@@ -339,22 +344,22 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       )
     else:
       none(Msg)
-  of "restore-scratchpad":
+  of CommandId.CidRestoreScratchpad:
     some(Msg(kind: MsgKind.CmdRestoreScratchpad))
-  of "select-window":
+  of CommandId.CidSelectWindow:
     some(Msg(kind: MsgKind.CmdSelectWindow))
-  of "rename-tag":
+  of CommandId.CidRenameTag:
     if parts.len >= 2:
       some(Msg(kind: MsgKind.CmdRenameTag, newName: parts[1 ..^ 1].join(" ")))
     else:
       none(Msg)
-  of "group-windows":
+  of CommandId.CidGroupWindows:
     some(Msg(kind: MsgKind.CmdGroupWindows))
-  of "ungroup-window":
+  of CommandId.CidUngroupWindow:
     some(Msg(kind: MsgKind.CmdUngroupWindow))
-  of "focus-next-in-group":
+  of CommandId.CidFocusNextInGroup:
     some(Msg(kind: MsgKind.CmdFocusNextInGroup))
-  of "move-floating":
+  of CommandId.CidMoveFloating:
     if parts.len >= 3:
       let dx = parseInt32Arg(parts[1])
       let dy = parseInt32Arg(parts[2])
@@ -364,7 +369,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "resize-floating":
+  of CommandId.CidResizeFloating:
     if parts.len >= 3:
       let dw = parseInt32Arg(parts[1])
       let dh = parseInt32Arg(parts[2])
@@ -374,7 +379,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "move-to-tag":
+  of CommandId.CidMoveToTag:
     if parts.len >= 2:
       let tag = parseUInt32Arg(parts[1])
       if tag.isSome:
@@ -383,7 +388,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "move-to-workspace":
+  of CommandId.CidMoveToWorkspace:
     if parts.len >= 2:
       let index = parseUInt32Arg(parts[1])
       if index.isSome:
@@ -392,12 +397,12 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "focus-output":
+  of CommandId.CidFocusOutput:
     if parts.len >= 2:
       some(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: parts[1 ..^ 1].join(" ")))
     else:
       none(Msg)
-  of "move-workspace-to-output":
+  of CommandId.CidMoveWorkspaceToOutput:
     if parts.len >= 2:
       some(
         Msg(
@@ -406,12 +411,12 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       )
     else:
       none(Msg)
-  of "move-to-output":
+  of CommandId.CidMoveToOutput:
     if parts.len >= 2:
       some(Msg(kind: MsgKind.CmdMoveToOutput, outputTarget: parts[1 ..^ 1].join(" ")))
     else:
       none(Msg)
-  of "focus-workspace":
+  of CommandId.CidFocusWorkspace:
     if parts.len >= 2:
       let index = parseUInt32Arg(parts[1])
       if index.isSome:
@@ -420,7 +425,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "focus-tag":
+  of CommandId.CidFocusTag:
     if parts.len >= 2:
       let tag = parseUInt32Arg(parts[1])
       if tag.isSome:
@@ -429,7 +434,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "swap-to-tag":
+  of CommandId.CidSwapToTag:
     if parts.len >= 2:
       let tag = parseUInt32Arg(parts[1])
       if tag.isSome:
@@ -438,7 +443,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "master-count":
+  of CommandId.CidMasterCount:
     if parts.len >= 2:
       try:
         some(Msg(kind: MsgKind.CmdSetMasterCount, count: parseInt(parts[1])))
@@ -446,7 +451,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "adjust-master-count":
+  of CommandId.CidAdjustMasterCount:
     if parts.len >= 2:
       try:
         some(Msg(kind: MsgKind.CmdAdjustMasterCount, deltaMC: parseInt(parts[1])))
@@ -454,7 +459,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "master-ratio":
+  of CommandId.CidMasterRatio:
     if parts.len >= 2:
       let ratio = parseFloat32Arg(parts[1])
       if ratio.isSome:
@@ -463,7 +468,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "adjust-master-ratio":
+  of CommandId.CidAdjustMasterRatio:
     if parts.len >= 2:
       let delta = parseFloat32Arg(parts[1])
       if delta.isSome:
@@ -472,7 +477,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "resize-width":
+  of CommandId.CidResizeWidth:
     if parts.len >= 2:
       let delta = parseFloat32Arg(parts[1])
       if delta.isSome:
@@ -481,7 +486,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "resize-height":
+  of CommandId.CidResizeHeight:
     if parts.len >= 2:
       let delta = parseFloat32Arg(parts[1])
       if delta.isSome:
@@ -490,7 +495,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "set-column-width":
+  of CommandId.CidSetColumnWidth:
     if parts.len >= 2:
       let width = parseFloat32Arg(parts[1])
       if width.isSome:
@@ -499,7 +504,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "switch-proportion-preset":
+  of CommandId.CidSwitchProportionPreset:
     if parts.len >= 2:
       try:
         some(
@@ -512,9 +517,9 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       some(Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1))
-  of "maximize-column":
+  of CommandId.CidMaximizeColumn:
     some(Msg(kind: MsgKind.CmdMaximizeColumn))
-  of "adjust-gaps":
+  of CommandId.CidAdjustGaps:
     if parts.len >= 2:
       let delta = parseInt32Arg(parts[1])
       if delta.isSome:
@@ -523,40 +528,38 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
-  of "toggle-gaps":
+  of CommandId.CidToggleGaps:
     some(Msg(kind: MsgKind.CmdToggleGaps))
-  of "zoom":
+  of CommandId.CidZoom:
     some(Msg(kind: MsgKind.CmdZoom))
-  of "consume-window":
+  of CommandId.CidConsumeWindow:
     some(Msg(kind: MsgKind.CmdConsumeWindow))
-  of "expel-window":
+  of CommandId.CidExpelWindow:
     some(Msg(kind: MsgKind.CmdExpelWindow))
-  of "move-column-left":
+  of CommandId.CidMoveColumnLeft:
     some(Msg(kind: MsgKind.CmdMoveColumnLeft))
-  of "move-column-right":
+  of CommandId.CidMoveColumnRight:
     some(Msg(kind: MsgKind.CmdMoveColumnRight))
-  of "move-column-to-first":
+  of CommandId.CidMoveColumnToFirst:
     some(Msg(kind: MsgKind.CmdMoveColumnToFirst))
-  of "move-column-to-last":
+  of CommandId.CidMoveColumnToLast:
     some(Msg(kind: MsgKind.CmdMoveColumnToLast))
-  of "move-window-left":
+  of CommandId.CidMoveWindowLeft:
     some(Msg(kind: MsgKind.CmdMoveWindowLeft))
-  of "move-window-right":
+  of CommandId.CidMoveWindowRight:
     some(Msg(kind: MsgKind.CmdMoveWindowRight))
-  of "move-window-up":
+  of CommandId.CidMoveWindowUp:
     some(Msg(kind: MsgKind.CmdMoveWindowUp))
-  of "move-window-down":
+  of CommandId.CidMoveWindowDown:
     some(Msg(kind: MsgKind.CmdMoveWindowDown))
-  of "move-window-up-or-to-workspace-up":
+  of CommandId.CidMoveWindowUpOrToWorkspaceUp:
     some(Msg(kind: MsgKind.CmdMoveWindowUpOrToWorkspaceUp))
-  of "move-window-down-or-to-workspace-down":
+  of CommandId.CidMoveWindowDownOrToWorkspaceDown:
     some(Msg(kind: MsgKind.CmdMoveWindowDownOrToWorkspaceDown))
-  of "swap-window-up":
+  of CommandId.CidSwapWindowUp:
     some(Msg(kind: MsgKind.CmdSwapWindowUp))
-  of "swap-window-down":
+  of CommandId.CidSwapWindowDown:
     some(Msg(kind: MsgKind.CmdSwapWindowDown))
-  else:
-    none(Msg)
 
 proc parseTextCommand*(line: string): Option[Msg] =
   parseCommandParts(line.strip().splitWhitespace())

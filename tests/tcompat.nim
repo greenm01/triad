@@ -3,8 +3,10 @@ import ../src/core/app_identity
 import ../src/core/msg
 import ../src/daemon/quickshell_runner
 import
-  ../src/ipc/
-    [commands, niri_cli, niri_compat, quickshell_compat, shell_overlay, triad_native]
+  ../src/ipc/[
+    command_registry, commands, niri_cli, niri_compat, quickshell_compat, shell_overlay,
+    triad_native,
+  ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 
 proc installAppIdentityFixture() =
@@ -112,6 +114,74 @@ proc checkTriadActionMatchesText(action, textCommand: string, payload = newJObje
   check actual.messages.len == 1
   check expected.isSome
   check repr(actual.messages[0]) == repr(expected.get())
+
+proc sampleCommand(
+    spec: CommandSpec
+): tuple[action: string, textCommand: string, payload: JsonNode] =
+  result.action = spec.name
+  result.payload = newJObject()
+  case spec.argShape
+  of CommandArgShape.NoArgs:
+    result.textCommand = spec.name
+  of CommandArgShape.OptionalWindowId, CommandArgShape.RequiredWindowId:
+    result.textCommand = spec.name & " 42"
+    result.payload["id"] = %42
+  of CommandArgShape.RequiredTag:
+    result.textCommand = spec.name & " 3"
+    result.payload["tag"] = %3
+  of CommandArgShape.RequiredWorkspaceIdx:
+    result.textCommand = spec.name & " 2"
+    result.payload["workspace_idx"] = %2
+  of CommandArgShape.RequiredName:
+    result.textCommand = spec.name & " named scratch"
+    result.payload["name"] = %"named scratch"
+  of CommandArgShape.RequiredOutput:
+    result.textCommand = spec.name & " HDMI-A-1"
+    result.payload["output"] = %"HDMI-A-1"
+  of CommandArgShape.RequiredFloatDelta:
+    result.textCommand = spec.name & " -0.25"
+    result.payload["delta"] = %(-0.25)
+  of CommandArgShape.RequiredFloatValue:
+    result.textCommand = spec.name & " 0.75"
+    result.payload["value"] = %0.75
+  of CommandArgShape.RequiredIntCount:
+    result.textCommand = spec.name & " 2"
+    result.payload["count"] = %2
+  of CommandArgShape.RequiredIntDelta:
+    result.textCommand = spec.name & " -1"
+    result.payload["delta"] = %(-1)
+  of CommandArgShape.OptionalIntDelta:
+    result.textCommand = spec.name & " -1"
+    result.payload["delta"] = %(-1)
+  of CommandArgShape.MoveDelta:
+    result.textCommand = spec.name & " 12 -34"
+    result.payload["dx"] = %12
+    result.payload["dy"] = %(-34)
+  of CommandArgShape.ResizeDelta:
+    result.textCommand = spec.name & " 12 -34"
+    result.payload["dw"] = %12
+    result.payload["dh"] = %(-34)
+  of CommandArgShape.RecentAdvance:
+    result.textCommand = spec.name & " --scope output --filter app-id"
+    result.payload["scope"] = %"output"
+    result.payload["filter"] = %"app-id"
+  of CommandArgShape.RecentScope:
+    result.textCommand = spec.name & " workspace"
+    result.payload["scope"] = %"workspace"
+  of CommandArgShape.SpawnArgv:
+    result.textCommand = spec.name & " sh -lc echo"
+    result.payload["argv"] = %*["sh", "-lc", "echo"]
+  of CommandArgShape.WarpPointer:
+    result.textCommand = spec.name & " 12 34"
+    result.payload["x"] = %12
+    result.payload["y"] = %34
+  of CommandArgShape.Screenshot:
+    result.textCommand =
+      spec.name & " --path /tmp/triad.png --show-pointer --clipboard-only"
+    result.payload["path"] = %"/tmp/triad.png"
+    result.payload["show_pointer"] = %true
+    result.payload["write_to_disk"] = %false
+    result.payload["copy_to_clipboard"] = %true
 
 proc writeFakeRecoveringQs(
     tmp: string
@@ -359,69 +429,45 @@ suite "Shell compatibility contracts":
     check setTGMix.messages.len == 1
     check setTGMix.messages[0].newLayout == LayoutMode.TGMix
 
-  test "Triad native actions mirror text IPC commands":
-    checkTriadActionMatchesText("layout-grid", "layout-grid")
-    checkTriadActionMatchesText("move-to-scratchpad", "move-to-scratchpad")
-    checkTriadActionMatchesText("recent-window-first", "recent-window-first")
-    checkTriadActionMatchesText("minimize", "minimize")
-    checkTriadActionMatchesText("toggle-hotkey-overlay", "toggle-hotkey-overlay")
-    checkTriadActionMatchesText(
-      "keyboard-shortcuts-inhibit", "keyboard-shortcuts-inhibit"
-    )
-    checkTriadActionMatchesText("swap-window-up", "swap-window-up")
-    checkTriadActionMatchesText("spawn-terminal", "spawn-terminal")
-    checkTriadActionMatchesText("stop-manager", "stop-manager")
-    checkTriadActionMatchesText("exit-session", "exit-session")
-    checkTriadActionMatchesText("eat-next-key", "eat-next-key")
-    checkTriadActionMatchesText("cancel-eat-next-key", "cancel-eat-next-key")
+  test "Triad command registry has unique resolvable action names":
+    var seen: seq[string] = @[]
+    for name in allCommandNames():
+      check name.len > 0
+    for spec in CommandSpecs:
+      check spec.name notin seen
+      seen.add(spec.name)
+      let canonical = resolveCommandSpec(spec.name)
+      check canonical.isSome
+      check canonical.get().id == spec.id
+      if spec.aliases.len > 0:
+        for alias in spec.aliases.split('|'):
+          check alias notin seen
+          seen.add(alias)
+          let resolved = resolveCommandSpec(alias)
+          check resolved.isSome
+          check resolved.get().id == spec.id
 
-    checkTriadActionMatchesText("focus-window", "focus-window 42", %*{"id": 42})
-    checkTriadActionMatchesText("close-window", "close-window 42", %*{"id": 42})
-    checkTriadActionMatchesText(
-      "fullscreen-window", "fullscreen-window 42", %*{"id": 42}
-    )
-    checkTriadActionMatchesText("exit-fullscreen", "exit-fullscreen 42", %*{"id": 42})
-    checkTriadActionMatchesText("swap-to-tag", "swap-to-tag 3", %*{"tag": 3})
-    checkTriadActionMatchesText(
-      "focus-output", "focus-output HDMI-A-1", %*{"output": "HDMI-A-1"}
-    )
-    checkTriadActionMatchesText(
-      "move-workspace-to-output", "move-workspace-to-output next", %*{"output": "next"}
-    )
-    checkTriadActionMatchesText(
-      "move-to-output", "move-to-output previous", %*{"output": "previous"}
-    )
-    checkTriadActionMatchesText(
-      "set-column-width", "set-column-width 0.75", %*{"value": 0.75}
-    )
-    checkTriadActionMatchesText(
-      "recent-window-next",
-      "recent-window-next --scope output --filter app-id",
-      %*{"scope": "output", "filter": "app-id"},
-    )
-    checkTriadActionMatchesText(
-      "recent-window-scope", "recent-window-scope workspace", %*{"scope": "workspace"}
-    )
-    checkTriadActionMatchesText(
-      "spawn", "spawn sh -lc echo", %*{"argv": ["sh", "-lc", "echo"]}
-    )
-    checkTriadActionMatchesText(
-      "warp-pointer", "warp-pointer 12 34", %*{"x": 12, "y": 34}
-    )
-    checkTriadActionMatchesText(
-      "screenshot-screen",
-      "screenshot-screen --path /tmp/triad.png --show-pointer --clipboard-only",
-      %*{
-        "path": "/tmp/triad.png",
-        "show_pointer": true,
-        "write_to_disk": false,
-        "copy_to_clipboard": true,
-      },
-    )
+  test "Triad native actions mirror text IPC commands":
+    for spec in CommandSpecs:
+      let sample = sampleCommand(spec)
+      checkTriadActionMatchesText(sample.action, sample.textCommand, sample.payload)
+      if spec.aliases.len > 0:
+        for alias in spec.aliases.split('|'):
+          checkTriadActionMatchesText(alias, sample.textCommand, sample.payload)
 
     let badAction = handleTriadAction("spawn", %*{"argv": []})
     check not parseJson(badAction.reply)["ok"].getBool()
     check badAction.messages.len == 0
+
+    let badWindowId = handleTriadAction("focus-window", %*{"id": "bad"})
+    check not parseJson(badWindowId.reply)["ok"].getBool()
+    check badWindowId.messages.len == 0
+
+    let badScreenshot = handleTriadAction(
+      "screenshot", %*{"write_to_disk": false, "copy_to_clipboard": false}
+    )
+    check not parseJson(badScreenshot.reply)["ok"].getBool()
+    check badScreenshot.messages.len == 0
 
   test "event streams start with current snapshot state":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())

@@ -1,6 +1,7 @@
 import std/[json, options, strutils]
 import ../core/layout_mode_codec
 import ../core/[msg, triad_state]
+import command_registry
 import commands
 import ../types/shell_snapshot
 
@@ -123,148 +124,91 @@ proc argvFromField(node: JsonNode, field: string): Option[seq[string]] =
   some(argv)
 
 proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string]] =
-  var parts = @[action]
-  case action
-  of "focus-next", "focus-prev", "focus-left", "focus-right", "focus-up", "focus-down",
-      "focus-last", "focus-tag-left", "focus-tag-right", "focus-occupied-tag-left",
-      "focus-occupied-tag-right", "focus-column-first", "focus-column-last",
-      "focus-window-or-workspace-up", "focus-window-or-workspace-down",
-      "move-to-tag-left", "move-to-tag-right", "config-reload", "layout-scroller",
-      "layout-vertical-scroller", "layout-tile", "layout-grid", "layout-monocle",
-      "layout-deck", "layout-center-tile", "layout-right-tile", "layout-vertical-tile",
-      "layout-vertical-grid", "layout-vertical-deck", "layout-tgmix", "switch-layout",
-      "toggle-overview", "open-overview", "close-overview", "recent-window-confirm",
-      "recent-window-cancel", "recent-window-first", "recent-window-last",
-      "recent-window-cycle-scope", "recent-window-close-current", "toggle-floating",
-      "maximize-window-to-edges", "toggle-maximized", "toggle-maximize", "minimize",
-      "minimize-window", "spawn-terminal", "lock-session", "eat-next-key",
-      "cancel-eat-next-key", "toggle-keyboard-shortcuts-inhibit",
-      "keyboard-shortcuts-inhibit", "stop-manager", "triad-reload", "exit-session",
-      "focus-shell-ui", "show-hotkey-overlay", "hide-hotkey-overlay",
-      "toggle-hotkey-overlay", "move-to-scratchpad", "toggle-scratchpad",
-      "restore-scratchpad", "select-window", "group-windows", "ungroup-window",
-      "focus-next-in-group", "maximize-column", "toggle-gaps", "zoom", "consume-window",
-      "expel-window", "move-column-left", "move-column-right", "move-column-to-first",
-      "move-column-to-last", "move-window-left", "move-window-right", "move-window-up",
-      "move-window-down", "move-window-up-or-to-workspace-up",
-      "move-window-down-or-to-workspace-down", "swap-window-up", "swap-window-down":
+  let specOpt = resolveCommandSpec(action)
+  if specOpt.isNone:
+    return none(seq[string])
+
+  let spec = specOpt.get()
+  var parts = @[spec.name]
+  case spec.argShape
+  of CommandArgShape.NoArgs:
     some(parts)
-  of "focus-tag":
+  of CommandArgShape.OptionalWindowId:
+    let id = uintFromField(payload, "id")
+    if id.isSome:
+      parts.add($id.get())
+    some(parts)
+  of CommandArgShape.RequiredWindowId:
+    let id = uintFromField(payload, "id")
+    if id.isSome:
+      parts.add($id.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of CommandArgShape.RequiredTag:
     let tag = uintStringFromField(payload, "tag")
     if tag.isSome:
       parts.add(tag.get())
       some(parts)
     else:
       none(seq[string])
-  of "move-to-tag":
-    let tag = uintStringFromField(payload, "tag")
-    if tag.isSome:
-      parts.add(tag.get())
-      some(parts)
-    else:
-      none(seq[string])
-  of "swap-to-tag":
-    let tag = uintStringFromField(payload, "tag")
-    if tag.isSome:
-      parts.add(tag.get())
-      some(parts)
-    else:
-      none(seq[string])
-  of "focus-workspace":
+  of CommandArgShape.RequiredWorkspaceIdx:
     let index = uintStringFromField(payload, "workspace_idx")
     if index.isSome:
       parts.add(index.get())
       some(parts)
     else:
       none(seq[string])
-  of "move-to-workspace":
-    let index = uintStringFromField(payload, "workspace_idx")
-    if index.isSome:
-      parts.add(index.get())
-      some(parts)
-    else:
-      none(seq[string])
-  of "focus-window":
-    let id = uintFromField(payload, "id")
-    if id.isSome:
-      parts.add($id.get())
-      some(parts)
-    else:
-      none(seq[string])
-  of "close-window":
-    let id = uintFromField(payload, "id")
-    if id.isSome:
-      parts.add($id.get())
-    some(parts)
-  of "fullscreen-window", "toggle-fullscreen":
-    let id = uintFromField(payload, "id")
-    if id.isSome:
-      parts.add($id.get())
-    some(parts)
-  of "exit-fullscreen":
-    let id = uintFromField(payload, "id")
-    if id.isSome:
-      parts.add($id.get())
-      some(parts)
-    else:
-      none(seq[string])
-  of "rename-tag", "toggle-named-scratchpad", "move-to-named-scratchpad":
+  of CommandArgShape.RequiredName:
     let name = stringFromField(payload, "name")
     if name.len > 0:
       parts.add(name)
       some(parts)
     else:
       none(seq[string])
-  of "focus-output", "move-workspace-to-output", "move-to-output":
+  of CommandArgShape.RequiredOutput:
     let output = stringFromField(payload, "output")
     if output.len > 0:
       parts.add(output)
       some(parts)
     else:
       none(seq[string])
-  of "resize-width", "resize-height", "adjust-master-ratio":
+  of CommandArgShape.RequiredFloatDelta:
     let delta = numberStringFromField(payload, "delta")
     if delta.isSome:
       parts.add(delta.get())
       some(parts)
     else:
       none(seq[string])
-  of "master-ratio":
-    let value = numberStringFromField(payload, "value")
-    if value.isSome:
-      parts.add(value.get())
-      some(parts)
-    else:
-      none(seq[string])
-  of "set-column-width":
+  of CommandArgShape.RequiredFloatValue:
     var value = numberStringFromField(payload, "value")
-    if value.isNone:
+    if spec.id == CommandId.CidSetColumnWidth and value.isNone:
       value = numberStringFromField(payload, "width")
     if value.isSome:
       parts.add(value.get())
       some(parts)
     else:
       none(seq[string])
-  of "master-count":
+  of CommandArgShape.RequiredIntCount:
     let count = intStringFromField(payload, "count")
     if count.isSome:
       parts.add(count.get())
       some(parts)
     else:
       none(seq[string])
-  of "adjust-master-count", "adjust-gaps":
+  of CommandArgShape.RequiredIntDelta:
     let delta = intStringFromField(payload, "delta")
     if delta.isSome:
       parts.add(delta.get())
       some(parts)
     else:
       none(seq[string])
-  of "switch-proportion-preset":
+  of CommandArgShape.OptionalIntDelta:
     let delta = intStringFromField(payload, "delta")
     if delta.isSome:
       parts.add(delta.get())
     some(parts)
-  of "move-floating":
+  of CommandArgShape.MoveDelta:
     let dx = intStringFromField(payload, "dx")
     let dy = intStringFromField(payload, "dy")
     if dx.isSome and dy.isSome:
@@ -273,7 +217,7 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       some(parts)
     else:
       none(seq[string])
-  of "resize-floating":
+  of CommandArgShape.ResizeDelta:
     let dw = intStringFromField(payload, "dw")
     let dh = intStringFromField(payload, "dh")
     if dw.isSome and dh.isSome:
@@ -282,7 +226,7 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       some(parts)
     else:
       none(seq[string])
-  of "recent-window-next", "recent-window-prev":
+  of CommandArgShape.RecentAdvance:
     let scope = stringFromField(payload, "scope")
     if scope.len > 0:
       parts.add("--scope")
@@ -292,21 +236,21 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       parts.add("--filter")
       parts.add(filter)
     some(parts)
-  of "recent-window-scope":
+  of CommandArgShape.RecentScope:
     let scope = stringFromField(payload, "scope")
     if scope.len > 0:
       parts.add(scope)
       some(parts)
     else:
       none(seq[string])
-  of "spawn":
+  of CommandArgShape.SpawnArgv:
     let argv = argvFromField(payload, "argv")
     if argv.isSome:
       parts.add(argv.get())
       some(parts)
     else:
       none(seq[string])
-  of "warp-pointer":
+  of CommandArgShape.WarpPointer:
     let x = intStringFromField(payload, "x")
     let y = intStringFromField(payload, "y")
     if x.isSome and y.isSome:
@@ -315,7 +259,7 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       some(parts)
     else:
       none(seq[string])
-  of "screenshot", "screenshot-screen", "screenshot-window":
+  of CommandArgShape.Screenshot:
     let path = stringFromField(payload, "path")
     if path.len > 0:
       parts.add("--path")
@@ -348,8 +292,6 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       elif not writeToDisk and copyToClipboard:
         parts.add("--clipboard-only")
       some(parts)
-  else:
-    none(seq[string])
 
 proc actionToMsg(action: string, payload: JsonNode): Option[Msg] =
   let parts = commandPartsForAction(action, payload)
