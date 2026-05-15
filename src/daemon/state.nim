@@ -122,6 +122,7 @@ type
     riverPhase*: RiverPhase
     bindingsConfigured*: bool
     bindingsReconfigurePending*: bool
+    hotkeyOverlayKeyEatArmed*: bool
     manageRequestPending*: bool
     manageRequestReason*: string
     screenshotCaptureActive*: bool

@@ -338,7 +338,8 @@ KDL config nodes and fields:
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`,
-  `position`, and `columns`.
+  `position`, and `columns`; while open it captures the next non-modifier key
+  and dismisses without running bound commands.
 - `config-notification`: `reload-succeeded`, `reload-failed`,
   `reload-rolled-back`.
 - `input`: `keyboard`, `mouse`, `touchpad`, `trackpoint`, `trackball`,

@@ -79,6 +79,12 @@ proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
         daemon.windowPointers[eff.maxWinId].informUnmaximized()
   of EffectKind.EffSetIdleInhibit:
     daemon.setIdleInhibit(eff.idleInhibitActive)
+  of EffectKind.EffEnsureNextKeyEaten:
+    for xkbSeat in daemon.xkbSeatPointers.values:
+      xkbSeat.ensureNextKeyEaten()
+  of EffectKind.EffCancelEnsureNextKeyEaten:
+    for xkbSeat in daemon.xkbSeatPointers.values:
+      xkbSeat.cancelEnsureNextKeyEaten()
   else:
     discard
 
@@ -126,12 +132,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffPointerWarp:
     for seat in daemon.seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)
-  of EffectKind.EffEnsureNextKeyEaten:
-    for xkbSeat in daemon.xkbSeatPointers.values:
-      xkbSeat.ensureNextKeyEaten()
-  of EffectKind.EffCancelEnsureNextKeyEaten:
-    for xkbSeat in daemon.xkbSeatPointers.values:
-      xkbSeat.cancelEnsureNextKeyEaten()
+  of EffectKind.EffEnsureNextKeyEaten, EffectKind.EffCancelEnsureNextKeyEaten:
+    daemon.queueManageEffect(eff)
   of EffectKind.EffStopManager:
     daemon.quickshellState.spawnPending = false
     daemon.quickshellState.releaseTrackedQuickshell("manager stop")

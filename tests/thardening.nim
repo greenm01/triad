@@ -3,8 +3,8 @@ import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
-    bindings_runtime, cursor_shake, input_device_classification, message_queue,
-    process_runner, reload_runtime, switch_event_runtime,
+    bindings_runtime, cursor_shake, effects_runtime, input_device_classification,
+    message_queue, process_runner, reload_runtime, switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat]
@@ -366,7 +366,9 @@ suite "Crash hardening":
 
   test "XKB release bindings arm on accepted press and dispatch once":
     var daemon = initTriadDaemon()
-    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true))
+    )
     daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
     daemon.xkbBindingModes[1'u32] = BindingMode.BindAlways
     daemon.xkbBindingModifiers[1'u32] = 64'u32
@@ -389,7 +391,9 @@ suite "Crash hardening":
 
   test "XKB bindings honor locked-session opt-in":
     var daemon = initTriadDaemon()
-    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true))
+    )
     daemon.runtimeState.model.sessionLocked = true
     daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
     daemon.xkbBindingModes[1'u32] = BindingMode.BindAlways
@@ -403,6 +407,61 @@ suite "Crash hardening":
     check daemon.hasQueuedMessages()
     let lockedMsg = daemon.popQueuedMessage()
     check lockedMsg.kind == MsgKind.CmdFocusNext
+
+  test "Hotkey overlay consumes bound XKB bindings as dismissal":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.runtimeState.model.hotkeyOverlayOpen = true
+    daemon.hotkeyOverlayKeyEatArmed = true
+    daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
+    daemon.xkbBindingModes[1'u32] = BindingMode.BindAlways
+    daemon.xkbBindingModifiers[1'u32] = 64'u32
+
+    daemon.handleXkbBindingPressed(1'u32)
+
+    check not daemon.hotkeyOverlayKeyEatArmed
+    check daemon.hasQueuedMessages()
+    let dismissMsg = daemon.popQueuedMessage()
+    check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
+    check not daemon.hasQueuedMessages()
+
+  test "Hotkey overlay consumes on-release bindings on press":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.runtimeState.model.hotkeyOverlayOpen = true
+    daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
+    daemon.xkbBindingModes[1'u32] = BindingMode.BindAlways
+    daemon.xkbBindingModifiers[1'u32] = 64'u32
+    daemon.xkbBindingOnRelease[1'u32] = true
+
+    daemon.handleXkbBindingPressed(1'u32)
+
+    check not daemon.xkbBindingReleaseArmed.getOrDefault(1'u32, false)
+    check daemon.hasQueuedMessages()
+    let dismissMsg = daemon.popQueuedMessage()
+    check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
+
+  test "Hotkey overlay hides after River eats an unbound key":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.runtimeState.model.hotkeyOverlayOpen = true
+    daemon.hotkeyOverlayKeyEatArmed = true
+
+    daemon.handleXkbSeatAteUnboundKey(7'u32)
+
+    check daemon.xkbSeatAteUnbound.getOrDefault(7'u32, 0'u32) == 1'u32
+    check not daemon.hotkeyOverlayKeyEatArmed
+    check daemon.hasQueuedMessages()
+    let dismissMsg = daemon.popQueuedMessage()
+    check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
+
+  test "eat-next-key effects defer to manage phase":
+    var daemon = initTriadDaemon()
+
+    daemon.executeEffect(Effect(kind: EffectKind.EffEnsureNextKeyEaten))
+
+    check daemon.pendingManageEffects.len == 1
+    check daemon.pendingManageEffects[0].kind == EffectKind.EffEnsureNextKeyEaten
 
   test "config reload defers binding reconfigure to manage":
     let base = getTempDir() / "triad-config-reload-" & $getCurrentProcessId()

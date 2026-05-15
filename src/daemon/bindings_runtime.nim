@@ -346,20 +346,25 @@ proc liveXkbBindingActive(daemon: TriadDaemon, id: uint32): bool =
       return false
   true
 
+proc enqueueHotkeyOverlayDismiss(daemon: var TriadDaemon): bool =
+  if not daemon.currentModel.hotkeyOverlayOpen:
+    return false
+  daemon.hotkeyOverlayKeyEatArmed = false
+  daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+  true
+
 proc enqueueXkbBindingCommand(daemon: var TriadDaemon, id: uint32) =
   if daemon.xkbBindings.hasKey(id):
     let msg = daemon.xkbBindings[id]
+    if daemon.enqueueHotkeyOverlayDismiss():
+      return
     daemon.enqueue(msg)
-    if daemon.currentModel.hotkeyOverlayOpen and
-        msg.kind notin {
-          MsgKind.CmdShowHotkeyOverlay, MsgKind.CmdToggleHotkeyOverlay,
-          MsgKind.CmdHideHotkeyOverlay,
-        }:
-      daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
 
 proc handleXkbBindingPressed*(daemon: var TriadDaemon, id: uint32) =
   daemon.xkbBindingPressed[id] = true
   daemon.xkbBindingReleaseArmed[id] = false
+  if daemon.xkbBindings.hasKey(id) and daemon.enqueueHotkeyOverlayDismiss():
+    return
   if not daemon.liveXkbBindingActive(id):
     return
   if daemon.xkbBindingOnRelease.getOrDefault(id, false):
@@ -375,6 +380,22 @@ proc handleXkbBindingReleased*(daemon: var TriadDaemon, id: uint32) =
     if not daemon.currentModel.sessionLocked or
         daemon.xkbBindingWhileLocked.getOrDefault(id, false):
       daemon.enqueueXkbBindingCommand(id)
+
+proc handleXkbSeatAteUnboundKey*(daemon: var TriadDaemon, id: uint32) =
+  daemon.xkbSeatAteUnbound[id] =
+    daemon.xkbSeatAteUnbound.getOrDefault(id, 0'u32) + 1'u32
+  trace "XKB seat ate unbound key", xkbSeatId = id, count = daemon.xkbSeatAteUnbound[id]
+  discard daemon.enqueueHotkeyOverlayDismiss()
+
+proc syncHotkeyOverlayKeyCapture*(daemon: var TriadDaemon) =
+  if daemon.currentModel.hotkeyOverlayOpen:
+    for xkbSeat in daemon.xkbSeatPointers.values:
+      xkbSeat.ensureNextKeyEaten()
+    daemon.hotkeyOverlayKeyEatArmed = true
+  elif daemon.hotkeyOverlayKeyEatArmed:
+    for xkbSeat in daemon.xkbSeatPointers.values:
+      xkbSeat.cancelEnsureNextKeyEaten()
+    daemon.hotkeyOverlayKeyEatArmed = false
 
 proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): bool =
   if daemon.currentModel.sessionLocked:
@@ -1107,10 +1128,7 @@ proc onXkbSeatAteUnboundKey(data: pointer, seat: ptr riverXkb.RiverXkbBindingsSe
   let daemon = callbackDaemon(data, "xkb seat ate unbound key")
   if daemon == nil:
     return
-  let id = seat.id()
-  daemon.xkbSeatAteUnbound[id] =
-    daemon.xkbSeatAteUnbound.getOrDefault(id, 0'u32) + 1'u32
-  trace "XKB seat ate unbound key", xkbSeatId = id, count = daemon.xkbSeatAteUnbound[id]
+  daemon[].handleXkbSeatAteUnboundKey(seat.id())
 
 proc onXkbSeatModifiersUpdate(
     data: pointer, seat: ptr riverXkb.RiverXkbBindingsSeatV1, old: uint32, new: uint32
@@ -1547,6 +1565,7 @@ proc applyManageState*(daemon: var TriadDaemon) =
     daemon.destroyBindings()
     daemon.bindingsReconfigurePending = false
   daemon.setupDefaultBindings()
+  daemon.syncHotkeyOverlayKeyCapture()
   if daemon.currentModel.protocolSurfaces.enabled:
     daemon.ensureOwnedShellSurface()
   else:

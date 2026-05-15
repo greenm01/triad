@@ -727,6 +727,10 @@ overlay binding is configured and that key slot is free. Shifted punctuation
 aliases such as `Super+Shift+/` normalize to their shifted key symbol, so
 `Super+?` and `Super+Shift+/` target the same binding.
 
+While the helper is open, Triad asks River to eat the next non-modifier key and
+uses that key only to dismiss the helper. Bound Triad keys also dismiss without
+running their normal command.
+
 ## Config Notifications
 
 `config-notification` runs optional user commands when `config-reload` succeeds,
