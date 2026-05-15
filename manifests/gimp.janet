@@ -1,6 +1,11 @@
 (def target-workspace 8)
 
-(def utility-title-fragments
+(def gimp-app-ids
+  ["gimp"
+   "gimp-3.2"
+   "org.gimp.GIMP"])
+
+(def palette-title-fragments
   ["Toolbox"
    "Tool Options"
    "Layers"
@@ -13,18 +18,29 @@
    "Fonts"
    "Buffers"
    "Images"
-   "History"
-   "Preferences"
+   "History"])
+
+(def dialog-title-fragments
+  ["Preferences"
    "Export"
    "Open Image"
+   "New Image"
+   "Scale Image"
    "Save"
    "Quit"
-   "About"])
+   "About"
+   "Error"
+   "Color"])
+
+(defn value-in? [needle values]
+  (var found false)
+  (each value values
+    (when (= needle value)
+      (set found true)))
+  found)
 
 (defn gimp-app? [app-id]
-  (or (= app-id "gimp")
-      (= app-id "gimp-3.2")
-      (= app-id "org.gimp.GIMP")))
+  (value-in? app-id gimp-app-ids))
 
 (defn title-matches? [title fragments]
   (var matched false)
@@ -32,6 +48,19 @@
     (when (string/find fragment title)
       (set matched true)))
   matched)
+
+(defn palette-window? [window]
+  (title-matches? (window :title) palette-title-fragments))
+
+(defn dialog-window? [window]
+  (or (title-matches? (window :title) dialog-title-fragments)
+      (> (window :parent-id) 0)))
+
+(defn window-kind [window]
+  (cond
+    (palette-window? window) :palette
+    (dialog-window? window) :dialog
+    :else :main))
 
 (defn other-gimp-window? [window current-id]
   (and (not= (window :id) current-id)
@@ -44,19 +73,24 @@
       (set found true)))
   found)
 
-(defn utility-window? [window]
-  (or (> (window :parent-id) 0)
-      (title-matches? (window :title) utility-title-fragments)))
+(defn should-follow? [kind window]
+  (or (= kind :main)
+      (= kind :dialog)
+      (not (has-other-gimp-window? (window :id)))))
 
-(defn main-window? [window]
-  (not (utility-window? window)))
+(defn place-main-window [window]
+  (triad/command "set-window-floating" (window :id) false)
+  (triad/command "set-window-maximized" (window :id) true))
+
+(defn place-floating-window [window]
+  (triad/command "set-window-floating" (window :id) true))
 
 (let [window triad/current-window]
   (when (and window (gimp-app? (window :app-id)))
-    (let [follow (or (main-window? window)
-                     (not (has-other-gimp-window? (window :id))))]
+    (let [kind (window-kind window)
+          follow (should-follow? kind window)]
       (triad/command "move-window-to-tag" (window :id) target-workspace follow)
       (triad/command "set-layout-for-workspace" target-workspace "scroller")
-      (if (main-window? window)
-        (triad/command "set-window-maximized" (window :id) true)
-        (triad/command "set-window-floating" (window :id) true)))))
+      (if (= kind :main)
+        (place-main-window window)
+        (place-floating-window window)))))
