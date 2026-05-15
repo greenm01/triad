@@ -4,10 +4,7 @@ const ShiftModifier* = 1'u32
 
 proc keySymForBinding*(key: string, modifiers: uint32 = 0): uint32 =
   if key.len == 1:
-    var ch = key[0]
-    if (modifiers and ShiftModifier) != 0 and ch in {'a' .. 'z'}:
-      ch = ch.toUpperAscii()
-    return uint32(ord(ch))
+    return uint32(ord(key[0].toLowerAscii()))
 
   case key.toLowerAscii()
   of "return", "enter":

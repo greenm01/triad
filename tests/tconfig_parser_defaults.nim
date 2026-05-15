@@ -630,6 +630,9 @@ bindings {
     check config.commandForBinding("Question", Super) == "toggle-hotkey-overlay"
     check config.commandForBinding("!", Super) == "focus-last"
     check config.commandForBinding("~", Super) == "close-window"
+    check keySymForBinding("Question", Super) == 0x3f'u32
+    check keySymForBinding("!", Super) == 0x21'u32
+    check keySymForBinding("~", Super) == 0x7e'u32
 
   test "Config clamps hotkey overlay columns and ignores invalid position":
     let path = getCurrentDir() / "test_config_hotkey_overlay_layout.kdl"
@@ -713,6 +716,8 @@ cursor {
     check config.msgKindForBinding("w", Super) == MsgKind.CmdToggleScratchpad
     check config.msgKindForBinding("w", Super + Shift) == MsgKind.CmdMoveToScratchpad
     check config.msgKindForBinding("r", Super + Shift) == MsgKind.CmdRestoreScratchpad
+    check config.msgKindForBinding("f", Super + Shift) == MsgKind.CmdToggleFullscreen
+    check keySymForBinding("f", Super + Shift) == uint32(ord('f'))
     check config.spawnForBinding("c", Super) ==
       @["wtype", "-M", "ctrl", "-P", "Insert", "-p", "Insert", "-m", "ctrl"]
     check config.spawnForBinding("v", Super) ==
