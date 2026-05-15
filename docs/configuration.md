@@ -700,6 +700,8 @@ Triad can render a native keyboard helper popup from the active config:
 hotkey-overlay {
   skip-at-startup
   hide-not-bound
+  position "top"
+  columns 2
 }
 
 bindings {
@@ -712,6 +714,10 @@ bindings {
   This is the default, so reloads never show the helper unless the user opens
   it explicitly.
 - `hide-not-bound`: omits built-in helper rows that have no configured key.
+- `position "top"|"center"|"bottom"`: places the helper popup on screen.
+  The default is `"top"`.
+- `columns <1..4>`: wraps helper rows into multiple columns. The default is
+  `2`.
 - `hotkey-overlay-title="..."`: shows a binding in the helper with the
   supplied label.
 - `hotkey-overlay-title=#null`: hides that binding from the helper.

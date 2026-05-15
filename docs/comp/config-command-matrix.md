@@ -36,7 +36,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
 | P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, release-triggered key, locked-session key, pointer button, wheel-axis, touchpad swipe gesture, and Linux evdev lid/tablet switch-event delivery surfaces exist. Compositor-native switch events remain absent. | Keep validating live hardware delivery and add compositor-native switch events if River exposes them. |
-| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay, coarse animation speed, and viewport snap-threshold tuning exist; advanced polish remains partial or blocked. | Pick the next small polish surface: layer rules, richer animation semantics, or overview/hotkey refinements. |
+| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay layout controls, coarse animation speed, and viewport snap-threshold tuning exist; advanced layer-rule polish remains blocked on richer layer identity. | Keep refining small polish surfaces when they are grounded in runtime data; do not add layer rules until River exposes enough identity/state. |
 
 ## Feature Matrix
 
@@ -337,7 +337,8 @@ KDL config nodes and fields:
   `hot-corners`.
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
-- `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.
+- `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`,
+  `position`, and `columns`.
 - `config-notification`: `reload-succeeded`, `reload-failed`,
   `reload-rolled-back`.
 - `input`: `keyboard`, `mouse`, `touchpad`, `trackpoint`, `trackball`,

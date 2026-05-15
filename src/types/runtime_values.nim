@@ -442,9 +442,16 @@ type
     trackpoint*: InputPointerConfig
     trackball*: InputPointerConfig
 
+  HotkeyOverlayPosition* {.pure.} = enum
+    Top
+    Center
+    Bottom
+
   HotkeyOverlayConfig* = object
     skipAtStartup*: bool
     hideNotBound*: bool
+    position*: HotkeyOverlayPosition
+    columns*: int32
 
   HotkeyOverlayRow* = object
     key*: string

@@ -273,6 +273,17 @@ proc parseInputButtonMap(name: string): InputButtonMap =
   else:
     raise newException(ValueError, "invalid input button map: " & name)
 
+proc parseHotkeyOverlayPosition(name: string): HotkeyOverlayPosition =
+  case name.normalize()
+  of "top":
+    HotkeyOverlayPosition.Top
+  of "center":
+    HotkeyOverlayPosition.Center
+  of "bottom":
+    HotkeyOverlayPosition.Bottom
+  else:
+    raise newException(ValueError, "invalid hotkey-overlay position: " & name)
+
 proc modifierValue(name: string): uint32 =
   case name
   of "Shift", "shift", "SHIFT":
@@ -912,6 +923,8 @@ proc loadConfig*(path: string): Config =
   result.floating.minHeight = DefaultFloatingMinHeight
   result.quickshell.command = DefaultQuickshellCommand
   result.hotkeyOverlay.skipAtStartup = true
+  result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
+  result.hotkeyOverlay.columns = 2
   result.screenshot.directory = DefaultScreenshotDirectory
   result.screenshot.filenamePrefix = DefaultScreenshotFilenamePrefix
   result.screenshot.captureCommand = DefaultScreenshotCaptureCommand
@@ -1617,6 +1630,11 @@ proc loadConfig*(path: string): Config =
             elif child.name == "hide-not-bound":
               result.hotkeyOverlay.hideNotBound =
                 child.args.len == 0 or child.args[0].kBool()
+            elif child.name == "position" and child.args.len > 0:
+              result.hotkeyOverlay.position =
+                parseHotkeyOverlayPosition(child.args[0].kString())
+            elif child.name == "columns" and child.args.len > 0:
+              result.hotkeyOverlay.columns = clamp32(int32(child.args[0].kInt()), 1, 4)
           except CatchableError as e:
             warn "Ignoring invalid hotkey-overlay field",
               field = child.name, error = e.msg

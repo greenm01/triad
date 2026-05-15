@@ -329,7 +329,8 @@ proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
     return
 
   let rows = daemon.currentModel.hotkeyOverlayRows()
-  let rendered = renderHotkeyOverlayBuffer(rows, screen)
+  let rendered =
+    renderHotkeyOverlayBuffer(rows, screen, daemon.currentModel.hotkeyOverlay.columns)
   var surf = daemon.surfaceTable[daemon.hotkeyOverlaySurfaceId]
   let buffer = daemon.createArgbShmBuffer(rendered)
   if buffer != nil:
@@ -341,9 +342,10 @@ proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
   surf.inputH = surf.bufferH
   daemon.commitProtocolSurface(surf)
   if surf.node != nil:
-    let x = screen.x + max(0'i32, (screen.w - surf.bufferW) div 2)
-    let y = screen.y + max(0'i32, (screen.h - surf.bufferH) div 2)
-    surf.node.setPosition(x, y)
+    let placement = hotkeyOverlayPlacement(
+      screen, surf.bufferW, surf.bufferH, daemon.currentModel.hotkeyOverlay.position
+    )
+    surf.node.setPosition(placement.x, placement.y)
     surf.node.placeTop()
   daemon.surfaceTable[daemon.hotkeyOverlaySurfaceId] = surf
 

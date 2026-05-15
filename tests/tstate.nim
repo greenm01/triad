@@ -299,13 +299,37 @@ suite "Runtime state primitives":
         HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
         HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys"),
       ]
-    let rendered = renderHotkeyOverlayBuffer(rows, screen)
+    let rendered = renderHotkeyOverlayBuffer(rows, screen, 2)
     let bytes = argbBytes(rendered.pixels)
 
     check rendered.width >= 360
     check rendered.width <= int32(float(screen.w) * 0.9)
     check rendered.height > 0
     check bytes.len == rendered.pixels.len * 4
+
+  test "hotkey overlay renderer wraps rows into configured columns":
+    let screen = runtime_values.Rect(x: 0, y: 0, w: 800, h: 300)
+    var rows: seq[HotkeyOverlayRow] = @[]
+    for idx in 1 .. 12:
+      rows.add(HotkeyOverlayRow(key: "Super+" & $idx, label: "Action " & $idx))
+
+    let singleColumn = renderHotkeyOverlayBuffer(rows, screen, 1)
+    let twoColumns = renderHotkeyOverlayBuffer(rows, screen, 2)
+
+    check twoColumns.width > singleColumn.width
+    check twoColumns.height == singleColumn.height
+    check twoColumns.width <= int32(float(screen.w) * 0.9)
+
+  test "hotkey overlay placement honors configured position":
+    let screen = runtime_values.Rect(x: 10, y: 20, w: 800, h: 600)
+
+    let top = hotkeyOverlayPlacement(screen, 300, 200, HotkeyOverlayPosition.Top)
+    let center = hotkeyOverlayPlacement(screen, 300, 200, HotkeyOverlayPosition.Center)
+    let bottom = hotkeyOverlayPlacement(screen, 300, 200, HotkeyOverlayPosition.Bottom)
+
+    check top == runtime_values.Rect(x: 260, y: 68, w: 300, h: 200)
+    check center == runtime_values.Rect(x: 260, y: 220, w: 300, h: 200)
+    check bottom == runtime_values.Rect(x: 260, y: 372, w: 300, h: 200)
 
   test "overlay text renderer measures clips and draws text":
     let style = OverlayTextStyle(sizePx: 14.0, color: 0xffffffff'u32)

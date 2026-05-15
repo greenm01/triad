@@ -210,6 +210,8 @@ protocol-surfaces {
 hotkey-overlay {
   skip-at-startup
   hide-not-bound
+  position "center"
+  columns 4
 }
 config-notification {
   reload-succeeded "notify-send" "Triad" "Config reloaded"
@@ -466,6 +468,8 @@ switch-events {
     check config.protocolSurfaces.enabled
     check config.hotkeyOverlay.skipAtStartup
     check config.hotkeyOverlay.hideNotBound
+    check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
+    check config.hotkeyOverlay.columns == 4
     check config.configNotification.reloadSucceeded ==
       @["notify-send", "Triad", "Config reloaded"]
     check config.configNotification.reloadFailed == @["notify-send", "Triad", "failed"]
@@ -591,6 +595,8 @@ bindings {
     removeFile(path)
 
     check config.hotkeyOverlay.skipAtStartup
+    check config.hotkeyOverlay.position == HotkeyOverlayPosition.Top
+    check config.hotkeyOverlay.columns == 2
     check config.msgKindForBinding("Slash", Super + Shift) ==
       MsgKind.CmdToggleHotkeyOverlay
 
@@ -606,6 +612,23 @@ bindings {
     removeFile(path)
 
     check occupied.msgKindForBinding("Slash", Super + Shift) == MsgKind.CmdFocusLast
+
+  test "Config clamps hotkey overlay columns and ignores invalid position":
+    let path = getCurrentDir() / "test_config_hotkey_overlay_layout.kdl"
+    writeFile(
+      path,
+      """
+hotkey-overlay {
+  position "left"
+  columns 9
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.hotkeyOverlay.position == HotkeyOverlayPosition.Top
+    check config.hotkeyOverlay.columns == 4
 
   test "cursor shake-to-find defaults off and supports explicit false":
     let path = getCurrentDir() / "test_config_cursor_shake.kdl"
