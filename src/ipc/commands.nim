@@ -121,8 +121,7 @@ proc parseRecentAdvanceCommand(parts: seq[string], kind: MsgKind): Option[Msg] =
       return none(Msg)
   some(msg)
 
-proc parseTextCommand*(line: string): Option[Msg] =
-  let parts = line.strip().splitWhitespace()
+proc parseCommandParts*(parts: seq[string]): Option[Msg] =
   if parts.len == 0:
     return none(Msg)
 
@@ -558,3 +557,6 @@ proc parseTextCommand*(line: string): Option[Msg] =
     some(Msg(kind: MsgKind.CmdSwapWindowDown))
   else:
     none(Msg)
+
+proc parseTextCommand*(line: string): Option[Msg] =
+  parseCommandParts(line.strip().splitWhitespace())

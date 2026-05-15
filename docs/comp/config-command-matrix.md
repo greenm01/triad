@@ -111,7 +111,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
 | Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
 | Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window` | X | Triad has explicit groups and consume/expel commands. |
-| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, native `set-layout` | X | Triad supports scroller, tile, grid, monocle, deck, tgmix, and variants. |
+| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, native `set-layout`, native action parity | X | Triad supports scroller, tile, grid, monocle, deck, tgmix, and variants. |
 | Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order. |
 | Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | |
 | Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |

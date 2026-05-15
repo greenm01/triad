@@ -379,6 +379,40 @@ Advance the active tag through the configured layout cycle:
 {"triad":{"version":1,"request":"switch-layout"}}
 ```
 
+### Native Actions
+
+Native actions mirror the same command names accepted by `triad msg <command>`
+and config bindings:
+
+```json
+{"triad":{"version":1,"request":"action","action":"focus-workspace","workspace_idx":2}}
+{"triad":{"version":1,"request":"action","action":"set-column-width","value":0.75}}
+{"triad":{"version":1,"request":"action","action":"spawn","argv":["foot","--working-directory","/tmp"]}}
+```
+
+Actions without arguments only need the `action` name. Argument-bearing actions
+use structured fields:
+
+- `id` for window-id commands such as `focus-window`, `close-window`,
+  `fullscreen-window`, `toggle-fullscreen`, and `exit-fullscreen`.
+- `tag` for tag commands and `workspace_idx` for shell workspace commands.
+- `name` for `rename-tag`, `move-to-named-scratchpad`, and
+  `toggle-named-scratchpad`.
+- `output` for `focus-output`, `move-workspace-to-output`, and
+  `move-to-output`.
+- `delta`, `value`, `count`, `dx`, `dy`, `dw`, and `dh` for sizing and layout
+  adjustment commands.
+- `scope` and `filter` for recent-window actions.
+- `argv` for `spawn`.
+- `x` and `y` for `warp-pointer`.
+- Screenshot actions accept `path`, `show_pointer`, `write_to_disk`, and
+  `copy_to_clipboard`.
+
+The layout-specific action names such as `layout-grid` and `layout-tgmix`
+remain available for command parity and affect the active tag. Prefer
+`request:"set-layout"` when a shell needs to target a specific tag or workspace
+without changing focus.
+
 ### Event Stream
 
 Subscribe to native layout events:

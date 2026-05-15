@@ -95,6 +95,24 @@ proc handleNiriRequest(line: string, snapshot: ShellSnapshot): NiriIpcResult =
 proc handleTriadRequest(line: string, snapshot: ShellSnapshot): TriadIpcResult =
   triad_native.handleTriadRequest(line, snapshot)
 
+proc handleTriadAction(action: string, payload: JsonNode): TriadIpcResult =
+  var actionPayload =
+    %*{"version": TriadIpcVersion, "request": "action", "action": action}
+  for key, value in payload:
+    actionPayload[key] = value
+  handleTriadRequest($(%*{"triad": actionPayload}), snapshotForShell())
+
+proc handleTriadAction(action: string): TriadIpcResult =
+  handleTriadAction(action, newJObject())
+
+proc checkTriadActionMatchesText(action, textCommand: string, payload = newJObject()) =
+  let actual = handleTriadAction(action, payload)
+  let expected = parseTextCommand(textCommand)
+  check parseJson(actual.reply)["ok"].getBool()
+  check actual.messages.len == 1
+  check expected.isSome
+  check repr(actual.messages[0]) == repr(expected.get())
+
 proc writeFakeRecoveringQs(
     tmp: string
 ): tuple[fakeQs: string, logPath: string, statePath: string] =
@@ -340,6 +358,70 @@ suite "Shell compatibility contracts":
     check parseJson(setTGMix.reply)["ok"].getBool()
     check setTGMix.messages.len == 1
     check setTGMix.messages[0].newLayout == LayoutMode.TGMix
+
+  test "Triad native actions mirror text IPC commands":
+    checkTriadActionMatchesText("layout-grid", "layout-grid")
+    checkTriadActionMatchesText("move-to-scratchpad", "move-to-scratchpad")
+    checkTriadActionMatchesText("recent-window-first", "recent-window-first")
+    checkTriadActionMatchesText("minimize", "minimize")
+    checkTriadActionMatchesText("toggle-hotkey-overlay", "toggle-hotkey-overlay")
+    checkTriadActionMatchesText(
+      "keyboard-shortcuts-inhibit", "keyboard-shortcuts-inhibit"
+    )
+    checkTriadActionMatchesText("swap-window-up", "swap-window-up")
+    checkTriadActionMatchesText("spawn-terminal", "spawn-terminal")
+    checkTriadActionMatchesText("stop-manager", "stop-manager")
+    checkTriadActionMatchesText("exit-session", "exit-session")
+    checkTriadActionMatchesText("eat-next-key", "eat-next-key")
+    checkTriadActionMatchesText("cancel-eat-next-key", "cancel-eat-next-key")
+
+    checkTriadActionMatchesText("focus-window", "focus-window 42", %*{"id": 42})
+    checkTriadActionMatchesText("close-window", "close-window 42", %*{"id": 42})
+    checkTriadActionMatchesText(
+      "fullscreen-window", "fullscreen-window 42", %*{"id": 42}
+    )
+    checkTriadActionMatchesText("exit-fullscreen", "exit-fullscreen 42", %*{"id": 42})
+    checkTriadActionMatchesText("swap-to-tag", "swap-to-tag 3", %*{"tag": 3})
+    checkTriadActionMatchesText(
+      "focus-output", "focus-output HDMI-A-1", %*{"output": "HDMI-A-1"}
+    )
+    checkTriadActionMatchesText(
+      "move-workspace-to-output", "move-workspace-to-output next", %*{"output": "next"}
+    )
+    checkTriadActionMatchesText(
+      "move-to-output", "move-to-output previous", %*{"output": "previous"}
+    )
+    checkTriadActionMatchesText(
+      "set-column-width", "set-column-width 0.75", %*{"value": 0.75}
+    )
+    checkTriadActionMatchesText(
+      "recent-window-next",
+      "recent-window-next --scope output --filter app-id",
+      %*{"scope": "output", "filter": "app-id"},
+    )
+    checkTriadActionMatchesText(
+      "recent-window-scope", "recent-window-scope workspace", %*{"scope": "workspace"}
+    )
+    checkTriadActionMatchesText(
+      "spawn", "spawn sh -lc echo", %*{"argv": ["sh", "-lc", "echo"]}
+    )
+    checkTriadActionMatchesText(
+      "warp-pointer", "warp-pointer 12 34", %*{"x": 12, "y": 34}
+    )
+    checkTriadActionMatchesText(
+      "screenshot-screen",
+      "screenshot-screen --path /tmp/triad.png --show-pointer --clipboard-only",
+      %*{
+        "path": "/tmp/triad.png",
+        "show_pointer": true,
+        "write_to_disk": false,
+        "copy_to_clipboard": true,
+      },
+    )
+
+    let badAction = handleTriadAction("spawn", %*{"argv": []})
+    check not parseJson(badAction.reply)["ok"].getBool()
+    check badAction.messages.len == 0
 
   test "event streams start with current snapshot state":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())

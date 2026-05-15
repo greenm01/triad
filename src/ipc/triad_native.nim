@@ -1,7 +1,8 @@
 import std/[json, options, strutils]
 import ../core/layout_mode_codec
 import ../core/[msg, triad_state]
-import ../types/[runtime_values, shell_snapshot]
+import commands
+import ../types/shell_snapshot
 
 type TriadIpcResult* = object
   handled*: bool
@@ -77,256 +78,284 @@ proc intFromField(node: JsonNode, field: string): Option[int] =
     discard
   none(int)
 
-proc floatFromField(node: JsonNode, field: string): Option[float] =
+proc boolFromField(node: JsonNode, field: string): Option[bool] =
   if node.kind != JObject or not node.hasKey(field):
-    return none(float)
-  try:
-    if node[field].kind == JFloat:
-      return some(node[field].getFloat())
-    if node[field].kind == JInt:
-      return some(float(node[field].getInt()))
-  except:
-    discard
-  none(float)
+    return none(bool)
+  if node[field].kind == JBool:
+    return some(node[field].getBool())
+  none(bool)
 
-proc actionToMsg(
-    action: string, payload: JsonNode, snapshot: ShellSnapshot
-): Option[Msg] =
+proc numberStringFromField(node: JsonNode, field: string): Option[string] =
+  if node.kind != JObject or not node.hasKey(field):
+    return none(string)
+  case node[field].kind
+  of JInt:
+    some($node[field].getInt())
+  of JFloat:
+    some($node[field].getFloat())
+  else:
+    none(string)
+
+proc intStringFromField(node: JsonNode, field: string): Option[string] =
+  let value = intFromField(node, field)
+  if value.isSome:
+    some($value.get())
+  else:
+    none(string)
+
+proc uintStringFromField(node: JsonNode, field: string): Option[string] =
+  let value = uintFromField(node, field)
+  if value.isSome:
+    some($value.get())
+  else:
+    none(string)
+
+proc argvFromField(node: JsonNode, field: string): Option[seq[string]] =
+  if node.kind != JObject or not node.hasKey(field) or node[field].kind != JArray:
+    return none(seq[string])
+  var argv: seq[string] = @[]
+  for arg in node[field]:
+    if arg.kind != JString:
+      return none(seq[string])
+    argv.add(arg.getStr())
+  if argv.len == 0:
+    return none(seq[string])
+  some(argv)
+
+proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string]] =
+  var parts = @[action]
   case action
-  of "focus-next":
-    some(Msg(kind: MsgKind.CmdFocusNext))
-  of "focus-prev":
-    some(Msg(kind: MsgKind.CmdFocusPrev))
-  of "focus-last":
-    some(Msg(kind: MsgKind.CmdFocusLast))
-  of "focus-left":
-    some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
-  of "focus-right":
-    some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
-  of "focus-up":
-    some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp))
-  of "focus-down":
-    some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
-  of "focus-tag-left":
-    some(Msg(kind: MsgKind.CmdFocusTagLeft))
-  of "focus-tag-right":
-    some(Msg(kind: MsgKind.CmdFocusTagRight))
-  of "focus-occupied-tag-left":
-    some(Msg(kind: MsgKind.CmdFocusOccupiedTagLeft))
-  of "focus-occupied-tag-right":
-    some(Msg(kind: MsgKind.CmdFocusOccupiedTagRight))
-  of "focus-column-first":
-    some(Msg(kind: MsgKind.CmdFocusColumnFirst))
-  of "focus-column-last":
-    some(Msg(kind: MsgKind.CmdFocusColumnLast))
-  of "focus-window-or-workspace-up":
-    some(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp))
-  of "focus-window-or-workspace-down":
-    some(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-  of "toggle-overview":
-    some(Msg(kind: MsgKind.CmdToggleOverview))
-  of "open-overview":
-    some(Msg(kind: MsgKind.CmdOpenOverview))
-  of "close-overview":
-    some(Msg(kind: MsgKind.CmdCloseOverview))
-  of "recent-window-next":
-    some(Msg(kind: MsgKind.CmdRecentWindowNext))
-  of "recent-window-prev":
-    some(Msg(kind: MsgKind.CmdRecentWindowPrev))
-  of "recent-window-confirm":
-    some(Msg(kind: MsgKind.CmdRecentWindowConfirm))
-  of "recent-window-cancel":
-    some(Msg(kind: MsgKind.CmdRecentWindowCancel))
-  of "toggle-scratchpad":
-    some(Msg(kind: MsgKind.CmdToggleScratchpad))
-  of "restore-scratchpad":
-    some(Msg(kind: MsgKind.CmdRestoreScratchpad))
-  of "select-window":
-    some(Msg(kind: MsgKind.CmdSelectWindow))
-  of "toggle-floating":
-    some(Msg(kind: MsgKind.CmdToggleFloating))
-  of "fullscreen-window":
-    some(Msg(kind: MsgKind.CmdToggleFullscreen))
-  of "toggle-fullscreen":
-    some(Msg(kind: MsgKind.CmdToggleFullscreen))
-  of "maximize-window-to-edges":
-    some(Msg(kind: MsgKind.CmdToggleMaximized))
-  of "toggle-maximized":
-    some(Msg(kind: MsgKind.CmdToggleMaximized))
-  of "zoom":
-    some(Msg(kind: MsgKind.CmdZoom))
-  of "maximize-column":
-    some(Msg(kind: MsgKind.CmdMaximizeColumn))
-  of "toggle-gaps":
-    some(Msg(kind: MsgKind.CmdToggleGaps))
-  of "consume-window":
-    some(Msg(kind: MsgKind.CmdConsumeWindow))
-  of "expel-window":
-    some(Msg(kind: MsgKind.CmdExpelWindow))
-  of "group-windows":
-    some(Msg(kind: MsgKind.CmdGroupWindows))
-  of "ungroup-window":
-    some(Msg(kind: MsgKind.CmdUngroupWindow))
-  of "focus-next-in-group":
-    some(Msg(kind: MsgKind.CmdFocusNextInGroup))
-  of "lock-session":
-    some(Msg(kind: MsgKind.CmdLockSession))
-  of "triad-reload":
-    some(Msg(kind: MsgKind.CmdTriadReload))
-  of "config-reload":
-    some(Msg(kind: MsgKind.CmdConfigReload))
-  of "switch-layout":
-    some(Msg(kind: MsgKind.CmdSwitchLayout))
-  of "move-column-left":
-    some(Msg(kind: MsgKind.CmdMoveColumnLeft))
-  of "move-column-right":
-    some(Msg(kind: MsgKind.CmdMoveColumnRight))
-  of "move-column-to-first":
-    some(Msg(kind: MsgKind.CmdMoveColumnToFirst))
-  of "move-column-to-last":
-    some(Msg(kind: MsgKind.CmdMoveColumnToLast))
-  of "move-window-left":
-    some(Msg(kind: MsgKind.CmdMoveWindowLeft))
-  of "move-window-right":
-    some(Msg(kind: MsgKind.CmdMoveWindowRight))
-  of "move-window-up":
-    some(Msg(kind: MsgKind.CmdMoveWindowUp))
-  of "move-window-down":
-    some(Msg(kind: MsgKind.CmdMoveWindowDown))
-  of "move-window-up-or-to-workspace-up":
-    some(Msg(kind: MsgKind.CmdMoveWindowUpOrToWorkspaceUp))
-  of "move-window-down-or-to-workspace-down":
-    some(Msg(kind: MsgKind.CmdMoveWindowDownOrToWorkspaceDown))
+  of "focus-next", "focus-prev", "focus-left", "focus-right", "focus-up", "focus-down",
+      "focus-last", "focus-tag-left", "focus-tag-right", "focus-occupied-tag-left",
+      "focus-occupied-tag-right", "focus-column-first", "focus-column-last",
+      "focus-window-or-workspace-up", "focus-window-or-workspace-down",
+      "move-to-tag-left", "move-to-tag-right", "config-reload", "layout-scroller",
+      "layout-vertical-scroller", "layout-tile", "layout-grid", "layout-monocle",
+      "layout-deck", "layout-center-tile", "layout-right-tile", "layout-vertical-tile",
+      "layout-vertical-grid", "layout-vertical-deck", "layout-tgmix", "switch-layout",
+      "toggle-overview", "open-overview", "close-overview", "recent-window-confirm",
+      "recent-window-cancel", "recent-window-first", "recent-window-last",
+      "recent-window-cycle-scope", "recent-window-close-current", "toggle-floating",
+      "maximize-window-to-edges", "toggle-maximized", "toggle-maximize", "minimize",
+      "minimize-window", "spawn-terminal", "lock-session", "eat-next-key",
+      "cancel-eat-next-key", "toggle-keyboard-shortcuts-inhibit",
+      "keyboard-shortcuts-inhibit", "stop-manager", "triad-reload", "exit-session",
+      "focus-shell-ui", "show-hotkey-overlay", "hide-hotkey-overlay",
+      "toggle-hotkey-overlay", "move-to-scratchpad", "toggle-scratchpad",
+      "restore-scratchpad", "select-window", "group-windows", "ungroup-window",
+      "focus-next-in-group", "maximize-column", "toggle-gaps", "zoom", "consume-window",
+      "expel-window", "move-column-left", "move-column-right", "move-column-to-first",
+      "move-column-to-last", "move-window-left", "move-window-right", "move-window-up",
+      "move-window-down", "move-window-up-or-to-workspace-up",
+      "move-window-down-or-to-workspace-down", "swap-window-up", "swap-window-down":
+    some(parts)
   of "focus-tag":
-    let t = uintFromField(payload, "tag")
-    if t.isSome:
-      some(Msg(kind: MsgKind.CmdFocusTag, focusTag: t.get()))
+    let tag = uintStringFromField(payload, "tag")
+    if tag.isSome:
+      parts.add(tag.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
   of "move-to-tag":
-    let t = uintFromField(payload, "tag")
-    if t.isSome:
-      some(Msg(kind: MsgKind.CmdMoveToTag, targetTag: t.get()))
+    let tag = uintStringFromField(payload, "tag")
+    if tag.isSome:
+      parts.add(tag.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
+  of "swap-to-tag":
+    let tag = uintStringFromField(payload, "tag")
+    if tag.isSome:
+      parts.add(tag.get())
+      some(parts)
+    else:
+      none(seq[string])
   of "focus-workspace":
-    let i = uintFromField(payload, "workspace_idx")
-    if i.isSome:
-      some(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: i.get()))
+    let index = uintStringFromField(payload, "workspace_idx")
+    if index.isSome:
+      parts.add(index.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
   of "move-to-workspace":
-    let i = uintFromField(payload, "workspace_idx")
-    if i.isSome:
-      some(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: i.get()))
+    let index = uintStringFromField(payload, "workspace_idx")
+    if index.isSome:
+      parts.add(index.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
   of "focus-window":
     let id = uintFromField(payload, "id")
     if id.isSome:
-      some(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: WindowId(id.get())))
+      parts.add($id.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
   of "close-window":
     let id = uintFromField(payload, "id")
     if id.isSome:
-      some(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: WindowId(id.get())))
+      parts.add($id.get())
+    some(parts)
+  of "fullscreen-window", "toggle-fullscreen":
+    let id = uintFromField(payload, "id")
+    if id.isSome:
+      parts.add($id.get())
+    some(parts)
+  of "exit-fullscreen":
+    let id = uintFromField(payload, "id")
+    if id.isSome:
+      parts.add($id.get())
+      some(parts)
     else:
-      some(Msg(kind: MsgKind.CmdCloseWindow))
-  of "rename-tag":
+      none(seq[string])
+  of "rename-tag", "toggle-named-scratchpad", "move-to-named-scratchpad":
     let name = stringFromField(payload, "name")
     if name.len > 0:
-      some(Msg(kind: MsgKind.CmdRenameTag, newName: name))
+      parts.add(name)
+      some(parts)
     else:
-      none(Msg)
-  of "toggle-named-scratchpad":
-    let name = stringFromField(payload, "name")
-    if name.len > 0:
-      some(Msg(kind: MsgKind.CmdToggleNamedScratchpad, scratchpadName: name))
+      none(seq[string])
+  of "focus-output", "move-workspace-to-output", "move-to-output":
+    let output = stringFromField(payload, "output")
+    if output.len > 0:
+      parts.add(output)
+      some(parts)
     else:
-      none(Msg)
-  of "move-to-named-scratchpad":
-    let name = stringFromField(payload, "name")
-    if name.len > 0:
-      some(Msg(kind: MsgKind.CmdMoveToNamedScratchpad, scratchpadName: name))
+      none(seq[string])
+  of "resize-width", "resize-height", "adjust-master-ratio":
+    let delta = numberStringFromField(payload, "delta")
+    if delta.isSome:
+      parts.add(delta.get())
+      some(parts)
     else:
-      none(Msg)
-  of "resize-width":
-    let d = floatFromField(payload, "delta")
-    if d.isSome:
-      some(Msg(kind: MsgKind.CmdResizeWidth, deltaW: d.get()))
-    else:
-      none(Msg)
-  of "resize-height":
-    let d = floatFromField(payload, "delta")
-    if d.isSome:
-      some(Msg(kind: MsgKind.CmdResizeHeight, deltaH: d.get()))
-    else:
-      none(Msg)
-  of "switch-proportion-preset":
-    let d = intFromField(payload, "delta")
-    if d.isSome:
-      some(Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: d.get()))
-    else:
-      some(Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1))
-  of "adjust-master-ratio":
-    let d = floatFromField(payload, "delta")
-    if d.isSome:
-      some(Msg(kind: MsgKind.CmdAdjustMasterRatio, deltaMR: d.get()))
-    else:
-      none(Msg)
+      none(seq[string])
   of "master-ratio":
-    let v = floatFromField(payload, "value")
-    if v.isSome:
-      some(Msg(kind: MsgKind.CmdSetMasterRatio, ratio: v.get()))
+    let value = numberStringFromField(payload, "value")
+    if value.isSome:
+      parts.add(value.get())
+      some(parts)
     else:
-      none(Msg)
-  of "adjust-gaps":
-    let d = floatFromField(payload, "delta")
-    if d.isSome:
-      some(Msg(kind: MsgKind.CmdAdjustGaps, deltaG: int32(d.get())))
+      none(seq[string])
+  of "set-column-width":
+    var value = numberStringFromField(payload, "value")
+    if value.isNone:
+      value = numberStringFromField(payload, "width")
+    if value.isSome:
+      parts.add(value.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
   of "master-count":
-    let c = intFromField(payload, "count")
-    if c.isSome:
-      some(Msg(kind: MsgKind.CmdSetMasterCount, count: c.get()))
+    let count = intStringFromField(payload, "count")
+    if count.isSome:
+      parts.add(count.get())
+      some(parts)
     else:
-      none(Msg)
-  of "adjust-master-count":
-    let d = intFromField(payload, "delta")
-    if d.isSome:
-      some(Msg(kind: MsgKind.CmdAdjustMasterCount, deltaMC: d.get()))
+      none(seq[string])
+  of "adjust-master-count", "adjust-gaps":
+    let delta = intStringFromField(payload, "delta")
+    if delta.isSome:
+      parts.add(delta.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
+  of "switch-proportion-preset":
+    let delta = intStringFromField(payload, "delta")
+    if delta.isSome:
+      parts.add(delta.get())
+    some(parts)
   of "move-floating":
-    let dx = floatFromField(payload, "dx")
-    let dy = floatFromField(payload, "dy")
+    let dx = intStringFromField(payload, "dx")
+    let dy = intStringFromField(payload, "dy")
     if dx.isSome and dy.isSome:
-      some(
-        Msg(
-          kind: MsgKind.CmdMoveFloating,
-          moveDX: int32(dx.get()),
-          moveDY: int32(dy.get()),
-        )
-      )
+      parts.add(dx.get())
+      parts.add(dy.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
   of "resize-floating":
-    let dw = floatFromField(payload, "dw")
-    let dh = floatFromField(payload, "dh")
+    let dw = intStringFromField(payload, "dw")
+    let dh = intStringFromField(payload, "dh")
     if dw.isSome and dh.isSome:
-      some(
-        Msg(
-          kind: MsgKind.CmdResizeFloating,
-          deltaFW: int32(dw.get()),
-          deltaFH: int32(dh.get()),
-        )
-      )
+      parts.add(dw.get())
+      parts.add(dh.get())
+      some(parts)
     else:
-      none(Msg)
+      none(seq[string])
+  of "recent-window-next", "recent-window-prev":
+    let scope = stringFromField(payload, "scope")
+    if scope.len > 0:
+      parts.add("--scope")
+      parts.add(scope)
+    let filter = stringFromField(payload, "filter")
+    if filter.len > 0:
+      parts.add("--filter")
+      parts.add(filter)
+    some(parts)
+  of "recent-window-scope":
+    let scope = stringFromField(payload, "scope")
+    if scope.len > 0:
+      parts.add(scope)
+      some(parts)
+    else:
+      none(seq[string])
+  of "spawn":
+    let argv = argvFromField(payload, "argv")
+    if argv.isSome:
+      parts.add(argv.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of "warp-pointer":
+    let x = intStringFromField(payload, "x")
+    let y = intStringFromField(payload, "y")
+    if x.isSome and y.isSome:
+      parts.add(x.get())
+      parts.add(y.get())
+      some(parts)
+    else:
+      none(seq[string])
+  of "screenshot", "screenshot-screen", "screenshot-window":
+    let path = stringFromField(payload, "path")
+    if path.len > 0:
+      parts.add("--path")
+      parts.add(path)
+    if payload.hasKey("show_pointer"):
+      let show = boolFromField(payload, "show_pointer")
+      if show.isNone:
+        return none(seq[string])
+      if show.get():
+        parts.add("--show-pointer")
+      else:
+        parts.add("--hide-pointer")
+    var writeToDisk = true
+    var copyToClipboard = true
+    if payload.hasKey("write_to_disk"):
+      let write = boolFromField(payload, "write_to_disk")
+      if write.isNone:
+        return none(seq[string])
+      writeToDisk = write.get()
+    if payload.hasKey("copy_to_clipboard"):
+      let copy = boolFromField(payload, "copy_to_clipboard")
+      if copy.isNone:
+        return none(seq[string])
+      copyToClipboard = copy.get()
+    if not writeToDisk and not copyToClipboard:
+      none(seq[string])
+    else:
+      if writeToDisk and not copyToClipboard:
+        parts.add("--no-clipboard")
+      elif not writeToDisk and copyToClipboard:
+        parts.add("--clipboard-only")
+      some(parts)
   else:
-    none(Msg)
+    none(seq[string])
+
+proc actionToMsg(action: string, payload: JsonNode): Option[Msg] =
+  let parts = commandPartsForAction(action, payload)
+  if parts.isNone:
+    return none(Msg)
+  parseCommandParts(parts.get())
 
 proc targetTagFromPayload(
     payload: JsonNode, snapshot: ShellSnapshot
@@ -428,7 +457,7 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
     if action.len == 0:
       result.reply = errReply("action name required")
       return
-    let msgOpt = actionToMsg(action, payload, snapshot)
+    let msgOpt = actionToMsg(action, payload)
     if msgOpt.isNone:
       result.reply = errReply("unknown action or bad parameters: " & action)
       return
