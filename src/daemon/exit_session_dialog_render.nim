@@ -10,7 +10,6 @@ const
   DialogText = 0xfff4f7fb'u32
   DialogPaddingX = 42'i32
   DialogPaddingY = 34'i32
-  DialogLineGap = 18'i32
   DialogMinWidth = 420'i32
   DialogScreenMargin = 48'i32
   DialogTextStyle = OverlayTextStyle(sizePx: 18.0, color: DialogText)
@@ -34,7 +33,7 @@ proc renderExitSessionDialogBuffer*(screen: Rect): PixelBuffer =
     maxW = max(DialogMinWidth, screen.w - DialogScreenMargin * 2)
     desiredW = max(DialogMinWidth, textW + DialogPaddingX * 2)
     width = min(maxW, desiredW)
-    height = DialogPaddingY * 2 + lineH * 3 + DialogLineGap * 2
+    height = DialogPaddingY * 2 + lineH * 3
 
   result = initPixelBuffer(width, height, DialogBg)
   result.strokeRect(0, 0, width, height, 5, DialogRing)
@@ -42,7 +41,7 @@ proc renderExitSessionDialogBuffer*(screen: Rect): PixelBuffer =
 
   let
     y1 = DialogPaddingY
-    y3 = DialogPaddingY + (lineH + DialogLineGap) * 2
+    y3 = DialogPaddingY + lineH * 2
   result.drawText(
     firstLine.centeredTextX(DialogTextStyle, width),
     y1,

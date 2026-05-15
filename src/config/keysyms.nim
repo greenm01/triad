@@ -18,6 +18,8 @@ proc keySymForBinding*(key: string, modifiers: uint32 = 0): uint32 =
     0xff09'u32
   of "backspace":
     0xff08'u32
+  of "delete", "del":
+    0xffff'u32
   of "space":
     0x20'u32
   of "slash":

@@ -1,4 +1,5 @@
 import tconfig_support
+import ../src/config/keysyms
 
 suite "KDL Configuration Parser: parser defaults":
   test "Parser reads layout, workspace, binding, and command settings":
@@ -723,6 +724,8 @@ cursor {
     check config.commandForBinding("Print", Alt) == "screenshot-window"
     check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
+    check config.msgKindForBinding("Delete", Ctrl + Alt) == MsgKind.CmdExitSession
+    check keySymForBinding("Delete", Ctrl + Alt) == 0xffff'u32
     check not config.hotkeyOverlay.skipAtStartup
     check config.hotkeyOverlay.hideNotBound
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
