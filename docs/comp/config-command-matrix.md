@@ -95,7 +95,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Focus | Focus by window id | | WM policy | `focus-window <id>` | X | Used by shell/overview. |
 | Focus | Focus shell UI | | `river_seat_v1.focus_shell_surface` | `focus-shell-ui` | X | Triad shell integration. |
 | Window lifecycle | Close focused window | `killclient` | `river_window_v1.close` | `close-window` | X | Optional id argument is supported. |
-| Window lifecycle | Minimize | `minimized`, `restore_minimized` | minimize request/capability | `minimize`, `restore-scratchpad` | X | Triad minimize flows through scratchpad-like state. |
+| Window lifecycle | Minimize | | minimize request/capability | `minimize`, `minimize-window` | X | Client-visible minimize state. Mango's `minimized` dispatcher is mapped under standard scratchpad because it sends windows to the scratchpad pool. |
 | Window state | Toggle floating | `togglefloating` | `set_tiled` primitive | `toggle-floating` | X | |
 | Window state | Toggle all floating | `toggle_all_floating` | WM policy | | | Not exposed by Triad. |
 | Window state | Fullscreen | `togglefullscreen` | fullscreen requests and commands | `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen` | X | Optional id argument is supported. |
@@ -126,7 +126,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
 | Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | `overview { hot-corners { size; top-left; top-right; bottom-left; bottom-right } }` | X | Triad hot corners are opt-in and open overview only. |
 | Overview | Overview tab mode | `ov_tab_mode` | WM policy | `overview { tab-mode }` | X | Off by default. Keyboard overview opener bindings with modifiers become hold-to-overview sessions: repeat the opener to cycle windows, release the opener modifier to close overview. |
-| Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |
+| Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | Default chords mirror Mango: `Super+i` sends the focused window, `Alt+z` toggles/cycles scratchpad windows, and `Super+Shift+i` restores. |
 | Scratchpad | Named scratchpad | `toggle_named_scratchpad`, `isnamedscratchpad` | WM policy | `move-to-named-scratchpad`, `toggle-named-scratchpad` | X | Triad names scratchpads directly. |
 | Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
 | Window rules | App/title matching | `windowrule appid/title` | Window metadata events | `window-rule { match app-id=... title=...; exclude ... }` | X | Match and exclude use regex search semantics; repeated `match` children are OR-ed. |

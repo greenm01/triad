@@ -29,7 +29,7 @@ layout {
 }
 
 scratchpad {
-    width-ratio 0.82
+    width-ratio 0.8
     height-ratio 0.9
 }
 
@@ -219,9 +219,7 @@ bindings {
     bind "Super+Tab" "focus-last"
     bind "Super+Shift+Tab" "focus-prev"
     bind "Super+u" "focus-occupied-tag-right"
-    bind "Super+i" "focus-occupied-tag-left"
     bind "Super+Shift+u" "focus-tag-right"
-    bind "Super+Shift+i" "focus-tag-left"
 
     // Tags/workspaces.
     bind "Super+1" "focus-workspace 1"
@@ -264,11 +262,11 @@ bindings {
     bind "Super+t" "toggle-floating"
     bind "Super+Shift+t" "toggle-floating"
     bind "Super+Shift+b" "minimize"
-    bind "Super+Shift+r" "restore-scratchpad"
 
-    // Scratchpad.
-    bind "Super+w" "toggle-scratchpad"
-    bind "Super+Shift+w" "move-to-scratchpad"
+    // Scratchpad. Mirrors Mango: send, toggle, restore.
+    bind "Super+i" "move-to-scratchpad"
+    bind "Alt+z" "toggle-scratchpad"
+    bind "Super+Shift+i" "restore-scratchpad"
     bind "Super+Ctrl+e" "toggle-named-scratchpad terminal"
     bind "Super+Ctrl+Shift+e" "move-to-named-scratchpad terminal"
     bind "Super+a" "toggle-named-scratchpad audio"

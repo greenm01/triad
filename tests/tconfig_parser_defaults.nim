@@ -713,9 +713,12 @@ cursor {
     check config.msgKindForBinding("l", Super + Ctrl) == MsgKind.CmdMoveColumnRight
     check config.msgKindForBinding("h", Super + Alt) == MsgKind.CmdMoveWindowLeft
     check config.msgKindForBinding("Right", Super + Alt) == MsgKind.CmdMoveWindowRight
-    check config.msgKindForBinding("w", Super) == MsgKind.CmdToggleScratchpad
-    check config.msgKindForBinding("w", Super + Shift) == MsgKind.CmdMoveToScratchpad
-    check config.msgKindForBinding("r", Super + Shift) == MsgKind.CmdRestoreScratchpad
+    check config.scratchpad.widthRatio == 0.8'f32
+    check config.scratchpad.heightRatio == 0.9'f32
+    check config.msgKindForBinding("i", Super) == MsgKind.CmdMoveToScratchpad
+    check config.msgKindForBinding("z", Alt) == MsgKind.CmdToggleScratchpad
+    check config.msgKindForBinding("i", Super + Shift) == MsgKind.CmdRestoreScratchpad
+    check config.msgKindForBinding("b", Super + Shift) == MsgKind.CmdMinimize
     check config.msgKindForBinding("f", Super + Shift) == MsgKind.CmdToggleFullscreen
     check keySymForBinding("f", Super + Shift) == uint32(ord('f'))
     check config.spawnForBinding("c", Super) ==

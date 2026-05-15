@@ -122,7 +122,10 @@ bindings {
     bind "Super+f" "maximize-window-to-edges"
     bind "Super+Shift+f" "fullscreen-window"
     bind "Super+m" "maximize-column"
-    bind "Super+i" "minimize"
+    bind "Super+Shift+b" "minimize"
+    bind "Super+i" "move-to-scratchpad"
+    bind "Alt+z" "toggle-scratchpad"
+    bind "Super+Shift+i" "restore-scratchpad"
     bind "Super+n" "switch-layout"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false

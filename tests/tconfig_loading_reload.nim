@@ -152,12 +152,30 @@ suite "KDL Configuration Parser: loading reload":
     check snapshot.workspaces[0].name == "term"
 
   test "Default reload binding requests full Triad reload":
-    let reloads = defaultKeyBindings().filterIt(it.command == "triad-reload")
+    let bindings = defaultKeyBindings()
+    let reloads = bindings.filterIt(it.command == "triad-reload")
     check reloads.len == 1
     check reloads[0].key == "r"
     check reloads[0].modifiers == 12'u32
     check reloads[0].bypassShortcutsInhibit
-    check defaultKeyBindings().allIt(it.command != "reload-config")
+    check bindings.allIt(it.command != "reload-config")
+
+  test "Default parser bindings mirror Mango scratchpad chords":
+    let bindings = defaultKeyBindings()
+
+    check bindings.anyIt(
+      it.key == "i" and it.modifiers == Super and it.command == "move-to-scratchpad"
+    )
+    check bindings.anyIt(
+      it.key == "z" and it.modifiers == Alt and it.command == "toggle-scratchpad"
+    )
+    check bindings.anyIt(
+      it.key == "i" and it.modifiers == Super + Shift and
+        it.command == "restore-scratchpad"
+    )
+    check bindings.anyIt(
+      it.key == "b" and it.modifiers == Super + Shift and it.command == "minimize"
+    )
 
   test "Strict config load rejects invalid KDL":
     let path = getCurrentDir() / "test_invalid_reload.kdl"

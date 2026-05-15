@@ -731,6 +731,28 @@ While the helper is open, Triad asks River to eat the next non-modifier key and
 uses that key only to dismiss the helper. Bound Triad keys also dismiss without
 running their normal command.
 
+## Scratchpad
+
+The `scratchpad` block controls the size used when showing the standard
+scratchpad:
+
+```kdl
+scratchpad {
+  width-ratio 0.8
+  height-ratio 0.9
+}
+```
+
+Default scratchpad bindings mirror Mango's standard scratchpad workflow:
+
+- `Super+I`: `move-to-scratchpad`
+- `Alt+Z`: `toggle-scratchpad`
+- `Super+Shift+I`: `restore-scratchpad`
+
+`toggle-scratchpad` shows, hides, or cycles windows that are already in the
+scratchpad pool. Use `move-to-scratchpad` first to send the focused window
+there.
+
 ## Config Notifications
 
 `config-notification` runs optional user commands when `config-reload` succeeds,
@@ -828,6 +850,7 @@ Default bindings are:
 - `Super+F`: `maximize-window-to-edges`
 - `Super+Shift+F`: `fullscreen-window`
 - `Super+M`: `maximize-column`
+- `Super+Shift+B`: `minimize`
 
 Screenshot commands save to disk and copy to the clipboard by default. Use
 `--no-clipboard` for disk-only capture or `--clipboard-only` for clipboard-only
