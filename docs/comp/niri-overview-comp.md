@@ -13,7 +13,9 @@ against the zoomed workspace stack, and camera/view offsets are ordinary
 workspace state.
 
 The Triad implementation target is the scroller overview behavior after
-`780dfa6 Fix Niri-style scroller overview behavior`.
+`780dfa6 Fix Niri-style scroller overview behavior`, with focused horizontal
+and vertical scroller content centered in the overview camera and clipped to the
+workspace preview area.
 
 ## Compatibility Matrix
 
@@ -33,7 +35,7 @@ Status values:
 | Workspace gap | Workspace stack gap is output height multiplied by `0.1` and overview zoom. | Compliant | Matches Niri workspace stack spacing. |
 | Active workspace position | Active workspace is centered and the stack moves by active workspace index. | Compliant | Triad previews derive from the active workspace slot. |
 | Camera snapshot | Closing overview does not restore a saved camera snapshot. | Compliant | Triad leaves Niri-style camera changes intact. |
-| Camera retarget | Focus changes in overview update workspace camera/view targets. | Compliant | Projection emits viewport targets while overview is open. |
+| Camera retarget | Focus changes in overview update workspace camera/view targets. | Compliant | Projection emits viewport targets while overview is open, and scroller overview rendering centers the focused column or row without mutating the saved viewport. |
 | Right-drag camera pan | Right-drag pans the hovered workspace view offset. | Partial | Triad pans the preview; Niri-style inertial and snap settling are not fully modeled. |
 | Wheel in overview | Unmodified vertical wheel switches workspaces, horizontal wheel focuses columns, and Shift+vertical focuses columns. | Compliant | Triad listens to raw `wl_pointer` wheel-axis events while overview is open and routes them through the unified overview navigation reducer. |
 | Touchpad overview scroll | Two-finger overview scrolling maps vertical movement to workspaces and horizontal movement to view offset. | Not Supported | Triad has live 3-/4-finger `gesture-bind` swipes, but not Niri-style continuous two-finger overview scrolling. |

@@ -379,43 +379,6 @@ proc scaledOverviewRect(source, dest, geom: rv.Rect, maxZoom: float32): rv.Rect 
     h: max(1'i32, int32(round(float32(max(1'i32, geom.h)) * scale))),
   )
 
-proc instructionBounds(instructions: openArray[rv.RenderInstruction]): Option[rv.Rect] =
-  if instructions.len == 0:
-    return none(rv.Rect)
-
-  var minX = instructions[0].geom.x
-  var minY = instructions[0].geom.y
-  var maxX = instructions[0].geom.x + instructions[0].geom.w
-  var maxY = instructions[0].geom.y + instructions[0].geom.h
-  for idx in 1 ..< instructions.len:
-    let instr = instructions[idx]
-    minX = min(minX, instr.geom.x)
-    minY = min(minY, instr.geom.y)
-    maxX = max(maxX, instr.geom.x + instr.geom.w)
-    maxY = max(maxY, instr.geom.y + instr.geom.h)
-
-  some(
-    rv.Rect(x: minX, y: minY, w: max(1'i32, maxX - minX), h: max(1'i32, maxY - minY))
-  )
-
-proc scrollerOverviewSource(
-    mode: rv.LayoutMode,
-    instructions: openArray[rv.RenderInstruction],
-    fallback: rv.Rect,
-): rv.Rect =
-  let bounds = instructions.instructionBounds()
-  if bounds.isNone:
-    return fallback
-
-  let rect = bounds.get()
-  case mode
-  of rv.LayoutMode.Scroller:
-    rv.Rect(x: rect.x, y: fallback.y, w: rect.w, h: fallback.h)
-  of rv.LayoutMode.VerticalScroller:
-    rv.Rect(x: fallback.x, y: rect.y, w: fallback.w, h: rect.h)
-  else:
-    fallback
-
 proc focusedInstructionCenterX(
     tag: rv.TagState, instructions: openArray[rv.RenderInstruction], fallback: rv.Rect
 ): int32 =
@@ -424,28 +387,35 @@ proc focusedInstructionCenterX(
       return instr.geom.x + instr.geom.w div 2
   fallback.x + fallback.w div 2
 
+proc focusedInstructionCenterY(
+    tag: rv.TagState, instructions: openArray[rv.RenderInstruction], fallback: rv.Rect
+): int32 =
+  for instr in instructions:
+    if instr.windowId == tag.focusedWindow:
+      return instr.geom.y + instr.geom.h div 2
+  fallback.y + fallback.h div 2
+
 proc horizontalScrollerOverviewSource(
     tag: rv.TagState,
     instructions: openArray[rv.RenderInstruction],
     fallback, lane: rv.Rect,
     zoom: float32,
 ): rv.Rect =
-  let bounds = instructions.instructionBounds()
-  let rect =
-    if bounds.isSome:
-      bounds.get()
-    else:
-      fallback
   let sourceW = max(fallback.w, int32(ceil(float32(max(1'i32, lane.w)) / zoom)))
-  let focusedCenter = tag.focusedInstructionCenterX(instructions, rect)
-  var sourceX = focusedCenter - sourceW div 2
-  let minX = rect.x
-  let maxX = rect.x + rect.w - sourceW
-  if maxX >= minX:
-    sourceX = clamp(sourceX, minX, maxX)
-  else:
-    sourceX = rect.x + (rect.w - sourceW) div 2
+  let focusedCenter = tag.focusedInstructionCenterX(instructions, fallback)
+  let sourceX = focusedCenter - sourceW div 2
   rv.Rect(x: sourceX, y: fallback.y, w: sourceW, h: fallback.h)
+
+proc verticalScrollerOverviewSource(
+    tag: rv.TagState,
+    instructions: openArray[rv.RenderInstruction],
+    fallback, preview: rv.Rect,
+    zoom: float32,
+): rv.Rect =
+  let sourceH = max(fallback.h, int32(ceil(float32(max(1'i32, preview.h)) / zoom)))
+  let focusedCenter = tag.focusedInstructionCenterY(instructions, fallback)
+  let sourceY = focusedCenter - sourceH div 2
+  rv.Rect(x: fallback.x, y: sourceY, w: fallback.w, h: sourceH)
 
 proc overviewTransform(
     mode: rv.LayoutMode,
@@ -465,7 +435,8 @@ proc overviewTransform(
       clip: lane,
     )
   of rv.LayoutMode.VerticalScroller:
-    result.source = scrollerOverviewSource(mode, instructions, workspaceScreen)
+    result.source =
+      tag.verticalScrollerOverviewSource(instructions, workspaceScreen, preview, zoom)
   else:
     discard
 

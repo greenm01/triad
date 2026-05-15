@@ -20,6 +20,15 @@ proc intersection(a, b: runtime_values.Rect): runtime_values.Rect =
 proc positiveArea(geom: runtime_values.Rect): bool =
   geom.w > 0 and geom.h > 0
 
+proc centerX(geom: runtime_values.Rect): int32 =
+  geom.x + geom.w div 2
+
+proc centerY(geom: runtime_values.Rect): int32 =
+  geom.y + geom.h div 2
+
+proc near(a, b: int32, tolerance = 1'i32): bool =
+  abs(a - b) <= tolerance
+
 proc aspectRatio(geom: runtime_values.Rect): float32 =
   float32(geom.w) / float32(max(1'i32, geom.h))
 
@@ -52,6 +61,14 @@ proc overviewInstructionsFor(
   for instr in instructions:
     if ids.includesId(uint32(instr.windowId)):
       result.add(instr)
+
+proc overviewInstructionGeom(
+    instructions: openArray[RenderInstruction], id: uint32
+): runtime_values.Rect =
+  for instr in instructions:
+    if uint32(instr.windowId) == id:
+      return instr.geom
+  runtime_values.Rect()
 
 proc checkOverviewGroup(
     instructions: openArray[RenderInstruction],
@@ -317,10 +334,139 @@ suite "Core Runtime Logic: overview navigation":
     check workspaceOne.len == 3
     check workspaceOne.allIt(it.clipSet)
     check workspaceOne.allIt(it.clip == activePreview)
-    check geoms.allIt(it.geomWithinPreview(activePreview))
+    check workspaceOne.allIt(
+      it.geom.intersection(activePreview).geomWithinPreview(activePreview)
+    )
+    check workspaceOne.countIt(it.geom.intersection(activePreview).positiveArea()) >= 1
     check geoms[0].y < geoms[1].y
     check geoms[1].y < geoms[2].y
     check geoms.allIt(it.aspectRatioClose(expectedAspect))
+
+  test "Scroller overview centers focused edge columns on screen":
+    var firstModel = configuredModel()
+    firstModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    for id in 1'u32 .. 3'u32:
+      firstModel.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    firstModel.markColumnsFullWidth(1)
+    firstModel.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    firstModel.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let firstScreen = firstModel.primaryScreen()
+    let firstSlots = firstModel.previewSlots()
+    let firstPreview =
+      firstModel.workspacePreviewRect(firstScreen, firstSlots, firstSlots.find(1'u32))
+    let firstLane = runtime_values.Rect(
+      x: firstScreen.x, y: firstPreview.y, w: firstScreen.w, h: firstPreview.h
+    )
+    let firstProjection = firstModel.layoutProjection()
+    let firstGeom = firstProjection.instructions.overviewInstructionGeom(1)
+
+    check firstGeom.centerX().near(firstLane.centerX())
+    check firstProjection.instructions.overviewInstructionGeom(2).centerX() >
+      firstGeom.centerX()
+
+    var lastModel = configuredModel()
+    lastModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    for id in 1'u32 .. 3'u32:
+      lastModel.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    lastModel.markColumnsFullWidth(1)
+    lastModel.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+    lastModel.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let lastScreen = lastModel.primaryScreen()
+    let lastSlots = lastModel.previewSlots()
+    let lastPreview =
+      lastModel.workspacePreviewRect(lastScreen, lastSlots, lastSlots.find(1'u32))
+    let lastLane = runtime_values.Rect(
+      x: lastScreen.x, y: lastPreview.y, w: lastScreen.w, h: lastPreview.h
+    )
+    let lastProjection = lastModel.layoutProjection()
+    let lastGeom = lastProjection.instructions.overviewInstructionGeom(3)
+
+    check lastGeom.centerX().near(lastLane.centerX())
+    check lastProjection.instructions.overviewInstructionGeom(2).centerX() <
+      lastGeom.centerX()
+
+  test "Vertical scroller overview centers focused edge rows in preview":
+    var firstModel = configuredModel()
+    firstModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    firstModel.applyMsg(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    for id in 1'u32 .. 3'u32:
+      firstModel.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    firstModel.markColumnsFullWidth(1)
+    firstModel.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    firstModel.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let firstScreen = firstModel.primaryScreen()
+    let firstSlots = firstModel.previewSlots()
+    let firstPreview =
+      firstModel.workspacePreviewRect(firstScreen, firstSlots, firstSlots.find(1'u32))
+    let firstProjection = firstModel.layoutProjection()
+    let firstGeom = firstProjection.instructions.overviewInstructionGeom(1)
+
+    check firstGeom.centerY().near(firstPreview.centerY())
+    check firstProjection.instructions.overviewInstructionGeom(2).centerY() >
+      firstGeom.centerY()
+
+    var lastModel = configuredModel()
+    lastModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    lastModel.applyMsg(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller)
+    )
+    for id in 1'u32 .. 3'u32:
+      lastModel.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    lastModel.markColumnsFullWidth(1)
+    lastModel.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+    lastModel.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let lastScreen = lastModel.primaryScreen()
+    let lastSlots = lastModel.previewSlots()
+    let lastPreview =
+      lastModel.workspacePreviewRect(lastScreen, lastSlots, lastSlots.find(1'u32))
+    let lastProjection = lastModel.layoutProjection()
+    let lastGeom = lastProjection.instructions.overviewInstructionGeom(3)
+
+    check lastGeom.centerY().near(lastPreview.centerY())
+    check lastProjection.instructions.overviewInstructionGeom(2).centerY() <
+      lastGeom.centerY()
 
   test "Mixed layout overview previews stay isolated":
     var model = configuredModel()
@@ -387,7 +533,10 @@ suite "Core Runtime Logic: overview navigation":
       requireRawInsideClip = false,
     )
     discard projection.instructions.checkOverviewGroup(
-      [4'u32, 5'u32, 6'u32], verticalPreview, [scrollerLane, gridPreview]
+      [4'u32, 5'u32, 6'u32],
+      verticalPreview,
+      [scrollerLane, gridPreview],
+      requireRawInsideClip = false,
     )
     discard projection.instructions.checkOverviewGroup(
       [7'u32, 8'u32, 9'u32], gridPreview, [scrollerLane, verticalPreview]
@@ -430,7 +579,9 @@ suite "Core Runtime Logic: overview navigation":
     check workspaceTwo.len == 3
     check workspaceTwo.allIt(it.clipSet)
     check workspaceTwo.allIt(it.clip == secondPreview)
-    check workspaceTwo.allIt(it.geom.geomWithinPreview(secondPreview))
+    check workspaceTwo.allIt(
+      it.geom.intersection(secondPreview).geomWithinPreview(secondPreview)
+    )
 
   test "Non-scroller overview projects workspace previews":
     var model = configuredModel()
