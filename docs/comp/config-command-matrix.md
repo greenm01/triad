@@ -24,10 +24,10 @@ Current River is non-monolithic. It supplies compositor configuration,
 startup, and protocol primitives, while window-management policy belongs to the
 external window manager.
 
-## Ongoing Config Work
+## Config Work Status
 
-These workstreams track the next config areas from the Niri and Mango review.
-They are grouped by user-facing capability rather than by implementation module.
+The Niri and Mango config review workstreams are complete. Remaining gaps are
+protocol-dependent or tracked in the feature matrix below.
 
 | Priority | Workstream | Target Triad surface | Niri/Mango reference | Current status | First milestone |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -35,8 +35,8 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Implemented through River input, XKB, and libinput config protocols for keyboard repeat, XKB keymaps/options, lock state, and basic mouse/touchpad/trackpoint/trackball settings. | Keep validating against live hardware; keyboard layout cycling remains separate command work. |
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
-| P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, release-triggered key, locked-session key, pointer button, wheel-axis, touchpad swipe gesture, and Linux evdev lid/tablet switch-event delivery surfaces exist. Compositor-native switch events remain absent. | Keep validating live hardware delivery and add compositor-native switch events if River exposes them. |
-| P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay layout controls, coarse animation speed, and viewport snap-threshold tuning exist; advanced layer-rule polish remains blocked on richer layer identity. | Keep refining small polish surfaces when they are grounded in runtime data; do not add layer rules until River exposes enough identity/state. |
+| Done | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Implemented for key press/release, locked-session keys, pointer buttons, wheel-axis bindings, touchpad swipe gestures, and Linux evdev lid/tablet switch events. | Use evdev switch delivery today; compositor-native switch events remain blocked until River exposes a protocol surface for them. |
+| Done | Focused polish | Cursor hiding, config notifications, overview/recent/hotkey overlays, and animation tuning | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Implemented cursor theme/size/shake/hiding, config reload notification commands, overview controls, recent windows, hotkey overlay layout controls, coarse animation speed, and viewport snap-threshold tuning. | Layer-rule polish remains protocol-blocked; do not add layer-rule config until River exposes enough layer-shell identity/state. |
 
 ## Feature Matrix
 
