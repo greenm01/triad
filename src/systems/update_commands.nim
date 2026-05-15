@@ -6,13 +6,12 @@ import
   scratchpad, update_effects, window_state, window_rules, workspaces
 
 proc closeOverview(model: var Model): bool =
-  result = model.setOverviewActive(false)
-  result = model.clearOverviewSelection() or result
-  result = model.setOverviewWorkspacePreviewsActive(false) or result
+  model.closeOverviewMode()
 
 proc openOverview(model: var Model): bool =
   if model.overviewActive:
     return false
+  discard model.setOverviewTabModeActive(false, 0'u32)
   discard model.setOverviewWorkspacePreviewsActive(true)
   result = model.setOverviewActive(true)
   if result:
@@ -179,6 +178,19 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.closeOverview()
     if result.dirty:
       result.effects.add(broadcastOverview(false))
+  of MsgKind.CmdOverviewTab:
+    if model.overviewTabMode and msg.overviewTabModifiers != 0:
+      if not model.overviewActive:
+        result.dirty = model.openOverview()
+        result.dirty =
+          model.setOverviewTabModeActive(true, msg.overviewTabModifiers) or result.dirty
+        if result.dirty:
+          result.effects.add(broadcastOverview(true))
+          result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+      else:
+        result.dirty =
+          model.setOverviewTabModeActive(true, msg.overviewTabModifiers) or result.dirty
+        result.dirty = model.focusOverviewTabNext() or result.dirty
   of MsgKind.CmdRecentWindowNext:
     result.dirty = model.openOrAdvanceRecentWindow(
       RecentWindowDirection.Forward, msg.recentScope, msg.recentScopeSet,

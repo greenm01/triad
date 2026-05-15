@@ -158,6 +158,12 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       result.dirty = model.setHotkeyOverlayOpen(false)
   of MsgKind.WlModifiersChanged:
     discard model.setActiveModifiers(msg.newModifiers)
+    if model.overviewTabModeActive and
+        (msg.newModifiers and model.overviewTabModeModifiers) !=
+        model.overviewTabModeModifiers:
+      result.dirty = model.closeOverviewMode() or result.dirty
+      if result.dirty:
+        result.effects.add(broadcastOverview(false))
     if model.recentWindowsActive and msg.newModifiers == 0:
       let selected = model.confirmedRecentWindow()
       result.dirty = selected != NullWindowId

@@ -381,6 +381,9 @@ type
     visibleSlots*: seq[uint32]
     overviewActive*: bool
     overviewWorkspacePreviewsActive*: bool
+    overviewTabMode*: bool
+    overviewTabModeActive*: bool
+    overviewTabModeModifiers*: uint32
     hotkeyOverlayOpen*: bool
     hotkeyOverlayShownOnce*: bool
     overviewSelectedWindow*: WindowId

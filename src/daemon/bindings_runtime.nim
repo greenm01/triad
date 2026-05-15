@@ -254,6 +254,16 @@ proc recentBindingCanOpen(model: Model, mode: BindingMode, msg: Msg): bool =
     not model.overviewActive and
     msg.kind in {MsgKind.CmdRecentWindowNext, MsgKind.CmdRecentWindowPrev}
 
+proc isOverviewTabOpenCommand(msg: Msg): bool =
+  msg.kind in {MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview}
+
+proc overviewTabBindingCanCycle(model: Model, binding: KeyBindingConfig): bool =
+  if not model.overviewTabMode or not model.overviewTabModeActive or
+      binding.modifiers == 0'u32 or binding.modifiers != model.overviewTabModeModifiers:
+    return false
+  let parsed = parseTextCommand(binding.command)
+  parsed.isSome and parsed.get().isOverviewTabOpenCommand()
+
 proc recentOpenCommandForBinding(binding: KeyBindingConfig): string =
   let parsed = parseTextCommand(binding.command)
   if parsed.isNone:
@@ -279,6 +289,8 @@ proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
   if binding.mode == BindingMode.BindRecent and
       not daemon.currentModel.recentWindowsActive and
       binding.command.isRecentAdvanceCommand() and not daemon.currentModel.overviewActive:
+    discard
+  elif daemon.currentModel.overviewTabBindingCanCycle(binding):
     discard
   elif not daemon.bindingModeActive(binding.mode):
     return false
@@ -1256,8 +1268,12 @@ proc addXkbBinding(
   if daemon.riverXkbBindings == nil:
     return
   let binding = daemon.riverXkbBindings.getXkbBinding(seat, keysym, modifiers)
+  var storedMsg = msg
+  if daemon.currentModel.overviewTabMode and modifiers != 0'u32 and
+      msg.isOverviewTabOpenCommand():
+    storedMsg = Msg(kind: MsgKind.CmdOverviewTab, overviewTabModifiers: modifiers)
   daemon.xkbBindingPointers.add(binding)
-  daemon.xkbBindings[binding.id()] = msg
+  daemon.xkbBindings[binding.id()] = storedMsg
   daemon.xkbBindingModes[binding.id()] = bindingConfig.mode
   daemon.xkbBindingModifiers[binding.id()] = modifiers
   discard binding.addListener(xkbBindingListener.addr, daemonData(daemon))

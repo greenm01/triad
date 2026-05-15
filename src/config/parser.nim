@@ -1439,6 +1439,8 @@ proc loadConfig*(path: string): Config =
             elif child.name == "zoom" and child.args.len > 0:
               result.overview.zoom =
                 clampF32(float32(child.args[0].kFloat()), 0.0001, 0.75)
+            elif child.name == "tab-mode":
+              result.overview.tabMode = child.childFlagEnabled()
             elif child.name == "hot-corners":
               for cornerChild in child.children:
                 try:

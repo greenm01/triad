@@ -125,7 +125,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
 | Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | `overview { hot-corners { size; top-left; top-right; bottom-left; bottom-right } }` | X | Triad hot corners are opt-in and open overview only. |
-| Overview | Overview tab mode | `ov_tab_mode` | WM policy | | | Not implemented. |
+| Overview | Overview tab mode | `ov_tab_mode` | WM policy | `overview { tab-mode }` | X | Off by default. Keyboard overview opener bindings with modifiers become hold-to-overview sessions: repeat the opener to cycle windows, release the opener modifier to close overview. |
 | Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | |
 | Scratchpad | Named scratchpad | `toggle_named_scratchpad`, `isnamedscratchpad` | WM policy | `move-to-named-scratchpad`, `toggle-named-scratchpad` | X | Triad names scratchpads directly. |
 | Scratchpad | Scratchpad size | `scratchpad_width_ratio`, `scratchpad_height_ratio` | WM policy | `scratchpad { width-ratio; height-ratio }` | X | |
@@ -331,7 +331,8 @@ KDL config nodes and fields:
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
-- `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`, `hot-corners`.
+- `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`, `tab-mode`,
+  `hot-corners`.
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup` defaults on, `hide-not-bound`.

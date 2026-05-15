@@ -85,6 +85,62 @@ suite "Core Runtime Logic: overview navigation":
     check model.activeWorkspaceFocusId() == 1
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
+  test "Overview tab mode opens, cycles with opener, and closes on modifier release":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        overview: OverviewConfig(tabMode: true),
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdOverviewTab, overviewTabModifiers: 64'u32))
+
+    check model.overviewActive
+    check model.overviewTabModeActive
+    check model.overviewTabModeModifiers == 64'u32
+    check model.selectedOverviewWindow() == WindowId(1)
+
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdOverviewTab, overviewTabModifiers: 64'u32))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(2)
+    check model.selectedOverviewWindow() == WindowId(2)
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlModifiersChanged, oldModifiers: 64'u32, newModifiers: 0)
+    )
+
+    check not model.overviewActive
+    check not model.overviewTabModeActive
+    check model.overviewTabModeModifiers == 0'u32
+    check model.focusedWindowId() == 2
+    check effects.anyIt(
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
+    )
+
+  test "Overview tab command is ignored while tab mode is off":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdOverviewTab, overviewTabModifiers: 64'u32))
+
+    check not model.overviewActive
+    check not model.overviewTabModeActive
+    check effects.len == 0
+
   test "Overview shell focus clear preserves selected window":
     var model = configuredModel()
     model.applyMsg(

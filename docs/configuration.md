@@ -87,7 +87,7 @@ The supported KDL nodes are:
   notification commands.
 - `environment`, `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
   `spawn-at-startup`.
-- `scratchpad`, `overview` gaps and zoom, `floating`, `screenshot`,
+- `scratchpad`, `overview` gaps, zoom, tab mode, `floating`, `screenshot`,
   `input`, `cursor`.
 - Top-level flags and settings: `presentation-mode`, `allow-exit-session`,
   `protocol-surfaces`, `hotkey-overlay`, and `config-notification`.
@@ -730,6 +730,30 @@ config-notification {
   the model.
 - `reload-succeeded` uses the newly applied config.
 - Omitted commands do nothing.
+
+## Overview
+
+Overview supports opt-in tab mode for Mango-style hold navigation:
+
+```kdl
+overview {
+  tab-mode
+}
+
+bindings {
+  bind "Super+o" "toggle-overview"
+}
+```
+
+- `tab-mode`: enables overview tab mode. The default is off. When enabled,
+  keyboard bindings for `toggle-overview` and `open-overview` that include
+  modifiers start a hold session instead of acting as a normal toggle. For
+  example, `Super+o` opens overview, tapping `o` again while still holding
+  `Super` cycles to the next overview window, and releasing `Super` closes
+  overview around the selected window.
+- Overview tab mode uses the configured opener binding's modifiers as the hold
+  latch. It does not affect IPC commands, pointer opens, hot corners, or
+  modifierless overview bindings.
 
 ## Overview Hot Corners
 

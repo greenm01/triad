@@ -24,6 +24,16 @@ proc setOverviewSelection*(model: var Model, winId: WindowId): bool =
 proc clearOverviewSelection*(model: var Model): bool =
   model.setOverviewSelection(NullWindowId)
 
+proc setOverviewTabModeActive*(
+    model: var Model, active: bool, modifiers: uint32
+): bool =
+  if model.overviewTabModeActive == active and
+      model.overviewTabModeModifiers == modifiers:
+    return false
+  model.overviewTabModeActive = active
+  model.overviewTabModeModifiers = modifiers
+  true
+
 proc setRecentWindowsActive*(model: var Model, active: bool): bool =
   if model.recentWindowsActive == active:
     return false

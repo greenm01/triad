@@ -207,6 +207,23 @@ proc focusCycle*(model: var Model, step: int): bool =
   discard model.recordFocus(target)
   true
 
+proc focusOverviewTabNext*(model: var Model): bool =
+  if not model.overviewActive:
+    return false
+  let windows = model.overviewWindowIds()
+  if windows.len == 0:
+    return false
+  let selected = model.selectedOverviewWindow()
+  let idx = windows.find(selected)
+  let nextIdx =
+    if idx == -1:
+      0
+    else:
+      (idx + 1) mod windows.len
+  let target = windows[nextIdx]
+  result = model.focusWindow(target)
+  result = model.setOverviewSelection(target) or result
+
 proc visibleWindowNear(model: Model, columnId: ColumnId, preferredIdx: int): WindowId =
   let count = model.windowCountForColumn(columnId)
   if count == 0:

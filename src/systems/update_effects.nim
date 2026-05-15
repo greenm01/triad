@@ -228,8 +228,10 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
 proc shouldBroadcastTriadStateChanged*(kind: MsgKind): bool =
   kind.shouldBroadcastTriadLayoutChanged() or kind.shouldBroadcastWindowsChanged() or
     kind.shouldBroadcastOutputsChanged() or
-    kind in
-    {MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview}
+    kind in {
+      MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
+      MsgKind.CmdOverviewTab,
+    }
 
 proc workspaceByTag(snapshot: ShellSnapshot, tagId: uint32): Option[ShellWorkspace] =
   for workspace in snapshot.workspaces:
@@ -282,7 +284,8 @@ proc isOverviewPreviewCommand(kind: MsgKind): bool =
   kind in {
     MsgKind.CmdFocusNext, MsgKind.CmdFocusPrev, MsgKind.CmdFocusDirection,
     MsgKind.CmdFocusWindowById, MsgKind.CmdFocusWindowOrWorkspaceUp,
-    MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.WlOverviewWheel,
+    MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdOverviewTab,
+    MsgKind.WlOverviewWheel,
   }
 
 proc isFocusPreservingLayoutCommand(kind: MsgKind): bool =
@@ -390,7 +393,8 @@ proc shouldSyncFullscreenPresentation(
     MsgKind.WlWindowExitFullscreenRequested, MsgKind.WlOutputRemoved,
     MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
     MsgKind.CmdExitFullscreenById, MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview,
-    MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
+    MsgKind.CmdCloseOverview, MsgKind.CmdOverviewTab, MsgKind.CmdSelectWindow,
+    MsgKind.CmdConfigReload,
   }
 
 proc addFullscreenPresentationSync(
@@ -441,7 +445,7 @@ proc shouldSyncMaximizedPresentation(
     MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn,
     MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdToggleFloating,
     MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
-    MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
+    MsgKind.CmdOverviewTab, MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
   }
 
 proc addMaximizedPresentationSync(
@@ -502,8 +506,12 @@ proc addPostUpdateEffects*(
   elif dirty and beforeFocus == afterFocus and
       msg.kind.shouldReassertFocusedWindow(before, after):
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
-  elif msg.kind in {MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow} and
-      afterFocus != 0:
+  elif (
+    msg.kind in {MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow} or (
+      msg.kind == MsgKind.WlModifiersChanged and before.overviewActive and
+      not after.overviewActive
+    )
+  ) and afterFocus != 0:
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
   elif dirty and overviewPreview:
     effects.add(Effect(kind: EffectKind.EffFocusShellUi))

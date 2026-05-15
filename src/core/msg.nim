@@ -117,6 +117,7 @@ type
     CmdToggleOverview
     CmdOpenOverview
     CmdCloseOverview
+    CmdOverviewTab
     CmdRecentWindowNext
     CmdRecentWindowPrev
     CmdRecentWindowConfirm
@@ -273,6 +274,8 @@ type
     of MsgKind.WlModifiersChanged:
       oldModifiers*: uint32
       newModifiers*: uint32
+    of MsgKind.CmdOverviewTab:
+      overviewTabModifiers*: uint32
     of MsgKind.CmdMoveFloating:
       moveDX*, moveDY*: int32
     of MsgKind.CmdSetLayout:

@@ -294,6 +294,7 @@ type
     outerGap*: int32
     innerGapMultiplier*: float32
     zoom*: float32
+    tabMode*: bool
     hotCorners*: OverviewHotCornersConfig
 
   RecentWindowDirection* {.pure.} = enum

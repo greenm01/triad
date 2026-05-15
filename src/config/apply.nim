@@ -257,6 +257,7 @@ proc applyConfig*(model: var Model, config: Config) =
       configClampF32(config.overview.zoom, 0.0001, 0.75)
     else:
       DefaultOverviewZoom
+  model.overviewTabMode = config.overview.tabMode
   model.overviewHotCorners = config.overview.hotCorners
   model.overviewHotCorners.size =
     if model.overviewHotCorners.size > 0:

@@ -168,6 +168,7 @@ overview {
   outer-gap 80
   inner-gap-multiplier 1.75
   zoom 0.25
+  tab-mode
   hot-corners {
     size 12
     top-left
@@ -435,6 +436,7 @@ switch-events {
     check config.overview.outerGap == 80
     check config.overview.innerGapMultiplier == 1.75'f32
     check config.overview.zoom == 0.25'f32
+    check config.overview.tabMode
     check config.overview.hotCorners.size == 12
     check config.overview.hotCorners.topLeft
     check not config.overview.hotCorners.topRight

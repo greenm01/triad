@@ -173,10 +173,14 @@ proc handleOverviewWheel*(model: var Model, x, y, horizontal, vertical: int32): 
   elif modifiers == ShiftModifier:
     result = model.focusOverviewColumnWheel(x, y, vertical.signedStep())
 
-proc closeOverviewFromPointer(model: var Model): bool =
+proc closeOverviewMode*(model: var Model): bool =
   result = model.setOverviewActive(false)
   result = model.setOverviewWorkspacePreviewsActive(false) or result
   result = model.clearOverviewSelection() or result
+  result = model.setOverviewTabModeActive(false, 0'u32) or result
+
+proc closeOverviewFromPointer(model: var Model): bool =
+  model.closeOverviewMode()
 
 proc overviewDragPastThreshold(op: PointerOpData): bool =
   abs(op.totalDX) >= OverviewDragThreshold or abs(op.totalDY) >= OverviewDragThreshold
