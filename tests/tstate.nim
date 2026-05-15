@@ -159,6 +159,49 @@ suite "Runtime state primitives":
             checkpoint path & ":" & $(lineNo + 1) & ": " & line
           check path.isAllowedTypeInterop(line)
 
+  test "audited exported data contracts stay in types modules":
+    let movedTypes = [
+      (path: "src/config/parser.nim", pattern: "Config* = object"),
+      (path: "src/config/parser.nim", pattern: "LayoutConfig* = object"),
+      (path: "src/config/parser.nim", pattern: "ConfigLoadResult* = object"),
+      (path: "src/config/parser.nim", pattern: "ConfigDocument* = object"),
+      (path: "src/core/msg.nim", pattern: "MsgKind* {.pure.} = enum"),
+      (path: "src/core/msg.nim", pattern: "Msg* = object"),
+      (path: "src/core/effects.nim", pattern: "EffectKind* {.pure.} = enum"),
+      (path: "src/core/effects.nim", pattern: "Effect* = object"),
+      (path: "src/core/restore_state.nim", pattern: "LiveRestoreState* = object"),
+      (path: "src/core/restore_state.nim", pattern: "LiveRestoreWriteResult* = object"),
+      (path: "src/ipc/command_registry.nim", pattern: "CommandId* {.pure.} = enum"),
+      (
+        path: "src/ipc/command_registry.nim",
+        pattern: "CommandArgShape* {.pure.} = enum",
+      ),
+      (path: "src/ipc/command_registry.nim", pattern: "CommandSpec* = object"),
+      (path: "src/systems/recent_windows.nim", pattern: "RecentWindowPreview* = object"),
+      (
+        path: "src/systems/window_policy.nim",
+        pattern: "ParentedWindowIntent* {.pure.} = enum",
+      ),
+      (path: "src/systems/window_policy.nim", pattern: "LeadFloatingAnchor* = object"),
+      (path: "src/systems/update_effects.nim", pattern: "UpdateStep* = object"),
+      (
+        path: "src/systems/overview_geometry.nim",
+        pattern: "OverviewStyle* {.pure.} = enum",
+      ),
+      (
+        path: "src/systems/overview_geometry.nim",
+        pattern: "OverviewDropKind* {.pure.} = enum",
+      ),
+      (
+        path: "src/systems/overview_geometry.nim",
+        pattern: "OverviewDropTarget* = object",
+      ),
+    ]
+    for item in movedTypes:
+      let source = readFile(item.path)
+      checkpoint item.path & " still defines " & item.pattern
+      check not source.contains(item.pattern)
+
   test "source follows enforceable style rules":
     let tabFailures = sourceLineFailures(
       proc(path, line: string): bool =

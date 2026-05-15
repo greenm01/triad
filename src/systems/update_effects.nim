@@ -2,12 +2,11 @@ import std/[json, options]
 import ../core/[effects, msg, niri_state, shell_focus, triad_state]
 import ../state/engine
 import ../types/shell_snapshot
+import ../types/system_views
 from ../types/runtime_values import nil
 import idle_inhibit, presentation_policy
 
-type UpdateStep* = object
-  dirty*: bool
-  effects*: seq[Effect]
+export system_views
 
 proc externalWindowId*(id: runtime_values.WindowId): ExternalWindowId =
   ExternalWindowId(uint32(id))

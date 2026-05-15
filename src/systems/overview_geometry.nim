@@ -1,20 +1,10 @@
 import std/math
 import ../state/engine
 import ../types/runtime_values as rv
+import ../types/system_views
 import workspaces
 
-type
-  OverviewStyle* {.pure.} = enum
-    WorkspaceStrip
-
-  OverviewDropKind* {.pure.} = enum
-    DropNone
-    DropWorkspace
-    DropDynamicGap
-
-  OverviewDropTarget* = object
-    kind*: OverviewDropKind
-    slot*: uint32
+export system_views
 
 const OverviewDragThreshold* = 8'i32
 const NiriWorkspaceGapRatio = 0.1'f32

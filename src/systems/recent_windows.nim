@@ -2,6 +2,9 @@ import std/[math, options, strutils, tables]
 import ../state/engine
 import ../types/core as core_types
 import ../types/runtime_values as rv
+import ../types/system_views
+
+export system_views
 
 const RecentTickMs = 16'i32
 const RecentPreviewGap = 16'i32
@@ -10,14 +13,6 @@ const RecentPreviewMinSize = 16'i32
 const RecentPreviewBorder = 2'i32
 const RecentPreviewFallbackW = 800'i32
 const RecentPreviewFallbackH = 600'i32
-
-type RecentWindowPreview* = object
-  winId*: core_types.WindowId
-  riverId*: rv.WindowId
-  geom*: rv.Rect
-  title*: string
-  appId*: string
-  selected*: bool
 
 proc recentWindowPreviews*(model: Model, screen: rv.Rect): seq[RecentWindowPreview]
 

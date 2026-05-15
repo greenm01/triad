@@ -27,3 +27,14 @@
   unmanaged-global behavior separate instead of collapsing them into one flag.
 - Revisit target-viewport layout projection only if compositor-owned animation
   or another projection consumer needs final-position coordinates.
+
+## DOD / Type Placement Cleanup
+
+- (done) Move config parser data shapes into `src/types`.
+- (done) Move runtime `Msg`, `Effect`, and live-restore state shapes into
+  `src/types`.
+- (done) Move IPC command schema types and command specs into `src/types`.
+- (done) Move exported system view/result shapes into `src/types` or make them
+  private.
+- (done) Make handwritten protocol coverage enums pure.
+- Reconcile duplicate canonical/runtime value types inside `src/types`.

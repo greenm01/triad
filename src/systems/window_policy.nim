@@ -1,17 +1,10 @@
 import std/options
 import floating_geometry, focus, layout_projection, placement, window_rules
 import ../state/engine
+import ../types/system_views
 from ../types/runtime_values import nil
 
-type ParentedWindowIntent* {.pure.} = enum
-  None
-  Float
-  Tile
-
-type LeadFloatingAnchor* = object
-  found*: bool
-  winId*: WindowId
-  columnId*: ColumnId
+export system_views
 
 const LargeParentedRatio = 0.9'f32
 
