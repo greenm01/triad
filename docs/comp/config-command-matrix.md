@@ -52,7 +52,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Startup | Environment variables | `env` | Init script environment | `environment` | X | Applies literal set/unset entries to future Triad-spawned user-facing processes. |
 | Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. |
 | Session | Quit manager | `quit` | `river_window_manager_v1.stop` | `stop-manager` | X | Triad also has `exit-session` behind config. |
-| Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config. |
+| Session | Exit compositor session | | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config; default configs bind `Ctrl+Alt+Delete` to exit the session. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
 | Bindings | Key bindings | `bind`, `bindl`, `binds`, `bindr`, `bindp` | `river_xkb_bindings_v1` | `bindings { bind ... }` | X | Triad supports mode, layout override, inhibit policy, and hotkey overlay titles. |
 | Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"`, `mode="overview"`, or `mode="recent"` | | Triad has fixed binding modes, not arbitrary named modes. Unified overview and recent-windows add modal fallback bindings, including derived direction-key navigation, only when those key slots are free. |

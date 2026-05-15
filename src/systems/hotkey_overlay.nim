@@ -7,6 +7,7 @@ type ImportantHotkey = object
   label: string
 
 const ImportantHotkeys = [
+  ImportantHotkey(command: "exit-session", label: "Exit Triad"),
   ImportantHotkey(command: "toggle-hotkey-overlay", label: "Show Important Hotkeys"),
   ImportantHotkey(command: "close-window", label: "Close Focused Window"),
   ImportantHotkey(command: "focus-left", label: "Focus Left"),

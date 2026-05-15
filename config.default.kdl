@@ -188,6 +188,7 @@ bindings {
     mirror-hjkl-arrows #true
 
     // Launch/session.
+    bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
     bind "Super+Return" "spawn kitty"
     bind "Super+Space" "spawn fuzzel"
     bind "Super+b" "spawn brave-origin-nightly"

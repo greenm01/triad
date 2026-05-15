@@ -81,6 +81,8 @@ workspace-rules {
 // Shells, bars, launchers, lock screens, startup services, and app rules are
 // intentionally configured outside this fallback.
 
+allow-exit-session #true
+
 recent-windows {
     debounce-ms 750
     open-delay-ms 150
@@ -114,6 +116,7 @@ hotkey-overlay {
 // }
 
 bindings {
+    bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
     bind "Super+?" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Super+q" "close-window"
     bind "Super+f" "maximize-window-to-edges"
