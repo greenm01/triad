@@ -62,9 +62,10 @@ renders itself into its assigned rect:
 
 ### Core Principle
 
-> Arrow keys navigate spatially within the focused workspace. At the boundary
-> of that workspace, navigation crosses to the adjacent keyboard-selectable
-> workspace preview, wrapping at the ends like a list highlight.
+> Arrow keys navigate spatially within the focused workspace. At the vertical
+> boundary of that workspace, Up/Down crosses to the adjacent
+> keyboard-selectable workspace preview, wrapping at the ends like a list
+> highlight. Left/Right stop at the horizontal boundary of the focused layout.
 
 Every layout implements the same two-method protocol. The overview manager
 dispatches uniformly with no per-layout special cases.
@@ -107,13 +108,16 @@ enum NavResult {
 ```rust
 fn handle_direction(&mut self, dir: Direction) {
     match self.focused_ws().layout.navigate(dir) {
-        NavResult::Window(w)      => self.set_focus(w),
-        NavResult::Boundary(exit) => self.cross_to_adjacent(exit),
+        NavResult::Window(w)                  => self.set_focus(w),
+        NavResult::Boundary(Direction::Up)    => self.cross_to_adjacent(Direction::Up),
+        NavResult::Boundary(Direction::Down)  => self.cross_to_adjacent(Direction::Down),
+        NavResult::Boundary(Direction::Left)  => {}
+        NavResult::Boundary(Direction::Right) => {}
     }
 }
 
 fn handle_pgup_pgdown(&mut self, dir: Direction) {
-    // same crossing logic; skips intra-workspace navigation entirely
+    // skips intra-workspace navigation entirely
     self.cross_to_adjacent(dir);
 }
 
@@ -158,9 +162,8 @@ fn entry_window(&self, from: Direction) -> WindowId {
 `PgUp` and `PgDn` jump to the previous or next keyboard-selectable workspace
 preview from anywhere in overview, bypassing intra-workspace navigation.
 
-Both call the same `cross_to_adjacent` as boundary-triggered crossing.
-Workspace crossing behavior is identical regardless of how it was triggered.
-PgUp/PgDn are a **speed layer** on the spatial model, not a separate mode.
+Both call `cross_to_adjacent` directly. PgUp/PgDn are a **speed layer** for
+workspace preview traversal, while horizontal arrow boundaries remain inert.
 
 Keyboard traversal visits every visible workspace preview. That includes empty
 default workspaces, active dynamic empty workspaces, and the trailing dynamic
@@ -185,8 +188,9 @@ workspace's entry window. Overview state is cleared on exit.
 
 ## Visual Behavior
 
-- **Arrow key boundary crossing**: the overview strip scrolls to bring the
+- **Vertical arrow boundary crossing**: the overview strip scrolls to bring the
   destination workspace into view.
+- **Horizontal arrow boundaries**: focus remains in the current workspace.
 - **PgUp/PgDn crossing**: same scroll animation; no visual distinction.
 - The focused workspace has a distinct border treatment.
 - Open-axis layouts show a scroll indicator when content exceeds the thumbnail

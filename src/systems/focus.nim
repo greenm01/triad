@@ -446,6 +446,15 @@ proc focusOverviewWorkspaceStep*(model: var Model, direction: int): bool =
   let target = model.overviewWorkspaceStepSlot(direction)
   target != 0 and model.focusWorkspaceSlot(target)
 
+proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
+  case direction
+  of Direction.DirUp:
+    model.focusOverviewWorkspaceStep(-1)
+  of Direction.DirDown:
+    model.focusOverviewWorkspaceStep(1)
+  of Direction.DirLeft, Direction.DirRight:
+    false
+
 proc focusByDirection*(model: var Model, direction: Direction): bool =
   if model.focusByVisualDirection(direction):
     return true
@@ -455,11 +464,7 @@ proc focusByDirection*(model: var Model, direction: Direction): bool =
   let pos = model.findWindowPosition(tagId, focused)
   if not pos.found:
     if model.overviewActive:
-      let workspaceDirection =
-        case direction
-        of Direction.DirLeft, Direction.DirUp: -1
-        of Direction.DirRight, Direction.DirDown: 1
-      return model.focusOverviewWorkspaceStep(workspaceDirection)
+      return model.focusOverviewBoundaryStep(direction)
     return false
 
   let columnCount = model.columnCountForTag(tagId)
@@ -487,11 +492,7 @@ proc focusByDirection*(model: var Model, direction: Direction): bool =
     return model.focusWindow(target)
 
   if model.overviewActive:
-    let workspaceDirection =
-      case direction
-      of Direction.DirLeft, Direction.DirUp: -1
-      of Direction.DirRight, Direction.DirDown: 1
-    return model.focusOverviewWorkspaceStep(workspaceDirection)
+    return model.focusOverviewBoundaryStep(direction)
 
   false
 

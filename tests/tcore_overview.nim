@@ -33,6 +33,14 @@ proc markColumnsFullWidth(model: var Model, slot: uint32) =
   for columnId, _ in model.columnsOnTagWithId(tagId):
     discard model.setColumnFullWidth(columnId, true)
 
+proc allLayoutModes(): seq[LayoutMode] =
+  @[
+    LayoutMode.Scroller, LayoutMode.VerticalScroller, LayoutMode.MasterStack,
+    LayoutMode.Grid, LayoutMode.Monocle, LayoutMode.Deck, LayoutMode.CenterTile,
+    LayoutMode.RightTile, LayoutMode.VerticalTile, LayoutMode.VerticalGrid,
+    LayoutMode.VerticalDeck, LayoutMode.TGMix,
+  ]
+
 proc includesId(ids: openArray[uint32], id: uint32): bool =
   for candidate in ids:
     if candidate == id:
@@ -473,6 +481,121 @@ suite "Core Runtime Logic: overview navigation":
     check closeEffects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 3
     )
+
+  test "Unified overview horizontal boundary stays in focused workspace":
+    for mode in allLayoutModes():
+      var model = configuredModel()
+      model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: mode))
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+      )
+      model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+
+      let activeTag = model.activeTag
+      let leftEffects = model.updateModel(
+        Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
+      )
+
+      check model.overviewActive
+      check model.activeTag == activeTag
+      check model.selectedOverviewWindow() == WindowId(1)
+      check not leftEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+      check not leftEffects.anyIt(
+        it.kind == EffectKind.EffBroadcastJson and
+          it.jsonPayload.contains("WorkspaceActivated")
+      )
+      check not leftEffects.anyIt(
+        it.kind == EffectKind.EffBroadcastJson and
+          it.jsonPayload.contains("WorkspacesChanged")
+      )
+
+      let rightEffects = model.updateModel(
+        Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+      )
+
+      check model.overviewActive
+      check model.activeTag == activeTag
+      check model.selectedOverviewWindow() == WindowId(1)
+      check not rightEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+      check not rightEffects.anyIt(
+        it.kind == EffectKind.EffBroadcastJson and
+          it.jsonPayload.contains("WorkspaceActivated")
+      )
+      check not rightEffects.anyIt(
+        it.kind == EffectKind.EffBroadcastJson and
+          it.jsonPayload.contains("WorkspacesChanged")
+      )
+
+  test "Unified overview vertical boundary still moves workspaces":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let upEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
+    )
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
+    check upEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    let downEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
+    )
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(3)
+    check model.selectedOverviewWindow() == NullWindowId
+    check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+  test "Unified overview empty workspace ignores horizontal arrows":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+
+    let activeTag = model.activeTag
+    check model.selectedOverviewWindow() == NullWindowId
+
+    let leftEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
+    )
+    check model.activeTag == activeTag
+    check model.selectedOverviewWindow() == NullWindowId
+    check not leftEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    let rightEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+    )
+    check model.activeTag == activeTag
+    check model.selectedOverviewWindow() == NullWindowId
+    check not rightEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    let upEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
+    )
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
+    check upEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    let downEffects = model.updateModel(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
+    )
+    check model.activeTag == model.tagForSlot(3)
+    check model.selectedOverviewWindow() == NullWindowId
+    check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview keeps workspace focus commands live":
     var model = configuredModel()
