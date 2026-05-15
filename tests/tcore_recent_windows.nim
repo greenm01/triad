@@ -20,6 +20,35 @@ proc recentModel(debounceMs = 0'i32, openDelayMs = 0'i32): Model =
     )
   ).model
 
+proc backgroundOpenedRecentModel(): Model =
+  result = initRuntimeStateFromConfig(
+    Config(
+      workspaces: WorkspaceConfig(defaultCount: 3),
+      recentWindows: recentConfig(),
+      windowRules:
+        @[
+          WindowRule(
+            appIdMatch: "background",
+            defaultWorkspace: 2,
+            openFocusedSet: true,
+            openFocused: false,
+          )
+        ],
+    )
+  ).model
+  result.applyMsg(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1200, height: 800)
+  )
+  result.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "one")
+  )
+  result.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "two")
+  )
+  result.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "background", title: "bg")
+  )
+
 suite "Core Runtime Logic: recent windows":
   test "recent-window-next opens on the previous MRU window and confirms on modifier release":
     var model = recentModel()
@@ -35,6 +64,24 @@ suite "Core Runtime Logic: recent windows":
     check not model.recentWindowsActive
     check model.focusedWindowId() == 2
     check effects.hasFocusEffect(2)
+
+  test "recent-window candidates include background opens before older visits":
+    var model = backgroundOpenedRecentModel()
+
+    check model.focusedWindowId() == 2
+    check model.recentWindowCandidates().mapIt(uint32(it)) == @[3'u32, 2'u32, 1'u32]
+
+  test "recent-window startup navigation anchors to current focus":
+    var model = backgroundOpenedRecentModel()
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowNext))
+    check model.recentWindowsActive
+    check uint32(model.selectedRecentWindow()) == 1
+
+    discard model.cancelRecentWindows()
+    discard model.updateModel(Msg(kind: MsgKind.CmdRecentWindowPrev))
+    check model.recentWindowsActive
+    check uint32(model.selectedRecentWindow()) == 3
 
   test "recent-window app-id filter skips other applications":
     var model = recentModel()

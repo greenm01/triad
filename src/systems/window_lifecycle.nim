@@ -680,6 +680,8 @@ proc createWindowForExternal*(
     preserveRuntimeState = existingWindow and not hasRestoredWindow,
   )
   discard model.applyWindowRuleBounds(result)
+  if not existingWindow:
+    discard model.recordRecentWindowOpen(result)
 
   let swallowHost = model.windowForExternal(swallowHostExternalId)
   let canSwallow =

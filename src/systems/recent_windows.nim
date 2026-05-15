@@ -154,6 +154,25 @@ proc selectNearestRecent(model: var Model, candidates: seq[core_types.WindowId])
     return model.setRecentWindowsSelected(candidates[0])
   false
 
+proc selectRecentStartupWindow(
+    model: var Model,
+    candidates: seq[core_types.WindowId],
+    active: core_types.WindowId,
+    direction: RecentWindowDirection,
+): bool =
+  var idx = 0
+  if active != NullWindowId and candidates.find(active) != -1:
+    idx = candidates.find(active)
+    case direction
+    of RecentWindowDirection.Forward:
+      idx = (idx + 1) mod candidates.len
+    of RecentWindowDirection.Backward:
+      idx = (idx + candidates.len - 1) mod candidates.len
+  else:
+    if direction == RecentWindowDirection.Backward:
+      idx = candidates.len - 1
+  model.setRecentWindowsSelected(candidates[idx])
+
 proc advanceRecentSelection*(model: var Model, direction: RecentWindowDirection): bool =
   result = model.unfreezeRecentWindowsView()
   let candidates = model.currentRecentCandidates()
@@ -204,15 +223,13 @@ proc openOrAdvanceRecentWindow*(
     let candidates = model.currentRecentCandidates()
     if candidates.len == 0:
       return false
-    discard model.setRecentWindowsSelected(candidates[0])
     model.recentWindowsOpenElapsedMs = 0
     discard model.setRecentWindowsActive(true)
     discard model.setHotkeyOverlayOpen(false)
     discard model.setOverviewActive(false)
     discard model.setOverviewWorkspacePreviewsActive(false)
     discard model.clearOverviewSelection()
-    if active != NullWindowId or direction == RecentWindowDirection.Backward:
-      discard model.advanceRecentSelection(direction)
+    discard model.selectRecentStartupWindow(candidates, active, direction)
     return true
 
   result = model.setRecentFilterFromCommand(filter, filterSet)

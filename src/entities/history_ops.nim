@@ -4,7 +4,9 @@ import ../types/[core, model]
 
 const MaxHistoryEntries = 32
 
-proc commitRecentFocus*(model: var Model, winId: WindowId): bool =
+proc touchRecentWindow(
+    model: var Model, winId: WindowId, clearPendingFocus: bool
+): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
   model.recentWindowHistory.keepIf(
@@ -14,10 +16,16 @@ proc commitRecentFocus*(model: var Model, winId: WindowId): bool =
   model.recentWindowHistory.add(winId)
   while model.recentWindowHistory.len > MaxHistoryEntries:
     model.recentWindowHistory.delete(0)
-  if model.pendingRecentFocusWindow == winId:
+  if clearPendingFocus and model.pendingRecentFocusWindow == winId:
     model.pendingRecentFocusWindow = NullWindowId
     model.pendingRecentFocusElapsedMs = 0
   true
+
+proc commitRecentFocus*(model: var Model, winId: WindowId): bool =
+  model.touchRecentWindow(winId, clearPendingFocus = true)
+
+proc recordRecentWindowOpen*(model: var Model, winId: WindowId): bool =
+  model.touchRecentWindow(winId, clearPendingFocus = false)
 
 proc scheduleRecentFocus(model: var Model, winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
