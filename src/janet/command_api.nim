@@ -70,5 +70,50 @@ proc actionMsg*(runtime: JanetHandle, index: int): Option[Msg] =
       some(Msg(kind: MsgKind.CmdSpawn, spawnCommand: command))
     else:
       none(Msg)
+  of JanetActionMoveWindowToTag:
+    some(
+      Msg(
+        kind: MsgKind.CmdMoveWindowToTag,
+        moveWindowId: triadJanetActionU32(runtime, cint(index)),
+        moveTargetTag: triadJanetActionU32B(runtime, cint(index)),
+        moveFollowWindow: triadJanetActionBool(runtime, cint(index)) != 0,
+      )
+    )
+  of JanetActionMoveWindowToWorkspace:
+    some(
+      Msg(
+        kind: MsgKind.CmdMoveWindowToWorkspaceIndex,
+        moveWorkspaceWindowId: triadJanetActionU32(runtime, cint(index)),
+        moveWorkspaceIndex: triadJanetActionU32B(runtime, cint(index)),
+        moveWorkspaceFollowWindow: triadJanetActionBool(runtime, cint(index)) != 0,
+      )
+    )
+  of JanetActionSetWindowFloating:
+    some(
+      Msg(
+        kind: MsgKind.CmdSetWindowFloatingById,
+        floatingWindowId: triadJanetActionU32(runtime, cint(index)),
+        windowFloating: triadJanetActionBool(runtime, cint(index)) != 0,
+      )
+    )
+  of JanetActionSetLayoutForWorkspace:
+    let layout = layoutFromName($triadJanetActionText(runtime, cint(index)))
+    if layout.isSome:
+      some(
+        Msg(
+          kind: MsgKind.CmdSetLayout,
+          newLayout: layout.get(),
+          layoutTargetTag: triadJanetActionU32(runtime, cint(index)),
+        )
+      )
+    else:
+      none(Msg)
+  of JanetActionFocusWindow:
+    some(
+      Msg(
+        kind: MsgKind.CmdFocusWindowById,
+        focusWindowId: triadJanetActionU32(runtime, cint(index)),
+      )
+    )
   else:
     none(Msg)

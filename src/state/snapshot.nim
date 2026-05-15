@@ -138,6 +138,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         parentId: uint32(win.parentExternalId),
         title: win.title,
         appId: win.appId,
+        identifier: win.identifier,
         tagId:
           if pos.found:
             some(pos.slot)

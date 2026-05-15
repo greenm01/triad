@@ -76,7 +76,8 @@ proc windowExpr(window: ShellWindow): string =
       "nil"
   "{:id " & $window.id & " :pid " & $window.pid & " :parent-id " & $window.parentId &
     " :title " & window.title.escaped() & " :app-id " & window.appId.escaped() &
-    " :tag-id " & tagId & " :workspace-idx " & $window.workspaceIdx & " :output-name " &
+    " :identifier " & window.identifier.escaped() & " :tag-id " & tagId &
+    " :workspace-idx " & $window.workspaceIdx & " :output-name " &
     window.outputName.escaped() & " :col-idx " & $window.colIdx & " :win-idx " &
     $window.winIdx & " :focused " & window.isFocused.boolValue() & " :floating " &
     window.isFloating.boolValue() & " :fullscreen " & window.isFullscreen.boolValue() &
@@ -97,7 +98,9 @@ proc outputExpr(output: ShellOutput): string =
     $output.y & " :w " & $output.w & " :h " & $output.h & " :primary " &
     output.isPrimary.boolValue() & "}"
 
-proc janetSnapshotSource*(snapshot: ShellSnapshot): string =
+proc janetSnapshotSource*(
+    snapshot: ShellSnapshot, currentWindow = none(ShellWindow)
+): string =
   var workspaces: seq[string] = @[]
   var windows: seq[string] = @[]
   var outputs: seq[string] = @[]
@@ -111,9 +114,16 @@ proc janetSnapshotSource*(snapshot: ShellSnapshot): string =
     outputs.add(output.outputExpr())
   for mode in snapshot.layoutCycle:
     layoutCycle.add(mode.layoutName().escaped())
+  let currentWindowExpr =
+    if currentWindow.isSome:
+      currentWindow.get().windowExpr()
+    else:
+      "nil"
 
   result =
     """
+(def triad/current-window $13)
+
 (def triad/snapshot
   {:version $1
    :active-tag $2
@@ -164,4 +174,5 @@ proc janetSnapshotSource*(snapshot: ShellSnapshot): string =
       workspaces.join(" "),
       windows.join(" "),
       outputs.join(" "),
+      currentWindowExpr,
     ]

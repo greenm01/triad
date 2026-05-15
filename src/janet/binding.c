@@ -9,12 +9,19 @@ enum {
   TRIAD_JANET_FOCUS_TAG = 3,
   TRIAD_JANET_SET_LAYOUT = 4,
   TRIAD_JANET_TOGGLE_FLOATING = 5,
-  TRIAD_JANET_SPAWN = 6
+  TRIAD_JANET_SPAWN = 6,
+  TRIAD_JANET_MOVE_WINDOW_TO_TAG = 7,
+  TRIAD_JANET_MOVE_WINDOW_TO_WORKSPACE = 8,
+  TRIAD_JANET_SET_WINDOW_FLOATING = 9,
+  TRIAD_JANET_SET_LAYOUT_FOR_WORKSPACE = 10,
+  TRIAD_JANET_FOCUS_WINDOW = 11
 };
 
 typedef struct {
   int kind;
   uint32_t u32_value;
+  uint32_t u32_value2;
+  int bool_value;
   char *text;
   int argc;
   char **argv;
@@ -96,6 +103,11 @@ static uint32_t get_u32_arg(Janet *argv, int32_t n) {
   return (uint32_t) value;
 }
 
+static int get_optional_bool_arg(Janet *argv, int32_t argc, int32_t n, int fallback) {
+  if (argc <= n) return fallback;
+  return janet_getboolean(argv, n) ? 1 : 0;
+}
+
 static Janet c_move_to_tag(int32_t argc, Janet *argv) {
   janet_arity(argc, 1, 1);
   TriadJanetAction action;
@@ -171,6 +183,65 @@ static Janet c_spawn(int32_t argc, Janet *argv) {
   return janet_wrap_nil();
 }
 
+static Janet c_move_window_to_tag(int32_t argc, Janet *argv) {
+  janet_arity(argc, 2, 3);
+  TriadJanetAction action;
+  memset(&action, 0, sizeof(action));
+  action.kind = TRIAD_JANET_MOVE_WINDOW_TO_TAG;
+  action.u32_value = get_u32_arg(argv, 0);
+  action.u32_value2 = get_u32_arg(argv, 1);
+  action.bool_value = get_optional_bool_arg(argv, argc, 2, 0);
+  if (!append_action(current_runtime, action)) janet_panic("failed to append action");
+  return janet_wrap_nil();
+}
+
+static Janet c_move_window_to_workspace(int32_t argc, Janet *argv) {
+  janet_arity(argc, 2, 3);
+  TriadJanetAction action;
+  memset(&action, 0, sizeof(action));
+  action.kind = TRIAD_JANET_MOVE_WINDOW_TO_WORKSPACE;
+  action.u32_value = get_u32_arg(argv, 0);
+  action.u32_value2 = get_u32_arg(argv, 1);
+  action.bool_value = get_optional_bool_arg(argv, argc, 2, 0);
+  if (!append_action(current_runtime, action)) janet_panic("failed to append action");
+  return janet_wrap_nil();
+}
+
+static Janet c_set_window_floating(int32_t argc, Janet *argv) {
+  janet_arity(argc, 2, 2);
+  TriadJanetAction action;
+  memset(&action, 0, sizeof(action));
+  action.kind = TRIAD_JANET_SET_WINDOW_FLOATING;
+  action.u32_value = get_u32_arg(argv, 0);
+  action.bool_value = janet_getboolean(argv, 1) ? 1 : 0;
+  if (!append_action(current_runtime, action)) janet_panic("failed to append action");
+  return janet_wrap_nil();
+}
+
+static Janet c_set_layout_for_workspace(int32_t argc, Janet *argv) {
+  janet_arity(argc, 2, 2);
+  TriadJanetAction action;
+  memset(&action, 0, sizeof(action));
+  action.kind = TRIAD_JANET_SET_LAYOUT_FOR_WORKSPACE;
+  action.u32_value = get_u32_arg(argv, 0);
+  action.text = copy_cstring(janet_getcstring(argv, 1));
+  if (action.text == NULL || !append_action(current_runtime, action)) {
+    free_action(&action);
+    janet_panic("failed to append action");
+  }
+  return janet_wrap_nil();
+}
+
+static Janet c_focus_window(int32_t argc, Janet *argv) {
+  janet_arity(argc, 1, 1);
+  TriadJanetAction action;
+  memset(&action, 0, sizeof(action));
+  action.kind = TRIAD_JANET_FOCUS_WINDOW;
+  action.u32_value = get_u32_arg(argv, 0);
+  if (!append_action(current_runtime, action)) janet_panic("failed to append action");
+  return janet_wrap_nil();
+}
+
 static const JanetReg triad_cfuns[] = {
   {"triad/move-to-tag", c_move_to_tag, NULL},
   {"triad/move-to-workspace", c_move_to_workspace, NULL},
@@ -178,6 +249,11 @@ static const JanetReg triad_cfuns[] = {
   {"triad/set-layout", c_set_layout, NULL},
   {"triad/toggle-floating", c_toggle_floating, NULL},
   {"triad/spawn", c_spawn, NULL},
+  {"triad/move-window-to-tag", c_move_window_to_tag, NULL},
+  {"triad/move-window-to-workspace", c_move_window_to_workspace, NULL},
+  {"triad/set-window-floating", c_set_window_floating, NULL},
+  {"triad/set-layout-for-workspace", c_set_layout_for_workspace, NULL},
+  {"triad/focus-window", c_focus_window, NULL},
   {NULL, NULL, NULL}
 };
 
@@ -275,6 +351,18 @@ uint32_t triad_janet_action_u32(void *runtime_ptr, int index) {
   TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
   if (runtime == NULL || index < 0 || index >= runtime->action_count) return 0;
   return runtime->actions[index].u32_value;
+}
+
+uint32_t triad_janet_action_u32_b(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->action_count) return 0;
+  return runtime->actions[index].u32_value2;
+}
+
+int triad_janet_action_bool(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->action_count) return 0;
+  return runtime->actions[index].bool_value;
 }
 
 const char *triad_janet_action_text(void *runtime_ptr, int index) {

@@ -93,6 +93,7 @@ type
     CmdToggleGaps
     CmdMoveFloating
     CmdMoveToTag
+    CmdMoveWindowToTag
     CmdSwapWindowToTag
     CmdRenameTag
     CmdGroupWindows
@@ -128,6 +129,7 @@ type
     CmdRecentWindowCycleScope
     CmdRecentWindowCloseCurrent
     CmdToggleFloating
+    CmdSetWindowFloatingById
     CmdToggleFullscreen
     CmdToggleFullscreenById
     CmdExitFullscreenById
@@ -138,6 +140,7 @@ type
     CmdFocusTag
     CmdFocusWorkspaceIndex
     CmdMoveToWorkspaceIndex
+    CmdMoveWindowToWorkspaceIndex
     CmdFocusOutput
     CmdMoveWorkspaceToOutput
     CmdMoveToOutput
@@ -294,6 +297,10 @@ type
       recentTargetScope*: RecentWindowScope
     of MsgKind.CmdMoveToTag:
       targetTag*: uint32
+    of MsgKind.CmdMoveWindowToTag:
+      moveWindowId*: uint32
+      moveTargetTag*: uint32
+      moveFollowWindow*: bool
     of MsgKind.CmdSwapWindowToTag:
       targetTagSwap*: uint32
     of MsgKind.CmdRenameTag:
@@ -324,10 +331,17 @@ type
       focusTag*: uint32
     of MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdMoveToWorkspaceIndex:
       workspaceIndex*: uint32
+    of MsgKind.CmdMoveWindowToWorkspaceIndex:
+      moveWorkspaceWindowId*: uint32
+      moveWorkspaceIndex*: uint32
+      moveWorkspaceFollowWindow*: bool
     of MsgKind.CmdFocusOutput, MsgKind.CmdMoveWorkspaceToOutput, MsgKind.CmdMoveToOutput:
       outputTarget*: string
     of MsgKind.CmdFocusWindowById:
       focusWindowId*: uint32
+    of MsgKind.CmdSetWindowFloatingById:
+      floatingWindowId*: uint32
+      windowFloating*: bool
     of MsgKind.CmdCloseWindowById:
       closeWindowId*: uint32
     of MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById:

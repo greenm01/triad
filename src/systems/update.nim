@@ -11,9 +11,11 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.WlSessionUnlocked, MsgKind.WlFocusChanged, MsgKind.CmdFocusTag,
     MsgKind.CmdFocusTagLeft, MsgKind.CmdFocusTagRight, MsgKind.CmdFocusWorkspaceIndex,
     MsgKind.CmdMoveToTag, MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
-    MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+    MsgKind.CmdMoveWindowToTag, MsgKind.CmdMoveToWorkspaceIndex,
+    MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdSetLayout,
-    MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleMaximized,
+    MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleFloating,
+    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdToggleMaximized,
     MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
     MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
     MsgKind.CmdRestoreScratchpad,
@@ -50,6 +52,12 @@ proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
     ids.addTrackedWindowId(msg.unmaximizeRequestId)
   of MsgKind.WlWindowMinimizeRequested:
     ids.addTrackedWindowId(msg.minimizeRequestId)
+  of MsgKind.CmdMoveWindowToTag:
+    ids.addTrackedWindowId(msg.moveWindowId)
+  of MsgKind.CmdMoveWindowToWorkspaceIndex:
+    ids.addTrackedWindowId(msg.moveWorkspaceWindowId)
+  of MsgKind.CmdSetWindowFloatingById:
+    ids.addTrackedWindowId(msg.floatingWindowId)
   else:
     discard
 

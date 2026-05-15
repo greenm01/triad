@@ -331,6 +331,10 @@ KDL config nodes and fields:
   `tablet-mode-off`.
 - `quickshell`: `enabled`, `command`, `theme`, `args`.
 - `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `fuel-limit`.
+  Manifests receive `triad/snapshot` and `triad/current-window`, and can emit
+  focused commands plus targeted window commands such as
+  `move-window-to-tag`, `move-window-to-workspace`, `set-window-floating`,
+  `set-layout-for-workspace`, and `focus-window`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.

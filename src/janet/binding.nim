@@ -13,6 +13,11 @@ const
   JanetActionSetLayout* = 4
   JanetActionToggleFloating* = 5
   JanetActionSpawn* = 6
+  JanetActionMoveWindowToTag* = 7
+  JanetActionMoveWindowToWorkspace* = 8
+  JanetActionSetWindowFloating* = 9
+  JanetActionSetLayoutForWorkspace* = 10
+  JanetActionFocusWindow* = 11
 
 type JanetHandle* = pointer
 
@@ -37,6 +42,14 @@ proc triadJanetActionKind*(
 proc triadJanetActionU32*(
   runtime: JanetHandle, index: cint
 ): uint32 {.importc: "triad_janet_action_u32".}
+
+proc triadJanetActionU32B*(
+  runtime: JanetHandle, index: cint
+): uint32 {.importc: "triad_janet_action_u32_b".}
+
+proc triadJanetActionBool*(
+  runtime: JanetHandle, index: cint
+): cint {.importc: "triad_janet_action_bool".}
 
 proc triadJanetActionText*(
   runtime: JanetHandle, index: cint

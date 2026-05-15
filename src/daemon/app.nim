@@ -106,7 +106,21 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let effects = syncRuntimeUpdate("message", msg)
     if msg.kind == MsgKind.WlWindowCreated:
       let snapshot = daemon.readModelSnapshot()
-      daemon.enqueueNext(daemon.janetRuntime.evalManifest(msg.appId, snapshot))
+      var currentWindow = ShellWindow(
+        id: msg.windowId,
+        pid: msg.createdPid,
+        parentId: msg.createdParentWindowId,
+        title: msg.title,
+        appId: msg.appId,
+        identifier: msg.createdIdentifier,
+      )
+      for win in snapshot.windows:
+        if win.id == msg.windowId:
+          currentWindow = win
+          break
+      daemon.enqueueNext(
+        daemon.janetRuntime.evalManifest(msg.appId, snapshot, some(currentWindow))
+      )
     let recentModifiersChanged =
       daemon.runtimeState.model.recentWindowsActive and
       previousActiveModifiers != daemon.runtimeState.model.activeModifiers

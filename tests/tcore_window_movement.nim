@@ -108,6 +108,48 @@ suite "Core Runtime Logic: window movement":
     check model.viewport(1).targetViewportXOffset != 0.0'f32
     check effects.hasFocusEffect(4)
 
+  test "Targeted Janet-style window commands do not require focused window":
+    var model = cameraModel()
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.CmdMoveWindowToTag,
+        moveWindowId: 2,
+        moveTargetTag: 8,
+        moveFollowWindow: false,
+      )
+    )
+    check model.focusedWindowId() == 1
+    check model.snapshotWindow(2).tagId == some(8'u32)
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid, layoutTargetTag: 8)
+    )
+    for workspace in model.shellSnapshot().workspaces:
+      if workspace.tagId == 8:
+        check workspace.layoutMode == LayoutMode.Grid
+
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.CmdSetWindowFloatingById,
+        floatingWindowId: 2,
+        windowFloating: true,
+      )
+    )
+    check model.snapshotWindow(2).isFloating
+
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.CmdMoveWindowToWorkspaceIndex,
+        moveWorkspaceWindowId: 2,
+        moveWorkspaceIndex: 2,
+        moveWorkspaceFollowWindow: true,
+      )
+    )
+    check model.focusedWindowId() == 2
+
   test "Live restore JSON records moved maximized window":
     var model = cameraModel()
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))

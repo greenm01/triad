@@ -36,6 +36,7 @@ type
     parentId*: uint32
     title*: string
     appId*: string
+    identifier*: string
     tagId*: Option[uint32]
     workspaceIdx*: uint32
     outputName*: string

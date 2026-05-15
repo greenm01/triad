@@ -238,6 +238,7 @@ Exposed namespaces:
 
 ```
 triad/snapshot            read-only ShellSnapshot struct
+triad/current-window      opening window struct | nil
 triad/active-tag-id       shorthand query → uint32
 triad/find-tag-by-name    shorthand query → struct | nil
 triad/windows-on-tag      shorthand query → tuple of structs
@@ -245,6 +246,11 @@ triad/window-by-id        shorthand query → struct | nil
 triad/move-to-tag         emit CmdMoveToTag Msg
 triad/move-to-workspace   emit CmdMoveToWorkspaceIndex Msg
 triad/toggle-floating     emit CmdToggleFloating Msg
+triad/move-window-to-tag  emit targeted CmdMoveWindowToTag Msg
+triad/move-window-to-workspace emit targeted CmdMoveWindowToWorkspaceIndex Msg
+triad/set-window-floating emit targeted CmdSetWindowFloatingById Msg
+triad/set-layout-for-workspace emit targeted CmdSetLayout Msg
+triad/focus-window        emit CmdFocusWindowById Msg
 triad/set-layout          emit CmdSetLayout Msg
 triad/focus-tag           emit CmdFocusTag Msg
 triad/spawn               emit CmdSpawn Msg
@@ -276,6 +282,13 @@ the `JanetRuntime`. Nothing is applied during Janet execution. After `eval`
 returns, `collectMsgs()` drains that queue into the daemon's message queue.
 Janet cannot observe the model change as a result of its own output — it
 receives only the snapshot that existed when evaluation began.
+
+Targeted window commands take the compositor-facing window id exposed in
+`triad/current-window` or `triad/snapshot :windows`. This lets manifests place
+or float a newly opened window without relying on the currently focused window.
+The optional final boolean on `triad/move-window-to-tag` and
+`triad/move-window-to-workspace` controls whether Triad follows focus to the
+moved window.
 
 ---
 

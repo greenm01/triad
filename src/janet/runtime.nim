@@ -40,12 +40,16 @@ proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
     runtime.handle = triadJanetNew()
 
 proc evalSource*(
-    runtime: var JanetRuntime, snapshot: ShellSnapshot, source: string, path = "<janet>"
+    runtime: var JanetRuntime,
+    snapshot: ShellSnapshot,
+    source: string,
+    path = "<janet>",
+    currentWindow = none(ShellWindow),
 ): tuple[ok: bool, messages: seq[Msg], error: string] =
   if runtime.handle == nil:
     return (true, @[], "")
 
-  let snapshotSource = snapshot.janetSnapshotSource()
+  let snapshotSource = snapshot.janetSnapshotSource(currentWindow)
   let ok =
     triadJanetEval(
       runtime.handle,
@@ -109,7 +113,10 @@ proc manifestEntry(
   none(ManifestCacheEntry)
 
 proc evalManifest*(
-    runtime: var JanetRuntime, appId: string, snapshot: ShellSnapshot
+    runtime: var JanetRuntime,
+    appId: string,
+    snapshot: ShellSnapshot,
+    currentWindow = none(ShellWindow),
 ): seq[Msg] =
   if runtime.handle == nil:
     return @[]
@@ -118,7 +125,8 @@ proc evalManifest*(
   if entry.isNone or entry.get().failed:
     return @[]
 
-  let evaluated = runtime.evalSource(snapshot, entry.get().source, entry.get().path)
+  let evaluated =
+    runtime.evalSource(snapshot, entry.get().source, entry.get().path, currentWindow)
   if not evaluated.ok:
     warn "Janet manifest failed",
       appId = appId, path = entry.get().path, error = evaluated.error

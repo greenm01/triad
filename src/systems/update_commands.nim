@@ -107,6 +107,12 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.focusExternalWindow(msg.focusWindowId.externalWindowId())
   of MsgKind.CmdMoveToTag:
     result.dirty = model.moveFocusedWindowToSlotAndFocus(msg.targetTag)
+  of MsgKind.CmdMoveWindowToTag:
+    let winId = model.windowForExternal(ExternalWindowId(msg.moveWindowId))
+    if winId != NullWindowId and model.moveWindowToSlot(winId, msg.moveTargetTag):
+      result.dirty = true
+      if msg.moveFollowWindow:
+        result.dirty = model.focusWindow(winId) or result.dirty
   of MsgKind.CmdSwapWindowToTag:
     result.dirty = model.swapFocusedWindowToSlot(msg.targetTagSwap)
   of MsgKind.CmdMoveToTagLeft:
@@ -118,6 +124,13 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdMoveToWorkspaceIndex:
     let slot = model.workspaceSlotForClampedIndex(msg.workspaceIndex)
     result.dirty = slot != 0 and model.moveFocusedWindowToSlotAndFocus(slot)
+  of MsgKind.CmdMoveWindowToWorkspaceIndex:
+    let slot = model.workspaceSlotForClampedIndex(msg.moveWorkspaceIndex)
+    let winId = model.windowForExternal(ExternalWindowId(msg.moveWorkspaceWindowId))
+    if slot != 0 and winId != NullWindowId and model.moveWindowToSlot(winId, slot):
+      result.dirty = true
+      if msg.moveWorkspaceFollowWindow:
+        result.dirty = model.focusWindow(winId) or result.dirty
   of MsgKind.CmdMoveWindowLeft:
     result.dirty = model.moveFocusedWindowLeft()
   of MsgKind.CmdMoveWindowRight:
@@ -227,6 +240,10 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
       result.dirty = true
   of MsgKind.CmdToggleFloating:
     result.dirty = model.toggleFloatingFocused()
+  of MsgKind.CmdSetWindowFloatingById:
+    result.dirty = model.setFloatingForExternal(
+      ExternalWindowId(msg.floatingWindowId), msg.windowFloating
+    )
   of MsgKind.CmdMoveFloating:
     result.dirty = model.moveFloatingFocused(msg.moveDX, msg.moveDY)
   of MsgKind.CmdResizeFloating:

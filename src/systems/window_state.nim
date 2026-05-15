@@ -246,6 +246,22 @@ proc toggleFloatingFocused*(model: var Model): bool =
       GeometryRect(),
   )
 
+proc setFloatingForExternal*(
+    model: var Model, externalId: ExternalWindowId, floating: bool
+): bool =
+  let winId = model.windowForExternal(externalId)
+  let win = model.window(winId)
+  if win.isNone:
+    return false
+  model.setWindowFloating(
+    winId,
+    floating,
+    if floating:
+      model.floatingGeomForWindow(winId, win.get().parentExternalId)
+    else:
+      GeometryRect(),
+  )
+
 proc toggleFullscreenFocused*(model: var Model): bool =
   let winId = model.focusedWindow()
   let win = model.window(winId)
