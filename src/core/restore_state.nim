@@ -17,6 +17,7 @@ type
     outputTags*: Table[uint32, uint32]
     scratchpadWindows*: seq[WindowId]
     namedScratchpads*: Table[string, WindowId]
+    scratchpadRestoreSlots*: Table[WindowId, seq[uint32]]
     visibleScratchpad*: WindowId
     isScratchpadVisible*: bool
     focusHistory*: seq[WindowId]
@@ -240,6 +241,23 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
 
   state.windows[externalId] = win
 
+proc parseScratchpadRestoreSlots(state: var LiveRestoreState, node: JsonNode) =
+  if node.kind != JObject or not node.hasKey("window_id") or not node.hasKey("slots"):
+    return
+  let winId = uint32FromJson(node["window_id"])
+  if winId.isNone or node["slots"].kind != JArray:
+    return
+
+  var slots: seq[uint32] = @[]
+  for slotNode in node["slots"]:
+    let slot = uint32FromJson(slotNode)
+    if slot.isSome and slot.get() > 0 and slot.get() <= MaxWorkspaceCount and
+        slots.find(slot.get()) == -1:
+      slots.add(slot.get())
+  if slots.len > 0:
+    slots.sort()
+    state.scratchpadRestoreSlots[WindowId(winId.get())] = slots
+
 proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
   var state = LiveRestoreState()
 
@@ -287,6 +305,11 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       let winId = uint32FromJson(node["window_id"])
       if winId.isSome:
         state.namedScratchpads[stringFromJson(node["name"])] = WindowId(winId.get())
+
+  if root.hasKey("scratchpad_restore_slots") and
+      root["scratchpad_restore_slots"].kind == JArray:
+    for node in root["scratchpad_restore_slots"]:
+      state.parseScratchpadRestoreSlots(node)
 
   if root.hasKey("visible_scratchpad"):
     let winId = uint32FromJson(root["visible_scratchpad"])

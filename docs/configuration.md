@@ -752,7 +752,9 @@ Default scratchpad bindings mirror Mango's standard scratchpad workflow:
 `toggle-scratchpad` shows, hides, or cycles windows that are already in the
 scratchpad pool. Use `move-to-scratchpad` first to send the focused window
 there. Showing a scratchpad gives that window keyboard focus; hiding it returns
-keyboard focus to the active workspace's focused window.
+keyboard focus to the active workspace's focused window. `restore-scratchpad`
+removes the window from scratchpad and returns it to the workspace it occupied
+before entering scratchpad.
 
 ## Config Notifications
 

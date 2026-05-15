@@ -197,13 +197,13 @@ suite "Runtime state primitives":
 
     let blockedRelationReads = [
       "model.scratchpadWindows", "model.namedScratchpads", "model.visibleScratchpad",
-      "model.isScratchpadVisible", "model.focusHistory", "model.workspaceHistory",
-      "model.restoreActiveSlot", "model.restoreFocusedWindow",
+      "model.scratchpadRestoreTags", "model.isScratchpadVisible", "model.focusHistory",
+      "model.workspaceHistory", "model.restoreActiveSlot", "model.restoreFocusedWindow",
       "model.restoreTagByWindow", "model.restoreWindows", "model.restoreTags",
       "model.restoreOutputTags", "model.restoreScratchpadWindows",
-      "model.restoreNamedScratchpads", "model.restoreVisibleScratchpad",
-      "model.restoreIsScratchpadVisible", "model.restoreFocusHistory",
-      "model.restoreWorkspaceHistory",
+      "model.restoreNamedScratchpads", "model.restoreScratchpadSlots",
+      "model.restoreVisibleScratchpad", "model.restoreIsScratchpadVisible",
+      "model.restoreFocusHistory", "model.restoreWorkspaceHistory",
     ]
     let directRelationReads = sourceLineFailures(
       proc(path, line: string): bool =
@@ -241,12 +241,14 @@ suite "Runtime state primitives":
     check model.placementForWindowOnTag(tagId, winId).isSome
 
     discard model.addScratchpadRef(winId)
+    discard model.recordScratchpadRestoreTags(winId, model.windowTagMask(winId))
     discard model.setNamedScratchpadRef("term", winId)
     discard model.showScratchpadRef(winId)
     check model.scratchpadVisible()
     check model.latestScratchpadWindow() == winId
     check model.activeScratchpadWindow() == winId
     check model.namedScratchpadWindow("term") == winId
+    check model.scratchpadRestoreSlots(winId) == @[1'u32]
 
     discard model.recordFocus(winId)
     discard model.recordWorkspace(tagId)

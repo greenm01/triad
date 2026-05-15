@@ -335,6 +335,7 @@ type
     outputTags*: Table[ExternalOutputId, uint32]
     scratchpadWindows*: seq[ExternalWindowId]
     namedScratchpads*: Table[string, ExternalWindowId]
+    scratchpadRestoreSlots*: Table[ExternalWindowId, seq[uint32]]
     visibleScratchpad*: ExternalWindowId
     isScratchpadVisible*: bool
     focusHistory*: seq[ExternalWindowId]
@@ -366,6 +367,7 @@ type
     groupByWindow*: Table[WindowId, GroupId]
     scratchpadWindows*: seq[WindowId]
     namedScratchpads*: Table[string, WindowId]
+    scratchpadRestoreTags*: Table[WindowId, TagMask]
     visibleScratchpad*: WindowId
     isScratchpadVisible*: bool
     swallowedBy*: Table[WindowId, WindowId]
@@ -473,6 +475,7 @@ type
     restoreOutputTags*: Table[ExternalOutputId, uint32]
     restoreScratchpadWindows*: seq[ExternalWindowId]
     restoreNamedScratchpads*: Table[string, ExternalWindowId]
+    restoreScratchpadSlots*: Table[ExternalWindowId, seq[uint32]]
     restoreVisibleScratchpad*: ExternalWindowId
     restoreIsScratchpadVisible*: bool
     restoreFocusHistory*: seq[ExternalWindowId]

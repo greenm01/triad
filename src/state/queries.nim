@@ -1,5 +1,5 @@
 import std/[algorithm, options, sets, tables]
-import entity_manager, iterators
+import entity_manager, id_gen, iterators
 import ../types/[core, model]
 
 proc tagForSlot*(model: Model, slot: uint32): TagId =
@@ -233,6 +233,9 @@ proc columnFullWidthForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId)
   let columnOpt = model.columnData(placementOpt.get().columnId)
   columnOpt.isSome and columnOpt.get().isFullWidth
 
+proc windowTagMask*(model: Model, winId: WindowId): TagMask =
+  model.windowTags.getOrDefault(winId, EmptyTagMask)
+
 proc latestScratchpadWindow*(model: Model): WindowId =
   if model.scratchpadWindows.len == 0:
     return NullWindowId
@@ -256,6 +259,34 @@ proc scratchpadWindowCount*(model: Model): int =
 
 proc namedScratchpadWindow*(model: Model, name: string): WindowId =
   model.namedScratchpads.getOrDefault(name, NullWindowId)
+
+proc isNamedScratchpadWindow*(model: Model, winId: WindowId): bool =
+  if winId == NullWindowId:
+    return false
+  for _, namedWin in model.namedScratchpads.pairs:
+    if namedWin == winId:
+      return true
+  false
+
+proc nextStandardScratchpadWindow*(model: Model): WindowId =
+  for winId in model.scratchpadWindows:
+    if model.windows.entity(winId).isSome and not model.isNamedScratchpadWindow(winId):
+      return winId
+  NullWindowId
+
+proc scratchpadRestoreTagMask*(model: Model, winId: WindowId): TagMask =
+  model.scratchpadRestoreTags.getOrDefault(winId, EmptyTagMask)
+
+proc scratchpadRestoreSlots*(model: Model, winId: WindowId): seq[uint32] =
+  let mask = model.scratchpadRestoreTagMask(winId)
+  if mask.isEmpty:
+    return @[]
+  for slot in 1'u32 .. MaxTagBits:
+    if mask.contains(tagBit(slot)):
+      result.add(slot)
+
+proc restoredScratchpadSlots*(model: Model, externalId: ExternalWindowId): seq[uint32] =
+  model.restoreScratchpadSlots.getOrDefault(externalId, @[])
 
 proc restoreFocusedWindowId*(model: Model): ExternalWindowId =
   model.restoreFocusedWindow

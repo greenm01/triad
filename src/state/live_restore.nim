@@ -97,6 +97,8 @@ proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
     result.scratchpadWindows.add(ExternalWindowId(uint32(winId)))
   for name, winId in source.namedScratchpads.pairs:
     result.namedScratchpads[name] = ExternalWindowId(uint32(winId))
+  for winId, slots in source.scratchpadRestoreSlots.pairs:
+    result.scratchpadRestoreSlots[ExternalWindowId(uint32(winId))] = slots
   result.visibleScratchpad = ExternalWindowId(uint32(source.visibleScratchpad))
   result.isScratchpadVisible = source.isScratchpadVisible
   for winId in source.focusHistory:
@@ -263,6 +265,12 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     if external != 0:
       result.namedScratchpads[name] = external
 
+  for winId, _ in model.scratchpadRestoreTagsWithId():
+    let external = model.externalWindowId(winId)
+    let slots = model.scratchpadRestoreSlots(winId)
+    if external != 0 and slots.len > 0:
+      result.scratchpadRestoreSlots[external] = slots
+
   result.visibleScratchpad = model.externalWindowId(model.visibleScratchpadWindow())
   result.isScratchpadVisible = model.scratchpadVisible()
 
@@ -373,6 +381,17 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
   for name in names:
     namedScratchpads.add(%*{"name": name, "window_id": state.namedScratchpads[name]})
 
+  let scratchpadRestoreSlots = newJArray()
+  var restoreWinIds: seq[rv.WindowId]
+  for winId in state.scratchpadRestoreSlots.keys:
+    restoreWinIds.add(winId)
+  restoreWinIds.sort()
+  for winId in restoreWinIds:
+    let slots = newJArray()
+    for slot in state.scratchpadRestoreSlots[winId]:
+      slots.add(%slot)
+    scratchpadRestoreSlots.add(%*{"window_id": winId, "slots": slots})
+
   let focusHistory = newJArray()
   for winId in state.focusHistory:
     focusHistory.add(%winId)
@@ -392,6 +411,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
       "output_tags": outputTags,
       "scratchpad_windows": scratchpads,
       "named_scratchpads": namedScratchpads,
+      "scratchpad_restore_slots": scratchpadRestoreSlots,
       "visible_scratchpad": state.visibleScratchpad,
       "is_scratchpad_visible": state.isScratchpadVisible,
       "focus_history": focusHistory,

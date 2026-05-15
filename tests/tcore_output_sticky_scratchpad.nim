@@ -806,7 +806,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check plainModel.windowData(plainId).get().isSticky
     check plainModel.placementForWindowOnTag(plainModel.tagForSlot(2), plainId).isSome
 
-  test "Scratchpad clears sticky state and restores as normal window":
+  test "Scratchpad clears sticky state and restores previous tag set":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 2),
@@ -834,7 +834,32 @@ suite "Core Runtime Logic: output sticky scratchpad":
     model.applyMsg(Msg(kind: MsgKind.CmdRestoreScratchpad))
     check not model.windowData(winId).get().isSticky
     check model.placementForWindowOnTag(model.tagForSlot(1), winId).isSome
-    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isNone
+    check model.placementForWindowOnTag(model.tagForSlot(2), winId).isSome
+
+  test "Live restore preserves scratchpad restore workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 29, appId: "term", title: "home")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+    var restoredModel = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    restoredModel.applyLiveRestore(restore.pendingRestoreState())
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 29, appId: "term", title: "home")
+    )
+    restoredModel.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    restoredModel.applyMsg(Msg(kind: MsgKind.CmdRestoreScratchpad))
+
+    let restoredId = restoredModel.windowForExternal(ExternalWindowId(29))
+    check restoredModel.activeWorkspaceSlot() == 1
+    check restoredModel.placementForWindowOnTag(restoredModel.tagForSlot(1), restoredId).isSome
+    check restoredModel.placementForWindowOnTag(restoredModel.tagForSlot(2), restoredId).isNone
 
   test "Live restore preserves sticky window state":
     var model = initRuntimeStateFromConfig(

@@ -120,6 +120,14 @@ proc validateInvariants*(model: Model): InvariantReport =
     if model.windows.entity(winId).isNone:
       result.addError("named scratchpad references missing window: " & name)
 
+  for winId, mask in model.scratchpadRestoreTags.pairs:
+    if model.windows.entity(winId).isNone:
+      result.addError("scratchpad restore tags reference missing window: " & $winId)
+    if model.scratchpadWindows.find(winId) == -1:
+      result.addError("scratchpad restore tags reference non-scratchpad: " & $winId)
+    if mask == EmptyTagMask:
+      result.addError("scratchpad restore tags are empty: " & $winId)
+
   if model.visibleScratchpad != NullWindowId and
       model.windows.entity(model.visibleScratchpad).isNone:
     result.addError(

@@ -112,7 +112,7 @@ suite "Core Runtime Logic: shell snapshot ipc":
     )
     model.requireTagShellSemantics("empty dynamic pruned scenario")
 
-  test "Scratchpad restore returns window to active tag":
+  test "Scratchpad restore returns window to previous workspace":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
@@ -127,8 +127,47 @@ suite "Core Runtime Logic: shell snapshot ipc":
     let focused = snapshot.windows.filterIt(it.isFocused)
     check focused.len == 1
     check focused[0].id == 1
-    check focused[0].workspaceIdx == 2
+    check focused[0].workspaceIdx == 1
+    check snapshot.activeWorkspaceIdx == 1
+    check model.placementForWindowOnTag(model.tagForSlot(1), WindowId(1)).isSome
+    check model.placementForWindowOnTag(model.tagForSlot(2), WindowId(1)).isNone
     model.requireTagShellSemantics("scratchpad restored scenario")
+
+  test "Scratchpad toggle cycles standard windows in send order":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "term", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    var effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check not model.scratchpadVisible()
+    check model.focusedWindowId() == 1
+    check effects.hasFocusEffect(1)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 3
+    check effects.hasFocusEffect(3)
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    model.requireTagShellSemantics("scratchpad cycle scenario")
 
   test "Scratchpad toggle focuses shown window and restores workspace focus":
     var model = configuredModel()
@@ -151,6 +190,72 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check not model.scratchpadVisible()
     check model.focusedWindowId() == 1
     check effects.hasFocusEffect(1)
+
+  test "Standard scratchpad toggle skips hidden named scratchpads":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "files", title: "Files")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToNamedScratchpad, scratchpadName: "files"))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    model.requireTagShellSemantics("hidden named scratchpad skipped scenario")
+
+  test "Standard scratchpad toggle hides visible named scratchpad first":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "files", title: "Files")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToNamedScratchpad, scratchpadName: "files"))
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleNamedScratchpad, scratchpadName: "files"))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 3
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    model.requireTagShellSemantics("visible named scratchpad hidden scenario")
+
+  test "Scratchpad restore with no visible window restores next standard candidate":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "term", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdRestoreScratchpad))
+    check not model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check model.scratchpadWindowCount() == 1
+    check model.placementForWindowOnTag(model.tagForSlot(1), WindowId(2)).isSome
+    check model.placementForWindowOnTag(model.tagForSlot(1), WindowId(3)).isNone
+    check effects.hasFocusEffect(2)
+    model.requireTagShellSemantics("hidden scratchpad restore candidate scenario")
 
   test "Manage start keeps compositor focus on visible scratchpad":
     var model = configuredModel()

@@ -10,6 +10,37 @@ proc addScratchpadRef*(model: var Model, winId: WindowId): bool =
     return true
   false
 
+proc rotateScratchpadRefToBack*(model: var Model, winId: WindowId): bool =
+  if winId == NullWindowId:
+    return false
+  let idx = model.scratchpadWindows.find(winId)
+  if idx == -1:
+    return false
+  model.scratchpadWindows.delete(idx)
+  model.scratchpadWindows.add(winId)
+  true
+
+proc recordScratchpadRestoreTags*(
+    model: var Model, winId: WindowId, mask: TagMask
+): bool =
+  if winId == NullWindowId or model.windows.entity(winId).isNone:
+    return false
+  if mask == EmptyTagMask:
+    if model.scratchpadRestoreTags.hasKey(winId):
+      model.scratchpadRestoreTags.del(winId)
+      return true
+    return false
+  if model.scratchpadRestoreTags.getOrDefault(winId, EmptyTagMask) == mask:
+    return false
+  model.scratchpadRestoreTags[winId] = mask
+  true
+
+proc clearScratchpadRestoreTags*(model: var Model, winId: WindowId): bool =
+  if not model.scratchpadRestoreTags.hasKey(winId):
+    return false
+  model.scratchpadRestoreTags.del(winId)
+  true
+
 proc removeNamedScratchpadRefs*(model: var Model, winId: WindowId): bool =
   var deadNames: seq[string] = @[]
   for name, namedWin in model.namedScratchpads.pairs:
@@ -29,6 +60,9 @@ proc removeScratchpadRef*(model: var Model, winId: WindowId): bool =
       inc i
 
   if model.removeNamedScratchpadRefs(winId):
+    result = true
+
+  if model.clearScratchpadRestoreTags(winId):
     result = true
 
   if model.visibleScratchpad == winId:
@@ -88,4 +122,12 @@ proc pruneScratchpadRefs*(model: var Model): bool =
       model.windows.entity(model.visibleScratchpad).isNone:
     model.visibleScratchpad = NullWindowId
     model.isScratchpadVisible = false
+    result = true
+
+  var deadRestoreRefs: seq[WindowId] = @[]
+  for winId in model.scratchpadRestoreTags.keys:
+    if model.windows.entity(winId).isNone:
+      deadRestoreRefs.add(winId)
+  for winId in deadRestoreRefs:
+    model.scratchpadRestoreTags.del(winId)
     result = true

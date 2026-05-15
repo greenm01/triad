@@ -68,6 +68,12 @@ iterator namedScratchpadsWithId*(model: Model): tuple[name: string, winId: Windo
   for name, winId in model.namedScratchpads.pairs:
     yield (name, winId)
 
+iterator scratchpadRestoreTagsWithId*(
+    model: Model
+): tuple[winId: WindowId, mask: TagMask] =
+  for winId, mask in model.scratchpadRestoreTags.pairs:
+    yield (winId, mask)
+
 iterator focusHistoryIds*(model: Model): WindowId =
   for winId in model.focusHistory:
     yield winId

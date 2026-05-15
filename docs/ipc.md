@@ -40,10 +40,12 @@ To dispatch a command to the running Triad instance, use the following syntax:
     `recent-window-cycle-scope`: Changes the active switcher scope.
 *   `recent-window-close-current`: Requests close for the selected switcher
     window without leaving the switcher.
-*   `toggle-scratchpad`: Shows the most recent scratchpad window as a centered
-    overlay, focuses it, or hides it and restores workspace focus.
+*   `toggle-scratchpad`: Shows the next standard scratchpad window as a centered
+    overlay, focuses it, or hides the visible scratchpad and restores workspace
+    focus.
 *   `toggle-named-scratchpad <name>`: Shows or hides a named scratchpad; if the name is new, the focused window is assigned to it.
-*   `restore-scratchpad`: Moves the visible or most recent scratchpad window back to the active tag.
+*   `restore-scratchpad`: Moves the visible or next standard scratchpad window
+    back to the workspace it occupied before entering scratchpad.
 *   `select-window`: In overview mode, selects the focused window and jumps to its tag.
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 *   `lock-session`: Launches the configured `screen-lock` command.
