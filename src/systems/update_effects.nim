@@ -1,5 +1,5 @@
 import std/[json, options]
-import ../core/[effects, msg, niri_state, triad_state]
+import ../core/[effects, msg, niri_state, shell_focus, triad_state]
 import ../state/engine
 import ../types/shell_snapshot
 from ../types/runtime_values import nil
@@ -24,15 +24,6 @@ proc runtimeWindowId*(model: Model, winId: WindowId): runtime_values.WindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     return runtimeWindowId(winOpt.get().externalId)
-  0'u32
-
-proc focusedWindowId*(snapshot: ShellSnapshot): runtime_values.WindowId =
-  for workspace in snapshot.workspaces:
-    if workspace.isActive:
-      return workspace.focusedWindow
-  for win in snapshot.windows:
-    if win.isFocused:
-      return win.id
   0'u32
 
 proc activeWorkspace(snapshot: ShellSnapshot): ShellWorkspace =
@@ -406,7 +397,8 @@ proc addFullscreenPresentationSync(
   let afterFocus = after.focusedWindowId()
   let focusedWin = after.windowById(afterFocus)
   let overlayFocus =
-    focusedWin.isSome and (focusedWin.get().isFloating or focusedWin.get().isOverlay)
+    (afterFocus != 0'u32 and afterFocus == after.activeScratchpadWindow) or
+    (focusedWin.isSome and (focusedWin.get().isFloating or focusedWin.get().isOverlay))
   let overlayRoot =
     if overlayFocus:
       after.popupRoot(afterFocus)

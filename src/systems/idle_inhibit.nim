@@ -1,4 +1,5 @@
 import std/options
+import ../core/shell_focus
 import ../types/shell_snapshot
 from ../types/runtime_values import WindowId, WindowRuleIdleInhibitMode
 
@@ -14,15 +15,6 @@ proc columnContainsWindow(workspace: ShellWorkspace, winId: WindowId): bool =
       if candidate == winId:
         return true
   false
-
-proc focusedWindowId(snapshot: ShellSnapshot): WindowId =
-  for workspace in snapshot.workspaces:
-    if workspace.isActive:
-      return workspace.focusedWindow
-  for win in snapshot.windows:
-    if win.isFocused:
-      return win.id
-  0'u32
 
 proc windowVisibleOnOutput(snapshot: ShellSnapshot, win: ShellWindow): bool =
   if win.isMinimized:

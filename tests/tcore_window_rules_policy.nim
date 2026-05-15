@@ -99,6 +99,34 @@ suite "Core Runtime Logic: window rules policy":
     effects = model.updateModel(Msg(kind: MsgKind.WlLayerFocusExclusive))
     check effects.hasIdleInhibitEffect(false)
 
+  test "Window rule idle-inhibit focused follows active scratchpad":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        windowRules:
+          @[
+            WindowRule(
+              appIdMatch: "video",
+              idleInhibitModeSet: true,
+              idleInhibitMode: WindowRuleIdleInhibitMode.IdleInhibitFocused,
+            )
+          ]
+      )
+    ).model
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "video", title: "Video")
+    )
+    discard model.updateModel(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "docs", title: "Docs")
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    check effects.hasIdleInhibitEffect(false)
+
   test "Window rule idle-inhibit visible tracks output-visible workspaces":
     var model = initRuntimeStateFromConfig(
       Config(

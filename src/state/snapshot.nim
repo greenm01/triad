@@ -55,6 +55,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     else:
       0'u32
   result.activeScratchpadWindow = model.externalWindowId(model.activeScratchpadWindow())
+  let activeScratchpad = model.activeScratchpadWindow()
   result.sessionLocked = model.sessionLocked
   result.layerFocusExclusive = model.layerFocusExclusive
   result.layoutCycle =
@@ -129,6 +130,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     let focused =
       pos.found and pos.tagId == model.activeTag and tagOpt.isSome and
       tagOpt.get().focusedWindow == winId
+    let isFocused =
+      winId == activeScratchpad or (activeScratchpad == NullWindowId and focused)
     result.windows.add(
       ShellWindow(
         id: runtime_values.WindowId(uint32(win.externalId)),
@@ -153,7 +156,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
             "",
         colIdx: pos.colIdx,
         winIdx: pos.winIdx,
-        isFocused: focused,
+        isFocused: isFocused,
         isFloating: win.isFloating,
         isFullscreen: win.isFullscreen,
         isMaximized: win.isMaximized,

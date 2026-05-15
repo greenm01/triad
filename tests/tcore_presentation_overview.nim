@@ -327,6 +327,49 @@ suite "Core Runtime Logic: presentation overview":
     check model.instructionGeom(3).w > 0
     check model.focusedWindowId() == 3
 
+  test "Scratchpad preserves backing window presentation":
+    var maximizedModel = cameraModel()
+    maximizedModel.seedCameraWindows(2)
+    discard maximizedModel.updateModel(
+      Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1)
+    )
+    discard maximizedModel.updateModel(
+      Msg(kind: MsgKind.WlWindowMaximizeRequested, maximizeRequestId: 1)
+    )
+    discard maximizedModel.updateModel(
+      Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2)
+    )
+    discard maximizedModel.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    let scratchpadEffects =
+      maximizedModel.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+
+    check maximizedModel.focusedWindowId() == 2
+    check scratchpadEffects.hasFocusEffect(2)
+    check scratchpadEffects.hasMaximizedEffect(1, true)
+    check not scratchpadEffects.hasMaximizedEffect(1, false)
+
+    var fullscreenModel = cameraModel()
+    fullscreenModel.seedCameraWindows(2)
+    discard fullscreenModel.updateModel(
+      Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1)
+    )
+    discard fullscreenModel.updateModel(
+      Msg(kind: MsgKind.WlWindowFullscreenRequested, fullscreenRequestId: 1)
+    )
+    discard fullscreenModel.updateModel(
+      Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2)
+    )
+    discard fullscreenModel.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    let fullscreenScratchpadEffects =
+      fullscreenModel.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+
+    check fullscreenModel.focusedWindowId() == 2
+    check fullscreenScratchpadEffects.hasFocusEffect(2)
+    check fullscreenScratchpadEffects.hasFullscreenEffect(1, true)
+    check not fullscreenScratchpadEffects.hasFullscreenEffect(1, false)
+
   test "Parented popup ignores unrelated maximized backing window":
     var model = cameraModel()
     model.seedCameraWindows(3)

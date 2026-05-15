@@ -1,7 +1,7 @@
 import std/[asyncdispatch, json, options, os, strutils, tables]
 import chronicles
 import ../config/[defaults, parser]
-import ../core/niri_state
+import ../core/[niri_state, shell_focus]
 import ../ipc/[quickshell_compat, socket]
 import ../systems/runtime_facade
 import ../types/[model, shell_snapshot]
@@ -40,12 +40,6 @@ proc spawnPendingStartupCommands*(
 proc broadcastNiriSnapshot*(snapshot: ShellSnapshot) =
   for event in initialNiriEvents(snapshot):
     asyncCheck broadcastJson(event)
-
-proc focusedWindowId(snapshot: ShellSnapshot): uint32 =
-  for win in snapshot.windows:
-    if win.isFocused:
-      return uint32(win.id)
-  0
 
 proc windowPreservationState(win: ShellWindow): string =
   let tagId =

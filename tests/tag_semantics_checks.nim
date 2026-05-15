@@ -145,7 +145,8 @@ proc requireTagShellSemantics*(model: Model, context = "tag semantics") =
       "active workspace tag mismatch",
     )
 
-  if active.found and active.workspace.focusedWindow != WindowId(0):
+  if active.found and active.workspace.focusedWindow != WindowId(0) and
+      snapshot.activeScratchpadWindow == WindowId(0):
     let activeWin = snapshot.shellWindow(active.workspace.focusedWindow)
     if activeWin.found and not activeWin.win.isMinimized:
       require(
@@ -160,18 +161,31 @@ proc requireTagShellSemantics*(model: Model, context = "tag semantics") =
       )
 
   if focused.count == 1:
-    require(context, active.found, "focused shell window requires an active workspace")
-    require(
-      context,
-      focused.win.workspaceIdx == active.workspace.workspaceIdx,
-      "focused shell window must be on active workspace index",
-    )
-    require(context, focused.win.tagId.isSome, "focused shell window must have a tag")
-    require(
-      context,
-      focused.win.tagId.get() == active.workspace.tagId,
-      "focused shell window must be on active workspace tag",
-    )
+    if focused.win.id == snapshot.activeScratchpadWindow:
+      require(
+        context,
+        focused.win.workspaceIdx == 0,
+        "focused scratchpad window must not claim a workspace index",
+      )
+      require(
+        context, focused.win.tagId.isNone,
+        "focused scratchpad window must not claim a tag",
+      )
+    else:
+      require(
+        context, active.found, "focused shell window requires an active workspace"
+      )
+      require(
+        context,
+        focused.win.workspaceIdx == active.workspace.workspaceIdx,
+        "focused shell window must be on active workspace index",
+      )
+      require(context, focused.win.tagId.isSome, "focused shell window must have a tag")
+      require(
+        context,
+        focused.win.tagId.get() == active.workspace.tagId,
+        "focused shell window must be on active workspace tag",
+      )
 
   for win in snapshot.windows:
     if win.tagId.isSome:
@@ -195,11 +209,14 @@ proc requireTagShellSemantics*(model: Model, context = "tag semantics") =
           "shell window tag does not match indexed workspace",
         )
     if win.isFocused:
-      require(context, active.found, "focused window requires active workspace")
-      require(
-        context,
-        win.workspaceIdx == active.workspace.workspaceIdx,
-        "inactive workspace focus exported as global focus",
-      )
+      if win.id == snapshot.activeScratchpadWindow:
+        require(context, win.workspaceIdx == 0, "scratchpad focus must be untagged")
+      else:
+        require(context, active.found, "focused window requires active workspace")
+        require(
+          context,
+          win.workspaceIdx == active.workspace.workspaceIdx,
+          "inactive workspace focus exported as global focus",
+        )
 
   requireNiriProjection(context, snapshot)

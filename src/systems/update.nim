@@ -1,5 +1,5 @@
 import std/[json, options]
-import ../core/[effects, msg]
+import ../core/[effects, msg, shell_focus]
 import ../state/engine
 from ../types/runtime_values import nil
 import ../utils/behavior_log
@@ -15,6 +15,9 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdSetLayout,
     MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleMaximized,
+    MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
+    MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
+    MsgKind.CmdRestoreScratchpad,
   }
 
 proc updateSnapshotSummary(snapshot: ShellSnapshot, model: Model): JsonNode =

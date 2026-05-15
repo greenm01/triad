@@ -63,7 +63,8 @@ proc effectiveMaximized*(
 
   let focusedWin = snapshot.windowById(focusedId)
   let overlayFocus =
-    focusedWin.isSome and (focusedWin.get().isFloating or focusedWin.get().isOverlay)
+    (focusedId != 0'u32 and focusedId == snapshot.activeScratchpadWindow) or
+    (focusedWin.isSome and (focusedWin.get().isFloating or focusedWin.get().isOverlay))
   if overlayFocus:
     let root = snapshot.popupRoot(focusedId)
     if root != focusedId:

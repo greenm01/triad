@@ -130,6 +130,28 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check focused[0].workspaceIdx == 2
     model.requireTagShellSemantics("scratchpad restored scenario")
 
+  test "Scratchpad toggle focuses shown window and restores workspace focus":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    check model.activeWorkspaceFocusId() == 1
+
+    var effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+
+    effects = model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+    check not model.scratchpadVisible()
+    check model.focusedWindowId() == 1
+    check effects.hasFocusEffect(1)
+
   test "Window rule opens named scratchpad hidden until toggled":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -162,10 +184,13 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check model.placementForWindowOnTag(model.tagForSlot(3), winId).isNone
     check model.shellSnapshot().windows.anyIt(uint32(it.id) == 10 and it.tagId.isNone)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdToggleNamedScratchpad, scratchpadName: "files"))
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.CmdToggleNamedScratchpad, scratchpadName: "files")
+    )
 
     check model.scratchpadVisible()
     check model.activeScratchpadWindow() == winId
+    check effects.hasFocusEffect(10)
     check model.instructionGeom(10).w > 0
     model.requireTagShellSemantics("named scratchpad rule scenario")
 
