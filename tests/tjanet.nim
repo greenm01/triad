@@ -231,6 +231,95 @@ suite "embedded Janet runtime":
     check invalid.ok
     check invalid.messages.len == 0
 
+  test "prelude media helpers emit spawn commands":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalSource(
+      testSnapshot(),
+      """
+(triad/spawn "foot" "-e" "htop")
+(triad/spawn-sh "notify-send triad")
+(triad/volume-up)
+(triad/volume-down "10%")
+(triad/volume-toggle-mute)
+(triad/mic-toggle-mute)
+(triad/media-play-pause)
+(triad/media-next)
+(triad/media-prev)
+(triad/media-stop)
+(triad/media-seek "+5")
+(triad/record-screen "/tmp/triad-screen.mp4")
+(triad/record-region "/tmp/triad-region.mp4")
+(triad/record-stop)
+""",
+    )
+
+    check evaluated.ok
+    check evaluated.messages.len == 14
+    check evaluated.messages[0].kind == MsgKind.CmdSpawn
+    check evaluated.messages[0].spawnCommand == @["foot", "-e", "htop"]
+    check evaluated.messages[1].spawnCommand == @["sh", "-lc", "notify-send triad"]
+    check evaluated.messages[2].spawnCommand ==
+      @["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"]
+    check evaluated.messages[3].spawnCommand ==
+      @["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "10%-"]
+    check evaluated.messages[4].spawnCommand ==
+      @["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]
+    check evaluated.messages[5].spawnCommand ==
+      @["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"]
+    check evaluated.messages[6].spawnCommand == @["playerctl", "play-pause"]
+    check evaluated.messages[7].spawnCommand == @["playerctl", "next"]
+    check evaluated.messages[8].spawnCommand == @["playerctl", "previous"]
+    check evaluated.messages[9].spawnCommand == @["playerctl", "stop"]
+    check evaluated.messages[10].spawnCommand == @["playerctl", "position", "+5"]
+    check evaluated.messages[11].spawnCommand ==
+      @["wf-recorder", "-f", "/tmp/triad-screen.mp4"]
+    check evaluated.messages[12].spawnCommand ==
+      @[
+        "sh", "-c", "geom=$(slurp) && exec wf-recorder -g \"$geom\" -f \"$1\"",
+        "triad-record-region", "/tmp/triad-region.mp4",
+      ]
+    check evaluated.messages[13].spawnCommand == @["pkill", "-INT", "wf-recorder"]
+
+  test "prelude screenshot helpers emit screenshot commands":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalSource(
+      testSnapshot(),
+      """
+(triad/screenshot "--clipboard-only")
+(triad/screenshot-screen "--path" "/tmp/screen.png" "--show-pointer")
+(triad/screenshot-window "--no-clipboard")
+""",
+    )
+
+    check evaluated.ok
+    check evaluated.messages.len == 3
+    check evaluated.messages[0].kind == MsgKind.CmdScreenshot
+    check evaluated.messages[0].screenshotKind == ScreenshotKind.ShotRegion
+    check not evaluated.messages[0].screenshotWriteToDisk
+    check evaluated.messages[0].screenshotCopyToClipboard
+    check evaluated.messages[1].screenshotKind == ScreenshotKind.ShotScreen
+    check evaluated.messages[1].screenshotPath == "/tmp/screen.png"
+    check evaluated.messages[1].screenshotPointerMode ==
+      ScreenshotPointerMode.PointerShow
+    check evaluated.messages[2].screenshotKind == ScreenshotKind.ShotWindow
+    check evaluated.messages[2].screenshotWriteToDisk
+    check not evaluated.messages[2].screenshotCopyToClipboard
+
+  test "prelude does not reopen direct process execution":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalSource(testSnapshot(), """(os/spawn ["foot"])""")
+
+    check not evaluated.ok
+
   test "snapshot query helpers expose current state":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:

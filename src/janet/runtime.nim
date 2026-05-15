@@ -2,7 +2,7 @@ import std/[options, os, strutils, tables, times]
 import chronicles
 import ../core/msg
 import ../types/[janet_manifest, runtime_values, shell_snapshot]
-import command_api, snapshot_api, binding
+import command_api, snapshot_api, binding, prelude
 
 type
   ManifestCacheEntry* = object
@@ -50,7 +50,7 @@ proc evalSource*(
   if runtime.handle == nil:
     return (true, @[], "")
 
-  let snapshotSource = snapshot.janetSnapshotSource(currentWindow)
+  let snapshotSource = snapshot.janetSnapshotSource(currentWindow) & JanetPreludeSource
   let ok =
     triadJanetEval(
       runtime.handle,

@@ -244,6 +244,12 @@ triad/find-tag-by-name    shorthand query → struct | nil
 triad/windows-on-tag      shorthand query → tuple of structs
 triad/window-by-id        shorthand query → struct | nil
 triad/command             emit any registered user command by name + args
+triad/spawn               emit spawn command with argv-style args
+triad/spawn-sh            emit spawn command as sh -lc
+triad/volume-*            wpctl volume and mute helpers
+triad/media-*             playerctl playback helpers
+triad/screenshot-*        Triad screenshot command helpers
+triad/record-*            wf-recorder recipe helpers
 triad/on                  future event hook registration
 ```
 
@@ -295,6 +301,48 @@ or change state on a newly opened window without relying on the currently
 focused window. The optional final boolean on `move-window-to-tag` and
 `move-window-to-workspace` controls whether Triad follows focus to the moved
 window.
+
+### Media and capture helpers
+
+The Janet prelude adds small convenience helpers for common media and capture
+workflows. These helpers still emit ordinary Triad commands; they do not grant
+Janet direct process, filesystem, network, PipeWire, or MPRIS access.
+
+Audio helpers use `wpctl`:
+
+```janet
+(triad/volume-up)        # wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+
+(triad/volume-up "10%")  # wpctl set-volume @DEFAULT_AUDIO_SINK@ 10%+
+(triad/volume-down)
+(triad/volume-toggle-mute)
+(triad/mic-toggle-mute)
+```
+
+Playback helpers use `playerctl`:
+
+```janet
+(triad/media-play-pause)
+(triad/media-next)
+(triad/media-prev)
+(triad/media-stop)
+(triad/media-seek "+5")
+```
+
+Capture helpers reuse Triad's configured screenshot commands or launch
+`wf-recorder`:
+
+```janet
+(triad/screenshot "--clipboard-only")
+(triad/screenshot-screen "--path" "/tmp/screen.png")
+(triad/screenshot-window "--show-pointer")
+(triad/record-screen "/tmp/triad-screen.mp4")
+(triad/record-region "/tmp/triad-region.mp4")
+(triad/record-stop)
+```
+
+Portal-based screen sharing remains app-initiated through the XDG ScreenCast
+portal. Triad can launch helper commands or apps, but it does not own a native
+portal session API.
 
 ---
 
