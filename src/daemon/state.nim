@@ -10,6 +10,7 @@ import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
+import ../janet/runtime
 import ../types/[projection_values, runtime_state, runtime_values]
 import cursor_shake, protocol_surfaces, quickshell_runner
 
@@ -129,6 +130,7 @@ type
     shmBufferCounter*: uint32
 
     runtimeState*: TriadRuntimeState
+    janetRuntime*: JanetRuntime
     msgQueue*: Deque[Msg]
     pendingManageEffects*: seq[Effect]
     desiredPlacements*: Table[uint32, Rect]

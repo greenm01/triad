@@ -1,14 +1,16 @@
 # Janet Scripting in the Triad Ecosystem
 
-Janet is embedded in Triad from the start. This document specifies the
-architecture, integration points, sandbox design, and module layout for the
-embedded runtime, and describes how external Janet clients fit alongside it.
+Triad supports Janet in two roles: external Janet clients over IPC, and an
+embedded manifest runtime for in-process window placement policy. This document
+specifies the current embedded surface, the sandbox shape, and how future hooks
+and layout extensions fit alongside it.
 
 Janet is a small, embeddable Lisp with a clean C API, built-in event loop,
 green threads, and a data-oriented character that fits Triad's model naturally.
-It embeds via a single `janet.c` / `janet.h` pair — integrated into the Nim
-build via `{.compile.}` pragmas and a thin C wrapper, with no additional
-runtime dependency.
+Triad vendors a pinned Janet `janet.c` / `janet.h` pair under `vendor/janet`
+and compiles it through a thin wrapper. The vendored interpreter is marked
+`linguist-vendored` so the upstream C source does not dominate GitHub language
+statistics.
 
 ---
 
@@ -24,8 +26,8 @@ A Janet interpreter hosted inside the Triad process. Scripts receive the
 same `Model.update(msg)` reducer boundary as IPC and keybinds, and pay no
 socket or JSON round-trip cost.
 
-This is the primary integration. It covers placement manifests, event hooks,
-and eventually custom layout functions.
+This is the primary integration. It currently covers placement manifests; event
+hooks and custom layout functions remain future phases.
 
 ### 2. External client scripts (zero Triad changes required)
 
@@ -81,7 +83,7 @@ reducer.
 # ~/.config/triad/manifests/firefox.janet
 (let [tag (triad/find-tag-by-name "web")]
   (if tag
-    (triad/move-to-tag (tag :id))
+    (triad/move-to-tag (tag :tag-id))
     (triad/move-to-tag (triad/active-tag-id))))
 ```
 
@@ -92,7 +94,7 @@ present on this tag, otherwise claim a new tag; check how many windows already
 share a tag before deciding whether to float; use a different layout when the
 main IDE window is already open.
 
-### Event hooks
+### Event hooks (future)
 
 Long-running hooks that react to compositor events in real time:
 
@@ -108,7 +110,7 @@ Long-running hooks that react to compositor events in real time:
       (triad/set-layout "monocle"))))
 ```
 
-### Custom layout functions (phase 3)
+### Custom layout functions (future)
 
 Pure Janet functions that receive column and window geometry data and return
 placement instructions, slotting into the layout projection pipeline alongside
@@ -208,17 +210,16 @@ never mutates model data is enforced by the type, not by convention.
 ```
 src/
   janet/
-    binding.nim       ← {.compile: "janet.c".} pragma, raw C API types/procs
-    runtime.nim       ← JanetRuntime lifecycle, sandboxed eval, hook registry
+    binding.nim       ← compiles vendored janet.c and the C API wrapper
+    runtime.nim       ← JanetRuntime lifecycle, sandboxed eval, manifest cache
     snapshot_api.nim  ← registers triad/snapshot and shorthand query functions
     command_api.nim   ← registers triad/move-to-tag etc., writes to Msg queue
-    manifest.nim      ← discovery (~/.config/triad/manifests/<app-id>.janet),
-                         caching (fsnotify invalidation), evaluation entry point
-    hooks.nim         ← triad/on registration, fiber-per-hook dispatch
+    hooks.nim         ← future triad/on registration, fiber-per-hook dispatch
 ```
 
-`src/janet/binding.nim` is the only file that touches C. All other modules
-build on it through Nim types. This keeps the C surface minimal and auditable.
+`src/janet/binding.nim` and the adjacent C wrapper are the only Triad-owned
+files that touch Janet's C API. All other modules build on it through Nim
+types. This keeps the C surface minimal and auditable.
 
 ---
 
@@ -229,9 +230,9 @@ sandbox is enforced structurally, not by policy documentation.
 
 ### Environment construction
 
-Janet's `janet_core_env()` is **not used**. The embedded environment is built
-from scratch using `janet_table(0)` and populated with only what is explicitly
-registered. No standard library module is reachable unless deliberately added.
+The embedded environment removes host-facing APIs and exposes only the Triad
+snapshot helpers and command functions. The vendored Janet build is compiled
+with dynamic modules, FFI, network, and process support disabled.
 
 Exposed namespaces:
 
@@ -247,23 +248,24 @@ triad/toggle-floating     emit CmdToggleFloating Msg
 triad/set-layout          emit CmdSetLayout Msg
 triad/focus-tag           emit CmdFocusTag Msg
 triad/spawn               emit CmdSpawn Msg
-triad/on                  register an event hook fiber
+triad/on                  future event hook registration
 ```
 
-Explicitly absent: `os/*`, `net/*`, `io/*`, `ffi`, `native/load`, `require`,
-`math/*` beyond basic arithmetic, `string/format` with `%p` (pointer leak).
+Explicitly absent: host filesystem, network, process, FFI, dynamic native
+module loading, and direct model or Wayland handles.
 
 ### Fuel limit
 
-Janet supports an instruction-count fuel limit (`janet_vm_set_fuel`). Every
-manifest evaluation and hook dispatch runs with a configured ceiling (default:
-500 000 instructions). Scripts that loop infinitely are killed before they
-stall the manage phase. The limit is configurable in `config.kdl`:
+Triad stores a configured `fuel-limit` for the embedded runtime. The first
+manifest implementation also blocks obvious loop forms before evaluation so a
+manifest cannot stall the manage path.
 
 ```kdl
 janet {
-  fuel-limit 500000
+  enabled #true
   manifest-dir "~/.config/triad/manifests"
+  system-manifest-dir "/usr/share/triad/manifests"
+  fuel-limit 500000
 }
 ```
 
@@ -282,13 +284,11 @@ receives only the snapshot that existed when evaluation began.
 Triad looks for manifests in order:
 
 1. `{manifest-dir}/{app-id}.janet` (config-specified directory)
-2. `~/.config/triad/manifests/{app-id}.janet` (default)
-3. `/usr/share/triad/manifests/{app-id}.janet` (system-installed)
+2. `{system-manifest-dir}/{app-id}.janet` (system-installed)
 
-Manifests are compiled to Janet images on first load and cached. `fsnotify`
-(already in the dependency tree) watches the manifest directory and invalidates
-the cache on file change. Hot-reload: editing a manifest takes effect on the
-next matching window open, no Triad restart required.
+Manifest source is read on first match and cached with the file modification
+time. Editing a manifest takes effect on the next matching window open, no
+Triad restart required.
 
 If no manifest exists for an `app-id`, evaluation is skipped with zero
 overhead — a simple table lookup against the cache.
@@ -362,29 +362,18 @@ The five levels compose. All can run simultaneously without conflict.
 
 ## Implementation Phases
 
-### Phase 1 — Embedded runtime skeleton
+### Phase 1 — Embedded manifest runtime
 
-- Add `src/janet/binding.nim` with `{.compile: "janet.c".}` and the raw C API
-  surface.
-- Add `src/janet/runtime.nim` with `JanetRuntime` init/deinit and sandboxed
-  `eval(src: string): seq[Msg]`.
-- Add `src/janet/snapshot_api.nim` and `src/janet/command_api.nim` to
-  register the `triad/*` C functions.
-- Write a unit test: feed a minimal Janet string, assert it produces the
-  expected `Msg` values.
-- Wire `JanetRuntime` into `TriadDaemon` state (constructed in `daemon/state.nim`,
-  passed to `processQueuedMessages`).
+- Vendored Janet source, wrapper, runtime lifecycle, snapshot conversion,
+  command emission, manifest lookup/cache, KDL config, and daemon integration.
+- Covered by `nimble testJanet`.
 
-### Phase 2 — Manifest loading
+### Phase 2 — Hardening
 
-- Add `src/janet/manifest.nim`: discovery logic, `fsnotify`-backed cache,
-  per-`app-id` compiled image storage.
-- Hook `WlWindowCreated` in `processQueuedMessages` to call
-  `evalManifest(appId, snap)`.
-- Add the `janet { }` config block to the KDL parser (`src/config/parser.nim`)
-  for `fuel-limit` and `manifest-dir`.
-- Add `nimble task testJanet` and a test suite covering manifest eval, cache
-  invalidation, and fuel-limit enforcement.
+- Replace the first loop guard with a true Janet VM fuel/interruption mechanism
+  when the C API integration is ready.
+- Expand sandbox tests for every host-facing symbol Triad promises not to
+  expose.
 
 ### Phase 3 — Event hooks
 

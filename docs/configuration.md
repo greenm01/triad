@@ -85,8 +85,8 @@ The supported KDL nodes are:
   mode events.
 - `config-notification`: optional reload success, failure, and rollback
   notification commands.
-- `environment`, `quickshell`, `terminal`, `screen-lock`, `window-menu-command`,
-  `spawn-at-startup`.
+- `environment`, `quickshell`, `janet`, `terminal`, `screen-lock`,
+  `window-menu-command`, `spawn-at-startup`.
 - `scratchpad`, `overview` gaps, zoom, tab mode, `floating`, `screenshot`,
   `input`, `cursor`.
 - Top-level flags and settings: `presentation-mode`, `allow-exit-session`,
@@ -100,6 +100,28 @@ capability changes, update this guide and
 `docs/comp/config-command-matrix.md` in the same change. The configuration
 guide states Triad's naming policy; the comparison matrix shows how that policy
 maps against Mango and River.
+
+## Janet Scripting
+
+The `janet` block configures the embedded Janet manifest runtime. It is enabled
+by default; external scripts can still use the IPC socket independently.
+
+```kdl
+janet {
+  enabled #true
+  manifest-dir "~/.config/triad/manifests"
+  system-manifest-dir "/usr/share/triad/manifests"
+  fuel-limit 500000
+}
+```
+
+When enabled, Triad evaluates `{manifest-dir}/{app-id}.janet` when a matching
+window opens. A manifest receives a read-only `triad/snapshot` value and can
+emit normal Triad commands such as `triad/move-to-tag`,
+`triad/move-to-workspace`, `triad/focus-tag`, `triad/set-layout`,
+`triad/toggle-floating`, and `triad/spawn`. Manifest output re-enters the
+normal reducer message path; scripts do not receive direct model or compositor
+handles. See `docs/janet.md`.
 
 ## Session Environment
 

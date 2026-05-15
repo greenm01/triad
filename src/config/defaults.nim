@@ -60,6 +60,13 @@ screenshot {
     show-pointer #false
 }
 
+janet {
+    enabled #true
+    manifest-dir "~/.config/triad/manifests"
+    system-manifest-dir "/usr/share/triad/manifests"
+    fuel-limit 500000
+}
+
 // output "HDMI-A-1" {
 //     focus-at-startup
 //     workspaces 2 4

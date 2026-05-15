@@ -36,6 +36,9 @@ const
   DefaultFloatingMinWidth* = 50'i32
   DefaultFloatingMinHeight* = 50'i32
   DefaultQuickshellCommand* = "qs"
+  DefaultJanetManifestDir* = "~/.config/triad/manifests"
+  DefaultJanetSystemManifestDir* = "/usr/share/triad/manifests"
+  DefaultJanetFuelLimit* = 500000'i32
   DefaultScreenshotDirectory* = "~/Pictures/Screenshots"
   DefaultScreenshotFilenamePrefix* = "triad-screenshot"
   DefaultScreenshotCaptureCommand* = "grim"

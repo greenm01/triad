@@ -201,6 +201,12 @@ type
     theme*: string
     args*: seq[string]
 
+  JanetConfig* = object
+    enabled*: bool
+    manifestDir*: string
+    systemManifestDir*: string
+    fuelLimit*: int32
+
   TerminalConfig* = object
     command*: seq[string]
 

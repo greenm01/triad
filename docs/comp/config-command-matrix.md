@@ -330,6 +330,7 @@ KDL config nodes and fields:
 - `switch-events`: `lid-close`, `lid-open`, `tablet-mode-on`,
   `tablet-mode-off`.
 - `quickshell`: `enabled`, `command`, `theme`, `args`.
+- `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `fuel-limit`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.

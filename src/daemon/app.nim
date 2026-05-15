@@ -5,6 +5,7 @@ import ../types/[model, shell_snapshot]
 import ../types/projection_values
 import ../config/[parser, reload_policy]
 import ../ipc/[quickshell_compat, socket]
+import ../janet/runtime as janet_runtime
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, effects_runtime, input_runtime, live_restore_runtime,
@@ -86,6 +87,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     if msg.kind == MsgKind.CmdConfigReload:
       if daemon.applyConfigReload(configPath, niriSocketPath):
+        daemon.janetRuntime.configure(daemon.runtimeState.model.janet)
         daemon.configureSwitchEventRuntime("config reload")
         result = true
       continue
@@ -102,6 +104,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let effects = syncRuntimeUpdate("message", msg)
+    if msg.kind == MsgKind.WlWindowCreated:
+      let snapshot = daemon.readModelSnapshot()
+      daemon.enqueueNext(daemon.janetRuntime.evalManifest(msg.appId, snapshot))
     let recentModifiersChanged =
       daemon.runtimeState.model.recentWindowsActive and
       previousActiveModifiers != daemon.runtimeState.model.activeModifiers
@@ -289,6 +294,7 @@ proc main*() =
       daemon.configWatchPaths = @[daemon.configPath]
       loadConfig(daemon.configPath)
   daemon.runtimeState = initRuntimeStateFromConfig(initialConfig)
+  daemon.janetRuntime = initJanetRuntime(daemon.runtimeState.model.janet)
   daemon.installInputRuntimeHooks()
   daemon.configureXkbKeymap("initial config")
   daemon.applyAllInputConfig("initial config")
@@ -431,6 +437,7 @@ proc main*() =
       daemon.display.cancel_read()
 
   daemon.closeSwitchEventDevices()
+  daemon.janetRuntime.close()
 
 if isMainModule:
   main()

@@ -928,6 +928,10 @@ proc loadConfig*(path: string): Config =
   result.floating.minWidth = DefaultFloatingMinWidth
   result.floating.minHeight = DefaultFloatingMinHeight
   result.quickshell.command = DefaultQuickshellCommand
+  result.janet.enabled = true
+  result.janet.manifestDir = DefaultJanetManifestDir
+  result.janet.systemManifestDir = DefaultJanetSystemManifestDir
+  result.janet.fuelLimit = DefaultJanetFuelLimit
   result.hotkeyOverlay.skipAtStartup = true
   result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
   result.hotkeyOverlay.columns = 2
@@ -1425,6 +1429,20 @@ proc loadConfig*(path: string): Config =
                 result.quickshell.args.add(arg.kString())
           except CatchableError as e:
             warn "Ignoring invalid quickshell field", field = child.name, error = e.msg
+      elif node.name == "janet":
+        for child in node.children:
+          try:
+            if child.name == "enabled" and child.args.len > 0:
+              result.janet.enabled = child.args[0].kBool()
+            elif child.name == "manifest-dir" and child.args.len > 0:
+              result.janet.manifestDir = child.args[0].kString()
+            elif child.name == "system-manifest-dir" and child.args.len > 0:
+              result.janet.systemManifestDir = child.args[0].kString()
+            elif child.name == "fuel-limit" and child.args.len > 0:
+              result.janet.fuelLimit =
+                clamp32(int32(child.args[0].kInt()), 1_000, 10_000_000)
+          except CatchableError as e:
+            warn "Ignoring invalid janet field", field = child.name, error = e.msg
       elif node.name == "terminal":
         for child in node.children:
           try:

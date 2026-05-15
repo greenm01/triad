@@ -102,6 +102,12 @@ quickshell {
   theme "noctalia"
   args "--verbose"
 }
+janet {
+  enabled #true
+  manifest-dir "~/triad-manifests"
+  system-manifest-dir "/usr/share/triad/test-manifests"
+  fuel-limit 1000000
+}
 terminal { command "kitty" }
 screenshot {
   directory "~/shots"
@@ -362,6 +368,10 @@ switch-events {
     check config.environment[3].name == "GTK_THEME"
     check config.environment[3].value == "Breeze"
     check config.quickshell.theme == "noctalia"
+    check config.janet.enabled
+    check config.janet.manifestDir == "~/triad-manifests"
+    check config.janet.systemManifestDir == "/usr/share/triad/test-manifests"
+    check config.janet.fuelLimit == 1000000
     check config.terminal.command.len > 0
     check config.screenshot.directory == "~/shots"
     check config.screenshot.filenamePrefix == "triad-test"
@@ -692,6 +702,8 @@ cursor {
     check config.hotkeyOverlay.hideNotBound
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
     check config.hotkeyOverlay.columns == 2
+    check config.janet.enabled
+    check config.janet.manifestDir == "~/.config/triad/manifests"
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
 
   test "Default bindings follow Niri-style movement and scratchpad chords":

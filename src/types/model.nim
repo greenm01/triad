@@ -4,11 +4,11 @@ from core import
   IdCounters, OutputId, Rect, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
-  InputConfig, GestureBindingConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig,
-  ParentedRole, OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind,
-  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter,
-  RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
-  TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
+  InputConfig, GestureBindingConfig, JanetConfig, KeyBindingConfig, LayoutMode,
+  HotkeyOverlayConfig, ParentedRole, OverviewHotCornersConfig, PointerBindingConfig,
+  PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
+  RecentWindowFilter, RecentWindowScope, RecentWindowsConfig, ScreenshotConfig,
+  SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
   WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
@@ -445,6 +445,7 @@ type
     scratchpadHeightRatio*: float32
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    janet*: JanetConfig
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig
     input*: InputConfig

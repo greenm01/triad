@@ -44,8 +44,8 @@ proc runConfigSuites() =
 proc runUnitSuites() =
   for path in [
     "tests/tapp_identity.nim", "tests/tcompat.nim", "tests/tstate.nim",
-    "tests/thardening.nim", "tests/tlayouts.nim", "tests/tlogging.nim",
-    "tests/tprotocol.nim",
+    "tests/thardening.nim", "tests/tjanet.nim", "tests/tlayouts.nim",
+    "tests/tlogging.nim", "tests/tprotocol.nim",
   ]:
     runTestSuite(path)
   runConfigSuites()
@@ -69,9 +69,9 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tcore_presentation_overview", "tests/tcore_overview",
     "tests/tcore_overview_interactions", "tests/tcore_recent_windows",
     "tests/tcore_shell_snapshot_ipc", "tests/tcore_unmanaged_global", "tests/tstate",
-    "tests/thardening", "tests/tlayouts", "tests/tlogging", "tests/tprotocol",
-    "tests/tstress", "triad-live-smoke.events", "triad-live-smoke.log",
-    "triad-live-smoke.out",
+    "tests/thardening", "tests/tjanet", "tests/tlayouts", "tests/tlogging",
+    "tests/tprotocol", "tests/tstress", "triad-live-smoke.events",
+    "triad-live-smoke.log", "triad-live-smoke.out",
   ]:
     if fileExists(path):
       rmFile(path)
@@ -109,6 +109,9 @@ task testDaemon, "Run daemon-facing runtime and hardening tests":
 
 task testHardening, "Run crash hardening tests":
   runTestSuite("tests/thardening.nim")
+
+task testJanet, "Run embedded Janet runtime tests":
+  runTestSuite("tests/tjanet.nim")
 
 task testLayouts, "Run layout algorithm tests":
   runTestSuite("tests/tlayouts.nim")
