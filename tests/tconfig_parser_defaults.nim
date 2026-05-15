@@ -223,6 +223,8 @@ bindings {
   bind "Super+/" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
   bind "Super+Shift+?" "focus-last" hotkey-overlay-title=#null
   bind "NONE+F12" "focus-last"
+  bind "Super+Escape" "lock-session" on-release=#true
+  bind "Ctrl+Alt+l" "lock-session" while-locked=#true
   pointer-bind "Super+left" "move"
   pointer-bind "Super+middle" "toggle-maximized"
   pointer-bind "right" "close-window" mode="overview"
@@ -487,6 +489,16 @@ switch-events {
     check hiddenBindings[0].hotkeyOverlayTitleKind ==
       HotkeyOverlayTitleKind.HotkeyTitleHidden
     check config.commandForBinding("F12", 0'u32) == "focus-last"
+    let releaseBindings =
+      config.keyBindings.filterIt(it.key == "Escape" and it.modifiers == Super)
+    check releaseBindings.len == 1
+    check releaseBindings[0].onRelease
+    check not releaseBindings[0].whileLocked
+    let lockedBindings =
+      config.keyBindings.filterIt(it.key == "l" and it.modifiers == Ctrl + Alt)
+    check lockedBindings.len == 1
+    check lockedBindings[0].whileLocked
+    check not lockedBindings[0].onRelease
     check config.pointerBindings.len == 4
     check config.pointerBindings.anyIt(
       it.button == 0x110'u32 and it.op == PointerOpKind.OpMove

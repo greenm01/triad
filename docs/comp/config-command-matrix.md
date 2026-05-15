@@ -35,7 +35,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Done | Input device config | `input { keyboard; mouse; touchpad; trackpoint; trackball }` | Niri `input`; Mango keyboard, mouse, and trackpad settings | Implemented through River input, XKB, and libinput config protocols for keyboard repeat, XKB keymaps/options, lock state, and basic mouse/touchpad/trackpoint/trackball settings. | Keep validating against live hardware; keyboard layout cycling remains separate command work. |
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
-| P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, pointer button, wheel-axis, dormant gesture, and dormant switch-event binding surfaces exist. Live gesture/switch hardware delivery is still blocked on a compositor or input event source. | Connect the next narrow event source without changing the user-facing config syntax. |
+| P2 | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Key, release-triggered key, locked-session key, pointer button, wheel-axis, dormant gesture, and dormant switch-event binding surfaces exist. Live gesture/switch hardware delivery is still blocked on a compositor or input event source. | Connect the next narrow event source without changing the user-facing config syntax. |
 | P3 | Focused polish | Cursor hiding, config notifications, richer overview/hotkey/animation/layer-rule polish | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Cursor theme/size/shake/hiding, config reload notification commands, overview, recent windows, hotkey overlay, and coarse animations exist; advanced polish remains partial or blocked. | Pick the next small polish surface: richer animation tuning, layer rules, or overview/hotkey refinements. |
 
 ## Feature Matrix
@@ -58,7 +58,7 @@ They are grouped by user-facing capability rather than by implementation module.
 | Bindings | Key modes/submaps | `keymode`, `setkeymode` | WM policy | `mode="normal"`, `mode="overview"`, or `mode="recent"` | | Triad has fixed binding modes, not arbitrary named modes. Unified overview and recent-windows add modal fallback bindings, including derived direction-key navigation, only when those key slots are free. |
 | Bindings | Recent-window switcher | MRU switcher actions | WM policy plus `river_xkb_bindings_v1` | `recent-windows`, `recent-window-*` | X | Niri-style recent window switching with debounce, open delay, scopes, app-id filter, and preview overlay. Defaults are Alt-only so `Super+Tab` remains available for Triad focus commands. |
 | Bindings | HJKL/arrow mirroring | Manual binds | WM policy | `mirror-hjkl-arrows` | X | Triad can generate arrow equivalents for HJKL binds. |
-| Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | | | Triad does not expose equivalent bind flags. |
+| Bindings | Pass/locked/release flags | `bindp`, `bindl`, `bindr` | Protocol has press/release events | `bind ... on-release=#true`, `while-locked=#true` | X | Triad supports release-triggered and locked-session keyboard binds. Pass-through binds remain unsupported. |
 | Bindings | Eat next key | | `ensure_next_key_eaten` | `eat-next-key`, `cancel-eat-next-key` | X | Useful for modal shell interactions. |
 | Pointer | Mouse button bindings | `mousebind` | `river_seat_v1.get_pointer_binding` | `bindings { pointer-bind ... }` | X | Triad supports configured move/resize pointer bindings. |
 | Pointer | Scroll wheel bindings | `axisbind` | Pointer axis from Wayland, policy in WM | `bindings { axis-bind ... }` | X | Triad supports wheel-up/down/left/right command bindings using raw pointer-axis events. |
@@ -324,7 +324,8 @@ KDL config nodes and fields:
 - `environment`, `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, `axis-bind`,
   `gesture-bind`, plus `layout`, `mode`, `allow-inhibiting`,
-  `hotkey-overlay-title`, and gesture `fingers` properties.
+  `on-release`, `while-locked`, `hotkey-overlay-title`, and gesture `fingers`
+  properties.
 - `switch-events`: `lid-close`, `lid-open`, `tablet-mode-on`,
   `tablet-mode-off`.
 - `quickshell`: `enabled`, `command`, `theme`, `args`.

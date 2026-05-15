@@ -262,6 +262,46 @@ suite "Crash hardening":
     check pointerClassFor("Logitech USB Receiver", 0, false, false) ==
       PointerDeviceClass.Mouse
 
+  test "XKB release bindings arm on accepted press and dispatch once":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
+    daemon.xkbBindingModes[1'u32] = BindingMode.BindAlways
+    daemon.xkbBindingModifiers[1'u32] = 64'u32
+    daemon.xkbBindingOnRelease[1'u32] = true
+
+    daemon.handleXkbBindingPressed(1'u32)
+    check daemon.xkbBindingReleaseArmed.getOrDefault(1'u32, false)
+    check not daemon.hasQueuedMessages()
+
+    daemon.handleXkbBindingReleased(1'u32)
+    check not daemon.xkbBindingReleaseArmed.getOrDefault(1'u32, false)
+    check daemon.hasQueuedMessages()
+    let releasedMsg = daemon.popQueuedMessage()
+    check releasedMsg.kind == MsgKind.CmdFocusNext
+    while daemon.hasQueuedMessages():
+      discard daemon.popQueuedMessage()
+
+    daemon.handleXkbBindingReleased(1'u32)
+    check not daemon.hasQueuedMessages()
+
+  test "XKB bindings honor locked-session opt-in":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    daemon.runtimeState.model.sessionLocked = true
+    daemon.xkbBindings[1'u32] = Msg(kind: MsgKind.CmdFocusNext)
+    daemon.xkbBindingModes[1'u32] = BindingMode.BindAlways
+    daemon.xkbBindingModifiers[1'u32] = 64'u32
+
+    daemon.handleXkbBindingPressed(1'u32)
+    check not daemon.hasQueuedMessages()
+
+    daemon.xkbBindingWhileLocked[1'u32] = true
+    daemon.handleXkbBindingPressed(1'u32)
+    check daemon.hasQueuedMessages()
+    let lockedMsg = daemon.popQueuedMessage()
+    check lockedMsg.kind == MsgKind.CmdFocusNext
+
   test "config reload defers binding reconfigure to manage":
     let base = getTempDir() / "triad-config-reload-" & $getCurrentProcessId()
     let configPath = base & ".kdl"

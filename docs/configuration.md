@@ -596,7 +596,8 @@ bindings {
 ```
 
 - `bind "<modifiers+key>" "<command>"`: binds a keyboard command. Keyboard
-  binds also support `layout=<index>` and `hotkey-overlay-title`.
+  binds also support `layout=<index>`, `on-release=#true`,
+  `while-locked=#true`, and `hotkey-overlay-title`.
 - `pointer-bind "<modifiers+button>" "<command>"`: binds mouse buttons. `move`
   and `resize` start River pointer operations; other commands are parsed as
   normal Triad commands and target the window under the pointer when the
@@ -614,6 +615,11 @@ bindings {
   mode means always active.
 - `allow-inhibiting=#false` lets a binding bypass a focused client's keyboard
   shortcuts inhibition.
+- `on-release=#true` runs the command on key release after an accepted press
+  instead of on press.
+- `while-locked=#true` keeps the keyboard binding active while the River
+  session is locked. This does not bypass command-specific behavior; commands
+  that need an unlocked session may still be no-ops.
 
 ## Switch Events
 

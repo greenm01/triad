@@ -283,6 +283,8 @@ proc recentOpenCommandForBinding(binding: KeyBindingConfig): string =
     ""
 
 proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
+  if daemon.currentModel.sessionLocked and not binding.whileLocked:
+    return false
   if daemon.currentModel.recentWindowsActive and binding.mode != BindingMode.BindRecent and
       binding.recentOpenCommandForBinding().len > 0:
     return false
@@ -299,7 +301,59 @@ proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
     return false
   true
 
+proc liveXkbBindingActive(daemon: TriadDaemon, id: uint32): bool =
+  if daemon.currentModel.sessionLocked and
+      not daemon.xkbBindingWhileLocked.getOrDefault(id, false):
+    return false
+  if daemon.xkbBindingModes.hasKey(id) and
+      not daemon.bindingModeActive(daemon.xkbBindingModes[id]):
+    if daemon.xkbBindings.hasKey(id) and
+        daemon.xkbBindings[id].isOverviewTabOpenCommand() and
+        daemon.currentModel.overviewTabModeActive and
+        daemon.xkbBindingModifiers.getOrDefault(id, 0'u32) ==
+        daemon.currentModel.overviewTabModeModifiers:
+      return true
+    if not daemon.xkbBindings.hasKey(id) or
+        daemon.xkbBindingModifiers.getOrDefault(id, 0'u32) == 0'u32 or
+        not daemon.currentModel.recentBindingCanOpen(
+          daemon.xkbBindingModes[id], daemon.xkbBindings[id]
+        ):
+      return false
+  true
+
+proc enqueueXkbBindingCommand(daemon: var TriadDaemon, id: uint32) =
+  if daemon.xkbBindings.hasKey(id):
+    let msg = daemon.xkbBindings[id]
+    daemon.enqueue(msg)
+    if daemon.currentModel.hotkeyOverlayOpen and
+        msg.kind notin {
+          MsgKind.CmdShowHotkeyOverlay, MsgKind.CmdToggleHotkeyOverlay,
+          MsgKind.CmdHideHotkeyOverlay,
+        }:
+      daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+
+proc handleXkbBindingPressed*(daemon: var TriadDaemon, id: uint32) =
+  daemon.xkbBindingPressed[id] = true
+  daemon.xkbBindingReleaseArmed[id] = false
+  if not daemon.liveXkbBindingActive(id):
+    return
+  if daemon.xkbBindingOnRelease.getOrDefault(id, false):
+    daemon.xkbBindingReleaseArmed[id] = true
+  else:
+    daemon.enqueueXkbBindingCommand(id)
+
+proc handleXkbBindingReleased*(daemon: var TriadDaemon, id: uint32) =
+  daemon.xkbBindingPressed[id] = false
+  if daemon.xkbBindingOnRelease.getOrDefault(id, false) and
+      daemon.xkbBindingReleaseArmed.getOrDefault(id, false):
+    daemon.xkbBindingReleaseArmed[id] = false
+    if not daemon.currentModel.sessionLocked or
+        daemon.xkbBindingWhileLocked.getOrDefault(id, false):
+      daemon.enqueueXkbBindingCommand(id)
+
 proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): bool =
+  if daemon.currentModel.sessionLocked:
+    return false
   if not daemon.bindingModeActive(binding.mode):
     return false
   if daemon.currentModel.keyboardShortcutsInhibited() and
@@ -308,6 +362,8 @@ proc pointerBindingActive(daemon: TriadDaemon, binding: PointerBindingConfig): b
   true
 
 proc axisBindingActive(daemon: TriadDaemon, binding: AxisBindingConfig): bool =
+  if daemon.currentModel.sessionLocked:
+    return false
   if not daemon.bindingModeActive(binding.mode):
     return false
   if daemon.currentModel.keyboardShortcutsInhibited() and
@@ -316,6 +372,8 @@ proc axisBindingActive(daemon: TriadDaemon, binding: AxisBindingConfig): bool =
   true
 
 proc gestureBindingActive(daemon: TriadDaemon, binding: GestureBindingConfig): bool =
+  if daemon.currentModel.sessionLocked:
+    return false
   if not daemon.bindingModeActive(binding.mode):
     return false
   if daemon.currentModel.keyboardShortcutsInhibited() and
@@ -909,31 +967,15 @@ proc onXkbPressed(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
   if daemon[].currentModel.cursor.hideWhenTyping:
     daemon[].hideAllCursors()
   let id = binding.id()
-  daemon.xkbBindingPressed[id] = true
-  if daemon.xkbBindingModes.hasKey(id) and
-      not daemon[].bindingModeActive(daemon.xkbBindingModes[id]):
-    if not daemon.xkbBindings.hasKey(id) or
-        daemon.xkbBindingModifiers.getOrDefault(id, 0'u32) == 0'u32 or
-        not daemon[].currentModel.recentBindingCanOpen(
-          daemon.xkbBindingModes[id], daemon.xkbBindings[id]
-        ):
-      return
-  if daemon.xkbBindings.hasKey(id):
-    let msg = daemon.xkbBindings[id]
-    daemon.enqueue(msg)
-    if daemon[].currentModel.hotkeyOverlayOpen and
-        msg.kind notin {
-          MsgKind.CmdShowHotkeyOverlay, MsgKind.CmdToggleHotkeyOverlay,
-          MsgKind.CmdHideHotkeyOverlay,
-        }:
-      daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
+  daemon[].handleXkbBindingPressed(id)
 
 proc onXkbReleased(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
   let daemon = callbackDaemon(data, "xkb released")
   if daemon == nil:
     return
-  daemon.xkbBindingPressed[binding.id()] = false
-  trace "XKB binding released", bindingId = binding.id()
+  let id = binding.id()
+  daemon[].handleXkbBindingReleased(id)
+  trace "XKB binding released", bindingId = id
 
 proc onXkbStopRepeat(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
   let daemon = callbackDaemon(data, "xkb stop-repeat")
@@ -1234,6 +1276,9 @@ proc destroyBindings*(daemon: var TriadDaemon) =
   daemon.xkbBindingPointers = @[]
   daemon.xkbBindings.clear()
   daemon.xkbBindingPressed.clear()
+  daemon.xkbBindingOnRelease.clear()
+  daemon.xkbBindingReleaseArmed.clear()
+  daemon.xkbBindingWhileLocked.clear()
   daemon.xkbBindingModes.clear()
   daemon.xkbBindingModifiers.clear()
   daemon.xkbStopRepeatCount.clear()
@@ -1276,6 +1321,8 @@ proc addXkbBinding(
   daemon.xkbBindings[binding.id()] = storedMsg
   daemon.xkbBindingModes[binding.id()] = bindingConfig.mode
   daemon.xkbBindingModifiers[binding.id()] = modifiers
+  daemon.xkbBindingOnRelease[binding.id()] = bindingConfig.onRelease
+  daemon.xkbBindingWhileLocked[binding.id()] = bindingConfig.whileLocked
   discard binding.addListener(xkbBindingListener.addr, daemonData(daemon))
   if bindingConfig.hasLayoutOverride:
     binding.setLayoutOverride(bindingConfig.layoutOverride)
@@ -1302,8 +1349,6 @@ proc addPointerBinding(
   binding.enable()
 
 proc setupDefaultBindings*(daemon: var TriadDaemon) =
-  if daemon.currentModel.sessionLocked:
-    return
   if daemon.bindingsConfigured:
     return
   if daemon.seatPointers.len == 0:
@@ -1319,13 +1364,14 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
       let sym = keySymForBinding(binding.key, binding.modifiers)
       if parsed.isSome and sym != 0:
         daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
-    if daemon.currentModel.overviewUsesWorkspacePreviews():
+    if not daemon.currentModel.sessionLocked and
+        daemon.currentModel.overviewUsesWorkspacePreviews():
       for binding in daemon.currentModel.overviewFallbackKeyBindings():
         let parsed = parseTextCommand(binding.command)
         let sym = keySymForBinding(binding.key, binding.modifiers)
         if parsed.isSome and sym != 0:
           daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
-    if daemon.currentModel.recentWindowsActive:
+    if not daemon.currentModel.sessionLocked and daemon.currentModel.recentWindowsActive:
       for binding in daemon.currentModel.recentOpenFallbackKeyBindings():
         let parsed = parseTextCommand(binding.command)
         let sym = keySymForBinding(binding.key, binding.modifiers)

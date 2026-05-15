@@ -502,6 +502,8 @@ type
     mode*: BindingMode
     hasLayoutOverride*: bool
     layoutOverride*: uint32
+    onRelease*: bool
+    whileLocked*: bool
     bypassShortcutsInhibit*: bool
     hotkeyOverlayTitleKind*: HotkeyOverlayTitleKind
     hotkeyOverlayTitle*: string

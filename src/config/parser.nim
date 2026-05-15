@@ -693,6 +693,10 @@ proc keyBindingFromNode(
     binding.mode = parseBindingMode(node.props["mode"].kString())
   if node.props.hasKey("allow-inhibiting"):
     binding.bypassShortcutsInhibit = not node.props["allow-inhibiting"].kBool()
+  if node.props.hasKey("on-release"):
+    binding.onRelease = node.props["on-release"].kBool()
+  if node.props.hasKey("while-locked"):
+    binding.whileLocked = node.props["while-locked"].kBool()
   if node.props.hasKey("hotkey-overlay-title"):
     binding.applyHotkeyOverlayTitle(node.props["hotkey-overlay-title"])
   some(binding)
