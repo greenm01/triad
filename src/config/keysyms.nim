@@ -24,6 +24,24 @@ proc keySymForBinding*(key: string, modifiers: uint32 = 0): uint32 =
     if (modifiers and ShiftModifier) != 0: 0x3f'u32 else: 0x2f'u32
   of "question":
     0x3f'u32
+  of "minus":
+    0x2d'u32
+  of "equal", "equals":
+    0x3d'u32
+  of "bracketleft", "leftbracket":
+    0x5b'u32
+  of "bracketright", "rightbracket":
+    0x5d'u32
+  of "backslash":
+    0x5c'u32
+  of "semicolon":
+    0x3b'u32
+  of "apostrophe", "quote":
+    0x27'u32
+  of "comma":
+    0x2c'u32
+  of "period", "dot":
+    0x2e'u32
   of "grave", "backtick":
     0x60'u32
   of "left":

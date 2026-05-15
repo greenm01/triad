@@ -108,7 +108,7 @@ recent-windows {
 // }
 
 bindings {
-    bind "Super+Shift+Slash" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
+    bind "Super+?" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
     bind "Super+q" "close-window"
     bind "Super+f" "maximize-window-to-edges"
     bind "Super+Shift+f" "fullscreen-window"

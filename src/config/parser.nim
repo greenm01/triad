@@ -1,6 +1,7 @@
 import std/[options, os, re, strutils]
 import chronicles, kdl
 import defaults
+import keysyms
 import ../types/runtime_values
 
 const MaxConfigIncludeDepth* = 10
@@ -334,18 +335,79 @@ proc buttonValue(name: string): uint32 =
       discard
     0'u32
 
+proc canonicalKeyName(rawKey: string): string =
+  case rawKey.strip().normalize()
+  of "/":
+    "Slash"
+  of "?":
+    "Question"
+  else:
+    rawKey.strip()
+
+proc shiftedKeyName(rawKey: string): string =
+  case rawKey.strip().normalize()
+  of "~": "~"
+  of "!": "!"
+  of "@": "@"
+  of "#": "#"
+  of "$": "$"
+  of "%": "%"
+  of "^": "^"
+  of "&": "&"
+  of "*": "*"
+  of "(": "("
+  of ")": ")"
+  of "_": "_"
+  of "+": "+"
+  of "{": "{"
+  of "}": "}"
+  of "|": "|"
+  of ":": ":"
+  of "\"": "\""
+  of "<": "<"
+  of ">": ">"
+  of "`", "grave", "backtick": "~"
+  of "1": "!"
+  of "2": "@"
+  of "3": "#"
+  of "4": "$"
+  of "5": "%"
+  of "6": "^"
+  of "7": "&"
+  of "8": "*"
+  of "9": "("
+  of "0": ")"
+  of "-", "minus": "_"
+  of "=", "equal", "equals": "+"
+  of "[", "bracketleft", "leftbracket": "{"
+  of "]", "bracketright", "rightbracket": "}"
+  of "\\", "backslash": "|"
+  of ";", "semicolon": ":"
+  of "'", "apostrophe", "quote": "\""
+  of ",", "comma": "<"
+  of ".", "period", "dot": ">"
+  of "/", "slash", "?", "question": "Question"
+  else: ""
+
+proc normalizeKeySpec(
+    rawKey: string, modifiers: uint32
+): tuple[key: string, modifiers: uint32] =
+  result.key = rawKey.canonicalKeyName()
+  result.modifiers = modifiers
+  let shifted = rawKey.shiftedKeyName()
+  if (modifiers and ShiftModifier) != 0 and shifted.len > 0:
+    result.key = shifted
+    result.modifiers = modifiers and not ShiftModifier
+
 proc parseKeySpec(value: string): tuple[key: string, modifiers: uint32] =
   let parts = value.split("+")
   if parts.len == 0:
     return ("", 0'u32)
   let rawKey = parts[^1].strip()
-  result.key =
-    case rawKey
-    of "/": "Slash"
-    of "?": "Question"
-    else: rawKey
+  var modifiers = 0'u32
   if parts.len > 1:
-    result.modifiers = parseModifiers(parts[0 .. ^2].join("+"))
+    modifiers = parseModifiers(parts[0 .. ^2].join("+"))
+  result = normalizeKeySpec(rawKey, modifiers)
 
 proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
   if value.kind == KNull:
@@ -595,8 +657,8 @@ proc mirrorHjklArrowBindings(bindings: var seq[KeyBindingConfig]) =
 
 proc hotkeyOverlayFallbackBinding(): KeyBindingConfig =
   KeyBindingConfig(
-    key: "Slash",
-    modifiers: 65'u32,
+    key: "Question",
+    modifiers: 64'u32,
     command: "toggle-hotkey-overlay",
     bypassShortcutsInhibit: true,
     hotkeyOverlayTitleKind: HotkeyOverlayTitleKind.HotkeyTitleCustom,

@@ -705,7 +705,7 @@ hotkey-overlay {
 }
 
 bindings {
-  bind "Super+Shift+Slash" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
+  bind "Super+?" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
   bind "Super+Shift+Q" "close-window" hotkey-overlay-title=#null
 }
 ```
@@ -722,9 +722,10 @@ bindings {
   supplied label.
 - `hotkey-overlay-title=#null`: hides that binding from the helper.
 
-Triad adds `Super+Shift+Slash` as a fallback `toggle-hotkey-overlay` binding
-when no overlay binding is configured and that key slot is free. `Slash`, `/`,
-`Question`, and `?` are accepted key names for slash/question bindings.
+Triad adds `Super+?` as a fallback `toggle-hotkey-overlay` binding when no
+overlay binding is configured and that key slot is free. Shifted punctuation
+aliases such as `Super+Shift+/` normalize to their shifted key symbol, so
+`Super+?` and `Super+Shift+/` target the same binding.
 
 ## Config Notifications
 

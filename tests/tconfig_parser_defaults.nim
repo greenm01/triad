@@ -488,9 +488,8 @@ switch-events {
     check titledBindings[0].hotkeyOverlayTitleKind ==
       HotkeyOverlayTitleKind.HotkeyTitleCustom
     check titledBindings[0].hotkeyOverlayTitle == "Show Important Hotkeys"
-    let hiddenBindings = config.keyBindings.filterIt(
-      it.key == "Question" and it.modifiers == Super + Shift
-    )
+    let hiddenBindings =
+      config.keyBindings.filterIt(it.key == "Question" and it.modifiers == Super)
     check hiddenBindings.len == 1
     check hiddenBindings[0].hotkeyOverlayTitleKind ==
       HotkeyOverlayTitleKind.HotkeyTitleHidden
@@ -597,8 +596,7 @@ bindings {
     check config.hotkeyOverlay.skipAtStartup
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Top
     check config.hotkeyOverlay.columns == 2
-    check config.msgKindForBinding("Slash", Super + Shift) ==
-      MsgKind.CmdToggleHotkeyOverlay
+    check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
 
     writeFile(
       path,
@@ -611,7 +609,26 @@ bindings {
     let occupied = loadConfig(path)
     removeFile(path)
 
-    check occupied.msgKindForBinding("Slash", Super + Shift) == MsgKind.CmdFocusLast
+    check occupied.msgKindForBinding("Question", Super) == MsgKind.CmdFocusLast
+
+  test "Config normalizes shifted punctuation aliases":
+    let path = getCurrentDir() / "test_config_shifted_key_aliases.kdl"
+    writeFile(
+      path,
+      """
+bindings {
+  bind "Super+Shift+/" "toggle-hotkey-overlay"
+  bind "Super+Shift+1" "focus-last"
+  bind "Super+Shift+grave" "close-window"
+}
+""",
+    )
+    let config = loadConfig(path)
+    removeFile(path)
+
+    check config.commandForBinding("Question", Super) == "toggle-hotkey-overlay"
+    check config.commandForBinding("!", Super) == "focus-last"
+    check config.commandForBinding("~", Super) == "close-window"
 
   test "Config clamps hotkey overlay columns and ignores invalid position":
     let path = getCurrentDir() / "test_config_hotkey_overlay_layout.kdl"
@@ -693,8 +710,7 @@ cursor {
     check config.commandForBinding("Print", Ctrl) == "screenshot-screen"
     check config.commandForBinding("Print", Alt) == "screenshot-window"
     check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
-    check config.msgKindForBinding("Slash", Super + Shift) ==
-      MsgKind.CmdToggleHotkeyOverlay
+    check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
     check config.msgKindForBinding("Tab", Alt, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowNext
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
