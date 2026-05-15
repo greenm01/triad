@@ -56,7 +56,7 @@ proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
   daemon.runtimeState.applyRuntimeUpdate(msg)
 
 proc syncRuntimeLayoutProjection(context: string, msg: Msg): seq[RenderInstruction] =
-  daemon.runtimeState.applyRuntimeLayoutProjection().instructions
+  daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind).instructions
 
 proc startAnimationLoop() {.async.} =
   while true:

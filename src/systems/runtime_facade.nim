@@ -3,6 +3,7 @@ import ../core/[effects, msg, restore_state]
 import ../state/engine
 import ../types/[layout_projection, runtime_state, shell_snapshot]
 import ../types/runtime_values as rv
+import ../utils/behavior_log
 import layout_projection, update, window_lifecycle, workspaces
 
 export runtime_state
@@ -22,8 +23,16 @@ proc applyRuntimeUpdate*(state: var TriadRuntimeState, msg: Msg): seq[Effect] =
   state.model = next
   effects
 
-proc applyRuntimeLayoutProjection*(state: var TriadRuntimeState): LayoutProjection =
+proc applyRuntimeLayoutProjection*(
+    state: var TriadRuntimeState, context = "", msgKind = ""
+): LayoutProjection =
   result = state.model.layoutProjection()
+  if behaviorLogEnabled():
+    let snapshot = state.model.shellSnapshot()
+    writeBehaviorEvent(
+      "layout_projection",
+      snapshot.layoutProjectionBehaviorPayload(result, context, msgKind),
+    )
   state.model.applyLayoutProjection(result)
 
 proc applyRuntimeConfig*(state: var TriadRuntimeState, config: Config): bool =

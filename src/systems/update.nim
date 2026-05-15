@@ -24,6 +24,7 @@ proc updateSnapshotSummary(snapshot: ShellSnapshot, model: Model): JsonNode =
   %*{
     "active_tag": snapshot.activeTag,
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
+    "layout_mode": snapshot.activeWorkspaceLayoutId(),
     "focused_window": uint32(snapshot.focusedWindowId()),
     "session_locked": model.sessionLocked,
     "layer_focus_exclusive": model.layerFocusExclusive,
@@ -125,6 +126,17 @@ proc compactRuntimeEffects(effects: seq[Effect]): JsonNode =
     else:
       discard
 
+proc isLayoutCommand(kind: MsgKind): bool =
+  kind in {MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout}
+
+proc layoutTransitionPayload(before, after: ShellSnapshot): JsonNode =
+  %*{
+    "before": before.activeWorkspaceLayoutId(),
+    "after": after.activeWorkspaceLayoutId(),
+    "active_tag_before": before.activeTag,
+    "active_tag_after": after.activeTag,
+  }
+
 proc writeRuntimeUpdateEvent(
     msg: Msg,
     beforeModel, afterModel: Model,
@@ -136,8 +148,7 @@ proc writeRuntimeUpdateEvent(
   if not kind.shouldLogRuntimeUpdate():
     return
   let trackedIds = trackedRuntimeWindowIds(msg, before, after)
-  writeBehaviorEvent(
-    "runtime_update",
+  let payload =
     %*{
       "kind": $kind,
       "dirty": dirty,
@@ -155,8 +166,10 @@ proc writeRuntimeUpdateEvent(
         "before": before.compactTrackedWindows(trackedIds),
         "after": after.compactTrackedWindows(trackedIds),
       },
-    },
-  )
+    }
+  if kind.isLayoutCommand():
+    payload["layout_transition"] = before.layoutTransitionPayload(after)
+  writeBehaviorEvent("runtime_update", payload)
 
 proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   var next = model

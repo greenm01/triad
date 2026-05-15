@@ -95,8 +95,84 @@ suite "Runtime logging":
     check event["event"].getStr() == "runtime_update"
     check event["kind"].getStr() == "CmdFocusWorkspaceIndex"
     check event["after"]["active_tag"].getInt() == 2
+    check event["after"]["layout_mode"].getStr() == "scroller"
     check event["after"].hasKey("workspace_distribution")
     check event["window_states"]["after"].kind == JArray
+
+  test "runtime update behavior event records layout transition":
+    let dir = getTempDir() / ("triad-behavior-layout-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    let model = initRuntimeStateFromConfig(
+      Config(
+        layout:
+          LayoutConfig(layoutCycle: @[LayoutMode.Scroller, LayoutMode.MasterStack])
+      )
+    ).model
+    discard model.update(Msg(kind: MsgKind.CmdSwitchLayout))
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["event"].getStr() == "runtime_update"
+    check event["kind"].getStr() == "CmdSwitchLayout"
+    check event["before"]["layout_mode"].getStr() == "scroller"
+    check event["after"]["layout_mode"].getStr() == "tile"
+    check event["layout_transition"]["before"].getStr() == "scroller"
+    check event["layout_transition"]["after"].getStr() == "tile"
+    check event["layout_transition"]["active_tag_before"].getInt() == 1
+    check event["layout_transition"]["active_tag_after"].getInt() == 1
+
+  test "layout projection behavior event records generated geometry":
+    let dir = getTempDir() / ("triad-behavior-projection-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    var state = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 0), workspaces: WorkspaceConfig(defaultCount: 3)
+      )
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "app", title: "One")
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, appId: "app", title: "Two")
+    )
+    discard state.applyRuntimeLayoutProjection("test render", "CmdSwitchLayout")
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["event"].getStr() == "layout_projection"
+    check event["context"].getStr() == "test render"
+    check event["msg_kind"].getStr() == "CmdSwitchLayout"
+    check event["active_tag"].getInt() == 1
+    check event["layout_mode"].getStr() == "scroller"
+    check event["instruction_count"].getInt() == 2
+    check event["instructions"].kind == JArray
+    check event["instructions"][0].hasKey("window_id")
+    check event["instructions"][0]["geom"]["w"].getInt() > 0
+    check event["instructions"][0]["geom"]["h"].getInt() > 0
+    check event["viewport_targets"].kind == JArray
 
   test "runtime update behavior event records window state effects":
     let dir = getTempDir() / ("triad-behavior-effects-" & $getCurrentProcessId())

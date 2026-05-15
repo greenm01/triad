@@ -1,5 +1,7 @@
 import std/[algorithm, json, options, os, strutils, tables, times]
+import ../core/layout_mode_codec
 import ../core/restore_state
+import ../types/layout_projection
 import ../types/shell_snapshot
 import ../types/runtime_values
 
@@ -111,6 +113,34 @@ proc writeBehaviorEvent*(eventName: string, payload: JsonNode = nil) =
   except CatchableError:
     discard
 
+proc behaviorLayoutId*(mode: LayoutMode): string =
+  mode.layoutModeId()
+
+proc activeWorkspaceLayoutId*(snapshot: ShellSnapshot): string =
+  for workspace in snapshot.workspaces:
+    if workspace.isActive:
+      return workspace.layoutMode.behaviorLayoutId()
+  ""
+
+proc rectBehaviorPayload*(rect: Rect): JsonNode =
+  %*{"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h}
+
+proc compactRenderInstructions*(instructions: openArray[RenderInstruction]): JsonNode =
+  result = newJArray()
+  for instr in instructions:
+    let node =
+      %*{"window_id": uint32(instr.windowId), "geom": instr.geom.rectBehaviorPayload()}
+    if instr.clipSet:
+      node["clip"] = instr.clip.rectBehaviorPayload()
+    result.add(node)
+
+proc compactViewportTargets*(targets: openArray[LayoutViewportTarget]): JsonNode =
+  result = newJArray()
+  for target in targets:
+    result.add(
+      %*{"tag": target.tagSlot, "target_x": target.targetX, "target_y": target.targetY}
+    )
+
 proc compactWorkspaceDistribution*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for workspace in snapshot.workspaces:
@@ -131,6 +161,7 @@ proc compactWorkspaceDistribution*(snapshot: ShellSnapshot): JsonNode =
         "tag_id": workspace.tagId,
         "workspace_idx": workspace.workspaceIdx,
         "name": workspace.name,
+        "layout_mode": workspace.layoutMode.behaviorLayoutId(),
         "active": workspace.isActive,
         "occupied": workspace.occupied,
         "focused_window": uint32(workspace.focusedWindow),
@@ -174,6 +205,7 @@ proc snapshotSummary*(snapshot: ShellSnapshot): JsonNode =
   %*{
     "active_tag": snapshot.activeTag,
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
+    "layout_mode": snapshot.activeWorkspaceLayoutId(),
     "focused_window": uint32(snapshot.snapshotFocusedWindowId()),
     "workspaces": snapshot.workspaces.len,
     "windows": snapshot.windows.len,
@@ -184,6 +216,26 @@ proc snapshotBehaviorPayload*(snapshot: ShellSnapshot): JsonNode =
   let payload = snapshot.snapshotSummary()
   payload["window_states"] = snapshot.compactSnapshotWindows()
   payload
+
+proc layoutProjectionBehaviorPayload*(
+    snapshot: ShellSnapshot, projection: LayoutProjection, context = "", msgKind = ""
+): JsonNode =
+  result =
+    %*{
+      "active_tag": snapshot.activeTag,
+      "active_workspace_idx": snapshot.activeWorkspaceIdx,
+      "layout_mode": snapshot.activeWorkspaceLayoutId(),
+      "focused_window": uint32(snapshot.snapshotFocusedWindowId()),
+      "overview_active": snapshot.overviewActive,
+      "active_scratchpad_window": uint32(snapshot.activeScratchpadWindow),
+      "instruction_count": projection.instructions.len,
+      "instructions": projection.instructions.compactRenderInstructions(),
+      "viewport_targets": projection.viewportTargets.compactViewportTargets(),
+    }
+  if context.len > 0:
+    result["context"] = %context
+  if msgKind.len > 0:
+    result["msg_kind"] = %msgKind
 
 proc compactFocusHistory(state: LiveRestoreState): JsonNode =
   result = newJArray()
