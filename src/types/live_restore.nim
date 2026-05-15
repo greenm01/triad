@@ -1,5 +1,6 @@
 import std/tables
-import runtime_values
+from core import Rect
+from runtime_values import LayoutMode
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
 const
@@ -7,22 +8,65 @@ const
   LiveRestoreStatusApplied* = "applied"
 
 type
+  RestoredWindowState* = object
+    tagId*: uint32
+    parentId*: uint32
+    swallowedBy*: uint32
+    swallowing*: uint32
+    pid*: int32
+    appId*: string
+    title*: string
+    identifier*: string
+    widthProportion*: float32
+    heightProportion*: float32
+    isFloating*: bool
+    isFullscreen*: bool
+    isMaximized*: bool
+    isMinimized*: bool
+    isSticky*: bool
+    isUnmanagedGlobal*: bool
+    fullscreenOutput*: uint32
+    floatingGeom*: Rect
+    manualFloatingPosition*: bool
+    isTerminal*: bool
+    allowSwallow*: bool
+    actualW*, actualH*: int32
+
+  RestoredColumnState* = object
+    windows*: seq[uint32]
+    widthProportion*: float32
+    scrollerSingleProportion*: float32
+    isFullWidth*: bool
+
+  RestoredTagState* = object
+    tagId*: uint32
+    name*: string
+    layoutMode*: LayoutMode
+    columns*: seq[RestoredColumnState]
+    focusedWindow*: uint32
+    targetViewportXOffset*: float32
+    currentViewportXOffset*: float32
+    targetViewportYOffset*: float32
+    currentViewportYOffset*: float32
+    masterCount*: int
+    masterSplitRatio*: float32
+
   LiveRestoreState* = object
     activeTag*: uint32
-    focusedWindow*: WindowId
-    tagByWindow*: Table[WindowId, uint32]
-    windows*: Table[WindowId, RestoredWindowState]
+    focusedWindow*: uint32
+    tagByWindow*: Table[uint32, uint32]
+    windows*: Table[uint32, RestoredWindowState]
     tags*: Table[uint32, RestoredTagState]
     outputTags*: Table[uint32, uint32]
-    scratchpadWindows*: seq[WindowId]
-    namedScratchpads*: Table[string, WindowId]
-    scratchpadRestoreSlots*: Table[WindowId, seq[uint32]]
-    visibleScratchpad*: WindowId
+    scratchpadWindows*: seq[uint32]
+    namedScratchpads*: Table[string, uint32]
+    scratchpadRestoreSlots*: Table[uint32, seq[uint32]]
+    visibleScratchpad*: uint32
     isScratchpadVisible*: bool
-    focusHistory*: seq[WindowId]
+    focusHistory*: seq[uint32]
     workspaceHistory*: seq[uint32]
-    swallowedBy*: Table[WindowId, WindowId]
-    swallowing*: Table[WindowId, WindowId]
+    swallowedBy*: Table[uint32, uint32]
+    swallowing*: Table[uint32, uint32]
 
   LiveRestoreWriteResult* = object
     ok*: bool

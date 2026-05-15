@@ -169,7 +169,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
-        some(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: WindowId(win.get())))
+        some(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: uint32(win.get())))
       else:
         none(Msg)
     else:
@@ -178,7 +178,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     if parts.len >= 2:
       let win = parseUInt32Arg(parts[1])
       if win.isSome:
-        some(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: WindowId(win.get())))
+        some(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: uint32(win.get())))
       else:
         none(Msg)
     else:
@@ -250,8 +250,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       if win.isSome:
         some(
           Msg(
-            kind: MsgKind.CmdToggleFullscreenById,
-            fullscreenWindowId: WindowId(win.get()),
+            kind: MsgKind.CmdToggleFullscreenById, fullscreenWindowId: uint32(win.get())
           )
         )
       else:
@@ -264,7 +263,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       if win.isSome:
         some(
           Msg(
-            kind: MsgKind.CmdExitFullscreenById, fullscreenWindowId: WindowId(win.get())
+            kind: MsgKind.CmdExitFullscreenById, fullscreenWindowId: uint32(win.get())
           )
         )
       else:

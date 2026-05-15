@@ -10,14 +10,14 @@ const LargeParentedRatio = 0.9'f32
 
 proc parentRenderRect(
     model: Model, parentExternalId: ExternalWindowId
-): tuple[found: bool, rect: runtime_values.Rect] =
+): tuple[found: bool, rect: Rect] =
   if parentExternalId == NullExternalWindowId:
-    return (false, runtime_values.Rect())
+    return (false, Rect())
   let projection = model.layoutProjection()
   for instr in projection.instructions:
     if ExternalWindowId(uint32(instr.windowId)) == parentExternalId:
       return (true, instr.geom)
-  (false, runtime_values.Rect())
+  (false, Rect())
 
 proc parentVisibleInProjection*(
     model: Model, parentExternalId: ExternalWindowId
@@ -88,7 +88,7 @@ proc instructionGeomFor(model: Model, winId: WindowId): GeometryRect =
 
 proc floatingGeomForWindow*(
   model: Model, winId: WindowId, parentExternalId = NullExternalWindowId
-): runtime_values.Rect
+): Rect
 
 proc recenterLeadFloatingAnchor*(
     model: var Model, anchor: LeadFloatingAnchor, mainWinId: WindowId
@@ -115,9 +115,7 @@ proc recenterLeadFloatingAnchor*(
 proc floatingGeomFromRule(
     model: Model, win: WindowData
 ): tuple[
-  geom: runtime_values.Rect,
-  position: runtime_values.WindowRuleFloatingPositionConfig,
-  center: bool,
+  geom: Rect, position: runtime_values.WindowRuleFloatingPositionConfig, center: bool
 ] =
   let screenW = max(0'i32, model.screenWidth)
   let screenH = max(0'i32, model.screenHeight)
@@ -147,7 +145,7 @@ proc floatingGeomFromRule(
 
 proc floatingGeomForWindow*(
     model: Model, winId: WindowId, parentExternalId: ExternalWindowId
-): runtime_values.Rect =
+): Rect =
   let screen = model.primaryScreen()
   result = model.defaultFloatingGeom()
   let winOpt = model.windowData(winId)
@@ -169,9 +167,7 @@ proc floatingGeomForWindow*(
 proc nearSize(size, bounds: int32): bool =
   size > 0 and bounds > 0 and float32(size) >= float32(bounds) * LargeParentedRatio
 
-proc parentedPrimarySurfaceIntent(
-    win: WindowData, parentRect: runtime_values.Rect
-): bool =
+proc parentedPrimarySurfaceIntent(win: WindowData, parentRect: Rect): bool =
   win.clientMinWidth.nearSize(parentRect.w) and
     win.clientMinHeight.nearSize(parentRect.h)
 
@@ -309,10 +305,7 @@ proc applyParentFocusPolicy*(
   model.enqueuePendingDialogFocus(winId)
 
 proc ensureFloatingAt*(
-    model: var Model,
-    winId: WindowId,
-    geom: runtime_values.Rect,
-    parentAutoFloating = false,
+    model: var Model, winId: WindowId, geom: Rect, parentAutoFloating = false
 ): bool =
   let winOpt = model.windowData(winId)
   if winOpt.isNone:

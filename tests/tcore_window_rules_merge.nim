@@ -77,7 +77,7 @@ suite "Core Runtime Logic: window rules merge":
     check model.swallowedByWindow(child) == host
     check model.columnHeads(1) == @[2'u32]
     check not model.shellSnapshot().windows.anyIt(uint32(it.id) == 1)
-    check model.snapshotWindow(2).swallowedBy == runtime_values.WindowId(1)
+    check model.snapshotWindow(2).swallowedBy == uint32(1)
 
     model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
 

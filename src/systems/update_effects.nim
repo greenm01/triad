@@ -3,21 +3,20 @@ import ../core/[effects, msg, niri_state, shell_focus, triad_state]
 import ../state/engine
 import ../types/shell_snapshot
 import ../types/system_views
-from ../types/runtime_values import nil
 import idle_inhibit, presentation_policy
 
 export system_views
 
-proc externalWindowId*(id: runtime_values.WindowId): ExternalWindowId =
+proc externalWindowId*(id: uint32): ExternalWindowId =
   ExternalWindowId(uint32(id))
 
 proc externalOutputId*(id: uint32): ExternalOutputId =
   ExternalOutputId(id)
 
-proc runtimeWindowId*(id: ExternalWindowId): runtime_values.WindowId =
-  runtime_values.WindowId(uint32(id))
+proc runtimeWindowId*(id: ExternalWindowId): uint32 =
+  uint32(uint32(id))
 
-proc runtimeWindowId*(model: Model, winId: WindowId): runtime_values.WindowId =
+proc runtimeWindowId*(model: Model, winId: WindowId): uint32 =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
@@ -61,15 +60,13 @@ proc broadcastWorkspaceActiveWindowChanged*(workspace: ShellWorkspace): Effect =
       ),
   )
 
-proc broadcastWindowFocusChanged*(winId: runtime_values.WindowId): Effect =
+proc broadcastWindowFocusChanged*(winId: uint32): Effect =
   Effect(
     kind: EffectKind.EffBroadcastJson,
     jsonPayload: $(%*{"WindowFocusChanged": {"id": winId}}),
   )
 
-proc broadcastWindowOpened*(
-    snapshot: ShellSnapshot, winId: runtime_values.WindowId
-): Effect =
+proc broadcastWindowOpened*(snapshot: ShellSnapshot, winId: uint32): Effect =
   for win in snapshot.windows:
     if win.id == winId:
       return Effect(
@@ -79,7 +76,7 @@ proc broadcastWindowOpened*(
       )
   Effect(kind: EffectKind.EffNone)
 
-proc broadcastWindowClosed*(winId: runtime_values.WindowId): Effect =
+proc broadcastWindowClosed*(winId: uint32): Effect =
   Effect(
     kind: EffectKind.EffBroadcastJson, jsonPayload: $(%*{"WindowClosed": {"id": winId}})
   )
@@ -301,10 +298,7 @@ proc shouldReassertFocusedWindow(kind: MsgKind, before, after: ShellSnapshot): b
   false
 
 proc addSetFullscreenEffect*(
-    effects: var seq[Effect],
-    winId: runtime_values.WindowId,
-    fullscreen: bool,
-    outputId = 0'u32,
+    effects: var seq[Effect], winId: uint32, fullscreen: bool, outputId = 0'u32
 ) =
   effects.add(
     Effect(
@@ -315,24 +309,18 @@ proc addSetFullscreenEffect*(
     )
   )
 
-proc addSetMaximizedEffect*(
-    effects: var seq[Effect], winId: runtime_values.WindowId, maximized: bool
-) =
+proc addSetMaximizedEffect*(effects: var seq[Effect], winId: uint32, maximized: bool) =
   effects.add(
     Effect(kind: EffectKind.EffSetMaximized, maxWinId: winId, isMaximized: maximized)
   )
 
-proc hasFullscreenEffect(
-    effects: seq[Effect], winId: runtime_values.WindowId, fullscreen: bool
-): bool =
+proc hasFullscreenEffect(effects: seq[Effect], winId: uint32, fullscreen: bool): bool =
   for effect in effects:
     if effect.kind == EffectKind.EffSetFullscreen and effect.fsWinId == winId and
         effect.isFullscreen == fullscreen:
       return true
 
-proc hasMaximizedEffect(
-    effects: seq[Effect], winId: runtime_values.WindowId, maximized: bool
-): bool =
+proc hasMaximizedEffect(effects: seq[Effect], winId: uint32, maximized: bool): bool =
   for effect in effects:
     if effect.kind == EffectKind.EffSetMaximized and effect.maxWinId == winId and
         effect.isMaximized == maximized:
@@ -354,17 +342,13 @@ proc addMaximizedPresentationEffect(
     return
   effects.addSetMaximizedEffect(win.id, present)
 
-proc fullscreenWindow(
-    snapshot: ShellSnapshot, winId: runtime_values.WindowId
-): Option[ShellWindow] =
+proc fullscreenWindow(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
   let win = snapshot.windowById(winId)
   if win.isSome and win.get().isFullscreen:
     return win
   none(ShellWindow)
 
-proc maximizedWindow(
-    snapshot: ShellSnapshot, winId: runtime_values.WindowId
-): Option[ShellWindow] =
+proc maximizedWindow(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
   let win = snapshot.windowById(winId)
   if win.isSome and win.get().isMaximized:
     return win

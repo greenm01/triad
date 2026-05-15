@@ -1,7 +1,9 @@
 import std/[algorithm, json, options, os, strutils, tables, times]
 import ../core/layout_mode_codec
 import ../core/restore_state
+from ../types/core import Rect
 import ../types/layout_projection
+from ../types/projection_values import RenderInstruction
 import ../types/shell_snapshot
 import ../types/runtime_values
 
@@ -195,7 +197,7 @@ proc compactSnapshotWindows*(snapshot: ShellSnapshot): JsonNode =
         newJNull()
     result.add(node)
 
-proc snapshotFocusedWindowId(snapshot: ShellSnapshot): WindowId =
+proc snapshotFocusedWindowId(snapshot: ShellSnapshot): uint32 =
   for win in snapshot.windows:
     if win.isFocused:
       return win.id
@@ -244,7 +246,7 @@ proc compactFocusHistory(state: LiveRestoreState): JsonNode =
 
 proc compactLiveRestoreWindows(state: LiveRestoreState): JsonNode =
   result = newJArray()
-  var winIds: seq[WindowId]
+  var winIds: seq[uint32]
   for winId in state.windows.keys:
     winIds.add(winId)
   winIds.sort()

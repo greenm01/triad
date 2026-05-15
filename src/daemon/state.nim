@@ -10,7 +10,7 @@ import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
 import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
-import ../types/[runtime_state, runtime_values]
+import ../types/[projection_values, runtime_state, runtime_values]
 import cursor_shake, protocol_surfaces, quickshell_runner
 
 type
@@ -131,14 +131,14 @@ type
     runtimeState*: TriadRuntimeState
     msgQueue*: Deque[Msg]
     pendingManageEffects*: seq[Effect]
-    desiredPlacements*: Table[WindowId, Rect]
-    desiredPlacementClips*: Table[WindowId, Rect]
-    desiredPlacementOrder*: seq[WindowId]
+    desiredPlacements*: Table[uint32, Rect]
+    desiredPlacementClips*: Table[uint32, Rect]
+    desiredPlacementOrder*: seq[uint32]
     lastPointerOpSeat*: pointer
-    pendingMaximizedAcks*: Table[WindowId, bool]
+    pendingMaximizedAcks*: Table[uint32, bool]
 
-    windowPointers*: Table[WindowId, ptr RiverWindowV1]
-    windowNodes*: Table[WindowId, ptr RiverNodeV1]
+    windowPointers*: Table[uint32, ptr RiverWindowV1]
+    windowNodes*: Table[uint32, ptr RiverNodeV1]
     outputPointers*: Table[uint32, ptr RiverOutputV1]
     layerOutputPointers*: Table[uint32, ptr riverLayer.RiverLayerShellOutputV1]
     layerOutputOwners*: Table[uint32, uint32]
@@ -184,7 +184,7 @@ type
     cursorShapeDevices*: Table[uint32, ptr cursorShape.WpCursorShapeDeviceV1]
     cursorHiddenPointers*: Table[uint32, bool]
     cursorLastMotionMsByPointer*: Table[uint32, int64]
-    pointerWindowBySeat*: Table[uint32, WindowId]
+    pointerWindowBySeat*: Table[uint32, uint32]
     pointerPositionBySeat*: Table[uint32, Rect]
     pointerHotCornerInsideBySeat*: Table[uint32, bool]
     cursorShakeBySeat*: Table[uint32, CursorShakeState]
@@ -194,8 +194,8 @@ type
     xkbConfigKeymap*: XkbKeymapRuntime
     libinputResultDescriptions*: Table[uint32, string]
     switchEventDevices*: seq[SwitchEventDeviceRuntime]
-    windowUnreliablePids*: Table[WindowId, int32]
-    pendingWindows*: Table[WindowId, WindowData]
+    windowUnreliablePids*: Table[uint32, int32]
+    pendingWindows*: Table[uint32, ProjectedWindow]
 
     configPath*: string
     configWatchPaths*: seq[string]
@@ -233,14 +233,12 @@ proc daemonFromData*(data: pointer): ptr TriadDaemon =
   else:
     cast[ptr TriadDaemon](data)
 
-proc expectMaximizedAck*(daemon: var TriadDaemon, id: WindowId, maximized: bool) =
+proc expectMaximizedAck*(daemon: var TriadDaemon, id: uint32, maximized: bool) =
   if id == 0:
     return
   daemon.pendingMaximizedAcks[id] = maximized
 
-proc consumeMaximizedAck*(
-    daemon: var TriadDaemon, id: WindowId, maximized: bool
-): bool =
+proc consumeMaximizedAck*(daemon: var TriadDaemon, id: uint32, maximized: bool): bool =
   if not daemon.pendingMaximizedAcks.hasKey(id):
     return false
   if daemon.pendingMaximizedAcks[id] != maximized:

@@ -1,40 +1,38 @@
 import std/algorithm
 import tcore_support
 
-proc geomWithinPreview(geom, preview: runtime_values.Rect): bool =
+proc geomWithinPreview(geom, preview: Rect): bool =
   geom.x >= preview.x and geom.y >= preview.y and
     geom.x + geom.w <= preview.x + preview.w and geom.y + geom.h <= preview.y + preview.h
 
-proc rectsIntersect(a, b: runtime_values.Rect): bool =
+proc rectsIntersect(a, b: Rect): bool =
   a.x < b.x + b.w and a.x + a.w > b.x and a.y < b.y + b.h and a.y + a.h > b.y
 
-proc intersection(a, b: runtime_values.Rect): runtime_values.Rect =
+proc intersection(a, b: Rect): Rect =
   let x1 = max(a.x, b.x)
   let y1 = max(a.y, b.y)
   let x2 = min(a.x + a.w, b.x + b.w)
   let y2 = min(a.y + a.h, b.y + b.h)
   if x2 <= x1 or y2 <= y1:
-    return runtime_values.Rect(x: x1, y: y1, w: 0, h: 0)
-  runtime_values.Rect(x: x1, y: y1, w: x2 - x1, h: y2 - y1)
+    return Rect(x: x1, y: y1, w: 0, h: 0)
+  Rect(x: x1, y: y1, w: x2 - x1, h: y2 - y1)
 
-proc positiveArea(geom: runtime_values.Rect): bool =
+proc positiveArea(geom: Rect): bool =
   geom.w > 0 and geom.h > 0
 
-proc centerX(geom: runtime_values.Rect): int32 =
+proc centerX(geom: Rect): int32 =
   geom.x + geom.w div 2
 
-proc centerY(geom: runtime_values.Rect): int32 =
+proc centerY(geom: Rect): int32 =
   geom.y + geom.h div 2
 
 proc near(a, b: int32, tolerance = 1'i32): bool =
   abs(a - b) <= tolerance
 
-proc aspectRatio(geom: runtime_values.Rect): float32 =
+proc aspectRatio(geom: Rect): float32 =
   float32(geom.w) / float32(max(1'i32, geom.h))
 
-proc aspectRatioClose(
-    geom: runtime_values.Rect, expected: float32, tolerance = 0.02'f32
-): bool =
+proc aspectRatioClose(geom: Rect, expected: float32, tolerance = 0.02'f32): bool =
   abs(geom.aspectRatio() - expected) <= tolerance
 
 proc markColumnsFullWidth(model: var Model, slot: uint32) =
@@ -64,17 +62,17 @@ proc overviewInstructionsFor(
 
 proc overviewInstructionGeom(
     instructions: openArray[RenderInstruction], id: uint32
-): runtime_values.Rect =
+): Rect =
   for instr in instructions:
     if uint32(instr.windowId) == id:
       return instr.geom
-  runtime_values.Rect()
+  Rect()
 
 proc checkOverviewGroup(
     instructions: openArray[RenderInstruction],
     ids: openArray[uint32],
-    clip: runtime_values.Rect,
-    otherPreviews: openArray[runtime_values.Rect],
+    clip: Rect,
+    otherPreviews: openArray[Rect],
     requireRawInsideClip = true,
 ): seq[RenderInstruction] =
   result = instructions.overviewInstructionsFor(ids)
@@ -176,15 +174,9 @@ suite "Core Runtime Logic: overview navigation":
   test "Overview hit testing uses topmost preview under pointer":
     let instructions =
       @[
-        RenderInstruction(
-          windowId: 1, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
-        ),
-        RenderInstruction(
-          windowId: 2, geom: runtime_values.Rect(x: 50, y: 50, w: 100, h: 100)
-        ),
-        RenderInstruction(
-          windowId: 3, geom: runtime_values.Rect(x: 200, y: 50, w: 100, h: 100)
-        ),
+        RenderInstruction(windowId: 1, geom: Rect(x: 0, y: 0, w: 100, h: 100)),
+        RenderInstruction(windowId: 2, geom: Rect(x: 50, y: 50, w: 100, h: 100)),
+        RenderInstruction(windowId: 3, geom: Rect(x: 200, y: 50, w: 100, h: 100)),
       ]
 
     check overviewHitTest(instructions, 10, 10) == 1
@@ -197,15 +189,15 @@ suite "Core Runtime Logic: overview navigation":
       @[
         RenderInstruction(
           windowId: 1,
-          geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 200),
+          geom: Rect(x: 0, y: 0, w: 100, h: 200),
           clipSet: true,
-          clip: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100),
+          clip: Rect(x: 0, y: 0, w: 100, h: 100),
         ),
         RenderInstruction(
           windowId: 2,
-          geom: runtime_values.Rect(x: 0, y: 100, w: 100, h: 100),
+          geom: Rect(x: 0, y: 100, w: 100, h: 100),
           clipSet: true,
-          clip: runtime_values.Rect(x: 0, y: 100, w: 100, h: 100),
+          clip: Rect(x: 0, y: 100, w: 100, h: 100),
         ),
       ]
 
@@ -267,9 +259,8 @@ suite "Core Runtime Logic: overview navigation":
     let slots = model.previewSlots()
     let projection = model.layoutProjection()
     let activePreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
-    let activeLane = runtime_values.Rect(
-      x: screen.x, y: activePreview.y, w: screen.w, h: activePreview.h
-    )
+    let activeLane =
+      Rect(x: screen.x, y: activePreview.y, w: screen.w, h: activePreview.h)
     let usableWidth = max(1'i32, screen.w - 2 * model.outerGaps)
     let usableHeight = max(1'i32, screen.h - 2 * model.outerGaps)
     let expectedAspect = float32(usableWidth - model.innerGaps) / float32(usableHeight)
@@ -277,7 +268,7 @@ suite "Core Runtime Logic: overview navigation":
       projection.instructions.filterIt(uint32(it.windowId) in @[1'u32, 2'u32, 3'u32])
     var geoms = workspaceOne.mapIt(it.geom)
     geoms.sort(
-      proc(a, b: runtime_values.Rect): int =
+      proc(a, b: Rect): int =
         cmp(a.x, b.x)
     )
 
@@ -327,7 +318,7 @@ suite "Core Runtime Logic: overview navigation":
       projection.instructions.filterIt(uint32(it.windowId) in @[1'u32, 2'u32, 3'u32])
     var geoms = workspaceOne.mapIt(it.geom)
     geoms.sort(
-      proc(a, b: runtime_values.Rect): int =
+      proc(a, b: Rect): int =
         cmp(a.y, b.y)
     )
 
@@ -364,9 +355,8 @@ suite "Core Runtime Logic: overview navigation":
     let firstSlots = firstModel.previewSlots()
     let firstPreview =
       firstModel.workspacePreviewRect(firstScreen, firstSlots, firstSlots.find(1'u32))
-    let firstLane = runtime_values.Rect(
-      x: firstScreen.x, y: firstPreview.y, w: firstScreen.w, h: firstPreview.h
-    )
+    let firstLane =
+      Rect(x: firstScreen.x, y: firstPreview.y, w: firstScreen.w, h: firstPreview.h)
     let firstProjection = firstModel.layoutProjection()
     let firstGeom = firstProjection.instructions.overviewInstructionGeom(1)
 
@@ -395,9 +385,8 @@ suite "Core Runtime Logic: overview navigation":
     let lastSlots = lastModel.previewSlots()
     let lastPreview =
       lastModel.workspacePreviewRect(lastScreen, lastSlots, lastSlots.find(1'u32))
-    let lastLane = runtime_values.Rect(
-      x: lastScreen.x, y: lastPreview.y, w: lastScreen.w, h: lastPreview.h
-    )
+    let lastLane =
+      Rect(x: lastScreen.x, y: lastPreview.y, w: lastScreen.w, h: lastPreview.h)
     let lastProjection = lastModel.layoutProjection()
     let lastGeom = lastProjection.instructions.overviewInstructionGeom(3)
 
@@ -520,9 +509,8 @@ suite "Core Runtime Logic: overview navigation":
     let slots = model.previewSlots()
     let projection = model.layoutProjection()
     let scrollerPreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
-    let scrollerLane = runtime_values.Rect(
-      x: screen.x, y: scrollerPreview.y, w: screen.w, h: scrollerPreview.h
-    )
+    let scrollerLane =
+      Rect(x: screen.x, y: scrollerPreview.y, w: screen.w, h: scrollerPreview.h)
     let verticalPreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
     let gridPreview = model.workspacePreviewRect(screen, slots, slots.find(3'u32))
 

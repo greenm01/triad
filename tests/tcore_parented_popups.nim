@@ -110,8 +110,8 @@ suite "Core Runtime Logic: parented popups":
 
     let snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].columns.len == 2
-    check snapshot.workspaces[0].columns[0].windows == @[runtime_values.WindowId(1)]
-    check snapshot.workspaces[0].columns[1].windows == @[runtime_values.WindowId(2)]
+    check snapshot.workspaces[0].columns[0].windows == @[uint32(1)]
+    check snapshot.workspaces[0].columns[1].windows == @[uint32(2)]
     check model.snapshotWindow(3).tagId.isSome
     check model.snapshotWindow(3).tagId.get() == 1
 
@@ -249,9 +249,8 @@ suite "Core Runtime Logic: parented popups":
 
     let beforeChildGeom = model.instructionGeom(2)
     let parentId = model.windowForExternal(ExternalWindowId(1))
-    discard model.setWindowFloating(
-      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300)
-    )
+    discard
+      model.setWindowFloating(parentId, true, Rect(x: 300, y: 100, w: 400, h: 300))
 
     let parentGeom = model.instructionGeom(1)
     let childGeom = model.instructionGeom(2)

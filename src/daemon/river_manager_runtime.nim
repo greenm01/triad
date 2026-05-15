@@ -6,8 +6,7 @@ import protocols/river_xkb_bindings/client as riverXkb
 import ../core/msg
 import ../state/[iterators, queries]
 import ../systems/window_rules
-import ../types/runtime_values
-from ../types/runtime_values import WindowId
+import ../types/projection_values as projection_values
 import ../utils/process_tree
 import
   bindings_runtime, input_runtime, live_restore_runtime, manage_requests, message_queue,
@@ -24,7 +23,7 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
 
   daemon.destroyAllProtocolSurfaces()
 
-  var winIds: seq[WindowId] = @[]
+  var winIds: seq[uint32] = @[]
   for id in daemon.windowPointers.keys:
     winIds.add(id)
   for id in winIds:
@@ -69,13 +68,13 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
     daemon.riverLayerShell.destroy()
     daemon.riverLayerShell = nil
 
-proc pendingWindowPid(daemon: TriadDaemon, id: WindowId): int32 =
+proc pendingWindowPid(daemon: TriadDaemon, id: uint32): int32 =
   result = daemon.windowUnreliablePids.getOrDefault(id, 0'i32)
   if result <= 0 and daemon.pendingWindows.hasKey(id):
     result = daemon.pendingWindows[id].pid
 
 proc pendingWindowAllowsSwallow(
-    daemon: TriadDaemon, data: runtime_values.WindowData
+    daemon: TriadDaemon, data: projection_values.ProjectedWindow
 ): bool =
   let rule = daemon.runtimeState.model.windowRuleFor(data.appId, data.title)
   if not rule.found:
@@ -95,8 +94,8 @@ proc pendingWindowAllowsSwallow(
   true
 
 proc swallowHostForPendingWindow(
-    daemon: TriadDaemon, id: WindowId, data: runtime_values.WindowData
-): WindowId =
+    daemon: TriadDaemon, id: uint32, data: projection_values.ProjectedWindow
+): uint32 =
   let childPid = daemon.pendingWindowPid(id)
   if childPid <= 0 or not daemon.pendingWindowAllowsSwallow(data):
     return 0'u32
@@ -107,7 +106,7 @@ proc swallowHostForPendingWindow(
     if winOpt.isNone:
       continue
     let win = winOpt.get()
-    let external = WindowId(uint32(win.externalId))
+    let external = uint32(win.externalId)
     if win.isTerminal and not win.isFloating and not win.isSticky and not win.isMinimized and
         win.windowAdmitted() and win.pid > 0 and
         uint32(daemon.runtimeState.model.swallowingWindow(logicalId)) == 0'u32 and
@@ -115,7 +114,7 @@ proc swallowHostForPendingWindow(
       return external
 
   for logicalId, win in daemon.runtimeState.model.windowsWithId():
-    let external = WindowId(uint32(win.externalId))
+    let external = uint32(win.externalId)
     if win.isTerminal and not win.isFloating and not win.isSticky and not win.isMinimized and
         win.windowAdmitted() and win.pid > 0 and
         uint32(daemon.runtimeState.model.swallowingWindow(logicalId)) == 0'u32 and

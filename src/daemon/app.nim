@@ -2,6 +2,7 @@ import wayland/native/client
 import ../core/[effects, msg, restore_state]
 import ../systems/[runtime, runtime_facade]
 import ../types/[model, shell_snapshot]
+import ../types/projection_values
 import ../config/[parser, reload_policy]
 import ../ipc/[quickshell_compat, socket]
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
@@ -11,8 +12,7 @@ import
   reload_runtime, render_runtime, state, switch_event_runtime
 from ../types/runtime_values import
   nil, BindingMode, KeyBindingConfig, PointerBindingConfig, PointerOpKind,
-  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, Rect, RenderInstruction,
-  TerminalConfig, WindowId
+  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, TerminalConfig
 import
   std/
     [asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, tables, times]

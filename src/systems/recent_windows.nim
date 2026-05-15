@@ -1,7 +1,7 @@
 import std/[math, options, strutils, tables]
 import ../state/engine
 import ../types/core as core_types
-import ../types/runtime_values as rv
+import ../types/projection_values as rv
 import ../types/system_views
 
 export system_views
@@ -408,7 +408,7 @@ proc recentWindowPreviews*(model: Model, screen: rv.Rect): seq[RecentWindowPrevi
         winId: winId,
         riverId:
           if winOpt.isSome:
-            rv.WindowId(uint32(winOpt.get().externalId))
+            uint32(uint32(winOpt.get().externalId))
           else:
             0'u32,
         geom: rv.Rect(

@@ -55,8 +55,8 @@ suite "Core Runtime Logic: smoke":
       regionSelectorCommand: "slurp -d",
       clipboardCommand: "wl-copy --type image/png",
     )
-    let screen = runtime_values.Rect(x: 0, y: 0, w: 1920, h: 1080)
-    let win = runtime_values.Rect(x: 40, y: 50, w: 800, h: 600)
+    let screen = Rect(x: 0, y: 0, w: 1920, h: 1080)
+    let win = Rect(x: 40, y: 50, w: 800, h: 600)
 
     check screenshotCaptureCommand(
       ScreenshotKind.ShotRegion, "/tmp/region shot.png", config, screen, win,

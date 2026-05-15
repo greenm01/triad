@@ -45,8 +45,7 @@ proc snapshotForShell(): ShellSnapshot =
           focusedWindow: 10,
           occupied: true,
           outputName: "triad-0",
-          columns:
-            @[ShellColumn(idx: 1, widthProportion: 0.5, windows: @[WindowId(10)])],
+          columns: @[ShellColumn(idx: 1, widthProportion: 0.5, windows: @[10'u32])],
           masterCount: 1,
           masterSplitRatio: 0.5,
         ),

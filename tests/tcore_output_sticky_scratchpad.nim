@@ -698,19 +698,13 @@ suite "Core Runtime Logic: output sticky scratchpad":
     var daemon = initTriadDaemon()
     daemon.runtimeState.model = model
     daemon.recordDesiredPlacement(
-      RenderInstruction(
-        windowId: 32, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
-      )
+      RenderInstruction(windowId: 32, geom: Rect(x: 0, y: 0, w: 100, h: 100))
     )
     daemon.recordDesiredPlacement(
-      RenderInstruction(
-        windowId: 33, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
-      )
+      RenderInstruction(windowId: 33, geom: Rect(x: 0, y: 0, w: 100, h: 100))
     )
     daemon.recordDesiredPlacement(
-      RenderInstruction(
-        windowId: 34, geom: runtime_values.Rect(x: 0, y: 0, w: 100, h: 100)
-      )
+      RenderInstruction(windowId: 34, geom: Rect(x: 0, y: 0, w: 100, h: 100))
     )
     let order = daemon.orderedDesiredInstructions().mapIt(uint32(it.windowId))
 

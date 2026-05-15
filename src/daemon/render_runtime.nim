@@ -3,7 +3,8 @@ import protocols/river/client as river
 import ../core/render_visibility
 import ../systems/[daemon_view, layout_projection, recent_windows, window_rules]
 import ../types/model
-import ../types/runtime_values except WindowId
+import ../types/projection_values
+import ../types/runtime_values
 import ../utils/overview_hit_test
 import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
 from ../types/core import WindowId
@@ -38,7 +39,7 @@ proc renderWindowBorder*(
 
 proc applyBorder(
     daemon: TriadDaemon,
-    id: runtime_values.WindowId,
+    id: uint32,
     win: ptr RiverWindowV1,
     focused: bool,
     edges: uint32,
@@ -76,9 +77,7 @@ proc configuredPresentationMode*(model: Model): uint32 =
 proc hasPresentationPreference*(model: Model): bool =
   model.effectivePresentationMode().hasPreference
 
-proc isDescendantRiverWindow(
-    daemon: TriadDaemon, child, ancestor: runtime_values.WindowId
-): bool =
+proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: uint32): bool =
   if child == 0 or ancestor == 0 or child == ancestor:
     return false
   var current = child
@@ -87,7 +86,7 @@ proc isDescendantRiverWindow(
     let winOpt = daemon.currentModel.windowDataForRiverId(current)
     if winOpt.isNone:
       return false
-    let parent = runtime_values.WindowId(uint32(winOpt.get().parentExternalId))
+    let parent = uint32(uint32(winOpt.get().parentExternalId))
     if parent == 0:
       return false
     if parent == ancestor:
@@ -96,13 +95,13 @@ proc isDescendantRiverWindow(
     inc depth
   false
 
-proc logicalWindowSortKey(daemon: TriadDaemon, id: runtime_values.WindowId): uint32 =
+proc logicalWindowSortKey(daemon: TriadDaemon, id: uint32): uint32 =
   let logicalId = daemon.currentModel.windowForRiverId(id)
   if uint32(logicalId) != 0:
     return uint32(logicalId)
   uint32(id)
 
-proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: runtime_values.WindowId): int =
+proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: uint32): int =
   if id == 0:
     return 0
   var current = id
@@ -116,13 +115,13 @@ proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: runtime_values.WindowId
       return 2
     if win.isOverlay:
       result = max(result, 1)
-    let parent = runtime_values.WindowId(uint32(win.parentExternalId))
+    let parent = uint32(uint32(win.parentExternalId))
     if parent == 0:
       return
     current = parent
     inc depth
 
-proc desiredStackCmp(daemon: TriadDaemon, a, b: runtime_values.WindowId): int =
+proc desiredStackCmp(daemon: TriadDaemon, a, b: uint32): int =
   if daemon.isDescendantRiverWindow(a, b):
     return 1
   if daemon.isDescendantRiverWindow(b, a):
@@ -133,7 +132,7 @@ proc desiredStackCmp(daemon: TriadDaemon, a, b: runtime_values.WindowId): int =
     return cmp(aLayer, bLayer)
   cmp(daemon.logicalWindowSortKey(a), daemon.logicalWindowSortKey(b))
 
-proc orderedDesiredIds*(daemon: TriadDaemon): seq[runtime_values.WindowId] =
+proc orderedDesiredIds*(daemon: TriadDaemon): seq[uint32] =
   for id in daemon.desiredPlacements.keys:
     if daemon.desiredPlacementOrder.find(id) == -1:
       result.add(id)
@@ -141,12 +140,12 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[runtime_values.WindowId] =
     if daemon.desiredPlacements.hasKey(id) and result.find(id) == -1:
       result.add(id)
   result.sort(
-    proc(a, b: runtime_values.WindowId): int =
+    proc(a, b: uint32): int =
       daemon.desiredStackCmp(a, b)
   )
 
 proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
-  proc desiredInstruction(id: runtime_values.WindowId): RenderInstruction =
+  proc desiredInstruction(id: uint32): RenderInstruction =
     result = RenderInstruction(windowId: id, geom: daemon.desiredPlacements[id])
     if daemon.desiredPlacementClips.hasKey(id):
       result.clipSet = true
@@ -163,9 +162,7 @@ proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
   if highlighted != 0 and daemon.desiredPlacements.hasKey(highlighted):
     result.add(desiredInstruction(highlighted))
 
-proc overviewWindowAtPointer*(
-    daemon: TriadDaemon, seat: ptr RiverSeatV1
-): runtime_values.WindowId =
+proc overviewWindowAtPointer*(daemon: TriadDaemon, seat: ptr RiverSeatV1): uint32 =
   if not daemon.currentModel.overviewActive or seat == nil:
     return 0
   let seatId = seat.id()
@@ -174,7 +171,7 @@ proc overviewWindowAtPointer*(
   let point = daemon.pointerPositionBySeat[seatId]
   overviewHitTest(daemon.orderedDesiredInstructions(), point.x, point.y)
 
-proc placementHonorsMinimums(daemon: TriadDaemon, id: runtime_values.WindowId): bool =
+proc placementHonorsMinimums(daemon: TriadDaemon, id: uint32): bool =
   if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
     return false
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
@@ -186,9 +183,7 @@ proc placementHonorsMinimums(daemon: TriadDaemon, id: runtime_values.WindowId): 
     daemon.currentModel.visibleScratchpadRiverId() == id
   win.isFloating or win.isFullscreen or scratchpad
 
-proc placementNeedsCellClip(
-    daemon: TriadDaemon, id: runtime_values.WindowId, geom: Rect
-): bool =
+proc placementNeedsCellClip(daemon: TriadDaemon, id: uint32, geom: Rect): bool =
   let winOpt = daemon.currentModel.windowDataForRiverId(id)
   if winOpt.isNone:
     return false
@@ -267,7 +262,7 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       output.setPresentationMode(mode)
   let ids = daemon.orderedDesiredIds()
 
-  var visible = initTable[runtime_values.WindowId, bool]()
+  var visible = initTable[uint32, bool]()
   var lastNode: ptr RiverNodeV1 = nil
   var firstNode: ptr RiverNodeV1 = nil
   let highlighted = daemon.currentModel.highlightRiverId()

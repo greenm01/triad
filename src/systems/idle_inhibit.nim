@@ -1,7 +1,7 @@
 import std/options
 import ../core/shell_focus
 import ../types/shell_snapshot
-from ../types/runtime_values import WindowId, WindowRuleIdleInhibitMode
+from ../types/runtime_values import WindowRuleIdleInhibitMode
 
 proc workspaceByTagId(snapshot: ShellSnapshot, tagId: uint32): Option[ShellWorkspace] =
   for workspace in snapshot.workspaces:
@@ -9,7 +9,7 @@ proc workspaceByTagId(snapshot: ShellSnapshot, tagId: uint32): Option[ShellWorks
       return some(workspace)
   none(ShellWorkspace)
 
-proc columnContainsWindow(workspace: ShellWorkspace, winId: WindowId): bool =
+proc columnContainsWindow(workspace: ShellWorkspace, winId: uint32): bool =
   for column in workspace.columns:
     for candidate in column.windows:
       if candidate == winId:

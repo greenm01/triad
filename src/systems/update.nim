@@ -1,7 +1,6 @@
 import std/[json, options]
 import ../core/[effects, msg, shell_focus]
 import ../state/engine
-from ../types/runtime_values import nil
 import ../utils/behavior_log
 import update_commands, update_effects, update_events, update_maintenance, window_rules
 
@@ -33,9 +32,7 @@ proc updateSnapshotSummary(snapshot: ShellSnapshot, model: Model): JsonNode =
     "workspace_distribution": snapshot.compactWorkspaceDistribution(),
   }
 
-proc addTrackedWindowId(
-    ids: var seq[runtime_values.WindowId], id: runtime_values.WindowId
-) =
+proc addTrackedWindowId(ids: var seq[uint32], id: uint32) =
   if id == 0:
     return
   for existing in ids:
@@ -43,7 +40,7 @@ proc addTrackedWindowId(
       return
   ids.add(id)
 
-proc addMsgWindowId(ids: var seq[runtime_values.WindowId], msg: Msg) =
+proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
   case msg.kind
   of MsgKind.WlFocusChanged:
     ids.addTrackedWindowId(msg.newFocusedId)
@@ -56,16 +53,12 @@ proc addMsgWindowId(ids: var seq[runtime_values.WindowId], msg: Msg) =
   else:
     discard
 
-proc trackedRuntimeWindowIds(
-    msg: Msg, before, after: ShellSnapshot
-): seq[runtime_values.WindowId] =
+proc trackedRuntimeWindowIds(msg: Msg, before, after: ShellSnapshot): seq[uint32] =
   result.addTrackedWindowId(before.focusedWindowId())
   result.addTrackedWindowId(after.focusedWindowId())
   result.addMsgWindowId(msg)
 
-proc compactWindowState(
-    snapshot: ShellSnapshot, id: runtime_values.WindowId
-): JsonNode =
+proc compactWindowState(snapshot: ShellSnapshot, id: uint32): JsonNode =
   for win in snapshot.windows:
     if win.id != id:
       continue
@@ -89,9 +82,7 @@ proc compactWindowState(
     return
   result = newJNull()
 
-proc compactTrackedWindows(
-    snapshot: ShellSnapshot, ids: seq[runtime_values.WindowId]
-): JsonNode =
+proc compactTrackedWindows(snapshot: ShellSnapshot, ids: seq[uint32]): JsonNode =
   result = newJArray()
   for id in ids:
     let node = snapshot.compactWindowState(id)

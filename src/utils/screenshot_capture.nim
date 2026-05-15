@@ -1,5 +1,6 @@
 import std/[asyncdispatch, os, osproc, strtabs, strutils, times]
 import ../core/[defaults, msg]
+from ../types/core import Rect
 import ../types/runtime_values
 
 proc shellQuote*(value: string): string =

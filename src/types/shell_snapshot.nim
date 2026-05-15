@@ -1,5 +1,6 @@
 import std/options
-from runtime_values import LayoutMode, Rect, WindowId, WindowRuleIdleInhibitMode
+from core import Rect
+from runtime_values import LayoutMode, WindowRuleIdleInhibitMode
 
 const TriadIpcVersion* = 1
 
@@ -9,7 +10,7 @@ type
     widthProportion*: float32
     scrollerSingleProportion*: float32
     isFullWidth*: bool
-    windows*: seq[WindowId]
+    windows*: seq[uint32]
 
   ShellWorkspace* = object
     tagId*: uint32
@@ -18,7 +19,7 @@ type
     layoutMode*: LayoutMode
     isActive*: bool
     isOutputVisible*: bool
-    focusedWindow*: WindowId
+    focusedWindow*: uint32
     occupied*: bool
     outputName*: string
     columns*: seq[ShellColumn]
@@ -30,9 +31,9 @@ type
     currentViewportYOffset*: float32
 
   ShellWindow* = object
-    id*: WindowId
+    id*: uint32
     pid*: int32
-    parentId*: WindowId
+    parentId*: uint32
     title*: string
     appId*: string
     tagId*: Option[uint32]
@@ -58,8 +59,8 @@ type
     idleInhibitMode*: WindowRuleIdleInhibitMode
     isTerminal*: bool
     allowSwallow*: bool
-    swallowedBy*: WindowId
-    swallowing*: WindowId
+    swallowedBy*: uint32
+    swallowing*: uint32
 
   ShellOutput* = object
     id*: uint32
@@ -72,8 +73,8 @@ type
     activeTag*: uint32
     activeWorkspaceIdx*: uint32
     overviewActive*: bool
-    overviewSelectedWindow*: WindowId
-    activeScratchpadWindow*: WindowId
+    overviewSelectedWindow*: uint32
+    activeScratchpadWindow*: uint32
     sessionLocked*: bool
     layerFocusExclusive*: bool
     layoutCycle*: seq[LayoutMode]

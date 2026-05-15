@@ -204,6 +204,34 @@ suite "Runtime state primitives":
       checkpoint item.path & " still defines " & item.pattern
       check not source.contains(item.pattern)
 
+  test "runtime values does not reintroduce duplicate model or projection types":
+    let runtimeValues = readFile("src/types/runtime_values.nim")
+    let blockedRuntimeTypes = [
+      "WindowId* =", "Rect* = object", "WindowData* = object", "OutputData* = object",
+      "TagState* = object", "Column* = object", "GroupState* = object",
+      "RenderInstruction* = object", "RestoredWindowState* = object",
+      "RestoredColumnState* = object", "RestoredTagState* = object",
+    ]
+    for pattern in blockedRuntimeTypes:
+      checkpoint "runtime_values still contains " & pattern
+      check not runtimeValues.contains(pattern)
+
+    let blockedImports = sourceLineFailures(
+      proc(path, line: string): bool =
+        for symbol in [
+          "WindowId", "Rect", "WindowData", "OutputData", "TagState", "Column",
+          "GroupState", "RenderInstruction", "RestoredWindowState",
+          "RestoredColumnState", "RestoredTagState",
+        ]:
+          if line.contains("runtime_values." & symbol):
+            return true
+          if ("import" in line or "from" in line) and "runtime_values" in line and
+              symbol in line:
+            return true
+        false
+    )
+    check blockedImports.len == 0
+
   test "source follows enforceable style rules":
     let tabFailures = sourceLineFailures(
       proc(path, line: string): bool =
@@ -341,7 +369,7 @@ suite "Runtime state primitives":
     check shown.model.hotkeyOverlayShownOnce
 
   test "hotkey overlay renderer produces bounded ARGB buffers":
-    let screen = runtime_values.Rect(x: 0, y: 0, w: 800, h: 600)
+    let screen = Rect(x: 0, y: 0, w: 800, h: 600)
     let rows =
       @[
         HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
@@ -356,7 +384,7 @@ suite "Runtime state primitives":
     check bytes.len == rendered.pixels.len * 4
 
   test "hotkey overlay renderer wraps rows into configured columns":
-    let screen = runtime_values.Rect(x: 0, y: 0, w: 800, h: 300)
+    let screen = Rect(x: 0, y: 0, w: 800, h: 300)
     var rows: seq[HotkeyOverlayRow] = @[]
     for idx in 1 .. 12:
       rows.add(HotkeyOverlayRow(key: "Super+" & $idx, label: "Action " & $idx))
@@ -369,18 +397,18 @@ suite "Runtime state primitives":
     check twoColumns.width <= int32(float(screen.w) * 0.9)
 
   test "hotkey overlay placement honors configured position":
-    let screen = runtime_values.Rect(x: 10, y: 20, w: 800, h: 600)
+    let screen = Rect(x: 10, y: 20, w: 800, h: 600)
 
     let top = hotkeyOverlayPlacement(screen, 300, 200, HotkeyOverlayPosition.Top)
     let center = hotkeyOverlayPlacement(screen, 300, 200, HotkeyOverlayPosition.Center)
     let bottom = hotkeyOverlayPlacement(screen, 300, 200, HotkeyOverlayPosition.Bottom)
 
-    check top == runtime_values.Rect(x: 260, y: 68, w: 300, h: 200)
-    check center == runtime_values.Rect(x: 260, y: 220, w: 300, h: 200)
-    check bottom == runtime_values.Rect(x: 260, y: 372, w: 300, h: 200)
+    check top == Rect(x: 260, y: 68, w: 300, h: 200)
+    check center == Rect(x: 260, y: 220, w: 300, h: 200)
+    check bottom == Rect(x: 260, y: 372, w: 300, h: 200)
 
   test "exit-session dialog renderer is centered with red ring":
-    let screen = runtime_values.Rect(x: 10, y: 20, w: 800, h: 600)
+    let screen = Rect(x: 10, y: 20, w: 800, h: 600)
     let rendered = renderExitSessionDialogBuffer(screen)
     let placement = exitSessionDialogPlacement(screen, rendered.width, rendered.height)
 
@@ -691,7 +719,7 @@ suite "Runtime state primitives":
       columns:
         @[
           RestoredColumnState(
-            windows: @[WindowId(50)],
+            windows: @[50'u32],
             widthProportion: 0.75,
             scrollerSingleProportion: 0.55,
             isFullWidth: true,
@@ -707,7 +735,7 @@ suite "Runtime state primitives":
       widthProportion: 0.75,
       heightProportion: 0.8,
       isFloating: true,
-      floatingGeom: runtime_values.Rect(x: 100, y: 80, w: 640, h: 480),
+      floatingGeom: Rect(x: 100, y: 80, w: 640, h: 480),
       manualFloatingPosition: true,
     )
     restore.tagByWindow[50] = 2
@@ -743,8 +771,7 @@ suite "Runtime state primitives":
     check snapshot.workspaces[1].currentViewportYOffset == 20.0'f32
     check snapshot.workspaces[1].columns.len == 0
     check snapshot.windows[0].isFloating
-    check snapshot.windows[0].floatingGeom ==
-      runtime_values.Rect(x: 100, y: 80, w: 640, h: 480)
+    check snapshot.windows[0].floatingGeom == Rect(x: 100, y: 80, w: 640, h: 480)
     let restoredWinId = state.model.windowForExternal(ExternalWindowId(50))
     check state.model.windowData(restoredWinId).get().manualFloatingPosition
     let restoredTagId = state.model.tagForSlot(2)

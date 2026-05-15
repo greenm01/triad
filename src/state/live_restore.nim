@@ -2,13 +2,14 @@ import std/[algorithm, json, options, os, tables]
 import iterators, queries
 import ../core/[defaults, restore_state]
 import ../types/core as core_types
+import ../types/live_restore as lr
 import ../types/model
-import ../types/runtime_values as rv
+from ../types/runtime_values import LayoutMode
 
-proc runtimeWindowId(win: model.WindowData): rv.WindowId =
-  rv.WindowId(uint32(win.externalId))
+proc runtimeWindowId(win: model.WindowData): uint32 =
+  uint32(win.externalId)
 
-proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
+proc externalWindowId(model: Model, winId: core_types.WindowId): uint32 =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
@@ -16,7 +17,7 @@ proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
     return 0'u32
   winOpt.get().runtimeWindowId()
 
-proc focusedOnActiveTag(model: Model): rv.WindowId =
+proc focusedOnActiveTag(model: Model): uint32 =
   if model.activeTag == NullTagId:
     return 0'u32
   let tagOpt = model.tagData(model.activeTag)
@@ -32,7 +33,7 @@ proc focusedOnActiveTag(model: Model): rv.WindowId =
     return 0'u32
   winOpt.get().runtimeWindowId()
 
-proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
+proc restoredWindowData*(source: lr.RestoredWindowState): RestoredWindowData =
   RestoredWindowData(
     slot: source.tagId,
     parentExternalId: ExternalWindowId(uint32(source.parentId)),
@@ -59,7 +60,7 @@ proc restoredWindowData*(source: rv.RestoredWindowState): RestoredWindowData =
     actualH: source.actualH,
   )
 
-proc restoredTagData*(source: rv.RestoredTagState): RestoredTagData =
+proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
   result = RestoredTagData(
     slot: source.tagId,
     name: source.name,
@@ -163,7 +164,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     let tag = tagOpt.get()
     if not model.shouldPersistTag(tag):
       continue
-    var restoredTag = rv.RestoredTagState(
+    var restoredTag = lr.RestoredTagState(
       tagId: tag.slot,
       name: tag.name,
       layoutMode: tag.layoutMode,
@@ -180,7 +181,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       let colOpt = model.columnData(colId)
       if colOpt.isNone:
         continue
-      var restoredCol = rv.RestoredColumnState(
+      var restoredCol = lr.RestoredColumnState(
         widthProportion: colOpt.get().widthProportion,
         scrollerSingleProportion: colOpt.get().scrollerSingleProportion,
         isFullWidth: colOpt.get().isFullWidth,
@@ -217,13 +218,11 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       if position.found:
         slot = position.slot
 
-    result.windows[external] = rv.RestoredWindowState(
+    result.windows[external] = lr.RestoredWindowState(
       tagId: slot,
-      parentId: rv.WindowId(uint32(win.parentExternalId)),
-      swallowedBy:
-        rv.WindowId(uint32(model.externalWindowId(model.swallowedByWindow(winId)))),
-      swallowing:
-        rv.WindowId(uint32(model.externalWindowId(model.swallowingWindow(winId)))),
+      parentId: uint32(win.parentExternalId),
+      swallowedBy: model.externalWindowId(model.swallowedByWindow(winId)),
+      swallowing: model.externalWindowId(model.swallowingWindow(winId)),
       pid: win.pid,
       appId: win.appId,
       title: win.title,
@@ -284,10 +283,10 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     if tagOpt.isSome and tagOpt.get().slot != 0:
       result.workspaceHistory.add(tagOpt.get().slot)
 
-proc rectJson(rect: rv.Rect): JsonNode =
+proc rectJson(rect: core_types.Rect): JsonNode =
   %*{"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h}
 
-proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode =
+proc windowStateJson(winId: uint32, win: lr.RestoredWindowState): JsonNode =
   %*{
     "id": winId,
     "tag_id": win.tagId,
@@ -315,7 +314,7 @@ proc windowStateJson(winId: rv.WindowId, win: rv.RestoredWindowState): JsonNode 
     "actual_h": win.actualH,
   }
 
-proc tagStateJson(tag: rv.RestoredTagState): JsonNode =
+proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
   let columns = newJArray()
   for col in tag.columns:
     let windows = newJArray()
@@ -354,7 +353,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
     tags.add(tagStateJson(state.tags[tagId]))
 
   let windows = newJArray()
-  var winIds: seq[rv.WindowId]
+  var winIds: seq[uint32]
   for winId in state.windows.keys:
     winIds.add(winId)
   winIds.sort()
@@ -382,7 +381,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
     namedScratchpads.add(%*{"name": name, "window_id": state.namedScratchpads[name]})
 
   let scratchpadRestoreSlots = newJArray()
-  var restoreWinIds: seq[rv.WindowId]
+  var restoreWinIds: seq[uint32]
   for winId in state.scratchpadRestoreSlots.keys:
     restoreWinIds.add(winId)
   restoreWinIds.sort()

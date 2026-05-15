@@ -2,20 +2,20 @@ import std/options
 import iterators, queries
 import ../core/defaults
 import ../types/[core, model, shell_snapshot]
-from ../types/runtime_values import nil
+from ../types/runtime_values import LayoutMode
 
-proc externalWindowId(model: Model, winId: WindowId): runtime_values.WindowId =
+proc externalWindowId(model: Model, winId: WindowId): uint32 =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
-    return runtime_values.WindowId(uint32(winOpt.get().externalId))
+    return uint32(winOpt.get().externalId)
   0'u32
 
 proc shellColumns(model: Model, tagId: TagId): seq[ShellColumn] =
   var idx = 0'u32
   for columnId, column in model.columnsOnTagWithId(tagId):
-    var windows: seq[runtime_values.WindowId] = @[]
+    var windows: seq[uint32] = @[]
     for winId, win in model.windowsOnColumnWithId(columnId):
       if win.windowAdmitted() and not win.isFloating and not win.isUnmanagedGlobal:
         windows.add(model.externalWindowId(winId))
@@ -63,9 +63,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       model.layoutCycle
     else:
       @[
-        runtime_values.LayoutMode.Scroller, runtime_values.LayoutMode.MasterStack,
-        runtime_values.LayoutMode.Grid, runtime_values.LayoutMode.Monocle,
-        runtime_values.LayoutMode.VerticalScroller,
+        LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid,
+        LayoutMode.Monocle, LayoutMode.VerticalScroller,
       ]
 
   for idx, slot in model.visibleWorkspaceSlots():
@@ -81,7 +80,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       else:
         TagData(
           slot: slot,
-          layoutMode: runtime_values.LayoutMode.Scroller,
+          layoutMode: LayoutMode.Scroller,
           masterCount: model.snapshotDefaultMasterCount(),
           masterSplitRatio: model.snapshotDefaultMasterRatio(),
         )
@@ -134,9 +133,9 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       winId == activeScratchpad or (activeScratchpad == NullWindowId and focused)
     result.windows.add(
       ShellWindow(
-        id: runtime_values.WindowId(uint32(win.externalId)),
+        id: uint32(win.externalId),
         pid: win.pid,
-        parentId: runtime_values.WindowId(uint32(win.parentExternalId)),
+        parentId: uint32(win.parentExternalId),
         title: win.title,
         appId: win.appId,
         tagId:
@@ -174,12 +173,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         idleInhibitMode: win.idleInhibitMode,
         isTerminal: win.isTerminal,
         allowSwallow: win.allowSwallow,
-        swallowedBy: runtime_values.WindowId(
-          uint32(model.externalWindowId(model.swallowedByWindow(winId)))
-        ),
-        swallowing: runtime_values.WindowId(
-          uint32(model.externalWindowId(model.swallowingWindow(winId)))
-        ),
+        swallowedBy: model.externalWindowId(model.swallowedByWindow(winId)),
+        swallowing: model.externalWindowId(model.swallowingWindow(winId)),
       )
     )
 

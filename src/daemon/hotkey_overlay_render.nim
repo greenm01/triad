@@ -1,4 +1,5 @@
-from ../types/runtime_values import HotkeyOverlayPosition, HotkeyOverlayRow, Rect
+from ../types/core import Rect
+from ../types/runtime_values import HotkeyOverlayPosition, HotkeyOverlayRow
 import overlay_text_render
 import pixel_buffer
 

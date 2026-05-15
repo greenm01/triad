@@ -1,27 +1,10 @@
+import core
+
 type
-  WindowId* = uint32
-
-  Rect* = object
-    x*, y*, w*, h*: int32
-
-  OutputData* = object
-    id*: uint32
-    wlName*: uint32
-    name*: string
-    x*, y*, w*, h*: int32
-    usableX*, usableY*, usableW*, usableH*: int32
-    hasUsable*: bool
-
   PresentationMode* {.pure.} = enum
     PresentationDefault
     PresentationVsync
     PresentationAsync
-
-  RenderInstruction* = object
-    windowId*: WindowId
-    geom*: Rect
-    clipSet*: bool
-    clip*: Rect
 
   LayoutMode* {.pure.} = enum
     Scroller
@@ -100,60 +83,6 @@ type
     width*: int32
     activeColorSet*: bool
     activeColor*: uint32
-
-  WindowData* = object
-    id*: WindowId
-    pid*: int32
-    title*: string
-    appId*: string
-    widthProportion*: float32
-    heightProportion*: float32
-    isFloating*: bool
-    isFullscreen*: bool
-    isMaximized*: bool
-    isMinimized*: bool
-    isSticky*: bool
-    isOverlay*: bool
-    isUnmanagedGlobal*: bool
-    fullscreenOutput*: uint32
-    parentId*: WindowId
-    identifier*: string
-    actualW*, actualH*: int32
-    minWidth*, minHeight*, maxWidth*, maxHeight*: int32
-    hasDecorationHint*: bool
-    decorationHint*: uint32
-    hasPresentationHint*: bool
-    presentationHint*: uint32
-    floatingGeom*: Rect
-    keyboardShortcutsInhibit*: bool
-    keyboardShortcutsInhibitBypass*: bool
-    idleInhibitMode*: WindowRuleIdleInhibitMode
-    isTerminal*: bool
-    allowSwallow*: bool
-
-  GroupState* = object
-    id*: uint32
-    windows*: seq[WindowId]
-    activeWindow*: WindowId
-
-  Column* = object
-    windows*: seq[WindowId]
-    widthProportion*: float32
-    scrollerSingleProportion*: float32
-    isFullWidth*: bool
-
-  TagState* = object
-    tagId*: uint32
-    name*: string
-    layoutMode*: LayoutMode
-    columns*: seq[Column]
-    focusedWindow*: WindowId
-    targetViewportXOffset*: float32
-    currentViewportXOffset*: float32
-    targetViewportYOffset*: float32
-    currentViewportYOffset*: float32
-    masterCount*: int
-    masterSplitRatio*: float32
 
   WindowRuleMatcher* = object
     appIdSet*: bool
@@ -553,49 +482,6 @@ type
 
   PointerOpState* = object
     kind*: PointerOpKind
-    windowId*: WindowId
+    windowId*: uint32
     initialGeom*: Rect
     edges*: uint32
-
-  RestoredWindowState* = object
-    tagId*: uint32
-    parentId*: WindowId
-    swallowedBy*: WindowId
-    swallowing*: WindowId
-    pid*: int32
-    appId*: string
-    title*: string
-    identifier*: string
-    widthProportion*: float32
-    heightProportion*: float32
-    isFloating*: bool
-    isFullscreen*: bool
-    isMaximized*: bool
-    isMinimized*: bool
-    isSticky*: bool
-    isUnmanagedGlobal*: bool
-    fullscreenOutput*: uint32
-    floatingGeom*: Rect
-    manualFloatingPosition*: bool
-    isTerminal*: bool
-    allowSwallow*: bool
-    actualW*, actualH*: int32
-
-  RestoredColumnState* = object
-    windows*: seq[WindowId]
-    widthProportion*: float32
-    scrollerSingleProportion*: float32
-    isFullWidth*: bool
-
-  RestoredTagState* = object
-    tagId*: uint32
-    name*: string
-    layoutMode*: LayoutMode
-    columns*: seq[RestoredColumnState]
-    focusedWindow*: WindowId
-    targetViewportXOffset*: float32
-    currentViewportXOffset*: float32
-    targetViewportYOffset*: float32
-    currentViewportYOffset*: float32
-    masterCount*: int
-    masterSplitRatio*: float32

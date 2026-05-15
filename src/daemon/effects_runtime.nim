@@ -5,7 +5,7 @@ import protocols/river_xkb_bindings/client as riverXkb
 import ../core/effects
 import ../ipc/socket
 import ../systems/daemon_view
-import ../types/runtime_values
+import ../types/projection_values
 import
   idle_inhibit_runtime, live_restore_runtime, manage_requests, process_runner,
   protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner, state

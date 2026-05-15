@@ -1,13 +1,13 @@
 import std/tables
-import ../types/runtime_values
+import ../types/projection_values
 
 proc clampProportion(value: float32, lo = 0.05'f32, hi = 1.0'f32): float32 =
   clamp(value, lo, hi)
 
-proc effectiveColumnProportion(col: Column): float32 =
+proc effectiveColumnProportion(col: ProjectedColumn): float32 =
   if col.isFullWidth: 1.0'f32 else: col.widthProportion
 
-proc effectiveSingleColumnProportion(col: Column): float32 =
+proc effectiveSingleColumnProportion(col: ProjectedColumn): float32 =
   if col.isFullWidth:
     1.0'f32
   elif col.scrollerSingleProportion > 0.0'f32:
@@ -16,8 +16,8 @@ proc effectiveSingleColumnProportion(col: Column): float32 =
     col.effectiveColumnProportion()
 
 proc layoutScroller*(
-    tag: var TagState,
-    windows: Table[WindowId, WindowData],
+    tag: var ProjectedTag,
+    windows: Table[ProjectionWindowId, ProjectedWindow],
     screen: Rect,
     outerGap, innerGap: int32,
     focusCenter: bool,
@@ -161,8 +161,8 @@ proc layoutScroller*(
   return instructions
 
 proc layoutVerticalScroller*(
-    tag: var TagState,
-    windows: Table[WindowId, WindowData],
+    tag: var ProjectedTag,
+    windows: Table[ProjectionWindowId, ProjectedWindow],
     screen: Rect,
     outerGap, innerGap: int32,
     focusCenter: bool,

@@ -1,4 +1,4 @@
-from ../types/runtime_values import Rect
+from ../types/core import Rect
 import overlay_text_render
 import pixel_buffer
 

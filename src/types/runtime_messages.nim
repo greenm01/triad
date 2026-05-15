@@ -168,62 +168,62 @@ type
   Msg* = object
     case kind*: MsgKind
     of MsgKind.WlWindowCreated:
-      windowId*: WindowId
-      createdParentWindowId*: WindowId
-      createdSwallowHostWindowId*: WindowId
+      windowId*: uint32
+      createdParentWindowId*: uint32
+      createdSwallowHostWindowId*: uint32
       createdPid*: int32
       appId*: string
       title*: string
       createdIdentifier*: string
       deferAdmission*: bool
     of MsgKind.WlWindowDestroyed:
-      destroyedId*: WindowId
+      destroyedId*: uint32
     of MsgKind.WlFocusChanged:
-      newFocusedId*: WindowId
+      newFocusedId*: uint32
     of MsgKind.WlWindowFullscreenRequested:
-      fullscreenRequestId*: WindowId
+      fullscreenRequestId*: uint32
       fullscreenOutputId*: uint32
     of MsgKind.WlWindowExitFullscreenRequested:
-      exitFullscreenRequestId*: WindowId
+      exitFullscreenRequestId*: uint32
     of MsgKind.WlWindowParent:
-      childWindowId*: WindowId
-      parentWindowId*: WindowId
+      childWindowId*: uint32
+      parentWindowId*: uint32
     of MsgKind.WlWindowIdentifier:
-      identifierWindowId*: WindowId
+      identifierWindowId*: uint32
       identifier*: string
     of MsgKind.WlWindowPid:
-      pidWindowId*: WindowId
+      pidWindowId*: uint32
       windowPid*: int32
     of MsgKind.WlWindowAppId:
-      appIdWindowId*: WindowId
+      appIdWindowId*: uint32
       updatedAppId*: string
     of MsgKind.WlWindowTitle:
-      titleWindowId*: WindowId
+      titleWindowId*: uint32
       updatedTitle*: string
     of MsgKind.WlWindowDimensionsHint:
-      hintWindowId*: WindowId
+      hintWindowId*: uint32
       minWidth*, minHeight*, maxWidth*, maxHeight*: int32
     of MsgKind.WlWindowDimensions:
-      dimensionsWindowId*: WindowId
+      dimensionsWindowId*: uint32
       actualWidth*, actualHeight*: int32
     of MsgKind.WlWindowDecorationHint:
-      decorationWindowId*: WindowId
+      decorationWindowId*: uint32
       decorationHint*: uint32
     of MsgKind.WlWindowPresentationHint:
-      presentationWindowId*: WindowId
+      presentationWindowId*: uint32
       presentationHint*: uint32
     of MsgKind.WlWindowMenuRequested:
-      menuWindowId*: WindowId
+      menuWindowId*: uint32
       menuX*: int32
       menuY*: int32
     of MsgKind.WlWindowMaximizeRequested:
-      maximizeRequestId*: WindowId
+      maximizeRequestId*: uint32
     of MsgKind.WlWindowUnmaximizeRequested:
-      unmaximizeRequestId*: WindowId
+      unmaximizeRequestId*: uint32
     of MsgKind.WlWindowMinimizeRequested:
-      minimizeRequestId*: WindowId
+      minimizeRequestId*: uint32
     of MsgKind.WlWindowAdmissionSettled:
-      admissionWindowId*: WindowId
+      admissionWindowId*: uint32
     of MsgKind.WlOutputDimensions:
       outputId*: uint32
       width*: int32
@@ -251,14 +251,14 @@ type
     of MsgKind.WlOutputRemoved:
       removedOutputId*: uint32
     of MsgKind.WlPointerMoveRequested:
-      moveWinId*: WindowId
+      moveWinId*: uint32
       moveSeat*: pointer # ptr RiverSeatV1
     of MsgKind.WlPointerResizeRequested:
-      resizeWinId*: WindowId
+      resizeWinId*: uint32
       resizeSeat*: pointer # ptr RiverSeatV1
       resizeEdges*: uint32
     of MsgKind.WlOverviewPointerDragRequested:
-      overviewDragWinId*: WindowId
+      overviewDragWinId*: uint32
       overviewDragSeat*: pointer # ptr RiverSeatV1
       overviewDragX*, overviewDragY*: int32
     of MsgKind.WlOverviewPointerScrollRequested:
@@ -327,11 +327,11 @@ type
     of MsgKind.CmdFocusOutput, MsgKind.CmdMoveWorkspaceToOutput, MsgKind.CmdMoveToOutput:
       outputTarget*: string
     of MsgKind.CmdFocusWindowById:
-      focusWindowId*: WindowId
+      focusWindowId*: uint32
     of MsgKind.CmdCloseWindowById:
-      closeWindowId*: WindowId
+      closeWindowId*: uint32
     of MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById:
-      fullscreenWindowId*: WindowId
+      fullscreenWindowId*: uint32
     of MsgKind.CmdSpawn:
       spawnCommand*: seq[string]
     of MsgKind.CmdWarpPointer:

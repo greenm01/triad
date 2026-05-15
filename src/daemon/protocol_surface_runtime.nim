@@ -5,6 +5,7 @@ import protocols/river/client as river
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/[hotkey_overlay, recent_windows]
+from ../types/core import Rect
 import ../types/runtime_values
 import
   exit_session_dialog_render, hotkey_overlay_render, overview_overlay_render,
@@ -489,7 +490,7 @@ proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
   daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = chromeSurf
 
 proc ensureDecorationSurface*(
-    daemon: var TriadDaemon, windowId: WindowId, kind: ProtocolSurfaceKind
+    daemon: var TriadDaemon, windowId: uint32, kind: ProtocolSurfaceKind
 ): uint32 =
   if not daemon.currentModel.protocolSurfaces.enabled:
     return 0
@@ -529,7 +530,7 @@ proc ensureDecorationSurface*(
     windowId = windowId, decorationId = id, kind = kindText
   id
 
-proc destroyWindowProtocolSurfaces*(daemon: var TriadDaemon, windowId: WindowId) =
+proc destroyWindowProtocolSurfaces*(daemon: var TriadDaemon, windowId: uint32) =
   if daemon.windowDecorationAbove.hasKey(windowId):
     let id = daemon.windowDecorationAbove[windowId]
     daemon.windowDecorationAbove.del(windowId)

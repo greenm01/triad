@@ -1,6 +1,6 @@
 import std/options
 import ../types/shell_snapshot
-from ../types/runtime_values import LayoutMode, WindowId
+from ../types/runtime_values import LayoutMode
 
 proc layoutSupportsMaximize*(mode: LayoutMode): bool =
   mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
@@ -11,13 +11,13 @@ proc workspaceForTag(snapshot: ShellSnapshot, tagId: uint32): Option[ShellWorksp
       return some(workspace)
   none(ShellWorkspace)
 
-proc windowById*(snapshot: ShellSnapshot, winId: WindowId): Option[ShellWindow] =
+proc windowById*(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
   for win in snapshot.windows:
     if win.id == winId:
       return some(win)
   none(ShellWindow)
 
-proc popupRoot*(snapshot: ShellSnapshot, winId: WindowId): WindowId =
+proc popupRoot*(snapshot: ShellSnapshot, winId: uint32): uint32 =
   result = winId
   var current = winId
   var depth = 0
@@ -53,7 +53,7 @@ proc windowInFullWidthColumn*(snapshot: ShellSnapshot, win: ShellWindow): bool =
   false
 
 proc effectiveMaximized*(
-    snapshot: ShellSnapshot, win: ShellWindow, focusedId: WindowId
+    snapshot: ShellSnapshot, win: ShellWindow, focusedId: uint32
 ): bool =
   if not win.isMaximized or win.isMinimized or win.isFloating:
     return false

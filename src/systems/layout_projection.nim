@@ -4,7 +4,7 @@ import ../state/engine
 import ../types/core as core_types
 import ../types/layout_projection
 import ../types/model as model_types
-import ../types/runtime_values as rv
+import ../types/projection_values as rv
 import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
@@ -14,10 +14,10 @@ type OverviewTransform = object
   dest: rv.Rect
   clip: rv.Rect
 
-proc externalWindowId(model: Model, winId: core_types.WindowId): rv.WindowId =
+proc externalWindowId(model: Model, winId: core_types.WindowId): rv.ProjectionWindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
-    return rv.WindowId(uint32(winOpt.get().externalId))
+    return rv.ProjectionWindowId(uint32(winOpt.get().externalId))
   0'u32
 
 proc primaryScreen*(model: Model): rv.Rect =
@@ -88,7 +88,7 @@ proc floatingStackCmp(
   cmp(uint32(a.id), uint32(b.id))
 
 proc applyPopupLayoutFocus(
-    model: Model, tag: var rv.TagState, active: core_types.WindowId
+    model: Model, tag: var rv.ProjectedTag, active: core_types.WindowId
 ) =
   let layoutFocus = model.popupTreeLayoutFocus(active)
   if tag.layoutMode in {rv.LayoutMode.Deck, rv.LayoutMode.VerticalDeck}:
@@ -114,7 +114,7 @@ proc addFloatingInstructions(
       model.floatingStackCmp(a, b)
   )
 
-  var geomByWindow = initTable[rv.WindowId, rv.Rect]()
+  var geomByWindow = initTable[rv.ProjectionWindowId, rv.Rect]()
   for instr in instructions:
     geomByWindow[instr.windowId] = instr.geom
 
@@ -124,7 +124,7 @@ proc addFloatingInstructions(
         model.parentedRoleFor(item.win) == rv.ParentedRole.Dialog:
       if not model.inActivePopupTree(item.id, activeRoot):
         continue
-      let parentId = rv.WindowId(uint32(item.win.parentExternalId))
+      let parentId = rv.ProjectionWindowId(uint32(item.win.parentExternalId))
       if not geomByWindow.hasKey(parentId):
         continue
       let parentGeom = geomByWindow[parentId]
@@ -139,9 +139,11 @@ proc addFloatingInstructions(
     instructions.add(rv.RenderInstruction(windowId: externalId, geom: geom))
     geomByWindow[externalId] = geom
 
-proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
+proc runtimeWindowTable(
+    model: Model
+): Table[rv.ProjectionWindowId, rv.ProjectedWindow] =
   for winId, win in model.windowsWithId():
-    result[model.externalWindowId(winId)] = rv.WindowData(
+    result[model.externalWindowId(winId)] = rv.ProjectedWindow(
       id: model.externalWindowId(winId),
       pid: win.pid,
       title: win.title,
@@ -156,7 +158,7 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
       isOverlay: win.isOverlay,
       isUnmanagedGlobal: win.isUnmanagedGlobal,
       fullscreenOutput: uint32(win.fullscreenOutput),
-      parentId: rv.WindowId(uint32(win.parentExternalId)),
+      parentId: rv.ProjectionWindowId(uint32(win.parentExternalId)),
       identifier: win.identifier,
       actualW: win.actualW,
       actualH: win.actualH,
@@ -178,14 +180,14 @@ proc runtimeWindowTable(model: Model): Table[rv.WindowId, rv.WindowData] =
 
 proc projectedTag(
     model: Model, tagId: core_types.TagId
-): tuple[found: bool, tag: rv.TagState] =
+): tuple[found: bool, tag: rv.ProjectedTag] =
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
-    return (false, rv.TagState())
+    return (false, rv.ProjectedTag())
 
   let tag = tagOpt.get()
   result.found = true
-  result.tag = rv.TagState(
+  result.tag = rv.ProjectedTag(
     tagId: tag.slot,
     name: tag.name,
     layoutMode: tag.layoutMode,
@@ -199,14 +201,14 @@ proc projectedTag(
   )
 
   for _, column in model.columnsOnTagWithId(tagId):
-    var windows: seq[rv.WindowId] = @[]
+    var windows: seq[rv.ProjectionWindowId] = @[]
     for winId, win in model.windowsOnColumnWithId(column.id):
       if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
           not win.isUnmanagedGlobal and not model.windowHiddenByGroup(winId):
         windows.add(model.externalWindowId(winId))
     if windows.len > 0:
       result.tag.columns.add(
-        rv.Column(
+        rv.ProjectedColumn(
           windows: windows,
           widthProportion: column.widthProportion,
           scrollerSingleProportion: column.scrollerSingleProportion,
@@ -215,8 +217,8 @@ proc projectedTag(
       )
 
 proc layoutForTag(
-    tag: var rv.TagState,
-    windows: Table[rv.WindowId, rv.WindowData],
+    tag: var rv.ProjectedTag,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
     screen: rv.Rect,
     outerGap, innerGap: int32,
     focusCenter, preferCenter: bool,
@@ -256,7 +258,7 @@ proc layoutUsesNativeViewport(mode: rv.LayoutMode): bool =
   mode in {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}
 
 proc applyLayoutViewportOffset(
-    tag: rv.TagState, instructions: var seq[rv.RenderInstruction]
+    tag: rv.ProjectedTag, instructions: var seq[rv.RenderInstruction]
 ) =
   if tag.layoutMode.layoutUsesNativeViewport():
     return
@@ -380,7 +382,9 @@ proc scaledOverviewRect(source, dest, geom: rv.Rect, maxZoom: float32): rv.Rect 
   )
 
 proc focusedInstructionCenterX(
-    tag: rv.TagState, instructions: openArray[rv.RenderInstruction], fallback: rv.Rect
+    tag: rv.ProjectedTag,
+    instructions: openArray[rv.RenderInstruction],
+    fallback: rv.Rect,
 ): int32 =
   for instr in instructions:
     if instr.windowId == tag.focusedWindow:
@@ -388,7 +392,9 @@ proc focusedInstructionCenterX(
   fallback.x + fallback.w div 2
 
 proc focusedInstructionCenterY(
-    tag: rv.TagState, instructions: openArray[rv.RenderInstruction], fallback: rv.Rect
+    tag: rv.ProjectedTag,
+    instructions: openArray[rv.RenderInstruction],
+    fallback: rv.Rect,
 ): int32 =
   for instr in instructions:
     if instr.windowId == tag.focusedWindow:
@@ -396,7 +402,7 @@ proc focusedInstructionCenterY(
   fallback.y + fallback.h div 2
 
 proc horizontalScrollerOverviewSource(
-    tag: rv.TagState,
+    tag: rv.ProjectedTag,
     instructions: openArray[rv.RenderInstruction],
     fallback, lane: rv.Rect,
     zoom: float32,
@@ -407,7 +413,7 @@ proc horizontalScrollerOverviewSource(
   rv.Rect(x: sourceX, y: fallback.y, w: sourceW, h: fallback.h)
 
 proc verticalScrollerOverviewSource(
-    tag: rv.TagState,
+    tag: rv.ProjectedTag,
     instructions: openArray[rv.RenderInstruction],
     fallback, preview: rv.Rect,
     zoom: float32,
@@ -419,7 +425,7 @@ proc verticalScrollerOverviewSource(
 
 proc overviewTransform(
     mode: rv.LayoutMode,
-    tag: rv.TagState,
+    tag: rv.ProjectedTag,
     instructions: openArray[rv.RenderInstruction],
     workspaceScreen, screen, preview: rv.Rect,
     zoom: float32,
@@ -455,7 +461,7 @@ proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]
       return
 
 proc columnHasMaximizedWindow(
-    col: rv.Column, windows: Table[rv.WindowId, rv.WindowData]
+    col: rv.ProjectedColumn, windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow]
 ): bool =
   for winId in col.windows:
     if windows.hasKey(winId) and windows[winId].isMaximized:
@@ -463,7 +469,7 @@ proc columnHasMaximizedWindow(
   false
 
 proc applyOverviewMaximizedColumnSizing(
-    tag: var rv.TagState, windows: Table[rv.WindowId, rv.WindowData]
+    tag: var rv.ProjectedTag, windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow]
 ) =
   if not tag.layoutMode.layoutSupportsMaximize():
     return
@@ -472,7 +478,9 @@ proc applyOverviewMaximizedColumnSizing(
       col.isFullWidth = true
 
 proc layoutWorkspaceStripOverview(
-    model: Model, windows: Table[rv.WindowId, rv.WindowData], screen: rv.Rect
+    model: Model,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    screen: rv.Rect,
 ): LayoutProjection =
   let slots = model.previewSlots()
   if slots.len == 0:

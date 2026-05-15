@@ -3,7 +3,7 @@ import chronicles
 import ../core/msg
 import ../ipc/socket
 import ../systems/[daemon_view, layout_projection]
-import ../types/runtime_values
+from ../types/core import Rect
 import ../utils/screenshot_capture
 import process_runner
 import state

@@ -12,7 +12,7 @@ import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model
-import ../src/types/[runtime_values, shell_snapshot]
+import ../src/types/[projection_values, runtime_values, shell_snapshot]
 import ../src/utils/session_env
 
 var observedConfigNotificationEvent: ConfigNotificationEvent
@@ -917,14 +917,12 @@ config-notification {
     )
     model = next4
 
-    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(1)).get()) ==
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(1'u32).get()) ==
       RiverAllEdges
-    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(2)).get()) ==
-      0'u32
-    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(3)).get()) ==
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(2'u32).get()) == 0'u32
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(3'u32).get()) ==
       RiverAllEdges
-    check model.tiledEdgesForWindow(model.windowDataForRiverId(WindowId(4)).get()) ==
-      0'u32
+    check model.tiledEdgesForWindow(model.windowDataForRiverId(4'u32).get()) == 0'u32
 
   test "Niri compatibility rejects malformed IPC without crashing":
     let malformed = niri_compat.handleNiriRequest("{", baseSnapshot())
@@ -992,31 +990,40 @@ config-notification {
 
   test "live restore collapse guard detects same-window collapse":
     var previous = LiveRestoreState(activeTag: 2)
-    previous.windows[WindowId(10)] = RestoredWindowState(tagId: 1)
-    previous.windows[WindowId(20)] = RestoredWindowState(tagId: 2)
+    previous.windows[10'u32] = RestoredWindowState(tagId: 1)
+    previous.windows[20'u32] = RestoredWindowState(tagId: 2)
 
     var candidate = LiveRestoreState(activeTag: 1)
-    candidate.windows[WindowId(10)] = RestoredWindowState(tagId: 1)
-    candidate.windows[WindowId(20)] = RestoredWindowState(tagId: 1)
+    candidate.windows[10'u32] = RestoredWindowState(tagId: 1)
+    candidate.windows[20'u32] = RestoredWindowState(tagId: 1)
 
     check previous.suspiciousLiveRestoreCollapse(candidate)
 
-    candidate.windows[WindowId(20)] = RestoredWindowState(tagId: 2)
+    candidate.windows[20'u32] = RestoredWindowState(tagId: 2)
     check not previous.suspiciousLiveRestoreCollapse(candidate)
 
   test "layout functions handle nonnegative rectangles":
     let screen = Rect(x: 0, y: 0, w: 100, h: 80)
-    var tag = TagState(
+    var tag = ProjectedTag(
       tagId: 1,
       layoutMode: LayoutMode.Scroller,
       focusedWindow: 1,
       masterCount: 1,
       masterSplitRatio: 0.5,
     )
-    tag.columns.add(Column(windows: @[WindowId(1), 2], widthProportion: 0.5))
+    tag.columns.add(
+      ProjectedColumn(windows: @[ProjectionWindowId(1), 2], widthProportion: 0.5)
+    )
 
     let scroller = layoutScroller(
-      tag, initTable[WindowId, WindowData](), screen, 4, 2, false, false, "never"
+      tag,
+      initTable[ProjectionWindowId, ProjectedWindow](),
+      screen,
+      4,
+      2,
+      false,
+      false,
+      "never",
     )
     let tiled = layoutMasterStack(tag, screen, 4, 2)
 

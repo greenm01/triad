@@ -1,12 +1,12 @@
 import core as core_types
 from runtime_effects import Effect
-import runtime_values as rv
+import projection_values as pv
 
 type
   RecentWindowPreview* = object
     winId*: core_types.WindowId
-    riverId*: rv.WindowId
-    geom*: rv.Rect
+    riverId*: uint32
+    geom*: pv.Rect
     title*: string
     appId*: string
     selected*: bool
@@ -40,7 +40,7 @@ type
   OverviewHiddenCountBadge* = object
     slot*: uint32
     count*: int
-    rect*: rv.Rect
+    rect*: pv.Rect
 
   OverviewScrollAxis* {.pure.} = enum
     Horizontal
@@ -51,4 +51,4 @@ type
     axis*: OverviewScrollAxis
     before*: bool
     after*: bool
-    rect*: rv.Rect
+    rect*: pv.Rect

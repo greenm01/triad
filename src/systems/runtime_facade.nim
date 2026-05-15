@@ -2,7 +2,6 @@ import ../config/[apply, parser]
 import ../core/[effects, msg, restore_state]
 import ../state/engine
 import ../types/[layout_projection, runtime_state, shell_snapshot]
-import ../types/runtime_values as rv
 import ../utils/behavior_log
 import layout_projection, update, window_lifecycle, workspaces
 
@@ -52,9 +51,9 @@ proc readRuntimeSnapshot*(state: TriadRuntimeState): ShellSnapshot =
 proc readRuntimeLiveRestoreJson*(state: TriadRuntimeState): string =
   state.model.liveRestoreJson()
 
-proc pendingAdmissionWindowIds*(state: TriadRuntimeState): seq[rv.WindowId] =
+proc pendingAdmissionWindowIds*(state: TriadRuntimeState): seq[uint32] =
   for externalId in state.model.pendingAdmissionExternalIds():
-    result.add(rv.WindowId(uint32(externalId)))
+    result.add(uint32(externalId))
 
 proc writeRuntimeLiveRestoreState*(
     state: TriadRuntimeState, path = defaultLiveRestorePath()

@@ -1,7 +1,7 @@
 import std/[json, options]
 import ../src/ipc/niri_compat
 import ../src/state/snapshot
-import ../src/types/[model, runtime_values, shell_snapshot]
+import ../src/types/[model, shell_snapshot]
 
 proc fail(context, message: string) =
   raise newException(AssertionDefect, context & ": " & message)
@@ -20,7 +20,7 @@ proc activeWorkspace(
       result = (true, workspace)
 
 proc shellWindow(
-    snapshot: ShellSnapshot, winId: WindowId
+    snapshot: ShellSnapshot, winId: uint32
 ): tuple[found: bool, win: ShellWindow] =
   for win in snapshot.windows:
     if win.id == winId:
@@ -89,11 +89,11 @@ proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
   )
 
   var focusedCount = 0
-  var focusedId = WindowId(0)
+  var focusedId = 0'u32
   for win in windows:
     if win["is_focused"].getBool():
       inc focusedCount
-      focusedId = WindowId(win["id"].getInt())
+      focusedId = uint32(win["id"].getInt())
   require(
     context, focusedCount <= 1, "Niri projection must expose at most one focused window"
   )
@@ -115,7 +115,7 @@ proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
     )
     require(
       context,
-      WindowId(focusedNode["id"].getInt()) == focusedId,
+      uint32(focusedNode["id"].getInt()) == focusedId,
       "Niri focused window differs from focused window projection",
     )
 
@@ -145,8 +145,8 @@ proc requireTagShellSemantics*(model: Model, context = "tag semantics") =
       "active workspace tag mismatch",
     )
 
-  if active.found and active.workspace.focusedWindow != WindowId(0) and
-      snapshot.activeScratchpadWindow == WindowId(0):
+  if active.found and active.workspace.focusedWindow != 0'u32 and
+      snapshot.activeScratchpadWindow == 0'u32:
     let activeWin = snapshot.shellWindow(active.workspace.focusedWindow)
     if activeWin.found and not activeWin.win.isMinimized:
       require(

@@ -1,7 +1,8 @@
 import std/options
 import workspaces
 import ../state/engine
-from ../types/runtime_values import Direction, LayoutMode, RenderInstruction
+from ../types/projection_values import RenderInstruction
+from ../types/runtime_values import Direction, LayoutMode
 import layout_projection
 import popup_tree
 

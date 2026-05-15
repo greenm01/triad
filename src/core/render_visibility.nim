@@ -1,4 +1,4 @@
-import ../types/runtime_values
+from ../types/core import Rect
 
 const
   RenderEdgeTop* = 1'u32

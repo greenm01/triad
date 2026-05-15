@@ -1,7 +1,7 @@
 import std/[os, osproc, strtabs, strutils, times]
 import chronicles
 import ../types/model
-from ../types/runtime_values import ConfigNotificationEvent, WindowId
+from ../types/runtime_values import ConfigNotificationEvent
 import ../utils/terminal
 
 proc commandArgs(command: seq[string]): seq[string] =
@@ -75,7 +75,7 @@ proc spawnScreenLock*(model: Model, command: seq[string]) =
     warn "Failed to spawn screen lock", cmd = command[0], error = e.msg
 
 proc spawnWindowMenu*(
-    model: Model, command: seq[string], windowId: WindowId, x, y: int32
+    model: Model, command: seq[string], windowId: uint32, x, y: int32
 ) =
   if command.len == 0:
     warn "Window menu command is not configured"

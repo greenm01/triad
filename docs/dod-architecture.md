@@ -31,6 +31,20 @@ The runtime uses four primary layers.
 - aggregate state containers
 - IPC, restore, config, and layout input/output shapes
 
+Type ownership is explicit:
+
+- `types/core.nim` owns canonical logical IDs, external ID wrappers, masks,
+  null constants, `EntityManager`, and `Rect`.
+- `types/model.nim` owns canonical runtime entity records such as
+  `WindowData`, `TagData`, `ColumnData`, `OutputData`, and `GroupData`.
+- `types/projection_values.nim` owns render/layout projection records such as
+  `ProjectedWindow`, `ProjectedTag`, `ProjectedColumn`, `ProjectedOutput`,
+  `ProjectedGroup`, and `RenderInstruction`.
+- `types/live_restore.nim` owns live-restore wire records.
+- `types/runtime_values.nim` is limited to runtime/config enums and config
+  value objects. It must not define canonical IDs, `Rect`, model entity
+  records, projection records, or live-restore records.
+
 `types` modules must not contain business logic. Minimal ID interop such as
 hashing, equality, ordering, and string conversion is allowed because Nim needs
 it for tables, sorting, and diagnostics.
@@ -200,6 +214,10 @@ Shell integrations must serialize snapshots, not internal storage.
 Production runtime state is data-oriented. `TriadRuntimeState` stores one
 `Model`, and daemon reads use snapshots, live-restore JSON, layout projection,
 and daemon-view helpers directly.
+
+IPC, shell snapshots, live restore, and compositor adapters expose numeric
+external IDs on the wire. The model converts those numeric IDs to canonical
+`ExternalWindowId`/`ExternalOutputId` wrappers at the reducer/state boundary.
 
 Window groups are modeled as entities. `GroupData` stores the dense member
 list and active window, while `groupByWindow` keeps one-window-to-one-group

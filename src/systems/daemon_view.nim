@@ -1,30 +1,29 @@
 import std/options
 import ../state/engine
-from ../types/runtime_values import nil
 import presentation_policy
 import recent_windows
 
-proc runtimeWindowId*(model: Model, winId: WindowId): runtime_values.WindowId =
+proc runtimeWindowId*(model: Model, winId: WindowId): uint32 =
   if winId == NullWindowId:
     return 0'u32
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
-    return runtime_values.WindowId(uint32(winOpt.get().externalId))
+    return uint32(winOpt.get().externalId)
   0'u32
 
-proc externalWindowId*(winId: runtime_values.WindowId): ExternalWindowId =
+proc externalWindowId*(winId: uint32): ExternalWindowId =
   ExternalWindowId(uint32(winId))
 
 proc externalOutputId*(outputId: uint32): ExternalOutputId =
   ExternalOutputId(outputId)
 
-proc windowForRiverId*(model: Model, winId: runtime_values.WindowId): WindowId =
+proc windowForRiverId*(model: Model, winId: uint32): WindowId =
   model.windowForExternal(winId.externalWindowId())
 
 proc outputForRiverId*(model: Model, outputId: uint32): OutputId =
   model.outputForExternal(outputId.externalOutputId())
 
-proc riverIdForWindow*(model: Model, winId: WindowId): runtime_values.WindowId =
+proc riverIdForWindow*(model: Model, winId: WindowId): uint32 =
   model.runtimeWindowId(winId)
 
 proc riverIdForOutput*(model: Model, outputId: OutputId): uint32 =
@@ -35,7 +34,7 @@ proc riverIdForOutput*(model: Model, outputId: OutputId): uint32 =
     return uint32(outputOpt.get().externalId)
   0
 
-proc activeFocusRiverId*(model: Model): runtime_values.WindowId =
+proc activeFocusRiverId*(model: Model): uint32 =
   let scratchpad = model.activeScratchpadWindow()
   if scratchpad != NullWindowId:
     return model.riverIdForWindow(scratchpad)
@@ -46,7 +45,7 @@ proc activeFocusRiverId*(model: Model): runtime_values.WindowId =
     return model.riverIdForWindow(tagOpt.get().focusedWindow)
   0'u32
 
-proc highlightRiverId*(model: Model): runtime_values.WindowId =
+proc highlightRiverId*(model: Model): uint32 =
   if model.recentWindowsActive:
     return model.riverIdForWindow(model.selectedRecentWindow())
   if model.overviewActive:
@@ -56,7 +55,7 @@ proc highlightRiverId*(model: Model): runtime_values.WindowId =
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 
-proc visibleScratchpadRiverId*(model: Model): runtime_values.WindowId =
+proc visibleScratchpadRiverId*(model: Model): uint32 =
   let scratchpad = model.activeScratchpadWindow()
   if scratchpad != NullWindowId:
     return model.riverIdForWindow(scratchpad)
@@ -66,9 +65,7 @@ proc activeLayoutSupportsMaximize*(model: Model): bool =
   let tagOpt = model.tagData(model.activeTag)
   tagOpt.isSome and tagOpt.get().layoutMode.layoutSupportsMaximize()
 
-proc effectivelyMaximizedForRiverId*(
-    model: Model, winId: runtime_values.WindowId
-): bool =
+proc effectivelyMaximizedForRiverId*(model: Model, winId: uint32): bool =
   let logicalId = model.windowForRiverId(winId)
   if logicalId == NullWindowId:
     return false
@@ -80,15 +77,13 @@ proc effectivelyMaximizedForRiverId*(
     model.activeLayoutSupportsMaximize() and
     not model.columnFullWidthForWindowOnTag(model.activeTag, logicalId)
 
-proc windowDataForRiverId*(
-    model: Model, winId: runtime_values.WindowId
-): Option[WindowData] =
+proc windowDataForRiverId*(model: Model, winId: uint32): Option[WindowData] =
   let logicalId = model.windowForRiverId(winId)
   if logicalId == NullWindowId:
     return none(WindowData)
   model.windowData(logicalId)
 
-proc hasRiverWindow*(model: Model, winId: runtime_values.WindowId): bool =
+proc hasRiverWindow*(model: Model, winId: uint32): bool =
   model.windowForRiverId(winId) != NullWindowId
 
 proc proposalDimensions*(
@@ -115,7 +110,7 @@ proc needsCellClip*(win: WindowData, cellW, cellH: int32): bool =
     (win.minWidth > safeW and safeW > 0) or (win.minHeight > safeH and safeH > 0)
 
 proc boundedDimensionsForRiverId*(
-    model: Model, winId: runtime_values.WindowId, w, h: int32
+    model: Model, winId: uint32, w, h: int32
 ): tuple[w, h: int32] =
   let winOpt = model.windowDataForRiverId(winId)
   if winOpt.isSome:
@@ -123,7 +118,7 @@ proc boundedDimensionsForRiverId*(
   (w: max(0'i32, w), h: max(0'i32, h))
 
 proc proposalDimensionsForRiverId*(
-    model: Model, winId: runtime_values.WindowId, w, h: int32, honorMinimums: bool
+    model: Model, winId: uint32, w, h: int32, honorMinimums: bool
 ): tuple[w, h: int32] =
   let winOpt = model.windowDataForRiverId(winId)
   if winOpt.isSome:

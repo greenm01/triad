@@ -1,13 +1,13 @@
 import std/[re, sets, tables]
 from core import
   ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
-  IdCounters, OutputId, TagId, TagMask, WindowId
+  IdCounters, OutputId, Rect, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, KeyBindingConfig, LayoutMode, HotkeyOverlayConfig,
   ParentedRole, OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind,
   PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, RecentWindowFilter,
-  RecentWindowScope, RecentWindowsConfig, Rect, ScreenshotConfig, SwitchEventConfig,
+  RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
   TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
   WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy

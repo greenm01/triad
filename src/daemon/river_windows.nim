@@ -3,7 +3,7 @@ import chronicles
 import protocols/river/client as river
 import ../core/msg
 import ../systems/daemon_view
-import ../types/runtime_values as rv
+import ../types/projection_values as rv
 import message_queue, protocol_surface_runtime, state, wayland_helpers
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -15,7 +15,7 @@ proc outputIdForPointer(daemon: TriadDaemon, output: ptr RiverOutputV1): uint32 
   let id = output.id()
   if daemon.outputPointers.hasKey(id): id else: 0
 
-proc forgetWindow*(daemon: var TriadDaemon, id: WindowId) =
+proc forgetWindow*(daemon: var TriadDaemon, id: uint32) =
   daemon.destroyWindowProtocolSurfaces(id)
   daemon.desiredPlacements.del(id)
   daemon.pendingMaximizedAcks.del(id)
@@ -351,5 +351,5 @@ proc trackWindow*(daemon: var TriadDaemon, win: ptr RiverWindowV1) =
   daemon.windowPointers[id] = win
   daemon.windowNodes[id] = win.getNode()
   daemon.pendingWindows[id] =
-    rv.WindowData(id: id, appId: "unknown", title: "unknown", allowSwallow: true)
+    rv.ProjectedWindow(id: id, appId: "unknown", title: "unknown", allowSwallow: true)
   discard win.addListener(riverWindowListener.addr, daemonData(daemon))

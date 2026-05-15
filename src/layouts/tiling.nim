@@ -1,13 +1,15 @@
 import std/math
 import grid_math
-import ../types/runtime_values
+import ../types/projection_values
 
-proc flattenTag(tag: TagState): seq[WindowId] =
+proc flattenTag(tag: ProjectedTag): seq[ProjectionWindowId] =
   for col in tag.columns:
     for win in col.windows:
       result.add(win)
 
-proc focusedFirst(windows: seq[WindowId], focused: WindowId): seq[WindowId] =
+proc focusedFirst(
+    windows: seq[ProjectionWindowId], focused: ProjectionWindowId
+): seq[ProjectionWindowId] =
   let focusedIdx = windows.find(focused)
   if focusedIdx <= 0:
     return windows
@@ -17,7 +19,7 @@ proc focusedFirst(windows: seq[WindowId], focused: WindowId): seq[WindowId] =
       result.add(win)
 
 proc layoutMasterStack*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
 
@@ -97,7 +99,7 @@ proc layoutMasterStack*(
   return instructions
 
 proc layoutGrid*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
 
@@ -138,7 +140,7 @@ proc layoutGrid*(
   return instructions
 
 proc layoutMonocle*(
-    tag: TagState, screen: Rect, outerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap: int32
 ): seq[RenderInstruction] =
   var instructions: seq[RenderInstruction] = @[]
 
@@ -171,7 +173,7 @@ proc layoutMonocle*(
   return instructions
 
 proc layoutDeck*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let allWindows = tag.flattenTag().focusedFirst(tag.focusedWindow)
   let n = allWindows.len
@@ -215,7 +217,7 @@ proc layoutDeck*(
       )
 
 proc layoutRightTile*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let allWindows = flattenTag(tag)
   let n = allWindows.len
@@ -263,7 +265,7 @@ proc layoutRightTile*(
       y += mh + safeInnerGap
 
 proc layoutCenterTile*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let allWindows = flattenTag(tag)
   let n = allWindows.len
@@ -305,7 +307,7 @@ proc layoutCenterTile*(
     else: 0)
 
   proc addVerticalStack(
-      outInstrs: var seq[RenderInstruction], ids: seq[WindowId], x, w: int32
+      outInstrs: var seq[RenderInstruction], ids: seq[ProjectionWindowId], x, w: int32
   ) =
     if ids.len == 0:
       return
@@ -318,8 +320,8 @@ proc layoutCenterTile*(
       )
       y += h + safeInnerGap
 
-  var leftIds: seq[WindowId] = @[]
-  var rightIds: seq[WindowId] = @[]
+  var leftIds: seq[ProjectionWindowId] = @[]
+  var rightIds: seq[ProjectionWindowId] = @[]
   for i in 0 ..< sCount:
     if i mod 2 == 0:
       leftIds.add(allWindows[mCount + i])
@@ -346,7 +348,7 @@ proc layoutCenterTile*(
   )
 
 proc layoutVerticalMasterStack*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let allWindows = flattenTag(tag)
   let n = allWindows.len
@@ -393,7 +395,7 @@ proc layoutVerticalMasterStack*(
       x += sw + safeInnerGap
 
 proc layoutVerticalDeck*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let allWindows = tag.flattenTag().focusedFirst(tag.focusedWindow)
   let n = allWindows.len
@@ -437,7 +439,7 @@ proc layoutVerticalDeck*(
       )
 
 proc layoutVerticalGrid*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let allWindows = flattenTag(tag)
   let n = allWindows.len
@@ -469,7 +471,7 @@ proc layoutVerticalGrid*(
     )
 
 proc layoutTGMix*(
-    tag: TagState, screen: Rect, outerGap, innerGap: int32
+    tag: ProjectedTag, screen: Rect, outerGap, innerGap: int32
 ): seq[RenderInstruction] =
   let n = tag.flattenTag().len
   if n <= 3:

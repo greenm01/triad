@@ -1,5 +1,6 @@
 import std/[algorithm, json, options, os, strutils, tables, times]
 import defaults
+from ../types/core import Rect
 import ../types/live_restore
 import ../types/runtime_values
 
@@ -99,7 +100,7 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
   if node.hasKey("focused_window"):
     let focused = uint32FromJson(node["focused_window"])
     if focused.isSome:
-      tag.focusedWindow = WindowId(focused.get())
+      tag.focusedWindow = focused.get()
   if node.hasKey("target_viewport_x_offset"):
     tag.targetViewportXOffset = float32FromJson(node["target_viewport_x_offset"])
   if node.hasKey("current_viewport_x_offset"):
@@ -131,8 +132,8 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
         for winNode in colNode["windows"]:
           let winId = uint32FromJson(winNode)
           if winId.isSome:
-            col.windows.add(WindowId(winId.get()))
-            state.tagByWindow[WindowId(winId.get())] = tag.tagId
+            col.windows.add(winId.get())
+            state.tagByWindow[winId.get()] = tag.tagId
       tag.columns.add(col)
 
   state.tags[tag.tagId] = tag
@@ -144,7 +145,7 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
   if winId.isNone:
     return
 
-  let externalId = WindowId(winId.get())
+  let externalId = winId.get()
   var win = RestoredWindowState(
     widthProportion: DefaultColumnWidth, heightProportion: DefaultWindowHeight
   )
@@ -159,16 +160,16 @@ proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =
   if node.hasKey("parent_id"):
     let parentId = uint32FromJson(node["parent_id"])
     if parentId.isSome:
-      win.parentId = WindowId(parentId.get())
+      win.parentId = parentId.get()
   if node.hasKey("swallowed_by"):
     let swallowedBy = uint32FromJson(node["swallowed_by"])
     if swallowedBy.isSome:
-      win.swallowedBy = WindowId(swallowedBy.get())
+      win.swallowedBy = swallowedBy.get()
       state.swallowedBy[externalId] = win.swallowedBy
   if node.hasKey("swallowing"):
     let swallowing = uint32FromJson(node["swallowing"])
     if swallowing.isSome:
-      win.swallowing = WindowId(swallowing.get())
+      win.swallowing = swallowing.get()
       state.swallowing[externalId] = win.swallowing
   if node.hasKey("pid"):
     win.pid = max(0'i32, int32FromJson(node["pid"]))
@@ -231,7 +232,7 @@ proc parseScratchpadRestoreSlots(state: var LiveRestoreState, node: JsonNode) =
       slots.add(slot.get())
   if slots.len > 0:
     slots.sort()
-    state.scratchpadRestoreSlots[WindowId(winId.get())] = slots
+    state.scratchpadRestoreSlots[winId.get()] = slots
 
 proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
   var state = LiveRestoreState()
@@ -243,7 +244,7 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
   if root.hasKey("focused_window"):
     let focused = uint32FromJson(root["focused_window"])
     if focused.isSome:
-      state.focusedWindow = WindowId(focused.get())
+      state.focusedWindow = focused.get()
 
   if root.hasKey("tags") and root["tags"].kind == JArray:
     for node in root["tags"]:
@@ -271,7 +272,7 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
     for node in root["scratchpad_windows"]:
       let winId = uint32FromJson(node)
       if winId.isSome:
-        state.scratchpadWindows.add(WindowId(winId.get()))
+        state.scratchpadWindows.add(winId.get())
 
   if root.hasKey("named_scratchpads") and root["named_scratchpads"].kind == JArray:
     for node in root["named_scratchpads"]:
@@ -279,7 +280,7 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
         continue
       let winId = uint32FromJson(node["window_id"])
       if winId.isSome:
-        state.namedScratchpads[stringFromJson(node["name"])] = WindowId(winId.get())
+        state.namedScratchpads[stringFromJson(node["name"])] = winId.get()
 
   if root.hasKey("scratchpad_restore_slots") and
       root["scratchpad_restore_slots"].kind == JArray:
@@ -289,7 +290,7 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
   if root.hasKey("visible_scratchpad"):
     let winId = uint32FromJson(root["visible_scratchpad"])
     if winId.isSome:
-      state.visibleScratchpad = WindowId(winId.get())
+      state.visibleScratchpad = winId.get()
   if root.hasKey("is_scratchpad_visible"):
     state.isScratchpadVisible = boolFromJson(root["is_scratchpad_visible"])
 
@@ -297,7 +298,7 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
     for node in root["focus_history"]:
       let winId = uint32FromJson(node)
       if winId.isSome:
-        state.focusHistory.add(WindowId(winId.get()))
+        state.focusHistory.add(winId.get())
 
   if root.hasKey("workspace_history") and root["workspace_history"].kind == JArray:
     for node in root["workspace_history"]:

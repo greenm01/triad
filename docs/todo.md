@@ -1,10 +1,5 @@
 # Triad TODO
 
-## Architecture Cleanup
-
-- Reconcile duplicate canonical/runtime/projection value types inside
-  `src/types`.
-
 ## Blocked / Watchlist
 
 - Continue Mango-informed window-rule work only when the needed protocol,

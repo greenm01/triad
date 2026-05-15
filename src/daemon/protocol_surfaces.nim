@@ -1,7 +1,6 @@
 import std/tables
 import wayland/native/client
 import protocols/river/client as river
-from ../types/runtime_values import WindowId
 
 type
   ProtocolSurfaceKind* {.pure.} = enum
@@ -23,7 +22,7 @@ type
     bufferH*: int32
     inputW*: int32
     inputH*: int32
-    windowId*: WindowId
+    windowId*: uint32
     kind*: ProtocolSurfaceKind
     offsetX*: int32
     offsetY*: int32
@@ -37,5 +36,5 @@ type
     exitSessionConfirmSurfaceId*: uint32
     recentWindowsSurfaceId*: uint32
     recentWindowsChromeSurfaceId*: uint32
-    windowDecorationAbove*: Table[WindowId, uint32]
-    windowDecorationBelow*: Table[WindowId, uint32]
+    windowDecorationAbove*: Table[uint32, uint32]
+    windowDecorationBelow*: Table[uint32, uint32]

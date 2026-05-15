@@ -8,6 +8,7 @@ import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../config/[keysyms, parser]
 import ../core/msg
+from ../types/core import Rect
 import ../ipc/commands
 import
   ../systems/
@@ -248,12 +249,12 @@ proc tickCursorShake*(daemon: var TriadDaemon) =
       if action == CursorShakeAction.Restore:
         daemon.restoreCursorSize(seat, seatId)
 
-proc queueWindowFocus(daemon: var TriadDaemon, target: WindowId) =
+proc queueWindowFocus(daemon: var TriadDaemon, target: uint32) =
   if target == 0:
     return
   daemon.enqueue(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: target))
 
-proc queueWindowInteraction(daemon: var TriadDaemon, target: WindowId) =
+proc queueWindowInteraction(daemon: var TriadDaemon, target: uint32) =
   if daemon.currentModel.overviewActive:
     return
   daemon.queueWindowFocus(target)
@@ -1171,7 +1172,7 @@ var xkbSeatListener* = riverXkb.RiverXkbBindingsSeatV1Listener(
 
 proc pointerCommandTarget(
     daemon: TriadDaemon, seatId: uint32, seat: ptr RiverSeatV1
-): WindowId =
+): uint32 =
   let focused = daemon.currentModel.activeFocusRiverId()
   if daemon.currentModel.overviewActive:
     if seat == nil:

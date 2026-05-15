@@ -107,16 +107,14 @@ suite "Core Runtime Logic: navigation layout":
     check monocle.focusDirection(Direction.DirLeft) == 1
 
   test "Render visibility suppresses clipped scroller border rails":
-    let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
+    let screen = Rect(x: 0, y: 0, w: 100, h: 80)
 
-    let full =
-      renderVisibility(runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+    let full = renderVisibility(Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
     check full.visible
     check not full.clipped
     check full.borderEdges == RenderAllEdges
 
-    let leftClip =
-      renderVisibility(runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+    let leftClip = renderVisibility(Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
     check leftClip.visible
     check leftClip.clipped
     check (leftClip.borderEdges and RenderEdgeLeft) == 0
@@ -131,15 +129,13 @@ suite "Core Runtime Logic: navigation layout":
     check leftClips.windowY == -3
     check leftClips.windowH == 36
 
-    let sliver =
-      renderVisibility(runtime_values.Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
+    let sliver = renderVisibility(Rect(x: -98, y: 10, w: 100, h: 30), screen, 4)
     check not sliver.visible
     check sliver.borderEdges == 0
 
   test "Forced cell clipping preserves border space":
-    let screen = runtime_values.Rect(x: 0, y: 0, w: 100, h: 80)
-    let cell =
-      renderVisibility(runtime_values.Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
+    let screen = Rect(x: 0, y: 0, w: 100, h: 80)
+    let cell = renderVisibility(Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)
 
     let clips = cell.renderClipBoxes(3)
     check clips.contentX == 0
@@ -151,8 +147,7 @@ suite "Core Runtime Logic: navigation layout":
     check clips.windowW == 46
     check clips.windowH == 36
 
-    let clipped =
-      renderVisibility(runtime_values.Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
+    let clipped = renderVisibility(Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
     let clippedBoxes = clipped.renderClipBoxes(3)
     check clippedBoxes.contentX == 20
     check clippedBoxes.contentW == 40

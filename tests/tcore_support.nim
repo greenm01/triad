@@ -10,7 +10,7 @@ import
     recent_windows, update, window_lifecycle, window_rules, workspaces,
   ]
 import ../src/types/model
-import ../src/types/runtime_values except WindowId
+import ../src/types/projection_values except WindowId
 import ../src/utils/[overview_hit_test, process_tree, screenshot_capture]
 import tag_semantics_checks
 
@@ -20,7 +20,7 @@ export
   hotkey_overlay, layout_projection, overview_geometry, popup_tree, recent_windows,
   runtime_facade, update, window_lifecycle, window_rules, workspaces, model,
   overview_hit_test, process_tree, screenshot_capture, tag_semantics_checks
-export runtime_values except WindowId
+export projection_values except WindowId
 
 proc initTriadDaemon*(): auto =
   daemon_state.initTriadDaemon()
@@ -110,14 +110,14 @@ proc viewport*(model: Model, slot: uint32): ViewportState =
     currentViewportYOffset: tag.currentViewportYOffset,
   )
 
-proc instructionGeom*(model: Model, id: uint32): runtime_values.Rect =
+proc instructionGeom*(model: Model, id: uint32): Rect =
   let projection = model.layoutProjection()
   for instr in projection.instructions:
     if uint32(instr.windowId) == id:
       return instr.geom
-  runtime_values.Rect()
+  Rect()
 
-proc rectCenter*(rect: runtime_values.Rect): tuple[x, y: int32] =
+proc rectCenter*(rect: Rect): tuple[x, y: int32] =
   (rect.x + rect.w div 2, rect.y + rect.h div 2)
 
 proc snapshotWindow*(model: Model, id: uint32): ShellWindow =

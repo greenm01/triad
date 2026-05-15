@@ -1,7 +1,7 @@
 import std/[json, options, strutils]
 import ../core/[msg, niri_state]
 import ../types/shell_snapshot
-from ../types/runtime_values import Direction, WindowId
+from ../types/runtime_values import Direction
 
 type NiriIpcResult* = object
   handled*: bool
@@ -70,7 +70,7 @@ proc nextTag(snapshot: ShellSnapshot, direction: int): Option[uint32] =
     return some(ids[idx + 1])
   some(ids[^1])
 
-proc focusedWindow(snapshot: ShellSnapshot): WindowId =
+proc focusedWindow(snapshot: ShellSnapshot): uint32 =
   if snapshot.activeScratchpadWindow != 0'u32:
     return snapshot.activeScratchpadWindow
   for workspace in snapshot.workspaces:
@@ -81,13 +81,13 @@ proc focusedWindow(snapshot: ShellSnapshot): WindowId =
       return win.id
   0'u32
 
-proc windowById(snapshot: ShellSnapshot, winId: WindowId): Option[ShellWindow] =
+proc windowById(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
   for win in snapshot.windows:
     if win.id == winId:
       return some(win)
   none(ShellWindow)
 
-proc toggleMaximizeMessage(snapshot: ShellSnapshot, winId: WindowId): Option[Msg] =
+proc toggleMaximizeMessage(snapshot: ShellSnapshot, winId: uint32): Option[Msg] =
   if winId == 0'u32:
     return none(Msg)
   let win = snapshot.windowById(winId)
@@ -182,7 +182,7 @@ proc actionMessages(
       if win.isSome:
         return (
           true,
-          @[Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: WindowId(win.get()))],
+          @[Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: uint32(win.get()))],
         )
   elif action.hasKey("CloseWindow"):
     let payload = action["CloseWindow"]
@@ -191,7 +191,7 @@ proc actionMessages(
       if win.isSome:
         return (
           true,
-          @[Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: WindowId(win.get()))],
+          @[Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: uint32(win.get()))],
         )
     return (true, @[Msg(kind: MsgKind.CmdCloseWindow)])
   elif action.hasKey("SwitchLayout"):
@@ -213,7 +213,7 @@ proc actionMessages(
     if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
       let win = uintFromNode(payload["id"])
       if win.isSome:
-        let msg = snapshot.toggleMaximizeMessage(WindowId(win.get()))
+        let msg = snapshot.toggleMaximizeMessage(uint32(win.get()))
         if msg.isSome:
           return (true, @[msg.get()])
     let focused = snapshot.focusedWindow()

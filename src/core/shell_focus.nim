@@ -1,7 +1,6 @@
 import ../types/shell_snapshot
-from ../types/runtime_values import WindowId
 
-proc focusedWindowId*(snapshot: ShellSnapshot): WindowId =
+proc focusedWindowId*(snapshot: ShellSnapshot): uint32 =
   if snapshot.activeScratchpadWindow != 0'u32:
     return snapshot.activeScratchpadWindow
 

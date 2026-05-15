@@ -85,7 +85,7 @@ suite "Core Runtime Logic: floating rules":
 
     let childId = model.windowForExternal(ExternalWindowId(2))
     let initial = model.windowData(childId).get().floatingGeom
-    check initial == runtime_values.Rect(x: 20, y: 56, w: 220, h: 588)
+    check initial == Rect(x: 20, y: 56, w: 220, h: 588)
     check model.instructionGeom(2) == initial
     check not model.windowData(childId).get().parentAutoFloating
     check model.focusedWindowId() == 2
@@ -128,7 +128,7 @@ suite "Core Runtime Logic: floating rules":
 
     let winId = model.windowForExternal(ExternalWindowId(1))
     check model.windowData(winId).get().floatingGeom ==
-      runtime_values.Rect(x: 32, y: 552, w: 200, h: 200)
+      Rect(x: 32, y: 552, w: 200, h: 200)
 
   test "Center floating rule centers unparented generated geometry":
     var model = initRuntimeStateFromConfig(
@@ -158,7 +158,7 @@ suite "Core Runtime Logic: floating rules":
 
     let winId = model.windowForExternal(ExternalWindowId(1))
     check model.windowData(winId).get().floatingGeom ==
-      runtime_values.Rect(x: 300, y: 300, w: 400, h: 200)
+      Rect(x: 300, y: 300, w: 400, h: 200)
 
   test "Floating anchor overrides center floating rule":
     var model = initRuntimeStateFromConfig(
@@ -191,7 +191,7 @@ suite "Core Runtime Logic: floating rules":
 
     let winId = model.windowForExternal(ExternalWindowId(1))
     check model.windowData(winId).get().floatingGeom ==
-      runtime_values.Rect(x: 32, y: 552, w: 200, h: 200)
+      Rect(x: 32, y: 552, w: 200, h: 200)
 
   test "Respect size hints false disables fixed-size auto floating":
     var model = initRuntimeStateFromConfig(
@@ -291,7 +291,7 @@ suite "Core Runtime Logic: floating rules":
 
     let winId = model.windowForExternal(ExternalWindowId(1))
     check model.windowData(winId).get().floatingGeom ==
-      runtime_values.Rect(x: 260, y: 20, w: 500, h: 200)
+      Rect(x: 260, y: 20, w: 500, h: 200)
 
   test "Dialog parent anchoring ignores default floating position":
     var model = initRuntimeStateFromConfig(
@@ -364,7 +364,7 @@ suite "Core Runtime Logic: floating rules":
 
     let winId = model.windowForExternal(ExternalWindowId(1))
     check model.windowData(winId).get().floatingGeom ==
-      runtime_values.Rect(x: 725, y: 30, w: 250, h: 400)
+      Rect(x: 725, y: 30, w: 250, h: 400)
 
   test "Lead floating startup window anchors same-app main window":
     var model = initRuntimeStateFromConfig(
@@ -404,7 +404,7 @@ suite "Core Runtime Logic: floating rules":
     let leadGeom = model.instructionGeom(2)
     let mainGeom = model.instructionGeom(3)
     check workspace.columns.len == 2
-    check workspace.columns[1].windows == @[runtime_values.WindowId(3)]
+    check workspace.columns[1].windows == @[uint32(3)]
     check model.focusedWindowId() == 2
     check abs(leadGeom.rectCenter().x - mainGeom.rectCenter().x) <= 1
     check abs(leadGeom.rectCenter().y - mainGeom.rectCenter().y) <= 1
@@ -495,7 +495,7 @@ suite "Core Runtime Logic: floating rules":
     check child.isFloating
     check child.workspaceIdx == 4
     check model.windowData(childId).get().floatingGeom ==
-      runtime_values.Rect(x: 20, y: 56, w: 220, h: 588)
+      Rect(x: 20, y: 56, w: 220, h: 588)
 
   test "Lead floating startup anchor ignores other apps and existing main windows":
     var model = initRuntimeStateFromConfig(
@@ -526,8 +526,7 @@ suite "Core Runtime Logic: floating rules":
       Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "krita", title: "Main")
     )
     check model.shellSnapshot().workspaces[0].columns.len == 2
-    check model.shellSnapshot().workspaces[0].columns[1].windows ==
-      @[runtime_values.WindowId(3)]
+    check model.shellSnapshot().workspaces[0].columns[1].windows == @[uint32(3)]
 
     model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 3))
     model.applyMsg(
@@ -549,8 +548,8 @@ suite "Core Runtime Logic: floating rules":
 
     let workspace = model.shellSnapshot().workspaces[0]
     check workspace.columns.len == 3
-    check workspace.columns[1].windows == @[runtime_values.WindowId(4)]
-    check workspace.columns[2].windows == @[runtime_values.WindowId(5)]
+    check workspace.columns[1].windows == @[uint32(4)]
+    check workspace.columns[2].windows == @[uint32(5)]
 
   test "Plain parented float ignores parent workspace and anchoring":
     var model = initRuntimeStateFromConfig(

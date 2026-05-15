@@ -131,7 +131,7 @@ suite "Core Runtime Logic: unmanaged global windows":
     restore.windows[ExternalWindowId(44)] = RestoredWindowData(
       isFloating: true,
       isUnmanagedGlobal: true,
-      floatingGeom: runtime_values.Rect(x: 10, y: 20, w: 300, h: 200),
+      floatingGeom: Rect(x: 10, y: 20, w: 300, h: 200),
       appId: "camera",
       title: "Cam",
     )

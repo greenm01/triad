@@ -1,5 +1,5 @@
 import ../types/model as model_types
-import ../types/runtime_values as rv
+import ../types/projection_values as rv
 
 const AnchorVisibilityTolerance* = 1'i32
 

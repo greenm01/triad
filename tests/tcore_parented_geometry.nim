@@ -43,12 +43,9 @@ suite "Core Runtime Logic: parented geometry":
     )
     let parentId = model.windowForExternal(ExternalWindowId(1))
     let childId = model.windowForExternal(ExternalWindowId(2))
-    discard model.setWindowFloating(
-      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300)
-    )
-    discard model.setWindowFloating(
-      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500)
-    )
+    discard
+      model.setWindowFloating(parentId, true, Rect(x: 300, y: 100, w: 400, h: 300))
+    discard model.setWindowFloating(childId, true, Rect(x: 0, y: 0, w: 800, h: 500))
 
     let parentGeom = model.instructionGeom(1)
     let childGeom = model.instructionGeom(2)
@@ -117,9 +114,8 @@ suite "Core Runtime Logic: parented geometry":
     model.applyMsg(Msg(kind: MsgKind.CmdResizeFloating, deltaFW: 120, deltaFH: 0))
 
     let parentId = model.windowForExternal(ExternalWindowId(1))
-    discard model.setWindowFloating(
-      parentId, true, runtime_values.Rect(x: 300, y: 100, w: 400, h: 300)
-    )
+    discard
+      model.setWindowFloating(parentId, true, Rect(x: 300, y: 100, w: 400, h: 300))
 
     let child = model.windowData(childId).get()
     let childGeom = model.instructionGeom(2)
@@ -185,9 +181,7 @@ suite "Core Runtime Logic: parented geometry":
       )
     )
     let childId = model.windowForExternal(ExternalWindowId(2))
-    discard model.setWindowFloating(
-      childId, true, runtime_values.Rect(x: 0, y: 0, w: 1400, h: 900)
-    )
+    discard model.setWindowFloating(childId, true, Rect(x: 0, y: 0, w: 1400, h: 900))
 
     let childGeom = model.instructionGeom(2)
     check childGeom == model.primaryScreen()
@@ -224,9 +218,7 @@ suite "Core Runtime Logic: parented geometry":
       )
     )
     let childId = model.windowForExternal(ExternalWindowId(4))
-    discard model.setWindowFloating(
-      childId, true, runtime_values.Rect(x: 0, y: 0, w: 800, h: 500)
-    )
+    discard model.setWindowFloating(childId, true, Rect(x: 0, y: 0, w: 800, h: 500))
 
     model.setViewport(1, targetX = 350.0, currentX = 350.0)
 
