@@ -388,14 +388,22 @@ suite "embedded Janet runtime":
     check evaluated.messages[3].kind == MsgKind.CmdFocusWindowById
     check evaluated.messages[3].focusWindowId == highId
 
-  test "bundled GIMP manifest targets graphics workspace":
+  test "bundled GIMP manifest targets first empty workspace":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
       runtime.close()
     let manifest = readFile("manifests/gimp.janet")
+    var snapshot = testSnapshot()
+    snapshot.workspaces[0].occupied = true
+    snapshot.workspaces[1].occupied = true
+    snapshot.workspaces.add(
+      ShellWorkspace(
+        tagId: 3, workspaceIdx: 3, name: "scratch", layoutMode: LayoutMode.Scroller
+      )
+    )
 
     let firstPalette = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       manifest,
       "manifests/gimp.janet",
       some(ShellWindow(id: 12, title: "Toolbox", appId: "gimp", identifier: "toolbox")),
@@ -404,17 +412,40 @@ suite "embedded Janet runtime":
     check firstPalette.ok
     check firstPalette.messages.len == 3
     check firstPalette.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check firstPalette.messages[0].moveTargetTag == 8
+    check firstPalette.messages[0].moveTargetTag == 3
     check firstPalette.messages[0].moveFollowWindow
     check firstPalette.messages[1].kind == MsgKind.CmdSetLayout
-    check firstPalette.messages[1].layoutTargetTag == 8
+    check firstPalette.messages[1].layoutTargetTag == 3
     check firstPalette.messages[1].newLayout == LayoutMode.Scroller
     check firstPalette.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check firstPalette.messages[2].floatingWindowId == 12
     check firstPalette.messages[2].windowFloating
 
+    var currentOccupiesTargetSnapshot = snapshot
+    currentOccupiesTargetSnapshot.workspaces[2].occupied = true
+    currentOccupiesTargetSnapshot.windows.add(
+      ShellWindow(
+        id: 18,
+        title: "GNU Image Manipulation Program",
+        appId: "gimp",
+        tagId: some(3'u32),
+        workspaceIdx: 3,
+      )
+    )
+    let currentOccupiesTarget = runtime.evalSource(
+      currentOccupiesTargetSnapshot,
+      manifest,
+      "manifests/gimp.janet",
+      some(ShellWindow(id: 18, title: "GNU Image Manipulation Program", appId: "gimp")),
+    )
+
+    check currentOccupiesTarget.ok
+    check currentOccupiesTarget.messages.len == 4
+    check currentOccupiesTarget.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check currentOccupiesTarget.messages[0].moveTargetTag == 3
+
     let mainWindow = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       manifest,
       "manifests/gimp.janet",
       some(
@@ -425,10 +456,10 @@ suite "embedded Janet runtime":
     check mainWindow.ok
     check mainWindow.messages.len == 4
     check mainWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check mainWindow.messages[0].moveTargetTag == 8
+    check mainWindow.messages[0].moveTargetTag == 3
     check mainWindow.messages[0].moveFollowWindow
     check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
-    check mainWindow.messages[1].layoutTargetTag == 8
+    check mainWindow.messages[1].layoutTargetTag == 3
     check mainWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check mainWindow.messages[2].floatingWindowId == 13
     check not mainWindow.messages[2].windowFloating
@@ -437,7 +468,7 @@ suite "embedded Janet runtime":
     check mainWindow.messages[3].windowMaximized
 
     let laterPalette = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       manifest,
       "manifests/gimp.janet",
       some(ShellWindow(id: 14, title: "Tool Options", appId: "org.gimp.GIMP")),
@@ -446,16 +477,48 @@ suite "embedded Janet runtime":
     check laterPalette.ok
     check laterPalette.messages.len == 3
     check laterPalette.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check laterPalette.messages[0].moveTargetTag == 8
+    check laterPalette.messages[0].moveTargetTag == 3
     check not laterPalette.messages[0].moveFollowWindow
     check laterPalette.messages[1].kind == MsgKind.CmdSetLayout
-    check laterPalette.messages[1].layoutTargetTag == 8
+    check laterPalette.messages[1].layoutTargetTag == 3
     check laterPalette.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check laterPalette.messages[2].floatingWindowId == 14
     check laterPalette.messages[2].windowFloating
 
+    var existingGimpSnapshot = snapshot
+    existingGimpSnapshot.workspaces.add(
+      ShellWorkspace(
+        tagId: 4, workspaceIdx: 4, name: "gimp", layoutMode: LayoutMode.Scroller
+      )
+    )
+    existingGimpSnapshot.workspaces.add(
+      ShellWorkspace(
+        tagId: 5, workspaceIdx: 5, name: "empty", layoutMode: LayoutMode.Scroller
+      )
+    )
+    existingGimpSnapshot.windows.add(
+      ShellWindow(
+        id: 19,
+        title: "GNU Image Manipulation Program",
+        appId: "gimp",
+        tagId: some(4'u32),
+        workspaceIdx: 4,
+      )
+    )
+    let welcomeWindow = runtime.evalSource(
+      existingGimpSnapshot,
+      manifest,
+      "manifests/gimp.janet",
+      some(ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")),
+    )
+
+    check welcomeWindow.ok
+    check welcomeWindow.messages.len == 3
+    check welcomeWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check welcomeWindow.messages[0].moveTargetTag == 4
+
     let dialogWindow = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       manifest,
       "manifests/gimp.janet",
       some(ShellWindow(id: 15, title: "Preferences", appId: "gimp")),
@@ -464,14 +527,14 @@ suite "embedded Janet runtime":
     check dialogWindow.ok
     check dialogWindow.messages.len == 3
     check dialogWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check dialogWindow.messages[0].moveTargetTag == 8
+    check dialogWindow.messages[0].moveTargetTag == 3
     check dialogWindow.messages[0].moveFollowWindow
     check dialogWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check dialogWindow.messages[2].floatingWindowId == 15
     check dialogWindow.messages[2].windowFloating
 
     let parentedDialog = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       manifest,
       "manifests/gimp.janet",
       some(ShellWindow(id: 16, parentId: 13, title: "Untitled", appId: "gimp")),
@@ -480,14 +543,14 @@ suite "embedded Janet runtime":
     check parentedDialog.ok
     check parentedDialog.messages.len == 3
     check parentedDialog.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check parentedDialog.messages[0].moveTargetTag == 8
+    check parentedDialog.messages[0].moveTargetTag == 3
     check parentedDialog.messages[0].moveFollowWindow
     check parentedDialog.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check parentedDialog.messages[2].floatingWindowId == 16
     check parentedDialog.messages[2].windowFloating
 
     let ignored = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       manifest,
       "manifests/gimp.janet",
       some(ShellWindow(id: 17, title: "Terminal", appId: "kitty")),

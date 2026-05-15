@@ -1,0 +1,360 @@
+// Triad default daily-driver config.
+// Use as ~/.config/triad/config.kdl for host or VM sessions.
+
+layout {
+    gaps 8
+    center-focused-column "on-overflow"
+    default-column-width { proportion 0.5; }
+    default-window-width { proportion 0.5; }
+    default-window-height { proportion 1.0; }
+    master {
+        count 1
+        split-ratio 0.55
+    }
+    border {
+        width 3
+        active-color "#7fc8ff"
+        inactive-color "#505050"
+    }
+    scroller-focus-center #false
+    scroller-prefer-center #false
+    enable-animations #true
+    animation-speed 0.15
+    smart-gaps #false
+    layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
+}
+
+scratchpad {
+    width-ratio 0.8
+    height-ratio 0.9
+}
+
+overview {
+    outer-gap 64
+    inner-gap-multiplier 2.0
+    hot-corners {
+        bottom-left
+    }
+}
+
+floating {
+    x-ratio 0.25
+    y-ratio 0.25
+    width-ratio 0.5
+    height-ratio 0.5
+    min-width 50
+    min-height 50
+}
+
+workspaces {
+    default-count 3
+    default-layout "scroller"
+}
+
+workspace-rules {
+    workspace 1 name="term"
+    workspace 2 name="web"
+    workspace 3 name="files"
+    workspace 4 name="chat" default-layout="deck"
+    workspace 5 name="media" default-layout="monocle"
+    workspace 6 name="code" default-layout="center-tile"
+    workspace 7 name="vm" default-layout="right-tile"
+    workspace 8 name="graphics" default-layout="scroller"
+    workspace 9 name="spare"
+}
+
+quickshell {
+    enabled #true
+    command "qs"
+    theme "noctalia-shell"
+}
+
+terminal {
+    command "kitty"
+}
+
+screenshot {
+    directory "~/Pictures/Screenshots"
+    filename-prefix "screenshot"
+    capture-command "grim"
+    region-selector-command "slurp"
+    clipboard-command "wl-copy --type image/png"
+    show-pointer #false
+}
+
+janet {
+    enabled #true
+    manifest-dir "~/.config/triad/manifests"
+    system-manifest-dir "/usr/share/triad/manifests"
+    fuel-limit 500000
+    manifest-alias "org.telegram.desktop" "telegram"
+    manifest-alias "TelegramDesktop" "telegram"
+    manifest-alias "telegram-desktop" "telegram"
+    manifest-alias "dev.vencord.Vesktop" "vesktop"
+    manifest-alias "Vesktop" "vesktop"
+    manifest-alias "gimp-3.2" "gimp"
+    manifest-alias "org.gimp.GIMP" "gimp"
+}
+
+input {
+    keyboard {
+        repeat-rate 40
+        repeat-delay 300
+        numlock
+        capslock #false
+        xkb {
+            rules "evdev"
+            model "pc105"
+            layout "us"
+            variant ""
+            options ""
+        }
+    }
+    mouse {
+        natural-scroll #false
+        accel-profile "flat"
+        accel-speed 0.0
+        left-handed #false
+        middle-emulation #false
+        scroll-factor 1.0
+    }
+}
+
+screen-lock {
+    command "sh" "-lc" "command -v lockme >/dev/null 2>&1 && exec lockme; command -v swaylock >/dev/null 2>&1 && exec swaylock -f; command -v gtklock >/dev/null 2>&1 && exec gtklock; exit 0"
+}
+
+cursor {
+    theme "default"
+    size 24
+    shake-to-find #true
+}
+
+presentation-mode "vsync"
+allow-exit-session #true
+
+protocol-surfaces {
+    enabled #true
+    visible-debug #false
+}
+
+hotkey-overlay {
+    skip-at-startup #false
+    hide-not-bound
+    position "center"
+}
+
+recent-windows {
+    debounce-ms 750
+    open-delay-ms 150
+    highlight {
+        active-color "#999999ff"
+        urgent-color "#ff9999ff"
+        padding 30
+        corner-radius 0
+    }
+    previews {
+        max-height 480
+        max-scale 0.5
+    }
+    binds {
+        bind "Alt+Tab" "recent-window-next"
+        bind "Alt+Shift+Tab" "recent-window-prev"
+        bind "Alt+grave" "recent-window-next --filter app-id"
+        bind "Alt+Shift+grave" "recent-window-prev --filter app-id"
+        bind "Super+Tab" "recent-window-next"
+        bind "Super+Shift+Tab" "recent-window-prev"
+        bind "Super+grave" "recent-window-next --filter app-id"
+        bind "Super+Shift+grave" "recent-window-prev --filter app-id"
+    }
+}
+
+spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"
+spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
+spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
+spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"
+spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev/null 2>&1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE NIRI_SOCKET TRIAD_SOCKET || true"
+spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
+spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
+spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"
+spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || true"
+
+bindings {
+    mirror-hjkl-arrows #true
+
+    // Launch/session.
+    bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
+    bind "Super+Return" "spawn kitty"
+    bind "Super+Space" "spawn fuzzel"
+    bind "Super+b" "spawn brave-origin-nightly"
+    bind "Super+e" "spawn env GTK_THEME=Adwaita:dark thunar"
+    bind "Super+Escape" "lock-session"
+    bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
+    bind "Super+?" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
+    bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
+    bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
+    bind "Ctrl+Alt+Backspace" "exit-session"
+
+    // Clipboard compatibility.
+    bind "Super+c" "spawn wtype -M ctrl -P Insert -p Insert -m ctrl" allow-inhibiting=#false
+    bind "Super+v" "spawn wtype -M shift -P Insert -p Insert -m shift" allow-inhibiting=#false
+    bind "Super+x" "spawn wtype -M ctrl x -m ctrl" allow-inhibiting=#false
+
+    // Screenshots.
+    bind "Print" "screenshot --show-pointer"
+    bind "Alt+Print" "screenshot-window"
+    bind "Super+Shift+Print" "screenshot --no-clipboard --hide-pointer"
+    bind "Super+Print" "screenshot --clipboard-only --hide-pointer"
+
+    // Focus. Arrow keys mirror h/j/k/l via mirror-hjkl-arrows.
+    bind "Super+h" "focus-left"
+    bind "Super+j" "focus-down"
+    bind "Super+k" "focus-up"
+    bind "Super+l" "focus-right"
+    bind "Super+Tab" "focus-last"
+    bind "Super+Shift+Tab" "focus-prev"
+    bind "Super+u" "focus-occupied-tag-right"
+    bind "Super+Shift+u" "focus-tag-right"
+
+    // Tags/workspaces.
+    bind "Super+1" "focus-workspace 1"
+    bind "Super+2" "focus-workspace 2"
+    bind "Super+3" "focus-workspace 3"
+    bind "Super+4" "focus-workspace 4"
+    bind "Super+5" "focus-workspace 5"
+    bind "Super+6" "focus-workspace 6"
+    bind "Super+7" "focus-workspace 7"
+    bind "Super+8" "focus-workspace 8"
+    bind "Super+9" "focus-workspace 9"
+
+    bind "Super+Ctrl+1" "move-to-workspace 1"
+    bind "Super+Ctrl+2" "move-to-workspace 2"
+    bind "Super+Ctrl+3" "move-to-workspace 3"
+    bind "Super+Ctrl+4" "move-to-workspace 4"
+    bind "Super+Ctrl+5" "move-to-workspace 5"
+    bind "Super+Ctrl+6" "move-to-workspace 6"
+    bind "Super+Ctrl+7" "move-to-workspace 7"
+    bind "Super+Ctrl+8" "move-to-workspace 8"
+    bind "Super+Ctrl+9" "move-to-workspace 9"
+    bind "Super+Ctrl+u" "move-to-tag-right"
+    bind "Super+Ctrl+i" "move-to-tag-left"
+
+    bind "Super+Shift+1" "swap-to-tag 1"
+    bind "Super+Shift+2" "swap-to-tag 2"
+    bind "Super+Shift+3" "swap-to-tag 3"
+    bind "Super+Shift+4" "swap-to-tag 4"
+    bind "Super+Shift+5" "swap-to-tag 5"
+    bind "Super+Shift+6" "swap-to-tag 6"
+    bind "Super+Shift+7" "swap-to-tag 7"
+    bind "Super+Shift+8" "swap-to-tag 8"
+    bind "Super+Shift+9" "swap-to-tag 9"
+
+    // Window state.
+    bind "Super+q" "close-window"
+    bind "Super+m" "maximize-column"
+    bind "Super+Shift+f" "fullscreen-window"
+    bind "Super+f" "maximize-window-to-edges"
+    bind "Super+t" "toggle-floating"
+    bind "Super+Shift+t" "toggle-floating"
+    bind "Super+Shift+b" "minimize"
+
+    // Scratchpad. Mirrors Mango: send, toggle, restore.
+    bind "Super+i" "move-to-scratchpad"
+    bind "Alt+z" "toggle-scratchpad"
+    bind "Super+Shift+i" "restore-scratchpad"
+    bind "Super+Ctrl+e" "toggle-named-scratchpad terminal"
+    bind "Super+Ctrl+Shift+e" "move-to-named-scratchpad terminal"
+    bind "Super+a" "toggle-named-scratchpad audio"
+    bind "Super+Shift+a" "move-to-named-scratchpad audio"
+
+    // Layout selection.
+    bind "Super+n" "switch-layout"
+    bind "Super+s" "layout-scroller"
+    bind "Super+Shift+s" "layout-vertical-scroller"
+    bind "Super+d" "layout-tile"
+    bind "Super+g" "layout-grid"
+    bind "Super+Shift+g" "layout-vertical-grid"
+    bind "Super+Ctrl+v" "layout-deck"
+    bind "Super+Ctrl+c" "layout-center-tile"
+    bind "Super+Shift+c" "layout-right-tile"
+    bind "Super+Ctrl+x" "layout-monocle"
+
+    // Scroller movement and stack surgery.
+    bind "Super+Ctrl+h" "move-column-left"
+    bind "Super+Ctrl+j" "move-window-down"
+    bind "Super+Ctrl+k" "move-window-up"
+    bind "Super+Ctrl+l" "move-column-right"
+    bind "Super+Alt+h" "move-window-left"
+    bind "Super+Alt+l" "move-window-right"
+    bind "Super+Alt+Home" "move-column-to-first"
+    bind "Super+Alt+End" "move-column-to-last"
+    bind "Super+z" "zoom"
+    bind "Super+Shift+z" "consume-window"
+    bind "Super+Ctrl+z" "expel-window"
+
+    // Groups.
+    bind "Super+y" "group-windows"
+    bind "Super+Shift+y" "ungroup-window"
+    bind "Super+Ctrl+y" "focus-next-in-group"
+
+    // Width, master, and gaps.
+    bind "Super+-" "resize-width -0.1"
+    bind "Super+=" "resize-width 0.1"
+    bind "Super+," "adjust-master-ratio -0.05"
+    bind "Super+." "adjust-master-ratio 0.05"
+    bind "Super+[" "adjust-master-count -1"
+    bind "Super+]" "adjust-master-count 1"
+    bind "Super+0" "toggle-gaps"
+    bind "Super+Shift+-" "adjust-gaps -2"
+    bind "Super+Shift+=" "adjust-gaps 2"
+
+    // Overview and shell handoff.
+    bind "Super+o" "toggle-overview"
+    bind "Super+p" "select-window"
+    bind "Super+Shift+Space" "focus-shell-ui"
+    bind "h" "focus-left" mode="overview"
+    bind "j" "focus-window-or-workspace-down" mode="overview"
+    bind "k" "focus-window-or-workspace-up" mode="overview"
+    bind "l" "focus-right" mode="overview"
+    bind "Home" "focus-column-first" mode="overview"
+    bind "End" "focus-column-last" mode="overview"
+    bind "Return" "select-window" mode="overview"
+    bind "Escape" "close-overview" mode="overview"
+
+    // Pointer operations.
+    pointer-bind "Super+left" "move"
+    pointer-bind "Super+right" "resize"
+    pointer-bind "Super+middle" "toggle-maximized"
+    pointer-bind "Super+Ctrl+right" "close-window"
+    pointer-bind "right" "close-window" mode="overview"
+}
+
+window-rule {
+    match app-id="qemu"
+    keyboard-shortcuts-inhibit #true
+}
+
+window-rule {
+    match app-id="fuzzel"
+    open-floating #true
+}
+
+window-rule {
+    match app-id="pavucontrol"
+    open-floating #true
+}
+
+window-rule {
+    match app-id="swappy"
+    open-floating #true
+}
+
+window-rule {
+    match app-id="satty"
+    open-floating #true
+}
+
+window-rule {
+    match title="^Picture-in-Picture$"
+    open-floating #true
+}

@@ -1,4 +1,27 @@
-(def target-workspace 8)
+(def default-workspace-count 3)
+
+(defn window-on-workspace? [window workspace]
+  (or (= (window :workspace-idx) (workspace :workspace-idx))
+      (= (window :tag-id) (workspace :tag-id))))
+
+(defn workspace-empty-for-window? [workspace current-id]
+  (var occupied false)
+  (each window (triad/snapshot :windows)
+    (when (and (not= (window :id) current-id)
+               (window-on-workspace? window workspace))
+      (set occupied true)))
+  (not occupied))
+
+(defn next-empty-workspace [current-id]
+  (var target 0)
+  (each workspace (triad/snapshot :workspaces)
+    (let [idx (workspace :workspace-idx)]
+      (when (and (workspace-empty-for-window? workspace current-id)
+                 (or (= target 0) (< idx target)))
+        (set target idx))))
+  (if (= target 0)
+    (+ default-workspace-count 1)
+    target))
 
 (def gimp-app-ids
   ["gimp"
@@ -28,6 +51,7 @@
    "Scale Image"
    "Save"
    "Quit"
+   "Welcome"
    "About"
    "Error"
    "Color"])
@@ -73,6 +97,21 @@
       (set found true)))
   found)
 
+(defn existing-gimp-workspace [current-id]
+  (var target 0)
+  (each window (triad/snapshot :windows)
+    (when (and (other-gimp-window? window current-id)
+               (> (window :workspace-idx) 0)
+               (or (= target 0) (< (window :workspace-idx) target)))
+      (set target (window :workspace-idx))))
+  target)
+
+(defn target-workspace [window]
+  (let [existing (existing-gimp-workspace (window :id))]
+    (if (= existing 0)
+      (next-empty-workspace (window :id))
+      existing)))
+
 (defn should-follow? [kind window]
   (or (= kind :main)
       (= kind :dialog)
@@ -88,7 +127,8 @@
 (let [window triad/current-window]
   (when (and window (gimp-app? (window :app-id)))
     (let [kind (window-kind window)
-          follow (should-follow? kind window)]
+          follow (should-follow? kind window)
+          target-workspace (target-workspace window)]
       (triad/command "move-window-to-tag" (window :id) target-workspace follow)
       (triad/command "set-layout-for-workspace" target-workspace "scroller")
       (if (= kind :main)
