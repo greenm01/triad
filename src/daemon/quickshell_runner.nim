@@ -1,4 +1,4 @@
-import std/[json, osproc, strutils]
+import std/[json, osproc, strutils, times]
 import chronicles
 import process_runner
 import ../ipc/quickshell_compat
@@ -7,6 +7,8 @@ from ../types/runtime_values import QuickshellConfig
 import ../utils/behavior_log
 
 type
+  QuickshellRecoveryDelay* = array[3, int64]
+
   QuickshellSpawnStatus* {.pure.} = enum
     Skipped
     Running
@@ -16,9 +18,29 @@ type
   QuickshellRunner* = object
     trackedProcess*: Process
     spawnPending*: bool
+    recoveryPending*: bool
+    recoveryAttempts*: int
+    nextRecoveryMs*: int64
+    recoveryReason*: string
 
-proc succeeded(status: QuickshellSpawnStatus): bool =
+const
+  MaxQuickshellRecoveryAttempts* = 3
+  QuickshellRecoveryDelaysMs*: QuickshellRecoveryDelay = [500'i64, 1000, 2000]
+
+proc succeeded*(status: QuickshellSpawnStatus): bool =
   status == QuickshellSpawnStatus.Running
+
+proc currentUnixMs(): int64 =
+  int64(epochTime() * 1000.0)
+
+proc recoveryDelayMs(attempts: int): int64 =
+  QuickshellRecoveryDelaysMs[min(attempts, QuickshellRecoveryDelaysMs.high)]
+
+proc clearQuickshellRecovery*(runner: var QuickshellRunner) =
+  runner.recoveryPending = false
+  runner.recoveryAttempts = 0
+  runner.nextRecoveryMs = 0
+  runner.recoveryReason = ""
 
 proc trackedQuickshellRunning*(runner: var QuickshellRunner): bool =
   if runner.trackedProcess == nil:
@@ -60,6 +82,33 @@ proc writeQuickshellBehaviorEvent*(
     eventName: string, config: QuickshellConfig, reason: string, extra: JsonNode = nil
 ) =
   writeBehaviorEvent(eventName, quickshellBehaviorPayload(config, reason, extra))
+
+proc scheduleQuickshellRecovery*(
+    runner: var QuickshellRunner,
+    model: Model,
+    reason: string,
+    status: QuickshellSpawnStatus,
+    nowMs = currentUnixMs(),
+) =
+  if not model.quickshell.enabled or model.quickshell.theme.strip().len == 0:
+    runner.clearQuickshellRecovery()
+    return
+
+  runner.recoveryPending = true
+  runner.recoveryAttempts = 0
+  runner.nextRecoveryMs = nowMs + runner.recoveryAttempts.recoveryDelayMs()
+  runner.recoveryReason = reason
+  writeQuickshellBehaviorEvent(
+    "quickshell_recovery_scheduled",
+    model.quickshell,
+    reason,
+    %*{
+      "status": $status,
+      "attempt": runner.recoveryAttempts,
+      "next_recovery_ms": runner.nextRecoveryMs,
+      "delay_ms": runner.recoveryAttempts.recoveryDelayMs(),
+    },
+  )
 
 proc stopTrackedQuickshell*(runner: var QuickshellRunner, reason: string) =
   if runner.trackedProcess == nil:
@@ -202,6 +251,7 @@ proc stopQuickshell*(
   )
   runner.stopTrackedQuickshell(reason)
   if authoritative:
+    runner.clearQuickshellRecovery()
     model.stopConfiguredQuickshell(reason)
 
 proc spawnQuickshell*(
@@ -304,7 +354,87 @@ proc restartQuickshell*(
     runner: var QuickshellRunner, model: Model, niriSocketPath, reason: string
 ) =
   runner.stopQuickshell(model, reason, authoritative = true)
-  discard runner.spawnQuickshell(model, niriSocketPath, reason)
+  let status = runner.spawnQuickshell(model, niriSocketPath, reason)
+  if not status.succeeded():
+    runner.scheduleQuickshellRecovery(model, reason, status)
+
+proc pollQuickshellRecovery*(
+    runner: var QuickshellRunner,
+    model: Model,
+    niriSocketPath: string,
+    nowMs = currentUnixMs(),
+): bool =
+  if not model.quickshell.enabled or model.quickshell.theme.strip().len == 0:
+    runner.clearQuickshellRecovery()
+    return false
+  if runner.trackedQuickshellRunning():
+    if runner.recoveryPending:
+      writeQuickshellBehaviorEvent(
+        "quickshell_recovery_succeeded",
+        model.quickshell,
+        runner.recoveryReason,
+        %*{"attempt": runner.recoveryAttempts, "already_running": true},
+      )
+    runner.clearQuickshellRecovery()
+    return false
+  if not runner.recoveryPending or nowMs < runner.nextRecoveryMs:
+    return false
+
+  if runner.recoveryAttempts >= MaxQuickshellRecoveryAttempts:
+    writeQuickshellBehaviorEvent(
+      "quickshell_recovery_exhausted",
+      model.quickshell,
+      runner.recoveryReason,
+      %*{"attempts": runner.recoveryAttempts},
+    )
+    runner.clearQuickshellRecovery()
+    return false
+
+  inc runner.recoveryAttempts
+  let attemptReason =
+    runner.recoveryReason & " recovery attempt " & $runner.recoveryAttempts
+  writeQuickshellBehaviorEvent(
+    "quickshell_recovery_attempt",
+    model.quickshell,
+    runner.recoveryReason,
+    %*{"attempt": runner.recoveryAttempts, "attempt_reason": attemptReason},
+  )
+  model.stopConfiguredQuickshell(attemptReason)
+  let status = runner.spawnQuickshell(model, niriSocketPath, attemptReason)
+  result = true
+  if status.succeeded():
+    writeQuickshellBehaviorEvent(
+      "quickshell_recovery_succeeded",
+      model.quickshell,
+      runner.recoveryReason,
+      %*{"attempt": runner.recoveryAttempts, "status": $status},
+    )
+    runner.clearQuickshellRecovery()
+    return
+
+  if runner.recoveryAttempts >= MaxQuickshellRecoveryAttempts:
+    writeQuickshellBehaviorEvent(
+      "quickshell_recovery_exhausted",
+      model.quickshell,
+      runner.recoveryReason,
+      %*{"attempts": runner.recoveryAttempts, "status": $status},
+    )
+    runner.clearQuickshellRecovery()
+    return
+
+  let delayMs = runner.recoveryAttempts.recoveryDelayMs()
+  runner.nextRecoveryMs = nowMs + delayMs
+  writeQuickshellBehaviorEvent(
+    "quickshell_recovery_rescheduled",
+    model.quickshell,
+    runner.recoveryReason,
+    %*{
+      "attempt": runner.recoveryAttempts,
+      "status": $status,
+      "next_recovery_ms": runner.nextRecoveryMs,
+      "delay_ms": delayMs,
+    },
+  )
 
 proc scheduleQuickshellSpawn*(runner: var QuickshellRunner, model: Model) =
   runner.spawnPending =
@@ -324,12 +454,16 @@ proc spawnPendingQuickshell*(
   of QuickshellReloadAction.Noop:
     discard
   of QuickshellReloadAction.SpawnOnly:
-    if not runner.spawnQuickshell(model, niriSocketPath, reason).succeeded():
+    let status = runner.spawnQuickshell(model, niriSocketPath, reason)
+    if not status.succeeded():
       writeQuickshellBehaviorEvent(
         "quickshell_startup_restart_required", model.quickshell, reason
       )
       model.stopConfiguredQuickshell(reason & " stale instance")
-      discard runner.spawnQuickshell(model, niriSocketPath, reason & " restart")
+      let restartStatus =
+        runner.spawnQuickshell(model, niriSocketPath, reason & " restart")
+      if not restartStatus.succeeded():
+        runner.scheduleQuickshellRecovery(model, reason & " restart", restartStatus)
   of QuickshellReloadAction.AuthoritativeStop:
     runner.stopQuickshell(model, reason, authoritative = true)
   of QuickshellReloadAction.AuthoritativeRestart:

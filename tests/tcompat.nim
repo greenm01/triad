@@ -95,6 +95,35 @@ proc handleNiriRequest(line: string, snapshot: ShellSnapshot): NiriIpcResult =
 proc handleTriadRequest(line: string, snapshot: ShellSnapshot): TriadIpcResult =
   triad_native.handleTriadRequest(line, snapshot)
 
+proc writeFakeRecoveringQs(
+    tmp: string
+): tuple[fakeQs: string, logPath: string, statePath: string] =
+  result.fakeQs = tmp / "qs"
+  result.logPath = tmp / "calls.log"
+  result.statePath = tmp / "state"
+  writeFile(
+    result.fakeQs,
+    """
+#!/bin/sh
+printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
+if [ "$1" = "kill" ]; then
+  exit 0
+fi
+count=0
+if [ -f "$TRIAD_FAKE_QS_STATE" ]; then
+  count="$(cat "$TRIAD_FAKE_QS_STATE")"
+fi
+count=$((count + 1))
+printf '%s\n' "$count" > "$TRIAD_FAKE_QS_STATE"
+handoffs="${TRIAD_FAKE_QS_HANDOFFS:-0}"
+if [ "$count" -le "$handoffs" ]; then
+  exit 0
+fi
+sleep 30
+""",
+  )
+  setFilePermissions(result.fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
+
 suite "Shell compatibility contracts":
   setup:
     installAppIdentityFixture()
@@ -489,6 +518,136 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
     check calls.contains("-c noctalia-shell")
     check calls.contains("kill -c noctalia-shell --any-display")
     check calls.count("-c noctalia-shell") >= 2
+
+  test "Quickshell double handoff schedules recovery until tracked":
+    let tmp = getTempDir() / ("triad-qs-recovery-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = writeFakeRecoveringQs(tmp)
+
+    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_QS_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_QS_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_QS_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_QS_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_QS_HANDOFFS", "2")
+    defer:
+      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
+      putEnv("TRIAD_FAKE_QS_STATE", oldState)
+      putEnv("TRIAD_FAKE_QS_HANDOFFS", oldHandoffs)
+
+    let config =
+      QuickshellConfig(enabled: true, command: fake.fakeQs, theme: "noctalia-shell")
+    var runner = QuickshellRunner(spawnPending: true)
+    let model = Model(quickshell: config)
+    defer:
+      runner.stopTrackedQuickshell("test cleanup")
+
+    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+
+    check runner.recoveryPending
+    check runner.recoveryAttempts == 0
+    check readFile(fake.statePath).strip() == "2"
+
+    runner.nextRecoveryMs = 0
+    check runner.pollQuickshellRecovery(model, tmp / "niri.sock", 0)
+    check not runner.recoveryPending
+    check runner.trackedQuickshellRunning()
+    check readFile(fake.statePath).strip() == "3"
+
+    let calls = readFile(fake.logPath)
+    check calls.count("kill -c noctalia-shell --any-display") >= 2
+
+  test "Quickshell recovery exhausts repeated handoffs":
+    let tmp = getTempDir() / ("triad-qs-recovery-exhaust-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = writeFakeRecoveringQs(tmp)
+
+    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_QS_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_QS_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_QS_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_QS_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_QS_HANDOFFS", "99")
+    defer:
+      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
+      putEnv("TRIAD_FAKE_QS_STATE", oldState)
+      putEnv("TRIAD_FAKE_QS_HANDOFFS", oldHandoffs)
+
+    let config =
+      QuickshellConfig(enabled: true, command: fake.fakeQs, theme: "noctalia-shell")
+    var runner = QuickshellRunner(spawnPending: true)
+    let model = Model(quickshell: config)
+
+    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+    check runner.recoveryPending
+
+    for attempt in 1 .. MaxQuickshellRecoveryAttempts:
+      runner.nextRecoveryMs = 0
+      check runner.pollQuickshellRecovery(model, tmp / "niri.sock", 0)
+      if attempt < MaxQuickshellRecoveryAttempts:
+        check runner.recoveryPending
+        check runner.recoveryAttempts == attempt
+      else:
+        check not runner.recoveryPending
+
+    check readFile(fake.statePath).strip() == "5"
+    let calls = readFile(fake.logPath)
+    check calls.count("kill -c noctalia-shell --any-display") >= 4
+
+  test "Quickshell config reload handoff schedules recovery":
+    let tmp = getTempDir() / ("triad-qs-config-recovery-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = writeFakeRecoveringQs(tmp)
+
+    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_QS_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_QS_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_QS_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_QS_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_QS_HANDOFFS", "1")
+    defer:
+      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
+      putEnv("TRIAD_FAKE_QS_STATE", oldState)
+      putEnv("TRIAD_FAKE_QS_HANDOFFS", oldHandoffs)
+
+    let config =
+      QuickshellConfig(enabled: true, command: fake.fakeQs, theme: "noctalia-shell")
+    var runner = QuickshellRunner()
+    let model = Model(quickshell: config)
+    defer:
+      runner.stopTrackedQuickshell("test cleanup")
+
+    let status =
+      runner.spawnQuickshell(model, tmp / "niri.sock", "config reload recovery")
+    check status == QuickshellSpawnStatus.Handoff
+
+    runner.scheduleQuickshellRecovery(model, "config reload recovery", status, 1000)
+    check runner.recoveryPending
+    check runner.nextRecoveryMs == 1500
+
+    runner.nextRecoveryMs = 0
+    check runner.pollQuickshellRecovery(model, tmp / "niri.sock", 0)
+    check not runner.recoveryPending
+    check runner.trackedQuickshellRunning()
+    check readFile(fake.statePath).strip() == "2"
 
   test "Quickshell failed spawn kills stale configured shell":
     let tmp = getTempDir() / ("triad-qs-failed-" & $getCurrentProcessId())

@@ -409,6 +409,9 @@ proc main*() =
       daemon.quickshellState.spawnPendingQuickshell(
         daemon.runtimeState.model, niriSocketPath, "initial manage"
       )
+      discard daemon.quickshellState.pollQuickshellRecovery(
+        daemon.runtimeState.model, niriSocketPath, int64(epochTime() * 1000.0)
+      )
 
     daemon.flushManageRequest()
 

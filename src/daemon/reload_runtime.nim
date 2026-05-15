@@ -230,9 +230,13 @@ proc applyConfigReload*(
         "quickshell_config_reload_recovery", daemon.runtimeState.model.quickshell,
         "config reload",
       )
-      discard daemon.quickshellState.spawnQuickshell(
+      let status = daemon.quickshellState.spawnQuickshell(
         daemon.runtimeState.model, niriSocketPath, "config reload recovery"
       )
+      if not status.succeeded():
+        daemon.quickshellState.scheduleQuickshellRecovery(
+          daemon.runtimeState.model, "config reload recovery", status
+        )
   of QuickshellReloadAction.SpawnOnly:
     discard
   of QuickshellReloadAction.AuthoritativeStop:
@@ -243,9 +247,13 @@ proc applyConfigReload*(
     daemon.quickshellState.stopQuickshell(
       previousModel, "config reload", authoritative = true
     )
-    discard daemon.quickshellState.spawnQuickshell(
+    let status = daemon.quickshellState.spawnQuickshell(
       daemon.runtimeState.model, niriSocketPath, "config reload"
     )
+    if not status.succeeded():
+      daemon.quickshellState.scheduleQuickshellRecovery(
+        daemon.runtimeState.model, "config reload", status
+      )
 
   daemon.requestBindingReconfigure("config reload")
   daemon.configWatchPaths = loaded.configPaths
