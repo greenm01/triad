@@ -71,6 +71,8 @@ proc nextTag(snapshot: ShellSnapshot, direction: int): Option[uint32] =
   some(ids[^1])
 
 proc focusedWindow(snapshot: ShellSnapshot): WindowId =
+  if snapshot.activeScratchpadWindow != 0'u32:
+    return snapshot.activeScratchpadWindow
   for workspace in snapshot.workspaces:
     if workspace.isActive and workspace.focusedWindow != 0:
       return workspace.focusedWindow

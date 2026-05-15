@@ -152,6 +152,44 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check model.focusedWindowId() == 1
     check effects.hasFocusEffect(1)
 
+  test "Manage start keeps compositor focus on visible scratchpad":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    discard model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlManageStart))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    check not effects.hasFocusEffect(1)
+    model.requireTagShellSemantics("scratchpad manage focus scenario")
+
+  test "Clicking visible scratchpad reasserts compositor focus":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+    discard model.updateModel(Msg(kind: MsgKind.CmdToggleScratchpad))
+
+    let effects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    check model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check effects.hasFocusEffect(2)
+    model.requireTagShellSemantics("scratchpad click focus scenario")
+
   test "Window rule opens named scratchpad hidden until toggled":
     var model = initRuntimeStateFromConfig(
       Config(

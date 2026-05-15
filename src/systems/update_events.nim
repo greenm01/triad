@@ -35,7 +35,12 @@ proc setExternalFocus(model: var Model, externalId: ExternalWindowId): bool =
 proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
   case msg.kind
   of MsgKind.WlManageStart:
-    let focused = model.focusedOnActiveTag()
+    let scratchpad = model.activeScratchpadWindow()
+    let focused =
+      if scratchpad != NullWindowId:
+        scratchpad
+      else:
+        model.focusedOnActiveTag()
     if focused != NullWindowId:
       discard model.recordWorkspace(model.activeTag)
       discard model.recordFocus(focused)

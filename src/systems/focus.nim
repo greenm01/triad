@@ -128,6 +128,11 @@ proc focusExternalWindow*(
     model: var Model, externalId: ExternalWindowId, restorePopupTree = true
 ): bool =
   let winId = model.windowForExternal(externalId)
+  if winId != NullWindowId and winId == model.activeScratchpadWindow():
+    discard model.setWindowMinimized(winId, false)
+    discard model.recordFocus(winId)
+    discard model.clearPendingDialogFocus(winId)
+    return true
   winId != NullWindowId and model.focusWindow(
     winId, restorePopupTree = restorePopupTree
   )

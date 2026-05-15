@@ -498,6 +498,9 @@ proc addPostUpdateEffects*(
   elif dirty and beforeFocus == afterFocus and
       msg.kind.shouldReassertFocusedWindow(before, after):
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
+  elif msg.kind == MsgKind.CmdFocusWindowById and msg.focusWindowId == afterFocus and
+      afterFocus != 0:
+    effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
   elif (
     msg.kind in {MsgKind.CmdCloseOverview, MsgKind.CmdSelectWindow} or (
       msg.kind == MsgKind.WlModifiersChanged and before.overviewActive and
