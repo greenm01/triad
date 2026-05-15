@@ -17,6 +17,7 @@ proc moveFocusedToScratchpad*(model: var Model, name = ""): bool =
   let restoreMask = model.windowTagMask(focused)
   discard model.setWindowSticky(focused, false)
   discard model.removeWindowFromAllTagsAndRefreshFocus(focused)
+  discard model.sourceWorkspaceFallbackFocus(activeTag)
   discard model.addScratchpadRef(focused)
   discard model.recordScratchpadRestoreTags(focused, restoreMask)
   let scratchpadName = name.strip()

@@ -45,7 +45,7 @@ proc addPlacedWindowColumn*(
     model.insertColumn(tagId, index, width, isFullWidth, scrollerSingleProportion)
   discard model.moveWindowToColumn(tagId, winId, result, 0)
 
-proc sourceWorkspaceFallbackFocus(model: var Model, tagId: TagId): WindowId =
+proc sourceWorkspaceFallbackFocus*(model: var Model, tagId: TagId): WindowId =
   if tagId == NullTagId:
     return NullWindowId
   if model.focusMostRecentWindowOnTag(tagId):

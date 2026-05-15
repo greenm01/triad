@@ -191,6 +191,31 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check model.focusedWindowId() == 1
     check effects.hasFocusEffect(1)
 
+  test "Move to scratchpad focuses last workspace-local focus":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Two")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "term", title: "Three")
+    )
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+    discard model.updateModel(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
+
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdMoveToScratchpad))
+
+    check not model.scratchpadVisible()
+    check model.focusedWindowId() == 2
+    check model.activeWorkspaceFocusId() == 2
+    check effects.hasFocusEffect(2)
+    check model.placementForWindowOnTag(model.tagForSlot(2), WindowId(3)).isNone
+    model.requireTagShellSemantics("scratchpad move fallback focus scenario")
+
   test "Standard scratchpad toggle skips hidden named scratchpads":
     var model = configuredModel()
     model.applyMsg(
