@@ -176,6 +176,21 @@
               export TRIAD_MANAGER_LOOP="''${TRIAD_MANAGER_LOOP:-${managerLoop}/bin/triad-manager-loop}"
               export TRIAD_RIVER_BIN="''${TRIAD_RIVER_BIN:-${pkgs.river}/bin/river}"
 
+              find_dbus_run_session() {
+                for candidate in \
+                  /usr/bin/dbus-run-session \
+                  /bin/dbus-run-session \
+                  /usr/sbin/dbus-run-session \
+                  /sbin/dbus-run-session; do
+                  if [ -x "$candidate" ]; then
+                    printf '%s\n' "$candidate"
+                    return 0
+                  fi
+                done
+
+                command -v dbus-run-session 2>/dev/null || true
+              }
+
               case "''${TRIAD_SESSION_DEV_MODE:-}" in
                 1|true|TRUE|yes|YES|on|ON)
                   export TRIAD_DEV_MODE=1
@@ -192,11 +207,11 @@
               printf '%s\n' "river-triad-session: WAYLAND_DISPLAY=''${WAYLAND_DISPLAY:-}"
               printf '%s\n' "river-triad-session: river=$TRIAD_RIVER_BIN"
               printf '%s\n' "river-triad-session: manager=$TRIAD_MANAGER_LOOP"
+              dbus_runner="$(find_dbus_run_session)"
 
-              if [ -z "''${DBUS_SESSION_BUS_ADDRESS:-}" ] &&
-                command -v dbus-run-session >/dev/null 2>&1; then
-                printf '%s\n' "river-triad-session: starting River through dbus-run-session"
-                exec dbus-run-session -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+              if [ -z "''${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "$dbus_runner" ]; then
+                printf '%s\n' "river-triad-session: starting River through $dbus_runner"
+                exec "$dbus_runner" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
               fi
 
               printf '%s\n' "river-triad-session: starting River directly"
