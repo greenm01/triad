@@ -66,7 +66,8 @@ proc updateWindowAppIdForExternal*(
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
-  discard model.setWindowAppId(winId, appId)
+  if not model.setWindowAppId(winId, appId):
+    return false
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     discard model.setWindowKeyboardShortcutsInhibit(
@@ -81,7 +82,8 @@ proc updateWindowTitleForExternal*(
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
-  discard model.setWindowTitle(winId, title)
+  if not model.setWindowTitle(winId, title):
+    return false
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
     discard model.setWindowKeyboardShortcutsInhibit(
@@ -89,6 +91,23 @@ proc updateWindowTitleForExternal*(
     )
     discard model.applyWindowRuleBounds(winId)
   true
+
+proc updateWindowTitleForExternalDetailed*(
+    model: var Model, externalId: ExternalWindowId, title: string
+): tuple[dirty: bool, manageDirty: bool] =
+  let winId = model.windowForExternal(externalId)
+  if winId == NullWindowId:
+    return
+  if not model.setWindowTitle(winId, title):
+    return
+  result.dirty = true
+  let winOpt = model.windowData(winId)
+  if winOpt.isSome:
+    result.manageDirty =
+      model.setWindowKeyboardShortcutsInhibit(
+        winId, model.windowKeyboardShortcutsInhibit(winOpt.get()), false
+      ) or result.manageDirty
+    result.manageDirty = model.applyWindowRuleBounds(winId) or result.manageDirty
 
 proc updateWindowDimensionsHintForExternal*(
     model: var Model,

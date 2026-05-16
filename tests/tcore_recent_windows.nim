@@ -50,6 +50,15 @@ proc backgroundOpenedRecentModel(): Model =
   )
 
 suite "Core Runtime Logic: recent windows":
+  test "stale pending recent focus clears on tick":
+    var model = recentModel(debounceMs = 1)
+    model.pendingRecentFocusWindow = WindowId(99)
+    model.pendingRecentFocusElapsedMs = 1
+
+    check not model.tickRecentWindows(1)
+    check model.pendingRecentFocusWindow == NullWindowId
+    check model.pendingRecentFocusElapsedMs == 0
+
   test "recent-window-next opens on the previous MRU window and confirms on modifier release":
     var model = recentModel()
     model.seedCameraWindows(3)
@@ -129,6 +138,29 @@ suite "Core Runtime Logic: recent windows":
     check model.recentWindowHistory[^1] == WindowId(3)
     discard model.updateModel(Msg(kind: MsgKind.CmdTick, tickElapsedMs: 1))
     check model.recentWindowHistory[^1] == WindowId(1)
+
+  test "duplicate pending recent focus does not reset debounce":
+    var model = recentModel(debounceMs = 750)
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick, tickElapsedMs: 400))
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick, tickElapsedMs: 350))
+
+    check model.recentWindowHistory[^1] == WindowId(1)
+    check model.pendingRecentFocusWindow == NullWindowId
+
+  test "duplicate committed recent focus does not arm debounce":
+    var model = recentModel(debounceMs = 750)
+    model.seedCameraWindows(3)
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick, tickElapsedMs: 750))
+
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 1))
+
+    check model.recentWindowHistory[^1] == WindowId(1)
+    check model.pendingRecentFocusWindow == NullWindowId
 
   test "recent-window scope can restrict candidates to active workspace":
     var model = recentModel()

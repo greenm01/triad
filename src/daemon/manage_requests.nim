@@ -1,3 +1,4 @@
+import std/tables
 import chronicles
 import protocols/river/client as river
 import state
@@ -5,6 +6,8 @@ import state
 proc requestManage*(daemon: var TriadDaemon, reason: string) =
   if daemon.riverManager == nil:
     return
+  daemon.manageRequestReasonCounts[reason] =
+    daemon.manageRequestReasonCounts.getOrDefault(reason, 0'u64) + 1'u64
   if daemon.manageRequestPending:
     trace "Coalescing River manage request",
       reason = reason, pendingReason = daemon.manageRequestReason
@@ -21,4 +24,5 @@ proc flushManageRequest*(daemon: var TriadDaemon) =
   daemon.manageRequestPending = false
   daemon.manageRequestReason = ""
   trace "Requesting River manage sequence", reason = reason
+  inc daemon.perfCounters.manageRequests
   daemon.riverManager.manageDirty()

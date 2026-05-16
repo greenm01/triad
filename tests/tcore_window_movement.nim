@@ -56,6 +56,31 @@ suite "Core Runtime Logic: window movement":
     check viewport.currentViewportYOffset == 50.0'f32
     check not model.tickAnimations()
 
+  test "Frame ticks are only demanded for active timed work":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          enableAnimations: true, animationSpeed: 0.0, animationSnapThreshold: 0.5
+        ),
+        layoutSwitchToast: LayoutSwitchToastConfig(enabled: true, timeoutMs: 16),
+        workspaces: WorkspaceConfig(defaultCount: 1),
+      )
+    ).model
+
+    check not model.needsFrameTick()
+
+    model.setViewport(1, targetX = 100.0, currentX = 0.0)
+    check model.hasPendingViewportAnimation()
+    check model.needsFrameTick()
+    check model.tickAnimations()
+    check not model.hasPendingViewportAnimation()
+    check not model.needsFrameTick()
+
+    check model.openLayoutSwitchToast(LayoutMode.Deck)
+    check model.needsFrameTick()
+    check model.tickLayoutSwitchToast(16)
+    check not model.needsFrameTick()
+
   test "Switching to non-scroller layout clears stale viewport offset":
     var baseline = cameraModel()
     baseline.seedCameraWindows(4)

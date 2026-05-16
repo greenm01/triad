@@ -13,6 +13,8 @@ Triad intentionally does not package River for non-NixOS systems. River owns
 the compositor process and the GPU/session boundary, so install and validate it
 as a normal host component before installing Triad. After River is installed,
 `river -version` must report 0.4 or newer.
+For daily use, build River with the upstream release-optimized install command
+rather than running an unoptimized development binary.
 
 Install Triad's local build requirements:
 

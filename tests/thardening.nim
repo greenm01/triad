@@ -419,7 +419,7 @@ suite "Crash hardening":
 
     daemon.handleXkbBindingPressed(1'u32)
 
-    check not daemon.hotkeyOverlayKeyEatArmed
+    check daemon.hotkeyOverlayKeyEatArmed
     check daemon.hasQueuedMessages()
     let dismissMsg = daemon.popQueuedMessage()
     check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
@@ -450,7 +450,7 @@ suite "Crash hardening":
     daemon.handleXkbSeatAteUnboundKey(7'u32)
 
     check daemon.xkbSeatAteUnbound.getOrDefault(7'u32, 0'u32) == 1'u32
-    check not daemon.hotkeyOverlayKeyEatArmed
+    check daemon.hotkeyOverlayKeyEatArmed
     check daemon.hasQueuedMessages()
     let dismissMsg = daemon.popQueuedMessage()
     check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay

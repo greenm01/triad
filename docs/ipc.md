@@ -57,6 +57,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
     developer diagnostics mode. `on` enables behavior JSONL logging for the
     live process, `off` disables it, `toggle` flips the current state, and no
     argument is equivalent to `status`.
+*   `perf-status`: Prints daemon frame pacing and render request counters as
+    JSON for live CPU investigations.
 *   `show-hotkey-overlay`, `hide-hotkey-overlay`, `toggle-hotkey-overlay`:
     Opens, closes, or toggles Triad's native keyboard helper popup.
 
@@ -127,6 +129,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `triad-reload`: Writes a live-restore snapshot and stops the active River
     manager so the normal session restart path can start a replacement.
 *   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus history, sizing, and window state.
+*   `perf-status`: Prints frame-rate selection, whether a frame tick is
+    currently active, and cumulative render/manage counters.
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
 *   `exit-session`: Opens a confirmation dialog, then sends `river_window_manager_v1.exit_session` after Enter only when `allow-exit-session #true` is configured.
     Niri-compatible `Quit` maps to this command, and `Quit` with

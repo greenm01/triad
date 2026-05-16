@@ -22,6 +22,11 @@ proc touchRecentWindow(
   true
 
 proc commitRecentFocus*(model: var Model, winId: WindowId): bool =
+  if winId == NullWindowId or model.windows.entity(winId).isNone:
+    if model.pendingRecentFocusWindow == winId:
+      model.pendingRecentFocusWindow = NullWindowId
+      model.pendingRecentFocusElapsedMs = 0
+    return false
   model.touchRecentWindow(winId, clearPendingFocus = true)
 
 proc recordRecentWindowOpen*(model: var Model, winId: WindowId): bool =
@@ -29,6 +34,10 @@ proc recordRecentWindowOpen*(model: var Model, winId: WindowId): bool =
 
 proc scheduleRecentFocus(model: var Model, winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
+    return false
+  if model.pendingRecentFocusWindow == winId:
+    return false
+  if model.recentWindowHistory.len > 0 and model.recentWindowHistory[^1] == winId:
     return false
   if model.recentWindowHistory.find(winId) == -1 or model.recentWindows.debounceMs <= 0:
     return model.commitRecentFocus(winId)
@@ -39,6 +48,8 @@ proc scheduleRecentFocus(model: var Model, winId: WindowId): bool =
 proc recordFocus*(model: var Model, winId: WindowId): bool =
   if winId == NullWindowId or model.windows.entity(winId).isNone:
     return false
+  if model.focusHistory.len > 0 and model.focusHistory[^1] == winId:
+    return model.scheduleRecentFocus(winId)
   model.focusHistory.keepIf(
     proc(id: WindowId): bool =
       id != winId
@@ -51,6 +62,8 @@ proc recordFocus*(model: var Model, winId: WindowId): bool =
 
 proc recordWorkspace*(model: var Model, tagId: TagId): bool =
   if tagId == NullTagId or model.tags.entity(tagId).isNone:
+    return false
+  if model.workspaceHistory.len > 0 and model.workspaceHistory[^1] == tagId:
     return false
   model.workspaceHistory.keepIf(
     proc(id: TagId): bool =

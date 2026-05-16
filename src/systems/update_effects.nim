@@ -367,6 +367,9 @@ proc addMaximizedPresentationEffect(
     return
   effects.addSetMaximizedEffect(win.id, present)
 
+proc shouldRequestManageDirty(kind: MsgKind): bool =
+  kind != MsgKind.WlWindowTitle
+
 proc fullscreenWindow(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
   let win = snapshot.windowById(winId)
   if win.isSome and win.get().isFullscreen:
@@ -523,7 +526,10 @@ proc addPostUpdateEffects*(
   effects.addFullscreenPresentationSync(msg, before, after)
   effects.addMaximizedPresentationSync(msg, before, after)
 
-  if msg.kind in {MsgKind.WlWindowCreated, MsgKind.WlWindowAppId, MsgKind.WlWindowTitle}:
+  if dirty and
+      msg.kind in {
+        MsgKind.WlWindowCreated, MsgKind.WlWindowAppId, MsgKind.WlWindowTitle
+      }:
     let openedId =
       case msg.kind
       of MsgKind.WlWindowCreated: msg.windowId
@@ -534,7 +540,8 @@ proc addPostUpdateEffects*(
     if effect.kind != EffectKind.EffNone:
       effects.add(effect)
 
-  if dirty and not effects.hasEffect(EffectKind.EffManageDirty):
+  if dirty and msg.kind.shouldRequestManageDirty() and
+      not effects.hasEffect(EffectKind.EffManageDirty):
     effects.add(Effect(kind: EffectKind.EffManageDirty))
 
   if dirty or collapsed or pruned:

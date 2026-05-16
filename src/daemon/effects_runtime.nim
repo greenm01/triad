@@ -52,6 +52,12 @@ proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
       daemon.windowPointers[eff.resizeLifecycleWinId].informResizeEnd()
   of EffectKind.EffSetFullscreen:
     if daemon.windowPointers.hasKey(eff.fsWinId):
+      let nextState =
+        FullscreenRequestState(active: eff.isFullscreen, outputId: eff.fsOutputId)
+      if daemon.lastFullscreenRequests.hasKey(eff.fsWinId) and
+          daemon.lastFullscreenRequests[eff.fsWinId] == nextState:
+        return
+      daemon.lastFullscreenRequests[eff.fsWinId] = nextState
       let win = daemon.windowPointers[eff.fsWinId]
       if eff.isFullscreen:
         var output: ptr RiverOutputV1 = nil
@@ -73,6 +79,10 @@ proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
         win.informNotFullscreen()
   of EffectKind.EffSetMaximized:
     if daemon.windowPointers.hasKey(eff.maxWinId):
+      if daemon.lastMaximizedRequests.hasKey(eff.maxWinId) and
+          daemon.lastMaximizedRequests[eff.maxWinId] == eff.isMaximized:
+        return
+      daemon.lastMaximizedRequests[eff.maxWinId] = eff.isMaximized
       daemon.expectMaximizedAck(eff.maxWinId, eff.isMaximized)
       if eff.isMaximized:
         daemon.windowPointers[eff.maxWinId].informMaximized()
@@ -90,6 +100,16 @@ proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
     discard
 
 proc queueManageEffect*(daemon: var TriadDaemon, eff: Effect) =
+  if eff.kind == EffectKind.EffSetFullscreen:
+    let nextState =
+      FullscreenRequestState(active: eff.isFullscreen, outputId: eff.fsOutputId)
+    if daemon.lastFullscreenRequests.hasKey(eff.fsWinId) and
+        daemon.lastFullscreenRequests[eff.fsWinId] == nextState:
+      return
+  if eff.kind == EffectKind.EffSetMaximized:
+    if daemon.lastMaximizedRequests.hasKey(eff.maxWinId) and
+        daemon.lastMaximizedRequests[eff.maxWinId] == eff.isMaximized:
+      return
   if daemon.riverPhase == RiverPhase.RiverManage:
     daemon.executeManageEffect(eff)
   else:

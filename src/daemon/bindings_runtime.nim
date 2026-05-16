@@ -353,14 +353,12 @@ proc liveXkbBindingActive(daemon: TriadDaemon, id: uint32): bool =
 proc enqueueHotkeyOverlayDismiss(daemon: var TriadDaemon): bool =
   if not daemon.currentModel.hotkeyOverlayOpen:
     return false
-  daemon.hotkeyOverlayKeyEatArmed = false
   daemon.enqueue(Msg(kind: MsgKind.CmdHideHotkeyOverlay))
   true
 
 proc enqueueExitSessionConfirmDismiss(daemon: var TriadDaemon): bool =
   if not daemon.currentModel.exitSessionConfirmOpen:
     return false
-  daemon.hotkeyOverlayKeyEatArmed = false
   daemon.enqueue(Msg(kind: MsgKind.CmdDismissExitSessionConfirm))
   true
 
@@ -375,7 +373,6 @@ proc handleXkbBindingPressed*(daemon: var TriadDaemon, id: uint32) =
   daemon.xkbBindingPressed[id] = true
   daemon.xkbBindingReleaseArmed[id] = false
   if daemon.currentModel.exitSessionConfirmOpen:
-    daemon.hotkeyOverlayKeyEatArmed = false
     if daemon.xkbBindings.hasKey(id) and
         daemon.xkbBindings[id].kind == MsgKind.CmdConfirmExitSession:
       daemon.enqueue(daemon.xkbBindings[id])
@@ -409,9 +406,10 @@ proc handleXkbSeatAteUnboundKey*(daemon: var TriadDaemon, id: uint32) =
 
 proc syncHotkeyOverlayKeyCapture*(daemon: var TriadDaemon) =
   if daemon.currentModel.hotkeyOverlayOpen or daemon.currentModel.exitSessionConfirmOpen:
-    for xkbSeat in daemon.xkbSeatPointers.values:
-      xkbSeat.ensureNextKeyEaten()
-    daemon.hotkeyOverlayKeyEatArmed = true
+    if not daemon.hotkeyOverlayKeyEatArmed:
+      for xkbSeat in daemon.xkbSeatPointers.values:
+        xkbSeat.ensureNextKeyEaten()
+      daemon.hotkeyOverlayKeyEatArmed = true
   elif daemon.hotkeyOverlayKeyEatArmed:
     for xkbSeat in daemon.xkbSeatPointers.values:
       xkbSeat.cancelEnsureNextKeyEaten()
@@ -1477,6 +1475,12 @@ proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   daemon.xkbSeatPointers[seatId] = xkbSeat
   discard xkbSeat.addListener(xkbSeatListener.addr, daemonData(daemon))
   xkbSeat.modifiersWatch(AllWatchedModifiers)
+  if daemon.hotkeyOverlayKeyEatArmed and
+      (
+        daemon.currentModel.hotkeyOverlayOpen or
+        daemon.currentModel.exitSessionConfirmOpen
+      ):
+    xkbSeat.ensureNextKeyEaten()
 
 proc destroyBindings*(daemon: var TriadDaemon) =
   for binding in daemon.xkbBindingPointers:

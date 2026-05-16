@@ -132,9 +132,12 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       msg.appIdWindowId.externalWindowId(), msg.updatedAppId
     )
   of MsgKind.WlWindowTitle:
-    result.dirty = model.updateWindowTitleForExternal(
+    let titleUpdate = model.updateWindowTitleForExternalDetailed(
       msg.titleWindowId.externalWindowId(), msg.updatedTitle
     )
+    result.dirty = titleUpdate.dirty
+    if titleUpdate.manageDirty:
+      result.effects.add(Effect(kind: EffectKind.EffManageDirty))
   of MsgKind.WlWindowDimensionsHint:
     result.dirty = model.updateWindowDimensionsHintForExternal(
       msg.hintWindowId.externalWindowId(),

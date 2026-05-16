@@ -162,6 +162,37 @@ proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
   if highlighted != 0 and daemon.desiredPlacements.hasKey(highlighted):
     result.add(desiredInstruction(highlighted))
 
+proc renderOrderKey(daemon: TriadDaemon, ids: seq[uint32]): seq[uint32] =
+  let highlighted = daemon.currentModel.highlightRiverId()
+  result.add(highlighted)
+  result.add(daemon.currentModel.visibleScratchpadRiverId())
+  result.add(daemon.ownedShellSurfaceId)
+  result.add(daemon.recentWindowsSurfaceId)
+  result.add(daemon.recentWindowsChromeSurfaceId)
+  result.add(if daemon.currentModel.overviewActive: 1'u32 else: 0'u32)
+  result.add(if daemon.currentModel.recentWindowsVisible(): 1'u32 else: 0'u32)
+  for id in ids:
+    let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
+    let isScratchpad =
+      daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
+    let winOpt = daemon.currentModel.windowDataForRiverId(id)
+    let isFloating = winOpt.isSome and winOpt.get().isFloating
+    let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
+    let isMaximized = daemon.currentModel.effectivelyMaximizedForRiverId(id)
+    var flags = uint32(daemon.windowOrAncestorStackLayer(id) shl 4)
+    if isScratchpad:
+      flags = flags or 1'u32
+    if isFloating:
+      flags = flags or 2'u32
+    if isFullscreen:
+      flags = flags or 4'u32
+    if isMaximized:
+      flags = flags or 8'u32
+    if id == highlighted:
+      flags = flags or 64'u32
+    result.add(id)
+    result.add(flags)
+
 proc overviewWindowAtPointer*(daemon: TriadDaemon, seat: ptr RiverSeatV1): uint32 =
   if not daemon.currentModel.overviewActive or seat == nil:
     return 0
@@ -254,6 +285,44 @@ proc applyVisibility(
   else:
     win.hide()
 
+proc desiredRenderWindowState(
+    daemon: TriadDaemon, id: uint32, geom, visibilityBounds: Rect, clipSet: bool
+): RenderWindowState =
+  let logicalId = daemon.currentModel.windowForRiverId(id)
+  let focused = id == daemon.currentModel.highlightRiverId()
+  let clipBorder = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
+  let renderBorder = daemon.currentModel.renderWindowBorder(logicalId, focused)
+  let visibility =
+    renderVisibility(geom, visibilityBounds, max(clipBorder.width * 2, 4'i32))
+  RenderWindowState(
+    visible: visibility.visible,
+    geom: geom,
+    clipSet: clipSet,
+    clip: visibilityBounds,
+    forceClip:
+      clipSet or daemon.currentModel.windowClipToGeometry(logicalId) or
+      daemon.placementNeedsCellClip(id, geom),
+    borderWidth: clipBorder.width,
+    renderBorderWidth: renderBorder.width,
+    borderActiveColor: renderBorder.activeColor,
+    borderInactiveColor: renderBorder.inactiveColor,
+    borderEdges: visibility.borderEdges,
+    focused: focused,
+  )
+
+proc applyRenderWindowState(
+    daemon: TriadDaemon,
+    id: uint32,
+    win: ptr RiverWindowV1,
+    node: ptr RiverNodeV1,
+    state: RenderWindowState,
+) =
+  node.setPosition(state.geom.x, state.geom.y)
+  let visibility =
+    renderVisibility(state.geom, state.clip, max(state.borderWidth * 2, 4'i32))
+  win.applyVisibility(visibility, state.forceClip, state.borderWidth)
+  daemon.applyBorder(id, win, state.focused, state.borderEdges)
+
 proc renderDesiredPlacements*(daemon: var TriadDaemon) =
   let screen = daemon.currentModel.primaryScreen()
   if daemon.currentModel.hasPresentationPreference():
@@ -261,6 +330,10 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     for output in daemon.outputPointers.values:
       output.setPresentationMode(mode)
   let ids = daemon.orderedDesiredIds()
+  let orderKey = daemon.renderOrderKey(ids)
+  let orderChanged = daemon.lastRenderOrder != orderKey
+  if orderChanged:
+    daemon.lastRenderOrder = orderKey
 
   var visible = initTable[uint32, bool]()
   var lastNode: ptr RiverNodeV1 = nil
@@ -271,69 +344,80 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       let node = daemon.windowNodes[id]
       let geom = daemon.desiredPlacements[id]
       visible[id] = true
-      node.setPosition(geom.x, geom.y)
       if firstNode == nil:
         firstNode = node
-      if lastNode != nil:
+      if orderChanged and lastNode != nil:
         node.placeAbove(lastNode)
       lastNode = node
       if daemon.windowPointers.hasKey(id):
-        let logicalId = daemon.currentModel.windowForRiverId(id)
-        let focused = id == highlighted
-        let border = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
         let hasClip = daemon.desiredPlacementClips.hasKey(id)
         let visibilityBounds =
           if hasClip:
             daemon.desiredPlacementClips[id]
           else:
             screen
-        let visibility =
-          renderVisibility(geom, visibilityBounds, max(border.width * 2, 4'i32))
-        let forceClip =
-          hasClip or daemon.currentModel.windowClipToGeometry(logicalId) or
-          daemon.placementNeedsCellClip(id, geom)
-        daemon.windowPointers[id].applyVisibility(visibility, forceClip, border.width)
-        daemon.applyBorder(
-          id, daemon.windowPointers[id], focused, visibility.borderEdges
-        )
+        let nextState =
+          daemon.desiredRenderWindowState(id, geom, visibilityBounds, hasClip)
+        if not daemon.lastRenderWindowStates.hasKey(id) or
+            daemon.lastRenderWindowStates[id] != nextState:
+          daemon.applyRenderWindowState(id, daemon.windowPointers[id], node, nextState)
+          daemon.lastRenderWindowStates[id] = nextState
+          inc daemon.perfCounters.renderRequests
+        else:
+          inc daemon.perfCounters.skippedRenderRequests
 
   for id, win in daemon.windowPointers.pairs:
     if not visible.hasKey(id):
-      win.hide()
+      let hiddenState = RenderWindowState(visible: false)
+      if not daemon.lastRenderWindowStates.hasKey(id) or
+          daemon.lastRenderWindowStates[id] != hiddenState:
+        win.hide()
+        daemon.lastRenderWindowStates[id] = hiddenState
+        inc daemon.perfCounters.renderRequests
+      else:
+        inc daemon.perfCounters.skippedRenderRequests
 
-  for id in ids:
-    if daemon.windowNodes.hasKey(id):
-      let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
-      let isScratchpad =
-        daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
-      let winOpt = daemon.currentModel.windowDataForRiverId(id)
-      let isFloating = winOpt.isSome and winOpt.get().isFloating
-      let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
-      let isMaximized = daemon.currentModel.effectivelyMaximizedForRiverId(id)
-      if not isFloating and not isScratchpad and
-          (isFullscreen or isMaximized or id == highlighted):
+  var staleCachedIds: seq[uint32]
+  for id in daemon.lastRenderWindowStates.keys:
+    if not daemon.windowPointers.hasKey(id):
+      staleCachedIds.add(id)
+  for id in staleCachedIds:
+    daemon.lastRenderWindowStates.del(id)
+
+  if orderChanged:
+    for id in ids:
+      if daemon.windowNodes.hasKey(id):
+        let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
+        let isScratchpad =
+          daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
+        let winOpt = daemon.currentModel.windowDataForRiverId(id)
+        let isFloating = winOpt.isSome and winOpt.get().isFloating
+        let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
+        let isMaximized = daemon.currentModel.effectivelyMaximizedForRiverId(id)
+        if not isFloating and not isScratchpad and
+            (isFullscreen or isMaximized or id == highlighted):
+          daemon.windowNodes[id].placeTop()
+
+    for id in ids:
+      if daemon.windowNodes.hasKey(id):
+        let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
+        let isScratchpad =
+          daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
+        let winOpt = daemon.currentModel.windowDataForRiverId(id)
+        let isFloating = winOpt.isSome and winOpt.get().isFloating
+        if isFloating or isScratchpad or id == highlighted:
+          daemon.windowNodes[id].placeTop()
+
+    for id in ids:
+      if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 1:
         daemon.windowNodes[id].placeTop()
 
-  for id in ids:
-    if daemon.windowNodes.hasKey(id):
-      let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
-      let isScratchpad =
-        daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
-      let winOpt = daemon.currentModel.windowDataForRiverId(id)
-      let isFloating = winOpt.isSome and winOpt.get().isFloating
-      if isFloating or isScratchpad or id == highlighted:
+    for id in ids:
+      if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 2:
         daemon.windowNodes[id].placeTop()
 
-  for id in ids:
-    if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 1:
-      daemon.windowNodes[id].placeTop()
-
-  for id in ids:
-    if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 2:
-      daemon.windowNodes[id].placeTop()
-
-  if highlighted != 0 and daemon.windowNodes.hasKey(highlighted):
-    daemon.windowNodes[highlighted].placeTop()
+    if highlighted != 0 and daemon.windowNodes.hasKey(highlighted):
+      daemon.windowNodes[highlighted].placeTop()
 
   if daemon.ownedShellSurfaceId != 0 and
       daemon.surfaceTable.hasKey(daemon.ownedShellSurfaceId):
@@ -341,16 +425,17 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     var shell = daemon.surfaceTable[daemon.ownedShellSurfaceId]
     if shell.node != nil:
       shell.node.setPosition(screen.x, screen.y)
-      if daemon.currentModel.overviewActive:
-        shell.node.placeTop()
-      elif daemon.currentModel.recentWindowsVisible():
-        shell.node.placeBottom()
-        if firstNode != nil:
-          shell.node.placeBelow(firstNode)
-      else:
-        shell.node.placeBottom()
-        if firstNode != nil:
-          shell.node.placeBelow(firstNode)
+      if orderChanged:
+        if daemon.currentModel.overviewActive:
+          shell.node.placeTop()
+        elif daemon.currentModel.recentWindowsVisible():
+          shell.node.placeBottom()
+          if firstNode != nil:
+            shell.node.placeBelow(firstNode)
+        else:
+          shell.node.placeBottom()
+          if firstNode != nil:
+            shell.node.placeBelow(firstNode)
     daemon.surfaceTable[daemon.ownedShellSurfaceId] = shell
 
   daemon.syncHotkeyOverlaySurface(screen)
@@ -361,16 +446,18 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       var backdrop = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
       if backdrop.node != nil:
         backdrop.node.setPosition(screen.x, screen.y)
-        backdrop.node.placeBottom()
-        if firstNode != nil:
-          backdrop.node.placeBelow(firstNode)
+        if orderChanged:
+          backdrop.node.placeBottom()
+          if firstNode != nil:
+            backdrop.node.placeBelow(firstNode)
       daemon.surfaceTable[daemon.recentWindowsSurfaceId] = backdrop
     if daemon.recentWindowsChromeSurfaceId != 0 and
         daemon.surfaceTable.hasKey(daemon.recentWindowsChromeSurfaceId):
       var chrome = daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId]
       if chrome.node != nil:
         chrome.node.setPosition(screen.x, screen.y)
-        chrome.node.placeTop()
+        if orderChanged:
+          chrome.node.placeTop()
       daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = chrome
   daemon.syncLayoutSwitchToastSurface(screen)
   daemon.syncExitSessionConfirmSurface(screen)

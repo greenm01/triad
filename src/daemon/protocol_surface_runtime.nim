@@ -400,8 +400,8 @@ proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
   else:
     warn "Hotkey overlay buffer unavailable"
     return
-  surf.inputW = surf.bufferW
-  surf.inputH = surf.bufferH
+  surf.inputW = 0
+  surf.inputH = 0
   daemon.commitProtocolSurface(surf)
   if surf.node != nil:
     let placement = hotkeyOverlayPlacement(

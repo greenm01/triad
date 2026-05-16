@@ -415,16 +415,18 @@ suite "Core Runtime Logic: window rules placement":
     check win.minWidth == 500
     check win.maxWidth == 0
 
-    model.applyMsg(
+    var effects = model.updateModel(
       Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 2, updatedTitle: "Small Dialog")
     )
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
     check win.minWidth == 0
     check win.maxWidth == 900
 
-    model.applyMsg(
+    effects = model.updateModel(
       Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 2, updatedTitle: "Main")
     )
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     win = model.windowData(model.windowForExternal(ExternalWindowId(2))).get()
     check win.minWidth == 500
     check win.maxWidth == 0

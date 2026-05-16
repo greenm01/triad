@@ -158,6 +158,7 @@ proc startIpcServer*(
     onMsg: proc(msg: Msg) {.gcsafe.},
     getSnapshot: proc(): ShellSnapshot {.gcsafe.} = nil,
     getLiveRestoreJson: proc(): string {.gcsafe.} = nil,
+    getPerfStatusJson: proc(): string {.gcsafe.} = nil,
 ) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
@@ -211,6 +212,13 @@ proc startIpcServer*(
                   await client.send(getLiveRestoreJson() & "\L")
                 else:
                   await client.send("""{"error":"live restore unavailable"}""" & "\L")
+                break
+
+              if line.strip() == "perf-status":
+                if getPerfStatusJson != nil:
+                  await client.send(getPerfStatusJson() & "\L")
+                else:
+                  await client.send("""{"error":"perf status unavailable"}""" & "\L")
                 break
 
               let snapshot = getSnapshot()

@@ -422,6 +422,66 @@ proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool
       discard model.setTagViewportCurrent(tagId, currentX, currentY)
       result = true
 
+proc hasPendingViewportAnimation*(model: Model): bool =
+  if not model.enableAnimations:
+    return false
+  let tickOverviewPreviews = model.overviewUsesWorkspacePreviews()
+  if model.overviewActive and not tickOverviewPreviews:
+    return false
+  let previewSlots =
+    if tickOverviewPreviews:
+      model.previewSlots()
+    else:
+      @[]
+  let snapThreshold = max(model.animationSnapThreshold, 0.01'f32)
+  for tagId, tag in model.tagsWithId():
+    if tickOverviewPreviews:
+      if previewSlots.find(tag.slot) == -1:
+        continue
+    elif tagId != model.activeTag:
+      continue
+    if abs(tag.targetViewportXOffset - tag.currentViewportXOffset) > 0.0'f32 or
+        abs(tag.targetViewportYOffset - tag.currentViewportYOffset) > 0.0'f32:
+      if model.animationSpeed <= 0.0'f32:
+        return true
+      if abs(tag.targetViewportXOffset - tag.currentViewportXOffset) > snapThreshold or
+          abs(tag.targetViewportYOffset - tag.currentViewportYOffset) > snapThreshold:
+        return true
+      return true
+
+proc needsFrameTick*(model: Model): bool =
+  if model.hasPendingViewportAnimation():
+    return true
+  if model.pointerOp.kind == PointerOpKind.OpOverviewDrag and
+      model.pointerOp.overviewDragPastThreshold() and model.pointerOp.hoverSlot != 0 and
+      model.pointerOp.hoverElapsedMs < OverviewHoldMs:
+    return true
+  if model.pendingRecentFocusWindow != NullWindowId:
+    return true
+  if model.recentWindowsActive and
+      model.recentWindowsOpenElapsedMs < model.recentWindows.openDelayMs:
+    return true
+  if model.layoutSwitchToastOpen:
+    return true
+  model.pendingDialogFocusWindows.len > 0
+
+proc frameTickReasons*(model: Model): seq[string] =
+  if model.hasPendingViewportAnimation():
+    result.add("viewport-animation")
+  if model.pointerOp.kind == PointerOpKind.OpOverviewDrag and
+      model.pointerOp.overviewDragPastThreshold() and model.pointerOp.hoverSlot != 0 and
+      model.pointerOp.hoverElapsedMs < OverviewHoldMs:
+    result.add("overview-hover")
+  if model.pendingRecentFocusWindow != NullWindowId:
+    result.add("recent-focus")
+  if model.recentWindowsActive and
+      model.recentWindowsOpenElapsedMs < model.recentWindows.openDelayMs:
+    result.add("recent-window-open-delay")
+  if model.layoutSwitchToastOpen:
+    result.add("layout-switch-toast")
+  if model.pendingDialogFocusWindows.len > 0:
+    result.add("dialog-focus")
+
 proc openLayoutSwitchToast*(model: var Model, layout: LayoutMode): bool =
   if not model.layoutSwitchToast.enabled or model.layoutSwitchToast.timeoutMs <= 0:
     return false

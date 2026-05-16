@@ -109,6 +109,42 @@ suite "Core Runtime Logic: window rules matchers":
     check not model.startupWindowRulesActive
     check not model.windowData(WindowId(1)).get().keyboardShortcutsInhibit
 
+  test "Duplicate title and app-id updates are not dirty":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 1))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Same")
+    )
+
+    let titleEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 1, updatedTitle: "Same")
+    )
+    check titleEffects.len == 0
+
+    let appIdEffects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 1, updatedAppId: "app")
+    )
+    check appIdEffects.len == 0
+
+  test "Title text changes broadcast without manage dirty by default":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 1))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "A")
+    )
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 1, updatedTitle: "B")
+    )
+
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowOpenedOrChanged")
+    )
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+
   test "Window rule state matchers use focused and active window state":
     var model = initRuntimeStateFromConfig(
       Config(

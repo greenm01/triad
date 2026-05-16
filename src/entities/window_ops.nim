@@ -358,17 +358,23 @@ proc setWindowHeightProportion*(
 proc setWindowTitle*(model: var Model, winId: WindowId, title: string): bool =
   if model.windows.entity(winId).isNone:
     return false
+  if model.windows.mEntity(winId).title == title:
+    return false
   model.windows.mEntity(winId).title = title
   true
 
 proc setWindowAppId*(model: var Model, winId: WindowId, appId: string): bool =
   if model.windows.entity(winId).isNone:
     return false
+  if model.windows.mEntity(winId).appId == appId:
+    return false
   model.windows.mEntity(winId).appId = appId
   true
 
 proc setWindowIdentifier*(model: var Model, winId: WindowId, identifier: string): bool =
   if model.windows.entity(winId).isNone:
+    return false
+  if model.windows.mEntity(winId).identifier == identifier:
     return false
   model.windows.mEntity(winId).identifier = identifier
   true
@@ -393,10 +399,16 @@ proc setWindowParent*(
 proc setWindowDimensions*(
     model: var Model, winId: WindowId, actualW, actualH: int32
 ): bool =
-  if model.windows.entity(winId).isNone:
+  let winOpt = model.windows.entity(winId)
+  if winOpt.isNone:
     return false
-  model.windows.mEntity(winId).actualW = max(0'i32, actualW)
-  model.windows.mEntity(winId).actualH = max(0'i32, actualH)
+  let nextW = max(0'i32, actualW)
+  let nextH = max(0'i32, actualH)
+  let win = winOpt.get()
+  if win.actualW == nextW and win.actualH == nextH:
+    return false
+  model.windows.mEntity(winId).actualW = nextW
+  model.windows.mEntity(winId).actualH = nextH
   true
 
 proc setWindowRestoredState*(
@@ -579,8 +591,13 @@ proc setWindowKeyboardShortcutsInhibit*(
 ): bool =
   if model.windows.entity(winId).isNone:
     return false
+  let nextBypass = inhibited and bypass
+  let win = model.windows.entity(winId).get()
+  if win.keyboardShortcutsInhibit == inhibited and
+      win.keyboardShortcutsInhibitBypass == nextBypass:
+    return false
   model.windows.mEntity(winId).keyboardShortcutsInhibit = inhibited
-  model.windows.mEntity(winId).keyboardShortcutsInhibitBypass = inhibited and bypass
+  model.windows.mEntity(winId).keyboardShortcutsInhibitBypass = nextBypass
   true
 
 proc setWindowIdleInhibitMode*(

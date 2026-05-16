@@ -138,6 +138,32 @@ type
     fd*: int32
     path*: string
 
+  RenderWindowState* = object
+    visible*: bool
+    geom*: Rect
+    clipSet*: bool
+    clip*: Rect
+    forceClip*: bool
+    borderWidth*: int32
+    renderBorderWidth*: int32
+    borderActiveColor*: uint32
+    borderInactiveColor*: uint32
+    borderEdges*: uint32
+    focused*: bool
+
+  RenderPerfCounters* = object
+    frameTicks*: uint64
+    activeFrameTicks*: uint64
+    dirtyFrameTicks*: uint64
+    renderStarts*: uint64
+    renderRequests*: uint64
+    skippedRenderRequests*: uint64
+    manageRequests*: uint64
+
+  FullscreenRequestState* = object
+    active*: bool
+    outputId*: uint32
+
   RuntimeReasonHook* = proc(daemon: pointer, reason: string) {.nimcall.}
   ConfigNotificationHook* = proc(
     daemon: pointer, event: ConfigNotificationEvent, command: seq[string]
@@ -195,6 +221,13 @@ type
     desiredPlacements*: Table[uint32, Rect]
     desiredPlacementClips*: Table[uint32, Rect]
     desiredPlacementOrder*: seq[uint32]
+    lastRenderWindowStates*: Table[uint32, RenderWindowState]
+    lastRenderOrder*: seq[uint32]
+    lastFrameTickMs*: int64
+    perfCounters*: RenderPerfCounters
+    manageRequestReasonCounts*: Table[string, uint64]
+    lastFullscreenRequests*: Table[uint32, FullscreenRequestState]
+    lastMaximizedRequests*: Table[uint32, bool]
     lastPointerOpSeat*: pointer
     pendingMaximizedAcks*: Table[uint32, bool]
     pendingManifestAppIdWindows*: Table[uint32, bool]

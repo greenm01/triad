@@ -16,8 +16,10 @@ import
   state, switch_event_runtime
 from ../types/runtime_values import nil, PointerOpKind
 import
-  std/
-    [asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, tables, times]
+  std/[
+    asyncdispatch, asyncnet, json, nativesockets, options, os, sequtils, strutils,
+    tables, times,
+  ]
 import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
@@ -91,15 +93,91 @@ proc frameIntervalMs(fps: int32): int =
 proc targetFrameIntervalMs(daemon: TriadDaemon): int =
   daemon.runtimeState.model.frameRate().frameIntervalMs()
 
-proc startAnimationLoop() {.async.} =
-  var lastTickMs = int64(epochTime() * 1000.0)
-  while true:
-    await sleepAsync(daemon.targetFrameIntervalMs())
-    let nowMs = int64(epochTime() * 1000.0)
-    let elapsedMs = int32(max(1'i64, min(1000'i64, nowMs - lastTickMs)))
-    lastTickMs = nowMs
-    {.cast(gcsafe).}:
-      daemon.enqueue(Msg(kind: MsgKind.CmdTick, tickElapsedMs: elapsedMs))
+proc unixMs(): int64 =
+  int64(epochTime() * 1000.0)
+
+proc cursorShakeTickNeeded(daemon: TriadDaemon): bool =
+  for state in daemon.cursorShakeBySeat.values:
+    if state.enlarged:
+      return true
+
+proc cursorVisibilityTickNeeded(daemon: TriadDaemon): bool =
+  if daemon.runtimeState.model.cursor.hideAfterInactiveMs <= 0:
+    return daemon.cursorHiddenPointers.len > 0
+  for pointerId in daemon.cursorLastMotionMsByPointer.keys:
+    if not daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
+      if daemon.cursorShapeDevices.hasKey(pointerId) and
+          daemon.wlPointerGlobalNames.hasKey(pointerId) and
+          daemon.wlPointerPointers.hasKey(daemon.wlPointerGlobalNames[pointerId]):
+        return true
+
+proc frameTickNeeded(daemon: TriadDaemon): bool =
+  daemon.runtimeState.model.needsFrameTick() or daemon.cursorShakeTickNeeded() or
+    daemon.cursorVisibilityTickNeeded()
+
+proc frameTickReasons(daemon: TriadDaemon): seq[string] =
+  result = daemon.runtimeState.model.frameTickReasons()
+  if daemon.cursorShakeTickNeeded():
+    result.add("cursor-shake")
+  if daemon.cursorVisibilityTickNeeded():
+    result.add("cursor-visibility")
+
+proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
+  if not daemon.frameTickNeeded():
+    daemon.lastFrameTickMs = nowMs
+    return
+  if daemon.lastFrameTickMs <= 0:
+    daemon.lastFrameTickMs = nowMs
+  let elapsedMs = nowMs - daemon.lastFrameTickMs
+  let frameInterval = int64(daemon.targetFrameIntervalMs())
+  if elapsedMs < frameInterval:
+    return
+  daemon.lastFrameTickMs = nowMs
+  daemon.enqueue(
+    Msg(
+      kind: MsgKind.CmdTick, tickElapsedMs: int32(max(1'i64, min(1000'i64, elapsedMs)))
+    )
+  )
+
+proc loopPollIntervalMs(daemon: TriadDaemon, nowMs: int64): int =
+  const IdlePollIntervalMs = 250
+  result = IdlePollIntervalMs
+  if daemon.frameTickNeeded():
+    let frameInterval = int64(daemon.targetFrameIntervalMs())
+    let elapsedMs =
+      if daemon.lastFrameTickMs <= 0:
+        frameInterval
+      else:
+        nowMs - daemon.lastFrameTickMs
+    result = max(1, int(max(1'i64, frameInterval - elapsedMs)))
+  if daemon.configReloadDebouncer.pending:
+    result = min(result, max(1, int(daemon.configReloadDebouncer.deadlineMs - nowMs)))
+
+proc perfStatusJson(daemon: TriadDaemon): string =
+  let counters = daemon.perfCounters
+  var manageRequestReasons = newJObject()
+  for reason, count in daemon.manageRequestReasonCounts.pairs:
+    manageRequestReasons[reason] = %int(count)
+  $(
+    %*{
+      "ok": true,
+      "type": "perf-status",
+      "frame_rate": daemon.runtimeState.model.frameRate(),
+      "frame_interval_ms": daemon.targetFrameIntervalMs(),
+      "frame_tick_active": daemon.frameTickNeeded(),
+      "frame_tick_reasons": daemon.frameTickReasons(),
+      "counters": {
+        "frame_ticks": counters.frameTicks,
+        "active_frame_ticks": counters.activeFrameTicks,
+        "dirty_frame_ticks": counters.dirtyFrameTicks,
+        "render_starts": counters.renderStarts,
+        "render_requests": counters.renderRequests,
+        "skipped_render_requests": counters.skippedRenderRequests,
+        "manage_requests": counters.manageRequests,
+      },
+      "manage_request_reasons": manageRequestReasons,
+    }
+  )
 
 proc startStartupWindowRulesExpiry() {.async.} =
   await sleepAsync(60_000)
@@ -129,6 +207,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       continue
 
     if msg.kind == MsgKind.CmdTick:
+      inc daemon.perfCounters.frameTicks
+      if daemon.frameTickNeeded():
+        inc daemon.perfCounters.activeFrameTicks
       daemon.tickCursorShake()
       daemon.tickCursorVisibility()
 
@@ -141,6 +222,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let effects = syncRuntimeUpdate("message", msg)
+    if msg.kind == MsgKind.CmdTick and
+        effects.anyIt(it.kind == EffectKind.EffManageDirty):
+      inc daemon.perfCounters.dirtyFrameTicks
     if msg.kind in {MsgKind.CmdSwitchShell, MsgKind.CmdCycleShell} and
         not sameShellsConfig(
           previousModelForShell.shells, daemon.runtimeState.model.shells
@@ -202,6 +286,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     elif msg.kind == MsgKind.WlWindowDestroyed:
       daemon.pendingManifestAppIdWindows.del(msg.destroyedId)
       daemon.pendingManifestAdmissionWindows.del(msg.destroyedId)
+      daemon.lastFullscreenRequests.del(msg.destroyedId)
+      daemon.lastMaximizedRequests.del(msg.destroyedId)
     let recentModifiersChanged =
       daemon.runtimeState.model.recentWindowsActive and
       previousActiveModifiers != daemon.runtimeState.model.activeModifiers
@@ -245,6 +331,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       continue
 
     if msg.kind == MsgKind.WlRenderStart:
+      inc daemon.perfCounters.renderStarts
       daemon.riverPhase = RiverPhase.RiverRender
       let instructions = syncRuntimeLayoutProjection("render layout", msg)
       daemon.recordDesiredPlacements(instructions)
@@ -258,7 +345,10 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       continue
 
     for eff in effects:
-      daemon.executeEffect(eff)
+      if eff.kind == EffectKind.EffManageDirty:
+        daemon.requestManage("effect:" & $msg.kind)
+      else:
+        daemon.executeEffect(eff)
 
 proc hasInitialRiverState(): bool =
   daemon.outputPointers.len > 0 or daemon.seatPointers.len > 0
@@ -324,7 +414,7 @@ proc main*() =
         cmd.add(" ")
       cmd.add(args[i])
     try:
-      if cmd == "dump-live-restore-state" or cmd == "dev-mode" or
+      if cmd == "dump-live-restore-state" or cmd == "perf-status" or cmd == "dev-mode" or
           cmd.startsWith("dev-mode "):
         let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
         stdout.writeLine(reply)
@@ -462,6 +552,10 @@ proc main*() =
     {.cast(gcsafe).}:
       daemon.readLiveRestoreJson()
 
+  proc snapshotPerfStatusJson(): string {.gcsafe.} =
+    {.cast(gcsafe).}:
+      daemon.perfStatusJson()
+
   let triadSocket = triadSocketPath()
   let niriSocketPath = chooseNiriCompatSocketPath(triadSocket)
   var ipcStarted = false
@@ -473,18 +567,18 @@ proc main*() =
     info "Starting Triad IPC server", path = triadSocket
     writeBehaviorEvent("triad_ipc_server_starting", %*{"path": triadSocket})
     asyncCheck startIpcServer(
-      triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson
+      triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson,
+      snapshotPerfStatusJson,
     )
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
       info "Starting Niri-compatible IPC server", path = niriSocketPath
       writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
-        niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson
+        niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson,
+        snapshotPerfStatusJson,
       )
 
-  # Start Animation Loop
-  asyncCheck startAnimationLoop()
   asyncCheck startStartupWindowRulesExpiry()
 
   # Spawn startup commands after River accepts the initial manage pass.
@@ -500,12 +594,14 @@ proc main*() =
     daemon.watcher.poll(0)
     daemon.pollSwitchEventDevices()
 
-    let frameInterval = daemon.targetFrameIntervalMs()
+    let nowMs = unixMs()
+    daemon.enqueueFrameTickIfDue(nowMs)
+    let pollInterval = daemon.loopPollIntervalMs(nowMs)
 
     # Poll async (IPC)
-    asyncdispatch.poll(frameInterval)
+    asyncdispatch.poll(pollInterval)
 
-    if daemon.configReloadDebouncer.takeDue(int64(epochTime() * 1000.0)):
+    if daemon.configReloadDebouncer.takeDue(unixMs()):
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
 
     # Process Message Queue
@@ -538,7 +634,7 @@ proc main*() =
       break
 
     discard daemon.display.flush()
-    if waitForWaylandEvents(daemon.display, frameInterval):
+    if waitForWaylandEvents(daemon.display, pollInterval):
       if daemon.display.read_events() == -1:
         running = false
     else:

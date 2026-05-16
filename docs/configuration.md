@@ -211,12 +211,13 @@ lists fall back to `0.33 0.5 0.67 1.0`. Triad does not bind
 `switch-proportion-preset` by default.
 
 `layout { enable-animations #true; animation-speed 0.15; animation-snap-threshold 0.5; frame-rate "auto" }`
-controls viewport camera animation and frame pacing. `animation-speed` is
+controls viewport camera animation and timed UI pacing. `animation-speed` is
 clamped to `0.0..1.0`; `0.0` snaps immediately. `animation-snap-threshold` is a
 pixel distance clamped to `0.01..64.0`; once the camera is within that distance
 of the target, Triad snaps to the exact target coordinate. `frame-rate` accepts
 `"auto"` or an integer clamped to `24..240`; `"auto"` follows the active output
-refresh rate when River reports one and falls back to 60 FPS.
+refresh rate when River reports one and falls back to 60 FPS. Triad uses this
+cadence only while animation or another timed runtime action is active.
 
 ## Window Rules
 
