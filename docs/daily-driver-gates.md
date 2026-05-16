@@ -38,6 +38,7 @@ Useful optional passes:
 ```bash
 TRIAD_LIVE_LAUNCH_CLIENTS=1 sh tools/live_smoke.sh
 TRIAD_LIVE_TEST_LOCKME=1 sh tools/live_smoke.sh
+TRIAD_LIVE_TEST_QUICKSHELL=1 sh tools/live_smoke.sh
 ```
 
 To fold this into preflight:
@@ -45,6 +46,9 @@ To fold this into preflight:
 ```bash
 TRIAD_DAILY_GATE_LIVE=1 nimble verify
 ```
+
+This folds the live smoke into `nimble verify`; it does not replace the final
+`nimble liveReload` pass.
 
 ## QEMU VT Gate
 
@@ -80,9 +84,13 @@ nimble verify
 Before treating Triad as daily-driver ready for a session:
 
 ```bash
-nimble verify
+TRIAD_DAILY_GATE_LIVE=1 nimble verify
 TRIAD_QEMU_IMAGE=/mnt/storage/triad-qemu/images/void-triad-vt.qcow2 sh tools/qemu_vt_smoke.sh
+nimble liveReload
 ```
+
+Run `nimble liveReload` last so daily-driver readiness includes the live-manager
+replacement path after the clean-tree preflight and QEMU VT checks pass.
 
 Then run one manual River session with `TRIAD_LOG_LEVEL=debug ./triad
 2>triad.log`, launch and close several clients, and confirm there are no Nim
