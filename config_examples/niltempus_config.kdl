@@ -68,6 +68,11 @@ shells {
     enabled #true
     active "noctalia"
     cycle "noctalia" "dank" "waybar"
+    watchdog {
+        enabled #true
+        fallback "waybar"
+        exclusive-focus-timeout-ms 30000
+    }
 
     profile "noctalia" {
         launch "/home/niltempus/.local/bin/noctalia-qs" "-p" "/home/niltempus/src/noctalia-shell"

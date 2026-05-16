@@ -944,6 +944,9 @@ proc loadConfig*(path: string): Config =
   result.floating.minWidth = DefaultFloatingMinWidth
   result.floating.minHeight = DefaultFloatingMinHeight
   result.quickshell.command = DefaultQuickshellCommand
+  result.shells.watchdog.enabled = true
+  result.shells.watchdog.exclusiveFocusTimeoutMs =
+    DefaultShellWatchdogExclusiveFocusTimeoutMs
   result.janet.enabled = true
   result.janet.manifestDir = DefaultJanetManifestDir
   result.janet.systemManifestDir = DefaultJanetSystemManifestDir
@@ -1441,6 +1444,20 @@ proc loadConfig*(path: string): Config =
               result.shells.active = child.args[0].kString()
             elif child.name == "cycle":
               result.shells.cycle = child.stringArgs()
+            elif child.name == "watchdog":
+              for watchdogChild in child.children:
+                try:
+                  if watchdogChild.name == "enabled" and watchdogChild.args.len > 0:
+                    result.shells.watchdog.enabled = watchdogChild.args[0].kBool()
+                  elif watchdogChild.name == "fallback" and watchdogChild.args.len > 0:
+                    result.shells.watchdog.fallback = watchdogChild.args[0].kString()
+                  elif watchdogChild.name == "exclusive-focus-timeout-ms" and
+                      watchdogChild.args.len > 0:
+                    result.shells.watchdog.exclusiveFocusTimeoutMs =
+                      clamp32(int32(watchdogChild.args[0].kInt()), 0, 600000)
+                except CatchableError as e:
+                  warn "Ignoring invalid shell watchdog field",
+                    field = watchdogChild.name, error = e.msg
             elif child.name == "profile" and child.args.len > 0:
               var profile = ShellProfileConfig(name: child.args[0].kString())
               for profileChild in child.children:

@@ -207,12 +207,18 @@ type
     stop*: seq[string]
     niriCompat*: bool
 
+  ShellWatchdogConfig* = object
+    enabled*: bool
+    fallback*: string
+    exclusiveFocusTimeoutMs*: int32
+
   ShellsConfig* = object
     configured*: bool
     enabled*: bool
     active*: string
     cycle*: seq[string]
     profiles*: seq[ShellProfileConfig]
+    watchdog*: ShellWatchdogConfig
 
   JanetManifestAlias* = object
     appId*: string

@@ -76,6 +76,10 @@ shells {
     enabled #true
     active "noctalia"
     cycle "noctalia"
+    watchdog {
+        enabled #true
+        exclusive-focus-timeout-ms 30000
+    }
 
     profile "noctalia" {
         launch "qs" "-c" "noctalia-shell"

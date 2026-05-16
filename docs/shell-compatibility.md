@@ -37,6 +37,12 @@ commands. Triad ships `triad_niri` for that command-side contract. It is
 deliberately not installed as `niri`, because users may have the real compositor
 CLI installed.
 
+Shell profiles can also use `shells { watchdog { ... } }` to recover from
+profile failures. The watchdog logs tracked process exits and exclusive layer
+focus timeouts, then switches to the configured fallback profile when one is
+available. This is generic profile plumbing; it is not specific to
+DankMaterialShell, Noctalia-shell, Waybar, or Quickshell.
+
 When Triad starts a shell profile with `niri-compat #true`, it creates a private
 runtime environment for that process:
 

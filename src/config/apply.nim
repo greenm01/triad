@@ -200,6 +200,11 @@ proc legacyShellsFromQuickshell(config: rv.QuickshellConfig): rv.ShellsConfig =
     enabled: true,
     active: "quickshell",
     cycle: @["quickshell"],
+    watchdog: rv.ShellWatchdogConfig(
+      enabled: true,
+      fallback: "quickshell",
+      exclusiveFocusTimeoutMs: DefaultShellWatchdogExclusiveFocusTimeoutMs,
+    ),
     profiles:
       @[
         rv.ShellProfileConfig(

@@ -479,9 +479,17 @@ proc main*() =
       daemon.quickshellState.spawnPendingQuickshell(
         daemon.runtimeState.model, niriSocketPath, "initial manage"
       )
-      discard daemon.quickshellState.pollQuickshellRecovery(
-        daemon.runtimeState.model, niriSocketPath, int64(epochTime() * 1000.0)
-      )
+      let shellPollMs = int64(epochTime() * 1000.0)
+      let watchdogFallback =
+        daemon.quickshellState.pollShellWatchdog(daemon.runtimeState.model, shellPollMs)
+      if watchdogFallback.isSome:
+        daemon.enqueue(
+          Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
+        )
+      else:
+        discard daemon.quickshellState.pollQuickshellRecovery(
+          daemon.runtimeState.model, niriSocketPath, shellPollMs
+        )
 
     daemon.flushManageRequest()
 

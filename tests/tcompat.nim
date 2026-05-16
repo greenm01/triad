@@ -749,6 +749,139 @@ exit 0
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-old", "launch-new"]
 
+  test "Shell watchdog falls back when active tracked shell exits":
+    let tmp = getTempDir() / ("triad-shell-watchdog-exit-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = tmp / "fake-shell"
+    writeFile(
+      fake,
+      """
+#!/bin/sh
+if [ "$1" = "launch-dank" ]; then
+  sleep 1
+  exit 7
+fi
+sleep 5
+""",
+    )
+    setFilePermissions(fake, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let model = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "dank",
+        cycle: @["waybar", "dank"],
+        watchdog: ShellWatchdogConfig(
+          enabled: true, fallback: "waybar", exclusiveFocusTimeoutMs: 30000
+        ),
+        profiles:
+          @[
+            ShellProfileConfig(
+              name: "dank", launch: @[fake, "launch-dank"], stop: @[fake, "stop-dank"]
+            ),
+            ShellProfileConfig(name: "waybar", launch: @[fake, "launch-waybar"]),
+          ],
+      )
+    )
+    var runner = QuickshellRunner()
+    runner.switchShell(Model(), model, tmp / "niri.sock", "test spawn")
+    check runner.trackedQuickshellRunning()
+
+    sleep(1200)
+    let fallback = runner.pollShellWatchdog(model, 2000)
+    check fallback.isSome
+    check fallback.get() == "waybar"
+    check runner.trackedProcess == nil
+
+  test "Shell watchdog falls back after exclusive layer focus timeout":
+    let model = Model(
+      layerFocusExclusive: true,
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "dank",
+        watchdog: ShellWatchdogConfig(
+          enabled: true, fallback: "waybar", exclusiveFocusTimeoutMs: 10
+        ),
+        profiles:
+          @[
+            ShellProfileConfig(name: "dank", launch: @["dms", "run"]),
+            ShellProfileConfig(name: "waybar", launch: @["waybar"]),
+          ],
+      ),
+    )
+    var runner = QuickshellRunner()
+    check runner.pollShellWatchdog(model, 1000).isNone
+    let fallback = runner.pollShellWatchdog(model, 1011)
+    check fallback.isSome
+    check fallback.get() == "waybar"
+
+  test "Shell startup stops stale configured profiles before active launch":
+    let tmp = getTempDir() / ("triad-shell-startup-cleanup-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = tmp / "fake-shell"
+    let logPath = tmp / "calls.log"
+    writeFile(
+      fake,
+      """
+#!/bin/sh
+printf '%s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+if [ "$1" = "launch-noctalia" ]; then
+  sleep 5
+fi
+exit 0
+""",
+    )
+    setFilePermissions(fake, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+
+    let model = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "noctalia",
+        profiles:
+          @[
+            ShellProfileConfig(
+              name: "noctalia",
+              launch: @[fake, "launch-noctalia"],
+              stop: @[fake, "stop-noctalia"],
+            ),
+            ShellProfileConfig(
+              name: "waybar", launch: @[fake], stop: @[fake, "stop-waybar"]
+            ),
+            ShellProfileConfig(
+              name: "dank", launch: @[fake], stop: @[fake, "stop-dank"]
+            ),
+          ],
+      )
+    )
+    var runner = QuickshellRunner(spawnPending: true)
+    defer:
+      runner.stopTrackedQuickshell("test cleanup")
+
+    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "initial manage")
+
+    let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
+    check calls == @["stop-noctalia", "stop-waybar", "stop-dank", "launch-noctalia"]
+
   test "Quickshell unchanged reload can recover untracked shell":
     let noctalia =
       QuickshellConfig(enabled: true, command: "qs", theme: "noctalia-shell")

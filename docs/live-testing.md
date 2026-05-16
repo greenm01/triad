@@ -109,9 +109,9 @@ When `shells { enabled #true }` is configured, Triad starts the active shell
 profile with a private Niri-compatible environment when that profile has
 `niri-compat #true`. Startup still waits until the first River manage pass has
 restored window/output state. During live reload, the exiting manager leaves its
-tracked shell process alive for the handoff; the replacement manager then stops
-the configured stale profile and spawns the active one after initial manage. To
-include that in live smoke:
+tracked shell process alive for the handoff; the replacement manager then runs
+configured stop commands for shell profiles and spawns the active profile after
+initial manage. To include that in live smoke:
 
 ```bash
 TRIAD_LIVE_TEST_QUICKSHELL=1 ./tools/live_smoke.sh

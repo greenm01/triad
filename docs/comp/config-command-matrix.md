@@ -331,8 +331,8 @@ KDL config nodes and fields:
   properties.
 - `switch-events`: `lid-close`, `lid-open`, `tablet-mode-on`,
   `tablet-mode-off`.
-- `shells`: `enabled`, `active`, `cycle`, `profile`, `launch`, `stop`,
-  `niri-compat`.
+- `shells`: `enabled`, `active`, `cycle`, `watchdog`, `fallback`,
+  `exclusive-focus-timeout-ms`, `profile`, `launch`, `stop`, `niri-compat`.
 - `quickshell`: legacy fallback accepted when `shells` is absent.
 - `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `fuel-limit`,
   `manifest-alias`.

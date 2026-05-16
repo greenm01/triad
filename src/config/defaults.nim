@@ -88,6 +88,8 @@ workspace-rules {
 
 // Shells, bars, launchers, lock screens, startup services, and app rules are
 // intentionally configured outside this fallback.
+// When shell profiles are configured, their watchdog defaults to enabled with
+// a 30000 ms exclusive layer focus timeout.
 
 allow-exit-session #true
 

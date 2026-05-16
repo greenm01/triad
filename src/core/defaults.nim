@@ -38,6 +38,7 @@ const
   DefaultFloatingMinWidth* = 50'i32
   DefaultFloatingMinHeight* = 50'i32
   DefaultQuickshellCommand* = "qs"
+  DefaultShellWatchdogExclusiveFocusTimeoutMs* = 30000'i32
   DefaultJanetManifestDir* = "~/.config/triad/manifests"
   DefaultJanetSystemManifestDir* = "/usr/share/triad/manifests"
   DefaultJanetFuelLimit* = 500000'i32

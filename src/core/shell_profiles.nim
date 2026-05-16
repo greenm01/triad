@@ -41,6 +41,19 @@ proc normalizeShells*(shells: var ShellsConfig) =
   if shells.active.len == 0 or not shells.hasShellProfile(shells.active):
     shells.active = shells.firstShellProfileName()
 
+  let fallback = shells.watchdog.fallback.strip()
+  if fallback.len > 0 and not shells.hasShellProfile(fallback):
+    shells.watchdog.fallback = ""
+
+proc fallbackShellName*(shells: ShellsConfig): string =
+  let fallback = shells.watchdog.fallback.strip()
+  if fallback.len > 0 and shells.hasShellProfile(fallback):
+    return fallback
+  shells.firstShellProfileName()
+
+proc shouldWatchShells*(shells: ShellsConfig): bool =
+  shells.enabled and shells.watchdog.enabled and shells.profiles.len > 0
+
 proc activeShellProfile*(shells: ShellsConfig): Option[ShellProfileConfig] =
   if not shells.enabled:
     return none(ShellProfileConfig)

@@ -163,6 +163,12 @@ shells {
   active "noctalia"
   cycle "noctalia" "dank" "waybar"
 
+  watchdog {
+    enabled #true
+    fallback "noctalia"
+    exclusive-focus-timeout-ms 30000
+  }
+
   profile "noctalia" {
     launch "qs" "-c" "noctalia-shell"
     stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
@@ -186,8 +192,15 @@ shells {
 `switch-shell <name>` stops the active profile before launching the named
 profile. `cycle-shell` rotates through `cycle`, falling back to profile order
 when `cycle` is empty. Missing launch or stop executables are logged as shell
-profile failures. The legacy `quickshell` block is still accepted and is
-translated into a single generated shell profile when `shells` is absent.
+profile failures.
+
+`watchdog` is enabled by default. It monitors Triad-spawned shell profile
+processes and can switch to `fallback` when the active profile exits. It can
+also switch to `fallback` when an exclusive layer-shell focus grab lasts longer
+than `exclusive-focus-timeout-ms`; set the timeout to `0` to disable that focus
+timeout. If `fallback` is omitted, Triad uses the first valid profile from
+`cycle`, then profile order. The legacy `quickshell` block is still accepted and
+is translated into a single generated shell profile when `shells` is absent.
 
 ## Layout
 

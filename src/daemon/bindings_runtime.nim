@@ -1,4 +1,4 @@
-import std/[options, sequtils, strutils, tables, times]
+import std/[json, options, sequtils, strutils, tables, times]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -17,6 +17,7 @@ import ../types/[model, runtime_values]
 import
   cursor_shake, manage_requests, message_queue, protocol_surface_runtime,
   protocol_surfaces, render_runtime, state, wayland_helpers
+import ../utils/behavior_log
 
 const
   RiverEdgeTop* = 1'u32
@@ -1302,6 +1303,18 @@ proc onLayerOutputNonExclusive(
   let layerId = layerOutput.id()
   if daemon.layerOutputOwners.hasKey(layerId):
     let outputId = daemon.layerOutputOwners[layerId]
+    let activeShell = daemon[].currentModel.shells.active
+    writeBehaviorEvent(
+      "layer_output_non_exclusive_area_changed",
+      %*{
+        "output_id": outputId,
+        "x": x,
+        "y": y,
+        "width": width,
+        "height": height,
+        "active_shell": activeShell,
+      },
+    )
     daemon.enqueue(
       Msg(
         kind: MsgKind.WlOutputUsable,

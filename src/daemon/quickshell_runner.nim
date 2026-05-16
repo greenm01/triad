@@ -1,10 +1,11 @@
-import std/[json, options, os, osproc, strutils, times]
+import std/[json, options, os, osproc, sequtils, strutils, times]
 import chronicles
 import process_runner
 import ../core/[defaults, shell_profiles]
 import ../ipc/quickshell_compat
 import ../types/model
-from ../types/runtime_values import QuickshellConfig, ShellProfileConfig, ShellsConfig
+from ../types/runtime_values import
+  QuickshellConfig, ShellProfileConfig, ShellWatchdogConfig, ShellsConfig
 import ../utils/behavior_log
 
 type
@@ -16,6 +17,11 @@ type
     Handoff
     Failed
 
+  ShellTrackedExit* = object
+    shellName*: string
+    pid*: int
+    exitCode*: int
+
   QuickshellRunner* = object
     trackedProcess*: Process
     trackedShellName*: string
@@ -24,6 +30,7 @@ type
     recoveryAttempts*: int
     nextRecoveryMs*: int64
     recoveryReason*: string
+    exclusiveFocusSinceMs*: int64
 
 const
   MaxQuickshellRecoveryAttempts* = 3
@@ -57,15 +64,26 @@ proc clearQuickshellRecovery*(runner: var QuickshellRunner) =
   runner.nextRecoveryMs = 0
   runner.recoveryReason = ""
 
-proc trackedQuickshellRunning*(runner: var QuickshellRunner): bool =
+proc pollTrackedShellExit(runner: var QuickshellRunner): Option[ShellTrackedExit] =
   if runner.trackedProcess == nil:
-    return false
+    return none(ShellTrackedExit)
   let code = runner.trackedProcess.pollProcessExitCode(0)
   if code == -1:
-    return true
+    return none(ShellTrackedExit)
+  result = some(
+    ShellTrackedExit(
+      shellName: runner.trackedShellName,
+      pid: runner.trackedProcess.processID,
+      exitCode: code,
+    )
+  )
   writeBehaviorEvent(
     "quickshell_tracked_process_exited",
-    %*{"tracked_pid": runner.trackedProcess.processID, "exit_code": code},
+    %*{
+      "tracked_pid": result.get().pid,
+      "profile": result.get().shellName,
+      "exit_code": result.get().exitCode,
+    },
   )
   try:
     runner.trackedProcess.close()
@@ -73,7 +91,13 @@ proc trackedQuickshellRunning*(runner: var QuickshellRunner): bool =
     discard
   runner.trackedProcess = nil
   runner.trackedShellName = ""
-  false
+
+proc trackedQuickshellRunning*(runner: var QuickshellRunner): bool =
+  if runner.trackedProcess == nil:
+    return false
+  if runner.pollTrackedShellExit().isSome:
+    return false
+  true
 
 proc activeShellProfile(
   model: Model
@@ -113,6 +137,11 @@ proc legacyShellsFromQuickshell(config: QuickshellConfig): ShellsConfig =
     enabled: true,
     active: "quickshell",
     cycle: @["quickshell"],
+    watchdog: ShellWatchdogConfig(
+      enabled: true,
+      fallback: "quickshell",
+      exclusiveFocusTimeoutMs: DefaultShellWatchdogExclusiveFocusTimeoutMs,
+    ),
     profiles:
       @[
         ShellProfileConfig(
@@ -195,6 +224,7 @@ proc scheduleQuickshellRecovery*(
   )
 
 proc stopTrackedQuickshell*(runner: var QuickshellRunner, reason: string) =
+  runner.exclusiveFocusSinceMs = 0
   if runner.trackedProcess == nil:
     writeBehaviorEvent(
       "quickshell_tracked_stop_skipped", %*{"reason": reason, "tracked": false}
@@ -232,6 +262,7 @@ proc stopTrackedQuickshell*(runner: var QuickshellRunner, reason: string) =
   runner.trackedProcess = nil
 
 proc releaseTrackedQuickshell*(runner: var QuickshellRunner, reason: string) =
+  runner.exclusiveFocusSinceMs = 0
   if runner.trackedProcess == nil:
     writeBehaviorEvent(
       "quickshell_release_skipped", %*{"reason": reason, "tracked": false}
@@ -345,6 +376,7 @@ proc stopShellProfile(
     shells: ShellsConfig,
     profile: ShellProfileConfig,
     reason: string,
+    stopTracked = true,
 ) =
   writeShellBehaviorEvent(
     "shell_stop_requested",
@@ -403,7 +435,8 @@ proc stopShellProfile(
           %*{"command": profile.stop, "error": e.msg},
         )
 
-  if runner.trackedShellName.len == 0 or runner.trackedShellName == profile.name:
+  if stopTracked and
+      (runner.trackedShellName.len == 0 or runner.trackedShellName == profile.name):
     runner.stopTrackedQuickshell(reason)
 
 proc spawnShellProfile(
@@ -503,6 +536,99 @@ proc activeShellProfile(
 ): tuple[shells: ShellsConfig, profile: Option[ShellProfileConfig]] =
   result.shells = model.effectiveShells()
   result.profile = result.shells.activeShellProfile()
+
+proc stopStaleShellProfiles*(
+    runner: var QuickshellRunner, model: Model, reason: string
+) =
+  let active = model.activeShellProfile()
+  if active.profile.isNone:
+    return
+
+  writeBehaviorEvent(
+    "shell_startup_stale_cleanup_requested",
+    %*{
+      "reason": reason,
+      "active": active.shells.active,
+      "profiles": active.shells.profiles.mapIt(it.name),
+    },
+  )
+  for profile in active.shells.profiles:
+    runner.stopShellProfile(
+      model, active.shells, profile, reason & " stale cleanup", stopTracked = false
+    )
+
+proc pollShellWatchdog*(
+    runner: var QuickshellRunner, model: Model, nowMs = currentUnixMs()
+): Option[string] =
+  let active = model.activeShellProfile()
+  if active.profile.isNone or not active.shells.shouldWatchShells():
+    runner.exclusiveFocusSinceMs = 0
+    return none(string)
+
+  let profile = active.profile.get()
+  let fallback = active.shells.fallbackShellName()
+  let trackedExit = runner.pollTrackedShellExit()
+  if trackedExit.isSome:
+    let exited = trackedExit.get()
+    writeShellBehaviorEvent(
+      "shell_watchdog_process_exit",
+      active.shells,
+      profile,
+      "tracked process exited",
+      %*{
+        "tracked_profile": exited.shellName,
+        "tracked_pid": exited.pid,
+        "exit_code": exited.exitCode,
+        "fallback": fallback,
+      },
+    )
+    if exited.shellName == profile.name:
+      runner.exclusiveFocusSinceMs = 0
+      if fallback.len > 0 and fallback != profile.name:
+        writeShellBehaviorEvent(
+          "shell_watchdog_fallback_requested",
+          active.shells,
+          profile,
+          "tracked process exited",
+          %*{"fallback": fallback},
+        )
+        return some(fallback)
+      runner.scheduleQuickshellRecovery(
+        model, "shell watchdog process exit", QuickshellSpawnStatus.Failed, nowMs
+      )
+    return none(string)
+
+  if model.sessionLocked or active.shells.watchdog.exclusiveFocusTimeoutMs <= 0:
+    runner.exclusiveFocusSinceMs = 0
+    return none(string)
+  if not model.layerFocusExclusive:
+    runner.exclusiveFocusSinceMs = 0
+    return none(string)
+  if fallback.len == 0 or fallback == profile.name:
+    runner.exclusiveFocusSinceMs = 0
+    return none(string)
+
+  if runner.exclusiveFocusSinceMs <= 0:
+    runner.exclusiveFocusSinceMs = nowMs
+    return none(string)
+
+  let elapsedMs = nowMs - runner.exclusiveFocusSinceMs
+  if elapsedMs < int64(active.shells.watchdog.exclusiveFocusTimeoutMs):
+    return none(string)
+
+  runner.exclusiveFocusSinceMs = 0
+  writeShellBehaviorEvent(
+    "shell_watchdog_exclusive_focus_timeout",
+    active.shells,
+    profile,
+    "exclusive layer focus timeout",
+    %*{
+      "fallback": fallback,
+      "elapsed_ms": elapsedMs,
+      "timeout_ms": active.shells.watchdog.exclusiveFocusTimeoutMs,
+    },
+  )
+  some(fallback)
 
 proc switchShell*(
     runner: var QuickshellRunner,
@@ -733,6 +859,7 @@ proc spawnPendingQuickshell*(
   let active = model.activeShellProfile()
   if active.profile.isNone:
     return
+  runner.stopStaleShellProfiles(model, reason)
   writeShellBehaviorEvent(
     "shell_startup_decision",
     active.shells,

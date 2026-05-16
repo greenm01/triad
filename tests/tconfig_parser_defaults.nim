@@ -106,6 +106,11 @@ shells {
   enabled #true
   active "noctalia"
   cycle "noctalia" "waybar"
+  watchdog {
+    enabled #true
+    fallback "waybar"
+    exclusive-focus-timeout-ms 12000
+  }
   profile "noctalia" {
     launch "qs" "-c" "noctalia"
     stop "qs" "kill" "-c" "noctalia" "--any-display"
@@ -396,6 +401,9 @@ switch-events {
     check config.shells.enabled
     check config.shells.active == "noctalia"
     check config.shells.cycle == @["noctalia", "waybar"]
+    check config.shells.watchdog.enabled
+    check config.shells.watchdog.fallback == "waybar"
+    check config.shells.watchdog.exclusiveFocusTimeoutMs == 12000
     check config.shells.profiles.len == 2
     check config.shells.profiles[0].launch == @["qs", "-c", "noctalia"]
     check config.shells.profiles[1].stop == @["pkill", "-x", "waybar"]
@@ -746,6 +754,9 @@ cursor {
     check config.layoutSwitchToast.enabled
     check config.layoutSwitchToast.timeoutMs == DefaultLayoutSwitchToastTimeoutMs
     check config.layoutSwitchToast.ringColor == DefaultLayoutSwitchToastRingColor
+    check config.shells.watchdog.enabled
+    check config.shells.watchdog.exclusiveFocusTimeoutMs ==
+      DefaultShellWatchdogExclusiveFocusTimeoutMs
     check config.janet.enabled
     check config.janet.manifestDir == "~/.config/triad/manifests"
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
