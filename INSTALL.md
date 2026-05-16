@@ -59,15 +59,19 @@ under your home directory.
 The Nix shell provides:
 
 - Nim, Nimble, and the native libraries needed to build Triad
-- River
+- River 0.4+ for the installed session launcher
 - Noctalia-shell, DankMaterialShell, and Waybar
 - common Wayland session utilities used by the starter config
 
 When run from `nix develop`, `tools/install_live_session.sh` records the shell's
-runtime command path in the installed launcher so display managers can start
-River and the default session utilities without inheriting the dev shell
-environment. The installer also pins those Nix store paths with user-local GC
-roots under `~/.local/state/triad/nix-gcroots/session-runtime`, so later
+runtime command path in local launchers so display managers and bare TTYs can
+start River and the default session utilities without inheriting the dev shell
+environment. The installer writes `~/.local/bin/triad-river` as the pinned
+River launcher and writes `~/.local/bin/river` when that path is absent or
+already Triad-managed. Both launchers pass arguments through to River, so
+`river -c other-init` still works. The installer also pins those Nix store
+paths with user-local GC roots under
+`~/.local/state/triad/nix-gcroots/session-runtime`, so later
 `nix-collect-garbage` runs do not remove River or the session utilities that
 the login launcher uses. Remove that directory only if you intentionally want a
 future garbage collection to reclaim the Nix-provided session runtime.
@@ -166,6 +170,8 @@ The installer builds optimized binaries first, then installs:
 ```bash
 ~/.local/bin/triad
 ~/.local/bin/triad_niri
+~/.local/bin/triad-river
+~/.local/bin/river
 ~/.local/bin/river-triad-session
 ~/.local/bin/triad-manager-loop
 ```
@@ -192,18 +198,25 @@ work when your current compositor and wlroots backend support it.
 3. Start River with Triad:
 
 ```bash
-river -c ~/.local/bin/triad-manager-loop
+~/.local/bin/river-triad-session
 ```
 
 Return to your main desktop with `Ctrl+Alt+F1` or `Ctrl+Alt+F2`, depending on
 your distribution and display manager.
+
+To start River directly with a custom init, use the installed pass-through
+launcher:
+
+```bash
+~/.local/bin/river -c ~/.local/bin/triad-manager-loop
+```
 
 ### Nested Wayland Smoke Test
 
 From an existing Wayland desktop:
 
 ```bash
-WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
+WLR_BACKENDS=wayland ~/.local/bin/river -c ~/.local/bin/triad-manager-loop
 ```
 
 This is useful for quick smoke testing. A real login session is the better path
@@ -215,7 +228,7 @@ Normal sessions keep behavior JSON logs off. For a diagnostic session, enable
 dev mode before starting River:
 
 ```bash
-TRIAD_DEV_MODE=1 river -c ~/.local/bin/triad-manager-loop
+TRIAD_SESSION_DEV_MODE=1 ~/.local/bin/river-triad-session
 ```
 
 Installed display-manager sessions clear inherited `TRIAD_DEV_MODE` and

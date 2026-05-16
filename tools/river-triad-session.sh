@@ -39,7 +39,7 @@ case "${TRIAD_SESSION_DEV_MODE:-}" in
     ;;
 esac
 
-river_bin="${TRIAD_RIVER_BIN:-river}"
+river_bin="${TRIAD_RIVER_BIN:-$HOME/.local/bin/triad-river}"
 manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
 dbus_runner="$(find_dbus_run_session)"
 
