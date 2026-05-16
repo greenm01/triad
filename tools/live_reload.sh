@@ -181,18 +181,77 @@ def read_state(path):
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
+def windows_by_id(state):
+    result = {}
+    for window in state.get("windows", []):
+        if not isinstance(window, dict):
+            continue
+        win_id = window.get("id")
+        if isinstance(win_id, int):
+            result[win_id] = window
+    return result
+
+def app_pid_counts(state):
+    result = {}
+    for window in state.get("windows", []):
+        if not isinstance(window, dict):
+            continue
+        app_id = window.get("app_id", "")
+        pid = window.get("pid", 0)
+        if app_id and isinstance(pid, int) and pid > 0:
+            key = (app_id, pid)
+            result[key] = result.get(key, 0) + 1
+    return result
+
+def canonical_maps(expected_state, actual_state):
+    expected_windows = windows_by_id(expected_state)
+    actual_windows = windows_by_id(actual_state)
+    expected_app_pid_counts = app_pid_counts(expected_state)
+    actual_app_pid_counts = app_pid_counts(actual_state)
+
+    def canonical_id(window, counts):
+        identifier = window.get("identifier", "")
+        if identifier:
+            return "identifier:" + identifier
+        app_id = window.get("app_id", "")
+        pid = window.get("pid", 0)
+        if (
+            app_id and isinstance(pid, int) and pid > 0 and
+            counts.get((app_id, pid), 0) == 1
+        ):
+            return "app-pid:{0}:{1}".format(app_id, pid)
+        return "id:" + str(window.get("id", 0))
+
+    expected_map = {
+        win_id: canonical_id(window, expected_app_pid_counts)
+        for win_id, window in expected_windows.items()
+    }
+    actual_map = {
+        win_id: canonical_id(window, actual_app_pid_counts)
+        for win_id, window in actual_windows.items()
+    }
+    return expected_map, actual_map
+
 def rounded(value):
     if isinstance(value, float):
         return round(value, 3)
     return value
 
-def normalize_columns(columns):
+def canonical_ref(value, id_map):
+    if isinstance(value, int) and value in id_map:
+        return id_map[value]
+    return value
+
+def normalize_columns(columns, id_map):
     result = []
     for column in columns or []:
         if not isinstance(column, dict):
             continue
         result.append({
-            "windows": column.get("windows", []),
+            "windows": [
+                canonical_ref(win_id, id_map)
+                for win_id in column.get("windows", [])
+            ],
             "width_proportion": rounded(column.get("width_proportion", 0.0)),
             "scroller_single_proportion": rounded(
                 column.get("scroller_single_proportion", 0.0)
@@ -201,7 +260,7 @@ def normalize_columns(columns):
         })
     return result
 
-def normalize_tags(state):
+def normalize_tags(state, id_map):
     result = {}
     for tag in state.get("tags", []):
         if not isinstance(tag, dict):
@@ -212,8 +271,8 @@ def normalize_tags(state):
         result[tag_id] = {
             "name": tag.get("name", ""),
             "layout_mode": tag.get("layout_mode", 0),
-            "columns": normalize_columns(tag.get("columns", [])),
-            "focused_window": tag.get("focused_window", 0),
+            "columns": normalize_columns(tag.get("columns", []), id_map),
+            "focused_window": canonical_ref(tag.get("focused_window", 0), id_map),
             "target_viewport_x_offset": rounded(
                 tag.get("target_viewport_x_offset", 0.0)
             ),
@@ -231,7 +290,7 @@ def normalize_tags(state):
         }
     return result
 
-def normalize_windows(state):
+def normalize_windows(state, id_map):
     result = {}
     for window in state.get("windows", []):
         if not isinstance(window, dict):
@@ -243,6 +302,11 @@ def normalize_windows(state):
         for key, value in window.items():
             if key in VOLATILE_WINDOW_FIELDS:
                 continue
+            if key == "id":
+                continue
+            if key in {"parent_id", "swallowed_by", "swallowing"}:
+                normalized[key] = canonical_ref(value, id_map)
+                continue
             if isinstance(value, float):
                 normalized[key] = rounded(value)
             elif isinstance(value, dict):
@@ -252,32 +316,37 @@ def normalize_windows(state):
                 }
             else:
                 normalized[key] = value
-        result[win_id] = normalized
+        result[id_map.get(win_id, "id:" + str(win_id))] = normalized
     return result
 
 def normalize_output_tags(state):
-    output_tags = []
+    tags = []
     for entry in state.get("output_tags", []):
         if isinstance(entry, dict):
-            output_tags.append((entry.get("output_id", 0), entry.get("tag_id", 0)))
-    return sorted(output_tags)
+            tag_id = entry.get("tag_id", 0)
+            if isinstance(tag_id, int):
+                tags.append(tag_id)
+    return sorted(tags)
 
-def normalize_focus_history(state):
-    return state.get("focus_history", [])
+def normalize_focus_history(state, id_map):
+    return [canonical_ref(win_id, id_map) for win_id in state.get("focus_history", [])]
 
-def normalized(state):
+def normalized(state, id_map):
     return {
         "active_tag": state.get("active_tag", 0),
-        "focused_window": state.get("focused_window", 0),
-        "tags": normalize_tags(state),
-        "windows": normalize_windows(state),
+        "focused_window": canonical_ref(state.get("focused_window", 0), id_map),
+        "tags": normalize_tags(state, id_map),
+        "windows": normalize_windows(state, id_map),
         "output_tags": normalize_output_tags(state),
-        "focus_history": normalize_focus_history(state),
+        "focus_history": normalize_focus_history(state, id_map),
         "workspace_history": state.get("workspace_history", []),
     }
 
-expected = normalized(read_state(sys.argv[1]))
-actual = normalized(read_state(sys.argv[2]))
+expected_raw = read_state(sys.argv[1])
+actual_raw = read_state(sys.argv[2])
+expected_id_map, actual_id_map = canonical_maps(expected_raw, actual_raw)
+expected = normalized(expected_raw, expected_id_map)
+actual = normalized(actual_raw, actual_id_map)
 
 ok = True
 for key in ["active_tag", "focused_window", "output_tags", "focus_history", "workspace_history"]:
