@@ -9,7 +9,7 @@ bin = @["triad", "triad_niri"]
 
 # Dependencies
 
-requires "nim >= 2.2.10"
+requires "nim >= 2.2.4"
 requires "nimkdl >= 2.1.0"
 requires "https://github.com/panno8M/wayland-nim == 0.1.0"
 requires "https://github.com/Nimaoth/fsnotify >= 0.1.6"

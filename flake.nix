@@ -258,6 +258,50 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          devNimble = pkgs.writeShellApplication {
+            name = "nimble";
+            runtimeInputs = [
+              pkgs.coreutils
+              pkgs.nimble
+            ];
+            text = ''
+              nimble_dir="''${TRIAD_NIMBLE_DIR:-$PWD/.nimble}"
+              mkdir -p "$nimble_dir"
+
+              if [ "''${1:-}" = "build" ]; then
+                has_define=0
+                has_strip=0
+                for arg in "$@"; do
+                  case "$arg" in
+                    -d:*|--define:*|--define=*)
+                      has_define=1
+                      ;;
+                    --passL:-s|--passL=-s)
+                      has_strip=1
+                      ;;
+                  esac
+                done
+                if [ "$has_define" -eq 0 ]; then
+                  set -- "$@" -d:release
+                fi
+                if [ "$has_strip" -eq 0 ]; then
+                  set -- "$@" --passL:-s
+                fi
+              fi
+
+              exec ${pkgs.nimble}/bin/nimble \
+                --nimbleDir:"$nimble_dir" \
+                --useSystemNim \
+                "$@"
+            '';
+          };
+          devLl = pkgs.writeShellApplication {
+            name = "ll";
+            runtimeInputs = [ pkgs.coreutils ];
+            text = ''
+              exec ls -la "$@"
+            '';
+          };
           sessionRuntimePackages =
             let
               dankShell = inputs.dank-material-shell.packages.${system}.dms-shell;
@@ -292,7 +336,8 @@
           default = pkgs.mkShell {
             packages = [
               pkgs.nim
-              pkgs.nimble
+              devNimble
+              devLl
               pkgs.nph
               pkgs.nimlangserver
               pkgs.pkg-config
@@ -307,6 +352,7 @@
             TRIAD_NIX_RUNTIME_PATH = pkgs.lib.makeBinPath sessionRuntimePackages;
 
             shellHook = ''
+              export TRIAD_NIMBLE_DIR="''${TRIAD_NIMBLE_DIR:-$PWD/.nimble}"
               echo "Triad dev shell"
               echo "  build:         nimble build"
               echo "  nix build:     nix build .#triad"

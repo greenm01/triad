@@ -55,7 +55,7 @@ After that, log out and select **River (Triad)**.
 
 ## Local Nim Install
 
-Without Nix, install River 0.4+, Nim 2.2.10+, Nimble, and Triad's Nim package
+Without Nix, install River 0.4+, Nim 2.2.4+, Nimble, and Triad's Nim package
 dependencies. Then build and install the live session helpers:
 
 ```bash

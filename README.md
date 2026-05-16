@@ -136,7 +136,7 @@ choosenim update stable
 nim --version
 ```
 
-The compiler must report Nim 2.2.10 or newer before running the full preflight.
+The compiler must report Nim 2.2.4 or newer before running the full preflight.
 
 ### Development Checks
 
