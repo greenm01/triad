@@ -1531,6 +1531,8 @@ proc loadConfig*(path: string): Config =
                 clampF32(float32(child.args[0].kFloat()), 0.0001, 0.75)
             elif child.name == "tab-mode":
               result.overview.tabMode = child.childFlagEnabled()
+            elif child.name == "scroller-indicators":
+              result.overview.scrollerIndicators = child.childFlagEnabled()
             elif child.name == "hot-corners":
               for cornerChild in child.children:
                 try:

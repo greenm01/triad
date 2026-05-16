@@ -195,6 +195,7 @@ overview {
   inner-gap-multiplier 1.75
   zoom 0.25
   tab-mode
+  scroller-indicators
   hot-corners {
     size 12
     top-left
@@ -485,6 +486,7 @@ switch-events {
     check config.overview.innerGapMultiplier == 1.75'f32
     check config.overview.zoom == 0.25'f32
     check config.overview.tabMode
+    check config.overview.scrollerIndicators
     check config.overview.hotCorners.size == 12
     check config.overview.hotCorners.topLeft
     check not config.overview.hotCorners.topRight
@@ -840,6 +842,7 @@ cursor {
     check model.defaultWorkspaceLayout == LayoutMode.Scroller
     check model.overviewOuterGap == DefaultOverviewOuterGap
     check model.overviewZoom == 0.75'f32
+    check not model.overviewScrollerIndicators
     check model.overviewHotCorners.size == 1000
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32

@@ -124,6 +124,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
+| Overview | Scroller overflow indicators | | WM policy | `overview { scroller-indicators }` | X | Off by default. When enabled, scroller previews render subtle edge hints if hidden columns extend beyond the preview frame. |
 | Overview | Hot corner overview | `enable_hotarea`, `hotarea_size`, `hotarea_corner` | WM policy | `overview { hot-corners { size; top-left; top-right; bottom-left; bottom-right } }` | X | Triad hot corners are opt-in and open overview only. |
 | Overview | Overview tab mode | `ov_tab_mode` | WM policy | `overview { tab-mode }` | X | Off by default. Keyboard overview opener bindings with modifiers become hold-to-overview sessions: repeat the opener to cycle windows, release the opener modifier to close overview. |
 | Scratchpad | Standard scratchpad | `minimized`, `toggle_scratchpad`, `restore_minimized` | WM policy | `move-to-scratchpad`, `toggle-scratchpad`, `restore-scratchpad` | X | Default chords mirror Mango: `Super+i` sends the focused window, `Alt+z` toggles/cycles standard scratchpad windows, and `Super+Shift+i` restores the window to its previous workspace. |
@@ -340,7 +341,7 @@ KDL config nodes and fields:
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
 - `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`, `tab-mode`,
-  `hot-corners`.
+  `scroller-indicators`, `hot-corners`.
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,
   `previews`, `binds`.
 - `hotkey-overlay`: `skip-at-startup`, `hide-not-bound`, `position`, and

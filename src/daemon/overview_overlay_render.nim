@@ -10,8 +10,8 @@ const
   EmptyWorkspaceFill = 0xcc000000'u32
   HiddenBadgeFill = 0xdd000000'u32
   HiddenBadgeText = 0xffffffff'u32
-  ScrollIndicatorColor = 0xccffffff'u32
-  ScrollIndicatorThickness = 5'i32
+  ScrollIndicatorColor = 0x55ffffff'u32
+  ScrollIndicatorThickness = 2'i32
 
 proc emptyWorkspaceFrameThickness*(model: Model): int32 =
   max(2'i32, min(max(0'i32, model.borderWidth), 8'i32))
@@ -24,8 +24,8 @@ proc overviewOverlayCacheKey*(model: Model, screen: rv.Rect): string =
   result =
     $screen.x & ":" & $screen.y & ":" & $screen.w & ":" & $screen.h & ":" &
     $model.activeWorkspaceSlot() & ":" & $model.effectiveOverviewZoom() & ":" &
-    $model.borderWidth & ":" & $model.focusedBorderColor & ":" &
-    $model.unfocusedBorderColor
+    $model.overviewScrollerIndicators & ":" & $model.borderWidth & ":" &
+    $model.focusedBorderColor & ":" & $model.unfocusedBorderColor
   for slot in model.previewSlots():
     result.add(":")
     result.add($slot)
@@ -153,10 +153,12 @@ proc renderOverviewOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
       rect.x - screen.x, rect.y - screen.y, rect.w, rect.h, thickness, color
     )
 
+  if model.overviewScrollerIndicators:
+    for idx, _ in slots:
+      result.drawScrollIndicator(
+        screen, model.overviewScrollIndicator(screen, slots, idx)
+      )
   for idx, _ in slots:
-    result.drawScrollIndicator(
-      screen, model.overviewScrollIndicator(screen, slots, idx)
-    )
     result.drawHiddenCountBadge(
       screen, model.overviewHiddenCountBadge(screen, slots, idx)
     )

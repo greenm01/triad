@@ -849,6 +849,7 @@ Overview supports opt-in tab mode for Mango-style hold navigation:
 
 ```kdl
 overview {
+  scroller-indicators #false
   tab-mode
 }
 
@@ -857,6 +858,9 @@ bindings {
 }
 ```
 
+- `scroller-indicators #true|#false`: controls overview edge hints for
+  scroller layouts when columns extend beyond the preview frame. The default is
+  off.
 - `tab-mode`: enables overview tab mode. The default is off. When enabled,
   keyboard bindings for `toggle-overview` and `open-overview` that include
   modifiers start a hold session instead of acting as a normal toggle. For

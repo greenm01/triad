@@ -25,7 +25,7 @@ const DeletedRuntimeModules = [
 
 const OverviewEmptyWorkspaceFill = 0xcc000000'u32
 const OverviewHiddenBadgeFill = 0xdd000000'u32
-const OverviewScrollIndicatorColor = 0xccffffff'u32
+const OverviewScrollIndicatorColor = 0x55ffffff'u32
 
 proc baseConfig(): Config =
   Config(
@@ -608,6 +608,7 @@ suite "Runtime state primitives":
 
   test "overview overlay renders horizontal scroller overflow indicators":
     var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.overviewScrollerIndicators = true
     for msg in [
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
@@ -629,6 +630,28 @@ suite "Runtime state primitives":
     check indicator.before
     check indicator.after
     check rendered.pixels.anyIt(it == OverviewScrollIndicatorColor)
+    check rendered.pixelAt(
+      indicator.rect.x + 2, indicator.rect.y + indicator.rect.h div 2
+    ) == 0
+
+  test "overview overlay hides scroller overflow indicators by default":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three"),
+    ]:
+      let (next, _) = model.update(msg)
+      model = next
+    discard model.setTagViewportCurrent(model.activeTag, 100.0'f32, 0.0'f32)
+    let (next, _) = model.update(Msg(kind: MsgKind.CmdOpenOverview))
+    model = next
+
+    let rendered = model.renderOverviewOverlayBuffer(model.primaryScreen())
+
+    check not model.overviewScrollerIndicators
+    check not rendered.pixels.anyIt(it == OverviewScrollIndicatorColor)
 
   test "overview overlay renders vertical scroller overflow indicators":
     var model = initRuntimeStateFromConfig(baseConfig()).model

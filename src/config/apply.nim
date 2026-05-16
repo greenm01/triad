@@ -299,6 +299,7 @@ proc applyConfig*(model: var Model, config: Config) =
     else:
       DefaultOverviewZoom
   model.overviewTabMode = config.overview.tabMode
+  model.overviewScrollerIndicators = config.overview.scrollerIndicators
   model.overviewHotCorners = config.overview.hotCorners
   model.overviewHotCorners.size =
     if model.overviewHotCorners.size > 0:

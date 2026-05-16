@@ -12,7 +12,7 @@ layout {
         split-ratio 0.55
     }
     border {
-        width 3
+        width 4
         active-color "#7fc8ff"
         inactive-color "#505050"
     }
@@ -32,6 +32,7 @@ scratchpad {
 overview {
     outer-gap 64
     inner-gap-multiplier 2.0
+    scroller-indicators #false
     hot-corners {
         bottom-left
     }

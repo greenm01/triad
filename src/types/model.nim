@@ -420,6 +420,7 @@ type
     overviewOuterGap*: int32
     overviewInnerGapMultiplier*: float32
     overviewZoom*: float32
+    overviewScrollerIndicators*: bool
     overviewHotCorners*: OverviewHotCornersConfig
     overviewScrollOffset*: float32
     scrollerFocusCenter*: bool

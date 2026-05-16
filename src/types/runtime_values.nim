@@ -248,6 +248,7 @@ type
     innerGapMultiplier*: float32
     zoom*: float32
     tabMode*: bool
+    scrollerIndicators*: bool
     hotCorners*: OverviewHotCornersConfig
 
   RecentWindowDirection* {.pure.} = enum
