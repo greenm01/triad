@@ -56,7 +56,10 @@ nix build .#triad
 nix run .#install-session
 ```
 
-Log out and select **River (Triad)** from your display manager's session menu.
+On non-NixOS systems, `install-session` registers the display-manager session
+under `/usr/share/wayland-sessions` by default. On NixOS, use the flake's
+`nixosModules.default` module and set `programs.triad.enable = true`. See
+[INSTALL.md](INSTALL.md) for both paths.
 
 ### Toolchain
 

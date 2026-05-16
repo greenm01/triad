@@ -168,6 +168,16 @@
               export TRIAD_MANAGER_LOOP="''${TRIAD_MANAGER_LOOP:-${managerLoop}/bin/triad-manager-loop}"
               export TRIAD_RIVER_BIN="''${TRIAD_RIVER_BIN:-${pkgs.river}/bin/river}"
 
+              case "''${TRIAD_SESSION_DEV_MODE:-}" in
+                1|true|TRUE|yes|YES|on|ON)
+                  export TRIAD_DEV_MODE=1
+                  ;;
+                *)
+                  unset TRIAD_DEV_MODE
+                  unset TRIAD_BEHAVIOR_LOG
+                  ;;
+              esac
+
               exec "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
             '';
           };
@@ -196,12 +206,52 @@
             name = "triad-install-session";
             runtimeInputs = [ pkgs.coreutils ];
             text = ''
+              usage() {
+                printf '%s\n' \
+                  "usage: triad-install-session [--system|--user]" \
+                  "" \
+                  "Installs the River (Triad) Wayland session entry." \
+                  "" \
+                  "  --system   install to /usr/share/wayland-sessions (default)" \
+                  "  --user     install to \$XDG_DATA_HOME/wayland-sessions" \
+                  "" \
+                  "Set TRIAD_WAYLAND_SESSION_DIR to override the session directory."
+              }
+
+              scope=system
+              while [ "$#" -gt 0 ]; do
+                case "$1" in
+                  --system)
+                    scope=system
+                    ;;
+                  --user)
+                    scope=user
+                    ;;
+                  -h|--help)
+                    usage
+                    exit 0
+                    ;;
+                  *)
+                    printf '%s\n' "triad-install-session: unknown option: $1" >&2
+                    usage >&2
+                    exit 2
+                    ;;
+                esac
+                shift
+              done
+
               config_dir="''${XDG_CONFIG_HOME:-$HOME/.config}/triad"
               config_path="$config_dir/config.kdl"
-              desktop_dir="''${TRIAD_WAYLAND_SESSION_DIR:-''${XDG_DATA_HOME:-$HOME/.local/share}/wayland-sessions}"
+              if [ -n "''${TRIAD_WAYLAND_SESSION_DIR:-}" ]; then
+                desktop_dir="$TRIAD_WAYLAND_SESSION_DIR"
+              elif [ "$scope" = user ]; then
+                desktop_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/wayland-sessions"
+              else
+                desktop_dir="/usr/share/wayland-sessions"
+              fi
               desktop_path="$desktop_dir/river-triad.desktop"
 
-              mkdir -p "$config_dir" "$desktop_dir"
+              mkdir -p "$config_dir"
 
               if [ ! -e "$config_path" ] && [ ! -L "$config_path" ]; then
                 install -Dm644 ${./config.default.kdl} "$config_path"
@@ -210,7 +260,22 @@
                 printf '%s\n' "triad-install-session: leaving existing config at $config_path"
               fi
 
-              install -Dm644 ${desktopFile} "$desktop_path"
+              if install -Dm644 ${desktopFile} "$desktop_path" 2>/dev/null; then
+                :
+              elif command -v sudo >/dev/null 2>&1; then
+                sudo install -Dm644 ${desktopFile} "$desktop_path"
+              elif command -v doas >/dev/null 2>&1; then
+                doas install -Dm644 ${desktopFile} "$desktop_path"
+              else
+                printf '%s\n' "triad-install-session: cannot write $desktop_path" >&2
+                printf '%s\n' "triad-install-session: rerun as root, install sudo/doas, or pass --user" >&2
+                exit 1
+              fi
+
+              if [ "$scope" = user ] && [ -z "''${TRIAD_WAYLAND_SESSION_DIR:-}" ]; then
+                printf '%s\n' "triad-install-session: warning: user-local sessions are not read by every display manager" >&2
+              fi
+
               printf '%s\n' "triad-install-session: installed $desktop_path"
               printf '%s\n' "triad-install-session: select 'River (Triad)' at login"
             '';
@@ -366,6 +431,30 @@
         triad = self.packages.${system}.triad;
         triadSession = self.packages.${system}.triadSession;
       });
+
+      nixosModules = {
+        default =
+          {
+            config,
+            lib,
+            pkgs,
+            ...
+          }:
+          let
+            cfg = config.programs.triad;
+            triadSession = self.packages.${pkgs.stdenv.hostPlatform.system}.triadSession;
+          in
+          {
+            options.programs.triad.enable = lib.mkEnableOption "the River (Triad) Wayland session";
+
+            config = lib.mkIf cfg.enable {
+              environment.systemPackages = [ triadSession ];
+              services.displayManager.sessionPackages = [ triadSession ];
+            };
+          };
+
+        triad = self.nixosModules.default;
+      };
 
       formatter = forAllSystems (
         system:

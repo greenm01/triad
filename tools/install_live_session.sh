@@ -32,7 +32,7 @@ command -v nimble >/dev/null 2>&1 ||
   fail "nimble is required to build optimized session binaries"
 
 printf '%s\n' "install-live-session: building optimized triad binaries"
-(cd "$repo_dir" && nimble build -d:release)
+(cd "$repo_dir" && nimble build -d:release --opt:speed --passL:-s)
 
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"

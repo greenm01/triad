@@ -5,6 +5,39 @@ Triad runs as the window-management client inside that session.
 
 ## Quick Start With Nix
 
+On Void, Arch, Debian, Ubuntu, and other non-NixOS systems with the Nix package
+manager:
+
+```bash
+nix --version
+```
+
+If `nix` reports `cannot connect to socket at '/var/nix/daemon-socket/socket'`,
+start the Nix daemon before running Triad's installer.
+
+On Void Linux with runit:
+
+```bash
+sudo ln -s /etc/sv/nix-daemon /var/service/
+sleep 1
+sudo sv up nix-daemon
+sudo sv status nix-daemon
+```
+
+On systemd-based distributions such as Arch, Debian, and Ubuntu:
+
+```bash
+sudo systemctl enable --now nix-daemon.socket
+```
+
+Some Nix packages use `nix-daemon.service` instead of socket activation:
+
+```bash
+sudo systemctl enable --now nix-daemon.service
+```
+
+Then install Triad's optimized Nix session package:
+
 ```bash
 git clone https://github.com/greenm01/triad.git
 cd triad
@@ -14,7 +47,9 @@ nix run .#install-session
 ```
 
 Then log out and choose **River (Triad)** from your display manager's session
-menu.
+menu. The installer writes the session entry to
+`/usr/share/wayland-sessions/river-triad.desktop` by default and uses `sudo` or
+`doas` when needed.
 
 The Nix flake provides:
 
@@ -22,7 +57,7 @@ The Nix flake provides:
 - River
 - Noctalia-shell, DankMaterialShell, and Waybar
 - common Wayland session utilities used by the default config
-- a user-local `River (Triad)` desktop entry
+- a `River (Triad)` desktop entry for display managers
 
 `nix run .#install-session` installs a starter config only when
 `~/.config/triad/config.kdl` does not already exist.
@@ -36,22 +71,65 @@ nix --extra-experimental-features 'nix-command flakes' run .#install-session
 
 ## Add Triad To Your Login Screen
 
-The Nix installer writes a user-local session file here:
+The Nix installer writes a system session file here:
+
+```bash
+/usr/share/wayland-sessions/river-triad.desktop
+```
+
+That is the most portable location for display managers on Void, Arch, Debian,
+Ubuntu, and similar systems. To install somewhere else:
+
+```bash
+TRIAD_WAYLAND_SESSION_DIR=/usr/local/share/wayland-sessions \
+  nix run .#install-session
+```
+
+User-local session files are still available for display managers that support
+them:
+
+```bash
+nix run .#install-session -- --user
+```
+
+That writes:
 
 ```bash
 ~/.local/share/wayland-sessions/river-triad.desktop
 ```
 
-Most display managers read user-local Wayland sessions. If yours does not, build
-the session package and install the desktop entry system-wide:
+Many display managers ignore user-local sessions, so prefer the default system
+install unless you know yours scans `$XDG_DATA_HOME/wayland-sessions`.
 
-```bash
-nix build .#triadSession
-sudo install -Dm644 result/share/wayland-sessions/river-triad.desktop \
-  /usr/share/wayland-sessions/river-triad.desktop
+### NixOS
+
+For NixOS, import the flake module and enable the session declaratively:
+
+```nix
+{
+  inputs.triad.url = "github:greenm01/triad";
+
+  outputs = { nixpkgs, triad, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        triad.nixosModules.default
+        {
+          programs.triad.enable = true;
+        }
+      ];
+    };
+  };
+}
 ```
 
-After that, log out and select **River (Triad)**.
+Then rebuild your system and log out:
+
+```bash
+sudo nixos-rebuild switch --flake .#host
+```
+
+After that, select **River (Triad)** from the display manager.
 
 ## Local Nim Install
 
@@ -74,7 +152,8 @@ The installer builds optimized binaries first, then installs:
 
 It also installs a `River (Triad)` login session. By default that desktop entry
 goes to `/usr/share/wayland-sessions` and may require passwordless sudo for the
-final install step. To install it somewhere else:
+final install step. The installed binaries are built with Nim release and speed
+optimizations. To install the session entry somewhere else:
 
 ```bash
 TRIAD_WAYLAND_SESSION_DIR="$HOME/.local/share/wayland-sessions" \
@@ -118,6 +197,11 @@ dev mode before starting River:
 ```bash
 TRIAD_DEV_MODE=1 river -c ~/.local/bin/triad-manager-loop
 ```
+
+Installed display-manager sessions clear inherited `TRIAD_DEV_MODE` and
+`TRIAD_BEHAVIOR_LOG` so a login session is not accidentally started in
+diagnostic mode. To opt a login session into diagnostics, set
+`TRIAD_SESSION_DEV_MODE=1` in the session environment before launch.
 
 Dev mode enables compact behavior JSONL logs unless
 `TRIAD_BEHAVIOR_LOG=0` is set. You can also run `triad --dev-mode` directly
