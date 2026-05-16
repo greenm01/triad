@@ -51,6 +51,8 @@ For complete installation and session setup instructions, see
 The recommended path is to install River 0.4+ from the upstream River source
 instructions, then build Triad locally:
 
+https://codeberg.org/river/river
+
 ```bash
 git clone https://github.com/greenm01/triad.git
 cd triad
