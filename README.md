@@ -17,7 +17,7 @@ Triad's architecture has three parts:
   surface placement.
 * **Model:** Triad owns window-management policy in one canonical,
   data-oriented runtime model.
-* **Projection:** Quickshell and IPC clients consume snapshots of that model,
+* **Projection:** IPC clients like Waybar and Quickshell consume snapshots of that model,
   including Niri-shaped JSON for existing shell ecosystems.
 
 That is the trinity: protocol, model, projection. Not a theme. A boundary.
