@@ -75,15 +75,28 @@ workspace-rules {
 shells {
     enabled #true
     active "noctalia"
-    cycle "noctalia"
+    cycle "noctalia" "dank" "waybar"
     watchdog {
         enabled #true
+        fallback "waybar"
         exclusive-focus-timeout-ms 30000
     }
 
     profile "noctalia" {
-        launch "qs" "-c" "noctalia-shell"
-        stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+        launch "noctalia-shell"
+        stop "pkill" "-f" "noctalia-shell|noctalia-qs|qs.*noctalia-shell"
+        niri-compat #true
+    }
+
+    profile "dank" {
+        launch "dms" "run" "--session"
+        stop "dms" "kill"
+        niri-compat #true
+    }
+
+    profile "waybar" {
+        launch "waybar"
+        stop "pkill" "-x" "waybar"
         niri-compat #true
     }
 }

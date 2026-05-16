@@ -112,13 +112,44 @@ it presentable. A fair division of labor, and frankly overdue.
 
 ### Installation
 
-Ensure you have a working River 0.4+ session. Triad is built using Nim 2.2.10+
-and requires the `nimkdl`, `wayland`, `fsnotify`, and `chronicles` packages.
+The easiest path for development is Nix. The flake provides Nim, River,
+Noctalia-shell, DankMaterialShell, Waybar, and the small Wayland utilities used
+by the default config.
+
+```bash
+nix develop
+nimble build
+nix build .#triad
+```
+
+To install a login session for your user:
+
+```bash
+nix run .#install-session
+```
+
+That writes a `River (Triad)` desktop entry under your user data directory and
+installs a starter config only when `~/.config/triad/config.kdl` does not
+already exist. The default config starts Noctalia first, includes Dank and
+Waybar as switchable profiles, and uses Waybar as the watchdog fallback.
+
+Without Nix, ensure you have a working River 0.4+ session. Triad is built using
+Nim 2.2.10+ and requires the `nimkdl`, `wayland`, `fsnotify`, `chronicles`, and
+`pixie` packages.
 
 ```bash
 nimble build
 ./triad
 ```
+
+For a local live-session install, use:
+
+```bash
+tools/install_live_session.sh
+```
+
+The live-session installer builds `nimble build -d:release` first, then installs
+the optimized binaries to `~/.local/bin/triad` and `~/.local/bin/triad_niri`.
 
 ### Toolchain
 

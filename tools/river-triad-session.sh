@@ -6,4 +6,7 @@ export XDG_SESSION_DESKTOP=river-triad
 export XDG_SESSION_TYPE=wayland
 export PATH="$HOME/.local/bin:$PATH"
 
-exec /home/niltempus/src/river/zig-out/bin/river -c "$HOME/.local/bin/triad-manager-loop"
+river_bin="${TRIAD_RIVER_BIN:-river}"
+manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
+
+exec "$river_bin" -c "$manager_loop"

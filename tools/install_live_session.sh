@@ -23,8 +23,17 @@ config_path="$config_dir/config.kdl"
 config_target="$repo_dir/config.default.kdl"
 desktop_dir="${TRIAD_WAYLAND_SESSION_DIR:-/usr/share/wayland-sessions}"
 desktop_path="$desktop_dir/river-triad.desktop"
+desktop_tmp="$(mktemp)"
+trap 'rm -f "$desktop_tmp"' EXIT
 
 [ -f "$config_target" ] || fail "missing config: $config_target"
+
+command -v nimble >/dev/null 2>&1 ||
+  fail "nimble is required to build optimized session binaries"
+
+printf '%s\n' "install-live-session: building optimized triad binaries"
+(cd "$repo_dir" && nimble build -d:release)
+
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"
 
@@ -49,10 +58,19 @@ if [ -e "$config_path" ] || [ -L "$config_path" ]; then
 fi
 ln -sfn "$config_target" "$config_path"
 
+cat >"$desktop_tmp" <<EOF
+[Desktop Entry]
+Name=River (Triad)
+Comment=River Wayland compositor with the Triad window manager
+Exec=$bin_dir/river-triad-session
+Type=Application
+DesktopNames=river
+EOF
+
 if [ -w "$desktop_dir" ]; then
-  install -Dm644 "$repo_dir/tools/river-triad.desktop" "$desktop_path"
+  install -Dm644 "$desktop_tmp" "$desktop_path"
 else
-  sudo -n install -Dm644 "$repo_dir/tools/river-triad.desktop" "$desktop_path"
+  sudo -n install -Dm644 "$desktop_tmp" "$desktop_path"
 fi
 
 printf '%s\n' "install-live-session: installed $desktop_path"

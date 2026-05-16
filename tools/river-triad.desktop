@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=River (Triad)
 Comment=River Wayland compositor with the Triad window manager
-Exec=/home/niltempus/.local/bin/river-triad-session
+Exec=river-triad-session
 Type=Application
 DesktopNames=river

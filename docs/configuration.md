@@ -165,13 +165,13 @@ shells {
 
   watchdog {
     enabled #true
-    fallback "noctalia"
+    fallback "waybar"
     exclusive-focus-timeout-ms 30000
   }
 
   profile "noctalia" {
-    launch "qs" "-c" "noctalia-shell"
-    stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+    launch "noctalia-shell"
+    stop "pkill" "-f" "noctalia-shell|noctalia-qs|qs.*noctalia-shell"
     niri-compat #true
   }
 
