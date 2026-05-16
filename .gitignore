@@ -15,6 +15,10 @@
 /tests/.nimcache/
 /tests/nimcache/
 
+# Nix build results
+/result
+/result-*
+
 # Local smoke-test logs
 /triad-live-smoke.log
 /triad-live-smoke.out
