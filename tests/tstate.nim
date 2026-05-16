@@ -40,12 +40,13 @@ proc baseConfig(): Config =
       layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid],
     ),
     workspaces: WorkspaceConfig(defaultCount: 3),
-    tagRules: @[
-      TagRule(tagId: 1, name: "main"),
-      TagRule(
-        tagId: 2, name: "web", defaultLayoutSet: true, defaultLayout: LayoutMode.Grid
-      ),
-    ],
+    tagRules:
+      @[
+        TagRule(tagId: 1, name: "main"),
+        TagRule(
+          tagId: 2, name: "web", defaultLayoutSet: true, defaultLayout: LayoutMode.Grid
+        ),
+      ],
     hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
     terminal: TerminalConfig(command: @["foot"]),
   )
@@ -150,6 +151,12 @@ suite "Runtime state primitives":
     check not source.contains("var daemon")
     check not source.contains("template ")
     check source.contains("import daemon/app")
+
+  test "daemon main loop does not sleep before Wayland event service":
+    let source = readFile("src/daemon/app.nim")
+    check source.contains("asyncdispatch.poll(0)")
+    check not source.contains("asyncdispatch.poll(pollInterval)")
+    check not source.contains("asyncdispatch.poll(frameInterval)")
 
   test "types modules stay data-only":
     for path in typeFiles():
@@ -370,10 +377,11 @@ suite "Runtime state primitives":
 
   test "hotkey overlay renderer produces bounded ARGB buffers":
     let screen = Rect(x: 0, y: 0, w: 800, h: 600)
-    let rows = @[
-      HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
-      HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys"),
-    ]
+    let rows =
+      @[
+        HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
+        HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys"),
+      ]
     let rendered = renderHotkeyOverlayBuffer(rows, screen, 2)
     let bytes = argbBytes(rendered.pixels)
 
@@ -783,14 +791,15 @@ suite "Runtime state primitives":
       layout:
         LayoutConfig(gaps: 30, layoutCycle: @[LayoutMode.Monocle, LayoutMode.Deck]),
       workspaces: WorkspaceConfig(defaultCount: 4),
-      tagRules: @[
-        TagRule(
-          tagId: 1,
-          name: "renamed",
-          defaultLayoutSet: true,
-          defaultLayout: LayoutMode.Monocle,
-        )
-      ],
+      tagRules:
+        @[
+          TagRule(
+            tagId: 1,
+            name: "renamed",
+            defaultLayoutSet: true,
+            defaultLayout: LayoutMode.Monocle,
+          )
+        ],
     )
     check state.applyRuntimeConfig(reloaded)
 
@@ -818,14 +827,15 @@ suite "Runtime state primitives":
       currentViewportXOffset: 280.0,
       targetViewportYOffset: 40.0,
       currentViewportYOffset: 20.0,
-      columns: @[
-        RestoredColumnState(
-          windows: @[50'u32],
-          widthProportion: 0.75,
-          scrollerSingleProportion: 0.55,
-          isFullWidth: true,
-        )
-      ],
+      columns:
+        @[
+          RestoredColumnState(
+            windows: @[50'u32],
+            widthProportion: 0.75,
+            scrollerSingleProportion: 0.55,
+            isFullWidth: true,
+          )
+        ],
       masterCount: 1,
       masterSplitRatio: 0.5,
     )

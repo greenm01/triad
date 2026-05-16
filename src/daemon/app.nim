@@ -140,8 +140,7 @@ proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
   )
 
 proc loopPollIntervalMs(daemon: TriadDaemon, nowMs: int64): int =
-  const IdlePollIntervalMs = 250
-  result = IdlePollIntervalMs
+  result = daemon.targetFrameIntervalMs()
   if daemon.frameTickNeeded():
     let frameInterval = int64(daemon.targetFrameIntervalMs())
     let elapsedMs =
@@ -598,8 +597,8 @@ proc main*() =
     daemon.enqueueFrameTickIfDue(nowMs)
     let pollInterval = daemon.loopPollIntervalMs(nowMs)
 
-    # Poll async (IPC)
-    asyncdispatch.poll(pollInterval)
+    # Poll async IPC without sleeping before Wayland events are serviced.
+    asyncdispatch.poll(0)
 
     if daemon.configReloadDebouncer.takeDue(unixMs()):
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
