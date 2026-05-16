@@ -89,7 +89,12 @@ proc snapshotForShell(): ShellSnapshot =
           actualH: 555,
         )
       ],
-    outputs: @[ShellOutput(id: 0, name: "triad-0", w: 1920, h: 1080, isPrimary: true)],
+    outputs:
+      @[
+        ShellOutput(
+          id: 0, name: "triad-0", w: 1920, h: 1080, refreshRate: 144000, isPrimary: true
+        )
+      ],
   )
 
 proc handleNiriRequest(line: string, snapshot: ShellSnapshot): NiriIpcResult =
@@ -260,6 +265,7 @@ suite "Shell compatibility contracts":
     check outputs.hasKey("triad-0")
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
+    check outputs["triad-0"]["refresh_rate"].getInt() == 144000
 
     let keyboardLayouts = parseJson(
       handleNiriRequest("\"KeyboardLayouts\"", snapshot).reply

@@ -331,10 +331,12 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
         Effect(kind: EffectKind.EffSpawn, spawnCommand: msg.spawnCommand)
       )
   of MsgKind.CmdTick:
-    result.dirty = model.tickAnimations()
-    result.dirty = model.tickOverviewPointerHold() or result.dirty
-    result.dirty = model.tickRecentWindows() or result.dirty
-    result.dirty = model.tickLayoutSwitchToast() or result.dirty
+    let elapsedMs =
+      if msg.tickElapsedMs > 0: msg.tickElapsedMs else: DefaultFrameIntervalMs
+    result.dirty = model.tickAnimations(elapsedMs)
+    result.dirty = model.tickOverviewPointerHold(elapsedMs) or result.dirty
+    result.dirty = model.tickRecentWindows(elapsedMs) or result.dirty
+    result.dirty = model.tickLayoutSwitchToast(elapsedMs) or result.dirty
     result.dirty = model.flushPendingDialogFocus() or result.dirty
   of MsgKind.CmdExpireStartupWindowRules:
     result.dirty = model.expireStartupWindowRules()

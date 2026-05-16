@@ -1,6 +1,7 @@
 import wayland/native/client
-import ../core/[effects, msg, restore_state, shell_profiles]
+import ../core/[defaults, effects, msg, restore_state, shell_profiles]
 import ../systems/[runtime, runtime_facade]
+import ../state/engine
 import ../types/[model, shell_snapshot]
 import ../types/projection_values
 import ../config/[parser, reload_policy]
@@ -59,11 +60,47 @@ proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
 proc syncRuntimeLayoutProjection(context: string, msg: Msg): seq[RenderInstruction] =
   daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind).instructions
 
+proc refreshRateFps(refreshRate: int32): int32 =
+  if refreshRate <= 0:
+    return 0
+  max(1'i32, (refreshRate + 500) div 1000)
+
+proc animationFrameRate(model: Model): int32 =
+  if model.animationFrameRate > 0:
+    return
+      min(MaxAnimationFrameRate, max(MinAnimationFrameRate, model.animationFrameRate))
+
+  let active = model.outputData(model.activeOutput)
+  if active.isSome:
+    let fps = active.get().refreshRate.refreshRateFps()
+    if fps > 0:
+      return min(MaxAnimationFrameRate, max(MinAnimationFrameRate, fps))
+
+  let primary = model.outputData(model.primaryOutput)
+  if primary.isSome:
+    let fps = primary.get().refreshRate.refreshRateFps()
+    if fps > 0:
+      return min(MaxAnimationFrameRate, max(MinAnimationFrameRate, fps))
+
+  FallbackAnimationFrameRate
+
+proc frameIntervalMs(fps: int32): int =
+  if fps == FallbackAnimationFrameRate:
+    return int(DefaultFrameIntervalMs)
+  max(1, int(1000.0 / float(max(1'i32, fps)) + 0.5))
+
+proc animationFrameIntervalMs(daemon: TriadDaemon): int =
+  daemon.runtimeState.model.animationFrameRate().frameIntervalMs()
+
 proc startAnimationLoop() {.async.} =
+  var lastTickMs = int64(epochTime() * 1000.0)
   while true:
+    await sleepAsync(daemon.animationFrameIntervalMs())
+    let nowMs = int64(epochTime() * 1000.0)
+    let elapsedMs = int32(max(1'i64, min(1000'i64, nowMs - lastTickMs)))
+    lastTickMs = nowMs
     {.cast(gcsafe).}:
-      daemon.enqueue(Msg(kind: MsgKind.CmdTick))
-    await sleepAsync(16) # ~60fps
+      daemon.enqueue(Msg(kind: MsgKind.CmdTick, tickElapsedMs: elapsedMs))
 
 proc startStartupWindowRulesExpiry() {.async.} =
   await sleepAsync(60_000)
@@ -462,8 +499,10 @@ proc main*() =
     daemon.watcher.poll(0)
     daemon.pollSwitchEventDevices()
 
+    let frameInterval = daemon.animationFrameIntervalMs()
+
     # Poll async (IPC)
-    asyncdispatch.poll(16)
+    asyncdispatch.poll(frameInterval)
 
     if daemon.configReloadDebouncer.takeDue(int64(epochTime() * 1000.0)):
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
@@ -498,7 +537,7 @@ proc main*() =
       break
 
     discard daemon.display.flush()
-    if waitForWaylandEvents(daemon.display, 16):
+    if waitForWaylandEvents(daemon.display, frameInterval):
       if daemon.display.read_events() == -1:
         running = false
     else:

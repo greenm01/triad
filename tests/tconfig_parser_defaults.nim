@@ -28,6 +28,7 @@ layout {
   enable-animations #false
   animation-speed 0.4
   animation-snap-threshold 2.5
+  animation-frame-rate 144
   smart-gaps #true
   layout-cycle "scroller" "deck" "vertical-grid"
 }
@@ -295,6 +296,7 @@ switch-events {
     check config.layout.scrollerProportionPresets ==
       @[1.0'f32, 0.25'f32, 0.5'f32, 0.5'f32]
     check config.layout.animationSnapThreshold == 2.5'f32
+    check config.layout.animationFrameRate == 144
     check config.layout.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
     check config.workspaces.defaultCount == 4
@@ -754,6 +756,7 @@ cursor {
     check config.layoutSwitchToast.enabled
     check config.layoutSwitchToast.timeoutMs == DefaultLayoutSwitchToastTimeoutMs
     check config.layoutSwitchToast.ringColor == DefaultLayoutSwitchToastRingColor
+    check config.layout.animationFrameRate == DefaultAnimationFrameRate
     check config.shells.watchdog.enabled
     check config.shells.watchdog.exclusiveFocusTimeoutMs ==
       DefaultShellWatchdogExclusiveFocusTimeoutMs
@@ -839,6 +842,7 @@ cursor {
           defaultMasterRatio: 2.0,
           animationSpeed: 5.0,
           animationSnapThreshold: 100.0,
+          animationFrameRate: 1000,
         ),
         workspaces: WorkspaceConfig(defaultCount: 0),
         overview: OverviewConfig(
@@ -861,6 +865,7 @@ cursor {
     check model.defaultMasterRatio == 0.95'f32
     check model.animationSpeed == 1.0'f32
     check model.animationSnapThreshold == 64.0'f32
+    check model.animationFrameRate == 240
     check model.defaultWorkspaceCount == DefaultWorkspaceCount
     check model.defaultWorkspaceLayout == LayoutMode.Scroller
     check model.overviewOuterGap == DefaultOverviewOuterGap

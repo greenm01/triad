@@ -186,6 +186,18 @@ proc setOutputPositionForExternal*(
   discard model.syncPrimaryOutputTag()
   result = model.syncConfiguredOutputState(outputId) or result
 
+proc setOutputRefreshRateForExternal*(
+    model: var Model, externalId: ExternalOutputId, refreshRate: int32
+): bool =
+  if externalId == NullExternalOutputId:
+    return false
+
+  let outputId = model.upsertOutputForExternal(externalId)
+  result = model.setOutputRefreshRate(outputId, refreshRate)
+  model.syncPrimaryOutput()
+  discard model.syncPrimaryOutputTag()
+  result = model.syncConfiguredOutputState(outputId) or result
+
 proc setOutputUsableForExternal*(
     model: var Model, externalId: ExternalOutputId, x, y, w, h: int32
 ): bool =

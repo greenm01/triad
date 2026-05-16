@@ -5,8 +5,11 @@ from ../types/runtime_values import LayoutMode, PointerOpKind
 import focus, overview_geometry, placement
 
 const
-  OverviewHoldTicks = 47
+  OverviewHoldMs = 752'i32
   ShiftModifier = 1'u32
+
+proc tickElapsedMs(msgElapsedMs: int32): int32 =
+  if msgElapsedMs > 0: msgElapsedMs else: DefaultFrameIntervalMs
 
 proc keyboardShortcutsInhibited*(model: Model): bool =
   if model.sessionLocked or model.layerFocusExclusive:
@@ -71,7 +74,9 @@ proc overviewScreen(model: Model): rv.Rect =
       return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
   rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
 
-proc updateOverviewDragHover(model: var Model, op: var PointerOpData): bool =
+proc updateOverviewDragHover(
+    model: var Model, op: var PointerOpData, elapsedMs = 0'i32
+): bool =
   let target =
     model.overviewDropTargetAt(model.overviewScreen(), op.currentX, op.currentY)
   let slot =
@@ -80,10 +85,10 @@ proc updateOverviewDragHover(model: var Model, op: var PointerOpData): bool =
     else:
       0'u32
   if op.hoverSlot == slot:
-    inc op.hoverTicks
+    op.hoverElapsedMs = max(0'i32, op.hoverElapsedMs + max(0'i32, elapsedMs))
   else:
     op.hoverSlot = slot
-    op.hoverTicks = 0
+    op.hoverElapsedMs = 0
   model.setPointerOpState(op)
 
 proc beginOverviewDrag*(
@@ -301,13 +306,15 @@ proc finishPointerOp*(model: var Model): core.WindowId =
   result = if op.kind == PointerOpKind.OpResize: op.windowId else: NullWindowId
   discard model.clearPointerOp()
 
-proc tickOverviewPointerHold*(model: var Model): bool =
+proc tickOverviewPointerHold*(
+    model: var Model, elapsedMs = DefaultFrameIntervalMs
+): bool =
   var op = model.pointerOp
   if op.kind != PointerOpKind.OpOverviewDrag or not op.overviewDragPastThreshold():
     return false
-  discard model.updateOverviewDragHover(op)
+  discard model.updateOverviewDragHover(op, elapsedMs.tickElapsedMs())
   op = model.pointerOp
-  if op.hoverSlot == 0 or op.hoverTicks < OverviewHoldTicks:
+  if op.hoverSlot == 0 or op.hoverElapsedMs < OverviewHoldMs:
     return false
   result = model.commitOverviewDrag(op, activateDrop = true)
   discard model.clearPointerOp()
@@ -376,7 +383,14 @@ proc animatedViewportOffset(
     return (target, abs(delta) > 0.0'f32)
   (current + delta * speed, true)
 
-proc tickAnimations*(model: var Model): bool =
+proc elapsedAnimationSpeed(speed: float32, elapsedMs: int32): float32 =
+  if speed <= 0.0'f32 or speed >= 1.0'f32:
+    return speed
+  let frames =
+    max(0.0'f32, float32(elapsedMs.tickElapsedMs()) / float32(DefaultFrameIntervalMs))
+  1.0'f32 - pow(1.0'f32 - speed, frames)
+
+proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool =
   if not model.enableAnimations:
     return false
   let tickOverviewPreviews = model.overviewUsesWorkspacePreviews()
@@ -387,7 +401,7 @@ proc tickAnimations*(model: var Model): bool =
       model.previewSlots()
     else:
       @[]
-  let speed = model.animationSpeed
+  let speed = model.animationSpeed.elapsedAnimationSpeed(elapsedMs)
   let snapThreshold = max(model.animationSnapThreshold, 0.01'f32)
   for tagId, tag in model.tagsWithId():
     if tickOverviewPreviews:
@@ -418,10 +432,12 @@ proc openLayoutSwitchToast*(model: var Model, layout: LayoutMode): bool =
   model.layoutSwitchToastElapsedMs = 0
   model.layoutSwitchToastLayout = layout
 
-proc tickLayoutSwitchToast*(model: var Model): bool =
+proc tickLayoutSwitchToast*(
+    model: var Model, elapsedMs = DefaultFrameIntervalMs
+): bool =
   if not model.layoutSwitchToastOpen:
     return false
-  model.layoutSwitchToastElapsedMs += 16
+  model.layoutSwitchToastElapsedMs += elapsedMs.tickElapsedMs()
   if model.layoutSwitchToastElapsedMs >= model.layoutSwitchToast.timeoutMs:
     model.layoutSwitchToastOpen = false
     model.layoutSwitchToastElapsedMs = 0

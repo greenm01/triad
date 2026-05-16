@@ -239,6 +239,7 @@ proc applyConfig*(model: var Model, config: Config) =
   model.animationSpeed = configClampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.animationSnapThreshold =
     configClampF32(config.layout.animationSnapThreshold, 0.01, 64.0)
+  model.animationFrameRate = runtimeAnimationFrameRate(config.layout.animationFrameRate)
   model.smartGaps = config.layout.smartGaps
   model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
   model.defaultWorkspaceLayout = config.workspaces.defaultLayout

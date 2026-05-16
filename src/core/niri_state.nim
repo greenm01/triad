@@ -109,6 +109,7 @@ proc niriWindowsJson*(snapshot: ShellSnapshot): JsonNode =
 proc niriOutputJson(output: ShellOutput): JsonNode =
   let w = max(0, int(output.w))
   let h = max(0, int(output.h))
+  let refreshRate = if output.refreshRate > 0: output.refreshRate else: 60000
   %*{
     "name": output.name,
     "connected": true,
@@ -118,12 +119,13 @@ proc niriOutputJson(output: ShellOutput): JsonNode =
     "physical_size": {"width": 0, "height": 0},
     "physical_width": 0,
     "physical_height": 0,
-    "modes": [{"width": w, "height": h, "refresh_rate": 60000, "is_preferred": true}],
+    "modes":
+      [{"width": w, "height": h, "refresh_rate": refreshRate, "is_preferred": true}],
     "current_mode": 0,
     "is_custom_mode": false,
     "vrr_supported": false,
     "vrr_enabled": false,
-    "refresh_rate": 60000,
+    "refresh_rate": refreshRate,
     "x": int(output.x),
     "y": int(output.y),
     "width": w,

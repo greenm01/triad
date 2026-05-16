@@ -310,7 +310,7 @@ The reply contains the full native shell-facing state:
       "overview": {"is_open": false},
       "layout": {},
       "outputs": [
-        {"id": 42, "name": "Virtual-1", "is_primary": true}
+        {"id": 42, "name": "Virtual-1", "is_primary": true, "refresh_rate": 144000}
       ],
       "windows": [
         {

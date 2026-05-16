@@ -203,6 +203,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         y: 0,
         w: max(0'i32, model.screenWidth),
         h: max(0'i32, model.screenHeight),
+        refreshRate: 0,
         isPrimary: true,
       )
     )
@@ -217,6 +218,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
           y: output.y,
           w: max(0'i32, output.w),
           h: max(0'i32, output.h),
+          refreshRate: output.refreshRate,
           isPrimary: outputId == model.primaryOutput,
         )
       )

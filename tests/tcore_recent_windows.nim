@@ -120,6 +120,16 @@ suite "Core Runtime Logic: recent windows":
       discard model.updateModel(Msg(kind: MsgKind.CmdTick))
     check model.recentWindowHistory[^1] == WindowId(1)
 
+  test "recent-window debounce uses elapsed tick time":
+    var model = recentModel(debounceMs = 750)
+    model.seedCameraWindows(3)
+    model.focusExternal(1)
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick, tickElapsedMs: 749))
+    check model.recentWindowHistory[^1] == WindowId(3)
+    discard model.updateModel(Msg(kind: MsgKind.CmdTick, tickElapsedMs: 1))
+    check model.recentWindowHistory[^1] == WindowId(1)
+
   test "recent-window scope can restrict candidates to active workspace":
     var model = recentModel()
     model.seedCameraWindows(2)

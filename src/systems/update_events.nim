@@ -69,6 +69,10 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.setOutputPositionForExternal(
       msg.positionOutputId.externalOutputId(), msg.outputX, msg.outputY
     )
+  of MsgKind.WlOutputRefreshRate:
+    result.dirty = model.setOutputRefreshRateForExternal(
+      msg.refreshOutputId.externalOutputId(), msg.outputRefreshRate
+    )
   of MsgKind.WlOutputUsable:
     result.dirty = model.setOutputUsableForExternal(
       msg.usableOutputId.externalOutputId(),

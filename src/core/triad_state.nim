@@ -79,6 +79,7 @@ proc triadOutputJson(output: ShellOutput): JsonNode =
     "id": output.id,
     "name": output.name,
     "is_primary": output.isPrimary,
+    "refresh_rate": output.refreshRate,
     "geometry": {"x": output.x, "y": output.y, "width": output.w, "height": output.h},
   }
 

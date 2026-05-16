@@ -14,6 +14,7 @@ proc addOutput*(
     y = 0'i32,
     w = 0'i32,
     h = 0'i32,
+    refreshRate = 0'i32,
     usableX = 0'i32,
     usableY = 0'i32,
     usableW = 0'i32,
@@ -37,6 +38,7 @@ proc addOutput*(
       y: y,
       w: w,
       h: h,
+      refreshRate: refreshRate,
       usableX: usableX,
       usableY: usableY,
       usableW: usableW,
@@ -83,6 +85,14 @@ proc setOutputPosition*(model: var Model, outputId: OutputId, x, y: int32): bool
     return false
   model.outputs.mEntity(outputId).x = x
   model.outputs.mEntity(outputId).y = y
+  true
+
+proc setOutputRefreshRate*(
+    model: var Model, outputId: OutputId, refreshRate: int32
+): bool =
+  if model.outputs.entity(outputId).isNone:
+    return false
+  model.outputs.mEntity(outputId).refreshRate = max(0'i32, refreshRate)
   true
 
 proc setOutputUsable*(model: var Model, outputId: OutputId, x, y, w, h: int32): bool =

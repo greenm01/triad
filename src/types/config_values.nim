@@ -53,6 +53,7 @@ type
     enableAnimations*: bool
     animationSpeed*: float32
     animationSnapThreshold*: float32
+    animationFrameRate*: int32
     smartGaps*: bool
     layoutCycle*: seq[LayoutMode]
 

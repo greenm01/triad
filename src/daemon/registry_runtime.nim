@@ -177,6 +177,7 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
   if daemon.wlOutputPointers.hasKey(name):
     daemon.wlOutputPointers[name].release()
     daemon.wlOutputPointers.del(name)
+  daemon.outputGlobalRefreshRates.del(name)
   daemon.wlOutputListenerData.del(name)
   if daemon.wlSeatPointers.hasKey(name):
     daemon[].detachWlPointer(name)

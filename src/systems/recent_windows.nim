@@ -6,7 +6,6 @@ import ../types/system_views
 
 export system_views
 
-const RecentTickMs = 16'i32
 const RecentPreviewGap = 16'i32
 const RecentPreviewStrut = 192'i32
 const RecentPreviewMinSize = 16'i32
@@ -311,17 +310,17 @@ proc closeCurrentRecentWindow*(model: var Model): core_types.WindowId =
   discard model.removeFocusHistoryRef(result)
   discard model.advanceRecentSelection(RecentWindowDirection.Forward)
 
-proc tickRecentWindows*(model: var Model): bool =
+proc tickRecentWindows*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool =
+  let tickMs = if elapsedMs > 0: elapsedMs else: DefaultFrameIntervalMs
   if model.pendingRecentFocusWindow != NullWindowId:
-    model.pendingRecentFocusElapsedMs += RecentTickMs
+    model.pendingRecentFocusElapsedMs += tickMs
     if model.pendingRecentFocusElapsedMs >= model.recentWindows.debounceMs:
       result = model.commitRecentFocus(model.pendingRecentFocusWindow) or result
   if model.recentWindowsActive:
     let wasVisible = model.recentWindowsVisible()
     if model.recentWindowsOpenElapsedMs < model.recentWindows.openDelayMs:
-      model.recentWindowsOpenElapsedMs = min(
-        model.recentWindows.openDelayMs, model.recentWindowsOpenElapsedMs + RecentTickMs
-      )
+      model.recentWindowsOpenElapsedMs =
+        min(model.recentWindows.openDelayMs, model.recentWindowsOpenElapsedMs + tickMs)
     result = (wasVisible != model.recentWindowsVisible()) or result
     result = model.selectNearestRecent(model.currentRecentCandidates()) or result
 

@@ -42,6 +42,7 @@ type
     WlOutputIdentity
     WlOutputDescription
     WlOutputPosition
+    WlOutputRefreshRate
     WlOutputUsable
     WlOutputRemoved
     WlManageStart
@@ -251,6 +252,9 @@ type
       positionOutputId*: uint32
       outputX*: int32
       outputY*: int32
+    of MsgKind.WlOutputRefreshRate:
+      refreshOutputId*: uint32
+      outputRefreshRate*: int32
     of MsgKind.WlOutputUsable:
       usableOutputId*: uint32
       usableX*: int32
@@ -367,6 +371,8 @@ type
     of MsgKind.CmdSwitchKeyboardLayout:
       keyboardLayoutDelta*: int32
       keyboardLayoutIndex*: int32
+    of MsgKind.CmdTick:
+      tickElapsedMs*: int32
     of MsgKind.CmdScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string

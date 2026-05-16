@@ -21,6 +21,22 @@ suite "Core Runtime Logic: window movement":
     check model.viewport(1).currentViewportXOffset == 100.0'f32
     check not model.tickAnimations()
 
+  test "Viewport animation scales by elapsed tick time":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          enableAnimations: true, animationSpeed: 0.5, animationSnapThreshold: 0.5
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 1),
+      )
+    ).model
+    model.setViewport(1, targetX = 100.0, currentX = 0.0)
+
+    check model.tickAnimations(8)
+    check abs(model.viewport(1).currentViewportXOffset - 29.289322'f32) < 0.001'f32
+    check model.tickAnimations(8)
+    check abs(model.viewport(1).currentViewportXOffset - 50.0'f32) < 0.001'f32
+
   test "Zero animation speed snaps without repeated dirty ticks":
     var model = initRuntimeStateFromConfig(
       Config(

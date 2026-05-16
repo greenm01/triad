@@ -47,6 +47,7 @@ proc onOutputRemoved(data: pointer, output: ptr RiverOutputV1) =
     daemon.outputGlobalNames.del(globalName)
     daemon.outputGlobalIdentities.del(globalName)
     daemon.outputGlobalDescriptions.del(globalName)
+    daemon.outputGlobalRefreshRates.del(globalName)
     daemon.outputWlNames.del(id)
   daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
   output.destroy()
@@ -83,6 +84,14 @@ proc onOutputWlOutput(data: pointer, output: ptr RiverOutputV1, name: uint32) =
         kind: MsgKind.WlOutputDescription,
         descriptionOutputId: outputId,
         outputDescription: daemon.outputGlobalDescriptions[name],
+      )
+    )
+  if daemon.outputGlobalRefreshRates.hasKey(name):
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputRefreshRate,
+        refreshOutputId: outputId,
+        outputRefreshRate: daemon.outputGlobalRefreshRates[name],
       )
     )
 
@@ -123,7 +132,26 @@ proc onWlOutputMode(
     height: int32,
     refresh: int32,
 ) =
-  discard
+  let listenerData = cast[ptr WlOutputListenerData](data)
+  if listenerData == nil or listenerData.daemon == nil:
+    warn "Ignoring wl_output mode without daemon context"
+    return
+  let daemon = listenerData.daemon
+  let globalName = listenerData.globalName
+  if refresh <= 0:
+    return
+  if (flags and 1'u32) != 0'u32 or not daemon.outputGlobalRefreshRates.hasKey(
+    globalName
+  ):
+    daemon.outputGlobalRefreshRates[globalName] = refresh
+    if daemon.outputGlobalOwners.hasKey(globalName):
+      daemon.enqueue(
+        Msg(
+          kind: MsgKind.WlOutputRefreshRate,
+          refreshOutputId: daemon.outputGlobalOwners[globalName],
+          outputRefreshRate: refresh,
+        )
+      )
 
 proc onWlOutputDone(data: pointer, output: ptr Output) =
   discard

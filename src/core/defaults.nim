@@ -15,6 +15,11 @@ const
   DefaultMasterRatio* = 0.55'f32
   DefaultAnimationSpeed* = 0.15'f32
   DefaultAnimationSnapThreshold* = 0.5'f32
+  DefaultAnimationFrameRate* = 0'i32
+  FallbackAnimationFrameRate* = 60'i32
+  MinAnimationFrameRate* = 24'i32
+  MaxAnimationFrameRate* = 240'i32
+  DefaultFrameIntervalMs* = 16'i32
   DefaultScratchpadWidthRatio* = 0.8'f32
   DefaultScratchpadHeightRatio* = 0.9'f32
   DefaultOverviewOuterGap* = 64'i32

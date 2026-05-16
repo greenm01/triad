@@ -62,6 +62,21 @@ suite "Core Runtime Logic: shell snapshot ipc":
         it.jsonPayload.contains("WorkspacesChanged")
     )
 
+  test "Shell snapshot exposes output refresh rate":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1080)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputRefreshRate, refreshOutputId: 1, outputRefreshRate: 144000
+      )
+    )
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.outputs.len == 1
+    check snapshot.outputs[0].refreshRate == 144000
+
   test "Workspace focus broadcasts activation and window snapshot":
     var model = configuredModel()
     model.applyMsg(

@@ -84,6 +84,7 @@ type
     model*: string
     description*: string
     x*, y*, w*, h*: int32
+    refreshRate*: int32
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
 
@@ -318,7 +319,7 @@ type
     totalDX*, totalDY*: int32
     startScrollOffset*: float32
     hoverSlot*: uint32
-    hoverTicks*: int
+    hoverElapsedMs*: int32
 
   ViewportState* = object
     targetViewportXOffset*: float32
@@ -438,6 +439,7 @@ type
     enableAnimations*: bool
     animationSpeed*: float32
     animationSnapThreshold*: float32
+    animationFrameRate*: int32
     floatingXRatio*: float32
     floatingYRatio*: float32
     floatingWidthRatio*: float32
