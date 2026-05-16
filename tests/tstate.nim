@@ -40,13 +40,12 @@ proc baseConfig(): Config =
       layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid],
     ),
     workspaces: WorkspaceConfig(defaultCount: 3),
-    tagRules:
-      @[
-        TagRule(tagId: 1, name: "main"),
-        TagRule(
-          tagId: 2, name: "web", defaultLayoutSet: true, defaultLayout: LayoutMode.Grid
-        ),
-      ],
+    tagRules: @[
+      TagRule(tagId: 1, name: "main"),
+      TagRule(
+        tagId: 2, name: "web", defaultLayoutSet: true, defaultLayout: LayoutMode.Grid
+      ),
+    ],
     hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
     terminal: TerminalConfig(command: @["foot"]),
   )
@@ -371,11 +370,10 @@ suite "Runtime state primitives":
 
   test "hotkey overlay renderer produces bounded ARGB buffers":
     let screen = Rect(x: 0, y: 0, w: 800, h: 600)
-    let rows =
-      @[
-        HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
-        HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys"),
-      ]
+    let rows = @[
+      HotkeyOverlayRow(key: "Super+1", label: "Workspace 1"),
+      HotkeyOverlayRow(key: "Super+Shift+/", label: "Show hotkeys"),
+    ]
     let rendered = renderHotkeyOverlayBuffer(rows, screen, 2)
     let bytes = argbBytes(rendered.pixels)
 
@@ -396,6 +394,21 @@ suite "Runtime state primitives":
     check twoColumns.width > singleColumn.width
     check twoColumns.height == singleColumn.height
     check twoColumns.width <= int32(float(screen.w) * 0.9)
+
+  test "hotkey overlay uses laptop height before wrapping columns":
+    let screen = Rect(x: 0, y: 0, w: 1536, h: 960)
+    var rows: seq[HotkeyOverlayRow] = @[]
+    for idx in 1 .. 26:
+      rows.add(
+        HotkeyOverlayRow(key: "Super+Ctrl+" & $idx, label: "Configured action " & $idx)
+      )
+
+    let singleColumn = renderHotkeyOverlayBuffer(rows, screen, 1)
+    let configuredColumns = renderHotkeyOverlayBuffer(rows, screen, 2)
+
+    check configuredColumns.width == singleColumn.width
+    check configuredColumns.height == singleColumn.height
+    check configuredColumns.height <= screen.h - 96
 
   test "hotkey overlay placement honors configured position":
     let screen = Rect(x: 10, y: 20, w: 800, h: 600)
@@ -770,15 +783,14 @@ suite "Runtime state primitives":
       layout:
         LayoutConfig(gaps: 30, layoutCycle: @[LayoutMode.Monocle, LayoutMode.Deck]),
       workspaces: WorkspaceConfig(defaultCount: 4),
-      tagRules:
-        @[
-          TagRule(
-            tagId: 1,
-            name: "renamed",
-            defaultLayoutSet: true,
-            defaultLayout: LayoutMode.Monocle,
-          )
-        ],
+      tagRules: @[
+        TagRule(
+          tagId: 1,
+          name: "renamed",
+          defaultLayoutSet: true,
+          defaultLayout: LayoutMode.Monocle,
+        )
+      ],
     )
     check state.applyRuntimeConfig(reloaded)
 
@@ -806,15 +818,14 @@ suite "Runtime state primitives":
       currentViewportXOffset: 280.0,
       targetViewportYOffset: 40.0,
       currentViewportYOffset: 20.0,
-      columns:
-        @[
-          RestoredColumnState(
-            windows: @[50'u32],
-            widthProportion: 0.75,
-            scrollerSingleProportion: 0.55,
-            isFullWidth: true,
-          )
-        ],
+      columns: @[
+        RestoredColumnState(
+          windows: @[50'u32],
+          widthProportion: 0.75,
+          scrollerSingleProportion: 0.55,
+          isFullWidth: true,
+        )
+      ],
       masterCount: 1,
       masterSplitRatio: 0.5,
     )

@@ -37,8 +37,10 @@ proc hotkeyOverlayPlacement*(
       screen.y + max(0'i32, screen.h - bufferH - HotkeyScreenMargin)
 
 proc rowCapacity(screen: Rect, titleHeight, rowH: int32): int =
-  let availableH = max(240'i32, screen.h - 120'i32)
-  max(1, int((availableH - HotkeyPadding * 3 - titleHeight) div (rowH + HotkeyRowGap)))
+  let
+    availableH = max(240'i32, screen.h - HotkeyScreenMargin * 2)
+    chromeH = HotkeyPadding * 3 + titleHeight
+  max(1, int((availableH - chromeH + HotkeyRowGap) div (rowH + HotkeyRowGap)))
 
 proc columnCount(rowCount, rowsPerColumn, requestedColumns: int): int =
   if rowCount <= 0:
