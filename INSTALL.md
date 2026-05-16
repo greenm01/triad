@@ -7,7 +7,7 @@ Triad runs as the window-management client inside that session.
 
 Install River 0.4+ from the upstream River source instructions:
 
-https://github.com/riverwm/river
+https://codeberg.org/river/river
 
 Triad intentionally does not package River for non-NixOS systems. River owns
 the compositor process and the GPU/session boundary, so install and validate it
