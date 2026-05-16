@@ -779,6 +779,37 @@ proc parsePresentationMode(value: string): tuple[valid: bool, mode: Presentation
   else:
     (false, PresentationMode.PresentationDefault)
 
+proc parseOutputConfigTransform(
+    value: string
+): tuple[valid: bool, transform: OutputConfigTransform] =
+  case value.toLowerAscii()
+  of "normal":
+    (true, OutputConfigTransform.OutputTransformNormal)
+  of "90":
+    (true, OutputConfigTransform.OutputTransform90)
+  of "180":
+    (true, OutputConfigTransform.OutputTransform180)
+  of "270":
+    (true, OutputConfigTransform.OutputTransform270)
+  of "flipped":
+    (true, OutputConfigTransform.OutputTransformFlipped)
+  of "flipped-90":
+    (true, OutputConfigTransform.OutputTransformFlipped90)
+  of "flipped-180":
+    (true, OutputConfigTransform.OutputTransformFlipped180)
+  of "flipped-270":
+    (true, OutputConfigTransform.OutputTransformFlipped270)
+  else:
+    (false, OutputConfigTransform.OutputTransformNormal)
+
+proc outputModeRefreshMilliHz(value: KdlVal): int32 =
+  let hz =
+    if value.kind == KInt:
+      float64(value.kInt())
+    else:
+      value.kFloat()
+  int32(max(0.0, hz * 1000.0 + 0.5))
+
 proc parseIdleInhibitMode(
     value: string
 ): tuple[valid: bool, mode: WindowRuleIdleInhibitMode] =
@@ -1077,6 +1108,32 @@ proc loadConfig*(path: string): Config =
                 rule.focusAtStartup = child.childFlagEnabled()
               elif child.name == "workspaces":
                 rule.workspaceSlots = child.workspaceTargets()
+              elif child.name == "mode" and child.args.len >= 3:
+                rule.modeSet = true
+                rule.modeWidth = clamp32(int32(child.args[0].kInt()), 1, 65535)
+                rule.modeHeight = clamp32(int32(child.args[1].kInt()), 1, 65535)
+                rule.modeRefresh = child.args[2].outputModeRefreshMilliHz()
+              elif child.name == "scale" and child.args.len > 0:
+                rule.scaleSet = true
+                rule.scale = clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
+              elif child.name == "position" and child.args.len >= 2:
+                rule.positionSet = true
+                rule.positionX = clamp32(int32(child.args[0].kInt()), -65535, 65535)
+                rule.positionY = clamp32(int32(child.args[1].kInt()), -65535, 65535)
+              elif child.name == "transform" and child.args.len > 0:
+                let parsed = parseOutputConfigTransform(child.args[0].kString())
+                if parsed.valid:
+                  rule.transformSet = true
+                  rule.transform = parsed.transform
+                else:
+                  warn "Ignoring invalid output transform",
+                    target = rule.target, value = child.args[0].kString()
+              elif child.name == "adaptive-sync" and child.args.len > 0:
+                rule.adaptiveSyncSet = true
+                rule.adaptiveSync = child.args[0].kBool()
+              elif child.name == "enabled":
+                warn "Ignoring unsupported output rule field",
+                  field = child.name, reason = "output disabling is not supported"
               else:
                 warn "Ignoring unsupported output rule field", field = child.name
             except CatchableError as e:

@@ -7,6 +7,7 @@ import protocols/river_libinput_config/client as riverLibinput
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_config/client as riverXkbConfig
 import protocols/river_xkb_bindings/client as riverXkb
+import protocols/wlr_output_management/client as wlrOutput
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
@@ -15,8 +16,8 @@ import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGe
 import ../core/msg
 import
   bindings_runtime, idle_inhibit_runtime, input_runtime, manage_requests, message_queue,
-  protocol_surface_runtime, river_manager_runtime, river_outputs_runtime, state,
-  wayland_helpers
+  output_management_runtime, protocol_surface_runtime, river_manager_runtime,
+  river_outputs_runtime, state, wayland_helpers
 
 proc handleGlobal*(
     data: pointer,
@@ -137,6 +138,16 @@ proc handleGlobal*(
     daemon.riverLibinputConfig = cast[pointer](config)
     discard config.addListener(libinputConfigListener.addr, daemonData(daemon[]))
     info "Bound to river_libinput_config_v1", name = name, advertisedVersion = version
+  elif interfaceName == "zwlr_output_manager_v1":
+    daemon.wlrOutputManager = cast[ptr wlrOutput.ZwlrOutputManagerV1](registry.`bind`(
+      name, wlrOutput.zwlr_output_manager_v1_interface.addr, min(version, 4'u32)
+    ))
+    daemon.wlrOutputManagerGlobalName = name
+    discard daemon.wlrOutputManager.addListener(
+      wlrOutputManagerListener.addr, daemonData(daemon[])
+    )
+    info "Bound to zwlr_output_manager_v1",
+      name = name, advertisedVersion = version, boundVersion = min(version, 4'u32)
   elif interfaceName == "wp_single_pixel_buffer_manager_v1":
     daemon.singlePixelManager = cast[ptr singlepixel.WpSinglePixelBufferManagerV1](registry.`bind`(
       name,
@@ -174,6 +185,15 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
     daemon.idleInhibitManager = nil
     daemon.idleInhibitGlobalName = 0
     daemon.idleInhibitDesired = desiredIdleInhibit
+  if daemon.wlrOutputManagerGlobalName == name:
+    daemon[].destroyOutputConfig()
+    if daemon.wlrOutputManager != nil:
+      daemon.wlrOutputManager.destroy()
+    daemon.wlrOutputManager = nil
+    daemon.wlrOutputManagerGlobalName = 0
+    daemon.wlrOutputReady = false
+    daemon.wlrOutputApplyInFlight = false
+    daemon.wlrOutputRetryPending = false
   if daemon.wlOutputPointers.hasKey(name):
     daemon.wlOutputPointers[name].release()
     daemon.wlOutputPointers.del(name)

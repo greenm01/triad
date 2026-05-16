@@ -39,9 +39,15 @@ workspaces {
 output "HDMI-A-1" {
   focus-at-startup
   workspaces 2 4 -1 2
+  mode 2560 1440 119.998
+  scale 1.25
+  position 10 20
+  transform "flipped-90"
+  adaptive-sync #true
 }
 output "DP-1" {
   workspaces "invalid"
+  enabled #false
 }
 workspace-rules {
   workspace 1 name="term"
@@ -305,6 +311,20 @@ switch-events {
     check config.outputRules[0].target == "HDMI-A-1"
     check config.outputRules[0].focusAtStartup
     check config.outputRules[0].workspaceSlots == @[2'u32, 4'u32]
+    check config.outputRules[0].modeSet
+    check config.outputRules[0].modeWidth == 2560
+    check config.outputRules[0].modeHeight == 1440
+    check config.outputRules[0].modeRefresh == 119998
+    check config.outputRules[0].scaleSet
+    check config.outputRules[0].scale == 1.25'f32
+    check config.outputRules[0].positionSet
+    check config.outputRules[0].positionX == 10
+    check config.outputRules[0].positionY == 20
+    check config.outputRules[0].transformSet
+    check config.outputRules[0].transform ==
+      OutputConfigTransform.OutputTransformFlipped90
+    check config.outputRules[0].adaptiveSyncSet
+    check config.outputRules[0].adaptiveSync
     check config.outputRules[1].target == "DP-1"
     check config.outputRules[1].workspaceSlots.len == 0
     check config.tagRules.len == 2

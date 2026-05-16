@@ -4,6 +4,7 @@ import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
+import protocols/wlr_output_management/client as wlrOutput
 import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import wayland/protocols/unstable/idleinhibitunstable/v1/client as idle
@@ -27,6 +28,51 @@ type
   WlSeatListenerData* = object
     daemon*: ptr TriadDaemon
     globalName*: uint32
+
+  WlrOutputHeadListenerData* = object
+    daemon*: ptr TriadDaemon
+    headId*: uint32
+
+  WlrOutputModeListenerData* = object
+    daemon*: ptr TriadDaemon
+    modeId*: uint32
+
+  WlrOutputConfigListenerData* = object
+    daemon*: ptr TriadDaemon
+    serial*: uint32
+
+  OutputManagementModeRuntime* = object
+    pointer*: ptr wlrOutput.ZwlrOutputModeV1
+    headId*: uint32
+    width*: int32
+    height*: int32
+    refresh*: int32
+    preferred*: bool
+    finished*: bool
+
+  OutputManagementHeadRuntime* = object
+    pointer*: ptr wlrOutput.ZwlrOutputHeadV1
+    name*: string
+    description*: string
+    make*: string
+    modelName*: string
+    serialNumber*: string
+    physicalWidth*: int32
+    physicalHeight*: int32
+    enabled*: bool
+    enabledSet*: bool
+    currentModeId*: uint32
+    x*: int32
+    y*: int32
+    positionSet*: bool
+    transform*: int32
+    transformSet*: bool
+    scale*: float32
+    scaleSet*: bool
+    adaptiveSync*: bool
+    adaptiveSyncSet*: bool
+    modeIds*: seq[uint32]
+    finished*: bool
 
   WlPointerWheelFrame* = object
     hasSource*: bool
@@ -106,6 +152,19 @@ type
     riverXkbConfig*: pointer
     riverLayerShell*: ptr riverLayer.RiverLayerShellV1
     riverXkbBindings*: ptr riverXkb.RiverXkbBindingsV1
+    wlrOutputManager*: ptr wlrOutput.ZwlrOutputManagerV1
+    wlrOutputManagerGlobalName*: uint32
+    wlrOutputSerial*: uint32
+    wlrOutputReady*: bool
+    wlrOutputApplyInFlight*: bool
+    wlrOutputRetryPending*: bool
+    wlrOutputRetryCount*: int
+    wlrOutputHeads*: Table[uint32, OutputManagementHeadRuntime]
+    wlrOutputModes*: Table[uint32, OutputManagementModeRuntime]
+    wlrOutputHeadListenerData*: Table[uint32, ref WlrOutputHeadListenerData]
+    wlrOutputModeListenerData*: Table[uint32, ref WlrOutputModeListenerData]
+    wlrOutputConfig*: ptr wlrOutput.ZwlrOutputConfigurationV1
+    wlrOutputConfigListenerData*: ref WlrOutputConfigListenerData
     compositor*: ptr Compositor
     shm*: ptr Shm
     cursorShapeManager*: ptr cursorShape.WpCursorShapeManagerV1

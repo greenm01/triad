@@ -158,6 +158,10 @@ cursor {
 presentation-mode "vsync"
 allow-exit-session #true
 
+output "DP-2" {
+    mode 2560 1440 120
+}
+
 protocol-surfaces {
     enabled #true
     visible-debug #false

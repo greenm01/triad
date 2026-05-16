@@ -70,7 +70,8 @@ The supported KDL nodes are:
 - `layout`: gaps, column/window proportions, master settings, borders,
   scroller centering, animation settings, smart gaps, and layout cycle.
 - `workspaces`: default workspace floor and fallback default layout.
-- `output`: startup focus and workspace affinity by output identity.
+- `output`: startup focus, workspace affinity, and output-management settings
+  by output identity.
 - `workspace-rules`: workspace names and explicit default layouts.
 - `window-rule`: app/title matching, default workspace/workspaces, floating behavior,
   all-workspace sticky behavior, managed overlay behavior, focus behavior,
@@ -647,6 +648,11 @@ and workspace placement policy:
 output "HDMI-A-1" {
   focus-at-startup
   workspaces 2 4
+  mode 2560 1440 120
+  scale 1.0
+  position 0 0
+  transform "normal"
+  adaptive-sync #false
 }
 ```
 
@@ -659,9 +665,20 @@ output "HDMI-A-1" {
 - `workspaces <n>...`: pins the listed workspace slots to this output target.
   Later output blocks win for the same slot, and explicit
   `workspace-rules` `open-on-output` entries override output-rule affinity.
-- Monitor mode, scale, transform, position, and power fields are not supported
-  until Triad has an output-management protocol path for those compositor
-  settings.
+- `mode <width> <height> <refresh-hz>`: requests an advertised monitor mode.
+  Refresh may be written as an integer or decimal; Triad matches the nearest
+  advertised mode within 1 Hz, so `120` can select `119.998 Hz`.
+- `scale <factor>`: requests compositor output scale. Values are clamped to
+  `0.01..64.0`.
+- `position <x> <y>`: requests the output's global compositor position.
+- `transform "normal"|"90"|"180"|"270"|"flipped"|"flipped-90"|"flipped-180"|"flipped-270"`:
+  requests output rotation/reflection.
+- `adaptive-sync #true|#false`: requests VRR/adaptive-sync state when the
+  compositor supports it.
+- Output-management fields are applied at startup and config reload when the
+  compositor advertises `zwlr_output_manager_v1`. Omitted fields preserve the
+  current compositor state. Output disabling and custom modes are intentionally
+  not exposed.
 
 ## Bindings
 

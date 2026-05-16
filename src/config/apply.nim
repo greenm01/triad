@@ -183,6 +183,19 @@ proc outputRuleData(rule: rv.OutputRule): OutputRuleData =
     target: rule.target.strip(),
     focusAtStartup: rule.focusAtStartup,
     workspaceSlots: rule.workspaceSlots,
+    modeSet: rule.modeSet,
+    modeWidth: rule.modeWidth,
+    modeHeight: rule.modeHeight,
+    modeRefresh: rule.modeRefresh,
+    scaleSet: rule.scaleSet,
+    scale: rule.scale,
+    positionSet: rule.positionSet,
+    positionX: rule.positionX,
+    positionY: rule.positionY,
+    transformSet: rule.transformSet,
+    transform: rule.transform,
+    adaptiveSyncSet: rule.adaptiveSyncSet,
+    adaptiveSync: rule.adaptiveSync,
   )
 
 proc legacyShellsFromQuickshell(config: rv.QuickshellConfig): rv.ShellsConfig =

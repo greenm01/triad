@@ -6,6 +6,16 @@ type
     PresentationVsync
     PresentationAsync
 
+  OutputConfigTransform* {.pure.} = enum
+    OutputTransformNormal
+    OutputTransform90
+    OutputTransform180
+    OutputTransform270
+    OutputTransformFlipped
+    OutputTransformFlipped90
+    OutputTransformFlipped180
+    OutputTransformFlipped270
+
   LayoutMode* {.pure.} = enum
     Scroller
     VerticalScroller
@@ -185,6 +195,19 @@ type
     target*: string
     focusAtStartup*: bool
     workspaceSlots*: seq[uint32]
+    modeSet*: bool
+    modeWidth*: int32
+    modeHeight*: int32
+    modeRefresh*: int32
+    scaleSet*: bool
+    scale*: float32
+    positionSet*: bool
+    positionX*: int32
+    positionY*: int32
+    transformSet*: bool
+    transform*: OutputConfigTransform
+    adaptiveSyncSet*: bool
+    adaptiveSync*: bool
 
   EnvironmentEntryConfig* = object
     name*: string

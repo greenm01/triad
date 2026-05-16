@@ -9,7 +9,7 @@ from ../types/runtime_values import ConfigNotificationEvent
 import ../utils/behavior_log
 import
   bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
-  quickshell_runner, state
+  output_management_runtime, quickshell_runner, state
 
 proc setupConfig*(daemon: var TriadDaemon, configPath = "") =
   daemon.configPath =
@@ -193,6 +193,8 @@ proc applyConfigReload*(
   if daemon.inputConfigReloadHook != nil:
     daemon.inputConfigReloadHook(addr daemon, "config reload")
   daemon.syncIdleInhibitFromRuntime()
+  daemon.resetOutputManagementRetry()
+  daemon.applyOutputManagementConfig("config reload")
   writeBehaviorEvent(
     "config_reload_applied",
     %*{

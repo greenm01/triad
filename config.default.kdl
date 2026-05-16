@@ -57,6 +57,11 @@ workspaces {
 // output "HDMI-A-1" {
 //     focus-at-startup
 //     workspaces 2 4
+//     mode 2560 1440 120
+//     scale 1.0
+//     position 0 0
+//     transform "normal"
+//     adaptive-sync #false
 // }
 
 workspace-rules {

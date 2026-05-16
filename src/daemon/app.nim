@@ -11,9 +11,9 @@ import ../janet/runtime as janet_runtime
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, effects_runtime, input_runtime, janet_manifest_runtime,
-  live_restore_runtime, manage_requests, message_queue, process_runner,
-  quickshell_runner, registry_runtime, reload_runtime, render_runtime, state,
-  switch_event_runtime
+  live_restore_runtime, manage_requests, message_queue, output_management_runtime,
+  process_runner, quickshell_runner, registry_runtime, reload_runtime, render_runtime,
+  state, switch_event_runtime
 from ../types/runtime_values import nil, PointerOpKind
 import
   std/
@@ -394,6 +394,8 @@ proc main*() =
   daemon.installInputRuntimeHooks()
   daemon.configureXkbKeymap("initial config")
   daemon.applyAllInputConfig("initial config")
+  daemon.resetOutputManagementRetry()
+  daemon.applyOutputManagementConfig("initial config")
   daemon.configureSwitchEventRuntime("initial config")
   info "Initial config loaded", path = daemon.configPath
 

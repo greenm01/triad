@@ -5,12 +5,13 @@ from core import
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, KeyBindingConfig, LayoutMode,
-  HotkeyOverlayConfig, LayoutSwitchToastConfig, ParentedRole, OverviewHotCornersConfig,
-  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
-  QuickshellConfig, ShellsConfig, RecentWindowFilter, RecentWindowScope,
-  RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig, TerminalConfig,
-  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  HotkeyOverlayConfig, LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole,
+  OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
+  ProtocolSurfacesConfig, QuickshellConfig, ShellsConfig, RecentWindowFilter,
+  RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
+  TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
+  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -265,6 +266,19 @@ type
     target*: string
     focusAtStartup*: bool
     workspaceSlots*: seq[uint32]
+    modeSet*: bool
+    modeWidth*: int32
+    modeHeight*: int32
+    modeRefresh*: int32
+    scaleSet*: bool
+    scale*: float32
+    positionSet*: bool
+    positionX*: int32
+    positionY*: int32
+    transformSet*: bool
+    transform*: OutputConfigTransform
+    adaptiveSyncSet*: bool
+    adaptiveSync*: bool
 
   RestoredWindowData* = object
     slot*: uint32
