@@ -161,11 +161,17 @@ compatibility environment.
 shells {
   enabled #true
   active "noctalia"
-  cycle "noctalia" "waybar" "dank"
+  cycle "noctalia" "dank" "waybar"
 
   profile "noctalia" {
     launch "qs" "-c" "noctalia-shell"
     stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+    niri-compat #true
+  }
+
+  profile "dank" {
+    launch "dms" "run" "--session"
+    stop "dms" "kill"
     niri-compat #true
   }
 

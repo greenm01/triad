@@ -66,23 +66,23 @@ workspace-rules {
 shells {
     enabled #true
     active "noctalia"
-    cycle "noctalia" "waybar" "dank"
+    cycle "noctalia" "dank" "waybar"
 
     profile "noctalia" {
-        launch "qs" "-c" "noctalia-shell"
-        stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+        launch "/home/niltempus/.local/bin/noctalia-qs" "-p" "/home/niltempus/src/noctalia-shell"
+        stop "/home/niltempus/.local/bin/noctalia-qs" "kill" "-p" "/home/niltempus/src/noctalia-shell" "--any-display"
+        niri-compat #true
+    }
+
+    profile "dank" {
+        launch "dms" "run" "--session"
+        stop "dms" "kill"
         niri-compat #true
     }
 
     profile "waybar" {
         launch "waybar"
         stop "pkill" "-x" "waybar"
-        niri-compat #true
-    }
-
-    profile "dank" {
-        launch "quickshell" "-p" "/usr/local/share/quickshell/dms"
-        stop "quickshell" "kill" "-p" "/usr/local/share/quickshell/dms" "--any-display"
         niri-compat #true
     }
 }
@@ -331,8 +331,8 @@ bindings {
     bind "Super+p" "select-window"
     bind "Super+Shift+Space" "focus-shell-ui"
     bind "Ctrl+Alt+1" "switch-shell noctalia" allow-inhibiting=#false
-    bind "Ctrl+Alt+2" "switch-shell waybar" allow-inhibiting=#false
-    bind "Ctrl+Alt+3" "switch-shell dank" allow-inhibiting=#false
+    bind "Ctrl+Alt+2" "switch-shell dank" allow-inhibiting=#false
+    bind "Ctrl+Alt+3" "switch-shell waybar" allow-inhibiting=#false
     bind "Ctrl+Alt+0" "cycle-shell" allow-inhibiting=#false
     bind "h" "focus-left" mode="overview"
     bind "j" "focus-window-or-workspace-down" mode="overview"
