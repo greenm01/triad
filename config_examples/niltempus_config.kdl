@@ -63,10 +63,28 @@ workspace-rules {
     workspace 9 name="spare"
 }
 
-quickshell {
-    enabled #false
-    command "qs"
-    theme "noctalia-shell"
+shells {
+    enabled #true
+    active "noctalia"
+    cycle "noctalia" "waybar" "dank"
+
+    profile "noctalia" {
+        launch "qs" "-c" "noctalia-shell"
+        stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+        niri-compat #true
+    }
+
+    profile "waybar" {
+        launch "waybar"
+        stop "pkill" "-x" "waybar"
+        niri-compat #true
+    }
+
+    profile "dank" {
+        launch "quickshell" "-p" "/usr/local/share/quickshell/dms"
+        stop "quickshell" "kill" "-p" "/usr/local/share/quickshell/dms" "--any-display"
+        niri-compat #true
+    }
 }
 
 terminal {
@@ -174,7 +192,6 @@ spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
 spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"
 spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev/null 2>&1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE NIRI_SOCKET TRIAD_SOCKET || true"
-spawn-at-startup "sh" "-lc" "command -v waybar >/dev/null 2>&1 || exit 0; pkill -x waybar >/dev/null 2>&1 || true; NIRI_SOCKET=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/triad-niri.sock\" TRIAD_SOCKET=\"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/triad.sock\" exec waybar"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"
@@ -313,6 +330,10 @@ bindings {
     bind "Super+o" "toggle-overview"
     bind "Super+p" "select-window"
     bind "Super+Shift+Space" "focus-shell-ui"
+    bind "Ctrl+Alt+1" "switch-shell noctalia" allow-inhibiting=#false
+    bind "Ctrl+Alt+2" "switch-shell waybar" allow-inhibiting=#false
+    bind "Ctrl+Alt+3" "switch-shell dank" allow-inhibiting=#false
+    bind "Ctrl+Alt+0" "cycle-shell" allow-inhibiting=#false
     bind "h" "focus-left" mode="overview"
     bind "j" "focus-window-or-workspace-down" mode="overview"
     bind "k" "focus-window-or-workspace-up" mode="overview"

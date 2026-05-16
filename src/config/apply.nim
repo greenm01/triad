@@ -2,6 +2,7 @@ import std/[options, re, sets, strutils]
 import chronicles
 import parser
 import defaults
+import ../core/shell_profiles
 import ../state/engine
 import ../systems/outputs
 import ../systems/window_rules
@@ -184,6 +185,32 @@ proc outputRuleData(rule: rv.OutputRule): OutputRuleData =
     workspaceSlots: rule.workspaceSlots,
   )
 
+proc legacyShellsFromQuickshell(config: rv.QuickshellConfig): rv.ShellsConfig =
+  var command = config.command.strip()
+  if command.len == 0:
+    command = DefaultQuickshellCommand
+  if not config.enabled or config.theme.strip().len == 0:
+    return rv.ShellsConfig(enabled: false)
+
+  var launch = @[command, "-c", config.theme]
+  for arg in config.args:
+    launch.add(arg)
+
+  rv.ShellsConfig(
+    enabled: true,
+    active: "quickshell",
+    cycle: @["quickshell"],
+    profiles:
+      @[
+        rv.ShellProfileConfig(
+          name: "quickshell",
+          launch: launch,
+          stop: @[command, "kill", "-c", config.theme, "--any-display"],
+          niriCompat: true,
+        )
+      ],
+  )
+
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
@@ -235,6 +262,12 @@ proc applyConfig*(model: var Model, config: Config) =
   model.quickshell = config.quickshell
   if model.quickshell.command.strip().len == 0:
     model.quickshell.command = DefaultQuickshellCommand
+  model.shells =
+    if config.shells.configured:
+      config.shells
+    else:
+      model.quickshell.legacyShellsFromQuickshell()
+  model.shells.normalizeShells()
   model.janet = config.janet
   if model.janet.manifestDir.strip().len == 0:
     model.janet.manifestDir = DefaultJanetManifestDir

@@ -162,6 +162,8 @@ type
     CmdConfirmExitSession
     CmdDismissExitSessionConfirm
     CmdFocusShellUi
+    CmdSwitchShell
+    CmdCycleShell
     CmdShowHotkeyOverlay
     CmdHideHotkeyOverlay
     CmdToggleHotkeyOverlay
@@ -309,6 +311,8 @@ type
       targetTagSwap*: uint32
     of MsgKind.CmdRenameTag:
       newName*: string
+    of MsgKind.CmdSwitchShell:
+      shellName*: string
     of MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleNamedScratchpad:
       scratchpadName*: string
     of MsgKind.CmdSetMasterCount:

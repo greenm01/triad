@@ -7,9 +7,9 @@ from runtime_values import
   InputConfig, GestureBindingConfig, JanetConfig, KeyBindingConfig, LayoutMode,
   HotkeyOverlayConfig, ParentedRole, OverviewHotCornersConfig, PointerBindingConfig,
   PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
-  RecentWindowFilter, RecentWindowScope, RecentWindowsConfig, ScreenshotConfig,
-  SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
-  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  ShellsConfig, RecentWindowFilter, RecentWindowScope, RecentWindowsConfig,
+  ScreenshotConfig, SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig,
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
@@ -445,6 +445,7 @@ type
     scratchpadHeightRatio*: float32
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    shells*: ShellsConfig
     janet*: JanetConfig
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig

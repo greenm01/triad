@@ -360,6 +360,10 @@ proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
 proc childFlagEnabled(node: KdlNode): bool =
   node.args.len == 0 or node.args[0].kBool()
 
+proc stringArgs(node: KdlNode): seq[string] =
+  for arg in node.args:
+    result.add(arg.kString())
+
 proc parseInputXkbConfig(config: var InputXkbConfig, node: KdlNode) =
   for child in node.children:
     try:
@@ -1424,6 +1428,33 @@ proc loadConfig*(path: string): Config =
           except CatchableError as e:
             warn "Ignoring invalid switch event config field",
               field = child.name, error = e.msg
+      elif node.name == "shells":
+        result.shells.configured = true
+        for child in node.children:
+          try:
+            if child.name == "enabled" and child.args.len > 0:
+              result.shells.enabled = child.args[0].kBool()
+            elif child.name == "active" and child.args.len > 0:
+              result.shells.active = child.args[0].kString()
+            elif child.name == "cycle":
+              result.shells.cycle = child.stringArgs()
+            elif child.name == "profile" and child.args.len > 0:
+              var profile = ShellProfileConfig(name: child.args[0].kString())
+              for profileChild in child.children:
+                try:
+                  if profileChild.name == "launch":
+                    profile.launch = profileChild.stringArgs()
+                  elif profileChild.name == "stop":
+                    profile.stop = profileChild.stringArgs()
+                  elif profileChild.name == "niri-compat":
+                    profile.niriCompat = profileChild.childFlagEnabled()
+                except CatchableError as e:
+                  warn "Ignoring invalid shell profile field",
+                    profile = profile.name, field = profileChild.name, error = e.msg
+              if profile.name.strip().len > 0 and profile.launch.len > 0:
+                result.shells.profiles.add(profile)
+          except CatchableError as e:
+            warn "Ignoring invalid shells field", field = child.name, error = e.msg
       elif node.name == "quickshell":
         for child in node.children:
           try:

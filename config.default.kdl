@@ -71,10 +71,16 @@ workspace-rules {
     workspace 8 name="float" default-layout="grid"
 }
 
-quickshell {
+shells {
     enabled #true
-    command "qs"
-    theme "noctalia-shell"
+    active "noctalia"
+    cycle "noctalia"
+
+    profile "noctalia" {
+        launch "qs" "-c" "noctalia-shell"
+        stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+        niri-compat #true
+    }
 }
 
 terminal {

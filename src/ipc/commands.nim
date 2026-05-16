@@ -415,6 +415,13 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdExitSession))
   of CommandId.CidFocusShellUi:
     some(Msg(kind: MsgKind.CmdFocusShellUi))
+  of CommandId.CidSwitchShell:
+    if parts.len >= 2:
+      some(Msg(kind: MsgKind.CmdSwitchShell, shellName: parts[1 ..^ 1].join(" ")))
+    else:
+      none(Msg)
+  of CommandId.CidCycleShell:
+    some(Msg(kind: MsgKind.CmdCycleShell))
   of CommandId.CidShowHotkeyOverlay:
     some(Msg(kind: MsgKind.CmdShowHotkeyOverlay))
   of CommandId.CidHideHotkeyOverlay:

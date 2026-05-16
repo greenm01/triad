@@ -102,6 +102,21 @@ quickshell {
   theme "noctalia"
   args "--verbose"
 }
+shells {
+  enabled #true
+  active "noctalia"
+  cycle "noctalia" "waybar"
+  profile "noctalia" {
+    launch "qs" "-c" "noctalia"
+    stop "qs" "kill" "-c" "noctalia" "--any-display"
+    niri-compat #true
+  }
+  profile "waybar" {
+    launch "waybar"
+    stop "pkill" "-x" "waybar"
+    niri-compat #true
+  }
+}
 janet {
   enabled #true
   manifest-dir "~/triad-manifests"
@@ -371,6 +386,14 @@ switch-events {
     check config.environment[3].name == "GTK_THEME"
     check config.environment[3].value == "Breeze"
     check config.quickshell.theme == "noctalia"
+    check config.shells.configured
+    check config.shells.enabled
+    check config.shells.active == "noctalia"
+    check config.shells.cycle == @["noctalia", "waybar"]
+    check config.shells.profiles.len == 2
+    check config.shells.profiles[0].launch == @["qs", "-c", "noctalia"]
+    check config.shells.profiles[1].stop == @["pkill", "-x", "waybar"]
+    check config.shells.profiles[1].niriCompat
     check config.janet.enabled
     check config.janet.manifestDir == "~/triad-manifests"
     check config.janet.systemManifestDir == "/usr/share/triad/test-manifests"

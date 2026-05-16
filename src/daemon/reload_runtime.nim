@@ -1,8 +1,8 @@
 import std/[asyncdispatch, json, options, os, strutils, tables]
 import chronicles
 import ../config/[defaults, parser]
-import ../core/[niri_state, shell_focus]
-import ../ipc/[quickshell_compat, socket]
+import ../core/[niri_state, shell_focus, shell_profiles]
+import ../ipc/socket
 import ../systems/runtime_facade
 import ../types/[model, shell_snapshot]
 from ../types/runtime_values import ConfigNotificationEvent
@@ -202,52 +202,32 @@ proc applyConfigReload*(
     },
   )
 
-  let quickshellAction = quickshellConfigReloadAction(
-    previousModel.quickshell, daemon.runtimeState.model.quickshell
-  )
+  let shellChanged =
+    not sameShellsConfig(previousModel.shells, daemon.runtimeState.model.shells)
   writeBehaviorEvent(
-    "quickshell_config_reload_decision",
+    "shell_config_reload_decision",
     %*{
       "reason": "config reload",
-      "action": $quickshellAction,
-      "changed": quickshellAction != QuickshellReloadAction.Noop,
-      "previous": quickshellBehaviorPayload(previousModel.quickshell, "config reload"),
-      "current":
-        quickshellBehaviorPayload(daemon.runtimeState.model.quickshell, "config reload"),
+      "changed": shellChanged,
+      "previous_active": previousModel.shells.active,
+      "current_active": daemon.runtimeState.model.shells.active,
     },
   )
 
-  case quickshellAction
-  of QuickshellReloadAction.Noop:
+  if not shellChanged:
     if daemon.quickshellState.needsQuickshellRecovery(daemon.runtimeState.model):
       writeQuickshellBehaviorEvent(
         "quickshell_config_reload_recovery", daemon.runtimeState.model.quickshell,
         "config reload",
       )
-      let status = daemon.quickshellState.spawnQuickshell(
-        daemon.runtimeState.model, niriSocketPath, "config reload recovery"
+      daemon.quickshellState.switchShell(
+        previousModel, daemon.runtimeState.model, niriSocketPath,
+        "config reload recovery",
       )
-      if not status.succeeded():
-        daemon.quickshellState.scheduleQuickshellRecovery(
-          daemon.runtimeState.model, "config reload recovery", status
-        )
-  of QuickshellReloadAction.SpawnOnly:
-    discard
-  of QuickshellReloadAction.AuthoritativeStop:
-    daemon.quickshellState.stopQuickshell(
-      previousModel, "config reload", authoritative = true
+  else:
+    daemon.quickshellState.switchShell(
+      previousModel, daemon.runtimeState.model, niriSocketPath, "config reload"
     )
-  of QuickshellReloadAction.AuthoritativeRestart:
-    daemon.quickshellState.stopQuickshell(
-      previousModel, "config reload", authoritative = true
-    )
-    let status = daemon.quickshellState.spawnQuickshell(
-      daemon.runtimeState.model, niriSocketPath, "config reload"
-    )
-    if not status.succeeded():
-      daemon.quickshellState.scheduleQuickshellRecovery(
-        daemon.runtimeState.model, "config reload", status
-      )
 
   daemon.requestBindingReconfigure("config reload")
   daemon.configWatchPaths = loaded.configPaths

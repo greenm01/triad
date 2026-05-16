@@ -693,6 +693,62 @@ suite "Shell compatibility contracts":
     check quickshellConfigReloadAction(noctalia, disabled) ==
       QuickshellReloadAction.AuthoritativeStop
 
+  test "Shell switching stops old profile before launching new profile":
+    let tmp = getTempDir() / ("triad-shell-switch-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = tmp / "fake-shell"
+    let logPath = tmp / "calls.log"
+    writeFile(
+      fake,
+      """
+#!/bin/sh
+printf '%s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+exit 0
+""",
+    )
+    setFilePermissions(fake, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+
+    let previous = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "old",
+        profiles:
+          @[
+            ShellProfileConfig(
+              name: "old", launch: @[fake, "launch-old"], stop: @[fake, "stop-old"]
+            ),
+            ShellProfileConfig(
+              name: "new", launch: @[fake, "launch-new"], stop: @[fake, "stop-new"]
+            ),
+          ],
+      )
+    )
+    let current = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "new",
+        profiles: previous.shells.profiles,
+      )
+    )
+
+    var runner = QuickshellRunner()
+    runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
+    let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
+    check calls == @["stop-old", "launch-new"]
+
   test "Quickshell unchanged reload can recover untracked shell":
     let noctalia =
       QuickshellConfig(enabled: true, command: "qs", theme: "noctalia-shell")

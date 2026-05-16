@@ -147,9 +147,41 @@ environment {
 - Later entries for the same variable win.
 - The block applies to future `spawn-at-startup`, `spawn`, `spawn-terminal`,
   `screen-lock`, `window-menu-command`, screenshot helper commands, and the
-  configured Quickshell process. It does not change Triad's own environment,
+  configured shell profile process. It does not change Triad's own environment,
   systemd/dbus activation environments, externally started processes, or an
-  already-running Quickshell instance after `config-reload`.
+  already-running shell profile after `config-reload`.
+
+## Shell Profiles
+
+`shells` defines named shell or bar profiles. Profile names are user-defined;
+Triad only stores the argv-style launch/stop commands and optional Niri
+compatibility environment.
+
+```kdl
+shells {
+  enabled #true
+  active "noctalia"
+  cycle "noctalia" "waybar" "dank"
+
+  profile "noctalia" {
+    launch "qs" "-c" "noctalia-shell"
+    stop "qs" "kill" "-c" "noctalia-shell" "--any-display"
+    niri-compat #true
+  }
+
+  profile "waybar" {
+    launch "waybar"
+    stop "pkill" "-x" "waybar"
+    niri-compat #true
+  }
+}
+```
+
+`switch-shell <name>` stops the active profile before launching the named
+profile. `cycle-shell` rotates through `cycle`, falling back to profile order
+when `cycle` is empty. Missing launch or stop executables are logged as shell
+profile failures. The legacy `quickshell` block is still accepted and is
+translated into a single generated shell profile when `shells` is absent.
 
 ## Layout
 

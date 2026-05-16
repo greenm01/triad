@@ -1,5 +1,5 @@
 import std/strutils
-import ../core/[effects, msg]
+import ../core/[effects, msg, shell_profiles]
 import ../state/engine
 from ../types/runtime_values import Direction, RecentWindowDirection
 import
@@ -398,6 +398,22 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdFocusShellUi:
     if not model.sessionLocked and not model.layerFocusExclusive:
       result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
+  of MsgKind.CmdSwitchShell:
+    if model.shells.hasShellProfile(msg.shellName):
+      if model.shells.active != msg.shellName:
+        model.shells.active = msg.shellName
+        result.dirty = true
+    else:
+      result.effects.add(
+        Effect(
+          kind: EffectKind.EffLog, msg: "shell profile not found: " & msg.shellName
+        )
+      )
+  of MsgKind.CmdCycleShell:
+    let nextShell = model.shells.nextShellName()
+    if nextShell.len > 0 and model.shells.active != nextShell:
+      model.shells.active = nextShell
+      result.dirty = true
   of MsgKind.CmdShowHotkeyOverlay:
     result.dirty = model.setHotkeyOverlayOpen(true)
   of MsgKind.CmdHideHotkeyOverlay:

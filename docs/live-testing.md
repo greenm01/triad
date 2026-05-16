@@ -105,23 +105,24 @@ stderr so they do not corrupt stream output.
 
 ## Exercise Quickshell Compatibility
 
-When `quickshell { enabled #true }` is configured, Triad starts Quickshell with
-a private Niri-compatible environment after the first River manage pass has
+When `shells { enabled #true }` is configured, Triad starts the active shell
+profile with a private Niri-compatible environment when that profile has
+`niri-compat #true`. Startup still waits until the first River manage pass has
 restored window/output state. During live reload, the exiting manager leaves its
-tracked Quickshell process alive for the handoff; the replacement manager then
-stops any stale instance of the configured theme and spawns the new one after
-initial manage. To include that in live smoke:
+tracked shell process alive for the handoff; the replacement manager then stops
+the configured stale profile and spawns the active one after initial manage. To
+include that in live smoke:
 
 ```bash
 TRIAD_LIVE_TEST_QUICKSHELL=1 ./tools/live_smoke.sh
 ```
 
-The smoke gate verifies that Quickshell was spawned, that
+The smoke gate verifies that a compatible shell profile was spawned, that
 `$XDG_RUNTIME_DIR/triad-compat-bin/niri` exists, and that the private shim can
 query Triad through the shell-facing `$NIRI_SOCKET`. Triad also prepends
-`$XDG_RUNTIME_DIR/triad-shell-compat/share` to Quickshell's `XDG_DATA_DIRS` so
-shells can resolve Triad-provided desktop/icon aliases without changing the rest
-of the user session.
+`$XDG_RUNTIME_DIR/triad-shell-compat/share` to the shell profile's
+`XDG_DATA_DIRS` so shells can resolve Triad-provided desktop/icon aliases
+without changing the rest of the user session.
 
 DMS screenshot actions require `grim`, `slurp`, and `wl-copy`. `satty` or
 `swappy` are opened by DMS after Triad emits the Niri-compatible

@@ -37,15 +37,15 @@ commands. Triad ships `triad_niri` for that command-side contract. It is
 deliberately not installed as `niri`, because users may have the real compositor
 CLI installed.
 
-When Triad starts Quickshell through the `quickshell` config block, it creates a
-private runtime environment for that process:
+When Triad starts a shell profile with `niri-compat #true`, it creates a private
+runtime environment for that process:
 
 - `$TRIAD_SOCKET` points at Triad's native shell IPC socket.
 - `$NIRI_SOCKET` points at a Triad-owned Niri-compatible socket.
 - `$XDG_RUNTIME_DIR/triad-compat-bin/niri` points at `triad_niri`.
 - `$XDG_RUNTIME_DIR/triad-shell-compat/share` is prepended to `XDG_DATA_DIRS`
   for shell-only desktop entry and icon aliases.
-- `PATH` is prefixed only for the spawned Quickshell process.
+- `PATH` is prefixed only for the spawned shell profile process.
 - `XDG_CURRENT_DESKTOP=triad`, so shells choose the Niri backend and do not
   accidentally select Mango/DWL behavior.
 

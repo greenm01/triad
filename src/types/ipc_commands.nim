@@ -69,6 +69,8 @@ type
     CidTriadReload
     CidExitSession
     CidFocusShellUi
+    CidSwitchShell
+    CidCycleShell
     CidShowHotkeyOverlay
     CidHideHotkeyOverlay
     CidToggleHotkeyOverlay
@@ -346,6 +348,10 @@ const CommandSpecs* = [
   CommandSpec(id: CommandId.CidTriadReload, name: "triad-reload", argShape: NoArgs),
   CommandSpec(id: CommandId.CidExitSession, name: "exit-session", argShape: NoArgs),
   CommandSpec(id: CommandId.CidFocusShellUi, name: "focus-shell-ui", argShape: NoArgs),
+  CommandSpec(
+    id: CommandId.CidSwitchShell, name: "switch-shell", argShape: RequiredName
+  ),
+  CommandSpec(id: CommandId.CidCycleShell, name: "cycle-shell", argShape: NoArgs),
   CommandSpec(
     id: CommandId.CidShowHotkeyOverlay, name: "show-hotkey-overlay", argShape: NoArgs
   ),

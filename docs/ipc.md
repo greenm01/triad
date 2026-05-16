@@ -51,6 +51,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `rename-tag <name>`: Bestows a new, more dignified name upon the active tag.
 *   `lock-session`: Launches the configured `screen-lock` command.
 *   `focus-shell-ui`: Focuses Triad's internal River shell surface when present.
+*   `switch-shell <name>`: Stops the active configured shell profile and starts the named profile.
+*   `cycle-shell`: Rotates through the configured `shells.cycle` profile list.
 *   `show-hotkey-overlay`, `hide-hotkey-overlay`, `toggle-hotkey-overlay`:
     Opens, closes, or toggles Triad's native keyboard helper popup.
 
@@ -117,7 +119,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `screenshot-window`: Captures the focused window geometry known to Triad.
 *   Screenshot flags: `--path <path>`, `--show-pointer`,
     `--hide-pointer`, `--no-clipboard`, and `--clipboard-only`.
-*   `config-reload`: Reloads the KDL config without restarting Triad or the configured shell unless the shell config changed.
+*   `config-reload`: Reloads the KDL config without restarting Triad or the configured shell profile unless the shell config changed.
 *   `triad-reload`: Writes a live-restore snapshot and stops the active River
     manager so the normal session restart path can start a replacement.
 *   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus history, sizing, and window state.

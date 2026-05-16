@@ -1,9 +1,10 @@
-import std/[json, osproc, strutils, times]
+import std/[json, options, os, osproc, strutils, times]
 import chronicles
 import process_runner
+import ../core/[defaults, shell_profiles]
 import ../ipc/quickshell_compat
 import ../types/model
-from ../types/runtime_values import QuickshellConfig
+from ../types/runtime_values import QuickshellConfig, ShellProfileConfig, ShellsConfig
 import ../utils/behavior_log
 
 type
@@ -17,6 +18,7 @@ type
 
   QuickshellRunner* = object
     trackedProcess*: Process
+    trackedShellName*: string
     spawnPending*: bool
     recoveryPending*: bool
     recoveryAttempts*: int
@@ -32,6 +34,19 @@ proc succeeded*(status: QuickshellSpawnStatus): bool =
 
 proc currentUnixMs(): int64 =
   int64(epochTime() * 1000.0)
+
+proc commandArgs(command: seq[string]): seq[string] =
+  if command.len > 1:
+    command[1 ..^ 1]
+  else:
+    @[]
+
+proc commandAvailable(command: string): bool =
+  if command.len == 0:
+    return false
+  if command.contains($DirSep) or (AltSep != '\0' and command.contains($AltSep)):
+    return fileExists(command)
+  findExe(command).len > 0
 
 proc recoveryDelayMs(attempts: int): int64 =
   QuickshellRecoveryDelaysMs[min(attempts, QuickshellRecoveryDelaysMs.high)]
@@ -57,11 +72,16 @@ proc trackedQuickshellRunning*(runner: var QuickshellRunner): bool =
   except CatchableError:
     discard
   runner.trackedProcess = nil
+  runner.trackedShellName = ""
   false
 
+proc activeShellProfile(
+  model: Model
+): tuple[shells: ShellsConfig, profile: Option[ShellProfileConfig]]
+
 proc needsQuickshellRecovery*(runner: var QuickshellRunner, model: Model): bool =
-  model.quickshell.enabled and model.quickshell.theme.strip().len > 0 and
-    not runner.trackedQuickshellRunning()
+  let active = model.activeShellProfile()
+  active.profile.isSome and not runner.trackedQuickshellRunning()
 
 proc quickshellBehaviorPayload*(
     config: QuickshellConfig, reason: string, extra: JsonNode = nil
@@ -78,6 +98,68 @@ proc quickshellBehaviorPayload*(
     for key, value in extra.pairs:
       result[key] = value
 
+proc legacyShellsFromQuickshell(config: QuickshellConfig): ShellsConfig =
+  var command = config.command.strip()
+  if command.len == 0:
+    command = DefaultQuickshellCommand
+  if not config.enabled or config.theme.strip().len == 0:
+    return ShellsConfig(enabled: false)
+
+  var launch = @[command, "-c", config.theme]
+  for arg in config.args:
+    launch.add(arg)
+
+  ShellsConfig(
+    enabled: true,
+    active: "quickshell",
+    cycle: @["quickshell"],
+    profiles:
+      @[
+        ShellProfileConfig(
+          name: "quickshell",
+          launch: launch,
+          stop: @[command, "kill", "-c", config.theme, "--any-display"],
+          niriCompat: true,
+        )
+      ],
+  )
+
+proc effectiveShells(model: Model): ShellsConfig =
+  if model.shells.configured or model.shells.profiles.len > 0:
+    result = model.shells
+  else:
+    result = model.quickshell.legacyShellsFromQuickshell()
+  result.normalizeShells()
+
+proc shellBehaviorPayload(
+    shells: ShellsConfig,
+    profile: ShellProfileConfig,
+    reason: string,
+    extra: JsonNode = nil,
+): JsonNode =
+  result =
+    %*{
+      "reason": reason,
+      "enabled": shells.enabled,
+      "active": shells.active,
+      "profile": profile.name,
+      "launch": profile.launch,
+      "stop": profile.stop,
+      "niri_compat": profile.niriCompat,
+    }
+  if extra != nil and extra.kind == JObject:
+    for key, value in extra.pairs:
+      result[key] = value
+
+proc writeShellBehaviorEvent(
+    eventName: string,
+    shells: ShellsConfig,
+    profile: ShellProfileConfig,
+    reason: string,
+    extra: JsonNode = nil,
+) =
+  writeBehaviorEvent(eventName, shellBehaviorPayload(shells, profile, reason, extra))
+
 proc writeQuickshellBehaviorEvent*(
     eventName: string, config: QuickshellConfig, reason: string, extra: JsonNode = nil
 ) =
@@ -90,7 +172,8 @@ proc scheduleQuickshellRecovery*(
     status: QuickshellSpawnStatus,
     nowMs = currentUnixMs(),
 ) =
-  if not model.quickshell.enabled or model.quickshell.theme.strip().len == 0:
+  let active = model.activeShellProfile()
+  if active.profile.isNone:
     runner.clearQuickshellRecovery()
     return
 
@@ -98,9 +181,10 @@ proc scheduleQuickshellRecovery*(
   runner.recoveryAttempts = 0
   runner.nextRecoveryMs = nowMs + runner.recoveryAttempts.recoveryDelayMs()
   runner.recoveryReason = reason
-  writeQuickshellBehaviorEvent(
-    "quickshell_recovery_scheduled",
-    model.quickshell,
+  writeShellBehaviorEvent(
+    "shell_recovery_scheduled",
+    active.shells,
+    active.profile.get(),
     reason,
     %*{
       "status": $status,
@@ -167,6 +251,7 @@ proc releaseTrackedQuickshell*(runner: var QuickshellRunner, reason: string) =
       %*{"reason": reason, "tracked_pid": pid, "error": e.msg},
     )
   runner.trackedProcess = nil
+  runner.trackedShellName = ""
 
 proc stopConfiguredQuickshell*(model: Model, reason: string) =
   let args = quickshellKillArgs(model.quickshell)
@@ -254,6 +339,196 @@ proc stopQuickshell*(
     runner.clearQuickshellRecovery()
     model.stopConfiguredQuickshell(reason)
 
+proc stopShellProfile(
+    runner: var QuickshellRunner,
+    model: Model,
+    shells: ShellsConfig,
+    profile: ShellProfileConfig,
+    reason: string,
+) =
+  writeShellBehaviorEvent(
+    "shell_stop_requested",
+    shells,
+    profile,
+    reason,
+    %*{"tracked_profile": runner.trackedShellName},
+  )
+
+  if profile.stop.len > 0:
+    if not profile.stop[0].commandAvailable():
+      warn "Shell stop command is not available",
+        profile = profile.name, command = profile.stop[0], reason = reason
+      writeShellBehaviorEvent(
+        "shell_stop_missing_command",
+        shells,
+        profile,
+        reason,
+        %*{"command": profile.stop[0]},
+      )
+    else:
+      try:
+        let p = startProcess(
+          profile.stop[0],
+          args = profile.stop.commandArgs(),
+          env = model.configuredProcessEnv(),
+          options = {poUsePath},
+        )
+        let code = p.pollProcessExitCode(1000)
+        if code == -1:
+          p.kill()
+          discard p.waitForExit()
+          writeShellBehaviorEvent(
+            "shell_stop_timed_out", shells, profile, reason, %*{"command": profile.stop}
+          )
+        else:
+          writeShellBehaviorEvent(
+            "shell_stop_completed",
+            shells,
+            profile,
+            reason,
+            %*{"command": profile.stop, "exit_code": code},
+          )
+        p.close()
+      except CatchableError as e:
+        warn "Shell stop command failed",
+          profile = profile.name,
+          command = profile.stop[0],
+          reason = reason,
+          error = e.msg
+        writeShellBehaviorEvent(
+          "shell_stop_failed",
+          shells,
+          profile,
+          reason,
+          %*{"command": profile.stop, "error": e.msg},
+        )
+
+  if runner.trackedShellName.len == 0 or runner.trackedShellName == profile.name:
+    runner.stopTrackedQuickshell(reason)
+
+proc spawnShellProfile(
+    runner: var QuickshellRunner,
+    model: Model,
+    shells: ShellsConfig,
+    profile: ShellProfileConfig,
+    niriSocketPath: string,
+    reason: string,
+): QuickshellSpawnStatus =
+  if not shells.enabled or profile.launch.len == 0:
+    writeShellBehaviorEvent("shell_spawn_skipped", shells, profile, reason)
+    return QuickshellSpawnStatus.Skipped
+
+  result = QuickshellSpawnStatus.Failed
+  if not profile.launch[0].commandAvailable():
+    warn "Shell launch command is not available",
+      profile = profile.name, command = profile.launch[0], reason = reason
+    writeShellBehaviorEvent(
+      "shell_spawn_missing_command",
+      shells,
+      profile,
+      reason,
+      %*{"command": profile.launch[0]},
+    )
+    return
+
+  writeShellBehaviorEvent(
+    "shell_spawn_requested",
+    shells,
+    profile,
+    reason,
+    %*{"launch": profile.launch, "niri_socket": niriSocketPath},
+  )
+
+  try:
+    let baseEnv = model.configuredProcessEnv()
+    let env =
+      if profile.niriCompat:
+        prepareQuickshellCompatEnv(niriSocketPath, baseEnv = baseEnv).env
+      else:
+        baseEnv
+    let p = startProcess(
+      profile.launch[0],
+      args = profile.launch.commandArgs(),
+      env = env,
+      options = {poUsePath},
+    )
+    let childPid = p.processID
+    let earlyExitCode = p.pollProcessExitCode(250)
+    if earlyExitCode == -1:
+      runner.trackedProcess = p
+      runner.trackedShellName = profile.name
+      writeShellBehaviorEvent(
+        "shell_spawned",
+        shells,
+        profile,
+        reason,
+        %*{"child_pid": childPid, "launch": profile.launch},
+      )
+      result = QuickshellSpawnStatus.Running
+    elif earlyExitCode == 0:
+      p.close()
+      writeShellBehaviorEvent(
+        "shell_spawn_handoff",
+        shells,
+        profile,
+        reason,
+        %*{"child_pid": childPid, "launch": profile.launch, "exit_code": earlyExitCode},
+      )
+      result = QuickshellSpawnStatus.Handoff
+    else:
+      p.close()
+      writeShellBehaviorEvent(
+        "shell_spawn_exited",
+        shells,
+        profile,
+        reason,
+        %*{"child_pid": childPid, "launch": profile.launch, "exit_code": earlyExitCode},
+      )
+  except CatchableError as e:
+    warn "Failed to spawn shell",
+      profile = profile.name,
+      command = profile.launch[0],
+      reason = reason,
+      error = e.msg
+    writeShellBehaviorEvent(
+      "shell_spawn_failed",
+      shells,
+      profile,
+      reason,
+      %*{"launch": profile.launch, "error": e.msg},
+    )
+
+proc activeShellProfile(
+    model: Model
+): tuple[shells: ShellsConfig, profile: Option[ShellProfileConfig]] =
+  result.shells = model.effectiveShells()
+  result.profile = result.shells.activeShellProfile()
+
+proc switchShell*(
+    runner: var QuickshellRunner,
+    previousModel: Model,
+    currentModel: Model,
+    niriSocketPath: string,
+    reason: string,
+) =
+  let previous = previousModel.activeShellProfile()
+  let current = currentModel.activeShellProfile()
+  if previous.profile.isSome:
+    runner.stopShellProfile(
+      previousModel, previous.shells, previous.profile.get(), reason & " stop"
+    )
+  elif runner.trackedProcess != nil:
+    runner.stopTrackedQuickshell(reason & " stop")
+
+  if current.profile.isSome:
+    let status = runner.spawnShellProfile(
+      currentModel, current.shells, current.profile.get(), niriSocketPath, reason
+    )
+    if not status.succeeded():
+      runner.scheduleQuickshellRecovery(currentModel, reason, status)
+  else:
+    runner.clearQuickshellRecovery()
+
 proc spawnQuickshell*(
     runner: var QuickshellRunner, model: Model, niriSocketPath: string, reason = "spawn"
 ): QuickshellSpawnStatus =
@@ -287,6 +562,7 @@ proc spawnQuickshell*(
       let earlyExitCode = p.pollProcessExitCode(250)
       if earlyExitCode == -1:
         runner.trackedProcess = p
+        runner.trackedShellName = model.quickshell.theme
         info "Spawned Quickshell",
           command = model.quickshell.command,
           theme = model.quickshell.theme,
@@ -364,14 +640,16 @@ proc pollQuickshellRecovery*(
     niriSocketPath: string,
     nowMs = currentUnixMs(),
 ): bool =
-  if not model.quickshell.enabled or model.quickshell.theme.strip().len == 0:
+  let active = model.activeShellProfile()
+  if active.profile.isNone:
     runner.clearQuickshellRecovery()
     return false
   if runner.trackedQuickshellRunning():
     if runner.recoveryPending:
-      writeQuickshellBehaviorEvent(
-        "quickshell_recovery_succeeded",
-        model.quickshell,
+      writeShellBehaviorEvent(
+        "shell_recovery_succeeded",
+        active.shells,
+        active.profile.get(),
         runner.recoveryReason,
         %*{"attempt": runner.recoveryAttempts, "already_running": true},
       )
@@ -381,9 +659,10 @@ proc pollQuickshellRecovery*(
     return false
 
   if runner.recoveryAttempts >= MaxQuickshellRecoveryAttempts:
-    writeQuickshellBehaviorEvent(
-      "quickshell_recovery_exhausted",
-      model.quickshell,
+    writeShellBehaviorEvent(
+      "shell_recovery_exhausted",
+      active.shells,
+      active.profile.get(),
       runner.recoveryReason,
       %*{"attempts": runner.recoveryAttempts},
     )
@@ -393,19 +672,23 @@ proc pollQuickshellRecovery*(
   inc runner.recoveryAttempts
   let attemptReason =
     runner.recoveryReason & " recovery attempt " & $runner.recoveryAttempts
-  writeQuickshellBehaviorEvent(
-    "quickshell_recovery_attempt",
-    model.quickshell,
+  writeShellBehaviorEvent(
+    "shell_recovery_attempt",
+    active.shells,
+    active.profile.get(),
     runner.recoveryReason,
     %*{"attempt": runner.recoveryAttempts, "attempt_reason": attemptReason},
   )
-  model.stopConfiguredQuickshell(attemptReason)
-  let status = runner.spawnQuickshell(model, niriSocketPath, attemptReason)
+  runner.stopShellProfile(model, active.shells, active.profile.get(), attemptReason)
+  let status = runner.spawnShellProfile(
+    model, active.shells, active.profile.get(), niriSocketPath, attemptReason
+  )
   result = true
   if status.succeeded():
-    writeQuickshellBehaviorEvent(
-      "quickshell_recovery_succeeded",
-      model.quickshell,
+    writeShellBehaviorEvent(
+      "shell_recovery_succeeded",
+      active.shells,
+      active.profile.get(),
       runner.recoveryReason,
       %*{"attempt": runner.recoveryAttempts, "status": $status},
     )
@@ -413,9 +696,10 @@ proc pollQuickshellRecovery*(
     return
 
   if runner.recoveryAttempts >= MaxQuickshellRecoveryAttempts:
-    writeQuickshellBehaviorEvent(
-      "quickshell_recovery_exhausted",
-      model.quickshell,
+    writeShellBehaviorEvent(
+      "shell_recovery_exhausted",
+      active.shells,
+      active.profile.get(),
       runner.recoveryReason,
       %*{"attempts": runner.recoveryAttempts, "status": $status},
     )
@@ -424,9 +708,10 @@ proc pollQuickshellRecovery*(
 
   let delayMs = runner.recoveryAttempts.recoveryDelayMs()
   runner.nextRecoveryMs = nowMs + delayMs
-  writeQuickshellBehaviorEvent(
-    "quickshell_recovery_rescheduled",
-    model.quickshell,
+  writeShellBehaviorEvent(
+    "shell_recovery_rescheduled",
+    active.shells,
+    active.profile.get(),
     runner.recoveryReason,
     %*{
       "attempt": runner.recoveryAttempts,
@@ -437,8 +722,7 @@ proc pollQuickshellRecovery*(
   )
 
 proc scheduleQuickshellSpawn*(runner: var QuickshellRunner, model: Model) =
-  runner.spawnPending =
-    model.quickshell.enabled and model.quickshell.theme.strip().len > 0
+  runner.spawnPending = model.activeShellProfile().profile.isSome
 
 proc spawnPendingQuickshell*(
     runner: var QuickshellRunner, model: Model, niriSocketPath, reason: string
@@ -446,25 +730,25 @@ proc spawnPendingQuickshell*(
   if not runner.spawnPending:
     return
   runner.spawnPending = false
-  let action = quickshellStartupAction(model.quickshell)
-  writeQuickshellBehaviorEvent(
-    "quickshell_startup_decision", model.quickshell, reason, %*{"action": $action}
+  let active = model.activeShellProfile()
+  if active.profile.isNone:
+    return
+  writeShellBehaviorEvent(
+    "shell_startup_decision",
+    active.shells,
+    active.profile.get(),
+    reason,
+    %*{"action": "SpawnOnly"},
   )
-  case action
-  of QuickshellReloadAction.Noop:
-    discard
-  of QuickshellReloadAction.SpawnOnly:
-    let status = runner.spawnQuickshell(model, niriSocketPath, reason)
-    if not status.succeeded():
-      writeQuickshellBehaviorEvent(
-        "quickshell_startup_restart_required", model.quickshell, reason
-      )
-      model.stopConfiguredQuickshell(reason & " stale instance")
-      let restartStatus =
-        runner.spawnQuickshell(model, niriSocketPath, reason & " restart")
-      if not restartStatus.succeeded():
-        runner.scheduleQuickshellRecovery(model, reason & " restart", restartStatus)
-  of QuickshellReloadAction.AuthoritativeStop:
-    runner.stopQuickshell(model, reason, authoritative = true)
-  of QuickshellReloadAction.AuthoritativeRestart:
-    runner.restartQuickshell(model, niriSocketPath, reason)
+  let status = runner.spawnShellProfile(
+    model, active.shells, active.profile.get(), niriSocketPath, reason
+  )
+  if not status.succeeded():
+    runner.stopShellProfile(
+      model, active.shells, active.profile.get(), reason & " stale instance"
+    )
+    let restartStatus = runner.spawnShellProfile(
+      model, active.shells, active.profile.get(), niriSocketPath, reason & " restart"
+    )
+    if not restartStatus.succeeded():
+      runner.scheduleQuickshellRecovery(model, reason & " restart", restartStatus)

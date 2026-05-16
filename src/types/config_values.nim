@@ -11,6 +11,7 @@ type
     environment*: seq[EnvironmentEntryConfig]
     startupCommands*: seq[seq[string]]
     quickshell*: QuickshellConfig
+    shells*: ShellsConfig
     janet*: JanetConfig
     terminal*: TerminalConfig
     screenshot*: ScreenshotConfig

@@ -1,10 +1,11 @@
 import wayland/native/client
-import ../core/[effects, msg, restore_state]
+import ../core/[effects, msg, restore_state, shell_profiles]
 import ../systems/[runtime, runtime_facade]
 import ../types/[model, shell_snapshot]
 import ../types/projection_values
 import ../config/[parser, reload_policy]
-import ../ipc/[quickshell_compat, socket]
+from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
+import ../ipc/socket
 import ../janet/runtime as janet_runtime
 import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
 import
@@ -12,9 +13,7 @@ import
   live_restore_runtime, manage_requests, message_queue, process_runner,
   quickshell_runner, registry_runtime, reload_runtime, render_runtime, state,
   switch_event_runtime
-from ../types/runtime_values import
-  nil, BindingMode, KeyBindingConfig, PointerBindingConfig, PointerOpKind,
-  PresentationMode, ProtocolSurfacesConfig, QuickshellConfig, TerminalConfig
+from ../types/runtime_values import nil, PointerOpKind
 import
   std/
     [asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, tables, times]
@@ -97,6 +96,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.tickCursorShake()
       daemon.tickCursorVisibility()
 
+    let previousModelForShell = daemon.runtimeState.model
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
@@ -105,6 +105,16 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let effects = syncRuntimeUpdate("message", msg)
+    if msg.kind in {MsgKind.CmdSwitchShell, MsgKind.CmdCycleShell} and
+        not sameShellsConfig(
+          previousModelForShell.shells, daemon.runtimeState.model.shells
+        ):
+      daemon.quickshellState.switchShell(
+        previousModelForShell,
+        daemon.runtimeState.model,
+        niriSocketPath,
+        "command " & $msg.kind,
+      )
     if msg.kind == MsgKind.WlWindowCreated:
       let snapshot = daemon.readModelSnapshot()
       let fallbackWindow = ShellWindow(

@@ -201,6 +201,19 @@ type
     theme*: string
     args*: seq[string]
 
+  ShellProfileConfig* = object
+    name*: string
+    launch*: seq[string]
+    stop*: seq[string]
+    niriCompat*: bool
+
+  ShellsConfig* = object
+    configured*: bool
+    enabled*: bool
+    active*: string
+    cycle*: seq[string]
+    profiles*: seq[ShellProfileConfig]
+
   JanetManifestAlias* = object
     appId*: string
     manifest*: string
