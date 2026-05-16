@@ -223,18 +223,44 @@
               dbus_runner="$(find_dbus_run_session)"
               dbus_config="$(find_dbus_session_config)"
 
-              if [ -z "''${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "$dbus_runner" ]; then
-                if [ -n "$dbus_config" ]; then
-                  printf '%s\n' "river-triad-session: starting River through $dbus_runner --config-file=$dbus_config"
-                  exec "$dbus_runner" --config-file="$dbus_config" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+              start_river() {
+                if [ -z "''${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "$dbus_runner" ]; then
+                  if [ -n "$dbus_config" ]; then
+                    printf '%s\n' "river-triad-session: starting River through $dbus_runner --config-file=$dbus_config"
+                    "$dbus_runner" --config-file="$dbus_config" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+                    return $?
+                  fi
+
+                  printf '%s\n' "river-triad-session: starting River through $dbus_runner"
+                  "$dbus_runner" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+                  return $?
                 fi
 
-                printf '%s\n' "river-triad-session: starting River through $dbus_runner"
-                exec "$dbus_runner" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+                printf '%s\n' "river-triad-session: starting River directly"
+                "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+              }
+
+              if [ -z "''${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "$dbus_runner" ]; then
+                :
               fi
 
-              printf '%s\n' "river-triad-session: starting River directly"
-              exec "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+              set +e
+              start_river
+              status="$?"
+              set -e
+
+              if [ "$status" -ne 0 ] &&
+                [ -z "''${WLR_RENDERER:-}" ] &&
+                grep -q 'RendererCreateFailed' "$session_log" 2>/dev/null; then
+                printf '%s\n' "river-triad-session: hardware renderer failed; retrying with WLR_RENDERER=pixman"
+                export WLR_RENDERER=pixman
+                set +e
+                start_river
+                status="$?"
+                set -e
+              fi
+
+              exit "$status"
             '';
           };
 

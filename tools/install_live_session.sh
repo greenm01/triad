@@ -288,18 +288,44 @@ printf '%s\\n' "river-triad-session: WAYLAND_DISPLAY=\${WAYLAND_DISPLAY:-}"
 printf '%s\\n' "river-triad-session: river=\$river_bin"
 printf '%s\\n' "river-triad-session: manager=\$manager_loop"
 
-if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "\$dbus_runner" ]; then
-  if [ -n "\$dbus_config" ]; then
-    printf '%s\\n' "river-triad-session: starting River through \$dbus_runner --config-file=\$dbus_config"
-    exec "\$dbus_runner" --config-file="\$dbus_config" -- "\$river_bin" -c "\$manager_loop"
+start_river() {
+  if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "\$dbus_runner" ]; then
+    if [ -n "\$dbus_config" ]; then
+      printf '%s\\n' "river-triad-session: starting River through \$dbus_runner --config-file=\$dbus_config"
+      "\$dbus_runner" --config-file="\$dbus_config" -- "\$river_bin" -c "\$manager_loop"
+      return \$?
+    fi
+
+    printf '%s\\n' "river-triad-session: starting River through \$dbus_runner"
+    "\$dbus_runner" -- "\$river_bin" -c "\$manager_loop"
+    return \$?
   fi
 
-  printf '%s\\n' "river-triad-session: starting River through \$dbus_runner"
-  exec "\$dbus_runner" -- "\$river_bin" -c "\$manager_loop"
+  printf '%s\\n' "river-triad-session: starting River directly"
+  "\$river_bin" -c "\$manager_loop"
+}
+
+if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "\$dbus_runner" ]; then
+  :
 fi
 
-printf '%s\\n' "river-triad-session: starting River directly"
-exec "\$river_bin" -c "\$manager_loop"
+set +e
+start_river
+status="\$?"
+set -e
+
+if [ "\$status" -ne 0 ] &&
+  [ -z "\${WLR_RENDERER:-}" ] &&
+  grep -q 'RendererCreateFailed' "\$session_log" 2>/dev/null; then
+  printf '%s\\n' "river-triad-session: hardware renderer failed; retrying with WLR_RENDERER=pixman"
+  export WLR_RENDERER=pixman
+  set +e
+  start_river
+  status="\$?"
+  set -e
+fi
+
+exit "\$status"
 EOF
 atomic_install "$session_tmp" "$bin_dir/river-triad-session" 755
 
