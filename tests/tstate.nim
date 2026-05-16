@@ -3,6 +3,7 @@ import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
 import ../src/daemon/exit_session_dialog_render
+import ../src/daemon/layout_switch_toast_render
 import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
 import ../src/daemon/recent_windows_overlay_render
@@ -420,6 +421,20 @@ suite "Runtime state primitives":
     check pixelAt(rendered, 0, 0) == 0xffff3b30'u32
     check pixelAt(rendered, rendered.width - 1, 0) == 0xffff3b30'u32
 
+  test "layout switch toast renderer is compact and uses configured ring":
+    let screen = Rect(x: 10, y: 20, w: 800, h: 600)
+    let rendered =
+      renderLayoutSwitchToastBuffer(screen, LayoutMode.Grid, 4, 0x00ff00ff'u32)
+    let placement = layoutSwitchToastPlacement(screen, rendered.width, rendered.height)
+
+    check rendered.width >= 260
+    check rendered.width <= screen.w - 96
+    check rendered.height < renderExitSessionDialogBuffer(screen).height
+    check placement.x == screen.x + (screen.w - rendered.width) div 2
+    check placement.y == screen.y + (screen.h - rendered.height) div 2
+    check pixelAt(rendered, 0, 0) == 0xff00ff00'u32
+    check pixelAt(rendered, rendered.width - 1, 0) == 0xff00ff00'u32
+
   test "overlay text renderer measures clips and draws text":
     let style = OverlayTextStyle(sizePx: 14.0, color: 0xffffffff'u32)
     let metrics = "Triad".textMetrics(style)
@@ -692,6 +707,58 @@ suite "Runtime state primitives":
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 42
     check snapshot.workspaces[0].focusedWindow == 42
+
+  test "switch-layout opens and expires layout switch toast":
+    var config = baseConfig()
+    config.layoutSwitchToast.enabled = true
+    config.layoutSwitchToast.timeoutMs = 16
+    config.layoutSwitchToast.ringColor = 0xff3b30ff'u32
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (switched, _) = model.update(Msg(kind: MsgKind.CmdSwitchLayout))
+    model = switched
+
+    check model.layoutSwitchToastOpen
+    check model.layoutSwitchToastLayout == LayoutMode.Deck
+    check model.layoutSwitchToastElapsedMs == 0
+
+    let (ticked, _) = model.update(Msg(kind: MsgKind.CmdTick))
+    model = ticked
+
+    check not model.layoutSwitchToastOpen
+
+  test "explicit active layout command opens layout switch toast":
+    var config = baseConfig()
+    config.layoutSwitchToast.enabled = true
+    config.layoutSwitchToast.timeoutMs = 900
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (setGrid, _) =
+      model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    model = setGrid
+
+    check model.layoutSwitchToastOpen
+    check model.layoutSwitchToastLayout == LayoutMode.Grid
+
+  test "layout switch toast ignores targeted layout command and disabled config":
+    var config = baseConfig()
+    config.layoutSwitchToast.enabled = true
+    config.layoutSwitchToast.timeoutMs = 900
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (setTarget, _) = model.update(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid, layoutTargetTag: 2)
+    )
+    model = setTarget
+
+    check not model.layoutSwitchToastOpen
+
+    config.layoutSwitchToast.enabled = false
+    model = initRuntimeStateFromConfig(config).model
+    let (disabledSwitch, _) = model.update(Msg(kind: MsgKind.CmdSwitchLayout))
+    model = disabledSwitch
+
+    check not model.layoutSwitchToastOpen
 
   test "runtime config reload preserves live state":
     var state = initRuntimeStateFromConfig(baseConfig())

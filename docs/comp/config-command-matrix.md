@@ -122,6 +122,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
+| Layouts | Layout switch toast | | WM policy | `layout-switch-toast { enabled; timeout-ms; ring-color }` | X | Native centered toast shown after active-workspace layout commands; follows command bindings rather than a hard-coded key. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
 | Overview | Scroller overflow indicators | | WM policy | `overview { scroller-indicators }` | X | Off by default. When enabled, scroller previews render subtle edge hints if hidden columns extend beyond the preview frame. |
@@ -340,6 +341,7 @@ KDL config nodes and fields:
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
+- `layout-switch-toast`: `enabled`, `timeout-ms`, `ring-color`.
 - `overview`: `outer-gap`, `inner-gap-multiplier`, `zoom`, `tab-mode`,
   `scroller-indicators`, `hot-corners`.
 - `recent-windows`: `off`, `debounce-ms`, `open-delay-ms`, `highlight`,

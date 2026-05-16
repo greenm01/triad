@@ -118,6 +118,12 @@ hotkey-overlay {
     position "center"
 }
 
+layout-switch-toast {
+    enabled #true
+    timeout-ms 900
+    ring-color "#ff3b30"
+}
+
 // environment {
 //     GTK_THEME "Adwaita:dark"
 //     SSH_AUTH_SOCK #null

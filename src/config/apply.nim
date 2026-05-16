@@ -334,6 +334,12 @@ proc applyConfig*(model: var Model, config: Config) =
     configClampF32(model.recentWindows.previews.maxScale, 0.01, 1.0)
   if not model.recentWindows.enabled:
     discard model.closeRecentWindows()
+  model.layoutSwitchToast = config.layoutSwitchToast
+  model.layoutSwitchToast.timeoutMs =
+    configClamp32(model.layoutSwitchToast.timeoutMs, 0, 60000)
+  if not model.layoutSwitchToast.enabled:
+    model.layoutSwitchToastOpen = false
+    model.layoutSwitchToastElapsedMs = 0
   model.presentationMode = config.presentationMode
   model.allowExitSession = config.allowExitSession
   model.protocolSurfaces = config.protocolSurfaces

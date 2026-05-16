@@ -5,12 +5,12 @@ from core import
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, KeyBindingConfig, LayoutMode,
-  HotkeyOverlayConfig, ParentedRole, OverviewHotCornersConfig, PointerBindingConfig,
-  PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
-  ShellsConfig, RecentWindowFilter, RecentWindowScope, RecentWindowsConfig,
-  ScreenshotConfig, SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig,
-  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
-  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  HotkeyOverlayConfig, LayoutSwitchToastConfig, ParentedRole, OverviewHotCornersConfig,
+  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
+  QuickshellConfig, ShellsConfig, RecentWindowFilter, RecentWindowScope,
+  RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig, TerminalConfig,
+  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
+  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -392,6 +392,9 @@ type
     overviewSelectedWindow*: WindowId
     recentWindowsActive*: bool
     recentWindowsOpenElapsedMs*: int32
+    layoutSwitchToastOpen*: bool
+    layoutSwitchToastElapsedMs*: int32
+    layoutSwitchToastLayout*: LayoutMode
     recentWindowsScope*: RecentWindowScope
     recentWindowsPreviousScope*: RecentWindowScope
     recentWindowsFilter*: RecentWindowFilter
@@ -456,6 +459,7 @@ type
     hotkeyOverlay*: HotkeyOverlayConfig
     configNotification*: ConfigNotificationConfig
     recentWindows*: RecentWindowsConfig
+    layoutSwitchToast*: LayoutSwitchToastConfig
     presentationMode*: PresentationMode
     protocolSurfaces*: ProtocolSurfacesConfig
     keyBindings*: seq[KeyBindingConfig]

@@ -168,6 +168,12 @@ hotkey-overlay {
     position "center"
 }
 
+layout-switch-toast {
+    enabled #true
+    timeout-ms 900
+    ring-color "#ff3b30"
+}
+
 recent-windows {
     debounce-ms 750
     open-delay-ms 150

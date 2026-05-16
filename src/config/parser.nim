@@ -934,6 +934,9 @@ proc loadConfig*(path: string): Config =
     DefaultRecentWindowsHighlightCornerRadius
   result.recentWindows.previews.maxHeight = DefaultRecentWindowsPreviewMaxHeight
   result.recentWindows.previews.maxScale = DefaultRecentWindowsPreviewMaxScale
+  result.layoutSwitchToast.enabled = true
+  result.layoutSwitchToast.timeoutMs = DefaultLayoutSwitchToastTimeoutMs
+  result.layoutSwitchToast.ringColor = DefaultLayoutSwitchToastRingColor
   result.floating.xRatio = DefaultFloatingXRatio
   result.floating.yRatio = DefaultFloatingYRatio
   result.floating.widthRatio = DefaultFloatingWidthRatio
@@ -1619,6 +1622,20 @@ proc loadConfig*(path: string): Config =
                     field = bindChild.name, error = e.msg
           except CatchableError as e:
             warn "Ignoring invalid recent-windows field",
+              field = child.name, error = e.msg
+      elif node.name == "layout-switch-toast":
+        for child in node.children:
+          try:
+            if child.name == "enabled" and child.args.len > 0:
+              result.layoutSwitchToast.enabled = child.args[0].kBool()
+            elif child.name == "timeout-ms" and child.args.len > 0:
+              result.layoutSwitchToast.timeoutMs =
+                clamp32(int32(child.args[0].kInt()), 0, 60000)
+            elif child.name == "ring-color" and child.args.len > 0:
+              result.layoutSwitchToast.ringColor =
+                parseColor(child.args[0].kString(), result.layoutSwitchToast.ringColor)
+          except CatchableError as e:
+            warn "Ignoring invalid layout-switch-toast field",
               field = child.name, error = e.msg
       elif node.name == "floating":
         for child in node.children:

@@ -163,6 +163,12 @@ hotkey-overlay {
     position "center"
 }
 
+layout-switch-toast {
+    enabled #true
+    timeout-ms 900
+    ring-color "#ff3b30"
+}
+
 recent-windows {
     debounce-ms 750
     open-delay-ms 150
@@ -365,6 +371,12 @@ window-rule {
 window-rule {
     match app-id="pavucontrol"
     open-floating #true
+}
+
+window-rule {
+    match app-id="brave-origin-nightly"
+    match app-id="brave-browser"
+    open-maximized-to-edges #true
 }
 
 window-rule {

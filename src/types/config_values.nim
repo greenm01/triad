@@ -18,6 +18,7 @@ type
     input*: InputConfig
     overview*: OverviewConfig
     recentWindows*: RecentWindowsConfig
+    layoutSwitchToast*: LayoutSwitchToastConfig
     floating*: FloatingConfig
     screenLock*: ScreenLockConfig
     windowMenu*: WindowMenuConfig

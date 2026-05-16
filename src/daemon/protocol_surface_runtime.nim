@@ -8,8 +8,9 @@ import ../systems/[hotkey_overlay, recent_windows]
 from ../types/core import Rect
 import ../types/runtime_values
 import
-  exit_session_dialog_render, hotkey_overlay_render, overview_overlay_render,
-  protocol_surfaces, recent_windows_overlay_render, state, wayland_helpers
+  exit_session_dialog_render, hotkey_overlay_render, layout_switch_toast_render,
+  overview_overlay_render, protocol_surfaces, recent_windows_overlay_render, state,
+  wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -26,6 +27,9 @@ template hotkeyOverlaySurfaceId(daemon: TriadDaemon): untyped =
 
 template exitSessionConfirmSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.exitSessionConfirmSurfaceId
+
+template layoutSwitchToastSurfaceId(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.layoutSwitchToastSurfaceId
 
 template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
@@ -62,6 +66,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
     of ProtocolSurfaceKind.PskHotkeyOverlay:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskExitSessionConfirm:
+      0x11111100'u32 or alpha
+    of ProtocolSurfaceKind.PskLayoutSwitchToast:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskRecentWindows:
       0x11111100'u32 or alpha
@@ -242,6 +248,31 @@ proc ensureExitSessionConfirmSurface*(daemon: var TriadDaemon) =
   debug "Created exit-session confirmation shell surface",
     shellSurfaceId = daemon.exitSessionConfirmSurfaceId
 
+proc ensureLayoutSwitchToastSurface*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    return
+  if daemon.layoutSwitchToastSurfaceId != 0 and
+      daemon.surfaceTable.hasKey(daemon.layoutSwitchToastSurfaceId):
+    return
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskLayoutSwitchToast)
+  if surf.surface == nil:
+    warn "Unable to create layout-switch toast wl_surface"
+    return
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create layout-switch toast shell surface"
+    daemon.destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  daemon.layoutSwitchToastSurfaceId = surf.shellSurface.id()
+  daemon.shellSurfacePointers[daemon.layoutSwitchToastSurfaceId] = surf.shellSurface
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[daemon.layoutSwitchToastSurfaceId] = surf
+  debug "Created layout-switch toast shell surface",
+    shellSurfaceId = daemon.layoutSwitchToastSurfaceId
+
 proc ensureRecentWindowsSurface*(daemon: var TriadDaemon) =
   if not daemon.currentModel.protocolSurfaces.enabled:
     return
@@ -419,6 +450,47 @@ proc syncExitSessionConfirmSurface*(daemon: var TriadDaemon, screen: Rect) =
     surf.node.placeTop()
   daemon.surfaceTable[daemon.exitSessionConfirmSurfaceId] = surf
 
+proc syncLayoutSwitchToastSurface*(daemon: var TriadDaemon, screen: Rect) =
+  if not daemon.currentModel.layoutSwitchToastOpen:
+    if daemon.layoutSwitchToastSurfaceId != 0 and
+        daemon.surfaceTable.hasKey(daemon.layoutSwitchToastSurfaceId):
+      var surf = daemon.surfaceTable[daemon.layoutSwitchToastSurfaceId]
+      surf.inputW = 0
+      surf.inputH = 0
+      let buffer = daemon.createProtocolBuffer(ProtocolSurfaceKind.PskLayoutSwitchToast)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, 1, 1)
+      if surf.node != nil:
+        surf.node.placeBottom()
+      daemon.commitProtocolSurface(surf)
+      daemon.surfaceTable[daemon.layoutSwitchToastSurfaceId] = surf
+    return
+
+  daemon.ensureLayoutSwitchToastSurface()
+  if daemon.layoutSwitchToastSurfaceId == 0 or
+      not daemon.surfaceTable.hasKey(daemon.layoutSwitchToastSurfaceId):
+    return
+
+  let rendered = renderLayoutSwitchToastBuffer(
+    screen, daemon.currentModel.layoutSwitchToastLayout,
+    daemon.currentModel.borderWidth, daemon.currentModel.layoutSwitchToast.ringColor,
+  )
+  var surf = daemon.surfaceTable[daemon.layoutSwitchToastSurfaceId]
+  let buffer = daemon.createArgbShmBuffer(rendered)
+  if buffer != nil:
+    surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+  else:
+    warn "Layout-switch toast buffer unavailable"
+    return
+  surf.inputW = 0
+  surf.inputH = 0
+  daemon.commitProtocolSurface(surf)
+  if surf.node != nil:
+    let placement = layoutSwitchToastPlacement(screen, surf.bufferW, surf.bufferH)
+    surf.node.setPosition(placement.x, placement.y)
+    surf.node.placeTop()
+  daemon.surfaceTable[daemon.layoutSwitchToastSurfaceId] = surf
+
 proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
   if not daemon.currentModel.recentWindowsVisible():
     if daemon.recentWindowsSurfaceId != 0 and
@@ -557,6 +629,7 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
   daemon.ownedShellSurfaceId = 0
   daemon.hotkeyOverlaySurfaceId = 0
   daemon.exitSessionConfirmSurfaceId = 0
+  daemon.layoutSwitchToastSurfaceId = 0
   daemon.recentWindowsSurfaceId = 0
   daemon.recentWindowsChromeSurfaceId = 0
   daemon.windowDecorationAbove.clear()

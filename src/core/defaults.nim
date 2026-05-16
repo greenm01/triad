@@ -29,6 +29,8 @@ const
   DefaultRecentWindowsHighlightCornerRadius* = 0'i32
   DefaultRecentWindowsPreviewMaxHeight* = 480'i32
   DefaultRecentWindowsPreviewMaxScale* = 0.5'f32
+  DefaultLayoutSwitchToastTimeoutMs* = 900'i32
+  DefaultLayoutSwitchToastRingColor* = 0xff3b30ff'u32
   DefaultFloatingXRatio* = 0.25'f32
   DefaultFloatingYRatio* = 0.25'f32
   DefaultFloatingWidthRatio* = 0.5'f32

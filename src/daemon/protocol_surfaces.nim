@@ -7,6 +7,7 @@ type
     PskShell
     PskHotkeyOverlay
     PskExitSessionConfirm
+    PskLayoutSwitchToast
     PskRecentWindows
     PskRecentWindowsChrome
     PskDecorationAbove
@@ -34,6 +35,7 @@ type
     ownedShellSurfaceId*: uint32
     hotkeyOverlaySurfaceId*: uint32
     exitSessionConfirmSurfaceId*: uint32
+    layoutSwitchToastSurfaceId*: uint32
     recentWindowsSurfaceId*: uint32
     recentWindowsChromeSurfaceId*: uint32
     windowDecorationAbove*: Table[uint32, uint32]

@@ -1,7 +1,7 @@
 import std/[math, options]
 import ../state/engine
 import ../types/projection_values as rv
-from ../types/runtime_values import PointerOpKind
+from ../types/runtime_values import LayoutMode, PointerOpKind
 import focus, overview_geometry, placement
 
 const
@@ -407,3 +407,23 @@ proc tickAnimations*(model: var Model): bool =
     if changed:
       discard model.setTagViewportCurrent(tagId, currentX, currentY)
       result = true
+
+proc openLayoutSwitchToast*(model: var Model, layout: LayoutMode): bool =
+  if not model.layoutSwitchToast.enabled or model.layoutSwitchToast.timeoutMs <= 0:
+    return false
+  result =
+    not model.layoutSwitchToastOpen or model.layoutSwitchToastElapsedMs != 0 or
+    model.layoutSwitchToastLayout != layout
+  model.layoutSwitchToastOpen = true
+  model.layoutSwitchToastElapsedMs = 0
+  model.layoutSwitchToastLayout = layout
+
+proc tickLayoutSwitchToast*(model: var Model): bool =
+  if not model.layoutSwitchToastOpen:
+    return false
+  model.layoutSwitchToastElapsedMs += 16
+  if model.layoutSwitchToastElapsedMs >= model.layoutSwitchToast.timeoutMs:
+    model.layoutSwitchToastOpen = false
+    model.layoutSwitchToastElapsedMs = 0
+    return true
+  false

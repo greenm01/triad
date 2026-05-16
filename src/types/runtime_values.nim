@@ -281,6 +281,11 @@ type
     highlight*: RecentWindowsHighlightConfig
     previews*: RecentWindowsPreviewConfig
 
+  LayoutSwitchToastConfig* = object
+    enabled*: bool
+    timeoutMs*: int32
+    ringColor*: uint32
+
   FloatingConfig* = object
     xRatio*: float32
     yRatio*: float32

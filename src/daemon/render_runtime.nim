@@ -372,4 +372,5 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         chrome.node.setPosition(screen.x, screen.y)
         chrome.node.placeTop()
       daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId] = chrome
+  daemon.syncLayoutSwitchToastSurface(screen)
   daemon.syncExitSessionConfirmSurface(screen)

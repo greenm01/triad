@@ -239,6 +239,11 @@ hotkey-overlay {
   position "center"
   columns 4
 }
+layout-switch-toast {
+  enabled #true
+  timeout-ms 1200
+  ring-color "#00ff00"
+}
 config-notification {
   reload-succeeded "notify-send" "Triad" "Config reloaded"
   reload-failed "notify-send Triad failed"
@@ -514,6 +519,9 @@ switch-events {
     check config.hotkeyOverlay.hideNotBound
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
     check config.hotkeyOverlay.columns == 4
+    check config.layoutSwitchToast.enabled
+    check config.layoutSwitchToast.timeoutMs == 1200
+    check config.layoutSwitchToast.ringColor == 0x00ff00ff'u32
     check config.configNotification.reloadSucceeded ==
       @["notify-send", "Triad", "Config reloaded"]
     check config.configNotification.reloadFailed == @["notify-send", "Triad", "failed"]
@@ -735,6 +743,9 @@ cursor {
     check config.hotkeyOverlay.hideNotBound
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
     check config.hotkeyOverlay.columns == 2
+    check config.layoutSwitchToast.enabled
+    check config.layoutSwitchToast.timeoutMs == DefaultLayoutSwitchToastTimeoutMs
+    check config.layoutSwitchToast.ringColor == DefaultLayoutSwitchToastRingColor
     check config.janet.enabled
     check config.janet.manifestDir == "~/.config/triad/manifests"
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
@@ -824,6 +835,7 @@ cursor {
           zoom: 99.0,
           hotCorners: OverviewHotCornersConfig(size: 5000, topLeft: true),
         ),
+        layoutSwitchToast: LayoutSwitchToastConfig(timeoutMs: 100000),
         scratchpad: ScratchpadConfig(widthRatio: 4.0, heightRatio: 0.0),
       )
     )
@@ -844,5 +856,6 @@ cursor {
     check model.overviewZoom == 0.75'f32
     check not model.overviewScrollerIndicators
     check model.overviewHotCorners.size == 1000
+    check model.layoutSwitchToast.timeoutMs == 60000
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32

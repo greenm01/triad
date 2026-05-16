@@ -1,7 +1,7 @@
-import std/strutils
+import std/[options, strutils]
 import ../core/[effects, msg, shell_profiles]
 import ../state/engine
-from ../types/runtime_values import Direction, RecentWindowDirection
+from ../types/runtime_values import Direction, LayoutMode, RecentWindowDirection
 import
   dialog_focus, focus, output_navigation, placement, recent_windows, runtime,
   scratchpad, update_effects, window_state, window_rules, workspaces
@@ -47,12 +47,22 @@ proc switchKeyboardLayout(
   model.keyboardLayoutIndex = next
   (true, next)
 
+proc showLayoutSwitchToast(model: var Model, layout: LayoutMode): bool =
+  model.openLayoutSwitchToast(layout)
+
 proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   case msg.kind
   of MsgKind.CmdSetLayout:
     result.dirty = model.setLayoutForSlot(msg.layoutTargetTag, msg.newLayout)
+    if result.dirty and msg.layoutTargetTag == 0:
+      result.dirty = model.showLayoutSwitchToast(msg.newLayout) or result.dirty
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
+    if result.dirty:
+      let tagOpt = model.tagData(model.activeTag)
+      if tagOpt.isSome:
+        result.dirty =
+          model.showLayoutSwitchToast(tagOpt.get().layoutMode) or result.dirty
   of MsgKind.CmdSetMasterCount:
     result.dirty = model.setMasterCount(msg.count)
   of MsgKind.CmdAdjustMasterCount:
@@ -324,6 +334,7 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.tickAnimations()
     result.dirty = model.tickOverviewPointerHold() or result.dirty
     result.dirty = model.tickRecentWindows() or result.dirty
+    result.dirty = model.tickLayoutSwitchToast() or result.dirty
     result.dirty = model.flushPendingDialogFocus() or result.dirty
   of MsgKind.CmdExpireStartupWindowRules:
     result.dirty = model.expireStartupWindowRules()

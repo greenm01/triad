@@ -795,6 +795,30 @@ While the helper is open, Triad asks River to eat the next non-modifier key and
 uses that key only to dismiss the helper. Bound Triad keys also dismiss without
 running their normal command.
 
+## Layout Switch Toast
+
+Triad can show a short native toast after a layout command changes the active
+workspace layout:
+
+```kdl
+layout-switch-toast {
+  enabled #true
+  timeout-ms 900
+  ring-color "#ff3b30"
+}
+```
+
+- `enabled #true|#false`: controls whether layout commands open the toast. The
+  default is true.
+- `timeout-ms <ms>`: sets how long the toast stays visible. Values are clamped
+  to `0..60000`; the default is `900`.
+- `ring-color "<rgba>"`: sets the toast border color. Colors use the same
+  `#rrggbb` or `#rrggbbaa` syntax as global border colors. The default is red.
+
+The toast follows layout commands, not hard-coded keys. Rebinding `switch-layout`
+away from `Super+n`, or binding direct layout commands such as `layout-scroller`
+and `layout-grid`, keeps the toast behavior.
+
 ## Scratchpad
 
 The `scratchpad` block controls the size used when showing the standard
