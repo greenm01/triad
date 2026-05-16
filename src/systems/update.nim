@@ -137,6 +137,33 @@ proc compactRuntimeEffects(effects: seq[Effect]): JsonNode =
 proc isLayoutCommand(kind: MsgKind): bool =
   kind in {MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout}
 
+proc needsFullSnapshotAlways(kind: MsgKind): bool =
+  case kind
+  of MsgKind.WlPointerDelta, MsgKind.WlRecentWindowPointerMotion,
+      MsgKind.WlOverviewPointerScrollRequested, MsgKind.WlOverviewWheel,
+      MsgKind.WlPointerMoveRequested, MsgKind.WlPointerResizeRequested,
+      MsgKind.WlOverviewPointerDragRequested, MsgKind.CmdTick:
+    false
+  else:
+    true
+
+proc modelFocusedWindowId(model: Model): uint32 =
+  let scratchpad = model.activeScratchpadWindow()
+  if scratchpad != NullWindowId:
+    let winOpt = model.windowData(scratchpad)
+    if winOpt.isSome:
+      return uint32(winOpt.get().externalId)
+  if model.activeTag == NullTagId:
+    return 0
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isSome:
+    let focused = tagOpt.get().focusedWindow
+    if focused != NullWindowId:
+      let winOpt = model.windowData(focused)
+      if winOpt.isSome:
+        return uint32(winOpt.get().externalId)
+  0
+
 proc layoutTransitionPayload(before, after: ShellSnapshot): JsonNode =
   %*{
     "before": before.activeWorkspaceLayoutId(),
@@ -187,7 +214,10 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   if model.sessionLocked and msg.kind.isFocusChangingCommand():
     return (next, effects)
 
-  let before = shellSnapshot(model)
+  let beforeFocus = model.modelFocusedWindowId()
+  let beforeTag = model.activeSlot
+  let beforeOverview = model.overviewActive
+
   let step =
     case msg.kind
     of MsgKind.WlWindowCreated .. MsgKind.WlModifiersChanged:
@@ -204,7 +234,26 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
   if dirty and next.windowRuleStateMatchersEnabled():
     dirty = next.refreshWindowRuleDerivedState() or dirty
 
-  let after = shellSnapshot(next)
+  let afterFocus = next.modelFocusedWindowId()
+  let afterTag = next.activeSlot
+  let afterOverview = next.overviewActive
+
+  let needSnapshot =
+    msg.kind.needsFullSnapshotAlways() or beforeFocus != afterFocus or
+    beforeTag != afterTag or beforeOverview != afterOverview or maintenance.collapsed or
+    maintenance.pruned or (behaviorLogEnabled() and msg.kind.shouldLogRuntimeUpdate())
+
+  let before =
+    if needSnapshot:
+      shellSnapshot(model)
+    else:
+      ShellSnapshot()
+  let after =
+    if needSnapshot:
+      shellSnapshot(next)
+    else:
+      ShellSnapshot()
+
   effects.addPostUpdateEffects(
     msg, before, after, dirty, maintenance.collapsed, maintenance.pruned
   )
