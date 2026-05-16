@@ -110,6 +110,23 @@ WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
 This is useful for quick smoke testing. A real login session is the better path
 for daily use because it gives River direct ownership of the Wayland session.
 
+### Development Diagnostics
+
+Normal sessions keep behavior JSON logs off. For a diagnostic session, enable
+dev mode before starting River:
+
+```bash
+TRIAD_DEV_MODE=1 river -c ~/.local/bin/triad-manager-loop
+```
+
+Dev mode enables compact behavior JSONL logs unless
+`TRIAD_BEHAVIOR_LOG=0` is set. You can also run `triad --dev-mode` directly
+when starting the daemon by hand.
+
+In a running Triad session, use `triad msg dev-mode status`,
+`triad msg dev-mode on`, `triad msg dev-mode off`, or
+`triad msg dev-mode toggle` to inspect or change the live diagnostics mode.
+
 ## Test In QEMU
 
 For the most isolated test, run Triad in a VM. This is slower than a TTY smoke

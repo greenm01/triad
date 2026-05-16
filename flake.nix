@@ -107,8 +107,16 @@
             text = ''
               state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/triad"
               mkdir -p "$state_dir"
-              export TRIAD_BEHAVIOR_LOG="''${TRIAD_BEHAVIOR_LOG:-1}"
               triad_bin="''${TRIAD_BIN:-${triad}/bin/triad}"
+              triad_args=""
+
+              case "''${TRIAD_DEV_MODE:-}" in
+                1|true|TRUE|yes|YES|on|ON)
+                  triad_args="--dev-mode"
+                  export TRIAD_DEV_MODE=1
+                  export TRIAD_BEHAVIOR_LOG="''${TRIAD_BEHAVIOR_LOG:-1}"
+                  ;;
+              esac
 
               rapid_restarts=0
 
@@ -121,7 +129,7 @@
                 ln -sfn "$log" "$latest" 2>/dev/null || true
                 printf '%s\n' "triad-manager-loop: starting triad, log=$log" >&2
 
-                "$triad_bin" >>"$log" 2>&1
+                "$triad_bin" $triad_args >>"$log" 2>&1
                 status="$?"
                 end_sec="$(date +%s)"
                 runtime_sec=$((end_sec - start_sec))

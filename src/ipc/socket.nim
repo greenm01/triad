@@ -116,6 +116,43 @@ proc canSubscribeTriad(): bool =
   pruneTriadSubscribers()
   triadSubscribers.len < MaxIpcSubscribers
 
+proc devModeReply(): string =
+  $(
+    %*{
+      "ok": true,
+      "type": "dev-mode",
+      "dev_mode": devModeEnabled(),
+      "behavior_log": behaviorLogEnabled(),
+    }
+  )
+
+proc devModeError(message: string): string =
+  $(%*{"ok": false, "type": "dev-mode", "error": message})
+
+proc handleDevModeControl*(line: string): Option[string] =
+  let parts = line.strip().splitWhitespace()
+  if parts.len == 0 or parts[0] != "dev-mode":
+    return none(string)
+  if parts.len == 1:
+    return some(devModeReply())
+  if parts.len > 2:
+    return some(devModeError("usage: dev-mode [on|off|toggle|status]"))
+
+  case parts[1]
+  of "on":
+    setRuntimeDevMode(true)
+    some(devModeReply())
+  of "off":
+    setRuntimeDevMode(false)
+    some(devModeReply())
+  of "toggle":
+    toggleRuntimeDevMode()
+    some(devModeReply())
+  of "status":
+    some(devModeReply())
+  else:
+    some(devModeError("usage: dev-mode [on|off|toggle|status]"))
+
 proc startIpcServer*(
     path: string,
     onMsg: proc(msg: Msg) {.gcsafe.},
@@ -161,6 +198,11 @@ proc startIpcServer*(
           while client != nil and not client.isClosed:
             let line = await recvLineLimited(client)
             if line == "":
+              break
+
+            let devModeControl = handleDevModeControl(line)
+            if devModeControl.isSome:
+              await client.send(devModeControl.get() & "\L")
               break
 
             if getSnapshot != nil:

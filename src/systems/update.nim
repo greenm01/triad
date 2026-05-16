@@ -152,6 +152,8 @@ proc writeRuntimeUpdateEvent(
     dirty, collapsed, pruned: bool,
     effects: seq[Effect],
 ) =
+  if not behaviorLogEnabled():
+    return
   let kind = msg.kind
   if not kind.shouldLogRuntimeUpdate():
     return

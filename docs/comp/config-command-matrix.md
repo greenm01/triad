@@ -425,3 +425,8 @@ CLI and environment:
   non-default root config path.
 - `triad validate-config [--config <path>]` checks config syntax, includes, and
   strict window-rule regex validation without starting the daemon.
+- `triad --dev-mode` and `TRIAD_DEV_MODE=1` enable developer-session defaults
+  such as behavior JSONL logs. `TRIAD_BEHAVIOR_LOG=0` still forces those logs
+  off, and `TRIAD_BEHAVIOR_LOG=1` enables them without the full dev mode.
+- `triad msg dev-mode [on|off|toggle|status]` changes or reports the live
+  daemon diagnostics mode without restarting the session.

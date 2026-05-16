@@ -71,6 +71,11 @@ For live reload, compositor, focus, session restore, or window-placement bugs:
    `niri_compat_event_stream_subscribed`, and
    `niri_compat_event_stream_disconnected`. Prefer citing these JSON events
    when explaining a live reload, focus, or shell disappearance bug.
-5. To force or redirect behavior logging, use `TRIAD_BEHAVIOR_LOG=1`,
+5. Behavior JSONL logs are off by default in normal sessions. Enable the
+   development bundle with `triad --dev-mode` or `TRIAD_DEV_MODE=1`, or force
+   only behavior logging with `TRIAD_BEHAVIOR_LOG=1`. `TRIAD_BEHAVIOR_LOG=0`
+   overrides startup dev mode and keeps behavior logs off. In a running
+   session, use `triad msg dev-mode on|off|toggle|status` to change or inspect
+   the live diagnostics mode. To redirect or tune logs, use
    `TRIAD_BEHAVIOR_LOG_DIR`, `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and
    `TRIAD_BEHAVIOR_LOG_KEEP_DAYS`. Keep generated logs out of git.

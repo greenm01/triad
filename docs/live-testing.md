@@ -60,12 +60,19 @@ snapshot cannot be captured, the reload aborts rather than falling back to the
 Niri-compatible state view, because that view cannot preserve camera offsets or
 full floating geometry.
 
-The development manager loop enables compact behavior JSONL logs by default.
-They are written outside the repository under
+Compact behavior JSONL logs are off by default for normal sessions. Enable
+them for a focused investigation with `triad --dev-mode`, `TRIAD_DEV_MODE=1`,
+or `TRIAD_BEHAVIOR_LOG=1`. They are written outside the repository under
 `${XDG_STATE_HOME:-$HOME/.local/state}/triad/behavior`, roll daily, cap each
-day at 5 MiB, and keep seven days. Set `TRIAD_BEHAVIOR_LOG=0` to disable them,
-or override `TRIAD_BEHAVIOR_LOG_DIR`, `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and
-`TRIAD_BEHAVIOR_LOG_KEEP_DAYS` for a focused investigation.
+day at 5 MiB, and keep seven days. `TRIAD_BEHAVIOR_LOG=0` disables behavior
+logs even when dev mode is enabled. Override `TRIAD_BEHAVIOR_LOG_DIR`,
+`TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and `TRIAD_BEHAVIOR_LOG_KEEP_DAYS` to redirect
+or tune the log files.
+
+For an already-running session, use `triad msg dev-mode on`,
+`triad msg dev-mode off`, `triad msg dev-mode toggle`, or
+`triad msg dev-mode status`. The live `off` command disables both
+`TRIAD_DEV_MODE` and behavior JSONL logging for the current daemon process.
 
 Expected startup milestones in `triad.log`:
 

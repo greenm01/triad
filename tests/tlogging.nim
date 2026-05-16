@@ -72,6 +72,53 @@ suite "Runtime logging":
     check event.hasKey("ts_unix_ms")
     check event.hasKey("pid")
 
+  test "dev mode enables behavior logging unless explicitly overridden":
+    let oldDevMode = getEnv("TRIAD_DEV_MODE", "")
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    defer:
+      restoreEnv("TRIAD_DEV_MODE", oldDevMode)
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+
+    putEnv("TRIAD_DEV_MODE", "")
+    putEnv("TRIAD_BEHAVIOR_LOG", "")
+    configureDevMode(@["--dev-mode"])
+
+    check devModeEnabled()
+    check behaviorLogEnabled()
+
+    putEnv("TRIAD_DEV_MODE", "")
+    putEnv("TRIAD_BEHAVIOR_LOG", "0")
+    configureDevMode(@["--dev-mode"])
+
+    check devModeEnabled()
+    check not behaviorLogEnabled()
+
+    putEnv("TRIAD_DEV_MODE", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG", "")
+    configureDevMode(@[])
+
+    check devModeEnabled()
+    check behaviorLogEnabled()
+
+  test "runtime dev mode toggles behavior logging live":
+    let oldDevMode = getEnv("TRIAD_DEV_MODE", "")
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    defer:
+      restoreEnv("TRIAD_DEV_MODE", oldDevMode)
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+
+    setRuntimeDevMode(true)
+    check devModeEnabled()
+    check behaviorLogEnabled()
+
+    setRuntimeDevMode(false)
+    check not devModeEnabled()
+    check not behaviorLogEnabled()
+
+    toggleRuntimeDevMode()
+    check devModeEnabled()
+    check behaviorLogEnabled()
+
   test "runtime update behavior event records workspace transition":
     let dir = getTempDir() / ("triad-behavior-runtime-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")

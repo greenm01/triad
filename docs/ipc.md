@@ -53,6 +53,10 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-shell-ui`: Focuses Triad's internal River shell surface when present.
 *   `switch-shell <name>`: Stops the active configured shell profile and starts the named profile.
 *   `cycle-shell`: Rotates through the configured `shells.cycle` profile list.
+*   `dev-mode [on|off|toggle|status]`: Shows or changes the running daemon's
+    developer diagnostics mode. `on` enables behavior JSONL logging for the
+    live process, `off` disables it, `toggle` flips the current state, and no
+    argument is equivalent to `status`.
 *   `show-hotkey-overlay`, `hide-hotkey-overlay`, `toggle-hotkey-overlay`:
     Opens, closes, or toggles Triad's native keyboard helper popup.
 

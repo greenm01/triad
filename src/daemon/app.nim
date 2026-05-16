@@ -288,7 +288,8 @@ proc main*() =
         cmd.add(" ")
       cmd.add(args[i])
     try:
-      if cmd == "dump-live-restore-state":
+      if cmd == "dump-live-restore-state" or cmd == "dev-mode" or
+          cmd.startsWith("dev-mode "):
         let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
         stdout.writeLine(reply)
       else:
@@ -297,18 +298,18 @@ proc main*() =
       failCli("socket request failed: " & e.msg)
     return
 
+  configureDevMode(args)
   configureLogging()
 
   info "Triad process starting",
     pid = getCurrentProcessId(),
     runtimeDir = runtimeDir(),
-    waylandDisplay = getEnv("WAYLAND_DISPLAY", "")
+    waylandDisplay = getEnv("WAYLAND_DISPLAY", ""),
+    devMode = devModeEnabled(),
+    behaviorLog = behaviorLogEnabled()
 
   daemon.pendingLiveRestorePath = defaultLiveRestorePath()
   let hadRestoreSnapshot = fileExists(daemon.pendingLiveRestorePath)
-  if hadRestoreSnapshot and getEnv("TRIAD_BEHAVIOR_LOG", "").len == 0 and
-      not liveRestoreStateApplied(daemon.pendingLiveRestorePath):
-    putEnv("TRIAD_BEHAVIOR_LOG", "1")
 
   let sessionProblem = currentWaylandSessionProblem()
   if sessionProblem.len > 0:

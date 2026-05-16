@@ -7,7 +7,7 @@ import
     message_queue, process_runner, reload_runtime, switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
-import ../src/ipc/[commands, niri_compat]
+import ../src/ipc/[commands, niri_compat, socket]
 import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
@@ -940,6 +940,14 @@ config-notification {
     check parseTextCommand("focus-workspace nope").isNone
     check parseTextCommand("focus-workspace 2").get().kind ==
       MsgKind.CmdFocusWorkspaceIndex
+
+  test "dev mode control IPC validates arguments":
+    let bad = parseJson(socket.handleDevModeControl("dev-mode maybe").get())
+    check not bad["ok"].getBool()
+    check bad["type"].getStr() == "dev-mode"
+
+    let extra = parseJson(socket.handleDevModeControl("dev-mode on now").get())
+    check not extra["ok"].getBool()
 
   test "native live restore parser rejects invalid or old payloads":
     check parseLiveRestoreJson("").isNone

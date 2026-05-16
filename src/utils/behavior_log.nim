@@ -10,10 +10,12 @@ import ../types/runtime_values
 const
   DefaultMaxBytes* = 5 * 1024 * 1024
   DefaultKeepDays* = 7
+  DevModeEnv* = "TRIAD_DEV_MODE"
+  BehaviorLogEnv* = "TRIAD_BEHAVIOR_LOG"
   BehaviorLogPrefix = "triad-behavior-"
   BehaviorLogSuffix = ".jsonl"
 
-proc envFlagEnabled(value: string): bool =
+proc envFlagEnabled*(value: string): bool =
   case value.normalize()
   of "1", "true", "yes", "on": true
   else: false
@@ -26,7 +28,33 @@ proc parsePositiveInt(value: string, fallback: int): int =
     fallback
 
 proc behaviorLogEnabled*(): bool =
-  getEnv("TRIAD_BEHAVIOR_LOG", "").envFlagEnabled()
+  getEnv(BehaviorLogEnv, "").envFlagEnabled()
+
+proc devModeEnabled*(): bool =
+  getEnv(DevModeEnv, "").envFlagEnabled()
+
+proc argsEnableDevMode*(args: openArray[string]): bool =
+  for arg in args:
+    if arg == "--dev-mode":
+      return true
+  false
+
+proc configureDevMode*(args: openArray[string]) =
+  if args.argsEnableDevMode() or devModeEnabled():
+    putEnv(DevModeEnv, "1")
+    if getEnv(BehaviorLogEnv, "").len == 0:
+      putEnv(BehaviorLogEnv, "1")
+
+proc setRuntimeDevMode*(enabled: bool) =
+  if enabled:
+    putEnv(DevModeEnv, "1")
+    putEnv(BehaviorLogEnv, "1")
+  else:
+    putEnv(DevModeEnv, "0")
+    putEnv(BehaviorLogEnv, "0")
+
+proc toggleRuntimeDevMode*() =
+  setRuntimeDevMode(not devModeEnabled())
 
 proc defaultBehaviorLogDir*(): string =
   let configured = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
