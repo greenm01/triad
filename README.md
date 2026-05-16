@@ -1,5 +1,7 @@
 # Triad
 
+https://github.com/user-attachments/assets/27e4bde8-95fc-40cf-9830-5373ac0bcc74
+
 Triad is a dynamic window-management client for the River 0.4+ compositor.
 It is written in Nim and built around a data-oriented runtime model. River
 keeps the display alive. Triad decides where windows go. Shells get clean
