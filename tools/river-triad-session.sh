@@ -12,7 +12,7 @@ exec >>"$session_log" 2>&1
 export XDG_CURRENT_DESKTOP=river
 export XDG_SESSION_DESKTOP=river-triad
 export XDG_SESSION_TYPE=wayland
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 find_dbus_run_session() {
   for candidate in \
@@ -52,10 +52,15 @@ case "${TRIAD_SESSION_DEV_MODE:-}" in
     ;;
 esac
 
-river_bin="${TRIAD_RIVER_BIN:-$HOME/.local/bin/triad-river}"
+river_bin="${TRIAD_RIVER_BIN:-$(command -v river 2>/dev/null || true)}"
 manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
 dbus_runner="$(find_dbus_run_session)"
 dbus_config="$(find_dbus_session_config)"
+
+if [ -z "$river_bin" ]; then
+  printf '%s\n' "river-triad-session: river not found; install River 0.4+ or set TRIAD_RIVER_BIN"
+  exit 1
+fi
 
 printf '%s\n' "river-triad-session: starting at $(date -Is 2>/dev/null || date)"
 printf '%s\n' "river-triad-session: HOME=$HOME"

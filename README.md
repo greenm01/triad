@@ -48,18 +48,19 @@ While it has a native JSON stream, it also projects state as Niri-shaped JSON. Y
 For complete installation and session setup instructions, see
 [INSTALL.md](INSTALL.md).
 
-If you already have the Nix package manager installed with `nix-command` and
-`flakes` enabled, the fast path on non-NixOS systems is:
+The recommended path is to install River 0.4+ from the upstream River source
+instructions, then build Triad locally:
 
 ```bash
 git clone https://github.com/greenm01/triad.git
 cd triad
-nix develop
-tools/install_live_session.sh
+nimble installSession
 ```
 
-If you need to install Nix, enable flakes, choose a user-local session, or set
-Triad up on NixOS, follow [INSTALL.md](INSTALL.md).
+`nimble installSession` builds optimized binaries with dev mode off by default,
+then installs the session. It expects `river` 0.4+ on `PATH`, or
+`TRIAD_RIVER_BIN=/path/to/river`. Nix remains available for contributors via
+`nix develop`, and NixOS users can use the flake module.
 
 ### Toolchain
 
@@ -80,6 +81,7 @@ Use the standard tasks while iterating:
 ```bash
 nimble test
 nimble build
+nimble buildRelease
 nimble tidy
 ```
 

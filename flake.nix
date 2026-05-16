@@ -9,17 +9,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixgl = {
-      url = "github:nix-community/nixGL";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
     inputs@{
       self,
       nixpkgs,
-      nixgl,
       ...
     }:
     let
@@ -290,84 +285,6 @@
               $out/share/triad/config.default.kdl
           '';
 
-          installSession = pkgs.writeShellApplication {
-            name = "triad-install-session";
-            runtimeInputs = [ pkgs.coreutils ];
-            text = ''
-              usage() {
-                printf '%s\n' \
-                  "usage: triad-install-session [--system|--user]" \
-                  "" \
-                  "Installs the River (Triad) Wayland session entry." \
-                  "" \
-                  "  --system   install to /usr/share/wayland-sessions (default)" \
-                  "  --user     install to \$XDG_DATA_HOME/wayland-sessions" \
-                  "" \
-                  "Set TRIAD_WAYLAND_SESSION_DIR to override the session directory."
-              }
-
-              scope=system
-              while [ "$#" -gt 0 ]; do
-                case "$1" in
-                  --system)
-                    scope=system
-                    ;;
-                  --user)
-                    scope=user
-                    ;;
-                  -h|--help)
-                    usage
-                    exit 0
-                    ;;
-                  *)
-                    printf '%s\n' "triad-install-session: unknown option: $1" >&2
-                    usage >&2
-                    exit 2
-                    ;;
-                esac
-                shift
-              done
-
-              config_dir="''${XDG_CONFIG_HOME:-$HOME/.config}/triad"
-              config_path="$config_dir/config.kdl"
-              if [ -n "''${TRIAD_WAYLAND_SESSION_DIR:-}" ]; then
-                desktop_dir="$TRIAD_WAYLAND_SESSION_DIR"
-              elif [ "$scope" = user ]; then
-                desktop_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/wayland-sessions"
-              else
-                desktop_dir="/usr/share/wayland-sessions"
-              fi
-              desktop_path="$desktop_dir/river-triad.desktop"
-
-              mkdir -p "$config_dir"
-
-              if [ ! -e "$config_path" ] && [ ! -L "$config_path" ]; then
-                install -Dm644 ${./config.default.kdl} "$config_path"
-                printf '%s\n' "triad-install-session: installed default config at $config_path"
-              else
-                printf '%s\n' "triad-install-session: leaving existing config at $config_path"
-              fi
-
-              if install -Dm644 ${desktopFile} "$desktop_path" 2>/dev/null; then
-                :
-              elif command -v sudo >/dev/null 2>&1; then
-                sudo install -Dm644 ${desktopFile} "$desktop_path"
-              elif command -v doas >/dev/null 2>&1; then
-                doas install -Dm644 ${desktopFile} "$desktop_path"
-              else
-                printf '%s\n' "triad-install-session: cannot write $desktop_path" >&2
-                printf '%s\n' "triad-install-session: rerun as root, install sudo/doas, or pass --user" >&2
-                exit 1
-              fi
-
-              if [ "$scope" = user ] && [ -z "''${TRIAD_WAYLAND_SESSION_DIR:-}" ]; then
-                printf '%s\n' "triad-install-session: warning: user-local sessions are not read by every display manager" >&2
-              fi
-
-              printf '%s\n' "triad-install-session: installed $desktop_path"
-              printf '%s\n' "triad-install-session: select 'River (Triad)' at login"
-            '';
-          };
         in
         {
           inherit
@@ -375,7 +292,6 @@
             triadSession
             riverTriadSession
             managerLoop
-            installSession
             ;
 
           default = triad;
@@ -386,23 +302,11 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          installSession = self.packages.${system}.installSession;
-          riverTriadSession = self.packages.${system}.riverTriadSession;
         in
         {
           default = {
             type = "app";
             program = "${pkgs.lib.getExe self.packages.${system}.triad}";
-          };
-
-          install-session = {
-            type = "app";
-            program = "${pkgs.lib.getExe installSession}";
-          };
-
-          river-triad-session = {
-            type = "app";
-            program = "${pkgs.lib.getExe riverTriadSession}";
           };
         }
       );
@@ -455,37 +359,6 @@
               exec ls -la "$@"
             '';
           };
-          sessionRuntimePackages =
-            let
-              dankShell = inputs.dank-material-shell.packages.${system}.dms-shell;
-            in
-            [
-              pkgs.river
-              pkgs.dbus
-              pkgs.pipewire
-              pkgs.wireplumber
-              pkgs.xdg-desktop-portal
-              pkgs.xdg-desktop-portal-wlr
-              pkgs.xdg-desktop-portal-gtk
-              pkgs.grim
-              pkgs.slurp
-              pkgs.wl-clipboard
-              pkgs.kitty
-              pkgs.fuzzel
-              pkgs.wtype
-              pkgs.waybar
-              pkgs.swaylock
-              pkgs.gtklock
-              pkgs.sunsetr
-              pkgs.quickshell
-              pkgs.noctalia-shell
-              dankShell
-              pkgs.janet
-              pkgs.jq
-              pkgs.procps
-            ];
-          localInstallRuntimePackages =
-            sessionRuntimePackages ++ [ nixgl.packages.${system}.nixGLIntel ];
         in
         {
           default = pkgs.mkShell {
@@ -501,17 +374,14 @@
               pkgs.wayland-protocols
               pkgs.libxkbcommon
               pkgs.pixman
-            ]
-            ++ localInstallRuntimePackages;
-
-            TRIAD_NIX_RUNTIME_PATH = pkgs.lib.makeBinPath localInstallRuntimePackages;
+            ];
 
             shellHook = ''
               export TRIAD_NIMBLE_DIR="''${TRIAD_NIMBLE_DIR:-$PWD/.nimble}"
               echo "Triad dev shell"
               echo "  build:         nimble build"
               echo "  nix build:     nix build .#triad"
-              echo "  install seat:  tools/install_live_session.sh"
+              echo "  install seat:  tools/install_live_session.sh (uses native River)"
             '';
           };
         }

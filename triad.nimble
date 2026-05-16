@@ -19,6 +19,9 @@ requires "pixie >= 5.1.0"
 proc runTestSuite(path: string) =
   exec "nimble c -r --hints:off --nimcache:tests/nimcache " & path
 
+proc buildReleaseBinaries() =
+  exec "env TRIAD_DEV_MODE=0 nimble build -d:release --opt:speed --passL:-s"
+
 proc runCoreSuites() =
   for path in [
     "tests/tcore_smoke.nim", "tests/tcore_navigation_layout.nim",
@@ -89,6 +92,12 @@ task verify, "Run tests, build, tidy, and binary hygiene checks":
 task buildAll, "Build all Triad binaries":
   exec "nimble build"
 
+task buildRelease, "Build optimized Triad binaries":
+  buildReleaseBinaries()
+
+task installSession, "Build optimized binaries and install the River login session":
+  exec "sh tools/install_live_session.sh"
+
 task testAppIdentity, "Run app identity tests":
   runTestSuite("tests/tapp_identity.nim")
 
@@ -134,5 +143,5 @@ task testAll, "Run all explicit test suites":
 
 task liveReload,
   "Build release binaries, install them, and restart the live Triad manager":
-  exec "nimble build -d:release"
+  buildReleaseBinaries()
   exec "sh tools/live_reload.sh"
