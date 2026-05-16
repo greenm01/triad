@@ -421,7 +421,7 @@
               echo "Triad dev shell"
               echo "  build:         nimble build"
               echo "  nix build:     nix build .#triad"
-              echo "  install seat:  nix run .#install-session"
+              echo "  install seat:  tools/install_live_session.sh"
             '';
           };
         }

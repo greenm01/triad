@@ -45,21 +45,21 @@ While it has a native JSON stream, it also projects state as Niri-shaped JSON. Y
 
 ### Installation
 
-For complete installation and session setup instructions, refer to [INSTALL.md](INSTALL.md).
-The fastest path for Nix users is:
+For complete installation and session setup instructions, see
+[INSTALL.md](INSTALL.md).
+
+If you already have the Nix package manager installed with `nix-command` and
+`flakes` enabled, the fast path on non-NixOS systems is:
 
 ```bash
 git clone https://github.com/greenm01/triad.git
 cd triad
 nix develop
-nix build .#triad
-nix run .#install-session
+tools/install_live_session.sh
 ```
 
-On non-NixOS systems, `install-session` registers the display-manager session
-under `/usr/share/wayland-sessions` by default. On NixOS, use the flake's
-`nixosModules.default` module and set `programs.triad.enable = true`. See
-[INSTALL.md](INSTALL.md) for both paths.
+If you need to install Nix, enable flakes, choose a user-local session, or set
+Triad up on NixOS, follow [INSTALL.md](INSTALL.md).
 
 ### Toolchain
 

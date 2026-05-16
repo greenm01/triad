@@ -36,42 +36,51 @@ Some Nix packages use `nix-daemon.service` instead of socket activation:
 sudo systemctl enable --now nix-daemon.service
 ```
 
-Then install Triad's optimized Nix session package:
+Then build and install Triad like a normal local application:
 
 ```bash
 git clone https://github.com/greenm01/triad.git
 cd triad
+mkdir -p ~/.config/nix
+grep -qxF 'experimental-features = nix-command flakes' ~/.config/nix/nix.conf 2>/dev/null \
+  || printf '%s\n' 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 nix develop
-nix build .#triad
-nix run .#install-session
+tools/install_live_session.sh
 ```
 
 Then log out and choose **River (Triad)** from your display manager's session
 menu. The installer writes the session entry to
-`/usr/share/wayland-sessions/river-triad.desktop` by default and uses `sudo` or
-`doas` when needed.
+`/usr/share/wayland-sessions/river-triad.desktop` by default, writes the
+launcher scripts and optimized Triad binaries to `~/.local/bin`, and uses
+`sudo` or `doas` only for the system session file when needed. Run the
+installer as your normal user, not with `sudo`, so the binaries and config land
+under your home directory.
 
-The Nix flake provides:
+The Nix shell provides:
 
-- Triad and `triad_niri`
+- Nim, Nimble, and the native libraries needed to build Triad
 - River
 - Noctalia-shell, DankMaterialShell, and Waybar
 - common Wayland session utilities used by the default config
-- a `River (Triad)` desktop entry for display managers
 
-`nix run .#install-session` installs a starter config only when
+When run from `nix develop`, `tools/install_live_session.sh` records the shell's
+runtime command path in the installed launcher so display managers can start
+River and the default session utilities without inheriting the dev shell
+environment. It installs a starter config only when
 `~/.config/triad/config.kdl` does not already exist.
 
-If your Nix does not enable flakes by default, run commands with:
+If your Nix already enables flakes, leave `~/.config/nix/nix.conf` alone. If it
+does not, add this once before running `nix develop`:
 
 ```bash
-nix --extra-experimental-features 'nix-command flakes' build .#triad
-nix --extra-experimental-features 'nix-command flakes' run .#install-session
+mkdir -p ~/.config/nix
+grep -qxF 'experimental-features = nix-command flakes' ~/.config/nix/nix.conf 2>/dev/null \
+  || printf '%s\n' 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 ```
 
 ## Add Triad To Your Login Screen
 
-The Nix installer writes a system session file here:
+The local installer writes a system session file here:
 
 ```bash
 /usr/share/wayland-sessions/river-triad.desktop
@@ -82,14 +91,15 @@ Ubuntu, and similar systems. To install somewhere else:
 
 ```bash
 TRIAD_WAYLAND_SESSION_DIR=/usr/local/share/wayland-sessions \
-  nix run .#install-session
+  tools/install_live_session.sh
 ```
 
 User-local session files are still available for display managers that support
-them:
+them and do not require `sudo`:
 
 ```bash
-nix run .#install-session -- --user
+TRIAD_WAYLAND_SESSION_DIR="$HOME/.local/share/wayland-sessions" \
+  tools/install_live_session.sh
 ```
 
 That writes:
