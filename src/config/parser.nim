@@ -803,11 +803,11 @@ proc parseOutputConfigTransform(
     (false, OutputConfigTransform.OutputTransformNormal)
 
 proc outputModeRefreshMilliHz(value: KdlVal): int32 =
-  let hz =
-    if value.kind == KInt:
-      float64(value.kInt())
-    else:
-      value.kFloat()
+  var hz: float64
+  try:
+    hz = value.kFloat()
+  except CatchableError:
+    hz = float64(value.kInt())
   int32(max(0.0, hz * 1000.0 + 0.5))
 
 proc parseIdleInhibitMode(
@@ -930,11 +930,10 @@ proc loadConfig*(path: string): Config =
   result.layout.gaps = DefaultGaps
   result.layout.centerFocusedColumn = DefaultCenterFocusedColumn
   result.layout.defaultColumnWidth = DefaultColumnWidth
-  result.layout.scrollerProportionPresets =
-    @[
-      DefaultScrollerProportionPresetSmall, DefaultScrollerProportionPresetMedium,
-      DefaultScrollerProportionPresetLarge, DefaultScrollerProportionPresetFull,
-    ]
+  result.layout.scrollerProportionPresets = @[
+    DefaultScrollerProportionPresetSmall, DefaultScrollerProportionPresetMedium,
+    DefaultScrollerProportionPresetLarge, DefaultScrollerProportionPresetFull,
+  ]
   result.layout.defaultWindowWidth = DefaultWindowWidth
   result.layout.defaultWindowHeight = DefaultWindowHeight
   result.layout.defaultMasterCount = DefaultMasterCount
@@ -949,11 +948,10 @@ proc loadConfig*(path: string): Config =
   result.layout.animationSnapThreshold = DefaultAnimationSnapThreshold
   result.layout.frameRate = DefaultFrameRate
   result.layout.smartGaps = false
-  result.layout.layoutCycle =
-    @[
-      LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
-      LayoutMode.VerticalScroller,
-    ]
+  result.layout.layoutCycle = @[
+    LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
+    LayoutMode.VerticalScroller,
+  ]
   result.workspaces.defaultCount = DefaultWorkspaceCount
   result.workspaces.defaultLayout = LayoutMode.Scroller
   result.scratchpad.widthRatio = DefaultScratchpadWidthRatio

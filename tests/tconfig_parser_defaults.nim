@@ -47,6 +47,7 @@ output "HDMI-A-1" {
 }
 output "DP-1" {
   workspaces "invalid"
+  mode 1920 1080 120
   enabled #false
 }
 workspace-rules {
@@ -327,6 +328,10 @@ switch-events {
     check config.outputRules[0].adaptiveSync
     check config.outputRules[1].target == "DP-1"
     check config.outputRules[1].workspaceSlots.len == 0
+    check config.outputRules[1].modeSet
+    check config.outputRules[1].modeWidth == 1920
+    check config.outputRules[1].modeHeight == 1080
+    check config.outputRules[1].modeRefresh == 120000
     check config.tagRules.len == 2
     check config.tagRules[0].tagId == 1
     check config.tagRules[0].name == "term"

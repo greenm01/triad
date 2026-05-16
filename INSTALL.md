@@ -61,13 +61,17 @@ The Nix shell provides:
 - Nim, Nimble, and the native libraries needed to build Triad
 - River
 - Noctalia-shell, DankMaterialShell, and Waybar
-- common Wayland session utilities used by the default config
+- common Wayland session utilities used by the starter config
 
 When run from `nix develop`, `tools/install_live_session.sh` records the shell's
 runtime command path in the installed launcher so display managers can start
 River and the default session utilities without inheriting the dev shell
 environment. It installs a starter config only when
-`~/.config/triad/config.kdl` does not already exist.
+`~/.config/triad/config.kdl` does not already exist. Existing config files and
+symlinks are left in place. The starter config avoids host-specific output and
+input policy and only binds applications included in the packaged session; use
+`config_examples/niltempus_config.kdl` as an example for a fuller personal
+setup with browser, file-manager, and app-specific window rules.
 
 If your Nix already enables flakes, leave `~/.config/nix/nix.conf` alone. If it
 does not, add this once before running `nix develop`:
@@ -262,7 +266,7 @@ log.
 
 ## Shell Profiles
 
-The default config starts Noctalia first, includes DankMaterialShell and Waybar
+The starter config starts Noctalia first, includes DankMaterialShell and Waybar
 as switchable shell profiles, and uses Waybar as the watchdog fallback.
 
 The profile commands are plain argv-style config entries, so users can replace

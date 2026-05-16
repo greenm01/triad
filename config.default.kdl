@@ -1,8 +1,8 @@
-// Triad default daily-driver config.
+// Triad default starter config.
 //
-// This is modeled after ~/.config/mango/config.conf, but only uses Triad
-// config and commands that the current implementation understands.
-// Use as ~/.config/triad/config.kdl for host or VM sessions.
+// This config avoids host-specific output/input policy and only binds
+// applications provided by the packaged River (Triad) session. See
+// config_examples/niltempus_config.kdl for a fuller opinionated setup.
 
 layout {
     gaps 8
@@ -57,7 +57,7 @@ workspaces {
 // output "HDMI-A-1" {
 //     focus-at-startup
 //     workspaces 2 4
-//     mode 2560 1440 120
+//     mode 1920 1080 60
 //     scale 1.0
 //     position 0 0
 //     transform "normal"
@@ -241,8 +241,7 @@ bindings {
     bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
     bind "Super+Return" "spawn kitty"
     bind "Super+Space" "spawn fuzzel"
-    bind "Super+b" "spawn brave-origin-nightly"
-    bind "Super+e" "spawn env GTK_THEME=Adwaita:dark thunar"
+    // Add browser and file-manager binds in your personal config.
     bind "Super+Escape" "lock-session"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Super+?" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
@@ -421,21 +420,6 @@ window-rule {
 
 window-rule {
     match app-id="fuzzel"
-    open-floating #true
-}
-
-window-rule {
-    match app-id="pavucontrol"
-    open-floating #true
-}
-
-window-rule {
-    match app-id="swappy"
-    open-floating #true
-}
-
-window-rule {
-    match app-id="satty"
     open-floating #true
 }
 

@@ -648,7 +648,7 @@ and workspace placement policy:
 output "HDMI-A-1" {
   focus-at-startup
   workspaces 2 4
-  mode 2560 1440 120
+  mode 1920 1080 60
   scale 1.0
   position 0 0
   transform "normal"
@@ -667,7 +667,7 @@ output "HDMI-A-1" {
   `workspace-rules` `open-on-output` entries override output-rule affinity.
 - `mode <width> <height> <refresh-hz>`: requests an advertised monitor mode.
   Refresh may be written as an integer or decimal; Triad matches the nearest
-  advertised mode within 1 Hz, so `120` can select `119.998 Hz`.
+  advertised mode within 1 Hz, so `60` can select `60.003 Hz`.
 - `scale <factor>`: requests compositor output scale. Values are clamped to
   `0.01..64.0`.
 - `position <x> <y>`: requests the output's global compositor position.
