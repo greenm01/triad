@@ -65,37 +65,36 @@ proc refreshRateFps(refreshRate: int32): int32 =
     return 0
   max(1'i32, (refreshRate + 500) div 1000)
 
-proc animationFrameRate(model: Model): int32 =
-  if model.animationFrameRate > 0:
-    return
-      min(MaxAnimationFrameRate, max(MinAnimationFrameRate, model.animationFrameRate))
+proc frameRate(model: Model): int32 =
+  if model.frameRate > 0:
+    return min(MaxFrameRate, max(MinFrameRate, model.frameRate))
 
   let active = model.outputData(model.activeOutput)
   if active.isSome:
     let fps = active.get().refreshRate.refreshRateFps()
     if fps > 0:
-      return min(MaxAnimationFrameRate, max(MinAnimationFrameRate, fps))
+      return min(MaxFrameRate, max(MinFrameRate, fps))
 
   let primary = model.outputData(model.primaryOutput)
   if primary.isSome:
     let fps = primary.get().refreshRate.refreshRateFps()
     if fps > 0:
-      return min(MaxAnimationFrameRate, max(MinAnimationFrameRate, fps))
+      return min(MaxFrameRate, max(MinFrameRate, fps))
 
-  FallbackAnimationFrameRate
+  FallbackFrameRate
 
 proc frameIntervalMs(fps: int32): int =
-  if fps == FallbackAnimationFrameRate:
+  if fps == FallbackFrameRate:
     return int(DefaultFrameIntervalMs)
   max(1, int(1000.0 / float(max(1'i32, fps)) + 0.5))
 
-proc animationFrameIntervalMs(daemon: TriadDaemon): int =
-  daemon.runtimeState.model.animationFrameRate().frameIntervalMs()
+proc targetFrameIntervalMs(daemon: TriadDaemon): int =
+  daemon.runtimeState.model.frameRate().frameIntervalMs()
 
 proc startAnimationLoop() {.async.} =
   var lastTickMs = int64(epochTime() * 1000.0)
   while true:
-    await sleepAsync(daemon.animationFrameIntervalMs())
+    await sleepAsync(daemon.targetFrameIntervalMs())
     let nowMs = int64(epochTime() * 1000.0)
     let elapsedMs = int32(max(1'i64, min(1000'i64, nowMs - lastTickMs)))
     lastTickMs = nowMs
@@ -499,7 +498,7 @@ proc main*() =
     daemon.watcher.poll(0)
     daemon.pollSwitchEventDevices()
 
-    let frameInterval = daemon.animationFrameIntervalMs()
+    let frameInterval = daemon.targetFrameIntervalMs()
 
     # Poll async (IPC)
     asyncdispatch.poll(frameInterval)

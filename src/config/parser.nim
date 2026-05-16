@@ -38,11 +38,11 @@ proc runtimeWorkspaceCount*(count: uint32): uint32 =
 proc runtimeCenterFocusedColumn*(value: string): string =
   if value in ["never", "always", "on-overflow"]: value else: "never"
 
-proc runtimeAnimationFrameRate*(value: int32): int32 =
+proc runtimeFrameRate*(value: int32): int32 =
   if value <= 0:
-    DefaultAnimationFrameRate
+    DefaultFrameRate
   else:
-    clamp32(value, MinAnimationFrameRate, MaxAnimationFrameRate)
+    clamp32(value, MinFrameRate, MaxFrameRate)
 
 proc runtimeLayoutCycle*(cycle: seq[LayoutMode]): seq[LayoutMode] =
   if cycle.len > 0:
@@ -916,7 +916,7 @@ proc loadConfig*(path: string): Config =
   result.layout.enableAnimations = true
   result.layout.animationSpeed = DefaultAnimationSpeed
   result.layout.animationSnapThreshold = DefaultAnimationSnapThreshold
-  result.layout.animationFrameRate = DefaultAnimationFrameRate
+  result.layout.frameRate = DefaultFrameRate
   result.layout.smartGaps = false
   result.layout.layoutCycle =
     @[
@@ -1039,12 +1039,11 @@ proc loadConfig*(path: string): Config =
             elif child.name == "animation-snap-threshold" and child.args.len > 0:
               result.layout.animationSnapThreshold =
                 clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
-            elif child.name == "animation-frame-rate" and child.args.len > 0:
+            elif child.name == "frame-rate" and child.args.len > 0:
               if child.args[0].kind == KString and child.args[0].kString() == "auto":
-                result.layout.animationFrameRate = DefaultAnimationFrameRate
+                result.layout.frameRate = DefaultFrameRate
               else:
-                result.layout.animationFrameRate =
-                  runtimeAnimationFrameRate(int32(child.args[0].kInt()))
+                result.layout.frameRate = runtimeFrameRate(int32(child.args[0].kInt()))
             elif child.name == "smart-gaps" and child.args.len > 0:
               result.layout.smartGaps = child.args[0].kBool()
             elif child.name == "layout-cycle":

@@ -39,7 +39,7 @@ While it has a native JSON stream, it also projects state as Niri-shaped JSON. Y
 * **Crash Resilience:** Decoupling policy from the compositor means layout errors do not affect your session.
 * **Waybar & Quickshell Ready:** Niri-shaped JSON projection ensures compatibility with popular shell ecosystems.
 * **Dynamic Workspaces:** Spawns workspaces when needed and prunes them when empty.
-* **Smooth Motion:** Uses an internal 60FPS clock and exponential easing for window movements.
+* **Smooth Motion:** Uses configurable frame pacing and exponential easing for window movements.
 * **The Scratchpad:** Manages utility windows as centered overlays.
 * **Stable Identity:** Tag and window IDs remain constant for use in long-running scripts.
 

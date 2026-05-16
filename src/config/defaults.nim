@@ -22,7 +22,7 @@ layout {
     enable-animations #true
     animation-speed 0.15
     animation-snap-threshold 0.5
-    animation-frame-rate "auto"
+    frame-rate "auto"
     smart-gaps #false
     layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller"
 }

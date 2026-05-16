@@ -36,7 +36,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Done | Output rules | `output "name" { focus-at-startup; workspaces ... }` | Niri `output`; Mango `monitorrule` | Implemented for startup focus and workspace/output affinity by existing output identity matching. Triad still has no output layout or mode config. | Document which mode/scale/position fields require output-management protocol support before expanding the surface. |
 | Done | Session environment | `environment { KEY "value"; KEY #null }` | Niri `environment`; Mango `env` | Implemented for future Triad-spawned user-facing processes; values are literal and `#null` unsets a variable. | Keep documenting that this does not retroactively change external systemd/dbus-launched processes or already-running apps. |
 | Done | Binding event types | `switch-events` and gestures | Mango `axisbind`, `gesturebind`, `switchbind`; Niri gestures and switch events | Implemented for key press/release, locked-session keys, pointer buttons, wheel-axis bindings, touchpad swipe gestures, and Linux evdev lid/tablet switch events. | Use evdev switch delivery today; compositor-native switch events remain blocked until River exposes a protocol surface for them. |
-| Done | Focused polish | Cursor hiding, config notifications, overview/recent/hotkey overlays, and animation tuning | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Implemented cursor theme/size/shake/hiding, config reload notification commands, overview controls, recent windows, hotkey overlay layout controls, coarse animation speed, viewport snap-threshold tuning, and output-refresh-aware animation frame pacing. | Layer-rule polish remains protocol-blocked; do not add layer-rule config until River exposes enough layer-shell identity/state. |
+| Done | Focused polish | Cursor hiding, config notifications, overview/recent/hotkey overlays, and frame/animation tuning | Niri config notifications, gestures, animations, layer rules; Mango visuals/effects/layer rules | Implemented cursor theme/size/shake/hiding, config reload notification commands, overview controls, recent windows, hotkey overlay layout controls, coarse animation speed, viewport snap-threshold tuning, and configurable output-refresh-aware frame pacing. | Layer-rule polish remains protocol-blocked; do not add layer-rule config until River exposes enough layer-shell identity/state. |
 
 ## Feature Matrix
 
@@ -150,7 +150,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Window rules | Client tiled hint | `force_tiled_state` | `river_window_v1.set_tiled` | `window-rule tiled-state` | X | Controls the client-visible tiled state only; Triad placement is unchanged. |
 | Window rules | Open silent/tag silent | `isopensilent`, `istagsilent` | WM policy | `window-rule open-focused`, `default-workspace` | X | `open-focused #false` covers open-silent; explicit `default-workspace` is the workspace placement escape hatch. |
 | Window rules | Geometry offsets | `width`, `height`, `offsetx`, `offsety` | WM policy | `window-rule floating`, `center-floating`, `default-floating-position` | X | Rule-level floating ratios or fixed pixel sizes override global default size; `center-floating` centers generated geometry and `default-floating-position` provides anchored pixel placement. |
-| Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `border`, `focus-ring`, `clip-to-geometry`, `enable-animations`, `animation-speed`, `animation-snap-threshold`, `animation-frame-rate` | | Rule-level border, focused-only focus-ring width/colors, geometry clipping, and global viewport animation tuning are supported; opacity, blur, shadows, radius, and per-window animation policy are not. |
+| Window rules | Visual effects | `noblur`, `isnoborder`, opacity, animation flags | WM/render policy | `border`, `focus-ring`, `clip-to-geometry`, `enable-animations`, `animation-speed`, `animation-snap-threshold`, `frame-rate` | | Rule-level border, focused-only focus-ring width/colors, geometry clipping, and global viewport animation tuning are supported; opacity, blur, shadows, radius, and per-window animation policy are not. |
 | Window rules | Terminal swallowing | `isterm`, `noswallow` | WM policy and process ancestry | `window-rule terminal`, `window-rule allow-swallow` | X | Explicit rules only: terminal hosts must be marked with `terminal #true`; child windows swallow by default unless `allow-swallow #false`, and missing PID data disables swallowing. |
 | Window rules | Global keybinding | `globalkeybinding` | WM policy | | | Not implemented. |
 | Layer rules | Layer shell rules | `layerrule` | Layer shell protocols | | | Triad handles shell/layer focus but has no rule config. |
@@ -304,7 +304,7 @@ KDL config nodes and fields:
   `master.split-ratio`, `border.width`, `border.active-color`,
   `border.inactive-color`, `scroller-focus-center`,
   `scroller-prefer-center`, `enable-animations`, `animation-speed`,
-  `animation-snap-threshold`,
+  `animation-snap-threshold`, `frame-rate`,
   `smart-gaps`, `layout-cycle`.
 - `workspaces`: `default-count`, `default-layout`.
 - `output`: `focus-at-startup`, `workspaces`.

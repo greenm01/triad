@@ -20,6 +20,7 @@ layout {
     scroller-prefer-center #false
     enable-animations #true
     animation-speed 0.15
+    frame-rate "auto"
     smart-gaps #false
     layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
 }

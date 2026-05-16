@@ -439,7 +439,7 @@ type
     enableAnimations*: bool
     animationSpeed*: float32
     animationSnapThreshold*: float32
-    animationFrameRate*: int32
+    frameRate*: int32
     floatingXRatio*: float32
     floatingYRatio*: float32
     floatingWidthRatio*: float32
