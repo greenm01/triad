@@ -191,6 +191,19 @@
                 command -v dbus-run-session 2>/dev/null || true
               }
 
+              find_dbus_session_config() {
+                for candidate in \
+                  /usr/share/dbus-1/session.conf \
+                  /etc/dbus-1/session.conf; do
+                  if [ -r "$candidate" ] && grep -q '<listen>' "$candidate" 2>/dev/null; then
+                    printf '%s\n' "$candidate"
+                    return 0
+                  fi
+                done
+
+                printf '%s\n' ""
+              }
+
               case "''${TRIAD_SESSION_DEV_MODE:-}" in
                 1|true|TRUE|yes|YES|on|ON)
                   export TRIAD_DEV_MODE=1
@@ -208,8 +221,14 @@
               printf '%s\n' "river-triad-session: river=$TRIAD_RIVER_BIN"
               printf '%s\n' "river-triad-session: manager=$TRIAD_MANAGER_LOOP"
               dbus_runner="$(find_dbus_run_session)"
+              dbus_config="$(find_dbus_session_config)"
 
               if [ -z "''${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "$dbus_runner" ]; then
+                if [ -n "$dbus_config" ]; then
+                  printf '%s\n' "river-triad-session: starting River through $dbus_runner --config-file=$dbus_config"
+                  exec "$dbus_runner" --config-file="$dbus_config" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
+                fi
+
                 printf '%s\n' "river-triad-session: starting River through $dbus_runner"
                 exec "$dbus_runner" -- "$TRIAD_RIVER_BIN" -c "$TRIAD_MANAGER_LOOP"
               fi
