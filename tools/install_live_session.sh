@@ -16,6 +16,48 @@ atomic_install() {
   mv -f "$tmp" "$dst"
 }
 
+pin_nix_runtime() {
+  [ -n "$runtime_path" ] || return 0
+
+  command -v nix-store >/dev/null 2>&1 ||
+    fail "nix-store is required to pin the Nix session runtime"
+
+  state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/triad"
+  gc_root_dir="$state_dir/nix-gcroots/session-runtime"
+  mkdir -p "$gc_root_dir"
+  find "$gc_root_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+  old_ifs="$IFS"
+  IFS=:
+  for bin_path in $runtime_path; do
+    IFS="$old_ifs"
+    if [ -n "$bin_path" ]; then
+      case "$bin_path" in
+        /nix/store/*/bin)
+          store_path="${bin_path%/bin}"
+          ;;
+        /nix/store/*)
+          store_path="$bin_path"
+          ;;
+        *)
+          store_path=""
+          ;;
+      esac
+
+      if [ -n "$store_path" ]; then
+        root_name="$(basename "$store_path")"
+        nix-store --add-root "$gc_root_dir/$root_name" --indirect --realise \
+          "$store_path" >/dev/null ||
+          fail "failed to pin Nix runtime path: $store_path"
+      fi
+    fi
+    IFS=:
+  done
+  IFS="$old_ifs"
+
+  printf '%s\n' "install-live-session: pinned Nix runtime at $gc_root_dir"
+}
+
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 bin_dir="$HOME/.local/bin"
 config_dir="$HOME/.config/triad"
@@ -51,6 +93,7 @@ mkdir -p "$bin_dir" "$config_dir"
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 atomic_install "$repo_dir/tools/triad-manager-loop.sh" "$bin_dir/triad-manager-loop" 755
+pin_nix_runtime
 
 cat >"$session_tmp" <<EOF
 #!/bin/sh

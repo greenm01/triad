@@ -66,7 +66,13 @@ The Nix shell provides:
 When run from `nix develop`, `tools/install_live_session.sh` records the shell's
 runtime command path in the installed launcher so display managers can start
 River and the default session utilities without inheriting the dev shell
-environment. It installs a starter config only when
+environment. The installer also pins those Nix store paths with user-local GC
+roots under `~/.local/state/triad/nix-gcroots/session-runtime`, so later
+`nix-collect-garbage` runs do not remove River or the session utilities that
+the login launcher uses. Remove that directory only if you intentionally want a
+future garbage collection to reclaim the Nix-provided session runtime.
+
+The installer creates a starter config only when
 `~/.config/triad/config.kdl` does not already exist. Existing config files and
 symlinks are left in place. The starter config avoids host-specific output and
 input policy and only binds applications included in the packaged session; use
