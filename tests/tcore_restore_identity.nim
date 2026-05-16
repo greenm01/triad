@@ -174,11 +174,10 @@ suite "Core Runtime Logic: restore identity":
       slot: 2,
       layoutMode: LayoutMode.Scroller,
       focusedWindow: ExternalWindowId(133),
-      columns:
-        @[
-          RestoredColumnData(windows: @[ExternalWindowId(133)], widthProportion: 0.5),
-          RestoredColumnData(windows: @[ExternalWindowId(136)], widthProportion: 0.5),
-        ],
+      columns: @[
+        RestoredColumnData(windows: @[ExternalWindowId(133)], widthProportion: 0.5),
+        RestoredColumnData(windows: @[ExternalWindowId(136)], widthProportion: 0.5),
+      ],
       targetViewportXOffset: 300.0,
       currentViewportXOffset: 120.0,
       masterCount: 1,
@@ -230,6 +229,57 @@ suite "Core Runtime Logic: restore identity":
     check model.columnHeads(1) == @[131'u32]
     check model.columnHeads(2) == @[132'u32, 133'u32]
     check model.viewport(2).currentViewportXOffset == 120.0'f32
+
+  test "Live restore focus history survives colliding replacement ids":
+    var restore =
+      PendingRestoreState(activeSlot: 1, focusedWindow: ExternalWindowId(132))
+    restore.addRestoredWindow(
+      ExternalWindowId(130), 1, "kitty", "triad", identifier = "triad-id"
+    )
+    restore.addRestoredWindow(
+      ExternalWindowId(131), 1, "brave-browser", "GitHub", identifier = "brave-id"
+    )
+    restore.addRestoredWindow(
+      ExternalWindowId(132),
+      1,
+      "kitty",
+      "nimble liveReload ~/d/triad",
+      identifier = "live-id",
+    )
+    restore.focusHistory =
+      @[ExternalWindowId(131), ExternalWindowId(130), ExternalWindowId(132)]
+
+    var model = cameraModel()
+    model.applyLiveRestore(restore)
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 130,
+        appId: "brave-browser",
+        title: "GitHub",
+        createdIdentifier: "brave-id",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 129,
+        appId: "kitty",
+        title: "triad",
+        createdIdentifier: "triad-id",
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 131,
+        appId: "kitty",
+        title: "nimble liveReload ~/d/triad",
+        createdIdentifier: "live-id",
+      )
+    )
+
+    check model.focusHistory == @[WindowId(1), WindowId(2), WindowId(3)]
 
   test "Non-scroller layouts render with workspace viewport offsets":
     for mode in [LayoutMode.Grid, LayoutMode.Deck]:
@@ -292,26 +342,24 @@ suite "Core Runtime Logic: restore identity":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules:
-          @[
-            WindowRule(
-              matches:
-                @[
-                  WindowRuleMatcher(
-                    appIdSet: true,
-                    appId: "^org\\.gimp\\.",
-                    titleSet: true,
-                    title: "Welcome",
-                  )
-                ],
-              excludes: @[WindowRuleMatcher(titleSet: true, title: "Private")],
-              defaultWorkspace: 2,
-              openFloatingSet: true,
-              openFloating: true,
-              openFocusedSet: true,
-              openFocused: false,
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            matches: @[
+              WindowRuleMatcher(
+                appIdSet: true,
+                appId: "^org\\.gimp\\.",
+                titleSet: true,
+                title: "Welcome",
+              )
+            ],
+            excludes: @[WindowRuleMatcher(titleSet: true, title: "Private")],
+            defaultWorkspace: 2,
+            openFloatingSet: true,
+            openFloating: true,
+            openFocusedSet: true,
+            openFocused: false,
+          )
+        ],
       )
     ).model
     model.applyMsg(

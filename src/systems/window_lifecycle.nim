@@ -81,7 +81,12 @@ proc remapWindowRuleOutput(
   model.setOutputTag(outputId, targetTag)
 
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
-  model.windowForExternal(externalId)
+  result = model.restoredWindowRef(externalId)
+  if result != NullWindowId:
+    return
+  if model.restoreWindow(externalId).isSome:
+    return NullWindowId
+  result = model.windowForExternal(externalId)
 
 proc restoredIdentityConflicts(
     restored: RestoredWindowData, appId, title, identifier: string
@@ -259,7 +264,7 @@ proc applyPendingRestore(
 
   discard model.consumeRestoreWindow(restoredExternalId)
   model.applyRestoredWindowState(winId, restored)
-  discard model.rewriteRestoreFocusRefs(restoredExternalId, externalId)
+  discard model.recordRestoreWindowRef(restoredExternalId, winId)
   model.recordRestoredScratchpad(restoredExternalId, winId)
 
   let restoresFocusedWindow =
@@ -822,7 +827,7 @@ proc createWindowForExternal*(
   elif restoredScratchpad:
     discard model.setWindowSticky(result, false)
   if hasRestoredWindow:
-    discard model.rewriteRestoreFocusRefs(restoredExternalId, externalId)
+    discard model.recordRestoreWindowRef(restoredExternalId, result)
     if restoresFocusedWindow and targetSlot == model.activeWorkspaceSlot():
       let targetTag = model.tagForSlot(targetSlot)
       if targetTag != NullTagId and model.tag(targetTag).isSome and

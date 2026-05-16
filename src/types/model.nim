@@ -504,6 +504,7 @@ type
     restoreIsScratchpadVisible*: bool
     restoreFocusHistory*: seq[ExternalWindowId]
     restoreWorkspaceHistory*: seq[uint32]
+    restoreResolvedWindows*: Table[ExternalWindowId, WindowId]
     restoreSwallowedBy*: Table[ExternalWindowId, ExternalWindowId]
     restoreSwallowing*: Table[ExternalWindowId, ExternalWindowId]
     layoutCycle*: seq[LayoutMode]

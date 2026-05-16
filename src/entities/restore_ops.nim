@@ -15,6 +15,7 @@ proc loadRestoreState*(model: var Model, state: PendingRestoreState): bool =
   model.restoreIsScratchpadVisible = state.isScratchpadVisible
   model.restoreFocusHistory = state.focusHistory
   model.restoreWorkspaceHistory = state.workspaceHistory
+  model.restoreResolvedWindows = initTable[ExternalWindowId, WindowId]()
   model.restoreSwallowedBy = state.swallowedBy
   model.restoreSwallowing = state.swallowing
   true
@@ -35,15 +36,16 @@ proc consumeRestoreTagSlot*(
   result = (true, model.restoreTagByWindow[externalId])
   model.restoreTagByWindow.del(externalId)
 
-proc rewriteRestoreFocusRefs*(
-    model: var Model, restoredExternalId, externalId: ExternalWindowId
+proc recordRestoreWindowRef*(
+    model: var Model, restoredExternalId: ExternalWindowId, winId: WindowId
 ): bool =
-  if restoredExternalId == externalId:
+  if restoredExternalId == NullExternalWindowId or winId == NullWindowId:
     return false
-  for item in model.restoreFocusHistory.mitems:
-    if item == restoredExternalId:
-      item = externalId
-      result = true
+  model.restoreResolvedWindows[restoredExternalId] = winId
+  true
+
+proc restoredWindowRef*(model: Model, restoredExternalId: ExternalWindowId): WindowId =
+  model.restoreResolvedWindows.getOrDefault(restoredExternalId, NullWindowId)
 
 proc clearRestoreFocusedWindow*(
     model: var Model, restoredExternalId: ExternalWindowId

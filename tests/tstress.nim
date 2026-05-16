@@ -79,17 +79,17 @@ proc require(ctx: FuzzContext, model: Model, cond: bool, msg: string) =
   if not cond:
     fail(ctx, model, msg)
 
-proc existingWindows(model: Model): seq[WindowId] =
+proc existingWindows(model: Model): seq[uint32] =
   for win in model.shellSnapshot().windows:
     result.add(win.id)
   result.sort()
 
-proc chooseWindow(rng: var FuzzRng, model: Model): WindowId =
+proc chooseWindow(rng: var FuzzRng, model: Model): uint32 =
   let wins = model.existingWindows()
   if wins.len > 0 and rng.chance(3, 4):
     wins[rng.pick(wins.len)]
   else:
-    WindowId(1 + rng.pick(96))
+    uint32(1 + rng.pick(96))
 
 proc chooseDelta(rng: var FuzzRng, magnitude = 40): int32 =
   int32(rng.pick(magnitude * 2 + 1) - magnitude)
@@ -97,7 +97,7 @@ proc chooseDelta(rng: var FuzzRng, magnitude = 40): int32 =
 proc chooseLayout(rng: var FuzzRng): LayoutMode =
   LayoutMode(rng.pick(ord(high(LayoutMode)) + 1))
 
-proc generatedMsg(rng: var FuzzRng, model: Model, nextWindow: var WindowId): Msg =
+proc generatedMsg(rng: var FuzzRng, model: Model, nextWindow: var uint32): Msg =
   case rng.pick(42)
   of 0:
     result = Msg(
@@ -253,7 +253,7 @@ suite "Deterministic runtime stress":
     let steps = int(parseUIntEnv("TRIAD_STRESS_STEPS", 400))
     var rng = initRng(seed)
     var model = baseModel()
-    var nextWindow = WindowId(1)
+    var nextWindow = 1'u32
 
     for step in 0 ..< steps:
       var ctx = FuzzContext(seed: seed, step: step)
