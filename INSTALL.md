@@ -60,6 +60,7 @@ The Nix shell provides:
 
 - Nim, Nimble, and the native libraries needed to build Triad
 - River 0.4+ for the installed session launcher
+- nixGL for accelerated River rendering on non-NixOS systems
 - Noctalia-shell, DankMaterialShell, and Waybar
 - common Wayland session utilities used by the starter config
 
@@ -69,8 +70,10 @@ start River and the default session utilities without inheriting the dev shell
 environment. The installer writes `~/.local/bin/triad-river` as the pinned
 River launcher and writes `~/.local/bin/river` when that path is absent or
 already Triad-managed. Both launchers pass arguments through to River, so
-`river -c other-init` still works. The installer also pins those Nix store
-paths with user-local GC roots under
+`river -c other-init` still works. On non-NixOS systems the launcher uses the
+Nix shell's `nixGLIntel` wrapper when available so River can use the host GPU
+driver stack; set `TRIAD_RIVER_ACCEL=off` to bypass that wrapper. The installer
+also pins those Nix store paths with user-local GC roots under
 `~/.local/state/triad/nix-gcroots/session-runtime`, so later
 `nix-collect-garbage` runs do not remove River or the session utilities that
 the login launcher uses. Remove that directory only if you intentionally want a

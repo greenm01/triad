@@ -98,6 +98,41 @@ resolve_river_bin() {
   fail "River 0.4+ not found; run from 'nix develop' or set TRIAD_RIVER_BIN=/path/to/river"
 }
 
+resolve_nixgl_bin() {
+  if [ -n "${TRIAD_NIXGL_BIN:-}" ]; then
+    [ -x "$TRIAD_NIXGL_BIN" ] ||
+      fail "TRIAD_NIXGL_BIN must point at an executable nixGL wrapper: $TRIAD_NIXGL_BIN"
+    printf '%s\n' "$TRIAD_NIXGL_BIN"
+    return 0
+  fi
+
+  old_ifs="$IFS"
+  IFS=:
+  for bin_path in $runtime_path; do
+    IFS="$old_ifs"
+    for name in nixGLIntel nixGLMesa nixGLDefault nixGL; do
+      candidate="$bin_path/$name"
+      if [ -x "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        IFS="$old_ifs"
+        return 0
+      fi
+    done
+    IFS=:
+  done
+  IFS="$old_ifs"
+
+  for name in nixGLIntel nixGLMesa nixGLDefault nixGL; do
+    candidate="$(command -v "$name" 2>/dev/null || true)"
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  printf '%s\n' ""
+}
+
 pin_nix_runtime() {
   [ -n "$runtime_path" ] || return 0
 
@@ -149,6 +184,18 @@ write_river_launcher() {
 set -eu
 
 export PATH="\$HOME/.local/bin${runtime_path:+:$runtime_path}:\$PATH"
+
+case "\${TRIAD_RIVER_ACCEL:-auto}" in
+  off|OFF|0|false|FALSE|no|NO)
+    ;;
+  *)
+    nixgl_bin="\${TRIAD_NIXGL_BIN:-$nixgl_bin}"
+    if [ -n "\$nixgl_bin" ] && [ -x "\$nixgl_bin" ]; then
+      exec "\$nixgl_bin" "$river_bin" "\$@"
+    fi
+    ;;
+esac
+
 exec "$river_bin" "\$@"
 EOF
 
@@ -203,6 +250,12 @@ command -v nimble >/dev/null 2>&1 ||
 river_bin="$(resolve_river_bin)"
 river_version="$(validate_river "$river_bin")"
 printf '%s\n' "install-live-session: using River $river_version at $river_bin"
+nixgl_bin="$(resolve_nixgl_bin)"
+if [ -n "$nixgl_bin" ]; then
+  printf '%s\n' "install-live-session: using nixGL wrapper at $nixgl_bin"
+else
+  printf '%s\n' "install-live-session: nixGL wrapper not found; hardware rendering may require TRIAD_NIXGL_BIN"
+fi
 
 printf '%s\n' "install-live-session: syncing Nim dependencies"
 (cd "$repo_dir" && nimble sync)

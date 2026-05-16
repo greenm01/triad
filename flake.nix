@@ -8,12 +8,18 @@
       url = "github:AvengeMedia/DankMaterialShell";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    nixgl = {
+      url = "github:nix-community/nixGL";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     inputs@{
       self,
       nixpkgs,
+      nixgl,
       ...
     }:
     let
@@ -478,6 +484,8 @@
               pkgs.jq
               pkgs.procps
             ];
+          localInstallRuntimePackages =
+            sessionRuntimePackages ++ [ nixgl.packages.${system}.nixGLIntel ];
         in
         {
           default = pkgs.mkShell {
@@ -494,9 +502,9 @@
               pkgs.libxkbcommon
               pkgs.pixman
             ]
-            ++ sessionRuntimePackages;
+            ++ localInstallRuntimePackages;
 
-            TRIAD_NIX_RUNTIME_PATH = pkgs.lib.makeBinPath sessionRuntimePackages;
+            TRIAD_NIX_RUNTIME_PATH = pkgs.lib.makeBinPath localInstallRuntimePackages;
 
             shellHook = ''
               export TRIAD_NIMBLE_DIR="''${TRIAD_NIMBLE_DIR:-$PWD/.nimble}"
