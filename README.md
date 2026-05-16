@@ -2,46 +2,46 @@
 
 https://github.com/user-attachments/assets/27e4bde8-95fc-40cf-9830-5373ac0bcc74
 
-Triad is a dynamic window manager for Wayland, built as a dedicated client for the River compositor. It operates on a clarifying principle: separate the display from the policy. River handles the Wayland protocol and keeps your screens running. Triad decides where your windows go. The result is a desktop of extraordinary resilience. If Triad restarts or updates, your display does not flinch; your windows remain exactly where they were.
+Triad is a dynamic window manager for Wayland, built for the River compositor. It separates display from policy: River handles the Wayland protocol while Triad manages window placement. This decoupling ensures resilience; if Triad restarts, your windows remain in place.
 
-But Triad's true distinction lies in its architecture. Most window managers treat workspaces as containers—moving a window means lifting it out of one box and dropping it into another. Triad treats your session as flat data. A window carries tags; there is no rigid hierarchy to traverse. This shift makes conditional logic remarkably cheap, transforming window management from static configuration into a live, scriptable engine.
+Triad treats your session as flat data. Windows carry tags rather than living in a rigid hierarchy. This makes conditional logic efficient, turning window management into a scriptable engine.
 
-Need a good screen lock? See [LockMe](https://github.com/greenm01/lockme).
+Need a screen lock? See [LockMe](https://github.com/greenm01/lockme).
 
 ### The Triad
 
-Triad's namesake is its foundation of control: **Tags**, **Rules**, and **IPC**.
+Triad is built on **Tags**, **Rules**, and **IPC**.
 
-Tags provide stable, concurrent labels for your windows. Rules, written in robust KDL, provide declarative defaults. IPC exposes a clean, flat snapshot of the entire model over a Unix socket. Together, they elevate external code into a first-class policy layer. A script can easily ask, "How many windows are currently on this tag, and what is the layout?" before deciding where to place a newly opened application.
+Tags provide stable, concurrent labels for windows. Rules, written in KDL, provide declarative defaults. IPC exposes a snapshot of the model over a Unix socket. Together, they allow external scripts to serve as a policy layer. A script can query the number of windows on a tag or the current layout before placing a new application.
 
 ### Scriptable Policy with Janet
 
-Configuration handles the predictable. Code handles the exceptions.
+Configuration handles the predictable; code handles the exceptions.
 
-To support true conditional logic, Triad embeds Janet—a small, elegant, and data-oriented Lisp. Rather than suffering the overhead of socket communication and JSON parsing, Janet scripts receive Triad's state as native tables and execute placement functions directly.
+Triad embeds Janet—a small, data-oriented Lisp—to support conditional logic. Janet scripts receive Triad's state as native tables and execute placement functions directly, avoiding the overhead of socket communication and JSON parsing.
 
-This unlocks **App Manifests**. Applications can ship with small, sandboxed Janet scripts that evaluate the current desktop context and dictate their preferred layout. It is a modern, executable successor to rigid X11 window hints. Your environment adapts live, making intelligent decisions based on what is actually on your screen.
+This enables **App Manifests**: sandboxed Janet scripts that evaluate the desktop context to dictate layout. They are executable alternatives to X11 window hints, allowing your environment to adapt based on active windows.
 
-### First-Class Scrolling (And 11 Other Layouts)
+### Scrolling and Other Layouts
 
-Triad is built around a premier, first-class scrolling layout—giving you an infinite, fluid canvas for your workflow. 
+Triad features a scrolling layout that provides a fluid canvas for your workflow.
 
-However, it does not force you into a single paradigm. Much like Mango WM, Triad natively supports 11 other layout modes, including Master-Stack, Grid, and Monocle. You can toggle between them instantly and independently for every workspace.
+It also supports 11 other layout modes, including Master-Stack, Grid, and Monocle. You can toggle between them independently for every workspace.
 
 ### The Shell Ecosystem
 
-A window manager is defined by its ecosystem, and the Wayland tiling community is largely split between Waybar and Quickshell. Triad supports both, flawlessly. 
+Triad natively supports both Waybar and Quickshell.
 
-While it emits its own native JSON stream, it also natively projects its state as Niri-shaped JSON. This means you can drop in existing, highly polished Waybar configurations or rich Quickshell themes—such as **Noctalia-shell** or **DankMaterialShell**—and they will work immediately. No forks, no shims, no compromises.
+While it has a native JSON stream, it also projects state as Niri-shaped JSON. You can use existing Waybar configurations or Quickshell themes—such as **Noctalia-shell** or **DankMaterialShell**—without modification.
 
 ### Features at a Glance
 
-* **Crash Resilience:** Because policy is decoupled from the Wayland compositor, layout errors cannot destroy your session or your open work.
-* **Waybar & Quickshell Ready:** Native projection of Niri-shaped JSON ensures immediate compatibility with the two most popular shell ecosystems.
-* **Dynamic Workspaces:** Spawns workspaces when needed; prunes them when empty.
-* **Flawless Motion:** Driven by an internal 60FPS clock and exponential easing for exceptionally smooth window movements.
-* **The Scratchpad:** Banishes utility windows, summoning them instantly as centered overlays.
-* **Stable Identity:** Ensures tag and window IDs remain constant, providing a solid foundation for long-running scripts.
+* **Crash Resilience:** Decoupling policy from the compositor means layout errors do not affect your session.
+* **Waybar & Quickshell Ready:** Niri-shaped JSON projection ensures compatibility with popular shell ecosystems.
+* **Dynamic Workspaces:** Spawns workspaces when needed and prunes them when empty.
+* **Smooth Motion:** Uses an internal 60FPS clock and exponential easing for window movements.
+* **The Scratchpad:** Manages utility windows as centered overlays.
+* **Stable Identity:** Tag and window IDs remain constant for use in long-running scripts.
 
 ### Installation
 
