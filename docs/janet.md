@@ -134,10 +134,16 @@ early reactions that do not depend on app identity.
 | `:window-title-changed` | Title updated | `:window-id`, `:old-title`, `:new-title`, `:old-window`, `:new-window` |
 | `:window-app-id-changed` | App-id updated | `:window-id`, `:old-app-id`, `:new-app-id`, `:old-window`, `:new-window` |
 | `:window-focus-changed` | Focus moved | `:old-window-id`, `:new-window-id`, `:old-window`, `:new-window` |
+| `:output-added` | Output appears in shell snapshot | `:output-id`, `:output`, `:old-output` (`nil`) |
+| `:output-changed` | Output fields visible to scripts changed | `:output-id`, `:output`, `:old-output` |
+| `:output-removed` | Output disappears from shell snapshot | `:output-id`, `:output` (`nil`), `:old-output` |
 | `:tag-changed` | Active tag changed | `:old-tag-id`, `:new-tag-id` |
 | `:layout-changed` | Active layout changed | `:old-layout`, `:new-layout`, `:tag-id` |
 | `:session-locked` | Session locked | — |
 | `:session-unlocked` | Session unlocked | — |
+
+Output structs include `:id`, `:name`, `:x`, `:y`, `:w`, `:h`,
+`:refresh-rate`, and `:primary`.
 
 #### Recursion behaviour
 

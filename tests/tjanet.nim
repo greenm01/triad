@@ -1,5 +1,7 @@
 import std/[options, os, strutils, unittest]
 import ../src/core/msg
+import ../src/daemon/janet_script_runtime
+from ../src/daemon/state import QueuedMsgOrigin, initTriadDaemon
 import ../src/ipc/commands
 import ../src/janet/[runtime, snapshot_api]
 import ../src/types/[ipc_commands, janet_manifest, runtime_values, shell_snapshot]
@@ -36,7 +38,17 @@ proc testSnapshot(): ShellSnapshot =
           tagId: some(1'u32),
         ),
       ],
-    outputs: @[ShellOutput(id: 1, name: "HDMI-A-1", w: 1920, h: 1080, isPrimary: true)],
+    outputs:
+      @[
+        ShellOutput(
+          id: 1,
+          name: "HDMI-A-1",
+          w: 1920,
+          h: 1080,
+          refreshRate: 144000,
+          isPrimary: true,
+        )
+      ],
   )
 
 proc sampleCommandParts(spec: CommandSpec): seq[string] =
@@ -346,6 +358,7 @@ suite "embedded Janet runtime":
   (when (and (= (web :tag-id) (by-tag :tag-id))
              (= (current :tag-id) 1)
              (= (output :name) "HDMI-A-1")
+             (= (output :refresh-rate) 144000)
              (= (length firefox) 1)
              (not (triad/workspace-empty? current 0))
              (triad/workspace-empty? empty 0)
@@ -860,6 +873,114 @@ suite "embedded Janet runtime":
     check closedResults.len == 1
     check closedResults[0].outcome == ScriptOutcome.Evaluated
     check closedResults[0].messages.len == 0
+
+  test "output lifecycle events dispatch from daemon snapshots":
+    let dir = getTempDir() / ("triad-output-hooks-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "outputs.janet",
+      """
+(triad/on :output-added
+  (fn [ev]
+    (when (and (= (ev :output-id) 2)
+               (= ((ev :output) :name) "DP-1")
+               (= ((ev :output) :refresh-rate) 165000)
+               (not (ev :old-output)))
+      (triad/command "focus-tag" 2))))
+
+(triad/on :output-changed
+  (fn [ev]
+    (when (and (= (ev :output-id) 1)
+               (= ((ev :old-output) :name) "HDMI-A-1")
+               (= ((ev :output) :name) "HDMI-A-2"))
+      (triad/command "focus-tag" 3))))
+
+(triad/on :output-removed
+  (fn [ev]
+    (when (and (= (ev :output-id) 3)
+               (not (ev :output))
+               (= ((ev :old-output) :name) "VGA-1"))
+      (triad/command "focus-tag" 4))))
+
+(triad/on :output-removed
+  (fn [ev]
+    (when (= (ev :output-id) 0)
+      (triad/command "focus-tag" 9))))
+""",
+    )
+    var daemon = initTriadDaemon()
+    daemon.janetRuntime = initJanetRuntime(testConfig(dir))
+    defer:
+      daemon.janetRuntime.close()
+      if fileExists(dir / "outputs.janet"):
+        removeFile(dir / "outputs.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let baseOutput =
+      ShellOutput(id: 1, name: "HDMI-A-1", w: 1920, h: 1080, isPrimary: true)
+    let addedOutput =
+      ShellOutput(id: 2, name: "DP-1", w: 2560, h: 1440, refreshRate: 165000)
+    let changedOutput =
+      ShellOutput(id: 1, name: "HDMI-A-2", w: 1920, h: 1080, isPrimary: true)
+    let removedOutput = ShellOutput(id: 3, name: "VGA-1", w: 1024, h: 768)
+
+    var before = testSnapshot()
+    before.outputs = @[baseOutput]
+    var afterAdded = before
+    afterAdded.outputs = @[baseOutput, addedOutput]
+    let addedMessages = daemon.collectJanetScriptMessages(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 2560, height: 1440),
+      before,
+      afterAdded,
+    )
+
+    check addedMessages.len == 1
+    check addedMessages[0].origin == QueuedMsgOrigin.JanetHook
+    check addedMessages[0].msg.kind == MsgKind.CmdFocusTag
+    check addedMessages[0].msg.focusTag == 2
+
+    var afterChanged = before
+    afterChanged.outputs = @[changedOutput]
+    let changedMessages = daemon.collectJanetScriptMessages(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "HDMI-A-2"),
+      before,
+      afterChanged,
+    )
+
+    check changedMessages.len == 1
+    check changedMessages[0].origin == QueuedMsgOrigin.JanetHook
+    check changedMessages[0].msg.kind == MsgKind.CmdFocusTag
+    check changedMessages[0].msg.focusTag == 3
+
+    var beforeRemoved = before
+    beforeRemoved.outputs = @[baseOutput, removedOutput]
+    let removedMessages = daemon.collectJanetScriptMessages(
+      Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 3), beforeRemoved, before
+    )
+
+    check removedMessages.len == 1
+    check removedMessages[0].origin == QueuedMsgOrigin.JanetHook
+    check removedMessages[0].msg.kind == MsgKind.CmdFocusTag
+    check removedMessages[0].msg.focusTag == 4
+
+    let unchangedMessages = daemon.collectJanetScriptMessages(
+      Msg(kind: MsgKind.WlOutputRefreshRate, refreshOutputId: 1, outputRefreshRate: 0),
+      before,
+      before,
+    )
+
+    check unchangedMessages.len == 0
+
+    var fallbackOnly = before
+    fallbackOnly.outputs = @[ShellOutput(id: 0, name: "triad-0", w: 1920, h: 1080)]
+    let fallbackReplacementMessages = daemon.collectJanetScriptMessages(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1080),
+      fallbackOnly,
+      before,
+    )
+
+    check fallbackReplacementMessages.len == 0
 
   test "sandbox blocks host access":
     var runtime = initJanetRuntime(testConfig(getTempDir()))

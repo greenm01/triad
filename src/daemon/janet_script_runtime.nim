@@ -68,6 +68,21 @@ proc windowById(snapshot: ShellSnapshot, id: uint32): Option[ShellWindow] =
       return some(win)
   none(ShellWindow)
 
+proc outputExpr(output: Option[ShellOutput]): string =
+  if output.isSome:
+    output.get().janetOutputExpr()
+  else:
+    "nil"
+
+proc outputById(snapshot: ShellSnapshot, id: uint32): Option[ShellOutput] =
+  for output in snapshot.outputs:
+    if output.id == id:
+      return some(output)
+  none(ShellOutput)
+
+proc isRealOutput(output: ShellOutput): bool =
+  output.id != 0
+
 proc activeLayoutId(snapshot: ShellSnapshot): string =
   snapshot.activeWorkspaceLayoutId()
 
@@ -126,11 +141,13 @@ proc shouldDispatchJanetScripts*(kind: MsgKind): bool =
     MsgKind.WlWindowCreated, MsgKind.WlWindowAdmissionSettled,
     MsgKind.WlWindowDestroyed, MsgKind.WlWindowTitle, MsgKind.WlWindowAppId,
     MsgKind.WlFocusChanged, MsgKind.WlSessionLocked, MsgKind.WlSessionUnlocked,
-    MsgKind.CmdFocusTag, MsgKind.CmdFocusTagLeft, MsgKind.CmdFocusTagRight,
-    MsgKind.CmdFocusOccupiedTagLeft, MsgKind.CmdFocusOccupiedTagRight,
-    MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdFocusWindowOrWorkspaceUp,
-    MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdMoveToTag,
-    MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
+    MsgKind.WlOutputDimensions, MsgKind.WlOutputName, MsgKind.WlOutputIdentity,
+    MsgKind.WlOutputDescription, MsgKind.WlOutputPosition, MsgKind.WlOutputRefreshRate,
+    MsgKind.WlOutputRemoved, MsgKind.CmdFocusTag, MsgKind.CmdFocusTagLeft,
+    MsgKind.CmdFocusTagRight, MsgKind.CmdFocusOccupiedTagLeft,
+    MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusWorkspaceIndex,
+    MsgKind.CmdFocusWindowOrWorkspaceUp, MsgKind.CmdFocusWindowOrWorkspaceDown,
+    MsgKind.CmdMoveToTag, MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
     MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdSetLayout,
     MsgKind.CmdSwitchLayout,
@@ -151,15 +168,59 @@ proc windowAppIdReady(appId: string): bool =
   normalized.len > 0 and normalized notin ["unknown", "unset", "none"]
 
 proc windowReadyEventStruct(windowId: uint32, win: Option[ShellWindow]): string =
-  eventStruct(
-    "window-ready",
-    [("window-id", $windowId), ("window", win.windowExpr())],
-  )
+  eventStruct("window-ready", [("window-id", $windowId), ("window", win.windowExpr())])
+
+proc addOutputLifecycleEvents(
+    events: var seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]],
+    before, after: ShellSnapshot,
+) =
+  for output in after.outputs:
+    if not output.isRealOutput():
+      continue
+    let oldOutput = before.outputById(output.id)
+    if oldOutput.isNone:
+      events.addScriptEvent(
+        "output-added",
+        eventStruct(
+          "output-added",
+          [
+            ("output-id", $output.id),
+            ("output", some(output).outputExpr()),
+            ("old-output", "nil"),
+          ],
+        ),
+      )
+    elif oldOutput.get() != output:
+      events.addScriptEvent(
+        "output-changed",
+        eventStruct(
+          "output-changed",
+          [
+            ("output-id", $output.id),
+            ("output", some(output).outputExpr()),
+            ("old-output", oldOutput.outputExpr()),
+          ],
+        ),
+      )
+
+  for output in before.outputs:
+    if not output.isRealOutput():
+      continue
+    if after.outputById(output.id).isNone:
+      events.addScriptEvent(
+        "output-removed",
+        eventStruct(
+          "output-removed",
+          [
+            ("output-id", $output.id),
+            ("output", "nil"),
+            ("old-output", some(output).outputExpr()),
+          ],
+        ),
+      )
 
 proc hookEvents(
-    msg: Msg,
-    before, after: ShellSnapshot,
-    windowReadyEmitted: var HashSet[uint32],
+    msg: Msg, before, after: ShellSnapshot, windowReadyEmitted: var HashSet[uint32]
 ): seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]] =
   case msg.kind
   of MsgKind.WlWindowCreated:
@@ -191,9 +252,7 @@ proc hookEvents(
         msg.admissionWindowId notin windowReadyEmitted:
       windowReadyEmitted.incl(msg.admissionWindowId)
       result.addScriptEvent(
-        "window-ready",
-        windowReadyEventStruct(msg.admissionWindowId, win),
-        win,
+        "window-ready", windowReadyEventStruct(msg.admissionWindowId, win), win
       )
     result.addScriptEvent(
       "window-admitted",
@@ -233,13 +292,11 @@ proc hookEvents(
   of MsgKind.WlWindowAppId:
     let oldWin = before.windowById(msg.appIdWindowId)
     let newWin = after.windowById(msg.appIdWindowId)
-    if msg.updatedAppId.windowAppIdReady() and
-        msg.appIdWindowId notin windowReadyEmitted and newWin.isSome:
+    if msg.updatedAppId.windowAppIdReady() and msg.appIdWindowId notin windowReadyEmitted and
+        newWin.isSome:
       windowReadyEmitted.incl(msg.appIdWindowId)
       result.addScriptEvent(
-        "window-ready",
-        windowReadyEventStruct(msg.appIdWindowId, newWin),
-        newWin,
+        "window-ready", windowReadyEventStruct(msg.appIdWindowId, newWin), newWin
       )
     result.addScriptEvent(
       "window-app-id-changed",
@@ -275,6 +332,10 @@ proc hookEvents(
     result.addScriptEvent("session-locked", emptyEventStruct("session-locked"))
   of MsgKind.WlSessionUnlocked:
     result.addScriptEvent("session-unlocked", emptyEventStruct("session-unlocked"))
+  of MsgKind.WlOutputDimensions, MsgKind.WlOutputName, MsgKind.WlOutputIdentity,
+      MsgKind.WlOutputDescription, MsgKind.WlOutputPosition,
+      MsgKind.WlOutputRefreshRate, MsgKind.WlOutputRemoved:
+    result.addOutputLifecycleEvents(before, after)
   else:
     discard
 
@@ -308,8 +369,9 @@ proc collectJanetScriptMessages*(
   if daemon.janetRuntime.handle == nil:
     return @[]
   for ev in hookEvents(msg, before, after, daemon.windowReadyEmitted):
-    let evalResults =
-      daemon.janetRuntime.evalScriptsDetailed(ev.name, ev.source, after, ev.currentWindow)
+    let evalResults = daemon.janetRuntime.evalScriptsDetailed(
+      ev.name, ev.source, after, ev.currentWindow
+    )
     for evalResult in evalResults:
       writeBehaviorEvent("janet_script_eval", evalResult.scriptEvalPayload())
       for scriptMsg in evalResult.messages:

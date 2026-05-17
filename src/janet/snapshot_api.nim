@@ -93,10 +93,10 @@ proc janetWindowExpr*(window: ShellWindow): string =
     window.allowSwallow.boolValue() & " :swallowed-by " & $window.swallowedBy &
     " :swallowing " & $window.swallowing & "}"
 
-proc outputExpr(output: ShellOutput): string =
+proc janetOutputExpr*(output: ShellOutput): string =
   "{:id " & $output.id & " :name " & output.name.escaped() & " :x " & $output.x & " :y " &
     $output.y & " :w " & $output.w & " :h " & $output.h & " :primary " &
-    output.isPrimary.boolValue() & "}"
+    output.isPrimary.boolValue() & " :refresh-rate " & $output.refreshRate & "}"
 
 proc janetSnapshotSource*(
     snapshot: ShellSnapshot, currentWindow = none(ShellWindow), currentEvent = "nil"
@@ -111,7 +111,7 @@ proc janetSnapshotSource*(
   for window in snapshot.windows:
     windows.add(window.janetWindowExpr())
   for output in snapshot.outputs:
-    outputs.add(output.outputExpr())
+    outputs.add(output.janetOutputExpr())
   for mode in snapshot.layoutCycle:
     layoutCycle.add(mode.layoutName().escaped())
   let currentWindowExpr =
