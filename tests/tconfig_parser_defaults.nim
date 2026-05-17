@@ -132,13 +132,8 @@ shells {
 }
 janet {
   enabled #true
-  manifest-dir "~/triad-manifests"
-  system-manifest-dir "/usr/share/triad/test-manifests"
-  hook-dir "~/triad-hooks"
+  script-dir "~/triad-janet"
   fuel-limit 1000000
-  manifest-alias "org.telegram.desktop" "old-telegram"
-  manifest-alias "org.telegram.desktop" "telegram"
-  manifest-alias "dev.vencord.Vesktop" "vesktop"
 }
 terminal { command "kitty" }
 screenshot {
@@ -437,15 +432,8 @@ switch-events {
     check config.shells.profiles[1].stop == @["pkill", "-x", "waybar"]
     check config.shells.profiles[1].niriCompat
     check config.janet.enabled
-    check config.janet.manifestDir == "~/triad-manifests"
-    check config.janet.systemManifestDir == "/usr/share/triad/test-manifests"
-    check config.janet.hookDir == "~/triad-hooks"
+    check config.janet.scriptDir == "~/triad-janet"
     check config.janet.fuelLimit == 1000000
-    check config.janet.manifestAliases.len == 2
-    check config.janet.manifestAliases[0].appId == "org.telegram.desktop"
-    check config.janet.manifestAliases[0].manifest == "telegram"
-    check config.janet.manifestAliases[1].appId == "dev.vencord.Vesktop"
-    check config.janet.manifestAliases[1].manifest == "vesktop"
     check config.terminal.command.len > 0
     check config.screenshot.directory == "~/shots"
     check config.screenshot.filenamePrefix == "triad-test"
@@ -788,8 +776,8 @@ cursor {
     check config.shells.watchdog.exclusiveFocusTimeoutMs ==
       DefaultShellWatchdogExclusiveFocusTimeoutMs
     check config.janet.enabled
-    check config.janet.manifestDir == "~/.config/triad/manifests"
-    check config.janet.hookDir == "~/.config/triad/hooks"
+    check config.janet.scriptDir == DefaultJanetScriptDir
+    check config.janet.fuelLimit == DefaultJanetFuelLimit
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
 
   test "Default bindings follow Niri-style movement and scratchpad chords":
