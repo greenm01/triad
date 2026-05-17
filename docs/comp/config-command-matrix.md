@@ -334,10 +334,11 @@ KDL config nodes and fields:
 - `shells`: `enabled`, `active`, `cycle`, `watchdog`, `fallback`,
   `exclusive-focus-timeout-ms`, `profile`, `launch`, `stop`, `niri-compat`.
 - `quickshell`: legacy fallback accepted when `shells` is absent.
-- `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `fuel-limit`,
-  `manifest-alias`.
+- `janet`: `enabled`, `manifest-dir`, `system-manifest-dir`, `hook-dir`,
+  `fuel-limit`, `manifest-alias`.
   Manifests receive `triad/snapshot` and `triad/current-window`, and can emit
-  every registered user command through `triad/command`.
+  every registered user command through `triad/command`. Hook files in
+  `hook-dir` can react to core runtime events through `triad/on`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.

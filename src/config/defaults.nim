@@ -66,6 +66,7 @@ janet {
     enabled #true
     manifest-dir "~/.config/triad/manifests"
     system-manifest-dir "/usr/share/triad/manifests"
+    hook-dir "~/.config/triad/hooks"
     fuel-limit 500000
 }
 

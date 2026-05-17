@@ -2,6 +2,9 @@
 
 ## Blocked / Watchlist
 
+- Janet follow-ups: richer snapshot query/prelude helpers, persistent hook
+  fibers, output/UI hook events, custom layout functions, and direct hook
+  registration storage if synchronous hook files prove too limited.
 - Continue Mango-informed window-rule work only when the needed protocol,
   runtime state, render, or layout substrate exists. See
   `docs/comp/window-rules.md`.

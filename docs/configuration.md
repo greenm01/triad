@@ -489,6 +489,7 @@ Triad includes an embedded Janet runtime for advanced automation. When a window 
 janet {
   enabled #true
   manifest-dir "~/.config/triad/manifests"
+  hook-dir "~/.config/triad/hooks"
   manifest-alias "org.telegram.desktop" "telegram"
 }
 ```

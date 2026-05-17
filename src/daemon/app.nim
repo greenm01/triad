@@ -10,10 +10,10 @@ import ../ipc/socket
 import ../janet/runtime as janet_runtime
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
 import
-  bindings_runtime, effects_runtime, input_runtime, janet_manifest_runtime,
-  live_restore_runtime, manage_requests, message_queue, output_management_runtime,
-  process_runner, quickshell_runner, registry_runtime, reload_runtime, render_runtime,
-  render_invalidation, state, switch_event_runtime
+  bindings_runtime, effects_runtime, input_runtime, janet_hook_runtime,
+  janet_manifest_runtime, live_restore_runtime, manage_requests, message_queue,
+  output_management_runtime, process_runner, quickshell_runner, registry_runtime,
+  reload_runtime, render_runtime, render_invalidation, state, switch_event_runtime
 from ../types/runtime_values import nil, PointerOpKind
 import
   std/[
@@ -225,7 +225,8 @@ proc startStartupWindowRulesExpiry() {.async.} =
 
 proc processQueuedMessages(configPath, niriSocketPath: string): bool =
   while daemon.hasQueuedMessages():
-    let msg = daemon.popQueuedMessage()
+    let queued = daemon.popQueuedMessageWithOrigin()
+    let msg = queued.msg
 
     if msg.kind == MsgKind.WlPointerRelease:
       if daemon.runtimeState.model.pointerOp.kind != PointerOpKind.OpNone:
@@ -260,7 +261,15 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousActiveModifiers = daemon.runtimeState.model.activeModifiers
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
+    let dispatchJanetHooks =
+      queued.origin != QueuedMsgOrigin.JanetHook and msg.kind.shouldDispatchJanetHooks()
+    let beforeJanetHookSnapshot =
+      if dispatchJanetHooks:
+        some(daemon.readModelSnapshot())
+      else:
+        none(ShellSnapshot)
     let effects = syncRuntimeUpdate("message", msg)
+    var nextQueuedMessages: seq[QueuedMsg] = @[]
     if msg.kind == MsgKind.CmdTick and
         effects.anyIt(it.kind == EffectKind.EffManageDirty):
       inc daemon.perfCounters.dirtyFrameTicks
@@ -285,8 +294,13 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         identifier: msg.createdIdentifier,
       )
       let currentWindow = snapshot.snapshotWindow(msg.windowId, fallbackWindow)
-      let manifestResult =
-        daemon.runWindowManifest(msg.appId, snapshot, currentWindow, "window_created")
+      let manifestResult = daemon.runWindowManifest(
+        msg.appId, snapshot, currentWindow, "window_created", enqueue = false
+      )
+      for manifestMsg in manifestResult.messages:
+        nextQueuedMessages.add(
+          QueuedMsg(msg: manifestMsg, origin: QueuedMsgOrigin.Normal)
+        )
       if manifestResult.messages.len > 0 and not snapshot.snapshotHasWindow(
         msg.windowId
       ):
@@ -301,8 +315,12 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         let fallbackWindow = ShellWindow(id: msg.appIdWindowId, appId: msg.updatedAppId)
         let currentWindow = snapshot.snapshotWindow(msg.appIdWindowId, fallbackWindow)
         let manifestResult = daemon.runWindowManifest(
-          msg.updatedAppId, snapshot, currentWindow, "window_app_id"
+          msg.updatedAppId, snapshot, currentWindow, "window_app_id", enqueue = false
         )
+        for manifestMsg in manifestResult.messages:
+          nextQueuedMessages.add(
+            QueuedMsg(msg: manifestMsg, origin: QueuedMsgOrigin.Normal)
+          )
         if manifestResult.messages.len > 0 and
             not snapshot.snapshotHasWindow(msg.appIdWindowId):
           daemon.pendingManifestAdmissionWindows[msg.appIdWindowId] = msg.updatedAppId
@@ -320,13 +338,27 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           else:
             pendingAppId
         if appId.manifestAppIdReady():
-          discard
-            daemon.runWindowManifest(appId, snapshot, currentWindow, "window_admitted")
+          let manifestResult = daemon.runWindowManifest(
+            appId, snapshot, currentWindow, "window_admitted", enqueue = false
+          )
+          for manifestMsg in manifestResult.messages:
+            nextQueuedMessages.add(
+              QueuedMsg(msg: manifestMsg, origin: QueuedMsgOrigin.Normal)
+            )
     elif msg.kind == MsgKind.WlWindowDestroyed:
       daemon.pendingManifestAppIdWindows.del(msg.destroyedId)
       daemon.pendingManifestAdmissionWindows.del(msg.destroyedId)
       daemon.lastFullscreenRequests.del(msg.destroyedId)
       daemon.lastMaximizedRequests.del(msg.destroyedId)
+    if beforeJanetHookSnapshot.isSome:
+      let afterJanetHookSnapshot = daemon.readModelSnapshot()
+      nextQueuedMessages.add(
+        daemon.collectJanetHookMessages(
+          msg, beforeJanetHookSnapshot.get(), afterJanetHookSnapshot
+        )
+      )
+    if nextQueuedMessages.len > 0:
+      daemon.enqueueNextQueued(nextQueuedMessages)
     let recentModifiersChanged =
       daemon.runtimeState.model.recentWindowsActive and
       previousActiveModifiers != daemon.runtimeState.model.activeModifiers

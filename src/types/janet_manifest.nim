@@ -19,3 +19,20 @@ type
     currentWindow*: Option[ShellWindow]
     messages*: seq[Msg]
     error*: string
+
+  HookOutcome* {.pure.} = enum
+    Disabled
+    Missing
+    ReadFailed
+    CachedFailed
+    EvalFailed
+    Evaluated
+
+  HookEvalResult* = object
+    event*: string
+    path*: string
+    outcome*: HookOutcome
+    currentWindow*: Option[ShellWindow]
+    messages*: seq[Msg]
+    error*: string
+    durationMs*: int64

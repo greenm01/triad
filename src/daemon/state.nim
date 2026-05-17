@@ -22,6 +22,14 @@ type
     RiverManage
     RiverRender
 
+  QueuedMsgOrigin* {.pure.} = enum
+    Normal
+    JanetHook
+
+  QueuedMsg* = object
+    msg*: Msg
+    origin*: QueuedMsgOrigin
+
   WlOutputListenerData* = object
     daemon*: ptr TriadDaemon
     globalName*: uint32
@@ -219,7 +227,7 @@ type
 
     runtimeState*: TriadRuntimeState
     janetRuntime*: JanetRuntime
-    msgQueue*: Deque[Msg]
+    msgQueue*: Deque[QueuedMsg]
     pendingManageEffects*: seq[Effect]
     desiredPlacements*: Table[uint32, Rect]
     desiredPlacementClips*: Table[uint32, Rect]
@@ -321,7 +329,7 @@ type
 
 proc initTriadDaemon*(): TriadDaemon =
   result.riverPhase = RiverPhase.RiverIdle
-  result.msgQueue = initDeque[Msg]()
+  result.msgQueue = initDeque[QueuedMsg]()
   result.pendingManageEffects = @[]
   result.desiredPlacementOrder = @[]
   result.seatPointers = @[]

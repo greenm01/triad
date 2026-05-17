@@ -26,8 +26,8 @@ A Janet interpreter hosted inside the Triad process. Scripts receive the
 same `Model.update(msg)` reducer boundary as IPC and keybinds, and pay no
 socket or JSON round-trip cost.
 
-This is the primary integration. It currently covers placement manifests; event
-hooks and custom layout functions remain future phases.
+This is the primary integration. It currently covers placement manifests and
+synchronous event hooks; custom layout functions remain a future phase.
 
 ### 2. External client scripts (zero Triad changes required)
 
@@ -94,9 +94,12 @@ present on this tag, otherwise claim a new tag; check how many windows already
 share a tag before deciding whether to float; use a different layout when the
 main IDE window is already open.
 
-### Event hooks (future)
+### Event hooks
 
-Long-running hooks that react to compositor events in real time:
+Synchronous hooks react to selected runtime events. Triad loads top-level
+`*.janet` files from `hook-dir` in lexicographic order. Each file can call
+`triad/on`; matching handlers receive `triad/current-event` and emit ordinary
+commands through `triad/command`.
 
 ```janet
 (triad/on :window-opened
@@ -106,7 +109,7 @@ Long-running hooks that react to compositor events in real time:
 
 (triad/on :tag-changed
   (fn [ev]
-    (when (= (ev :tag-name) "game")
+    (when (= (ev :new-tag-id) 5)
       (triad/command "layout-monocle"))))
 ```
 
@@ -211,10 +214,11 @@ never mutates model data is enforced by the type, not by convention.
 src/
   janet/
     binding.nim       ← compiles vendored janet.c and the C API wrapper
-    runtime.nim       ← JanetRuntime lifecycle, sandboxed eval, manifest cache
+    runtime.nim       ← JanetRuntime lifecycle, sandboxed eval, source caches
     snapshot_api.nim  ← registers triad/snapshot and shorthand query functions
     command_api.nim   ← translates triad/command actions into Msg values
-    hooks.nim         ← future triad/on registration, fiber-per-hook dispatch
+  daemon/
+    janet_hook_runtime.nim ← event shaping, triad/on dispatch, behavior logs
 ```
 
 `src/janet/binding.nim` and the adjacent C wrapper are the only Triad-owned
@@ -250,7 +254,7 @@ triad/volume-*            wpctl volume and mute helpers
 triad/media-*             playerctl playback helpers
 triad/screenshot-*        Triad screenshot command helpers
 triad/record-*            wf-recorder recipe helpers
-triad/on                  future event hook registration
+triad/on                  synchronous event hook registration
 ```
 
 Explicitly absent: host filesystem, network, process, FFI, dynamic native
@@ -267,6 +271,7 @@ janet {
   enabled #true
   manifest-dir "~/.config/triad/manifests"
   system-manifest-dir "/usr/share/triad/manifests"
+  hook-dir "~/.config/triad/hooks"
   fuel-limit 500000
 }
 ```
@@ -430,8 +435,8 @@ like in practice:
   conditionality. Defined in `config.kdl`.
 - **Embedded Janet manifests** — conditional placement at window-open time.
   Receives the live snapshot. Emits `Msg` values through the reducer.
-- **Embedded Janet hooks** — persistent event-driven logic. Runs in a fiber
-  per hook, yields back to the main loop immediately.
+- **Embedded Janet hooks** — synchronous event-driven logic. Runs after selected
+  reducer updates and emits commands back into the queue.
 - **External Janet (or any language) via IPC** — out-of-process scripts.
   Socket latency, full OS isolation. Suitable for long-running automations.
 - **Parallel `river-layout-v3` clients** — custom layout generators that
@@ -458,10 +463,12 @@ The five levels compose. All can run simultaneously without conflict.
 
 ### Phase 3 — Event hooks
 
-- Add `src/janet/hooks.nim`: `triad/on` registration, per-hook fiber dispatch,
-  hook drain after each `syncRuntimeUpdate` call.
+- Add synchronous `triad/on` hook dispatch for files in `hook-dir`.
 - Support hook events: `:window-opened`, `:window-closed`,
-  `:window-focus-changed`, `:tag-changed`, `:layout-changed`.
+  `:window-admitted`, `:window-title-changed`, `:window-app-id-changed`,
+  `:window-focus-changed`, `:tag-changed`, `:layout-changed`,
+  `:session-locked`, and `:session-unlocked`.
+- Keep persistent fibers as a later phase.
 
 ### Phase 4 — Custom layouts (speculative)
 

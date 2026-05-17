@@ -107,8 +107,10 @@ proc runWindowManifest*(
     snapshot: ShellSnapshot,
     currentWindow: ShellWindow,
     trigger: string,
+    enqueue = true,
 ): ManifestEvalResult =
   result =
     daemon.janetRuntime.evalManifestDetailed(appId, snapshot, some(currentWindow))
   writeBehaviorEvent("janet_manifest_eval", result.manifestEvalPayload(trigger))
-  daemon.enqueueNext(result.messages)
+  if enqueue:
+    daemon.enqueueNext(result.messages)

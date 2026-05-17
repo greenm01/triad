@@ -930,10 +930,11 @@ proc loadConfig*(path: string): Config =
   result.layout.gaps = DefaultGaps
   result.layout.centerFocusedColumn = DefaultCenterFocusedColumn
   result.layout.defaultColumnWidth = DefaultColumnWidth
-  result.layout.scrollerProportionPresets = @[
-    DefaultScrollerProportionPresetSmall, DefaultScrollerProportionPresetMedium,
-    DefaultScrollerProportionPresetLarge, DefaultScrollerProportionPresetFull,
-  ]
+  result.layout.scrollerProportionPresets =
+    @[
+      DefaultScrollerProportionPresetSmall, DefaultScrollerProportionPresetMedium,
+      DefaultScrollerProportionPresetLarge, DefaultScrollerProportionPresetFull,
+    ]
   result.layout.defaultWindowWidth = DefaultWindowWidth
   result.layout.defaultWindowHeight = DefaultWindowHeight
   result.layout.defaultMasterCount = DefaultMasterCount
@@ -948,10 +949,11 @@ proc loadConfig*(path: string): Config =
   result.layout.animationSnapThreshold = DefaultAnimationSnapThreshold
   result.layout.frameRate = DefaultFrameRate
   result.layout.smartGaps = false
-  result.layout.layoutCycle = @[
-    LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
-    LayoutMode.VerticalScroller,
-  ]
+  result.layout.layoutCycle =
+    @[
+      LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
+      LayoutMode.VerticalScroller,
+    ]
   result.workspaces.defaultCount = DefaultWorkspaceCount
   result.workspaces.defaultLayout = LayoutMode.Scroller
   result.scratchpad.widthRatio = DefaultScratchpadWidthRatio
@@ -986,6 +988,7 @@ proc loadConfig*(path: string): Config =
   result.janet.enabled = true
   result.janet.manifestDir = DefaultJanetManifestDir
   result.janet.systemManifestDir = DefaultJanetSystemManifestDir
+  result.janet.hookDir = DefaultJanetHookDir
   result.janet.fuelLimit = DefaultJanetFuelLimit
   result.hotkeyOverlay.skipAtStartup = true
   result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
@@ -1565,6 +1568,8 @@ proc loadConfig*(path: string): Config =
               result.janet.manifestDir = child.args[0].kString()
             elif child.name == "system-manifest-dir" and child.args.len > 0:
               result.janet.systemManifestDir = child.args[0].kString()
+            elif child.name == "hook-dir" and child.args.len > 0:
+              result.janet.hookDir = child.args[0].kString()
             elif child.name == "fuel-limit" and child.args.len > 0:
               result.janet.fuelLimit =
                 clamp32(int32(child.args[0].kInt()), 1_000, 10_000_000)

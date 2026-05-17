@@ -251,6 +251,7 @@ type
     enabled*: bool
     manifestDir*: string
     systemManifestDir*: string
+    hookDir*: string
     fuelLimit*: int32
     manifestAliases*: seq[JanetManifestAlias]
 

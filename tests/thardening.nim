@@ -8,6 +8,7 @@ import
     switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
+from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[commands, niri_compat, socket]
 import ../src/layouts/[scroller, tiling]
 import ../src/state/[invariants, snapshot]
@@ -60,6 +61,21 @@ suite "Crash hardening":
     check not daemon.consumeMaximizedAck(42, true)
     check daemon.consumeMaximizedAck(42, false)
     check not daemon.consumeMaximizedAck(42, false)
+
+  test "message queue preserves Janet hook origin":
+    var daemon = initTriadDaemon()
+
+    daemon.enqueue(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+    daemon.enqueue(
+      Msg(kind: MsgKind.CmdMoveToTag, targetTag: 3), QueuedMsgOrigin.JanetHook
+    )
+
+    let normal = daemon.popQueuedMessageWithOrigin()
+    let hook = daemon.popQueuedMessageWithOrigin()
+    check normal.origin == QueuedMsgOrigin.Normal
+    check normal.msg.focusTag == 2
+    check hook.origin == QueuedMsgOrigin.JanetHook
+    check hook.msg.targetTag == 3
 
   test "render start skip requires clean render state":
     var daemon = initTriadDaemon()

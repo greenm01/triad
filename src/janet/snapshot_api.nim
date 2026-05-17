@@ -68,7 +68,7 @@ proc workspaceExpr(workspace: ShellWorkspace): string =
     " :current-viewport-y-offset " & $workspace.currentViewportYOffset & " :columns [" &
     columns.join(" ") & "]}"
 
-proc windowExpr(window: ShellWindow): string =
+proc janetWindowExpr*(window: ShellWindow): string =
   let tagId =
     if window.tagId.isSome:
       $window.tagId.get()
@@ -99,7 +99,7 @@ proc outputExpr(output: ShellOutput): string =
     output.isPrimary.boolValue() & "}"
 
 proc janetSnapshotSource*(
-    snapshot: ShellSnapshot, currentWindow = none(ShellWindow)
+    snapshot: ShellSnapshot, currentWindow = none(ShellWindow), currentEvent = "nil"
 ): string =
   var workspaces: seq[string] = @[]
   var windows: seq[string] = @[]
@@ -109,20 +109,21 @@ proc janetSnapshotSource*(
   for workspace in snapshot.workspaces:
     workspaces.add(workspace.workspaceExpr())
   for window in snapshot.windows:
-    windows.add(window.windowExpr())
+    windows.add(window.janetWindowExpr())
   for output in snapshot.outputs:
     outputs.add(output.outputExpr())
   for mode in snapshot.layoutCycle:
     layoutCycle.add(mode.layoutName().escaped())
   let currentWindowExpr =
     if currentWindow.isSome:
-      currentWindow.get().windowExpr()
+      currentWindow.get().janetWindowExpr()
     else:
       "nil"
 
   result =
     """
 (def triad/current-window $13)
+(def triad/current-event $14)
 
 (def triad/snapshot
   {:version $1
@@ -175,4 +176,5 @@ proc janetSnapshotSource*(
       windows.join(" "),
       outputs.join(" "),
       currentWindowExpr,
+      currentEvent,
     ]

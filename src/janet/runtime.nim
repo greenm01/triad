@@ -1,4 +1,4 @@
-import std/[options, os, strutils, tables, times]
+import std/[algorithm, options, os, strutils, tables, times]
 import chronicles
 import ../core/msg
 import ../types/[janet_manifest, runtime_values, shell_snapshot]
@@ -16,10 +16,12 @@ type
     handle*: JanetHandle
     config*: JanetConfig
     manifests*: Table[string, ManifestCacheEntry]
+    hooks*: Table[string, ManifestCacheEntry]
 
 proc initJanetRuntime*(config: JanetConfig): JanetRuntime =
   result.config = config
   result.manifests = initTable[string, ManifestCacheEntry]()
+  result.hooks = initTable[string, ManifestCacheEntry]()
   if config.enabled:
     result.handle = triadJanetNew()
 
@@ -28,6 +30,7 @@ proc close*(runtime: var JanetRuntime) =
     triadJanetFree(runtime.handle)
     runtime.handle = nil
   runtime.manifests.clear()
+  runtime.hooks.clear()
 
 proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
   let wasEnabled = runtime.handle != nil
@@ -37,6 +40,7 @@ proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
     return
   runtime.config = config
   runtime.manifests.clear()
+  runtime.hooks.clear()
   if config.enabled and runtime.handle == nil:
     runtime.handle = triadJanetNew()
 
@@ -46,11 +50,13 @@ proc evalSource*(
     source: string,
     path = "<janet>",
     currentWindow = none(ShellWindow),
+    currentEvent = "nil",
 ): tuple[ok: bool, messages: seq[Msg], error: string] =
   if runtime.handle == nil:
     return (true, @[], "")
 
-  let snapshotSource = snapshot.janetSnapshotSource(currentWindow) & JanetPreludeSource
+  let snapshotSource =
+    snapshot.janetSnapshotSource(currentWindow, currentEvent) & JanetPreludeSource
   let ok =
     triadJanetEval(
       runtime.handle,
@@ -77,7 +83,7 @@ proc validManifestName(name: string): bool =
   stripped.len > 0 and stripped.find('/') == -1 and stripped.find('\\') == -1 and
     stripped.find("..") == -1
 
-proc expandManifestDir(path: string): string =
+proc expandJanetDir(path: string): string =
   let stripped = path.strip()
   if stripped == "~":
     getHomeDir()
@@ -99,7 +105,7 @@ proc addCandidatePath(paths: var seq[string], path: string) =
 proc candidateManifestPaths(runtime: JanetRuntime, appId: string): seq[string] =
   let aliasNames = runtime.config.aliasManifestNames(appId)
   for dir in [runtime.config.manifestDir, runtime.config.systemManifestDir]:
-    let expanded = dir.expandManifestDir()
+    let expanded = dir.expandJanetDir()
     if expanded.len > 0:
       result.addCandidatePath(expanded / (appId & ".janet"))
       for aliasName in aliasNames:
@@ -186,3 +192,65 @@ proc evalManifest*(
     currentWindow = none(ShellWindow),
 ): seq[Msg] =
   runtime.evalManifestDetailed(appId, snapshot, currentWindow).messages
+
+proc hookPaths(runtime: JanetRuntime): seq[string] =
+  let expanded = runtime.config.hookDir.expandJanetDir()
+  if expanded.len == 0 or not dirExists(expanded):
+    return @[]
+  for path in walkFiles(expanded / "*.janet"):
+    result.add(path)
+  result.sort()
+
+proc hookEntry(runtime: var JanetRuntime, path: string): ManifestCacheEntry =
+  let modified = getLastModificationTime(path)
+  if runtime.hooks.hasKey(path):
+    let cached = runtime.hooks[path]
+    if cached.modified == modified:
+      return cached
+
+  result = ManifestCacheEntry(path: path, modified: modified)
+  try:
+    result.source = readFile(path)
+  except CatchableError as e:
+    result.failed = true
+    result.error = e.msg
+    warn "Failed to read Janet hook", path = path, error = e.msg
+  runtime.hooks[path] = result
+
+proc evalHookDetailed*(
+    runtime: var JanetRuntime,
+    event: string,
+    eventSource: string,
+    snapshot: ShellSnapshot,
+    currentWindow = none(ShellWindow),
+): seq[HookEvalResult] =
+  if runtime.handle == nil:
+    return @[]
+
+  for path in runtime.hookPaths():
+    let started = epochTime()
+    let entry = runtime.hookEntry(path)
+    var evalResult =
+      HookEvalResult(event: event, path: path, currentWindow: currentWindow)
+    if entry.failed:
+      evalResult.outcome =
+        if entry.source.len == 0: HookOutcome.ReadFailed else: HookOutcome.CachedFailed
+      evalResult.error = entry.error
+    else:
+      let evaluated = runtime.evalSource(
+        snapshot, entry.source, entry.path, currentWindow, eventSource
+      )
+      if evaluated.ok:
+        evalResult.outcome = HookOutcome.Evaluated
+        evalResult.messages = evaluated.messages
+      else:
+        warn "Janet hook failed",
+          event = event, path = entry.path, error = evaluated.error
+        var failedEntry = entry
+        failedEntry.failed = true
+        failedEntry.error = evaluated.error
+        runtime.hooks[failedEntry.path] = failedEntry
+        evalResult.outcome = HookOutcome.EvalFailed
+        evalResult.error = evaluated.error
+    evalResult.durationMs = int64((epochTime() - started) * 1000)
+    result.add(evalResult)

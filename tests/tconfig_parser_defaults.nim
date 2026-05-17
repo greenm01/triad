@@ -134,6 +134,7 @@ janet {
   enabled #true
   manifest-dir "~/triad-manifests"
   system-manifest-dir "/usr/share/triad/test-manifests"
+  hook-dir "~/triad-hooks"
   fuel-limit 1000000
   manifest-alias "org.telegram.desktop" "old-telegram"
   manifest-alias "org.telegram.desktop" "telegram"
@@ -438,6 +439,7 @@ switch-events {
     check config.janet.enabled
     check config.janet.manifestDir == "~/triad-manifests"
     check config.janet.systemManifestDir == "/usr/share/triad/test-manifests"
+    check config.janet.hookDir == "~/triad-hooks"
     check config.janet.fuelLimit == 1000000
     check config.janet.manifestAliases.len == 2
     check config.janet.manifestAliases[0].appId == "org.telegram.desktop"
@@ -787,6 +789,7 @@ cursor {
       DefaultShellWatchdogExclusiveFocusTimeoutMs
     check config.janet.enabled
     check config.janet.manifestDir == "~/.config/triad/manifests"
+    check config.janet.hookDir == "~/.config/triad/hooks"
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
 
   test "Default bindings follow Niri-style movement and scratchpad chords":

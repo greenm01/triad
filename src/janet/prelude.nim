@@ -1,5 +1,9 @@
 const JanetPreludeSource* =
   """
+(defn triad/on [event handler]
+  (when (and triad/current-event (= event (triad/current-event :kind)))
+    (handler triad/current-event)))
+
 (defn triad/spawn [cmd & args]
   (apply triad/command "spawn" cmd args))
 

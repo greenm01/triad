@@ -46,6 +46,7 @@ const
   DefaultShellWatchdogExclusiveFocusTimeoutMs* = 30000'i32
   DefaultJanetManifestDir* = "~/.config/triad/manifests"
   DefaultJanetSystemManifestDir* = "/usr/share/triad/manifests"
+  DefaultJanetHookDir* = "~/.config/triad/hooks"
   DefaultJanetFuelLimit* = 500000'i32
   DefaultScreenshotDirectory* = "~/Pictures/Screenshots"
   DefaultScreenshotFilenamePrefix* = "triad-screenshot"

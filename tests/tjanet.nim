@@ -9,6 +9,7 @@ proc testConfig(dir: string): JanetConfig =
     enabled: true,
     manifestDir: dir,
     systemManifestDir: dir / "system",
+    hookDir: dir / "hooks",
     fuelLimit: 500000,
   )
 
@@ -359,6 +360,100 @@ suite "embedded Janet runtime":
     check evaluated.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check evaluated.messages[0].moveWindowId == 12
     check evaluated.messages[0].moveTargetTag == 8
+
+  test "hook files dispatch matching current events in sorted order":
+    let dir = getTempDir() / ("triad-janet-hooks-" & $getCurrentProcessId())
+    let hookDir = dir / "hooks"
+    createDir(dir)
+    createDir(hookDir)
+    writeFile(
+      hookDir / "b.janet",
+      """
+(triad/on :window-opened
+  (fn [ev]
+    (triad/command "move-to-tag" (ev :target-tag))))
+""",
+    )
+    writeFile(
+      hookDir / "a.janet",
+      """
+(triad/on :window-opened
+  (fn [ev]
+    (triad/command "focus-window" (ev :window-id))))
+(triad/on :window-closed
+  (fn [_]
+    (triad/command "move-to-tag" 9)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(hookDir / "a.janet"):
+        removeFile(hookDir / "a.janet")
+      if fileExists(hookDir / "b.janet"):
+        removeFile(hookDir / "b.janet")
+      if dirExists(hookDir):
+        removeDir(hookDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    let results = runtime.evalHookDetailed(
+      "window-opened",
+      "{:kind :window-opened :window-id 12 :target-tag 2}",
+      testSnapshot(),
+      some(ShellWindow(id: 12, appId: "gimp")),
+    )
+
+    check results.len == 2
+    check results[0].path.endsWith("a.janet")
+    check results[0].outcome == HookOutcome.Evaluated
+    check results[0].messages.len == 1
+    check results[0].messages[0].kind == MsgKind.CmdFocusWindowById
+    check results[0].messages[0].focusWindowId == 12
+    check results[1].path.endsWith("b.janet")
+    check results[1].messages.len == 1
+    check results[1].messages[0].kind == MsgKind.CmdMoveToTag
+    check results[1].messages[0].targetTag == 2
+
+  test "missing hook directory skips evaluation":
+    var runtime = initJanetRuntime(testConfig(getTempDir() / "triad-missing-hooks"))
+    defer:
+      runtime.close()
+
+    let results = runtime.evalHookDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check results.len == 0
+
+  test "hook eval failures are reported and cached until source changes":
+    let dir = getTempDir() / ("triad-janet-hook-failure-" & $getCurrentProcessId())
+    let hookDir = dir / "hooks"
+    createDir(dir)
+    createDir(hookDir)
+    writeFile(hookDir / "broken.janet", "(undefined-hook-call)")
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(hookDir / "broken.janet"):
+        removeFile(hookDir / "broken.janet")
+      if dirExists(hookDir):
+        removeDir(hookDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    let failed = runtime.evalHookDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let cached = runtime.evalHookDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check failed.len == 1
+    check failed[0].outcome == HookOutcome.EvalFailed
+    check failed[0].error.len > 0
+    check cached.len == 1
+    check cached[0].outcome == HookOutcome.CachedFailed
 
   test "targeted window commands accept compositor ids above signed int32":
     var runtime = initJanetRuntime(testConfig(getTempDir()))

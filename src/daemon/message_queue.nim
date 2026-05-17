@@ -2,10 +2,16 @@ import std/deques
 import ../core/msg
 import state
 
-proc enqueue*(daemon: var TriadDaemon, msg: Msg) =
-  daemon.msgQueue.addLast(msg)
+proc enqueue*(daemon: var TriadDaemon, msg: Msg, origin = QueuedMsgOrigin.Normal) =
+  daemon.msgQueue.addLast(QueuedMsg(msg: msg, origin: origin))
 
-proc enqueueNext*(daemon: var TriadDaemon, messages: seq[Msg]) =
+proc enqueueNext*(
+    daemon: var TriadDaemon, messages: seq[Msg], origin = QueuedMsgOrigin.Normal
+) =
+  for i in countdown(messages.len - 1, 0):
+    daemon.msgQueue.addFirst(QueuedMsg(msg: messages[i], origin: origin))
+
+proc enqueueNextQueued*(daemon: var TriadDaemon, messages: seq[QueuedMsg]) =
   for i in countdown(messages.len - 1, 0):
     daemon.msgQueue.addFirst(messages[i])
 
@@ -16,5 +22,8 @@ proc enqueue*(daemon: ptr TriadDaemon, msg: Msg) =
 proc hasQueuedMessages*(daemon: TriadDaemon): bool =
   daemon.msgQueue.len > 0
 
-proc popQueuedMessage*(daemon: var TriadDaemon): Msg =
+proc popQueuedMessageWithOrigin*(daemon: var TriadDaemon): QueuedMsg =
   daemon.msgQueue.popFirst()
+
+proc popQueuedMessage*(daemon: var TriadDaemon): Msg =
+  daemon.popQueuedMessageWithOrigin().msg

@@ -292,6 +292,8 @@ proc applyConfig*(model: var Model, config: Config) =
     model.janet.manifestDir = DefaultJanetManifestDir
   if model.janet.systemManifestDir.strip().len == 0:
     model.janet.systemManifestDir = DefaultJanetSystemManifestDir
+  if model.janet.hookDir.strip().len == 0:
+    model.janet.hookDir = DefaultJanetHookDir
   model.janet.fuelLimit = configClamp32(model.janet.fuelLimit, 1_000, 10_000_000)
   model.terminal = config.terminal
   model.screenshot = config.screenshot
