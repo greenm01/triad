@@ -42,15 +42,42 @@ atomic_install() {
   mv -f "$tmp" "$dst"
 }
 
-latest_triad_pid() {
-  pgrep -n -x triad 2>/dev/null || true
+latest_live_triad_pid() {
+  latest=""
+  for proc_exe in /proc/[0-9]*/exe; do
+    pid="${proc_exe%/exe}"
+    pid="${pid##*/}"
+    exe="$(readlink "$proc_exe" 2>/dev/null || true)"
+    if [ "$exe" = "$bin_dir/triad" ] &&
+        { [ -z "$latest" ] || [ "$pid" -gt "$latest" ]; }; then
+      latest="$pid"
+    fi
+  done
+
+  [ -n "$latest" ] || return 1
+  echo "$latest"
+}
+
+perf_status_is_compatible() {
+  printf "%s\n" "$1" | python3 -c '
+import json
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+if data.get("ok") is True and data.get("type") == "perf-status":
+    sys.exit(0)
+sys.exit(1)
+'
 }
 
 running_triad_pid() {
   perf_status="$(timeout 1 "$repo_dir/triad" msg perf-status 2>/dev/null || true)"
   if [ -n "$perf_status" ]; then
     pid="$(
-      echo "$perf_status" | python3 -c '
+      printf "%s\n" "$perf_status" | python3 -c '
 import json
 import sys
 
@@ -67,8 +94,34 @@ if isinstance(pid, int) and pid > 0:
       echo "$pid"
       return 0
     fi
+    if perf_status_is_compatible "$perf_status"; then
+      latest_live_triad_pid
+      return $?
+    fi
   fi
-  latest_triad_pid
+  return 1
+}
+
+require_hardened_runtime() {
+  live_manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
+
+  if [ ! -x "$live_manager_loop" ]; then
+    fail "live manager loop is missing or not executable: $live_manager_loop"
+  fi
+
+  if ! cmp -s "$repo_dir/tools/triad-manager-loop.sh" "$live_manager_loop"; then
+    log_error "installed manager loop is not the hardened repo version: $live_manager_loop"
+    log_error "install the updated manager loop, restart the River/Triad session, then retry liveReload"
+    fail "refusing live reload with stale live manager loop"
+  fi
+
+  if ! old_pid="$(running_triad_pid)"; then
+    log_error "running Triad daemon does not expose perf-status pid"
+    log_error "restart the River/Triad session on the hardened binaries, then retry liveReload"
+    fail "refusing live reload with stale running Triad daemon"
+  fi
+
+  log_info "hardened live runtime confirmed with manager pid $old_pid"
 }
 
 validate_live_config() {
@@ -120,13 +173,36 @@ rollback_and_fail() {
   message="$1"
   log_error "$message"
   if restore_live_binaries; then
+    rollback_start_pid="$(running_triad_pid || true)"
     if "$bin_dir/triad" msg triad-reload >/dev/null 2>&1; then
       log_info "requested reload after restoring previous live binaries"
+      if wait_rollback_ready "$rollback_start_pid"; then
+        log_info "rollback reload became ready"
+      else
+        log_error "rollback reload did not become ready"
+      fi
     else
       log_error "restored previous live binaries, but rollback reload IPC failed"
     fi
   fi
   exit 1
+}
+
+wait_rollback_ready() {
+  previous_pid="$1"
+  i=0
+  while [ "$i" -lt 50 ]; do
+    current_pid="$(running_triad_pid || true)"
+    if [ -n "$current_pid" ] &&
+        { [ -z "$previous_pid" ] || [ "$current_pid" != "$previous_pid" ]; }; then
+      wait_restore_ready || return 1
+      log_info "rollback manager pid $current_pid restored active tag $snapshot_active_tag"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 0.1
+  done
+  return 1
 }
 
 active_tag_from_snapshot() {
@@ -573,11 +649,12 @@ bin_dir="${TRIAD_LIVE_BIN_DIR:-$HOME/.local/bin}"
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
 restore_path="${TRIAD_LIVE_RESTORE_PATH:-$runtime_dir/triad-live-restore.json}"
 backup_dir=""
-old_pid="$(running_triad_pid)"
+old_pid=""
 
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"
 
+require_hardened_runtime
 validate_live_config
 snapshot_restore_state "$restore_path"
 
