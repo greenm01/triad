@@ -16,6 +16,22 @@ as a normal host component before installing Triad. After River is installed,
 For daily use, build River with the upstream release-optimized install command
 rather than running an unoptimized development binary.
 
+Recommended local River build:
+
+```bash
+git clone https://codeberg.org/river/river.git
+cd river
+zig build -Doptimize=ReleaseSafe -Dcpu=baseline -Dstrip -Dpie \
+  -Dxwayland --prefix "$HOME/.local" install
+river -version
+```
+
+`-Doptimize=ReleaseSafe` keeps Zig runtime safety checks enabled while still
+building an optimized binary. `-Dcpu=baseline` avoids a host-specific
+`-march=native` build, and `-Dstrip -Dpie` match River's packaging
+recommendations. `-Dxwayland` enables support for X11 applications through
+Xwayland.
+
 Install Triad's local build requirements:
 
 - Nim 2.2.4 or newer
