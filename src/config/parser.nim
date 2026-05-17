@@ -915,7 +915,7 @@ proc loadConfigDocument*(path: string): ConfigDocument =
   var stack: seq[string] = @[]
   appendConfigNodes(path, result.nodes, result.paths, stack)
 
-proc loadConfig*(path: string): Config =
+proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   var recentWindowBindings = defaultRecentWindowBindings()
   # Default values
   result.layout.gaps = DefaultGaps
@@ -990,7 +990,6 @@ proc loadConfig*(path: string): Config =
   result.protocolSurfaces.enabled = true
 
   try:
-    let doc = loadConfigDocument(path).nodes
     for node in doc:
       if node.name == "layout":
         for child in node.children:
@@ -1850,6 +1849,17 @@ proc loadConfig*(path: string): Config =
   if result.pointerBindings.len == 0:
     result.pointerBindings = defaultPointerBindings()
 
+proc loadConfig*(path: string): Config =
+  try:
+    result = loadConfigNodes(loadConfigDocument(path).nodes, path)
+  except:
+    let e = getCurrentException()
+    warn "Could not load config, using defaults", path = path, error = e.msg
+    result = loadConfigNodes(@[], path)
+
+proc loadFallbackConfig*(): Config =
+  loadConfigNodes(parseKdl(FallbackConfigContent), "<builtin fallback>")
+
 proc loadConfigStrict*(path: string): ConfigLoadResult =
   var document: ConfigDocument
   try:
@@ -1857,7 +1867,7 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
   except CatchableError as e:
     return ConfigLoadResult(ok: false, error: e.msg)
 
-  let config = loadConfig(path)
+  let config = loadConfigNodes(document.nodes, path)
   let regexError = config.validateWindowRuleRegexes()
   if regexError.len > 0:
     return ConfigLoadResult(ok: false, error: regexError)

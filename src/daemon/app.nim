@@ -11,9 +11,9 @@ import ../janet/runtime as janet_runtime
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, effects_runtime, input_runtime, janet_script_runtime,
-  live_restore_runtime, manage_requests, message_queue,
-  output_management_runtime, process_runner, quickshell_runner, registry_runtime,
-  reload_runtime, render_runtime, render_invalidation, state, switch_event_runtime
+  live_restore_runtime, manage_requests, message_queue, output_management_runtime,
+  process_runner, quickshell_runner, registry_runtime, reload_runtime, render_runtime,
+  render_invalidation, state, switch_event_runtime
 from ../types/runtime_values import nil, PointerOpKind
 import
   std/[
@@ -262,7 +262,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let dispatchJanetHooks =
-      queued.origin != QueuedMsgOrigin.JanetHook and msg.kind.shouldDispatchJanetScripts()
+      queued.origin != QueuedMsgOrigin.JanetHook and
+      msg.kind.shouldDispatchJanetScripts()
     let beforeJanetHookSnapshot =
       if dispatchJanetHooks:
         some(daemon.readModelSnapshot())
@@ -483,16 +484,8 @@ proc main*() =
 
   # Setup and Load Config
   daemon.setupConfig(configPathFromArgs(args))
-  let initialLoaded = loadConfigStrict(daemon.configPath)
-  let initialConfig =
-    if initialLoaded.ok:
-      daemon.configWatchPaths = initialLoaded.configPaths
-      initialLoaded.config
-    else:
-      warn "Initial config strict validation failed; falling back to permissive load",
-        path = daemon.configPath, error = initialLoaded.error
-      daemon.configWatchPaths = @[daemon.configPath]
-      loadConfig(daemon.configPath)
+  let initialLoaded = daemon.loadStartupConfig()
+  let initialConfig = initialLoaded.config
   daemon.runtimeState = initRuntimeStateFromConfig(initialConfig)
   daemon.janetRuntime = initJanetRuntime(daemon.runtimeState.model.janet)
   daemon.installInputRuntimeHooks()

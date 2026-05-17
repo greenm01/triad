@@ -1,4 +1,6 @@
 import tconfig_support
+import ../src/daemon/reload_runtime
+from ../src/daemon/state import initTriadDaemon
 
 suite "KDL Configuration Parser: loading reload":
   test "config application preserves live window state":
@@ -202,6 +204,94 @@ window-rule {
 
     check not loaded.ok
     check loaded.error.contains("window-rule[0].match[0] app-id")
+
+  test "Startup config load uses built-in fallback after strict validation failure":
+    let path =
+      getTempDir() / ("triad-startup-invalid-" & $getCurrentProcessId() & ".kdl")
+    writeFile(
+      path,
+      """
+terminal {
+  command "custom-terminal"
+}
+
+bindings {
+  bind "Super+t" "spawn custom-terminal"
+}
+
+window-rule {
+  match app-id="["
+  open-floating #true
+}
+""",
+    )
+
+    var daemon = initTriadDaemon()
+    daemon.setupConfig(path)
+    let loaded = daemon.loadStartupConfig()
+
+    check loaded.usedFallback
+    check loaded.error.contains("window-rule[0].match[0] app-id")
+    check daemon.configWatchPaths == @[path.absoluteConfigPath()]
+    check loaded.config.commandForBinding("t", Super) == "spawn-terminal"
+    check loaded.config.terminal.command != @["custom-terminal"]
+
+    removeFile(path)
+
+  test "Startup config load falls back when required include is missing":
+    let dir = getTempDir() / ("triad-startup-missing-include-" & $getCurrentProcessId())
+    createDir(dir)
+    let root = dir / "root.kdl"
+    writeFile(root, "include \"missing.kdl\"\n")
+
+    var daemon = initTriadDaemon()
+    daemon.setupConfig(root)
+    let loaded = daemon.loadStartupConfig()
+
+    check loaded.usedFallback
+    check loaded.error.contains("included config not found")
+    check daemon.configWatchPaths == @[root.absoluteConfigPath()]
+    check loaded.config.commandForBinding("Delete", Ctrl + Alt) == "exit-session"
+
+    removeFile(root)
+    removeDir(dir)
+
+  test "Startup setup creates fallback config when path is absent":
+    let dir = getTempDir() / ("triad-startup-absent-config-" & $getCurrentProcessId())
+    createDir(dir)
+    let configPath = dir / "config.kdl"
+
+    var daemon = initTriadDaemon()
+    daemon.setupConfig(configPath)
+    let loaded = daemon.loadStartupConfig()
+
+    check fileExists(configPath)
+    check not loaded.usedFallback
+    check daemon.configWatchPaths == @[configPath.absoluteConfigPath()]
+    check loaded.config.commandForBinding("Delete", Ctrl + Alt) == "exit-session"
+
+    removeFile(configPath)
+    removeDir(dir)
+
+  test "Startup setup preserves broken config symlink and falls back":
+    let dir = getTempDir() / ("triad-startup-broken-link-" & $getCurrentProcessId())
+    createDir(dir)
+    let configPath = dir / "config.kdl"
+    let missingTarget = dir / "missing" / "config.kdl"
+    createSymlink(missingTarget, configPath)
+
+    var daemon = initTriadDaemon()
+    daemon.setupConfig(configPath)
+    let loaded = daemon.loadStartupConfig()
+
+    check symlinkExists(configPath)
+    check not fileExists(configPath)
+    check loaded.usedFallback
+    check daemon.configWatchPaths == @[configPath.absoluteConfigPath()]
+    check loaded.config.commandForBinding("r", Ctrl + Alt) == "triad-reload"
+
+    removeFile(configPath)
+    removeDir(dir)
 
   test "Config includes merge in place and root settings can override":
     let dir = getTempDir() / ("triad-config-include-" & $getCurrentProcessId())

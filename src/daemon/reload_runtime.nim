@@ -11,6 +11,12 @@ import
   bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
   output_management_runtime, quickshell_runner, render_invalidation, state
 
+type StartupConfigLoadResult* = object
+  config*: Config
+  configPaths*: seq[string]
+  usedFallback*: bool
+  error*: string
+
 proc setupConfig*(daemon: var TriadDaemon, configPath = "") =
   daemon.configPath =
     if configPath.len > 0:
@@ -21,9 +27,30 @@ proc setupConfig*(daemon: var TriadDaemon, configPath = "") =
   if not dirExists(configDir):
     createDir(configDir)
 
-  if not fileExists(daemon.configPath):
+  if not fileExists(daemon.configPath) and not symlinkExists(daemon.configPath):
     writeFile(daemon.configPath, FallbackConfigContent)
     info "Created default config", path = daemon.configPath
+
+proc loadStartupConfig*(daemon: var TriadDaemon): StartupConfigLoadResult =
+  let loaded = loadConfigStrict(daemon.configPath)
+  if loaded.ok:
+    daemon.configWatchPaths = loaded.configPaths
+    return
+      StartupConfigLoadResult(config: loaded.config, configPaths: loaded.configPaths)
+
+  warn "Initial config strict validation failed; using built-in fallback",
+    path = daemon.configPath, error = loaded.error
+  writeBehaviorEvent(
+    "config_startup_fallback",
+    %*{"path": daemon.configPath, "reason": "load failed", "error": loaded.error},
+  )
+  daemon.configWatchPaths = @[daemon.configPath]
+  StartupConfigLoadResult(
+    config: loadFallbackConfig(),
+    configPaths: daemon.configWatchPaths,
+    usedFallback: true,
+    error: loaded.error,
+  )
 
 proc scheduleStartupCommands*(daemon: var TriadDaemon, model: Model) =
   daemon.startupCommandsPending = model.startupCommands.len > 0
