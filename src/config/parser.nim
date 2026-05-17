@@ -644,15 +644,6 @@ proc defaultRecentWindowBindings*(): seq[KeyBindingConfig] =
     ),
   ]
 
-proc setJanetManifestAlias(
-    aliases: var seq[JanetManifestAlias], appId, manifest: string
-) =
-  for alias in aliases.mitems:
-    if alias.appId == appId:
-      alias.manifest = manifest
-      return
-  aliases.add(JanetManifestAlias(appId: appId, manifest: manifest))
-
 proc recentWindowFallbackBindings*(): seq[KeyBindingConfig] =
   @[
     KeyBindingConfig(
@@ -986,9 +977,7 @@ proc loadConfig*(path: string): Config =
   result.shells.watchdog.exclusiveFocusTimeoutMs =
     DefaultShellWatchdogExclusiveFocusTimeoutMs
   result.janet.enabled = true
-  result.janet.manifestDir = DefaultJanetManifestDir
-  result.janet.systemManifestDir = DefaultJanetSystemManifestDir
-  result.janet.hookDir = DefaultJanetHookDir
+  result.janet.scriptDir = DefaultJanetScriptDir
   result.janet.fuelLimit = DefaultJanetFuelLimit
   result.hotkeyOverlay.skipAtStartup = true
   result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
@@ -1564,19 +1553,11 @@ proc loadConfig*(path: string): Config =
           try:
             if child.name == "enabled" and child.args.len > 0:
               result.janet.enabled = child.args[0].kBool()
-            elif child.name == "manifest-dir" and child.args.len > 0:
-              result.janet.manifestDir = child.args[0].kString()
-            elif child.name == "system-manifest-dir" and child.args.len > 0:
-              result.janet.systemManifestDir = child.args[0].kString()
-            elif child.name == "hook-dir" and child.args.len > 0:
-              result.janet.hookDir = child.args[0].kString()
+            elif child.name == "script-dir" and child.args.len > 0:
+              result.janet.scriptDir = child.args[0].kString()
             elif child.name == "fuel-limit" and child.args.len > 0:
               result.janet.fuelLimit =
                 clamp32(int32(child.args[0].kInt()), 1_000, 10_000_000)
-            elif child.name == "manifest-alias" and child.args.len >= 2:
-              result.janet.manifestAliases.setJanetManifestAlias(
-                child.args[0].kString(), child.args[1].kString()
-              )
           except CatchableError as e:
             warn "Ignoring invalid janet field", field = child.name, error = e.msg
       elif node.name == "terminal":

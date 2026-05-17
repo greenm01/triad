@@ -124,13 +124,15 @@
 (defn place-floating-window [window]
   (triad/command "set-window-floating" (window :id) true))
 
-(let [window triad/current-window]
-  (when (and window (gimp-app? (window :app-id)))
-    (let [kind (window-kind window)
-          follow (should-follow? kind window)
-          target-workspace (target-workspace window)]
-      (triad/command "move-window-to-tag" (window :id) target-workspace follow)
-      (triad/command "set-layout-for-workspace" target-workspace "scroller")
-      (if (= kind :main)
-        (place-main-window window)
-        (place-floating-window window)))))
+(triad/on :window-ready
+  (fn [ev]
+    (let [window (ev :window)]
+      (when (gimp-app? (window :app-id))
+        (let [kind (window-kind window)
+              follow (should-follow? kind window)
+              target-workspace (target-workspace window)]
+          (triad/command "move-window-to-tag" (window :id) target-workspace follow)
+          (triad/command "set-layout-for-workspace" target-workspace "scroller")
+          (if (= kind :main)
+            (place-main-window window)
+            (place-floating-window window)))))))

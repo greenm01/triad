@@ -2,7 +2,7 @@
 
 Triad uses the KDL configuration format, which is both readable and expressive. You can find your configuration at `$XDG_CONFIG_HOME/triad/config.kdl` (or `~/.config/triad/config.kdl` if the environment variable is unset). If you haven't created one yet, Triad will provide a sensible default when it first starts.
 
-See config_examples for practical examples.
+See `examples/config/` for practical examples.
 
 ## The Basics
 

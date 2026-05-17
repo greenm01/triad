@@ -86,7 +86,7 @@ symlinks are left in place. The starter config avoids host-specific output and
 input policy, but it references common session tools such as `kitty`,
 `fuzzel`, Noctalia, DankMaterialShell, and Waybar. Install the tools you want
 or edit the shell/binding commands in `~/.config/triad/config.kdl`. Use
-`config_examples/niltempus_config.kdl` as an example for a fuller personal
+`examples/config/niltempus_config.kdl` as an example for a fuller personal
 setup with browser, file-manager, and app-specific window rules.
 
 ## Optional Nix Dev Shell

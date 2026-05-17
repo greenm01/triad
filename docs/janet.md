@@ -1,9 +1,9 @@
 # Janet Scripting in the Triad Ecosystem
 
 Triad supports Janet in two roles: external Janet clients over IPC, and an
-embedded manifest runtime for in-process window placement policy. This document
-specifies the current embedded surface, the sandbox shape, and how future hooks
-and layout extensions fit alongside it.
+embedded script runtime for in-process window placement and event handling.
+This document specifies the current embedded surface, the sandbox shape, and
+how future layout extensions fit alongside it.
 
 Janet is a small, embeddable Lisp with a clean C API, built-in event loop,
 green threads, and a data-oriented character that fits Triad's model naturally.
@@ -26,8 +26,8 @@ A Janet interpreter hosted inside the Triad process. Scripts receive the
 same `Model.update(msg)` reducer boundary as IPC and keybinds, and pay no
 socket or JSON round-trip cost.
 
-This is the primary integration. It currently covers placement manifests and
-synchronous event hooks; custom layout functions remain a future phase.
+This is the primary integration. It currently covers synchronous event scripts;
+custom layout functions remain a future phase.
 
 ### 2. External client scripts (zero Triad changes required)
 
@@ -72,34 +72,82 @@ model where data flows one way through the reducer.
 
 ## What Embedded Janet Can Do
 
-### Placement manifests
+### Scripts
 
-When a window opens, Triad checks for a Janet manifest file matching the
-`app-id`. The manifest receives the current snapshot and the new window's
-metadata, evaluates placement logic, and emits `Msg` values that re-enter the
-reducer.
+Triad loads every `*.janet` file from `script-dir` (default
+`~/.config/triad/janet`) in lexicographic order and evaluates each on every
+dispatchable event. Scripts subscribe to the events they care about with
+`triad/on` and emit commands through `triad/command`.
+
+A single script file can handle any combination of events for a concern —
+including window placement on open and any follow-up reactions:
 
 ```janet
-# ~/.config/triad/manifests/firefox.janet
-(let [tag (triad/find-tag-by-name "web")]
-  (if tag
-    (triad/command "move-to-tag" (tag :tag-id))
-    (triad/command "move-to-tag" (triad/active-tag-id))))
+# ~/.config/triad/janet/firefox.janet
+(triad/on :window-ready
+  (fn [ev]
+    (let [window (ev :window)]
+      (when (= (window :app-id) "firefox")
+        (let [tag (triad/find-tag-by-name "web")]
+          (when tag
+            (triad/command "move-window-to-tag" (window :id) (tag :tag-id) true)))))))
+
+(triad/on :window-closed
+  (fn [ev]
+    (let [window (ev :window)]
+      (when (= (window :app-id) "firefox")
+        # react to firefox closing
+        ))))
 ```
 
-This is the executable successor to ICCCM/EWMH placement hints. KDL window
-rules handle the static, unconditional cases well. A manifest handles
-conditionality KDL cannot express: open next to an existing terminal if one is
-present on this tag, otherwise claim a new tag; check how many windows already
-share a tag before deciding whether to float; use a different layout when the
-main IDE window is already open.
+This replaces the old manifest + hooks split. All per-app placement logic,
+reactions, and cross-event state live in one file.
 
-### Event hooks
+#### The `:window-ready` event
 
-Synchronous hooks react to selected runtime events. Triad loads top-level
-`*.janet` files from `hook-dir` in lexicographic order. Each file can call
-`triad/on`; matching handlers receive `triad/current-event` and emit ordinary
-commands through `triad/command`.
+`:window-ready` is the canonical event for initial window placement. It fires
+exactly once per window, the first time both conditions hold:
+
+1. The window has a non-placeholder `app-id` (i.e. the app has reported its
+   identity to the compositor).
+2. The window has been admitted to the model.
+
+This ensures placement scripts always see the real `app-id`, even for apps that
+report it asynchronously after the window is created (Telegram, some Electron
+apps). Triad tracks which windows have already received `:window-ready` and
+never re-fires it.
+
+#### The `:window-opened` event
+
+`:window-opened` fires once at window creation, before the window is fully
+admitted. The `app-id` may still be empty at this point. Use it for very
+early reactions that do not depend on app identity.
+
+#### Available events
+
+| Event | When it fires | Key fields |
+|---|---|---|
+| `:window-ready` | First moment window has app-id + is admitted | `:window-id`, `:window` |
+| `:window-opened` | Window created (app-id may be empty) | `:window-id`, `:window` |
+| `:window-admitted` | Window fully admitted to model | `:window-id`, `:window` |
+| `:window-closed` | Window destroyed | `:window-id`, `:window` |
+| `:window-title-changed` | Title updated | `:window-id`, `:old-title`, `:new-title`, `:old-window`, `:new-window` |
+| `:window-app-id-changed` | App-id updated | `:window-id`, `:old-app-id`, `:new-app-id`, `:old-window`, `:new-window` |
+| `:window-focus-changed` | Focus moved | `:old-window-id`, `:new-window-id`, `:old-window`, `:new-window` |
+| `:tag-changed` | Active tag changed | `:old-tag-id`, `:new-tag-id` |
+| `:layout-changed` | Active layout changed | `:old-layout`, `:new-layout`, `:tag-id` |
+| `:session-locked` | Session locked | — |
+| `:session-unlocked` | Session unlocked | — |
+
+#### Recursion behaviour
+
+Commands emitted by scripts carry a `JanetHook` origin marker. The dispatcher
+does not re-evaluate scripts for messages with that origin, preventing infinite
+cascades. If a `:window-ready` handler emits `move-window-to-tag`, the
+resulting tag change will not re-trigger the `:tag-changed` handler in other
+scripts.
+
+#### Example: tag-based reactions
 
 ```janet
 (triad/on :window-opened
@@ -112,6 +160,15 @@ commands through `triad/command`.
     (when (= (ev :new-tag-id) 5)
       (triad/command "layout-monocle"))))
 ```
+
+See `examples/janet/` for full per-app examples (gimp, telegram, vesktop).
+
+This is the executable successor to ICCCM/EWMH placement hints. KDL window
+rules handle the static, unconditional cases well. Scripts handle
+conditionality KDL cannot express: open next to an existing terminal if one is
+present on this tag, otherwise claim a new tag; check how many windows already
+share a tag before deciding whether to float; use a different layout when the
+main IDE window is already open.
 
 ### Custom layout functions (future)
 
@@ -129,7 +186,7 @@ the built-in Nim layouts without recompiling Triad.
   The model is never passed by reference to Janet — only the immutable snapshot.
 - **Access the host filesystem, network, or OS.** `os/*`, `net/*`, file I/O,
   and `ffi` are not loaded into the sandbox environment.
-- **Block the main loop.** Manifests run synchronously in the manage phase.
+- **Block the main loop.** Scripts run synchronously in the event loop.
   Long-running work goes in a Janet fiber; the main fiber yields back
   immediately.
 - **Replace Quickshell.** Janet has no Qt/QML bindings. Shell UI — bars,
@@ -149,13 +206,9 @@ Wayland event / IPC command
         │
    [manage phase — WlManageStart]
         │
-        ├─ WlWindowCreated? ──► janet/manifest.evalManifest(appId, snap)
-        │                              │
-        │                         seq[Msg] ──► Model.update(msg)  (each)
-        │
-        ├─ any event? ─────────► janet/runtime.dispatchHooks(event, snap)
-        │                              │
-        │                         seq[Msg] ──► Model.update(msg)  (each)
+        ├─ any dispatchable event? ──► janet_script_runtime.collectJanetScriptMessages(event, snap)
+        │                                     │
+        │                               seq[Msg] ──► Model.update(msg)  (each)
         │
         └─ [render phase continues unchanged]
 ```
@@ -168,27 +221,15 @@ are output data.
 
 ### Integration point in `app.nim`
 
-The manage-phase message processing loop in `src/daemon/app.nim` already
-handles `WlManageStart` and processes the message queue. Janet evaluation slots
-in at the `WlWindowCreated` case, before layout projection:
+The manage-phase message processing loop evaluates all scripts on every
+dispatchable event after the model update:
 
 ```nim
-# processQueuedMessages — WlWindowCreated branch (sketch)
-if msg.kind == MsgKind.WlWindowCreated:
-  let snap = daemon.readModelSnapshot()
-  let janetMsgs = daemon.janetRuntime.evalManifest(msg.appId, snap)
-  for jmsg in janetMsgs:
-    daemon.enqueue(jmsg)
-```
-
-Hook dispatch runs after every event that has registered listeners:
-
-```nim
-# after syncRuntimeUpdate returns effects
-let snap = daemon.readModelSnapshot()
-let hookMsgs = daemon.janetRuntime.dispatchHooks(msg.kind, snap)
-for jmsg in hookMsgs:
-  daemon.enqueue(jmsg)
+if beforeSnapshot.isSome:
+  let afterSnapshot = daemon.readModelSnapshot()
+  nextQueuedMessages.add(
+    daemon.collectJanetScriptMessages(msg, beforeSnapshot.get(), afterSnapshot)
+  )
 ```
 
 ### Snapshot conversion
@@ -213,12 +254,12 @@ never mutates model data is enforced by the type, not by convention.
 ```
 src/
   janet/
-    binding.nim       ← compiles vendored janet.c and the C API wrapper
-    runtime.nim       ← JanetRuntime lifecycle, sandboxed eval, source caches
-    snapshot_api.nim  ← registers triad/snapshot and shorthand query functions
-    command_api.nim   ← translates triad/command actions into Msg values
+    binding.nim            ← compiles vendored janet.c and the C API wrapper
+    runtime.nim            ← JanetRuntime lifecycle, sandboxed eval, source caches
+    snapshot_api.nim       ← registers triad/snapshot and shorthand query functions
+    command_api.nim        ← translates triad/command actions into Msg values
   daemon/
-    janet_hook_runtime.nim ← event shaping, triad/on dispatch, behavior logs
+    janet_script_runtime.nim ← event shaping, triad/on dispatch, behavior logs
 ```
 
 `src/janet/binding.nim` and the adjacent C wrapper are the only Triad-owned
@@ -229,8 +270,7 @@ types. This keeps the C surface minimal and auditable.
 
 ## Sandbox Design
 
-Manifests are untrusted code from third-party application packages. The
-sandbox is enforced structurally, not by policy documentation.
+The sandbox is enforced structurally, not by policy documentation.
 
 ### Environment construction
 
@@ -242,7 +282,8 @@ Exposed namespaces:
 
 ```
 triad/snapshot            read-only ShellSnapshot struct
-triad/current-window      opening window struct | nil
+triad/current-window      event window struct | nil
+triad/current-event       current event struct | nil
 triad/active-tag-id       shorthand query → uint32
 triad/find-tag-by-name    shorthand query → struct | nil
 triad/windows-on-tag      shorthand query → tuple of structs
@@ -254,7 +295,7 @@ triad/volume-*            wpctl volume and mute helpers
 triad/media-*             playerctl playback helpers
 triad/screenshot-*        Triad screenshot command helpers
 triad/record-*            wf-recorder recipe helpers
-triad/on                  synchronous event hook registration
+triad/on                  synchronous event subscription
 ```
 
 Explicitly absent: host filesystem, network, process, FFI, dynamic native
@@ -262,16 +303,14 @@ module loading, and direct model or Wayland handles.
 
 ### Fuel limit
 
-Triad stores a configured `fuel-limit` for the embedded runtime. The first
-manifest implementation also blocks obvious loop forms before evaluation so a
-manifest cannot stall the manage path.
+Triad stores a configured `fuel-limit` for the embedded runtime. The script
+runtime also blocks obvious loop forms before evaluation so a script cannot
+stall the event path.
 
 ```kdl
 janet {
   enabled #true
-  manifest-dir "~/.config/triad/manifests"
-  system-manifest-dir "/usr/share/triad/manifests"
-  hook-dir "~/.config/triad/hooks"
+  script-dir "~/.config/triad/janet"
   fuel-limit 500000
 }
 ```
@@ -301,9 +340,9 @@ Arguments are argv-style values, not shell strings. Use one Janet argument per
 command argument; names that contain spaces can be passed as one string.
 
 Targeted window commands take the compositor-facing window id exposed in
-`triad/current-window` or `triad/snapshot :windows`. This lets manifests place
-or change state on a newly opened window without relying on the currently
-focused window. The optional final boolean on `move-window-to-tag` and
+`triad/current-window` or `triad/snapshot :windows`. This lets scripts place
+or change state on a specific window without relying on the currently focused
+window. The optional final boolean on `move-window-to-tag` and
 `move-window-to-workspace` controls whether Triad follows focus to the moved
 window.
 
@@ -351,33 +390,20 @@ portal session API.
 
 ---
 
-## Manifest Discovery and Caching
+## Script Discovery and Caching
 
-Triad looks for manifests in order:
-
-1. `{manifest-dir}/{app-id}.janet` (config-specified directory)
-2. `{manifest-dir}/{alias}.janet` for any matching configured `manifest-alias`
-3. `{system-manifest-dir}/{app-id}.janet` (system-installed)
-4. `{system-manifest-dir}/{alias}.janet` for any matching configured
-   `manifest-alias`
-
-Aliases are configured in KDL, not compiled into Triad:
+Triad loads all `*.janet` files from `script-dir` in lexicographic order. The
+default is `~/.config/triad/janet`. Change it in `config.kdl`:
 
 ```kdl
 janet {
-  manifest-alias "org.telegram.desktop" "telegram"
+  script-dir "~/.config/triad/janet"
 }
 ```
 
-Exact app-id files win over alias targets. Alias targets are manifest basenames,
-not paths.
-
-Manifest source is read on first match and cached with the file modification
-time. Editing a manifest takes effect on the next matching window open, no
-Triad restart required.
-
-If no manifest exists for an `app-id`, evaluation is skipped with zero
-overhead — a simple table lookup against the cache.
+Script source is read on first load and cached with the file modification time.
+Editing a script takes effect on the next matching event — no Triad restart
+required. A config reload also clears the cache.
 
 ---
 
@@ -398,7 +424,7 @@ protocol handlers.
 | Effort to write | High | Low | Low |
 
 Triad's narrower surface is intentional. Placement policy does not need
-compositor rendering internals. Sandboxed manifests that express policy against
+compositor rendering internals. Sandboxed scripts that express policy against
 a stable snapshot are more maintainable and more secure than compiled plugins
 that reach into compositor state.
 
@@ -433,25 +459,26 @@ like in practice:
 
 - **KDL window rules** — static, unconditional placement. Fast lookup, no
   conditionality. Defined in `config.kdl`.
-- **Embedded Janet manifests** — conditional placement at window-open time.
-  Receives the live snapshot. Emits `Msg` values through the reducer.
-- **Embedded Janet hooks** — synchronous event-driven logic. Runs after selected
-  reducer updates and emits commands back into the queue.
+- **Embedded Janet scripts** — conditional placement and event-driven logic.
+  All `*.janet` files in `script-dir` run on every dispatchable event. Scripts
+  subscribe to specific events with `triad/on` and emit `Msg` values through
+  the reducer.
 - **External Janet (or any language) via IPC** — out-of-process scripts.
   Socket latency, full OS isolation. Suitable for long-running automations.
 - **Parallel `river-layout-v3` clients** — custom layout generators that
   speak the River protocol directly, independent of Triad.
 
-The five levels compose. All can run simultaneously without conflict.
+The four levels compose. All can run simultaneously without conflict.
 
 ---
 
 ## Implementation Phases
 
-### Phase 1 — Embedded manifest runtime
+### Phase 1 — Embedded script runtime
 
 - Vendored Janet source, wrapper, runtime lifecycle, snapshot conversion,
-  command emission, manifest lookup/cache, KDL config, and daemon integration.
+  command emission, script lookup/cache, KDL config, and daemon integration.
+- Event dispatch with `triad/on`, including `:window-ready` for placement.
 - Covered by `nimble testJanet`.
 
 ### Phase 2 — Hardening
@@ -461,16 +488,7 @@ The five levels compose. All can run simultaneously without conflict.
 - Expand sandbox tests for every host-facing symbol Triad promises not to
   expose.
 
-### Phase 3 — Event hooks
-
-- Add synchronous `triad/on` hook dispatch for files in `hook-dir`.
-- Support hook events: `:window-opened`, `:window-closed`,
-  `:window-admitted`, `:window-title-changed`, `:window-app-id-changed`,
-  `:window-focus-changed`, `:tag-changed`, `:layout-changed`,
-  `:session-locked`, and `:session-unlocked`.
-- Keep persistent fibers as a later phase.
-
-### Phase 4 — Custom layouts (speculative)
+### Phase 3 — Custom layouts (speculative)
 
 - Define a layout contract: a Janet function that receives column/window
   geometry data and returns a sequence of placement instructions.

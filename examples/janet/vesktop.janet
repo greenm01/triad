@@ -1,9 +1,9 @@
 (def fallback-chat-tag 4)
 
-(def telegram-app-ids
-  ["telegram-desktop"
-   "TelegramDesktop"
-   "org.telegram.desktop"])
+(def vesktop-app-ids
+  ["vesktop"
+   "Vesktop"
+   "dev.vencord.Vesktop"])
 
 (defn value-in? [needle values]
   (var found false)
@@ -12,8 +12,8 @@
       (set found true)))
   found)
 
-(defn telegram-app? [app-id]
-  (value-in? app-id telegram-app-ids))
+(defn vesktop-app? [app-id]
+  (value-in? app-id vesktop-app-ids))
 
 (defn chat-tag []
   (let [tag (triad/find-tag-by-name "chat")]
@@ -31,12 +31,14 @@
 (defn place-dialog-window [window]
   (triad/command "set-window-floating" (window :id) true))
 
-(let [window triad/current-window]
-  (when (and window (telegram-app? (window :app-id)))
-    (let [target-tag (chat-tag)
-          dialog (dialog-window? window)]
-      (triad/command "move-window-to-tag" (window :id) target-tag true)
-      (triad/command "set-layout-for-workspace" target-tag "deck")
-      (if dialog
-        (place-dialog-window window)
-        (place-main-window window)))))
+(triad/on :window-ready
+  (fn [ev]
+    (let [window (ev :window)]
+      (when (vesktop-app? (window :app-id))
+        (let [target-tag (chat-tag)
+              dialog (dialog-window? window)]
+          (triad/command "move-window-to-tag" (window :id) target-tag true)
+          (triad/command "set-layout-for-workspace" target-tag "deck")
+          (if dialog
+            (place-dialog-window window)
+            (place-main-window window)))))))

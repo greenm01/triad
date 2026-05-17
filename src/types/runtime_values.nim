@@ -243,17 +243,10 @@ type
     profiles*: seq[ShellProfileConfig]
     watchdog*: ShellWatchdogConfig
 
-  JanetManifestAlias* = object
-    appId*: string
-    manifest*: string
-
   JanetConfig* = object
     enabled*: bool
-    manifestDir*: string
-    systemManifestDir*: string
-    hookDir*: string
+    scriptDir*: string
     fuelLimit*: int32
-    manifestAliases*: seq[JanetManifestAlias]
 
   TerminalConfig* = object
     command*: seq[string]

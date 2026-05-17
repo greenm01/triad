@@ -1,18 +1,18 @@
-import std/[json, options]
+import std/[json, options, sets, strutils]
 import ../core/[msg, shell_focus]
 import ../janet/[runtime as janet_runtime, snapshot_api]
 import ../types/[janet_manifest, shell_snapshot]
 import ../utils/[behavior_log]
 import state
 
-proc hookOutcomeId(outcome: HookOutcome): string =
+proc scriptOutcomeId(outcome: ScriptOutcome): string =
   case outcome
-  of HookOutcome.Disabled: "disabled"
-  of HookOutcome.Missing: "missing"
-  of HookOutcome.ReadFailed: "read_failed"
-  of HookOutcome.CachedFailed: "cached_failed"
-  of HookOutcome.EvalFailed: "eval_failed"
-  of HookOutcome.Evaluated: "evaluated"
+  of ScriptOutcome.Disabled: "disabled"
+  of ScriptOutcome.Missing: "missing"
+  of ScriptOutcome.ReadFailed: "read_failed"
+  of ScriptOutcome.CachedFailed: "cached_failed"
+  of ScriptOutcome.EvalFailed: "eval_failed"
+  of ScriptOutcome.Evaluated: "evaluated"
 
 proc escaped(value: string): string =
   result = "\""
@@ -71,7 +71,7 @@ proc windowById(snapshot: ShellSnapshot, id: uint32): Option[ShellWindow] =
 proc activeLayoutId(snapshot: ShellSnapshot): string =
   snapshot.activeWorkspaceLayoutId()
 
-proc hookCommandPayload(msg: Msg): JsonNode =
+proc scriptCommandPayload(msg: Msg): JsonNode =
   result = %*{"kind": $msg.kind}
   case msg.kind
   of MsgKind.CmdMoveToTag:
@@ -103,14 +103,14 @@ proc hookCommandPayload(msg: Msg): JsonNode =
   else:
     discard
 
-proc hookEvalPayload(evalResult: HookEvalResult): JsonNode =
+proc scriptEvalPayload(evalResult: ScriptEvalResult): JsonNode =
   let commands = newJArray()
   for msg in evalResult.messages:
-    commands.add(msg.hookCommandPayload())
+    commands.add(msg.scriptCommandPayload())
   result =
     %*{
       "event": evalResult.event,
-      "outcome": evalResult.outcome.hookOutcomeId(),
+      "outcome": evalResult.outcome.scriptOutcomeId(),
       "path": evalResult.path,
       "command_count": evalResult.messages.len,
       "commands": commands,
@@ -121,7 +121,7 @@ proc hookEvalPayload(evalResult: HookEvalResult): JsonNode =
   if evalResult.currentWindow.isSome:
     result["current_window_id"] = %evalResult.currentWindow.get().id
 
-proc shouldDispatchJanetHooks*(kind: MsgKind): bool =
+proc shouldDispatchJanetScripts*(kind: MsgKind): bool =
   kind in {
     MsgKind.WlWindowCreated, MsgKind.WlWindowAdmissionSettled,
     MsgKind.WlWindowDestroyed, MsgKind.WlWindowTitle, MsgKind.WlWindowAppId,
@@ -136,7 +136,7 @@ proc shouldDispatchJanetHooks*(kind: MsgKind): bool =
     MsgKind.CmdSwitchLayout,
   }
 
-proc addHookEvent(
+proc addScriptEvent(
     events: var seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]],
     name, source: string,
     currentWindow = none(ShellWindow),
@@ -146,8 +146,20 @@ proc addHookEvent(
 proc emptyEventStruct(kind: string): string =
   "{:kind " & kind.eventKeyword() & "}"
 
+proc windowAppIdReady(appId: string): bool =
+  let normalized = appId.strip().normalize()
+  normalized.len > 0 and normalized notin ["unknown", "unset", "none"]
+
+proc windowReadyEventStruct(windowId: uint32, win: Option[ShellWindow]): string =
+  eventStruct(
+    "window-ready",
+    [("window-id", $windowId), ("window", win.windowExpr())],
+  )
+
 proc hookEvents(
-    msg: Msg, before, after: ShellSnapshot
+    msg: Msg,
+    before, after: ShellSnapshot,
+    windowReadyEmitted: var HashSet[uint32],
 ): seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]] =
   case msg.kind
   of MsgKind.WlWindowCreated:
@@ -165,7 +177,7 @@ proc hookEvents(
         win
       else:
         some(fallback)
-    result.addHookEvent(
+    result.addScriptEvent(
       "window-opened",
       eventStruct(
         "window-opened",
@@ -175,7 +187,15 @@ proc hookEvents(
     )
   of MsgKind.WlWindowAdmissionSettled:
     let win = after.windowById(msg.admissionWindowId)
-    result.addHookEvent(
+    if win.isSome and win.get().appId.windowAppIdReady() and
+        msg.admissionWindowId notin windowReadyEmitted:
+      windowReadyEmitted.incl(msg.admissionWindowId)
+      result.addScriptEvent(
+        "window-ready",
+        windowReadyEventStruct(msg.admissionWindowId, win),
+        win,
+      )
+    result.addScriptEvent(
       "window-admitted",
       eventStruct(
         "window-admitted",
@@ -185,17 +205,18 @@ proc hookEvents(
     )
   of MsgKind.WlWindowDestroyed:
     let win = before.windowById(msg.destroyedId)
-    result.addHookEvent(
+    result.addScriptEvent(
       "window-closed",
       eventStruct(
         "window-closed", [("window-id", $msg.destroyedId), ("window", win.windowExpr())]
       ),
       win,
     )
+    windowReadyEmitted.excl(msg.destroyedId)
   of MsgKind.WlWindowTitle:
     let oldWin = before.windowById(msg.titleWindowId)
     let newWin = after.windowById(msg.titleWindowId)
-    result.addHookEvent(
+    result.addScriptEvent(
       "window-title-changed",
       eventStruct(
         "window-title-changed",
@@ -212,7 +233,15 @@ proc hookEvents(
   of MsgKind.WlWindowAppId:
     let oldWin = before.windowById(msg.appIdWindowId)
     let newWin = after.windowById(msg.appIdWindowId)
-    result.addHookEvent(
+    if msg.updatedAppId.windowAppIdReady() and
+        msg.appIdWindowId notin windowReadyEmitted and newWin.isSome:
+      windowReadyEmitted.incl(msg.appIdWindowId)
+      result.addScriptEvent(
+        "window-ready",
+        windowReadyEventStruct(msg.appIdWindowId, newWin),
+        newWin,
+      )
+    result.addScriptEvent(
       "window-app-id-changed",
       eventStruct(
         "window-app-id-changed",
@@ -229,7 +258,7 @@ proc hookEvents(
   of MsgKind.WlFocusChanged:
     let oldWin = before.windowById(before.focusedWindowId())
     let newWin = after.windowById(after.focusedWindowId())
-    result.addHookEvent(
+    result.addScriptEvent(
       "window-focus-changed",
       eventStruct(
         "window-focus-changed",
@@ -243,14 +272,14 @@ proc hookEvents(
       newWin,
     )
   of MsgKind.WlSessionLocked:
-    result.addHookEvent("session-locked", emptyEventStruct("session-locked"))
+    result.addScriptEvent("session-locked", emptyEventStruct("session-locked"))
   of MsgKind.WlSessionUnlocked:
-    result.addHookEvent("session-unlocked", emptyEventStruct("session-unlocked"))
+    result.addScriptEvent("session-unlocked", emptyEventStruct("session-unlocked"))
   else:
     discard
 
   if before.activeTag != after.activeTag:
-    result.addHookEvent(
+    result.addScriptEvent(
       "tag-changed",
       eventStruct(
         "tag-changed",
@@ -261,7 +290,7 @@ proc hookEvents(
   let beforeLayout = before.activeLayoutId()
   let afterLayout = after.activeLayoutId()
   if beforeLayout != afterLayout:
-    result.addHookEvent(
+    result.addScriptEvent(
       "layout-changed",
       eventStruct(
         "layout-changed",
@@ -273,15 +302,15 @@ proc hookEvents(
       ),
     )
 
-proc collectJanetHookMessages*(
+proc collectJanetScriptMessages*(
     daemon: var TriadDaemon, msg: Msg, before, after: ShellSnapshot
 ): seq[QueuedMsg] =
   if daemon.janetRuntime.handle == nil:
     return @[]
-  for ev in hookEvents(msg, before, after):
+  for ev in hookEvents(msg, before, after, daemon.windowReadyEmitted):
     let evalResults =
-      daemon.janetRuntime.evalHookDetailed(ev.name, ev.source, after, ev.currentWindow)
+      daemon.janetRuntime.evalScriptsDetailed(ev.name, ev.source, after, ev.currentWindow)
     for evalResult in evalResults:
-      writeBehaviorEvent("janet_hook_eval", evalResult.hookEvalPayload())
-      for hookMsg in evalResult.messages:
-        result.add(QueuedMsg(msg: hookMsg, origin: QueuedMsgOrigin.JanetHook))
+      writeBehaviorEvent("janet_script_eval", evalResult.scriptEvalPayload())
+      for scriptMsg in evalResult.messages:
+        result.add(QueuedMsg(msg: scriptMsg, origin: QueuedMsgOrigin.JanetHook))

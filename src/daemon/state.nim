@@ -1,4 +1,4 @@
-import std/[deques, options, tables]
+import std/[deques, options, sets, tables]
 import fsnotify
 from posix import TPollfd
 import wayland/native/client
@@ -247,8 +247,7 @@ type
     lastMaximizedRequests*: Table[uint32, bool]
     lastPointerOpSeat*: pointer
     pendingMaximizedAcks*: Table[uint32, bool]
-    pendingManifestAppIdWindows*: Table[uint32, bool]
-    pendingManifestAdmissionWindows*: Table[uint32, string]
+    windowReadyEmitted*: HashSet[uint32]
 
     windowPointers*: Table[uint32, ptr RiverWindowV1]
     windowNodes*: Table[uint32, ptr RiverNodeV1]
@@ -330,6 +329,7 @@ type
 proc initTriadDaemon*(): TriadDaemon =
   result.riverPhase = RiverPhase.RiverIdle
   result.msgQueue = initDeque[QueuedMsg]()
+  result.windowReadyEmitted = initHashSet[uint32]()
   result.pendingManageEffects = @[]
   result.desiredPlacementOrder = @[]
   result.seatPointers = @[]

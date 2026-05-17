@@ -1,15 +1,13 @@
 import std/[options, os, strutils, unittest]
 import ../src/core/msg
 import ../src/ipc/commands
-import ../src/janet/runtime
+import ../src/janet/[runtime, snapshot_api]
 import ../src/types/[ipc_commands, janet_manifest, runtime_values, shell_snapshot]
 
 proc testConfig(dir: string): JanetConfig =
   JanetConfig(
     enabled: true,
-    manifestDir: dir,
-    systemManifestDir: dir / "system",
-    hookDir: dir / "hooks",
+    scriptDir: dir,
     fuelLimit: 500000,
   )
 
@@ -116,6 +114,10 @@ proc janetCommandSource(parts: seq[string]): string =
     result.add(" ")
     result.add(part.janetStringLiteral())
   result.add(")")
+
+proc windowReadyEvent(window: ShellWindow): string =
+  "{:kind :window-ready :window-id " & $window.id & " :window " &
+    window.janetWindowExpr() & "}"
 
 suite "embedded Janet runtime":
   test "generic command function emits reducer messages":
@@ -361,13 +363,11 @@ suite "embedded Janet runtime":
     check evaluated.messages[0].moveWindowId == 12
     check evaluated.messages[0].moveTargetTag == 8
 
-  test "hook files dispatch matching current events in sorted order":
-    let dir = getTempDir() / ("triad-janet-hooks-" & $getCurrentProcessId())
-    let hookDir = dir / "hooks"
+  test "script files dispatch matching current events in sorted order":
+    let dir = getTempDir() / ("triad-janet-scripts-" & $getCurrentProcessId())
     createDir(dir)
-    createDir(hookDir)
     writeFile(
-      hookDir / "b.janet",
+      dir / "b.janet",
       """
 (triad/on :window-opened
   (fn [ev]
@@ -375,7 +375,7 @@ suite "embedded Janet runtime":
 """,
     )
     writeFile(
-      hookDir / "a.janet",
+      dir / "a.janet",
       """
 (triad/on :window-opened
   (fn [ev]
@@ -388,16 +388,14 @@ suite "embedded Janet runtime":
     var runtime = initJanetRuntime(testConfig(dir))
     defer:
       runtime.close()
-      if fileExists(hookDir / "a.janet"):
-        removeFile(hookDir / "a.janet")
-      if fileExists(hookDir / "b.janet"):
-        removeFile(hookDir / "b.janet")
-      if dirExists(hookDir):
-        removeDir(hookDir)
+      if fileExists(dir / "a.janet"):
+        removeFile(dir / "a.janet")
+      if fileExists(dir / "b.janet"):
+        removeFile(dir / "b.janet")
       if dirExists(dir):
         removeDir(dir)
 
-    let results = runtime.evalHookDetailed(
+    let results = runtime.evalScriptsDetailed(
       "window-opened",
       "{:kind :window-opened :window-id 12 :target-tag 2}",
       testSnapshot(),
@@ -406,7 +404,7 @@ suite "embedded Janet runtime":
 
     check results.len == 2
     check results[0].path.endsWith("a.janet")
-    check results[0].outcome == HookOutcome.Evaluated
+    check results[0].outcome == ScriptOutcome.Evaluated
     check results[0].messages.len == 1
     check results[0].messages[0].kind == MsgKind.CmdFocusWindowById
     check results[0].messages[0].focusWindowId == 12
@@ -415,45 +413,41 @@ suite "embedded Janet runtime":
     check results[1].messages[0].kind == MsgKind.CmdMoveToTag
     check results[1].messages[0].targetTag == 2
 
-  test "missing hook directory skips evaluation":
-    var runtime = initJanetRuntime(testConfig(getTempDir() / "triad-missing-hooks"))
+  test "missing script directory skips evaluation":
+    var runtime = initJanetRuntime(testConfig(getTempDir() / "triad-missing-scripts"))
     defer:
       runtime.close()
 
-    let results = runtime.evalHookDetailed(
+    let results = runtime.evalScriptsDetailed(
       "window-opened", "{:kind :window-opened}", testSnapshot()
     )
 
     check results.len == 0
 
-  test "hook eval failures are reported and cached until source changes":
-    let dir = getTempDir() / ("triad-janet-hook-failure-" & $getCurrentProcessId())
-    let hookDir = dir / "hooks"
+  test "script eval failures are reported and cached until source changes":
+    let dir = getTempDir() / ("triad-janet-script-failure-" & $getCurrentProcessId())
     createDir(dir)
-    createDir(hookDir)
-    writeFile(hookDir / "broken.janet", "(undefined-hook-call)")
+    writeFile(dir / "broken.janet", "(undefined-script-call)")
     var runtime = initJanetRuntime(testConfig(dir))
     defer:
       runtime.close()
-      if fileExists(hookDir / "broken.janet"):
-        removeFile(hookDir / "broken.janet")
-      if dirExists(hookDir):
-        removeDir(hookDir)
+      if fileExists(dir / "broken.janet"):
+        removeFile(dir / "broken.janet")
       if dirExists(dir):
         removeDir(dir)
 
-    let failed = runtime.evalHookDetailed(
+    let failed = runtime.evalScriptsDetailed(
       "window-opened", "{:kind :window-opened}", testSnapshot()
     )
-    let cached = runtime.evalHookDetailed(
+    let cached = runtime.evalScriptsDetailed(
       "window-opened", "{:kind :window-opened}", testSnapshot()
     )
 
     check failed.len == 1
-    check failed[0].outcome == HookOutcome.EvalFailed
+    check failed[0].outcome == ScriptOutcome.EvalFailed
     check failed[0].error.len > 0
     check cached.len == 1
-    check cached[0].outcome == HookOutcome.CachedFailed
+    check cached[0].outcome == ScriptOutcome.CachedFailed
 
   test "targeted window commands accept compositor ids above signed int32":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
@@ -483,11 +477,11 @@ suite "embedded Janet runtime":
     check evaluated.messages[3].kind == MsgKind.CmdFocusWindowById
     check evaluated.messages[3].focusWindowId == highId
 
-  test "bundled GIMP manifest targets first empty workspace":
+  test "bundled GIMP script targets first empty workspace":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
       runtime.close()
-    let manifest = readFile("manifests/gimp.janet")
+    let script = readFile("examples/janet/gimp.janet")
     var snapshot = testSnapshot()
     snapshot.workspaces[0].occupied = true
     snapshot.workspaces[1].occupied = true
@@ -499,9 +493,12 @@ suite "embedded Janet runtime":
 
     let firstPalette = runtime.evalSource(
       snapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 12, title: "Toolbox", appId: "gimp", identifier: "toolbox")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(id: 12, title: "Toolbox", appId: "gimp", identifier: "toolbox")
+        ),
     )
 
     check firstPalette.ok
@@ -529,9 +526,12 @@ suite "embedded Janet runtime":
     )
     let currentOccupiesTarget = runtime.evalSource(
       currentOccupiesTargetSnapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 18, title: "GNU Image Manipulation Program", appId: "gimp")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(id: 18, title: "GNU Image Manipulation Program", appId: "gimp")
+        ),
     )
 
     check currentOccupiesTarget.ok
@@ -541,11 +541,12 @@ suite "embedded Janet runtime":
 
     let mainWindow = runtime.evalSource(
       snapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(
-        ShellWindow(id: 13, title: "GNU Image Manipulation Program", appId: "gimp-3.2")
-      ),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(id: 13, title: "GNU Image Manipulation Program", appId: "gimp-3.2")
+        ),
     )
 
     check mainWindow.ok
@@ -564,9 +565,12 @@ suite "embedded Janet runtime":
 
     let laterPalette = runtime.evalSource(
       snapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 14, title: "Tool Options", appId: "org.gimp.GIMP")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(id: 14, title: "Tool Options", appId: "org.gimp.GIMP")
+        ),
     )
 
     check laterPalette.ok
@@ -602,9 +606,12 @@ suite "embedded Janet runtime":
     )
     let welcomeWindow = runtime.evalSource(
       existingGimpSnapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")
+        ),
     )
 
     check welcomeWindow.ok
@@ -614,9 +621,10 @@ suite "embedded Janet runtime":
 
     let dialogWindow = runtime.evalSource(
       snapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 15, title: "Preferences", appId: "gimp")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(ShellWindow(id: 15, title: "Preferences", appId: "gimp")),
     )
 
     check dialogWindow.ok
@@ -630,9 +638,12 @@ suite "embedded Janet runtime":
 
     let parentedDialog = runtime.evalSource(
       snapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 16, parentId: 13, title: "Untitled", appId: "gimp")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(id: 16, parentId: 13, title: "Untitled", appId: "gimp")
+        ),
     )
 
     check parentedDialog.ok
@@ -646,25 +657,27 @@ suite "embedded Janet runtime":
 
     let ignored = runtime.evalSource(
       snapshot,
-      manifest,
-      "manifests/gimp.janet",
-      some(ShellWindow(id: 17, title: "Terminal", appId: "kitty")),
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent =
+        windowReadyEvent(ShellWindow(id: 17, title: "Terminal", appId: "kitty")),
     )
 
     check ignored.ok
     check ignored.messages.len == 0
 
-  test "bundled Vesktop manifest targets chat workspace":
+  test "bundled Vesktop script targets chat workspace":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
       runtime.close()
-    let manifest = readFile("manifests/vesktop.janet")
+    let script = readFile("examples/janet/vesktop.janet")
 
     let mainWindow = runtime.evalSource(
       testSnapshot(),
-      manifest,
-      "manifests/vesktop.janet",
-      some(ShellWindow(id: 18, title: "Discord", appId: "vesktop")),
+      script,
+      "examples/janet/vesktop.janet",
+      currentEvent =
+        windowReadyEvent(ShellWindow(id: 18, title: "Discord", appId: "vesktop")),
     )
 
     check mainWindow.ok
@@ -685,13 +698,14 @@ suite "embedded Janet runtime":
 
     let parentedDialog = runtime.evalSource(
       testSnapshot(),
-      manifest,
-      "manifests/vesktop.janet",
-      some(
-        ShellWindow(
-          id: 19, parentId: 18, title: "Open File", appId: "dev.vencord.Vesktop"
-        )
-      ),
+      script,
+      "examples/janet/vesktop.janet",
+      currentEvent =
+        windowReadyEvent(
+          ShellWindow(
+            id: 19, parentId: 18, title: "Open File", appId: "dev.vencord.Vesktop"
+          )
+        ),
     )
 
     check parentedDialog.ok
@@ -709,82 +723,123 @@ suite "embedded Janet runtime":
 
     let ignored = runtime.evalSource(
       testSnapshot(),
-      manifest,
-      "manifests/vesktop.janet",
-      some(ShellWindow(id: 20, title: "Terminal", appId: "kitty")),
+      script,
+      "examples/janet/vesktop.janet",
+      currentEvent =
+        windowReadyEvent(ShellWindow(id: 20, title: "Terminal", appId: "kitty")),
     )
 
     check ignored.ok
     check ignored.messages.len == 0
 
-  test "bundled Telegram manifest targets chat workspace":
-    let dir = getTempDir() / ("triad-telegram-manifest-" & $getCurrentProcessId())
+  test "bundled Telegram script targets chat workspace":
+    let dir = getTempDir() / ("triad-telegram-script-" & $getCurrentProcessId())
     createDir(dir)
-    writeFile(dir / "telegram.janet", readFile("manifests/telegram.janet"))
-    var config = testConfig(dir)
-    config.manifestAliases.add(
-      JanetManifestAlias(appId: "org.telegram.desktop", manifest: "telegram")
-    )
-    config.manifestAliases.add(
-      JanetManifestAlias(appId: "TelegramDesktop", manifest: "telegram")
-    )
-
-    var runtime = initJanetRuntime(config)
+    writeFile(dir / "telegram.janet", readFile("examples/janet/telegram.janet"))
+    var runtime = initJanetRuntime(testConfig(dir))
     defer:
       runtime.close()
       if fileExists(dir / "telegram.janet"):
         removeFile(dir / "telegram.janet")
       removeDir(dir)
 
-    let mainWindow = runtime.evalManifestDetailed(
-      "org.telegram.desktop",
+    let results = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 21, title: "Telegram", appId: "org.telegram.desktop")),
       testSnapshot(),
       some(ShellWindow(id: 21, title: "Telegram", appId: "org.telegram.desktop")),
     )
 
-    check mainWindow.outcome == ManifestOutcome.Evaluated
-    check mainWindow.path == dir / "telegram.janet"
-    check mainWindow.messages.len == 4
-    check mainWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check mainWindow.messages[0].moveWindowId == 21
-    check mainWindow.messages[0].moveTargetTag == 4
-    check mainWindow.messages[0].moveFollowWindow
-    check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
-    check mainWindow.messages[1].layoutTargetTag == 4
-    check mainWindow.messages[1].newLayout == LayoutMode.Deck
-    check mainWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
-    check mainWindow.messages[2].floatingWindowId == 21
-    check not mainWindow.messages[2].windowFloating
-    check mainWindow.messages[3].kind == MsgKind.CmdSetWindowMaximizedById
-    check mainWindow.messages[3].maximizedWindowId == 21
-    check mainWindow.messages[3].windowMaximized
+    check results.len == 1
+    check results[0].outcome == ScriptOutcome.Evaluated
+    check results[0].messages.len == 4
+    check results[0].messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check results[0].messages[0].moveWindowId == 21
+    check results[0].messages[0].moveTargetTag == 4
+    check results[0].messages[0].moveFollowWindow
+    check results[0].messages[1].kind == MsgKind.CmdSetLayout
+    check results[0].messages[1].layoutTargetTag == 4
+    check results[0].messages[1].newLayout == LayoutMode.Deck
+    check results[0].messages[2].kind == MsgKind.CmdSetWindowFloatingById
+    check results[0].messages[2].floatingWindowId == 21
+    check not results[0].messages[2].windowFloating
+    check results[0].messages[3].kind == MsgKind.CmdSetWindowMaximizedById
+    check results[0].messages[3].maximizedWindowId == 21
+    check results[0].messages[3].windowMaximized
 
-    let parentedDialog = runtime.evalManifestDetailed(
-      "TelegramDesktop",
+    let dialogResults = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(
+        ShellWindow(id: 22, parentId: 21, title: "Open File", appId: "TelegramDesktop")
+      ),
       testSnapshot(),
       some(
         ShellWindow(id: 22, parentId: 21, title: "Open File", appId: "TelegramDesktop")
       ),
     )
 
-    check parentedDialog.outcome == ManifestOutcome.Evaluated
-    check parentedDialog.path == dir / "telegram.janet"
-    check parentedDialog.messages.len == 3
-    check parentedDialog.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check parentedDialog.messages[0].moveWindowId == 22
-    check parentedDialog.messages[0].moveTargetTag == 4
-    check parentedDialog.messages[0].moveFollowWindow
-    check parentedDialog.messages[1].kind == MsgKind.CmdSetLayout
-    check parentedDialog.messages[1].layoutTargetTag == 4
-    check parentedDialog.messages[1].newLayout == LayoutMode.Deck
-    check parentedDialog.messages[2].kind == MsgKind.CmdSetWindowFloatingById
-    check parentedDialog.messages[2].floatingWindowId == 22
-    check parentedDialog.messages[2].windowFloating
+    check dialogResults.len == 1
+    check dialogResults[0].outcome == ScriptOutcome.Evaluated
+    check dialogResults[0].messages.len == 3
+    check dialogResults[0].messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check dialogResults[0].messages[0].moveWindowId == 22
+    check dialogResults[0].messages[0].moveTargetTag == 4
+    check dialogResults[0].messages[1].kind == MsgKind.CmdSetLayout
+    check dialogResults[0].messages[2].kind == MsgKind.CmdSetWindowFloatingById
+    check dialogResults[0].messages[2].floatingWindowId == 22
+    check dialogResults[0].messages[2].windowFloating
 
-    let missing = runtime.evalManifestDetailed("kitty", testSnapshot())
+    let missedResults = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 23, title: "Terminal", appId: "kitty")),
+      testSnapshot(),
+      some(ShellWindow(id: 23, title: "Terminal", appId: "kitty")),
+    )
 
-    check missing.outcome == ManifestOutcome.Missing
-    check missing.messages.len == 0
+    check missedResults.len == 1
+    check missedResults[0].outcome == ScriptOutcome.Evaluated
+    check missedResults[0].messages.len == 0
+
+  test "window-ready event fires once via evalScriptsDetailed":
+    let dir = getTempDir() / ("triad-window-ready-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "placer.janet",
+      """
+(triad/on :window-ready
+  (fn [ev]
+    (triad/command "focus-window" ((ev :window) :id))))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "placer.janet"):
+        removeFile(dir / "placer.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let win = ShellWindow(id: 42, title: "App", appId: "myapp")
+    let results = runtime.evalScriptsDetailed(
+      "window-ready", windowReadyEvent(win), testSnapshot(), some(win)
+    )
+
+    check results.len == 1
+    check results[0].outcome == ScriptOutcome.Evaluated
+    check results[0].messages.len == 1
+    check results[0].messages[0].kind == MsgKind.CmdFocusWindowById
+    check results[0].messages[0].focusWindowId == 42
+
+    let closedResults = runtime.evalScriptsDetailed(
+      "window-closed",
+      "{:kind :window-closed :window-id 42 :window " & win.janetWindowExpr() & "}",
+      testSnapshot(),
+      some(win),
+    )
+
+    check closedResults.len == 1
+    check closedResults[0].outcome == ScriptOutcome.Evaluated
+    check closedResults[0].messages.len == 0
 
   test "sandbox blocks host access":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
@@ -805,121 +860,3 @@ suite "embedded Janet runtime":
 
     check not evaluated.ok
     check evaluated.error.len > 0
-
-  test "manifest lookup emits messages for matching app id":
-    let dir = getTempDir() / "triad-janet-tests"
-    createDir(dir)
-    writeFile(dir / "firefox.janet", """(triad/command "move-to-workspace" 2)""")
-
-    var runtime = initJanetRuntime(testConfig(dir))
-    defer:
-      runtime.close()
-      removeFile(dir / "firefox.janet")
-      removeDir(dir)
-
-    let messages = runtime.evalManifest("firefox", testSnapshot())
-
-    check messages.len == 1
-    check messages[0].kind == MsgKind.CmdMoveToWorkspaceIndex
-    check messages[0].workspaceIndex == 2
-
-  test "manifest aliases map app ids without overriding exact matches":
-    let dir = getTempDir() / ("triad-janet-alias-" & $getCurrentProcessId())
-    createDir(dir)
-    writeFile(
-      dir / "telegram.janet", """(triad/command "move-window-to-tag" 12 4 true)"""
-    )
-    writeFile(
-      dir / "org.telegram.desktop.janet",
-      """(triad/command "move-window-to-tag" 12 9 true)""",
-    )
-
-    var config = testConfig(dir)
-    config.manifestAliases.add(
-      JanetManifestAlias(appId: "org.telegram.desktop", manifest: "telegram")
-    )
-    config.manifestAliases.add(
-      JanetManifestAlias(appId: "bad-app", manifest: "../telegram")
-    )
-
-    var runtime = initJanetRuntime(config)
-    defer:
-      runtime.close()
-      if fileExists(dir / "telegram.janet"):
-        removeFile(dir / "telegram.janet")
-      if fileExists(dir / "org.telegram.desktop.janet"):
-        removeFile(dir / "org.telegram.desktop.janet")
-      removeDir(dir)
-
-    let exact = runtime.evalManifestDetailed("org.telegram.desktop", testSnapshot())
-    check exact.outcome == ManifestOutcome.Evaluated
-    check exact.path == dir / "org.telegram.desktop.janet"
-    check exact.candidatePaths[0] == dir / "org.telegram.desktop.janet"
-    check exact.candidatePaths[1] == dir / "telegram.janet"
-    check exact.messages.len == 1
-    check exact.messages[0].moveTargetTag == 9
-
-    removeFile(dir / "org.telegram.desktop.janet")
-    runtime.configure(config)
-
-    let alias = runtime.evalManifestDetailed("org.telegram.desktop", testSnapshot())
-    check alias.outcome == ManifestOutcome.Evaluated
-    check alias.path == dir / "telegram.janet"
-    check alias.messages.len == 1
-    check alias.messages[0].moveTargetTag == 4
-
-    let invalidAlias = runtime.evalManifestDetailed("bad-app", testSnapshot())
-    check invalidAlias.outcome == ManifestOutcome.Missing
-    check invalidAlias.candidatePaths.len == 2
-
-  test "manifest detailed result records lookup outcomes":
-    let dir = getTempDir() / ("triad-janet-detail-" & $getCurrentProcessId())
-    createDir(dir)
-    writeFile(dir / "gimp.janet", """(triad/command "move-window-to-tag" 12 8 true)""")
-
-    var runtime = initJanetRuntime(testConfig(dir))
-    defer:
-      runtime.close()
-      if fileExists(dir / "gimp.janet"):
-        removeFile(dir / "gimp.janet")
-      removeDir(dir)
-
-    let missing = runtime.evalManifestDetailed("missing", testSnapshot())
-    check missing.outcome == ManifestOutcome.Missing
-    check missing.candidatePaths.len == 2
-    check missing.messages.len == 0
-
-    let invalid = runtime.evalManifestDetailed("../bad", testSnapshot())
-    check invalid.outcome == ManifestOutcome.InvalidAppId
-    check invalid.candidatePaths.len == 0
-
-    let evaluated = runtime.evalManifestDetailed(
-      "gimp", testSnapshot(), some(ShellWindow(id: 12, title: "Toolbox", appId: "gimp"))
-    )
-    check evaluated.outcome == ManifestOutcome.Evaluated
-    check evaluated.path == dir / "gimp.janet"
-    check evaluated.currentWindow.isSome
-    check evaluated.messages.len == 1
-    check evaluated.messages[0].kind == MsgKind.CmdMoveWindowToTag
-    check evaluated.messages[0].moveTargetTag == 8
-
-  test "manifest detailed result records eval failures":
-    let dir = getTempDir() / ("triad-janet-failure-" & $getCurrentProcessId())
-    createDir(dir)
-    writeFile(dir / "broken.janet", """(undefined-triad-call)""")
-
-    var runtime = initJanetRuntime(testConfig(dir))
-    defer:
-      runtime.close()
-      if fileExists(dir / "broken.janet"):
-        removeFile(dir / "broken.janet")
-      removeDir(dir)
-
-    let failed = runtime.evalManifestDetailed("broken", testSnapshot())
-    check failed.outcome == ManifestOutcome.EvalFailed
-    check failed.error.len > 0
-    check failed.messages.len == 0
-
-    let cached = runtime.evalManifestDetailed("broken", testSnapshot())
-    check cached.outcome == ManifestOutcome.CachedFailed
-    check cached.error.len > 0

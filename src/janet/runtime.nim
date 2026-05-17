@@ -5,7 +5,7 @@ import ../types/[janet_manifest, runtime_values, shell_snapshot]
 import command_api, snapshot_api, binding, prelude
 
 type
-  ManifestCacheEntry* = object
+  ScriptCacheEntry* = object
     path*: string
     modified*: Time
     source*: string
@@ -15,13 +15,11 @@ type
   JanetRuntime* = object
     handle*: JanetHandle
     config*: JanetConfig
-    manifests*: Table[string, ManifestCacheEntry]
-    hooks*: Table[string, ManifestCacheEntry]
+    scripts*: Table[string, ScriptCacheEntry]
 
 proc initJanetRuntime*(config: JanetConfig): JanetRuntime =
   result.config = config
-  result.manifests = initTable[string, ManifestCacheEntry]()
-  result.hooks = initTable[string, ManifestCacheEntry]()
+  result.scripts = initTable[string, ScriptCacheEntry]()
   if config.enabled:
     result.handle = triadJanetNew()
 
@@ -29,8 +27,7 @@ proc close*(runtime: var JanetRuntime) =
   if runtime.handle != nil:
     triadJanetFree(runtime.handle)
     runtime.handle = nil
-  runtime.manifests.clear()
-  runtime.hooks.clear()
+  runtime.scripts.clear()
 
 proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
   let wasEnabled = runtime.handle != nil
@@ -39,8 +36,7 @@ proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
     runtime.config = config
     return
   runtime.config = config
-  runtime.manifests.clear()
-  runtime.hooks.clear()
+  runtime.scripts.clear()
   if config.enabled and runtime.handle == nil:
     runtime.handle = triadJanetNew()
 
@@ -74,15 +70,6 @@ proc evalSource*(
       result.messages.add(msg.get())
   result.ok = true
 
-proc validManifestAppId(appId: string): bool =
-  appId.len > 0 and appId.find('/') == -1 and appId.find('\\') == -1 and
-    appId.find("..") == -1
-
-proc validManifestName(name: string): bool =
-  let stripped = name.strip()
-  stripped.len > 0 and stripped.find('/') == -1 and stripped.find('\\') == -1 and
-    stripped.find("..") == -1
-
 proc expandJanetDir(path: string): string =
   let stripped = path.strip()
   if stripped == "~":
@@ -92,165 +79,67 @@ proc expandJanetDir(path: string): string =
   else:
     stripped
 
-proc aliasManifestNames(config: JanetConfig, appId: string): seq[string] =
-  for alias in config.manifestAliases:
-    let manifest = alias.manifest.strip()
-    if alias.appId == appId and manifest.validManifestName():
-      result.add(manifest)
-
-proc addCandidatePath(paths: var seq[string], path: string) =
-  if path notin paths:
-    paths.add(path)
-
-proc candidateManifestPaths(runtime: JanetRuntime, appId: string): seq[string] =
-  let aliasNames = runtime.config.aliasManifestNames(appId)
-  for dir in [runtime.config.manifestDir, runtime.config.systemManifestDir]:
-    let expanded = dir.expandJanetDir()
-    if expanded.len > 0:
-      result.addCandidatePath(expanded / (appId & ".janet"))
-      for aliasName in aliasNames:
-        result.addCandidatePath(expanded / (aliasName & ".janet"))
-
-proc manifestEntry(
-    runtime: var JanetRuntime, appId: string
-): Option[ManifestCacheEntry] =
-  if not appId.validManifestAppId():
-    return none(ManifestCacheEntry)
-
-  for path in runtime.candidateManifestPaths(appId):
-    if not fileExists(path):
-      continue
-    let modified = getLastModificationTime(path)
-    if runtime.manifests.hasKey(path):
-      let cached = runtime.manifests[path]
-      if cached.modified == modified:
-        return some(cached)
-
-    var entry = ManifestCacheEntry(path: path, modified: modified)
-    try:
-      entry.source = readFile(path)
-    except CatchableError as e:
-      entry.failed = true
-      entry.error = e.msg
-      warn "Failed to read Janet manifest", path = path, error = e.msg
-    runtime.manifests[path] = entry
-    return some(entry)
-
-  none(ManifestCacheEntry)
-
-proc evalManifestDetailed*(
-    runtime: var JanetRuntime,
-    appId: string,
-    snapshot: ShellSnapshot,
-    currentWindow = none(ShellWindow),
-): ManifestEvalResult =
-  result.appId = appId
-  result.currentWindow = currentWindow
-  if runtime.handle == nil:
-    result.outcome = ManifestOutcome.Disabled
-    return
-
-  if not appId.validManifestAppId():
-    result.outcome = ManifestOutcome.InvalidAppId
-    return
-
-  result.candidatePaths = runtime.candidateManifestPaths(appId)
-  let entry = runtime.manifestEntry(appId)
-  if entry.isNone:
-    result.outcome = ManifestOutcome.Missing
-    return
-  result.path = entry.get().path
-  if entry.get().failed:
-    result.outcome =
-      if entry.get().source.len == 0:
-        ManifestOutcome.ReadFailed
-      else:
-        ManifestOutcome.CachedFailed
-    result.error = entry.get().error
-    return
-
-  let evaluated =
-    runtime.evalSource(snapshot, entry.get().source, entry.get().path, currentWindow)
-  if not evaluated.ok:
-    warn "Janet manifest failed",
-      appId = appId, path = entry.get().path, error = evaluated.error
-    var failedEntry = entry.get()
-    failedEntry.failed = true
-    failedEntry.error = evaluated.error
-    runtime.manifests[failedEntry.path] = failedEntry
-    result.outcome = ManifestOutcome.EvalFailed
-    result.error = evaluated.error
-    return
-
-  result.outcome = ManifestOutcome.Evaluated
-  result.messages = evaluated.messages
-
-proc evalManifest*(
-    runtime: var JanetRuntime,
-    appId: string,
-    snapshot: ShellSnapshot,
-    currentWindow = none(ShellWindow),
-): seq[Msg] =
-  runtime.evalManifestDetailed(appId, snapshot, currentWindow).messages
-
-proc hookPaths(runtime: JanetRuntime): seq[string] =
-  let expanded = runtime.config.hookDir.expandJanetDir()
+proc scriptPaths(runtime: JanetRuntime): seq[string] =
+  let expanded = runtime.config.scriptDir.expandJanetDir()
   if expanded.len == 0 or not dirExists(expanded):
     return @[]
   for path in walkFiles(expanded / "*.janet"):
     result.add(path)
   result.sort()
 
-proc hookEntry(runtime: var JanetRuntime, path: string): ManifestCacheEntry =
+proc scriptEntry(runtime: var JanetRuntime, path: string): ScriptCacheEntry =
   let modified = getLastModificationTime(path)
-  if runtime.hooks.hasKey(path):
-    let cached = runtime.hooks[path]
+  if runtime.scripts.hasKey(path):
+    let cached = runtime.scripts[path]
     if cached.modified == modified:
       return cached
 
-  result = ManifestCacheEntry(path: path, modified: modified)
+  result = ScriptCacheEntry(path: path, modified: modified)
   try:
     result.source = readFile(path)
   except CatchableError as e:
     result.failed = true
     result.error = e.msg
-    warn "Failed to read Janet hook", path = path, error = e.msg
-  runtime.hooks[path] = result
+    warn "Failed to read Janet script", path = path, error = e.msg
+  runtime.scripts[path] = result
 
-proc evalHookDetailed*(
+proc evalScriptsDetailed*(
     runtime: var JanetRuntime,
     event: string,
     eventSource: string,
     snapshot: ShellSnapshot,
     currentWindow = none(ShellWindow),
-): seq[HookEvalResult] =
+): seq[ScriptEvalResult] =
   if runtime.handle == nil:
     return @[]
 
-  for path in runtime.hookPaths():
+  for path in runtime.scriptPaths():
     let started = epochTime()
-    let entry = runtime.hookEntry(path)
+    let entry = runtime.scriptEntry(path)
     var evalResult =
-      HookEvalResult(event: event, path: path, currentWindow: currentWindow)
+      ScriptEvalResult(event: event, path: path, currentWindow: currentWindow)
     if entry.failed:
       evalResult.outcome =
-        if entry.source.len == 0: HookOutcome.ReadFailed else: HookOutcome.CachedFailed
+        if entry.source.len == 0:
+          ScriptOutcome.ReadFailed
+        else:
+          ScriptOutcome.CachedFailed
       evalResult.error = entry.error
     else:
       let evaluated = runtime.evalSource(
         snapshot, entry.source, entry.path, currentWindow, eventSource
       )
       if evaluated.ok:
-        evalResult.outcome = HookOutcome.Evaluated
+        evalResult.outcome = ScriptOutcome.Evaluated
         evalResult.messages = evaluated.messages
       else:
-        warn "Janet hook failed",
+        warn "Janet script failed",
           event = event, path = entry.path, error = evaluated.error
         var failedEntry = entry
         failedEntry.failed = true
         failedEntry.error = evaluated.error
-        runtime.hooks[failedEntry.path] = failedEntry
-        evalResult.outcome = HookOutcome.EvalFailed
+        runtime.scripts[failedEntry.path] = failedEntry
+        evalResult.outcome = ScriptOutcome.EvalFailed
         evalResult.error = evaluated.error
     evalResult.durationMs = int64((epochTime() - started) * 1000)
     result.add(evalResult)
