@@ -18,7 +18,7 @@ Tags provide stable, concurrent labels for windows. Rules, written in KDL, provi
 
 Configuration handles the predictable; code handles the exceptions.
 
-Triad embeds [Janet](https://janet-lang.org/) —a small, data-oriented Lisp—to support conditional logic. Janet scripts receive Triad's state as native tables and execute placement functions directly, avoiding the overhead of socket communication and JSON parsing.
+Triad embeds [Janet](https://janet-lang.org/) —a small, data-oriented Lisp— to support conditional logic. Janet scripts receive Triad's state as native tables and execute placement functions directly, avoiding the overhead of socket communication and JSON parsing.
 
 This enables **App Manifests**: sandboxed Janet scripts that evaluate the desktop context to dictate layout. They are executable alternatives to X11 window hints, allowing your environment to adapt based on active windows.
 
