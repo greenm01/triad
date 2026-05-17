@@ -9,7 +9,7 @@ from ../types/runtime_values import ConfigNotificationEvent
 import ../utils/behavior_log
 import
   bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
-  output_management_runtime, quickshell_runner, state
+  output_management_runtime, quickshell_runner, render_invalidation, state
 
 proc setupConfig*(daemon: var TriadDaemon, configPath = "") =
   daemon.configPath =
@@ -239,6 +239,7 @@ proc applyConfigReload*(
   )
   daemon.postManageBroadcastPending = true
   daemon.postManageBroadcastReason = "config reload"
+  daemon.markRenderDirty("config reload")
   broadcastNiriSnapshot(daemon.readModelSnapshot())
   writeBehaviorEvent(
     "config_reload_broadcast",

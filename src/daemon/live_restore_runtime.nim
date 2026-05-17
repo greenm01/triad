@@ -4,7 +4,7 @@ import ../core/restore_state
 import ../systems/runtime_facade
 import ../types/shell_snapshot
 import ../utils/behavior_log
-import idle_inhibit_runtime
+import idle_inhibit_runtime, render_invalidation
 import state
 
 proc readModelSnapshot*(daemon: TriadDaemon): ShellSnapshot =
@@ -59,6 +59,7 @@ proc applyPendingLiveRestore*(daemon: var TriadDaemon, context: string) =
   )
   discard daemon.runtimeState.applyRuntimeLiveRestore(state)
   daemon.syncIdleInhibitFromRuntime()
+  daemon.markRenderDirty("live restore")
   daemon.pendingLiveRestore = none(LiveRestoreState)
   daemon.liveRestoreCommitPending = daemon.pendingLiveRestorePath.len > 0
   info "Live restore snapshot applied",

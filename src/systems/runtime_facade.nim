@@ -55,6 +55,9 @@ proc pendingAdmissionWindowIds*(state: TriadRuntimeState): seq[uint32] =
   for externalId in state.model.pendingAdmissionExternalIds():
     result.add(uint32(externalId))
 
+proc hasPendingAdmissionWindow*(state: TriadRuntimeState): bool =
+  state.model.hasPendingAdmissionWindow()
+
 proc writeRuntimeLiveRestoreState*(
     state: TriadRuntimeState, path = defaultLiveRestorePath()
 ): LiveRestoreWriteResult =

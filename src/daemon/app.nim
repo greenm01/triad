@@ -13,7 +13,7 @@ import
   bindings_runtime, effects_runtime, input_runtime, janet_manifest_runtime,
   live_restore_runtime, manage_requests, message_queue, output_management_runtime,
   process_runner, quickshell_runner, registry_runtime, reload_runtime, render_runtime,
-  state, switch_event_runtime
+  render_invalidation, state, switch_event_runtime
 from ../types/runtime_values import nil, PointerOpKind
 import
   std/[
@@ -208,6 +208,8 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "active_frame_ticks": counters.activeFrameTicks,
         "dirty_frame_ticks": counters.dirtyFrameTicks,
         "render_starts": counters.renderStarts,
+        "skipped_render_starts": counters.skippedRenderStarts,
+        "render_layout_projections": counters.renderLayoutProjections,
         "render_requests": counters.renderRequests,
         "skipped_render_requests": counters.skippedRenderRequests,
         "manage_requests": counters.manageRequests,
@@ -370,6 +372,12 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     if msg.kind == MsgKind.WlRenderStart:
       inc daemon.perfCounters.renderStarts
       daemon.riverPhase = RiverPhase.RiverRender
+      if daemon.canSkipRenderStart():
+        inc daemon.perfCounters.skippedRenderStarts
+        daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
+        daemon.riverPhase = RiverPhase.RiverIdle
+        continue
+      inc daemon.perfCounters.renderLayoutProjections
       let instructions = syncRuntimeLayoutProjection("render layout", msg)
       daemon.recordDesiredPlacements(instructions)
       daemon.renderDesiredPlacements()
@@ -378,6 +386,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: windowId)
         )
       daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
+      daemon.markRenderCleanAfterFullRender()
       daemon.riverPhase = RiverPhase.RiverIdle
       continue
 

@@ -4,7 +4,8 @@ import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, cursor_shake, effects_runtime, input_device_classification,
-    message_queue, process_runner, reload_runtime, switch_event_runtime,
+    message_queue, process_runner, reload_runtime, render_invalidation,
+    switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 import ../src/ipc/[commands, niri_compat, socket]
@@ -59,6 +60,36 @@ suite "Crash hardening":
     check not daemon.consumeMaximizedAck(42, true)
     check daemon.consumeMaximizedAck(42, false)
     check not daemon.consumeMaximizedAck(42, false)
+
+  test "render start skip requires clean render state":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+
+    check daemon.renderDirty
+    check not daemon.canSkipRenderStart()
+
+    daemon.markRenderCleanAfterFullRender()
+    check daemon.canSkipRenderStart()
+
+    daemon.markRenderDirty("layout")
+    check daemon.renderDirtyReason == "layout"
+    check not daemon.canSkipRenderStart()
+
+  test "pending admissions force full render start":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    discard daemon.runtimeState.applyRuntimeUpdate(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 42,
+        appId: "app",
+        title: "Pending",
+        deferAdmission: true,
+      )
+    )
+    daemon.markRenderCleanAfterFullRender()
+
+    check not daemon.canSkipRenderStart()
 
   test "configured process environment applies literal set and unset entries":
     let base = newStringTable(modeCaseSensitive)

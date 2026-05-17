@@ -157,6 +157,8 @@ type
     activeFrameTicks*: uint64
     dirtyFrameTicks*: uint64
     renderStarts*: uint64
+    skippedRenderStarts*: uint64
+    renderLayoutProjections*: uint64
     renderRequests*: uint64
     skippedRenderRequests*: uint64
     manageRequests*: uint64
@@ -227,6 +229,8 @@ type
     lastFrameTickMs*: int64
     lastWaitTimeoutMs*: int
     waitBackend*: string
+    renderDirty*: bool
+    renderDirtyReason*: string
     eventPollFds*: seq[TPollfd]
     eventSwitchFds*: seq[int32]
     perfCounters*: RenderPerfCounters
@@ -325,6 +329,8 @@ proc initTriadDaemon*(): TriadDaemon =
   result.xkbBindingPointers = @[]
   result.pointerBindingPointers = @[]
   result.waitBackend = "timeout"
+  result.renderDirty = true
+  result.renderDirtyReason = "startup"
   result.pendingLiveRestore = none(LiveRestoreState)
 
 proc daemonData*(daemon: var TriadDaemon): pointer =

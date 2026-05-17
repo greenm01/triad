@@ -29,6 +29,12 @@ proc pendingAdmissionExternalIds*(model: Model): seq[ExternalWindowId] =
     if win.admissionState == WindowAdmissionState.PendingAdmission:
       result.add(win.externalId)
 
+proc hasPendingAdmissionWindow*(model: Model): bool =
+  for _, win in model.windowsWithId():
+    if win.admissionState == WindowAdmissionState.PendingAdmission:
+      return true
+  false
+
 proc columnData*(model: Model, columnId: ColumnId): Option[ColumnData] =
   model.columns.entity(columnId)
 

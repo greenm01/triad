@@ -1,9 +1,10 @@
 import std/tables
 import chronicles
 import protocols/river/client as river
-import state
+import render_invalidation, state
 
 proc requestManage*(daemon: var TriadDaemon, reason: string) =
+  daemon.markRenderDirty(reason)
   if daemon.riverManager == nil:
     return
   daemon.manageRequestReasonCounts[reason] =

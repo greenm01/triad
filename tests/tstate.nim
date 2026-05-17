@@ -164,6 +164,8 @@ suite "Runtime state primitives":
     check source.contains("\"idle_wake_interval_ms\"")
     check source.contains("\"current_wait_timeout_ms\"")
     check source.contains("\"wait_backend\"")
+    check source.contains("\"skipped_render_starts\"")
+    check source.contains("\"render_layout_projections\"")
 
   test "runtime event poll reports descriptor readiness":
     var pipeFds: array[2, cint]
