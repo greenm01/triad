@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/time.h>
 
 enum {
   TRIAD_JANET_COMMAND = 1
@@ -23,6 +25,13 @@ typedef struct {
 
 static TriadJanetRuntime *current_runtime = NULL;
 static int janet_init_count = 0;
+static volatile sig_atomic_t janet_eval_interrupted = 0;
+
+static void janet_eval_alarm_handler(int sig) {
+  (void) sig;
+  janet_eval_interrupted = 1;
+  janet_interpreter_interrupt(NULL);
+}
 
 static char *copy_cstring(const char *source) {
   size_t len = strlen(source);
@@ -141,9 +150,12 @@ static void remove_symbol(JanetTable *env, const char *name) {
 
 static void scrub_env(JanetTable *env) {
   const char *blocked[] = {
-    "dofile", "require", "import", "use", "os/execute", "os/spawn", "os/shell",
-    "os/exit", "os/getenv", "os/setenv", "os/environ", "file/open", "file/read",
-    "file/write", "file/close", "file/seek", "file/stat", "file/rm", "file/mkdir",
+    "dofile", "require", "import", "use", "eval", "compile", "asm", "disasm",
+    "sandbox", "debug/break", "debug/unbreak", "debug/fbreak", "debug/unfbreak",
+    "debug/arg-stack", "debug/stack", "debug/stacktrace", "debug/lineage",
+    "debug/step", "os/execute", "os/spawn", "os/shell", "os/exit", "os/getenv",
+    "os/setenv", "os/environ", "file/open", "file/read", "file/write",
+    "file/close", "file/seek", "file/stat", "file/rm", "file/mkdir",
     "file/temp", "slurp", "spit", "native", "native/lookup", "native/load",
     "ffi/open", "ffi/lookup", "net/connect", "net/listen", NULL
   };
@@ -152,8 +164,71 @@ static void scrub_env(JanetTable *env) {
   }
 }
 
-static int script_has_blocked_loop(const char *source) {
-  return strstr(source, "(while") != NULL || strstr(source, "(forever") != NULL;
+static void harden_sandbox(void) {
+  janet_sandbox(
+    JANET_SANDBOX_SUBPROCESS |
+    JANET_SANDBOX_NET |
+    JANET_SANDBOX_FFI |
+    JANET_SANDBOX_FS |
+    JANET_SANDBOX_ENV |
+    JANET_SANDBOX_DYNAMIC_MODULES |
+    JANET_SANDBOX_THREADS |
+    JANET_SANDBOX_SIGNAL |
+    JANET_SANDBOX_HRTIME |
+    JANET_SANDBOX_CHROOT |
+    JANET_SANDBOX_UNMARSHAL);
+}
+
+static int eval_source_with_timer(
+    TriadJanetRuntime *runtime,
+    JanetTable *env,
+    const char *source,
+    const char *path,
+    int32_t fuel_limit,
+    Janet *out) {
+  struct sigaction next_action;
+  struct sigaction previous_action;
+  struct itimerval next_timer;
+  struct itimerval previous_timer;
+  int32_t micros = fuel_limit <= 0 ? 1000 : fuel_limit;
+
+  memset(&next_action, 0, sizeof(next_action));
+  next_action.sa_handler = janet_eval_alarm_handler;
+  sigemptyset(&next_action.sa_mask);
+  sigaction(SIGALRM, &next_action, &previous_action);
+  getitimer(ITIMER_REAL, &previous_timer);
+
+  memset(&next_timer, 0, sizeof(next_timer));
+  next_timer.it_value.tv_sec = micros / 1000000;
+  next_timer.it_value.tv_usec = micros % 1000000;
+  if (next_timer.it_value.tv_sec == 0 && next_timer.it_value.tv_usec == 0) {
+    next_timer.it_value.tv_usec = 1000;
+  }
+
+  janet_eval_interrupted = 0;
+  setitimer(ITIMER_REAL, &next_timer, NULL);
+  int status = janet_dostring(env, source, path, out);
+
+  memset(&next_timer, 0, sizeof(next_timer));
+  setitimer(ITIMER_REAL, &next_timer, NULL);
+  sigaction(SIGALRM, &previous_action, NULL);
+  setitimer(ITIMER_REAL, &previous_timer, NULL);
+
+  if (janet_eval_interrupted) {
+    set_error(runtime, "Janet script exceeded fuel limit");
+    janet_interpreter_interrupt_handled(NULL);
+    return 0;
+  }
+  if (status != 0) {
+    JanetString desc = janet_description(*out);
+    char *message = copy_janet_string(desc);
+    set_error(
+      runtime,
+      message == NULL || message[0] == '\0' ? "Janet evaluation failed" : message);
+    if (message != NULL) free(message);
+    return 0;
+  }
+  return status == 0;
 }
 
 void *triad_janet_new(void) {
@@ -177,14 +252,10 @@ void triad_janet_free(void *runtime_ptr) {
 }
 
 int triad_janet_eval(void *runtime_ptr, const char *snapshot_source, const char *source, const char *path, int32_t fuel_limit) {
-  (void) fuel_limit;
   TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
   if (runtime == NULL) return 0;
   clear_runtime(runtime);
-  if (script_has_blocked_loop(source)) {
-    set_error(runtime, "script contains a loop form blocked by the current Janet runtime guard");
-    return 0;
-  }
+  harden_sandbox();
 
   JanetTable *env = janet_core_env(NULL);
   scrub_env(env);
@@ -194,7 +265,13 @@ int triad_janet_eval(void *runtime_ptr, const char *snapshot_source, const char 
   current_runtime = runtime;
   int status = janet_dostring(env, snapshot_source, path, &out);
   if (status == 0) {
-    status = janet_dostring(env, source, path, &out);
+    if (!eval_source_with_timer(runtime, env, source, path, fuel_limit, &out)) {
+      if (runtime->last_error == NULL || runtime->last_error[0] == '\0') {
+        set_error(runtime, "Janet evaluation failed");
+      }
+      current_runtime = NULL;
+      return 0;
+    }
   }
   current_runtime = NULL;
   if (status != 0) {

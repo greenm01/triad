@@ -148,10 +148,41 @@ proc janetSnapshotSource*(
       (set found workspace)))
   found)
 
+(defn triad/workspace-by-tag [tag-id]
+  (var found nil)
+  (each workspace (triad/snapshot :workspaces)
+    (when (= tag-id (workspace :tag-id))
+      (set found workspace)))
+  found)
+
+(defn triad/workspace-by-index [workspace-idx]
+  (var found nil)
+  (each workspace (triad/snapshot :workspaces)
+    (when (= workspace-idx (workspace :workspace-idx))
+      (set found workspace)))
+  found)
+
+(defn triad/current-workspace []
+  (triad/workspace-by-tag (triad/active-tag-id)))
+
+(defn triad/output-by-name [name]
+  (var found nil)
+  (each output (triad/snapshot :outputs)
+    (when (= name (output :name))
+      (set found output)))
+  found)
+
 (defn triad/windows-on-tag [tag-id]
   (var found @[])
   (each window (triad/snapshot :windows)
     (when (= tag-id (window :tag-id))
+      (array/push found window)))
+  (tuple ;found))
+
+(defn triad/windows-by-app-id [app-id]
+  (var found @[])
+  (each window (triad/snapshot :windows)
+    (when (= app-id (window :app-id))
       (array/push found window)))
   (tuple ;found))
 
@@ -160,6 +191,27 @@ proc janetSnapshotSource*(
   (each window (triad/snapshot :windows)
     (when (= window-id (window :id))
       (set found window)))
+  found)
+
+(defn triad/window-on-workspace? [window workspace]
+  (or (= (window :workspace-idx) (workspace :workspace-idx))
+      (= (window :tag-id) (workspace :tag-id))))
+
+(defn triad/workspace-empty? [workspace ignored-window-id]
+  (var occupied false)
+  (each window (triad/snapshot :windows)
+    (when (and (not= (window :id) ignored-window-id)
+               (triad/window-on-workspace? window workspace))
+      (set occupied true)))
+  (not occupied))
+
+(defn triad/first-empty-workspace [ignored-window-id]
+  (var found nil)
+  (each workspace (triad/snapshot :workspaces)
+    (when (and (triad/workspace-empty? workspace ignored-window-id)
+               (or (not found)
+                   (< (workspace :workspace-idx) (found :workspace-idx))))
+      (set found workspace)))
   found)
 """ %
     [

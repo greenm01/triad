@@ -62,7 +62,8 @@ proc evalSource*(
       runtime.config.fuelLimit,
     ) == 1
   if not ok:
-    return (false, @[], $triadJanetLastError(runtime.handle))
+    let error = $triadJanetLastError(runtime.handle)
+    return (false, @[], if error.len > 0: error else: "Janet evaluation failed")
 
   for index in 0 ..< int(triadJanetActionCount(runtime.handle)):
     let msg = runtime.handle.actionMsg(index)

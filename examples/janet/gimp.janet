@@ -1,27 +1,12 @@
 (def default-workspace-count 3)
 
-(defn window-on-workspace? [window workspace]
-  (or (= (window :workspace-idx) (workspace :workspace-idx))
-      (= (window :tag-id) (workspace :tag-id))))
-
-(defn workspace-empty-for-window? [workspace current-id]
-  (var occupied false)
-  (each window (triad/snapshot :windows)
-    (when (and (not= (window :id) current-id)
-               (window-on-workspace? window workspace))
-      (set occupied true)))
-  (not occupied))
+# GIMP: main = lowest empty + scroller + fullscreen; others = float
 
 (defn next-empty-workspace [current-id]
-  (var target 0)
-  (each workspace (triad/snapshot :workspaces)
-    (let [idx (workspace :workspace-idx)]
-      (when (and (workspace-empty-for-window? workspace current-id)
-                 (or (= target 0) (< idx target)))
-        (set target idx))))
-  (if (= target 0)
-    (+ default-workspace-count 1)
-    target))
+  (let [workspace (triad/first-empty-workspace current-id)]
+    (if workspace
+      (workspace :workspace-idx)
+      (+ default-workspace-count 1))))
 
 (def gimp-app-ids
   ["gimp"
@@ -118,8 +103,7 @@
       (not (has-other-gimp-window? (window :id)))))
 
 (defn place-main-window [window]
-  (triad/command "set-window-floating" (window :id) false)
-  (triad/command "set-window-maximized" (window :id) true))
+  (triad/command "fullscreen-window" (window :id)))
 
 (defn place-floating-window [window]
   (triad/command "set-window-floating" (window :id) true))

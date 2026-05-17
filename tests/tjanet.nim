@@ -5,11 +5,10 @@ import ../src/janet/[runtime, snapshot_api]
 import ../src/types/[ipc_commands, janet_manifest, runtime_values, shell_snapshot]
 
 proc testConfig(dir: string): JanetConfig =
-  JanetConfig(
-    enabled: true,
-    scriptDir: dir,
-    fuelLimit: 500000,
-  )
+  JanetConfig(enabled: true, scriptDir: dir, fuelLimit: 500000)
+
+proc testConfigFuel(dir: string, fuelLimit: int32): JanetConfig =
+  JanetConfig(enabled: true, scriptDir: dir, fuelLimit: fuelLimit)
 
 proc testSnapshot(): ShellSnapshot =
   ShellSnapshot(
@@ -327,19 +326,45 @@ suite "embedded Janet runtime":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
       runtime.close()
+    var snapshot = testSnapshot()
+    snapshot.workspaces.add(
+      ShellWorkspace(
+        tagId: 3, workspaceIdx: 3, name: "empty", layoutMode: LayoutMode.Monocle
+      )
+    )
 
     let evaluated = runtime.evalSource(
-      testSnapshot(),
+      snapshot,
       """
-(let [tag (triad/find-tag-by-name "web")]
-  (triad/command "focus-tag" (tag :tag-id)))
+(let [web (triad/find-tag-by-name "web")
+      by-tag (triad/workspace-by-tag 2)
+      empty (triad/workspace-by-index 3)
+      current (triad/current-workspace)
+      output (triad/output-by-name "HDMI-A-1")
+      firefox (triad/windows-by-app-id "firefox")
+      first-empty (triad/first-empty-workspace 0)]
+  (when (and (= (web :tag-id) (by-tag :tag-id))
+             (= (current :tag-id) 1)
+             (= (output :name) "HDMI-A-1")
+             (= (length firefox) 1)
+             (not (triad/workspace-empty? current 0))
+             (triad/workspace-empty? empty 0)
+             (= (first-empty :tag-id) 3))
+    (triad/command "focus-tag" (web :tag-id))
+    (triad/command "move-to-tag" ((firefox 0) :tag-id))
+    (triad/command "set-layout-for-workspace" (first-empty :tag-id) "grid")))
 """,
     )
 
     check evaluated.ok
-    check evaluated.messages.len == 1
+    check evaluated.messages.len == 3
     check evaluated.messages[0].kind == MsgKind.CmdFocusTag
     check evaluated.messages[0].focusTag == 2
+    check evaluated.messages[1].kind == MsgKind.CmdMoveToTag
+    check evaluated.messages[1].targetTag == 2
+    check evaluated.messages[2].kind == MsgKind.CmdSetLayout
+    check evaluated.messages[2].layoutTargetTag == 3
+    check evaluated.messages[2].newLayout == LayoutMode.Grid
 
   test "current window exposes opening metadata":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
@@ -495,10 +520,9 @@ suite "embedded Janet runtime":
       snapshot,
       script,
       "examples/janet/gimp.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(id: 12, title: "Toolbox", appId: "gimp", identifier: "toolbox")
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 12, title: "Toolbox", appId: "gimp", identifier: "toolbox")
+      ),
     )
 
     check firstPalette.ok
@@ -528,49 +552,46 @@ suite "embedded Janet runtime":
       currentOccupiesTargetSnapshot,
       script,
       "examples/janet/gimp.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(id: 18, title: "GNU Image Manipulation Program", appId: "gimp")
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 18, title: "GNU Image Manipulation Program", appId: "gimp")
+      ),
     )
 
     check currentOccupiesTarget.ok
-    check currentOccupiesTarget.messages.len == 4
+    check currentOccupiesTarget.messages.len == 3
     check currentOccupiesTarget.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check currentOccupiesTarget.messages[0].moveTargetTag == 3
+    check currentOccupiesTarget.messages[1].kind == MsgKind.CmdSetLayout
+    check currentOccupiesTarget.messages[1].layoutTargetTag == 3
+    check currentOccupiesTarget.messages[2].kind == MsgKind.CmdToggleFullscreenById
+    check currentOccupiesTarget.messages[2].fullscreenWindowId == 18
 
     let mainWindow = runtime.evalSource(
       snapshot,
       script,
       "examples/janet/gimp.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(id: 13, title: "GNU Image Manipulation Program", appId: "gimp-3.2")
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 13, title: "GNU Image Manipulation Program", appId: "gimp-3.2")
+      ),
     )
 
     check mainWindow.ok
-    check mainWindow.messages.len == 4
+    check mainWindow.messages.len == 3
     check mainWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check mainWindow.messages[0].moveTargetTag == 3
     check mainWindow.messages[0].moveFollowWindow
     check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
     check mainWindow.messages[1].layoutTargetTag == 3
-    check mainWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
-    check mainWindow.messages[2].floatingWindowId == 13
-    check not mainWindow.messages[2].windowFloating
-    check mainWindow.messages[3].kind == MsgKind.CmdSetWindowMaximizedById
-    check mainWindow.messages[3].maximizedWindowId == 13
-    check mainWindow.messages[3].windowMaximized
+    check mainWindow.messages[2].kind == MsgKind.CmdToggleFullscreenById
+    check mainWindow.messages[2].fullscreenWindowId == 13
 
     let laterPalette = runtime.evalSource(
       snapshot,
       script,
       "examples/janet/gimp.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(id: 14, title: "Tool Options", appId: "org.gimp.GIMP")
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 14, title: "Tool Options", appId: "org.gimp.GIMP")
+      ),
     )
 
     check laterPalette.ok
@@ -608,10 +629,9 @@ suite "embedded Janet runtime":
       existingGimpSnapshot,
       script,
       "examples/janet/gimp.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")
+      ),
     )
 
     check welcomeWindow.ok
@@ -640,10 +660,9 @@ suite "embedded Janet runtime":
       snapshot,
       script,
       "examples/janet/gimp.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(id: 16, parentId: 13, title: "Untitled", appId: "gimp")
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 16, parentId: 13, title: "Untitled", appId: "gimp")
+      ),
     )
 
     check parentedDialog.ok
@@ -700,12 +719,11 @@ suite "embedded Janet runtime":
       testSnapshot(),
       script,
       "examples/janet/vesktop.janet",
-      currentEvent =
-        windowReadyEvent(
-          ShellWindow(
-            id: 19, parentId: 18, title: "Open File", appId: "dev.vencord.Vesktop"
-          )
-        ),
+      currentEvent = windowReadyEvent(
+        ShellWindow(
+          id: 19, parentId: 18, title: "Open File", appId: "dev.vencord.Vesktop"
+        )
+      ),
     )
 
     check parentedDialog.ok
@@ -745,7 +763,9 @@ suite "embedded Janet runtime":
 
     let results = runtime.evalScriptsDetailed(
       "window-ready",
-      windowReadyEvent(ShellWindow(id: 21, title: "Telegram", appId: "org.telegram.desktop")),
+      windowReadyEvent(
+        ShellWindow(id: 21, title: "Telegram", appId: "org.telegram.desktop")
+      ),
       testSnapshot(),
       some(ShellWindow(id: 21, title: "Telegram", appId: "org.telegram.desktop")),
     )
@@ -846,13 +866,39 @@ suite "embedded Janet runtime":
     defer:
       runtime.close()
 
-    let evaluated = runtime.evalSource(testSnapshot(), """(os/getenv "HOME")""")
+    for source in [
+      """(os/getenv "HOME")""", """(file/open "/tmp/triad-janet-sandbox" :w)""",
+      """(net/connect "127.0.0.1" "1")""", """(native/load "libc.so.6")""",
+      """(eval "(+ 1 2)")""", """(compile '(+ 1 2))""",
+      """(debug/stack (fiber/new (fn [] nil)))""",
+    ]:
+      let evaluated = runtime.evalSource(testSnapshot(), source)
 
-    check not evaluated.ok
-    check evaluated.messages.len == 0
+      check not evaluated.ok
+      check evaluated.messages.len == 0
 
-  test "loop guard rejects obvious infinite loops":
-    var runtime = initJanetRuntime(testConfig(getTempDir()))
+  test "fuel limit allows finite loops":
+    var runtime = initJanetRuntime(testConfigFuel(getTempDir(), 10000))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalSource(
+      testSnapshot(),
+      """
+(var count 0)
+(while (< count 5)
+  (set count (+ count 1)))
+(triad/command "move-to-tag" count)
+""",
+    )
+
+    check evaluated.ok
+    check evaluated.messages.len == 1
+    check evaluated.messages[0].kind == MsgKind.CmdMoveToTag
+    check evaluated.messages[0].targetTag == 5
+
+  test "fuel limit rejects non-terminating loops":
+    var runtime = initJanetRuntime(testConfigFuel(getTempDir(), 1000))
     defer:
       runtime.close()
 
@@ -860,3 +906,4 @@ suite "embedded Janet runtime":
 
     check not evaluated.ok
     check evaluated.error.len > 0
+    check evaluated.messages.len == 0

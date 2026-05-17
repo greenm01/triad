@@ -286,8 +286,15 @@ triad/current-window      event window struct | nil
 triad/current-event       current event struct | nil
 triad/active-tag-id       shorthand query → uint32
 triad/find-tag-by-name    shorthand query → struct | nil
+triad/workspace-by-tag    shorthand query → struct | nil
+triad/workspace-by-index  shorthand query → struct | nil
+triad/current-workspace   shorthand query → struct | nil
+triad/output-by-name      shorthand query → struct | nil
 triad/windows-on-tag      shorthand query → tuple of structs
+triad/windows-by-app-id   shorthand query → tuple of structs
 triad/window-by-id        shorthand query → struct | nil
+triad/workspace-empty?    shorthand query → bool
+triad/first-empty-workspace shorthand query → struct | nil
 triad/command             emit any registered user command by name + args
 triad/spawn               emit spawn command with argv-style args
 triad/spawn-sh            emit spawn command as sh -lc
@@ -298,14 +305,19 @@ triad/record-*            wf-recorder recipe helpers
 triad/on                  synchronous event subscription
 ```
 
+`triad/workspace-empty?` and `triad/first-empty-workspace` take an
+`ignored-window-id` argument. Pass `0` when no window should be ignored, or
+the current window id while deciding where to place that same window.
+
 Explicitly absent: host filesystem, network, process, FFI, dynamic native
 module loading, and direct model or Wayland handles.
 
 ### Fuel limit
 
-Triad stores a configured `fuel-limit` for the embedded runtime. The script
-runtime also blocks obvious loop forms before evaluation so a script cannot
-stall the event path.
+Triad stores a configured `fuel-limit` for user script evaluation. Finite loops
+are allowed when they complete within the budget; scripts that exceed the
+budget fail without applying emitted commands, so a script cannot stall the
+event path indefinitely.
 
 ```kdl
 janet {
@@ -483,10 +495,10 @@ The four levels compose. All can run simultaneously without conflict.
 
 ### Phase 2 — Hardening
 
-- Replace the first loop guard with a true Janet VM fuel/interruption mechanism
-  when the C API integration is ready.
-- Expand sandbox tests for every host-facing symbol Triad promises not to
+- Keep expanding sandbox tests for host-facing symbols Triad promises not to
   expose.
+- Validate the fuel budget against realistic user scripts as the embedded
+  surface grows.
 
 ### Phase 3 — Custom layouts (speculative)
 

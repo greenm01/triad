@@ -482,15 +482,16 @@ When a shell profile is started with `niri-compat #true`, Triad creates a privat
 - `PATH` is updated to prioritize Triad's compatibility tools.
 
 ### Janet Scripting
-Triad includes an embedded Janet runtime for advanced automation. When a window opens, Triad looks for a matching script in your `manifest-dir`.
+Triad includes an embedded Janet runtime for advanced automation. Scripts in
+`script-dir` can subscribe to runtime events with `triad/on` and emit normal
+Triad commands through `triad/command`.
 
 **Example Janet Configuration:**
 ```kdl
 janet {
   enabled #true
-  manifest-dir "~/.config/triad/manifests"
-  hook-dir "~/.config/triad/hooks"
-  manifest-alias "org.telegram.desktop" "telegram"
+  script-dir "~/.config/triad/janet"
+  fuel-limit 500000
 }
 ```
 

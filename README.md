@@ -16,11 +16,11 @@ Tags provide stable, concurrent labels for windows. Rules, written in KDL, provi
 
 ### Scriptable Policy with Janet
 
-Configuration handles the predictable; code handles the exceptions.
+Static rules cover the predictable. [Janet](https://janet-lang.org/) covers everything else.
 
-Triad embeds [Janet](https://janet-lang.org/) —a small, data-oriented Lisp— to support conditional logic. Janet scripts receive Triad's state as native tables and execute placement functions directly, avoiding the overhead of socket communication and JSON parsing.
+Some window behavior can't be expressed as a rule: send GIMP to a dedicated workspace, but only if one exists; float a dialog when its parent is already open; switch the layout when a particular app arrives. Triad embeds Janet—a small Lisp—so you can write that logic directly, in plain code, without running a separate process or piping commands through a shell.
 
-This enables **App Manifests**: sandboxed Janet scripts that evaluate the desktop context to dictate layout. They are executable alternatives to X11 window hints, allowing your environment to adapt based on active windows.
+Scripts live in `~/.config/triad/janet/` and react to session events as they happen. Open an app and it lands where you want it. Close it and the workspace cleans up. Switch tags and the layout follows. All of it expressed once, in one place.
 
 ### Scrolling and Other Layouts
 

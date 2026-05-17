@@ -48,8 +48,15 @@ The stability of IDs reinforces this. Tag IDs and window IDs are Triad-owned log
 
 The logical extension of the IPC scripting model is to bring the script inside the process entirely. Janet is a small, embeddable Lisp with a clean C API and a data-oriented character that fits Triad's model naturally. Rather than a script opening a socket and speaking JSON, a Janet script receives the snapshot as a native table and calls placement functions directly. The socket overhead and JSON round-trip disappear.
 
-The more interesting possibility is app-developer placement manifests. An application ships a small Janet file alongside its binary. When Triad sees that app open, it loads the manifest and evaluates it against the current snapshot. The developer knows their own windows better than any generic rule can: which dialogs should float, which secondary windows belong on a dedicated tag, whether the main canvas works better in scroller or monocle. A manifest can express conditionality that KDL cannot — open next to an existing terminal if one is present, otherwise claim a new tag.
+The more interesting possibility is app-specific placement policy. A user keeps
+a small Janet script in Triad's `script-dir`; when matching events fire, Triad
+evaluates that script against the current snapshot. The script can encode
+knowledge generic rules do not have: which dialogs should float, which
+secondary windows belong on a dedicated tag, whether the main canvas works
+better in scroller or monocle. A script can express conditionality that KDL
+cannot — open next to an existing terminal if one is present, otherwise claim a
+new tag.
 
-This is a modern, executable successor to the static ICCCM and EWMH hints that X11 apps used to self-describe their placement preferences. Instead of rigid binary properties, a manifest is live policy that reads context and responds to it.
+This is a modern, executable successor to the static ICCCM and EWMH hints that X11 apps used to self-describe their placement preferences. Instead of rigid binary properties, a script is live policy that reads context and responds to it.
 
-The security boundary is straightforward. A manifest runs in a sandboxed Janet environment that exposes only the snapshot as input and a constrained set of placement commands as output. No file I/O, no network access, no system calls. Janet's environment is controllable enough to enforce this: you expose exactly the functions you want the manifest to call and nothing else. The manifest cannot corrupt internal state because it never touches the model directly — it only sees a snapshot and issues commands through the same reducer boundary that every other external actor uses.
+The security boundary is straightforward. A script runs in a sandboxed Janet environment that exposes only the snapshot as input and a constrained set of placement commands as output. No file I/O, no network access, no system calls. Janet's environment is controllable enough to enforce this: you expose exactly the functions you want the script to call and nothing else. The script cannot corrupt internal state because it never touches the model directly — it only sees a snapshot and issues commands through the same reducer boundary that every other external actor uses.
