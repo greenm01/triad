@@ -82,3 +82,9 @@ For live reload, compositor, focus, session restore, or window-placement bugs:
    the live diagnostics mode. To redirect or tune logs, use
    `TRIAD_BEHAVIOR_LOG_DIR`, `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and
    `TRIAD_BEHAVIOR_LOG_KEEP_DAYS`. Keep generated logs out of git.
+6. If `nimble liveReload` reports that the running daemon does not expose a
+   `perf-status` PID, first verify whether `triad msg perf-status` returns a
+   valid `perf-status` reply outside the agent sandbox. A one-version-old
+   hardened daemon may answer `perf-status` without `pid`; `tools/live_reload.sh`
+   treats that as a bootstrap-compatible daemon only when the live process
+   executable matches the installed `$TRIAD_LIVE_BIN_DIR/triad`.
