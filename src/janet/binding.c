@@ -23,9 +23,15 @@ typedef struct {
   char *last_error;
 } TriadJanetRuntime;
 
+typedef struct {
+  JanetTable *env;
+} TriadJanetScript;
+
 static TriadJanetRuntime *current_runtime = NULL;
 static int janet_init_count = 0;
 static volatile sig_atomic_t janet_eval_interrupted = 0;
+
+void triad_janet_script_free(void *script_ptr);
 
 static void janet_eval_alarm_handler(int sig) {
   (void) sig;
@@ -231,6 +237,23 @@ static int eval_source_with_timer(
   return status == 0;
 }
 
+static int eval_source(
+    TriadJanetRuntime *runtime,
+    JanetTable *env,
+    const char *source,
+    const char *path) {
+  Janet out;
+  int status = janet_dostring(env, source, path, &out);
+  if (status != 0) {
+    JanetString desc = janet_description(out);
+    char *message = copy_janet_string(desc);
+    set_error(runtime, message == NULL ? "Janet evaluation failed" : message);
+    if (message != NULL) free(message);
+    return 0;
+  }
+  return 1;
+}
+
 void *triad_janet_new(void) {
   if (janet_init_count == 0) {
     janet_init();
@@ -282,6 +305,82 @@ int triad_janet_eval(void *runtime_ptr, const char *snapshot_source, const char 
     return 0;
   }
   return 1;
+}
+
+void *triad_janet_script_load(void *runtime_ptr, const char *bootstrap_source, const char *source, const char *path, int32_t fuel_limit) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return NULL;
+  clear_runtime(runtime);
+  harden_sandbox();
+
+  TriadJanetScript *script = (TriadJanetScript *) calloc(1, sizeof(TriadJanetScript));
+  if (script == NULL) {
+    set_error(runtime, "failed to allocate Janet script");
+    return NULL;
+  }
+
+  script->env = janet_core_env(NULL);
+  scrub_env(script->env);
+  janet_cfuns(script->env, NULL, triad_cfuns);
+  janet_gcroot(janet_wrap_table(script->env));
+
+  current_runtime = runtime;
+  if (!eval_source(runtime, script->env, bootstrap_source, path)) {
+    current_runtime = NULL;
+    triad_janet_script_free(script);
+    return NULL;
+  }
+  Janet out;
+  if (!eval_source_with_timer(runtime, script->env, source, path, fuel_limit, &out)) {
+    if (runtime->last_error == NULL || runtime->last_error[0] == '\0') {
+      set_error(runtime, "Janet script load failed");
+    }
+    current_runtime = NULL;
+    triad_janet_script_free(script);
+    return NULL;
+  }
+  current_runtime = NULL;
+  clear_runtime(runtime);
+  return script;
+}
+
+int triad_janet_script_dispatch(void *runtime_ptr, void *script_ptr, const char *event_source, const char *path, int32_t fuel_limit) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (runtime == NULL || script == NULL || script->env == NULL) return 0;
+  clear_runtime(runtime);
+  harden_sandbox();
+
+  current_runtime = runtime;
+  if (!eval_source(runtime, script->env, event_source, path)) {
+    current_runtime = NULL;
+    return 0;
+  }
+  Janet out;
+  if (!eval_source_with_timer(
+        runtime,
+        script->env,
+        "(triad/dispatch-event triad/current-event)",
+        path,
+        fuel_limit,
+        &out)) {
+    if (runtime->last_error == NULL || runtime->last_error[0] == '\0') {
+      set_error(runtime, "Janet event dispatch failed");
+    }
+    current_runtime = NULL;
+    return 0;
+  }
+  current_runtime = NULL;
+  return 1;
+}
+
+void triad_janet_script_free(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return;
+  if (script->env != NULL) {
+    janet_gcunroot(janet_wrap_table(script->env));
+  }
+  free(script);
 }
 
 const char *triad_janet_last_error(void *runtime_ptr) {

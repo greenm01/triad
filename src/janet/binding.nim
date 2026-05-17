@@ -9,12 +9,28 @@
 const JanetActionCommand* = 1
 
 type JanetHandle* = pointer
+type JanetScriptHandle* = pointer
 
 proc triadJanetNew*(): JanetHandle {.importc: "triad_janet_new".}
 proc triadJanetFree*(runtime: JanetHandle) {.importc: "triad_janet_free".}
 proc triadJanetEval*(
   runtime: JanetHandle, snapshotSource, source, path: cstring, fuelLimit: int32
 ): cint {.importc: "triad_janet_eval".}
+
+proc triadJanetScriptLoad*(
+  runtime: JanetHandle, bootstrapSource, source, path: cstring, fuelLimit: int32
+): JanetScriptHandle {.importc: "triad_janet_script_load".}
+
+proc triadJanetScriptDispatch*(
+  runtime: JanetHandle,
+  script: JanetScriptHandle,
+  eventSource, path: cstring,
+  fuelLimit: int32,
+): cint {.importc: "triad_janet_script_dispatch".}
+
+proc triadJanetScriptFree*(
+  script: JanetScriptHandle
+) {.importc: "triad_janet_script_free".}
 
 proc triadJanetLastError*(
   runtime: JanetHandle

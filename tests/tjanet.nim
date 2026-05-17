@@ -451,6 +451,130 @@ suite "embedded Janet runtime":
     check results[1].messages[0].kind == MsgKind.CmdMoveToTag
     check results[1].messages[0].targetTag == 2
 
+  test "script hooks keep state across events without top-level commands":
+    let dir = getTempDir() / ("triad-persistent-hooks-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "counter.janet",
+      """
+(var seen 0)
+(triad/command "focus-tag" 9)
+(triad/on :window-opened
+  (fn [_]
+    (set seen (+ seen 1))
+    (triad/command "focus-tag" seen)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "counter.janet"):
+        removeFile(dir / "counter.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let first = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let second = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check first.len == 1
+    check first[0].outcome == ScriptOutcome.Evaluated
+    check first[0].messages.len == 1
+    check first[0].messages[0].kind == MsgKind.CmdFocusTag
+    check first[0].messages[0].focusTag == 1
+    check second.len == 1
+    check second[0].messages.len == 1
+    check second[0].messages[0].kind == MsgKind.CmdFocusTag
+    check second[0].messages[0].focusTag == 2
+
+  test "script hooks reload on source changes and evict deleted scripts":
+    let dir = getTempDir() / ("triad-persistent-reload-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "counter.janet",
+      """
+(var seen 0)
+(triad/on :window-opened
+  (fn [_]
+    (set seen (+ seen 1))
+    (triad/command "focus-tag" seen)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "counter.janet"):
+        removeFile(dir / "counter.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let first = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    sleep(1100)
+    writeFile(
+      dir / "counter.janet",
+      """
+(var seen 4)
+(triad/on :window-opened
+  (fn [_]
+    (set seen (+ seen 1))
+    (triad/command "focus-tag" seen)))
+""",
+    )
+    let reloaded = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    removeFile(dir / "counter.janet")
+    let deleted = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check first.len == 1
+    check first[0].messages.len == 1
+    check first[0].messages[0].focusTag == 1
+    check reloaded.len == 1
+    check reloaded[0].outcome == ScriptOutcome.Evaluated
+    check reloaded[0].messages.len == 1
+    check reloaded[0].messages[0].focusTag == 5
+    check deleted.len == 0
+
+  test "multiple handlers for one event run in registration order":
+    let dir =
+      getTempDir() / ("triad-persistent-handler-order-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "handlers.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (triad/command "focus-tag" 2)))
+(triad/on :window-opened
+  (fn [_]
+    (triad/command "focus-tag" 3)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "handlers.janet"):
+        removeFile(dir / "handlers.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let results = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check results.len == 1
+    check results[0].outcome == ScriptOutcome.Evaluated
+    check results[0].messages.len == 2
+    check results[0].messages[0].focusTag == 2
+    check results[0].messages[1].focusTag == 3
+
   test "missing script directory skips evaluation":
     var runtime = initJanetRuntime(testConfig(getTempDir() / "triad-missing-scripts"))
     defer:
@@ -466,6 +590,38 @@ suite "embedded Janet runtime":
     let dir = getTempDir() / ("triad-janet-script-failure-" & $getCurrentProcessId())
     createDir(dir)
     writeFile(dir / "broken.janet", "(undefined-script-call)")
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "broken.janet"):
+        removeFile(dir / "broken.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let failed = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let cached = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check failed.len == 1
+    check failed[0].outcome == ScriptOutcome.EvalFailed
+    check failed[0].error.len > 0
+    check cached.len == 1
+    check cached[0].outcome == ScriptOutcome.CachedFailed
+
+  test "script handler failures are cached until source changes":
+    let dir = getTempDir() / ("triad-handler-failure-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "broken.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (error "handler boom")))
+""",
+    )
     var runtime = initJanetRuntime(testConfig(dir))
     defer:
       runtime.close()
@@ -1028,3 +1184,31 @@ suite "embedded Janet runtime":
     check not evaluated.ok
     check evaluated.error.len > 0
     check evaluated.messages.len == 0
+
+  test "fuel limit rejects non-terminating hook handlers":
+    let dir = getTempDir() / ("triad-handler-fuel-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "loop.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (while true nil)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfigFuel(dir, 1000))
+    defer:
+      runtime.close()
+      if fileExists(dir / "loop.janet"):
+        removeFile(dir / "loop.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let results = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check results.len == 1
+    check results[0].outcome == ScriptOutcome.EvalFailed
+    check results[0].error.len > 0
+    check results[0].messages.len == 0

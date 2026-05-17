@@ -75,9 +75,14 @@ model where data flows one way through the reducer.
 ### Scripts
 
 Triad loads every `*.janet` file from `script-dir` (default
-`~/.config/triad/janet`) in lexicographic order and evaluates each on every
-dispatchable event. Scripts subscribe to the events they care about with
-`triad/on` and emit commands through `triad/command`.
+`~/.config/triad/janet`) in lexicographic order. Each file is loaded into a
+retained sandbox environment, registers event handlers with `triad/on`, and is
+reloaded only when the source file changes. Handler state survives across
+events until reload.
+
+Top-level script code runs at load/reload time, not on every event. Put
+event-time commands inside `triad/on` handlers; commands emitted while loading a
+script are discarded.
 
 A single script file can handle any combination of events for a concern —
 including window placement on open and any follow-up reactions:
@@ -193,8 +198,7 @@ the built-in Nim layouts without recompiling Triad.
 - **Access the host filesystem, network, or OS.** `os/*`, `net/*`, file I/O,
   and `ffi` are not loaded into the sandbox environment.
 - **Block the main loop.** Scripts run synchronously in the event loop.
-  Long-running work goes in a Janet fiber; the main fiber yields back
-  immediately.
+  Yielding hook fibers are not scheduled yet; keep handlers short and bounded.
 - **Replace Quickshell.** Janet has no Qt/QML bindings. Shell UI — bars,
   panels, notifications — remains Quickshell's domain.
 
@@ -308,7 +312,7 @@ triad/volume-*            wpctl volume and mute helpers
 triad/media-*             playerctl playback helpers
 triad/screenshot-*        Triad screenshot command helpers
 triad/record-*            wf-recorder recipe helpers
-triad/on                  synchronous event subscription
+triad/on                  persistent event handler registration
 ```
 
 `triad/workspace-empty?` and `triad/first-empty-workspace` take an
@@ -478,9 +482,9 @@ like in practice:
 - **KDL window rules** — static, unconditional placement. Fast lookup, no
   conditionality. Defined in `config.kdl`.
 - **Embedded Janet scripts** — conditional placement and event-driven logic.
-  All `*.janet` files in `script-dir` run on every dispatchable event. Scripts
-  subscribe to specific events with `triad/on` and emit `Msg` values through
-  the reducer.
+  All `*.janet` files in `script-dir` load into retained sandbox environments.
+  Scripts register event handlers with `triad/on` and emit `Msg` values through
+  the reducer during handler dispatch.
 - **External Janet (or any language) via IPC** — out-of-process scripts.
   Socket latency, full OS isolation. Suitable for long-running automations.
 - **Parallel `river-layout-v3` clients** — custom layout generators that
@@ -496,7 +500,8 @@ The four levels compose. All can run simultaneously without conflict.
 
 - Vendored Janet source, wrapper, runtime lifecycle, snapshot conversion,
   command emission, script lookup/cache, KDL config, and daemon integration.
-- Event dispatch with `triad/on`, including `:window-ready` for placement.
+- Persistent event dispatch with `triad/on`, including `:window-ready` for
+  placement.
 - Covered by `nimble testJanet`.
 
 ### Phase 2 — Hardening

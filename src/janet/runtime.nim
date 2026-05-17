@@ -1,4 +1,4 @@
-import std/[algorithm, options, os, strutils, tables, times]
+import std/[algorithm, options, os, sequtils, strutils, tables, times]
 import chronicles
 import ../core/msg
 import ../types/[janet_manifest, runtime_values, shell_snapshot]
@@ -9,8 +9,11 @@ type
     path*: string
     modified*: Time
     source*: string
+    script*: JanetScriptHandle
     failed*: bool
     error*: string
+
+  ScriptEntryResult = tuple[entry: ScriptCacheEntry, reloaded: bool]
 
   JanetRuntime* = object
     handle*: JanetHandle
@@ -23,11 +26,22 @@ proc initJanetRuntime*(config: JanetConfig): JanetRuntime =
   if config.enabled:
     result.handle = triadJanetNew()
 
+proc freeScript(entry: var ScriptCacheEntry) =
+  if entry.script != nil:
+    triadJanetScriptFree(entry.script)
+    entry.script = nil
+
+proc clearScripts(runtime: var JanetRuntime) =
+  for path in runtime.scripts.keys.toSeq:
+    var entry = runtime.scripts[path]
+    entry.freeScript()
+  runtime.scripts.clear()
+
 proc close*(runtime: var JanetRuntime) =
+  runtime.clearScripts()
   if runtime.handle != nil:
     triadJanetFree(runtime.handle)
     runtime.handle = nil
-  runtime.scripts.clear()
 
 proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
   let wasEnabled = runtime.handle != nil
@@ -36,7 +50,7 @@ proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
     runtime.config = config
     return
   runtime.config = config
-  runtime.scripts.clear()
+  runtime.clearScripts()
   if config.enabled and runtime.handle == nil:
     runtime.handle = triadJanetNew()
 
@@ -88,21 +102,50 @@ proc scriptPaths(runtime: JanetRuntime): seq[string] =
     result.add(path)
   result.sort()
 
-proc scriptEntry(runtime: var JanetRuntime, path: string): ScriptCacheEntry =
+proc loadScriptEntry(
+    runtime: var JanetRuntime, path: string, snapshot: ShellSnapshot
+): ScriptEntryResult =
   let modified = getLastModificationTime(path)
   if runtime.scripts.hasKey(path):
     let cached = runtime.scripts[path]
     if cached.modified == modified:
-      return cached
+      return (cached, false)
+    var stale = cached
+    stale.freeScript()
 
-  result = ScriptCacheEntry(path: path, modified: modified)
+  result.entry = ScriptCacheEntry(path: path, modified: modified)
+  result.reloaded = true
   try:
-    result.source = readFile(path)
+    result.entry.source = readFile(path)
   except CatchableError as e:
-    result.failed = true
-    result.error = e.msg
+    result.entry.failed = true
+    result.entry.error = e.msg
     warn "Failed to read Janet script", path = path, error = e.msg
-  runtime.scripts[path] = result
+    runtime.scripts[path] = result.entry
+    return
+
+  let bootstrapSource =
+    snapshot.janetSnapshotSource(none(ShellWindow), "nil") & JanetPersistentPreludeSource
+  result.entry.script = triadJanetScriptLoad(
+    runtime.handle,
+    cstring(bootstrapSource),
+    cstring(result.entry.source),
+    cstring(path),
+    runtime.config.fuelLimit,
+  )
+  if result.entry.script == nil:
+    let error = $triadJanetLastError(runtime.handle)
+    result.entry.failed = true
+    result.entry.error = if error.len > 0: error else: "Janet script load failed"
+    warn "Janet script failed", path = path, error = result.entry.error
+  runtime.scripts[path] = result.entry
+
+proc evictMissingScripts(runtime: var JanetRuntime, paths: seq[string]) =
+  for path in runtime.scripts.keys.toSeq:
+    if path notin paths:
+      var entry = runtime.scripts[path]
+      entry.freeScript()
+      runtime.scripts.del(path)
 
 proc evalScriptsDetailed*(
     runtime: var JanetRuntime,
@@ -114,33 +157,49 @@ proc evalScriptsDetailed*(
   if runtime.handle == nil:
     return @[]
 
-  for path in runtime.scriptPaths():
+  let paths = runtime.scriptPaths()
+  runtime.evictMissingScripts(paths)
+
+  for path in paths:
     let started = epochTime()
-    let entry = runtime.scriptEntry(path)
+    let loaded = runtime.loadScriptEntry(path, snapshot)
+    let entry = loaded.entry
     var evalResult =
       ScriptEvalResult(event: event, path: path, currentWindow: currentWindow)
     if entry.failed:
       evalResult.outcome =
         if entry.source.len == 0:
           ScriptOutcome.ReadFailed
+        elif loaded.reloaded:
+          ScriptOutcome.EvalFailed
         else:
           ScriptOutcome.CachedFailed
       evalResult.error = entry.error
     else:
-      let evaluated = runtime.evalSource(
-        snapshot, entry.source, entry.path, currentWindow, eventSource
-      )
-      if evaluated.ok:
+      let eventSnapshotSource = snapshot.janetSnapshotSource(currentWindow, eventSource)
+      let evaluated =
+        triadJanetScriptDispatch(
+          runtime.handle,
+          entry.script,
+          cstring(eventSnapshotSource),
+          cstring(entry.path),
+          runtime.config.fuelLimit,
+        ) == 1
+      if evaluated:
         evalResult.outcome = ScriptOutcome.Evaluated
-        evalResult.messages = evaluated.messages
+        for index in 0 ..< int(triadJanetActionCount(runtime.handle)):
+          let msg = runtime.handle.actionMsg(index)
+          if msg.isSome:
+            evalResult.messages.add(msg.get())
       else:
-        warn "Janet script failed",
-          event = event, path = entry.path, error = evaluated.error
+        let error = $triadJanetLastError(runtime.handle)
+        warn "Janet script failed", event = event, path = entry.path, error = error
         var failedEntry = entry
+        failedEntry.freeScript()
         failedEntry.failed = true
-        failedEntry.error = evaluated.error
+        failedEntry.error = if error.len > 0: error else: "Janet event dispatch failed"
         runtime.scripts[failedEntry.path] = failedEntry
         evalResult.outcome = ScriptOutcome.EvalFailed
-        evalResult.error = evaluated.error
+        evalResult.error = failedEntry.error
     evalResult.durationMs = int64((epochTime() - started) * 1000)
     result.add(evalResult)

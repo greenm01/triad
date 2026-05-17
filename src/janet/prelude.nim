@@ -1,9 +1,5 @@
-const JanetPreludeSource* =
+const JanetHelperPreludeSource =
   """
-(defn triad/on [event handler]
-  (when (and triad/current-event (= event (triad/current-event :kind)))
-    (handler triad/current-event)))
-
 (defn triad/spawn [cmd & args]
   (apply triad/command "spawn" cmd args))
 
@@ -71,3 +67,29 @@ const JanetPreludeSource* =
 (defn triad/record-stop []
   (triad/command "spawn" "pkill" "-INT" "wf-recorder"))
 """
+
+const JanetPreludeSource* =
+  """
+(defn triad/on [event handler]
+  (when (and triad/current-event (= event (triad/current-event :kind)))
+    (handler triad/current-event)))
+""" &
+  JanetHelperPreludeSource
+
+const JanetPersistentPreludeSource* =
+  """
+(def triad/handlers @{})
+
+(defn triad/on [event handler]
+  (let [handlers (or (triad/handlers event) @[])]
+    (array/push handlers handler)
+    (put triad/handlers event handlers))
+  nil)
+
+(defn triad/dispatch-event [event]
+  (when event
+    (when-let [handlers (triad/handlers (event :kind))]
+      (each handler handlers
+        (handler event)))))
+""" &
+  JanetHelperPreludeSource
