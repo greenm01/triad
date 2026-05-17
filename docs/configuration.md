@@ -2,7 +2,7 @@
 
 Triad uses the KDL configuration format, which is both readable and expressive. You can find your configuration at `$XDG_CONFIG_HOME/triad/config.kdl` (or `~/.config/triad/config.kdl` if the environment variable is unset). If you haven't created one yet, Triad will provide a sensible default when it first starts.
 
-Check the config_examples folder for practical examples.
+See config_examples for practical examples.
 
 ## The Basics
 
@@ -221,7 +221,7 @@ Every rule begins with a `match` or `exclude` block.
 | `open-maximized` | `Bool` | Open as a full-width column in scroller layouts. |
 | `open-maximized-to-edges` | `Bool` | Open in the edge-maximized state. |
 | `maximize-policy` | `"edge"`, `"column"`, `"ignore"` | Sets behavior when the maximize command is issued. |
-| `default-workspace` | `Int` | Send the window to a specific workspace. |
+| `default-workspace` | `Int" | Send the window to a specific workspace. |
 | `default-workspaces` | `Int...` | Assign window to multiple workspaces. |
 | `open-on-output` | `String` | Pin the window to a specific monitor name. |
 | `open-named-scratchpad`| `String` | Open hidden in a specific scratchpad pool. |
@@ -313,8 +313,8 @@ Configure your peripherals with precision. Blocks are available for `keyboard`, 
 | `accel-profile` | `"none"`, `"flat"`, `"adaptive"` | Pointer acceleration behavior. |
 | `accel-speed` | `-1.0..1.0` | Pointer speed adjustment. |
 | `scroll-method` | `"none"`, `"two-finger"`, `"edge"`, `"on-button-down"` | How to trigger scrolling. |
-| `scroll-button` | `Int` | Button code for `on-button-down` scrolling. |
-| `scroll-button-lock` | `Bool` | Lock scroll mode after button press. |
+| `scroll-button` | `Int" | Button code for `on-button-down` scrolling. |
+| `scroll-button-lock` | `Bool" | Lock scroll mode after button press. |
 | `scroll-factor` | `0.0..100.0` | Sensitivity of scrolling. |
 | `left-handed` | `Bool` | Swap left and right buttons. |
 | `middle-emulation` | `Bool` | Simulate middle click by pressing both buttons. |
@@ -440,7 +440,7 @@ A visual guide to your current keybindings.
 | Setting | Format | Description |
 | :--- | :--- | :--- |
 | `skip-at-startup` | `Bool` | Don't show the guide on Triad launch. |
-| `hide-not-bound` | `Bool` | Hide rows that don't have a configured key. |
+| `hide-not-bound" | `Bool` | Hide rows that don't have a configured key. |
 | `position` | `"top"`, `"center"`, `"bottom"` | Overlay placement on screen. |
 | `columns` | `1..4` | Number of columns in the guide. |
 
@@ -459,13 +459,27 @@ A birds-eye view of all your workspaces.
 | :--- | :--- | :--- |
 | `outer-gap` | `Pixels` | Gaps around the overview frame. |
 | `inner-gap-multiplier`| `Float` | Multiplier for gaps between previews. |
-| `zoom` | `Float` | Scaling factor for previews. |
+| `zoom` | `Float" | Scaling factor for previews. |
 | `tab-mode` | `Bool` | Enable modifier-hold cycling. |
 | `hot-corners` | `Block` | Configure trigger `size` and active corners. |
 
 ---
 
-## Automation & Integration
+## Integration & Compatibility
+
+### Shell Compatibility
+Triad can provide a compatibility layer for existing Wayland shells that expect a specific JSON IPC contract.
+
+| Feature | Description |
+| :--- | :--- |
+| `niri-compat` | When enabled in a `profile`, Triad sets `$NIRI_SOCKET` and provides a compatible IPC facade. |
+| `triad_niri` | A CLI tool that maps standard message commands to Triad's native equivalents. |
+
+**How it works:**
+When a shell profile is started with `niri-compat #true`, Triad creates a private runtime environment:
+- `$NIRI_SOCKET` points at Triad's compatibility socket.
+- `XDG_CURRENT_DESKTOP=triad` is set so shells select the correct backend.
+- `PATH` is updated to prioritize Triad's compatibility tools.
 
 ### Janet Scripting
 Triad includes an embedded Janet runtime for advanced automation. When a window opens, Triad looks for a matching script in your `manifest-dir`.
@@ -495,8 +509,8 @@ Advanced control over Wayland protocol-driven surfaces.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `enabled` | `Bool` | Toggle protocol surface management. |
-| `visible-debug` | `Bool` | Draw debug boxes around protocol surfaces. |
+| `enabled" | `Bool` | Toggle protocol surface management. |
+| `visible-debug" | `Bool` | Draw debug boxes around protocol surfaces. |
 
 ---
 
