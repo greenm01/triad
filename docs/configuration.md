@@ -119,7 +119,7 @@ Control the geometry and behavior of your windows.
 | `animation-speed` | `0.0..1.0` | Speed of camera movement (0.0 is instant). |
 | `animation-snap-threshold` | `0.01..64.0` | Pixel distance to snap camera to target. |
 | `frame-rate` | `"auto" / Int` | Targeted FPS (24..240, default: "auto"). |
-| `layout-cycle` | `List` | Layouts to rotate through. |
+| `layout-cycle` | `List` | Built-in layout ids and declared Janet layout names to rotate through. |
 
 **Example Layout Configuration:**
 ```kdl
@@ -147,7 +147,7 @@ Workspaces are your virtual rooms. You can name them, pin them to specific monit
 | Setting | Format | Description |
 | :--- | :--- | :--- |
 | `default-count` | `Int` | The minimum number of workspaces to keep open. |
-| `default-layout` | `String` | Fallback layout (e.g., `"scroller"`, `"deck"`). |
+| `default-layout` | `String` | Built-in layout id or declared Janet layout name. |
 
 **Example Workspace Rules:**
 ```kdl
@@ -485,6 +485,10 @@ When a shell profile is started with `niri-compat #true`, Triad creates a privat
 Triad includes an embedded Janet runtime for advanced automation. Scripts in
 `script-dir` can subscribe to runtime events with `triad/on` and emit normal
 Triad commands through `triad/command`.
+Named Janet layouts are declared in the same block. A custom layout name is a
+bare id that must not collide with a built-in layout id. Each declaration has a
+safe built-in fallback used for overview, compatibility projections, and any
+failed custom evaluation.
 
 **Example Janet Configuration:**
 ```kdl
@@ -492,8 +496,13 @@ janet {
   enabled #true
   script-dir "~/.config/triad/janet"
   fuel-limit 500000
+  layout "spiral" fallback="scroller"
+  layout "wide-master" fallback="tile"
 }
 ```
+
+Declared Janet layout names can be used in `layout-cycle`,
+`workspaces default-layout`, and `workspace-rules default-layout=...`.
 
 ### Config Notifications
 Run custom commands to notify yourself of configuration reload results.

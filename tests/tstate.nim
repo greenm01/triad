@@ -1,7 +1,7 @@
 import std/[json, options, os, sequtils, strutils, tables, unittest]
 from posix import TPollfd, close, pipe, read, write
 import ../src/config/parser
-import ../src/core/[effects, msg, restore_state]
+import ../src/core/[effects, layout_selection_codec, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
 import ../src/daemon/exit_session_dialog_render
 import ../src/daemon/layout_switch_toast_render
@@ -13,7 +13,9 @@ import ../src/state/[invariants, snapshot]
 import
   ../src/systems/
     [layout_projection, overview_geometry, recent_windows, runtime_facade, update]
+import ../src/types/janet_layouts
 import ../src/types/[model, runtime_values]
+import ../src/types/projection_values as pv
 import ../src/utils/event_poll
 
 const DeletedRuntimeModules = [
@@ -779,6 +781,75 @@ suite "Runtime state primitives":
     model = ticked
 
     check not model.layoutSwitchToastOpen
+
+  test "custom layout command stores custom selection with fallback":
+    var config = baseConfig()
+    config.janet.layouts =
+      @[JanetLayoutConfig(id: janetLayoutId("spiral"), fallback: LayoutMode.Grid)]
+    config.layout.layoutSelections =
+      @[
+        builtinSelection(LayoutMode.Scroller),
+        customSelection(janetLayoutId("spiral"), LayoutMode.Grid),
+      ]
+    config.layout.layoutCycle = @[LayoutMode.Scroller, LayoutMode.Grid]
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (customSet, _) = model.update(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("spiral"))
+    )
+    model = customSet
+    let active = model.tagData(model.activeTag).get()
+
+    check active.layoutMode == LayoutMode.Grid
+    check active.customLayoutId.layoutIdString() == "spiral"
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces[0].layoutId == "spiral"
+    check snapshot.workspaces[0].layoutKind == "custom"
+    check snapshot.workspaces[0].fallbackLayout == LayoutMode.Grid
+
+    let (builtinSet, _) =
+      model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Monocle))
+    model = builtinSet
+    check model.tagData(model.activeTag).get().customLayoutId.layoutIdString() == ""
+
+  test "custom layout projection uses Janet geometry callback":
+    var config = baseConfig()
+    config.janet.layouts =
+      @[JanetLayoutConfig(id: janetLayoutId("spiral"), fallback: LayoutMode.Grid)]
+    var model = initRuntimeStateFromConfig(config).model
+    let (withFirst, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model = withFirst
+    let (withSecond, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model = withSecond
+    let (customSet, _) = model.update(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("spiral"))
+    )
+    model = customSet
+
+    proc customEval(context: JanetLayoutContext): JanetLayoutEvalResult =
+      check context.layoutId.layoutIdString() == "spiral"
+      JanetLayoutEvalResult(
+        layoutId: context.layoutId,
+        outcome: JanetLayoutOutcome.Applied,
+        instructions:
+          @[
+            pv.RenderInstruction(
+              windowId: pv.ProjectionWindowId(10),
+              geom: pv.Rect(x: 1, y: 2, w: 300, h: 400),
+            ),
+            pv.RenderInstruction(
+              windowId: pv.ProjectionWindowId(11),
+              geom: pv.Rect(x: 301, y: 2, w: 300, h: 400),
+            ),
+          ],
+      )
+
+    let projection = model.layoutProjection(customEval)
+
+    check projection.instructions.len == 2
+    check projection.instructions[0].geom == pv.Rect(x: 1, y: 2, w: 300, h: 400)
+    check projection.instructions[1].geom == pv.Rect(x: 301, y: 2, w: 300, h: 400)
 
   test "explicit active layout command opens layout switch toast":
     var config = baseConfig()

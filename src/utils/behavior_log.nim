@@ -149,7 +149,7 @@ proc behaviorLayoutId*(mode: LayoutMode): string =
 proc activeWorkspaceLayoutId*(snapshot: ShellSnapshot): string =
   for workspace in snapshot.workspaces:
     if workspace.isActive:
-      return workspace.layoutMode.behaviorLayoutId()
+      return workspace.layoutId
   ""
 
 proc rectBehaviorPayload*(rect: Rect): JsonNode =

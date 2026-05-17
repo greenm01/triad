@@ -1,9 +1,11 @@
 import std/[algorithm, options]
 import entity_manager, id_gen, invariants, iterators, live_restore, queries, snapshot
 import ../core/defaults
+import ../core/layout_selection_codec
 import ../entities/ops
 import ../types/[core, model, shell_snapshot]
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import
+  JanetLayoutConfig, JanetLayoutId, LayoutMode, LayoutSelection
 
 export defaults
 export iterators
@@ -88,6 +90,16 @@ proc layoutCycle*(model: Model): seq[LayoutMode] =
       LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
       LayoutMode.VerticalScroller,
     ]
+
+proc layoutSelectionCycle*(model: Model): seq[LayoutSelection] =
+  if model.layoutCycleSelections.len > 0:
+    result = model.layoutCycleSelections
+  else:
+    for mode in model.layoutCycle():
+      result.add(builtinSelection(mode))
+
+proc customLayoutConfig*(model: Model, id: JanetLayoutId): Option[JanetLayoutConfig] =
+  model.customLayouts.findCustomLayout(id)
 
 proc setHotkeyOverlayOpen*(model: var Model, open: bool): bool =
   if model.hotkeyOverlayOpen == open:

@@ -1,6 +1,6 @@
 import std/tables
 from core import Rect
-from runtime_values import LayoutMode
+from runtime_values import JanetLayoutId, LayoutMode
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
 const
@@ -42,6 +42,7 @@ type
     tagId*: uint32
     name*: string
     layoutMode*: LayoutMode
+    customLayoutId*: JanetLayoutId
     columns*: seq[RestoredColumnState]
     focusedWindow*: uint32
     targetViewportXOffset*: float32

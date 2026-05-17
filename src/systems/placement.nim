@@ -1,7 +1,9 @@
 import std/options
 import focus, workspaces
+import ../core/layout_selection_codec
 import ../state/engine
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import
+  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind
 
 proc resetNonScrollerViewport(model: var Model, tagId: TagId, mode: LayoutMode): bool =
   if mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
@@ -15,6 +17,13 @@ proc setCommandLayout(model: var Model, tagId: TagId, mode: LayoutMode): bool =
   result = model.setTagLayout(tagId, mode)
   if result:
     result = model.resetNonScrollerViewport(tagId, mode) or result
+
+proc setCommandCustomLayout(
+    model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutMode
+): bool =
+  result = model.setTagCustomLayout(tagId, id, fallback)
+  if result:
+    result = model.resetNonScrollerViewport(tagId, fallback) or result
 
 proc focusedPosition(
     model: var Model
@@ -78,19 +87,57 @@ proc setLayoutForSlot*(model: var Model, slot: uint32, mode: LayoutMode): bool =
     return false
   tagId != NullTagId and model.setCommandLayout(tagId, mode)
 
+proc setCustomLayoutForSlot*(model: var Model, slot: uint32, id: JanetLayoutId): bool =
+  let custom = model.customLayoutConfig(id)
+  if custom.isNone:
+    return false
+  let tagId =
+    if slot == 0:
+      model.ensureActiveWorkspace()
+    else:
+      model.tagForSlot(slot)
+  if tagId == NullTagId:
+    return false
+  if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
+      not model.tagHasNonStickyLiveWindows(tagId):
+    return false
+  model.setCommandCustomLayout(tagId, id, custom.get().fallback)
+
+proc tagLayoutSelection(tag: TagData): LayoutSelection =
+  if tag.customLayoutId.layoutIdString().len > 0:
+    customSelection(tag.customLayoutId, tag.layoutMode)
+  else:
+    builtinSelection(tag.layoutMode)
+
 proc switchLayout*(model: var Model): bool =
   let tagId = model.ensureActiveWorkspace()
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
     return false
-  let cycle = model.layoutCycle()
-  let idx = cycle.find(tagOpt.get().layoutMode)
+  let selectionCycle = model.layoutSelectionCycle()
+  if selectionCycle.len == 0:
+    return false
+  let current = tagOpt.get().tagLayoutSelection()
+  var idx = -1
+  for i, selection in selectionCycle:
+    if selection.kind == current.kind and
+        selection.selectionId() == current.selectionId():
+      idx = i
+      break
   let nextIdx =
     if idx == -1:
       0
     else:
-      (idx + 1) mod cycle.len
-  model.setCommandLayout(tagId, cycle[nextIdx])
+      (idx + 1) mod selectionCycle.len
+  let next = selectionCycle[nextIdx]
+  case next.kind
+  of LayoutSelectionKind.Builtin:
+    model.setCommandLayout(tagId, next.builtin)
+  of LayoutSelectionKind.Custom:
+    let custom = model.customLayoutConfig(next.customId)
+    if custom.isNone:
+      return model.setCommandLayout(tagId, next.builtin)
+    model.setCommandCustomLayout(tagId, next.customId, custom.get().fallback)
 
 proc setMasterCount*(model: var Model, count: int): bool =
   let tagId = model.ensureActiveWorkspace()

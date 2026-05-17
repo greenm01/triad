@@ -15,11 +15,12 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMoveWindowToTag, MsgKind.CmdMoveToWorkspaceIndex,
     MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdSetLayout,
-    MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleFloating,
-    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
-    MsgKind.CmdToggleMaximized, MsgKind.CmdMoveToScratchpad,
-    MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleScratchpad,
-    MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
+    MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn,
+    MsgKind.CmdToggleFloating, MsgKind.CmdSetWindowFloatingById,
+    MsgKind.CmdSetWindowMaximizedById, MsgKind.CmdToggleMaximized,
+    MsgKind.CmdMoveToScratchpad, MsgKind.CmdMoveToNamedScratchpad,
+    MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
+    MsgKind.CmdRestoreScratchpad,
   }
 
 proc updateSnapshotSummary(snapshot: ShellSnapshot, model: Model): JsonNode =
@@ -135,7 +136,7 @@ proc compactRuntimeEffects(effects: seq[Effect]): JsonNode =
       discard
 
 proc isLayoutCommand(kind: MsgKind): bool =
-  kind in {MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout}
+  kind in {MsgKind.CmdSetLayout, MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout}
 
 proc needsFullSnapshotAlways(kind: MsgKind): bool =
   case kind

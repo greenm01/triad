@@ -1,7 +1,9 @@
 import std/[algorithm, math, options, tables]
+import ../core/layout_selection_codec
 import ../layouts/[scroller, tiling]
 import ../state/engine
 import ../types/core as core_types
+import ../types/janet_layouts
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/projection_values as rv
@@ -9,10 +11,13 @@ import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
 
-type OverviewTransform = object
-  source: rv.Rect
-  dest: rv.Rect
-  clip: rv.Rect
+type
+  CustomLayoutEval* = proc(context: JanetLayoutContext): JanetLayoutEvalResult
+
+  OverviewTransform = object
+    source: rv.Rect
+    dest: rv.Rect
+    clip: rv.Rect
 
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.ProjectionWindowId =
   let winOpt = model.windowData(winId)
@@ -332,6 +337,30 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   model.addFloatingInstructions(model.activeTag, screen, result)
   model.addUnmanagedGlobalInstructions(screen, result)
 
+proc customLayoutInstructions(
+    layoutEval: CustomLayoutEval,
+    tag: rv.ProjectedTag,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    screen: rv.Rect,
+    customLayoutId: JanetLayoutId,
+    outerGap, innerGap: int32,
+): tuple[applied: bool, instructions: seq[rv.RenderInstruction]] =
+  if layoutEval == nil or customLayoutId.layoutIdString().len == 0:
+    return
+  let evalResult = layoutEval(
+    JanetLayoutContext(
+      layoutId: customLayoutId,
+      screen: screen,
+      outerGap: outerGap,
+      innerGap: innerGap,
+      tag: tag,
+      windows: windows,
+    )
+  )
+  if evalResult.outcome != JanetLayoutOutcome.Applied:
+    return
+  (true, evalResult.instructions)
+
 proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
     return true
@@ -546,7 +575,9 @@ proc layoutWorkspaceStripOverview(
       )
   model.applyOverviewDrag(result.instructions)
 
-proc layoutProjection*(model: Model): LayoutProjection =
+proc layoutProjection*(
+    model: Model, layoutEval: CustomLayoutEval = nil
+): LayoutProjection =
   let screen = model.primaryScreen()
   let windows = model.runtimeWindowTable()
 
@@ -580,18 +611,26 @@ proc layoutProjection*(model: Model): LayoutProjection =
   let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
   model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
-  result.instructions = layoutForTag(
-    tagForLayout,
-    windows,
-    screen,
-    currentOuterGap,
-    currentInnerGap,
-    retargetViewport and model.scrollerFocusCenter,
-    retargetViewport and model.scrollerPreferCenter,
-    if retargetViewport: model.centerFocusedColumn else: "never",
+  let activeTagData = model.tagData(model.activeTag).get()
+  let custom = customLayoutInstructions(
+    layoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
+    currentOuterGap, currentInnerGap,
   )
-  tagForLayout.applyLayoutViewportOffset(result.instructions)
-  if tagForLayout.columns.len > 0:
+  if custom.applied:
+    result.instructions = custom.instructions
+  else:
+    result.instructions = layoutForTag(
+      tagForLayout,
+      windows,
+      screen,
+      currentOuterGap,
+      currentInnerGap,
+      retargetViewport and model.scrollerFocusCenter,
+      retargetViewport and model.scrollerPreferCenter,
+      if retargetViewport: model.centerFocusedColumn else: "never",
+    )
+    tagForLayout.applyLayoutViewportOffset(result.instructions)
+  if tagForLayout.columns.len > 0 and not custom.applied:
     result.viewportTargets.add(
       LayoutViewportTarget(
         tagSlot: projected.tag.tagId,

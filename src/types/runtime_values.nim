@@ -1,6 +1,8 @@
 import core
 
 type
+  JanetLayoutId* = distinct string
+
   PresentationMode* {.pure.} = enum
     PresentationDefault
     PresentationVsync
@@ -29,6 +31,19 @@ type
     VerticalGrid
     VerticalDeck
     TGMix
+
+  LayoutSelectionKind* {.pure.} = enum
+    Builtin
+    Custom
+
+  LayoutSelection* = object
+    kind*: LayoutSelectionKind
+    builtin*: LayoutMode
+    customId*: JanetLayoutId
+
+  JanetLayoutConfig* = object
+    id*: JanetLayoutId
+    fallback*: LayoutMode
 
   Direction* {.pure.} = enum
     DirLeft
@@ -189,6 +204,7 @@ type
     name*: string
     defaultLayoutSet*: bool
     defaultLayout*: LayoutMode
+    defaultLayoutSelection*: LayoutSelection
     openOnOutput*: string
 
   OutputRule* = object
@@ -217,6 +233,7 @@ type
   WorkspaceConfig* = object
     defaultCount*: uint32
     defaultLayout*: LayoutMode
+    defaultLayoutSelection*: LayoutSelection
 
   QuickshellConfig* = object
     enabled*: bool
@@ -247,6 +264,7 @@ type
     enabled*: bool
     scriptDir*: string
     fuelLimit*: int32
+    layouts*: seq[JanetLayoutConfig]
 
   TerminalConfig* = object
     command*: seq[string]

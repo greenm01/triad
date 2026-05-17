@@ -1,5 +1,6 @@
 import std/[options, strutils]
 import ../core/layout_mode_codec
+import ../core/layout_selection_codec
 import ../core/msg
 import ../types/runtime_values
 import command_registry
@@ -281,8 +282,26 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
             newLayout: layout.get(),
           )
         )
+      elif tag.isSome and parts[2].strip().len > 0:
+        some(
+          Msg(
+            kind: MsgKind.CmdSetCustomLayout,
+            customLayoutTargetTag: tag.get(),
+            customLayout: janetLayoutId(parts[2].strip()),
+          )
+        )
       else:
         none(Msg)
+    else:
+      none(Msg)
+  of CommandId.CidLayoutCustom:
+    if parts.len >= 2 and parts[1 ..^ 1].join(" ").strip().len > 0:
+      some(
+        Msg(
+          kind: MsgKind.CmdSetCustomLayout,
+          customLayout: janetLayoutId(parts[1 ..^ 1].join(" ").strip()),
+        )
+      )
     else:
       none(Msg)
   of CommandId.CidConfigReload:

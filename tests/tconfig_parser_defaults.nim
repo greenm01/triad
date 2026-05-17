@@ -1,5 +1,7 @@
 import tconfig_support
+import kdl
 import ../src/config/keysyms
+import ../src/core/layout_selection_codec
 
 suite "KDL Configuration Parser: parser defaults":
   test "Parser reads layout, workspace, binding, and command settings":
@@ -891,3 +893,44 @@ cursor {
     check model.layoutSwitchToast.timeoutMs == 60000
     check model.scratchpadWidthRatio == 1.0'f32
     check model.scratchpadHeightRatio == 0.1'f32
+
+  test "Parser resolves declared Janet layouts in layout selections":
+    let config = loadConfigNodes(
+      parseKdl(
+        """
+layout {
+  layout-cycle "scroller" "spiral" "grid"
+}
+
+workspaces {
+  default-layout "spiral"
+}
+
+workspace-rules {
+  workspace 2 name="web" default-layout="wide-master"
+}
+
+janet {
+  layout "spiral" fallback="scroller"
+  layout "wide-master" fallback="tile"
+}
+"""
+      )
+    )
+
+    check config.janet.layouts.len == 2
+    check config.janet.layouts[0].id.layoutIdString() == "spiral"
+    check config.janet.layouts[0].fallback == LayoutMode.Scroller
+    check config.janet.layouts[1].id.layoutIdString() == "wide-master"
+    check config.janet.layouts[1].fallback == LayoutMode.MasterStack
+    check config.layout.layoutCycle ==
+      @[LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Grid]
+    check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[1].customId.layoutIdString() == "spiral"
+    check config.workspaces.defaultLayout == LayoutMode.Scroller
+    check config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom
+    check config.workspaces.defaultLayoutSelection.customId.layoutIdString() == "spiral"
+    check config.tagRules[0].defaultLayout == LayoutMode.MasterStack
+    check config.tagRules[0].defaultLayoutSelection.kind == LayoutSelectionKind.Custom
+    check config.tagRules[0].defaultLayoutSelection.customId.layoutIdString() ==
+      "wide-master"

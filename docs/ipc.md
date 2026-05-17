@@ -78,7 +78,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `layout-tgmix`: Sets the active tag to tile mode for up to three windows,
     then grid mode for larger sets.
 *   `set-layout-for-workspace <tag> <layout>`: Sets a stable tag id to a
-    canonical layout id without changing focus.
+    built-in layout id or declared custom layout name without changing focus.
+*   `layout-custom <name>`: Sets the active tag to a declared Janet layout.
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
     Niri-compatible `SwitchLayout` is separate keyboard-layout vocabulary and
     switches configured River XKB keyboard layouts instead of triggering this
@@ -342,8 +343,9 @@ Request:
 {"triad":{"version":1,"request":"layout-state"}}
 ```
 
-The reply contains supported layout ids, the configured layout cycle, the active
-tag/workspace index, and layout state for every visible workspace:
+The reply contains supported built-in and custom layout ids, the configured
+layout cycle, the active tag/workspace index, and layout state for every visible
+workspace:
 
 ```json
 {
@@ -353,8 +355,14 @@ tag/workspace index, and layout state for every visible workspace:
     "type": "layout-state",
     "state": {
       "version": 1,
-      "layouts": [{"id": "scroller", "ordinal": 0}],
+      "layouts": [
+        {"kind": "builtin", "id": "scroller", "ordinal": 0},
+        {"kind": "custom", "id": "spiral", "fallback_layout": "scroller"}
+      ],
       "layout_cycle": ["scroller", "tile", "grid"],
+      "layout_cycle_entries": [
+        {"kind": "builtin", "id": "scroller"}
+      ],
       "active_tag": 1,
       "active_workspace_idx": 1,
       "workspaces": [
@@ -363,6 +371,8 @@ tag/workspace index, and layout state for every visible workspace:
           "workspace_idx": 1,
           "name": "term",
           "layout": "scroller",
+          "layout_kind": "builtin",
+          "fallback_layout": "scroller",
           "is_active": true,
           "focused_window_id": 10,
           "columns": [{"idx": 1, "width_proportion": 0.5, "windows": [10]}],
@@ -387,12 +397,20 @@ Canonical layout ids are:
 `center-tile`, `right-tile`, `vertical-tile`, `vertical-grid`,
 `vertical-deck`, `tgmix`.
 
+Custom layout ids are the declared Janet layout names.
+
 ### Layout Actions
 
 Set the active tag layout:
 
 ```json
 {"triad":{"version":1,"request":"set-layout","layout":"grid"}}
+```
+
+Set the active tag to a declared Janet layout:
+
+```json
+{"triad":{"version":1,"request":"set-layout","layout":"spiral"}}
 ```
 
 Set a stable tag id without switching focus:

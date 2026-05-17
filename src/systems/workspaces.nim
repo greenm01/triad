@@ -2,6 +2,7 @@ import std/[algorithm, options]
 import outputs
 import sticky_windows
 import ../state/engine
+from ../types/runtime_values import LayoutSelectionKind
 
 proc activeWorkspaceSlot*(model: Model): uint32 =
   let tagOpt = model.tagData(model.activeTag)
@@ -37,6 +38,14 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
     masterCount = model.defaultMasterCount(),
     masterSplitRatio = model.defaultMasterRatio(),
   )
+  if forcedLayout == 0:
+    let selection =
+      if tagRule.found and tagRule.rule.defaultLayoutSet:
+        tagRule.rule.defaultLayoutSelection
+      else:
+        model.defaultWorkspaceLayoutSelection
+    if selection.kind == LayoutSelectionKind.Custom:
+      discard model.setTagCustomLayout(result, selection.customId, selection.builtin)
   if tagRule.found and tagRule.rule.openOnOutput.len > 0:
     discard model.setTagHomeOutput(result, tagRule.rule.openOnOutput, pinned = true)
     let outputId = model.outputForTarget(tagRule.rule.openOnOutput)

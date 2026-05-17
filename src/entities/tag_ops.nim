@@ -2,7 +2,7 @@ import std/[options, sets, tables]
 import active_workspace_ops, history_ops
 import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import JanetLayoutId, LayoutMode
 
 proc addTag*(
     model: var Model,
@@ -61,6 +61,16 @@ proc setTagLayout*(model: var Model, tagId: TagId, mode: LayoutMode): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).layoutMode = mode
+  model.tags.mEntity(tagId).customLayoutId = JanetLayoutId("")
+  true
+
+proc setTagCustomLayout*(
+    model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutMode
+): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).layoutMode = fallback
+  model.tags.mEntity(tagId).customLayoutId = id
   true
 
 proc setTagName*(model: var Model, tagId: TagId, name: string): bool =
@@ -132,6 +142,7 @@ proc setTagRestoredState*(
     tagId: TagId,
     name: string,
     layoutMode: LayoutMode,
+    customLayoutId: JanetLayoutId,
     targetViewportXOffset, currentViewportXOffset, targetViewportYOffset,
       currentViewportYOffset: float32,
     masterCount: int,
@@ -142,6 +153,16 @@ proc setTagRestoredState*(
   if name.len > 0 and model.tags.mEntity(tagId).name.len == 0:
     model.tags.mEntity(tagId).name = name
   model.tags.mEntity(tagId).layoutMode = layoutMode
+  var customKnown = false
+  for layout in model.customLayouts:
+    if string(layout.id) == string(customLayoutId):
+      customKnown = true
+      break
+  model.tags.mEntity(tagId).customLayoutId =
+    if string(customLayoutId).len > 0 and customKnown:
+      customLayoutId
+    else:
+      JanetLayoutId("")
   model.tags.mEntity(tagId).targetViewportXOffset = targetViewportXOffset
   model.tags.mEntity(tagId).currentViewportXOffset = currentViewportXOffset
   model.tags.mEntity(tagId).targetViewportYOffset = targetViewportYOffset

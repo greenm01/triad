@@ -1,5 +1,7 @@
 import std/[options, strutils]
 import iterators, queries
+import ../core/layout_mode_codec
+import ../core/layout_selection_codec
 import ../core/defaults
 import ../types/[core, model, shell_snapshot]
 from ../types/runtime_values import LayoutMode
@@ -75,6 +77,15 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid,
         LayoutMode.Monocle, LayoutMode.VerticalScroller,
       ]
+  result.layoutCycleSelections =
+    if model.layoutCycleSelections.len > 0:
+      model.layoutCycleSelections
+    else:
+      @[]
+  if result.layoutCycleSelections.len == 0:
+    for mode in result.layoutCycle:
+      result.layoutCycleSelections.add(builtinSelection(mode))
+  result.customLayouts = model.customLayouts
   result.keyboardLayoutNames = model.keyboardLayoutNames()
   result.keyboardLayoutIndex =
     if result.keyboardLayoutNames.len == 0:
@@ -99,6 +110,13 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
           masterCount: model.snapshotDefaultMasterCount(),
           masterSplitRatio: model.snapshotDefaultMasterRatio(),
         )
+    let layoutKind =
+      if tag.customLayoutId.layoutIdString().len > 0: "custom" else: "builtin"
+    let layoutId =
+      if layoutKind == "custom":
+        tag.customLayoutId.layoutIdString()
+      else:
+        layoutModeId(tag.layoutMode)
 
     result.workspaces.add(
       ShellWorkspace(
@@ -106,6 +124,9 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         workspaceIdx: uint32(idx + 1),
         name: tag.name,
         layoutMode: tag.layoutMode,
+        layoutId: layoutId,
+        layoutKind: layoutKind,
+        fallbackLayout: tag.layoutMode,
         isActive: slot == model.activeSlot,
         isOutputVisible: tagId != NullTagId and model.tagVisibleOnOutput(tagId),
         focusedWindow: model.externalWindowId(tag.focusedWindow),

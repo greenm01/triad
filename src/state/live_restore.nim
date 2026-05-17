@@ -1,5 +1,6 @@
 import std/[algorithm, json, options, os, tables]
 import iterators, queries
+import ../core/layout_selection_codec
 import ../core/[defaults, restore_state]
 import ../types/core as core_types
 import ../types/live_restore as lr
@@ -65,6 +66,7 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
     slot: source.tagId,
     name: source.name,
     layoutMode: source.layoutMode,
+    customLayoutId: source.customLayoutId,
     focusedWindow: ExternalWindowId(uint32(source.focusedWindow)),
     targetViewportXOffset: source.targetViewportXOffset,
     currentViewportXOffset: source.currentViewportXOffset,
@@ -132,7 +134,8 @@ proc restoreDefaultMasterRatio(model: Model): float32 =
     DefaultMasterRatio
 
 proc hasDurableTagState*(model: Model, tag: TagData): bool =
-  if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller:
+  if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller or
+      tag.customLayoutId.layoutIdString().len > 0:
     return true
   if tag.focusedWindow != NullWindowId and model.tagHasNonStickyLiveWindows(tag.id):
     return true
@@ -168,6 +171,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       tagId: tag.slot,
       name: tag.name,
       layoutMode: tag.layoutMode,
+      customLayoutId: tag.customLayoutId,
       focusedWindow: model.externalWindowId(tag.focusedWindow),
       targetViewportXOffset: tag.targetViewportXOffset,
       currentViewportXOffset: tag.currentViewportXOffset,
@@ -333,6 +337,9 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
     "id": tag.tagId,
     "name": tag.name,
     "layout_mode": ord(tag.layoutMode),
+    "layout_kind":
+      if tag.customLayoutId.layoutIdString().len > 0: "custom" else: "builtin",
+    "custom_layout": tag.customLayoutId.layoutIdString(),
     "columns": columns,
     "focused_window": tag.focusedWindow,
     "target_viewport_x_offset": tag.targetViewportXOffset,

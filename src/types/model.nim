@@ -4,8 +4,9 @@ from core import
   IdCounters, OutputId, Rect, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
-  InputConfig, GestureBindingConfig, JanetConfig, KeyBindingConfig, LayoutMode,
-  HotkeyOverlayConfig, LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole,
+  InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
+  KeyBindingConfig, LayoutMode, LayoutSelection, HotkeyOverlayConfig,
+  LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, ShellsConfig, RecentWindowFilter,
   RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
@@ -60,6 +61,7 @@ type
     bit*: TagMask
     name*: string
     layoutMode*: LayoutMode
+    customLayoutId*: JanetLayoutId
     focusedWindow*: WindowId
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32
@@ -260,6 +262,7 @@ type
     name*: string
     defaultLayoutSet*: bool
     defaultLayout*: LayoutMode
+    defaultLayoutSelection*: LayoutSelection
     openOnOutput*: string
 
   OutputRuleData* = object
@@ -314,6 +317,7 @@ type
     slot*: uint32
     name*: string
     layoutMode*: LayoutMode
+    customLayoutId*: JanetLayoutId
     columns*: seq[RestoredColumnData]
     focusedWindow*: ExternalWindowId
     targetViewportXOffset*: float32
@@ -395,6 +399,7 @@ type
     outputStartupFocusResolved*: bool
     defaultWorkspaceCount*: uint32
     defaultWorkspaceLayout*: LayoutMode
+    defaultWorkspaceLayoutSelection*: LayoutSelection
     visibleSlots*: seq[uint32]
     overviewActive*: bool
     overviewWorkspacePreviewsActive*: bool
@@ -410,6 +415,7 @@ type
     layoutSwitchToastOpen*: bool
     layoutSwitchToastElapsedMs*: int32
     layoutSwitchToastLayout*: LayoutMode
+    layoutSwitchToastCustomLayout*: JanetLayoutId
     recentWindowsScope*: RecentWindowScope
     recentWindowsPreviousScope*: RecentWindowScope
     recentWindowsFilter*: RecentWindowFilter
@@ -508,6 +514,8 @@ type
     restoreSwallowedBy*: Table[ExternalWindowId, ExternalWindowId]
     restoreSwallowing*: Table[ExternalWindowId, ExternalWindowId]
     layoutCycle*: seq[LayoutMode]
+    layoutCycleSelections*: seq[LayoutSelection]
+    customLayouts*: seq[JanetLayoutConfig]
     focusHistory*: seq[WindowId]
     recentWindowHistory*: seq[WindowId]
     pendingRecentFocusWindow*: WindowId

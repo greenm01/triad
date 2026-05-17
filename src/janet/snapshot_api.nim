@@ -56,7 +56,9 @@ proc workspaceExpr(workspace: ShellWorkspace): string =
     columns.add(column.columnExpr())
   "{:tag-id " & $workspace.tagId & " :workspace-idx " & $workspace.workspaceIdx &
     " :name " & workspace.name.escaped() & " :layout-mode " &
-    workspace.layoutMode.layoutName().escaped() & " :active " &
+    workspace.layoutMode.layoutName().escaped() & " :layout-id " &
+    workspace.layoutId.escaped() & " :layout-kind " & workspace.layoutKind.escaped() &
+    " :fallback-layout " & workspace.fallbackLayout.layoutName().escaped() & " :active " &
     workspace.isActive.boolValue() & " :output-visible " &
     workspace.isOutputVisible.boolValue() & " :focused-window " &
     $workspace.focusedWindow & " :occupied " & workspace.occupied.boolValue() &

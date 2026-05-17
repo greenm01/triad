@@ -1,4 +1,5 @@
 import std/[json, options, sets, strutils]
+import ../core/layout_selection_codec
 import ../core/[msg, shell_focus]
 import ../janet/[runtime as janet_runtime, snapshot_api]
 import ../types/[janet_manifest, model, runtime_values, shell_snapshot]
@@ -147,6 +148,11 @@ proc scriptCommandPayload(msg: Msg): JsonNode =
     result["layout"] = %msg.newLayout.behaviorLayoutId()
     if msg.layoutTargetTag != 0:
       result["target_tag"] = %msg.layoutTargetTag
+  of MsgKind.CmdSetCustomLayout:
+    result["layout"] = %msg.customLayout.layoutIdString()
+    result["layout_kind"] = %"custom"
+    if msg.customLayoutTargetTag != 0:
+      result["target_tag"] = %msg.customLayoutTargetTag
   of MsgKind.CmdSetWindowFloatingById:
     result["window_id"] = %msg.floatingWindowId
     result["floating"] = %msg.windowFloating
@@ -192,7 +198,7 @@ proc shouldDispatchJanetScripts*(kind: MsgKind): bool =
     MsgKind.CmdMoveToTag, MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
     MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
     MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdSetLayout,
-    MsgKind.CmdSwitchLayout,
+    MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout,
   }
 
 proc shouldDispatchJanetUiScripts*(origin: QueuedMsgOrigin): bool =

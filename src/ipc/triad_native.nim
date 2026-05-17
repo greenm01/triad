@@ -1,9 +1,11 @@
 import std/[json, options, strutils]
 import ../core/layout_mode_codec
+import ../core/layout_selection_codec
 import ../core/[msg, triad_state]
 import command_registry
 import commands
 import ../types/shell_snapshot
+from ../types/runtime_values import LayoutMode
 
 type TriadIpcResult* = object
   handled*: bool
@@ -68,6 +70,14 @@ proc tagForWorkspaceIndex(snapshot: ShellSnapshot, workspaceIdx: uint32): uint32
     if workspace.workspaceIdx == workspaceIdx:
       return workspace.tagId
   0
+
+proc customLayoutFallback(
+    snapshot: ShellSnapshot, layoutId: string
+): Option[LayoutMode] =
+  for layout in snapshot.customLayouts:
+    if layout.id.layoutIdString() == layoutId:
+      return some(layout.fallback)
+  none(LayoutMode)
 
 proc intFromField(node: JsonNode, field: string): Option[int] =
   if node.kind != JObject or not node.hasKey(field):
@@ -413,20 +423,30 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
   of "set-layout":
     let layoutId = stringFromField(payload, "layout")
     let layout = parseLayoutModeId(layoutId)
-    if layout.isNone:
-      result.reply = errReply("unknown layout: " & layoutId)
-      return
-
     let target = targetTagFromPayload(payload, snapshot)
     if not target.ok:
       result.reply = errReply(target.error)
       return
-
-    result.messages.add(
-      Msg(
-        kind: MsgKind.CmdSetLayout, newLayout: layout.get(), layoutTargetTag: target.tag
+    if layout.isSome:
+      result.messages.add(
+        Msg(
+          kind: MsgKind.CmdSetLayout,
+          newLayout: layout.get(),
+          layoutTargetTag: target.tag,
+        )
       )
-    )
+    else:
+      let custom = snapshot.customLayoutFallback(layoutId)
+      if custom.isNone:
+        result.reply = errReply("unknown layout: " & layoutId)
+        return
+      result.messages.add(
+        Msg(
+          kind: MsgKind.CmdSetCustomLayout,
+          customLayout: janetLayoutId(layoutId),
+          customLayoutTargetTag: target.tag,
+        )
+      )
     result.reply = ackReply()
   of "switch-layout":
     result.messages.add(Msg(kind: MsgKind.CmdSwitchLayout))

@@ -56,11 +56,21 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.setLayoutForSlot(msg.layoutTargetTag, msg.newLayout)
     if result.dirty and msg.layoutTargetTag == 0:
       result.dirty = model.showLayoutSwitchToast(msg.newLayout) or result.dirty
+  of MsgKind.CmdSetCustomLayout:
+    result.dirty =
+      model.setCustomLayoutForSlot(msg.customLayoutTargetTag, msg.customLayout)
+    if result.dirty and msg.customLayoutTargetTag == 0:
+      let custom = model.customLayoutConfig(msg.customLayout)
+      if custom.isSome:
+        model.layoutSwitchToastCustomLayout = msg.customLayout
+        result.dirty =
+          model.showLayoutSwitchToast(custom.get().fallback) or result.dirty
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
     if result.dirty:
       let tagOpt = model.tagData(model.activeTag)
       if tagOpt.isSome:
+        model.layoutSwitchToastCustomLayout = tagOpt.get().customLayoutId
         result.dirty =
           model.showLayoutSwitchToast(tagOpt.get().layoutMode) or result.dirty
   of MsgKind.CmdSetMasterCount:

@@ -23,9 +23,12 @@ proc applyRuntimeUpdate*(state: var TriadRuntimeState, msg: Msg): seq[Effect] =
   effects
 
 proc applyRuntimeLayoutProjection*(
-    state: var TriadRuntimeState, context = "", msgKind = ""
+    state: var TriadRuntimeState,
+    context = "",
+    msgKind = "",
+    layoutEval: CustomLayoutEval = nil,
 ): LayoutProjection =
-  result = state.model.layoutProjection()
+  result = state.model.layoutProjection(layoutEval)
   if behaviorLogEnabled():
     let snapshot = state.model.shellSnapshot()
     writeBehaviorEvent(

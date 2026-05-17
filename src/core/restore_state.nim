@@ -1,5 +1,6 @@
 import std/[algorithm, json, options, os, strutils, tables, times]
 import defaults
+import layout_selection_codec
 from ../types/core import Rect
 import ../types/live_restore
 import ../types/runtime_values
@@ -97,6 +98,10 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
 
   if node.hasKey("name"):
     tag.name = stringFromJson(node["name"])
+  if node.hasKey("custom_layout"):
+    let custom = stringFromJson(node["custom_layout"]).strip()
+    if custom.len > 0:
+      tag.customLayoutId = janetLayoutId(custom)
   if node.hasKey("focused_window"):
     let focused = uint32FromJson(node["focused_window"])
     if focused.isSome:

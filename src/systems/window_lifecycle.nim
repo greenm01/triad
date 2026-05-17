@@ -165,9 +165,10 @@ proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
   if result != NullTagId and restoredTag.isSome:
     let restored = restoredTag.get()
     discard model.setTagRestoredState(
-      result, restored.name, restored.layoutMode, restored.targetViewportXOffset,
-      restored.currentViewportXOffset, restored.targetViewportYOffset,
-      restored.currentViewportYOffset, restored.masterCount, restored.masterSplitRatio,
+      result, restored.name, restored.layoutMode, restored.customLayoutId,
+      restored.targetViewportXOffset, restored.currentViewportXOffset,
+      restored.targetViewportYOffset, restored.currentViewportYOffset,
+      restored.masterCount, restored.masterSplitRatio,
     )
   if result != NullTagId:
     discard model.syncStickyWindowsForWorkspace(result)

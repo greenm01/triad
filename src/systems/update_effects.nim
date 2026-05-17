@@ -212,11 +212,12 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
       MsgKind.WlWindowDimensionsHint, MsgKind.WlWindowParent,
       MsgKind.WlWindowFullscreenRequested, MsgKind.WlWindowExitFullscreenRequested,
       MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
-      MsgKind.WlWindowMinimizeRequested, MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout,
-      MsgKind.CmdSetMasterCount, MsgKind.CmdSetMasterRatio,
-      MsgKind.CmdAdjustMasterCount, MsgKind.CmdAdjustMasterRatio,
-      MsgKind.CmdMaximizeColumn, MsgKind.CmdResizeWidth, MsgKind.CmdResizeHeight,
-      MsgKind.CmdSetColumnWidth, MsgKind.CmdSwitchProportionPreset, MsgKind.CmdFocusTag,
+      MsgKind.WlWindowMinimizeRequested, MsgKind.CmdSetLayout,
+      MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdSetMasterCount,
+      MsgKind.CmdSetMasterRatio, MsgKind.CmdAdjustMasterCount,
+      MsgKind.CmdAdjustMasterRatio, MsgKind.CmdMaximizeColumn, MsgKind.CmdResizeWidth,
+      MsgKind.CmdResizeHeight, MsgKind.CmdSetColumnWidth,
+      MsgKind.CmdSwitchProportionPreset, MsgKind.CmdFocusTag,
       MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdMoveToTag, MsgKind.CmdMoveWindowToTag,
       MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
       MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindow,
@@ -318,8 +319,8 @@ proc shouldReassertFocusedWindow(kind: MsgKind, before, after: ShellSnapshot): b
     MsgKind.CmdMoveToWorkspaceIndex,
   }:
     return before.activeTag != after.activeTag
-  if kind in {MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout}:
-    return before.activeWorkspace().layoutMode != after.activeWorkspace().layoutMode
+  if kind in {MsgKind.CmdSetLayout, MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout}:
+    return before.activeWorkspace().layoutId != after.activeWorkspace().layoutId
   false
 
 proc addSetFullscreenEffect*(
@@ -445,11 +446,12 @@ proc shouldSyncMaximizedPresentation(
     MsgKind.WlManageStart, MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed,
     MsgKind.WlWindowAppId, MsgKind.WlWindowTitle, MsgKind.WlWindowMaximizeRequested,
     MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
-    MsgKind.CmdSetLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdMaximizeColumn,
-    MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize, MsgKind.CmdToggleFloating,
-    MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
-    MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview,
-    MsgKind.CmdOverviewTab, MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
+    MsgKind.CmdSetLayout, MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout,
+    MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,
+    MsgKind.CmdToggleFloating, MsgKind.CmdSetWindowFloatingById,
+    MsgKind.CmdSetWindowMaximizedById, MsgKind.CmdToggleOverview,
+    MsgKind.CmdOpenOverview, MsgKind.CmdCloseOverview, MsgKind.CmdOverviewTab,
+    MsgKind.CmdSelectWindow, MsgKind.CmdConfigReload,
   }
 
 proc addMaximizedPresentationSync(

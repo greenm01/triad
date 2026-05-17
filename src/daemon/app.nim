@@ -8,6 +8,7 @@ import ../config/[parser, reload_policy]
 from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
 import ../ipc/socket
 import ../janet/runtime as janet_runtime
+import ../types/janet_layouts
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, effects_runtime, input_runtime, janet_script_runtime,
@@ -62,7 +63,12 @@ proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
   daemon.runtimeState.applyRuntimeUpdate(msg)
 
 proc syncRuntimeLayoutProjection(context: string, msg: Msg): seq[RenderInstruction] =
-  daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind).instructions
+  proc evalCustomLayout(context: JanetLayoutContext): JanetLayoutEvalResult =
+    daemon.janetRuntime.evalLayoutDetailed(
+      daemon.runtimeState.readRuntimeSnapshot(), context
+    )
+
+  daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind, evalCustomLayout).instructions
 
 proc refreshRateFps(refreshRate: int32): int32 =
   if refreshRate <= 0:

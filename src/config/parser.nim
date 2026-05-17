@@ -2,6 +2,8 @@ import std/[options, os, re, strutils]
 import chronicles, kdl
 import defaults
 import keysyms
+import ../core/layout_mode_codec
+import ../core/layout_selection_codec
 import ../types/config_values
 import ../types/runtime_values
 
@@ -106,6 +108,65 @@ proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
   of "vertical-deck", "vertical_deck": LayoutMode.VerticalDeck
   of "tgmix", "tg_mix": LayoutMode.TGMix
   else: fallback
+
+proc builtinLayoutSelection(mode: LayoutMode): LayoutSelection =
+  LayoutSelection(kind: LayoutSelectionKind.Builtin, builtin: mode)
+
+proc customLayoutSelection(id: JanetLayoutId, fallback: LayoutMode): LayoutSelection =
+  LayoutSelection(kind: LayoutSelectionKind.Custom, builtin: fallback, customId: id)
+
+proc customLayoutById(
+    layouts: openArray[JanetLayoutConfig], id: JanetLayoutId
+): Option[JanetLayoutConfig] =
+  for layout in layouts:
+    if layout.id.layoutIdString() == id.layoutIdString():
+      return some(layout)
+  none(JanetLayoutConfig)
+
+proc parseLayoutSelectionName(
+    name: string, layouts: openArray[JanetLayoutConfig], fallback: LayoutSelection
+): LayoutSelection =
+  let builtin = parseLayoutModeId(name)
+  if builtin.isSome:
+    return builtinLayoutSelection(builtin.get())
+
+  let id = janetLayoutId(name)
+  let custom = layouts.customLayoutById(id)
+  if custom.isSome:
+    return customLayoutSelection(id, custom.get().fallback)
+
+  fallback
+
+proc collectJanetLayoutDeclarations(doc: KdlDoc): seq[JanetLayoutConfig] =
+  for node in doc:
+    if node.name != "janet":
+      continue
+    for child in node.children:
+      if child.name != "layout" or child.args.len == 0:
+        continue
+      try:
+        let name = child.args[0].kString().strip()
+        if name.len == 0:
+          continue
+        if parseLayoutModeId(name).isSome:
+          warn "Ignoring janet layout with reserved built-in id", layout = name
+          continue
+        let id = janetLayoutId(name)
+        if result.customLayoutById(id).isSome:
+          warn "Ignoring duplicate janet layout declaration", layout = name
+          continue
+        let fallbackName =
+          if child.props.hasKey("fallback"):
+            child.props["fallback"].kString()
+          else:
+            "scroller"
+        result.add(
+          JanetLayoutConfig(
+            id: id, fallback: parseLayoutName(fallbackName, LayoutMode.Scroller)
+          )
+        )
+      except CatchableError as e:
+        warn "Ignoring invalid janet layout declaration", error = e.msg
 
 proc forcedLayoutValue(name: string): int =
   case name
@@ -945,8 +1006,17 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
       LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
       LayoutMode.VerticalScroller,
     ]
+  result.layout.layoutSelections =
+    @[
+      builtinLayoutSelection(LayoutMode.Scroller),
+      builtinLayoutSelection(LayoutMode.MasterStack),
+      builtinLayoutSelection(LayoutMode.Grid),
+      builtinLayoutSelection(LayoutMode.Monocle),
+      builtinLayoutSelection(LayoutMode.VerticalScroller),
+    ]
   result.workspaces.defaultCount = DefaultWorkspaceCount
   result.workspaces.defaultLayout = LayoutMode.Scroller
+  result.workspaces.defaultLayoutSelection = builtinLayoutSelection(LayoutMode.Scroller)
   result.scratchpad.widthRatio = DefaultScratchpadWidthRatio
   result.scratchpad.heightRatio = DefaultScratchpadHeightRatio
   result.overview.outerGap = DefaultOverviewOuterGap
@@ -979,6 +1049,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.janet.enabled = true
   result.janet.scriptDir = DefaultJanetScriptDir
   result.janet.fuelLimit = DefaultJanetFuelLimit
+  result.janet.layouts = collectJanetLayoutDeclarations(doc)
   result.hotkeyOverlay.skipAtStartup = true
   result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
   result.hotkeyOverlay.columns = 2
@@ -1068,10 +1139,15 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
               result.layout.smartGaps = child.args[0].kBool()
             elif child.name == "layout-cycle":
               result.layout.layoutCycle = @[]
+              result.layout.layoutSelections = @[]
               for arg in child.args:
-                result.layout.layoutCycle.add(
-                  parseLayoutName(arg.kString(), LayoutMode.Scroller)
+                let selection = parseLayoutSelectionName(
+                  arg.kString(),
+                  result.janet.layouts,
+                  builtinLayoutSelection(LayoutMode.Scroller),
                 )
+                result.layout.layoutSelections.add(selection)
+                result.layout.layoutCycle.add(selection.builtin)
           except CatchableError as e:
             warn "Ignoring invalid layout config field",
               field = child.name, error = e.msg
@@ -1082,9 +1158,12 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
               let count = child.args[0].kInt()
               result.workspaces.defaultCount = normalizeWorkspaceCountFromConfig(count)
             elif child.name == "default-layout" and child.args.len > 0:
-              result.workspaces.defaultLayout = parseLayoutName(
-                child.args[0].kString(), result.workspaces.defaultLayout
+              let fallback = result.workspaces.defaultLayoutSelection
+              let selection = parseLayoutSelectionName(
+                child.args[0].kString(), result.janet.layouts, fallback
               )
+              result.workspaces.defaultLayoutSelection = selection
+              result.workspaces.defaultLayout = selection.builtin
           except CatchableError as e:
             warn "Ignoring invalid workspace config field",
               field = child.name, error = e.msg
@@ -1141,14 +1220,19 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 continue
               let id = uint32(rawId)
               var layout = result.workspaces.defaultLayout
+              var layoutSelection = result.workspaces.defaultLayoutSelection
               var layoutSet = false
               var tagName = ""
               if child.props.hasKey("name"):
                 tagName = child.props["name"].kString()
               if child.props.hasKey("default-layout"):
                 layoutSet = true
-                layout =
-                  parseLayoutName(child.props["default-layout"].kString(), layout)
+                layoutSelection = parseLayoutSelectionName(
+                  child.props["default-layout"].kString(),
+                  result.janet.layouts,
+                  layoutSelection,
+                )
+                layout = layoutSelection.builtin
               var openOnOutput = ""
               if child.props.hasKey("open-on-output"):
                 openOnOutput = child.props["open-on-output"].kString().strip()
@@ -1157,6 +1241,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                   tagId: id,
                   defaultLayoutSet: layoutSet,
                   defaultLayout: layout,
+                  defaultLayoutSelection: layoutSelection,
                   name: tagName,
                   openOnOutput: openOnOutput,
                 )
@@ -1557,6 +1642,8 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
             elif child.name == "fuel-limit" and child.args.len > 0:
               result.janet.fuelLimit =
                 clamp32(int32(child.args[0].kInt()), 1_000, 10_000_000)
+            elif child.name == "layout":
+              discard
           except CatchableError as e:
             warn "Ignoring invalid janet field", field = child.name, error = e.msg
       elif node.name == "terminal":

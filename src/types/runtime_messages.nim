@@ -60,6 +60,7 @@ type
 
     # User Commands (IPC/Keybinds)
     CmdSetLayout
+    CmdSetCustomLayout
     CmdFocusNext
     CmdFocusPrev
     CmdFocusDirection
@@ -296,6 +297,9 @@ type
     of MsgKind.CmdSetLayout:
       newLayout*: LayoutMode
       layoutTargetTag*: uint32
+    of MsgKind.CmdSetCustomLayout:
+      customLayout*: JanetLayoutId
+      customLayoutTargetTag*: uint32
     of MsgKind.CmdFocusDirection:
       direction*: Direction
     of MsgKind.CmdRecentWindowNext, MsgKind.CmdRecentWindowPrev:

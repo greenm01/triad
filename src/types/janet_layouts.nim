@@ -1,11 +1,10 @@
 import std/tables
 import projection_values
+import runtime_values
 
 type
-  JanetLayoutId* = distinct string
-
   JanetLayoutContext* = object
-    layoutId*: JanetLayoutId
+    layoutId*: runtime_values.JanetLayoutId
     screen*: Rect
     outerGap*: int32
     innerGap*: int32
@@ -21,7 +20,7 @@ type
     Applied
 
   JanetLayoutEvalResult* = object
-    layoutId*: JanetLayoutId
+    layoutId*: runtime_values.JanetLayoutId
     path*: string
     outcome*: JanetLayoutOutcome
     error*: string

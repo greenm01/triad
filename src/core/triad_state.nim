@@ -1,7 +1,9 @@
 import std/[json, options]
 import layout_mode_codec
+import layout_selection_codec
 import ../types/shell_snapshot
-from ../types/runtime_values import LayoutMode, WindowRuleIdleInhibitMode
+from ../types/runtime_values import
+  LayoutMode, LayoutSelectionKind, WindowRuleIdleInhibitMode
 
 export shell_snapshot
 
@@ -11,15 +13,42 @@ proc nullableString(value: string): JsonNode =
   else:
     %value
 
-proc triadSupportedLayoutsJson*(): JsonNode =
+proc triadSupportedLayoutsJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for mode in LayoutMode:
-    result.add(%*{"id": layoutModeId(mode), "ordinal": ord(mode)})
+    result.add(%*{"kind": "builtin", "id": layoutModeId(mode), "ordinal": ord(mode)})
+  for layout in snapshot.customLayouts:
+    result.add(
+      %*{
+        "kind": "custom",
+        "id": layout.id.layoutIdString(),
+        "fallback_layout": layoutModeId(layout.fallback),
+      }
+    )
 
 proc triadLayoutCycleJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
-  for mode in snapshot.layoutCycle:
-    result.add(%layoutModeId(mode))
+  if snapshot.layoutCycleSelections.len > 0:
+    for selection in snapshot.layoutCycleSelections:
+      result.add(%selection.selectionId())
+  else:
+    for mode in snapshot.layoutCycle:
+      result.add(%layoutModeId(mode))
+
+proc triadLayoutCycleEntriesJson*(snapshot: ShellSnapshot): JsonNode =
+  result = newJArray()
+  for selection in snapshot.layoutCycleSelections:
+    case selection.kind
+    of LayoutSelectionKind.Builtin:
+      result.add(%*{"kind": "builtin", "id": layoutModeId(selection.builtin)})
+    of LayoutSelectionKind.Custom:
+      result.add(
+        %*{
+          "kind": "custom",
+          "id": selection.customId.layoutIdString(),
+          "fallback_layout": layoutModeId(selection.builtin),
+        }
+      )
 
 proc triadColumnJson(col: ShellColumn): JsonNode =
   let windows = newJArray()
@@ -42,7 +71,9 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     "tag_id": workspace.tagId,
     "workspace_idx": workspace.workspaceIdx,
     "name": nullableString(workspace.name),
-    "layout": layoutModeId(workspace.layoutMode),
+    "layout": workspace.layoutId,
+    "layout_kind": workspace.layoutKind,
+    "fallback_layout": layoutModeId(workspace.fallbackLayout),
     "is_active": workspace.isActive,
     "focused_window_id":
       if workspace.focusedWindow == 0:
@@ -67,8 +98,9 @@ proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
 
   %*{
     "version": snapshot.version,
-    "layouts": triadSupportedLayoutsJson(),
+    "layouts": triadSupportedLayoutsJson(snapshot),
     "layout_cycle": triadLayoutCycleJson(snapshot),
+    "layout_cycle_entries": triadLayoutCycleEntriesJson(snapshot),
     "active_tag": snapshot.activeTag,
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
     "workspaces": workspaces,

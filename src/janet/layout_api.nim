@@ -1,14 +1,11 @@
 import std/[algorithm, json, sets, strutils, tables]
+import ../core/layout_selection_codec
 import ../types/janet_layouts
 import ../types/projection_values as rv
 import ../utils/behavior_log
 import binding
 
-proc janetLayoutId*(value: string): JanetLayoutId =
-  JanetLayoutId(value)
-
-proc layoutIdString*(layoutId: JanetLayoutId): string =
-  string(layoutId)
+export janetLayoutId, layoutIdString
 
 proc escaped(value: string): string =
   result = "\""

@@ -58,22 +58,18 @@ predictable.
 
 ## Additive Layout Selection
 
-Introduce a future selection layer that can represent either a built-in layout
-or a custom layout:
+Triad has an additive selection layer that can represent either a built-in
+layout or a custom layout:
 
 ```text
 LayoutSelection =
   builtin LayoutMode
-  custom  string
+  custom  JanetLayoutId + fallback LayoutMode
 ```
 
-The exact Nim type can be chosen during implementation, but the behavior should
-be fixed:
-
 - existing commands such as `layout-grid` keep targeting built-ins;
-- a new custom-layout command selects a named custom layout;
-- layout cycles can include built-ins and custom names only after config can
-  validate those names;
+- `layout-custom <name>` selects a declared custom layout;
+- layout cycles can include built-ins and declared custom names;
 - snapshots expose both the effective layout id and whether it is built-in or
   custom;
 - restoring an unknown custom layout falls back to the tag's configured safe
@@ -204,10 +200,20 @@ complete user-facing layout selection; that belongs to Phase 2.
 
 ### Phase 2: Configuration And IPC
 
-- Add config syntax for named Janet layouts and safe fallback layouts.
-- Add commands to select a custom layout by name.
-- Extend snapshots and IPC to report built-in vs custom effective layout ids.
-- Allow layout cycles to include validated custom names.
+Implemented.
+
+- Config supports `janet { layout "<name>" fallback="<builtin>" }`.
+- `layout-cycle`, `workspaces default-layout`, and
+  `workspace-rules default-layout=...` accept declared custom names.
+- `layout-custom <name>` selects a custom layout for the active workspace.
+- `set-layout-for-workspace <tag> <layout>` accepts built-in ids or custom
+  names.
+- Native IPC `request:"set-layout"` accepts declared custom names and exposes
+  `layout`, `layout_kind`, and `fallback_layout` in layout snapshots.
+- The active normal workspace evaluates custom Janet geometry; overview and
+  Niri-compatible projections keep using the safe built-in fallback.
+- Live restore persists custom selection and clears unknown custom names on
+  restore/config reload.
 
 ### Phase 3: Native Frame/Tab Substrate
 

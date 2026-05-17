@@ -24,6 +24,7 @@ type
     CidSetWindowFloating
     CidSetWindowMaximized
     CidSetLayoutForWorkspace
+    CidLayoutCustom
     CidConfigReload
     CidLayoutScroller
     CidLayoutVerticalScroller
@@ -224,6 +225,9 @@ const CommandSpecs* = [
     id: CommandId.CidSetLayoutForWorkspace,
     name: "set-layout-for-workspace",
     argShape: TagLayout,
+  ),
+  CommandSpec(
+    id: CommandId.CidLayoutCustom, name: "layout-custom", argShape: RequiredName
   ),
   CommandSpec(id: CommandId.CidConfigReload, name: "config-reload", argShape: NoArgs),
   CommandSpec(

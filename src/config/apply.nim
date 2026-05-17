@@ -2,6 +2,7 @@ import std/[options, re, sets, strutils]
 import chronicles
 import parser
 import defaults
+import ../core/layout_selection_codec
 import ../core/shell_profiles
 import ../state/engine
 import ../systems/outputs
@@ -175,6 +176,12 @@ proc tagRuleData(rule: rv.TagRule): TagRuleData =
     name: rule.name,
     defaultLayoutSet: rule.defaultLayoutSet,
     defaultLayout: rule.defaultLayout,
+    defaultLayoutSelection:
+      if rule.defaultLayoutSet and
+          rule.defaultLayoutSelection.kind == LayoutSelectionKind.Custom:
+        rule.defaultLayoutSelection
+      else:
+        builtinSelection(rule.defaultLayout),
     openOnOutput: rule.openOnOutput.strip(),
   )
 
@@ -256,6 +263,11 @@ proc applyConfig*(model: var Model, config: Config) =
   model.smartGaps = config.layout.smartGaps
   model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
   model.defaultWorkspaceLayout = config.workspaces.defaultLayout
+  model.defaultWorkspaceLayoutSelection =
+    if config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom:
+      config.workspaces.defaultLayoutSelection
+    else:
+      builtinSelection(config.workspaces.defaultLayout)
 
   var pinnedTagOutputs: seq[TagId] = @[]
   for tagId in model.tagHomeOutputPinned:
@@ -291,6 +303,11 @@ proc applyConfig*(model: var Model, config: Config) =
   if model.janet.scriptDir.strip().len == 0:
     model.janet.scriptDir = DefaultJanetScriptDir
   model.janet.fuelLimit = configClamp32(model.janet.fuelLimit, 1_000, 10_000_000)
+  model.customLayouts = model.janet.layouts
+  for tagId, tag in model.tagsWithId():
+    if tag.customLayoutId.layoutIdString().len > 0 and
+        model.customLayoutConfig(tag.customLayoutId).isNone:
+      discard model.setTagLayout(tagId, tag.layoutMode)
   model.terminal = config.terminal
   model.screenshot = config.screenshot
   model.input = config.input
@@ -366,6 +383,14 @@ proc applyConfig*(model: var Model, config: Config) =
   model.gestureBindings = config.gestureBindings
   model.switchEvents = config.switchEvents
   model.layoutCycle = runtimeLayoutCycle(config.layout.layoutCycle)
+  model.layoutCycleSelections =
+    if config.layout.layoutSelections.len > 0:
+      config.layout.layoutSelections
+    else:
+      @[]
+  if model.layoutCycleSelections.len == 0:
+    for mode in model.layoutCycle:
+      model.layoutCycleSelections.add(builtinSelection(mode))
 
   for slot in 1'u32 .. model.defaultWorkspaceCount:
     discard model.ensureWorkspaceSlot(slot)
@@ -394,13 +419,16 @@ proc applyConfig*(model: var Model, config: Config) =
         tagOpt.isSome and tagOpt.get().focusedWindow == NullWindowId and
         model.columnCountForTag(tagId) == 0 and not model.tagHasLiveWindows(tagId)
       if emptyWorkspace:
-        discard model.setTagLayout(
-          tagId,
+        let selection =
           if tagRule.found and tagRule.rule.defaultLayoutSet:
-            tagRule.rule.defaultLayout
+            tagRule.rule.defaultLayoutSelection
           else:
-            model.defaultWorkspaceLayout,
-        )
+            model.defaultWorkspaceLayoutSelection
+        case selection.kind
+        of LayoutSelectionKind.Builtin:
+          discard model.setTagLayout(tagId, selection.builtin)
+        of LayoutSelectionKind.Custom:
+          discard model.setTagCustomLayout(tagId, selection.customId, selection.builtin)
       if tagRule.found:
         discard model.setTagName(tagId, tagRule.rule.name)
         if tagRule.rule.openOnOutput.len > 0:

@@ -1,6 +1,7 @@
 import std/options
 from core import Rect
-from runtime_values import LayoutMode, WindowRuleIdleInhibitMode
+from runtime_values import
+  JanetLayoutConfig, LayoutMode, LayoutSelection, WindowRuleIdleInhibitMode
 
 const TriadIpcVersion* = 1
 
@@ -17,6 +18,9 @@ type
     workspaceIdx*: uint32
     name*: string
     layoutMode*: LayoutMode
+    layoutId*: string
+    layoutKind*: string
+    fallbackLayout*: LayoutMode
     isActive*: bool
     isOutputVisible*: bool
     focusedWindow*: uint32
@@ -80,6 +84,8 @@ type
     sessionLocked*: bool
     layerFocusExclusive*: bool
     layoutCycle*: seq[LayoutMode]
+    layoutCycleSelections*: seq[LayoutSelection]
+    customLayouts*: seq[JanetLayoutConfig]
     keyboardLayoutNames*: seq[string]
     keyboardLayoutIndex*: uint32
     workspaces*: seq[ShellWorkspace]

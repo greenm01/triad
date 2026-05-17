@@ -56,6 +56,7 @@ type
     frameRate*: int32
     smartGaps*: bool
     layoutCycle*: seq[LayoutMode]
+    layoutSelections*: seq[LayoutSelection]
 
   ConfigLoadResult* = object
     ok*: bool
