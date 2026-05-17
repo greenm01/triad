@@ -196,6 +196,7 @@ proc perfStatusJson(daemon: TriadDaemon): string =
     %*{
       "ok": true,
       "type": "perf-status",
+      "pid": getCurrentProcessId(),
       "frame_rate": daemon.runtimeState.model.frameRate(),
       "frame_interval_ms": daemon.targetFrameIntervalMs(),
       "idle_wake_interval_ms": IdleWakeIntervalMs,

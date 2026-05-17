@@ -15,7 +15,10 @@ this file adds the operational details an agent needs to act safely.
 4. Define verification. Turn every bugfix or feature into concrete checks and
    run them before finishing when feasible. For runtime, compositor, reload, or
    session-behavior changes, run `nimble liveReload` as the final verification
-   step after automated tests/build checks pass.
+   step after automated tests/build checks pass. If the current session has had
+   a recent keyboard lock, reload hang, missing-manager incident, or manual
+   recovery after `nimble liveReload`, do not run `nimble liveReload` again
+   without explicit human approval.
 5. Format Nim-family files with `nph`. Run `nph` on touched `.nim`,
    `.nims`, and `.nimble` files before verification, and use `nph --check`
    when validating formatting without writing changes.

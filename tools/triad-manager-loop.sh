@@ -25,8 +25,10 @@ while :; do
   ln -sfn "$log" "$latest" 2>/dev/null || true
   printf '%s\n' "triad-manager-loop: starting triad, log=$log" >&2
 
+  set +e
   "$triad_bin" $triad_args >>"$log" 2>&1
   status="$?"
+  set -e
   end_sec="$(date +%s)"
   runtime_sec=$((end_sec - start_sec))
 
@@ -45,7 +47,12 @@ while :; do
       sleep 0.2
     fi
   else
-    printf '%s\n' "triad-manager-loop: triad exited with status $status; leaving River session" >&2
-    exit "$status"
+    if [ "$rapid_restarts" -ge 3 ]; then
+      printf '%s\n' "triad-manager-loop: triad exited with status $status after ${runtime_sec}s; rapid restart count ${rapid_restarts}, backing off" >&2
+      sleep 5
+    else
+      printf '%s\n' "triad-manager-loop: triad exited with status $status after ${runtime_sec}s; restarting" >&2
+      sleep 1
+    fi
   fi
 done

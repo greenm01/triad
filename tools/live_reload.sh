@@ -46,6 +46,89 @@ latest_triad_pid() {
   pgrep -n -x triad 2>/dev/null || true
 }
 
+running_triad_pid() {
+  perf_status="$(timeout 1 "$repo_dir/triad" msg perf-status 2>/dev/null || true)"
+  if [ -n "$perf_status" ]; then
+    pid="$(
+      echo "$perf_status" | python3 -c '
+import json
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+pid = data.get("pid", 0)
+if isinstance(pid, int) and pid > 0:
+    print(pid)
+'
+    )"
+    if [ -n "$pid" ]; then
+      echo "$pid"
+      return 0
+    fi
+  fi
+  latest_triad_pid
+}
+
+validate_live_config() {
+  report="$(mktemp "${TMPDIR:-/tmp}/triad-live-config.XXXXXX")"
+  if "$repo_dir/triad" validate-config >"$report" 2>&1; then
+    while IFS= read -r line; do
+      log_info "config validation $line"
+    done < "$report"
+    rm -f "$report"
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    log_error "config validation $line"
+  done < "$report"
+  rm -f "$report"
+  fail "live config validation failed; aborting reload before installing binaries"
+}
+
+backup_live_binaries() {
+  [ -x "$bin_dir/triad" ] ||
+    fail "missing installed live binary: $bin_dir/triad"
+  [ -x "$bin_dir/triad_niri" ] ||
+    fail "missing installed live binary: $bin_dir/triad_niri"
+
+  backup_dir="$(live_reload_log_dir)/rollback-$(date +%Y%m%d-%H%M%S)-$$"
+  mkdir -p "$backup_dir"
+  cp -p "$bin_dir/triad" "$backup_dir/triad"
+  cp -p "$bin_dir/triad_niri" "$backup_dir/triad_niri"
+  log_info "backed up live binaries to $backup_dir"
+}
+
+restore_live_binaries() {
+  if [ -z "${backup_dir:-}" ]; then
+    log_error "no live binary backup is available for rollback"
+    return 1
+  fi
+  if [ ! -x "$backup_dir/triad" ] || [ ! -x "$backup_dir/triad_niri" ]; then
+    log_error "live binary backup is incomplete: $backup_dir"
+    return 1
+  fi
+
+  atomic_install "$backup_dir/triad" "$bin_dir/triad" 755
+  atomic_install "$backup_dir/triad_niri" "$bin_dir/triad_niri" 755
+  log_info "restored live binaries from $backup_dir"
+}
+
+rollback_and_fail() {
+  message="$1"
+  log_error "$message"
+  if restore_live_binaries; then
+    if "$bin_dir/triad" msg triad-reload >/dev/null 2>&1; then
+      log_info "requested reload after restoring previous live binaries"
+    else
+      log_error "restored previous live binaries, but rollback reload IPC failed"
+    fi
+  fi
+  exit 1
+}
+
 active_tag_from_snapshot() {
   echo "$1" |
     sed -n 's/.*"active_tag"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' |
@@ -430,13 +513,13 @@ wait_restore_ready() {
 wait_reload_ready() {
   i=0
   while [ "$i" -lt 50 ]; do
-    current_pid="$(latest_triad_pid)"
+    current_pid="$(running_triad_pid)"
     if [ -n "$current_pid" ] && [ "$current_pid" != "$old_pid" ]; then
-      wait_restore_ready ||
-        fail "installed binaries and requested reload, but restored workspace state did not become ready"
-      ready_pid="$(latest_triad_pid)"
+      wait_restore_ready || return 1
+      ready_pid="$(running_triad_pid)"
       if [ -z "$ready_pid" ] || [ "$ready_pid" = "$old_pid" ]; then
-        fail "restored workspace state became ready, but no replacement triad manager remained"
+        log_error "restored workspace state became ready, but no replacement triad manager remained"
+        return 1
       fi
       log_info "installed binaries and reloaded manager pid $old_pid -> $ready_pid; restored active tag $snapshot_active_tag is ready"
       return 0
@@ -489,21 +572,24 @@ repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 bin_dir="${TRIAD_LIVE_BIN_DIR:-$HOME/.local/bin}"
 runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
 restore_path="${TRIAD_LIVE_RESTORE_PATH:-$runtime_dir/triad-live-restore.json}"
-old_pid="$(latest_triad_pid)"
+backup_dir=""
+old_pid="$(running_triad_pid)"
 
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"
 
+validate_live_config
 snapshot_restore_state "$restore_path"
 
 mkdir -p "$bin_dir"
+backup_live_binaries
 
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 
 if "$repo_dir/triad" msg triad-reload; then
   wait_reload_ready ||
-    fail "installed binaries and requested reload, but triad did not become ready"
+    rollback_and_fail "installed binaries and requested reload, but triad did not become ready"
 else
-  fail "installed binaries, but triad-reload IPC failed"
+  rollback_and_fail "installed binaries, but triad-reload IPC failed"
 fi
