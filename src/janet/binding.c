@@ -10,6 +10,8 @@ enum {
   TRIAD_JANET_COMMAND = 1
 };
 
+#define TRIAD_JANET_MAX_WAITERS 64
+
 typedef struct {
   int kind;
   int argc;
@@ -24,10 +26,29 @@ typedef struct {
 } TriadJanetRuntime;
 
 typedef struct {
+  JanetFiber *fiber;
+  char *event_name;
+} TriadJanetWaiter;
+
+typedef struct {
+  char *event_name;
+  JanetFunction **handlers;
+  int handler_count;
+  int handler_capacity;
+} TriadJanetHandlerList;
+
+typedef struct {
   JanetTable *env;
+  TriadJanetHandlerList *handler_lists;
+  int handler_list_count;
+  int handler_list_capacity;
+  TriadJanetWaiter *waiters;
+  int waiter_count;
+  int waiter_capacity;
 } TriadJanetScript;
 
 static TriadJanetRuntime *current_runtime = NULL;
+static TriadJanetScript *current_script = NULL;
 static int janet_init_count = 0;
 static volatile sig_atomic_t janet_eval_interrupted = 0;
 
@@ -145,8 +166,81 @@ static Janet c_command(int32_t argc, Janet *argv) {
   return janet_wrap_nil();
 }
 
+static Janet c_wait_event(int32_t argc, Janet *argv) {
+  janet_fixarity(argc, 1);
+  if (!janet_checktype(argv[0], JANET_KEYWORD)) {
+    janet_panic("triad/wait-event expects an event keyword");
+  }
+  JanetArray *marker = janet_array(2);
+  janet_array_push(marker, janet_ckeywordv("triad/wait-event"));
+  janet_array_push(marker, argv[0]);
+  janet_signalv(JANET_SIGNAL_YIELD, janet_wrap_array(marker));
+  return janet_wrap_nil();
+}
+
+static Janet c_on(int32_t argc, Janet *argv) {
+  janet_fixarity(argc, 2);
+  if (current_script == NULL) {
+    janet_panic("triad/on is only available while loading a persistent script");
+  }
+  if (!janet_checktype(argv[0], JANET_KEYWORD)) {
+    janet_panic("triad/on expects an event keyword");
+  }
+  if (!janet_checktype(argv[1], JANET_FUNCTION)) {
+    janet_panic("triad/on expects a handler function");
+  }
+
+  char *event_name = copy_janet_string(janet_unwrap_keyword(argv[0]));
+  if (event_name == NULL) janet_panic("failed to register handler");
+  JanetFunction *handler = janet_unwrap_function(argv[1]);
+
+  TriadJanetHandlerList *list = NULL;
+  for (int i = 0; i < current_script->handler_list_count; i++) {
+    if (strcmp(current_script->handler_lists[i].event_name, event_name) == 0) {
+      list = &current_script->handler_lists[i];
+      break;
+    }
+  }
+  if (list == NULL) {
+    if (current_script->handler_list_count == current_script->handler_list_capacity) {
+      int new_capacity =
+        current_script->handler_list_capacity == 0
+          ? 4
+          : current_script->handler_list_capacity * 2;
+      TriadJanetHandlerList *new_lists = (TriadJanetHandlerList *) realloc(
+        current_script->handler_lists,
+        sizeof(TriadJanetHandlerList) * (size_t) new_capacity);
+      if (new_lists == NULL) {
+        free(event_name);
+        janet_panic("failed to register handler");
+      }
+      current_script->handler_lists = new_lists;
+      current_script->handler_list_capacity = new_capacity;
+    }
+    list = &current_script->handler_lists[current_script->handler_list_count++];
+    memset(list, 0, sizeof(TriadJanetHandlerList));
+    list->event_name = event_name;
+    event_name = NULL;
+  }
+  if (event_name != NULL) free(event_name);
+
+  if (list->handler_count == list->handler_capacity) {
+    int new_capacity = list->handler_capacity == 0 ? 4 : list->handler_capacity * 2;
+    JanetFunction **new_handlers = (JanetFunction **) realloc(
+      list->handlers, sizeof(JanetFunction *) * (size_t) new_capacity);
+    if (new_handlers == NULL) janet_panic("failed to register handler");
+    list->handlers = new_handlers;
+    list->handler_capacity = new_capacity;
+  }
+  janet_gcroot(janet_wrap_function(handler));
+  list->handlers[list->handler_count++] = handler;
+  return janet_wrap_nil();
+}
+
 static const JanetReg triad_cfuns[] = {
   {"triad/command", c_command, NULL},
+  {"triad/on", c_on, NULL},
+  {"triad/wait-event", c_wait_event, NULL},
   {NULL, NULL, NULL}
 };
 
@@ -237,6 +331,92 @@ static int eval_source_with_timer(
   return status == 0;
 }
 
+static JanetSignal pcall_with_timer(
+    TriadJanetRuntime *runtime,
+    JanetFunction *function,
+    int32_t argc,
+    const Janet *argv,
+    int32_t fuel_limit,
+    Janet *out,
+    JanetFiber **fiber) {
+  struct sigaction next_action;
+  struct sigaction previous_action;
+  struct itimerval next_timer;
+  struct itimerval previous_timer;
+  int32_t micros = fuel_limit <= 0 ? 1000 : fuel_limit;
+
+  memset(&next_action, 0, sizeof(next_action));
+  next_action.sa_handler = janet_eval_alarm_handler;
+  sigemptyset(&next_action.sa_mask);
+  sigaction(SIGALRM, &next_action, &previous_action);
+  getitimer(ITIMER_REAL, &previous_timer);
+
+  memset(&next_timer, 0, sizeof(next_timer));
+  next_timer.it_value.tv_sec = micros / 1000000;
+  next_timer.it_value.tv_usec = micros % 1000000;
+  if (next_timer.it_value.tv_sec == 0 && next_timer.it_value.tv_usec == 0) {
+    next_timer.it_value.tv_usec = 1000;
+  }
+
+  janet_eval_interrupted = 0;
+  setitimer(ITIMER_REAL, &next_timer, NULL);
+  JanetSignal signal = janet_pcall(function, argc, argv, out, fiber);
+
+  memset(&next_timer, 0, sizeof(next_timer));
+  setitimer(ITIMER_REAL, &next_timer, NULL);
+  sigaction(SIGALRM, &previous_action, NULL);
+  setitimer(ITIMER_REAL, &previous_timer, NULL);
+
+  if (janet_eval_interrupted) {
+    set_error(runtime, "Janet script exceeded fuel limit");
+    janet_interpreter_interrupt_handled(NULL);
+    return JANET_SIGNAL_ERROR;
+  }
+  return signal;
+}
+
+static JanetSignal continue_with_timer(
+    TriadJanetRuntime *runtime,
+    JanetFiber *fiber,
+    Janet input,
+    int32_t fuel_limit,
+    Janet *out) {
+  struct sigaction next_action;
+  struct sigaction previous_action;
+  struct itimerval next_timer;
+  struct itimerval previous_timer;
+  int32_t micros = fuel_limit <= 0 ? 1000 : fuel_limit;
+
+  memset(&next_action, 0, sizeof(next_action));
+  next_action.sa_handler = janet_eval_alarm_handler;
+  sigemptyset(&next_action.sa_mask);
+  sigaction(SIGALRM, &next_action, &previous_action);
+  getitimer(ITIMER_REAL, &previous_timer);
+
+  memset(&next_timer, 0, sizeof(next_timer));
+  next_timer.it_value.tv_sec = micros / 1000000;
+  next_timer.it_value.tv_usec = micros % 1000000;
+  if (next_timer.it_value.tv_sec == 0 && next_timer.it_value.tv_usec == 0) {
+    next_timer.it_value.tv_usec = 1000;
+  }
+
+  janet_eval_interrupted = 0;
+  setitimer(ITIMER_REAL, &next_timer, NULL);
+  JanetSignal signal = janet_continue(fiber, input, out);
+
+  memset(&next_timer, 0, sizeof(next_timer));
+  setitimer(ITIMER_REAL, &next_timer, NULL);
+  sigaction(SIGALRM, &previous_action, NULL);
+  setitimer(ITIMER_REAL, &previous_timer, NULL);
+
+  if (janet_eval_interrupted) {
+    set_error(runtime, "Janet script exceeded fuel limit");
+    janet_interpreter_interrupt_handled(NULL);
+    return JANET_SIGNAL_ERROR;
+  }
+  return signal;
+}
+
 static int eval_source(
     TriadJanetRuntime *runtime,
     JanetTable *env,
@@ -250,6 +430,212 @@ static int eval_source(
     set_error(runtime, message == NULL ? "Janet evaluation failed" : message);
     if (message != NULL) free(message);
     return 0;
+  }
+  return 1;
+}
+
+static Janet resolve_env_symbol(JanetTable *env, const char *name) {
+  Janet value = janet_wrap_nil();
+  if (janet_resolve(env, janet_csymbol(name), &value) == JANET_BINDING_NONE) {
+    JanetTable *lookup = janet_env_lookup(env);
+    return janet_get(janet_wrap_table(lookup), janet_csymbolv(name));
+  }
+  return value;
+}
+
+static void free_waiter(TriadJanetWaiter *waiter) {
+  if (waiter == NULL) return;
+  if (waiter->fiber != NULL) {
+    janet_gcunroot(janet_wrap_fiber(waiter->fiber));
+  }
+  if (waiter->event_name != NULL) {
+    free(waiter->event_name);
+  }
+  memset(waiter, 0, sizeof(TriadJanetWaiter));
+}
+
+static void clear_waiters(TriadJanetScript *script) {
+  if (script == NULL) return;
+  for (int i = 0; i < script->waiter_count; i++) {
+    free_waiter(&script->waiters[i]);
+  }
+  script->waiter_count = 0;
+}
+
+static void free_handler_list(TriadJanetHandlerList *list) {
+  if (list == NULL) return;
+  if (list->event_name != NULL) free(list->event_name);
+  if (list->handlers != NULL) {
+    for (int i = 0; i < list->handler_count; i++) {
+      if (list->handlers[i] != NULL) {
+        janet_gcunroot(janet_wrap_function(list->handlers[i]));
+      }
+    }
+    free(list->handlers);
+  }
+  memset(list, 0, sizeof(TriadJanetHandlerList));
+}
+
+static void clear_handlers(TriadJanetScript *script) {
+  if (script == NULL) return;
+  for (int i = 0; i < script->handler_list_count; i++) {
+    free_handler_list(&script->handler_lists[i]);
+  }
+  script->handler_list_count = 0;
+}
+
+static int parse_wait_event(Janet value, char **event_name) {
+  const Janet *items = NULL;
+  int32_t len = 0;
+  if (!janet_indexed_view(value, &items, &len) || len != 2) return 0;
+  if (!janet_checktype(items[0], JANET_KEYWORD) ||
+      janet_cstrcmp(janet_unwrap_keyword(items[0]), "triad/wait-event") != 0) {
+    return 0;
+  }
+  if (!janet_checktype(items[1], JANET_KEYWORD)) return 0;
+  *event_name = copy_janet_string(janet_unwrap_keyword(items[1]));
+  return *event_name != NULL;
+}
+
+static int append_waiter(
+    TriadJanetRuntime *runtime,
+    TriadJanetScript *script,
+    JanetFiber *fiber,
+    char *event_name,
+    int rooted) {
+  if (script->waiter_count >= TRIAD_JANET_MAX_WAITERS) {
+    if (rooted) janet_gcunroot(janet_wrap_fiber(fiber));
+    free(event_name);
+    set_error(runtime, "Janet script exceeded waiter limit");
+    return 0;
+  }
+  if (script->waiter_count == script->waiter_capacity) {
+    int new_capacity =
+      script->waiter_capacity == 0 ? 4 : script->waiter_capacity * 2;
+    TriadJanetWaiter *new_waiters = (TriadJanetWaiter *) realloc(
+      script->waiters, sizeof(TriadJanetWaiter) * (size_t) new_capacity);
+    if (new_waiters == NULL) {
+      if (rooted) janet_gcunroot(janet_wrap_fiber(fiber));
+      free(event_name);
+      set_error(runtime, "failed to append Janet waiter");
+      return 0;
+    }
+    script->waiters = new_waiters;
+    script->waiter_capacity = new_capacity;
+  }
+  if (!rooted) janet_gcroot(janet_wrap_fiber(fiber));
+  TriadJanetWaiter waiter;
+  waiter.fiber = fiber;
+  waiter.event_name = event_name;
+  script->waiters[script->waiter_count++] = waiter;
+  return 1;
+}
+
+static int signal_failed(TriadJanetRuntime *runtime, JanetSignal signal, Janet out) {
+  if (runtime->last_error == NULL || runtime->last_error[0] == '\0') {
+    JanetString desc = janet_description(out);
+    char *message = copy_janet_string(desc);
+    set_error(
+      runtime,
+      message == NULL || message[0] == '\0' ? janet_signal_names[signal] : message);
+    if (message != NULL) free(message);
+  }
+  return 0;
+}
+
+static int handle_signal(
+    TriadJanetRuntime *runtime,
+    TriadJanetScript *script,
+    JanetFiber *fiber,
+    JanetSignal signal,
+    Janet out,
+    int rooted) {
+  if (signal == JANET_SIGNAL_OK) {
+    if (rooted) janet_gcunroot(janet_wrap_fiber(fiber));
+    return 1;
+  }
+  if (signal == JANET_SIGNAL_YIELD) {
+    char *event_name = NULL;
+    if (!parse_wait_event(out, &event_name)) {
+      if (rooted) janet_gcunroot(janet_wrap_fiber(fiber));
+      set_error(runtime, "Janet hook yielded unsupported value");
+      return 0;
+    }
+    return append_waiter(runtime, script, fiber, event_name, rooted);
+  }
+  if (rooted) janet_gcunroot(janet_wrap_fiber(fiber));
+  return signal_failed(runtime, signal, out);
+}
+
+static TriadJanetWaiter take_waiter(TriadJanetScript *script, int index) {
+  TriadJanetWaiter waiter = script->waiters[index];
+  for (int i = index + 1; i < script->waiter_count; i++) {
+    script->waiters[i - 1] = script->waiters[i];
+  }
+  script->waiter_count--;
+  memset(&script->waiters[script->waiter_count], 0, sizeof(TriadJanetWaiter));
+  return waiter;
+}
+
+static int resume_waiters(
+    TriadJanetRuntime *runtime,
+    TriadJanetScript *script,
+    const char *event_name,
+    Janet event_value,
+    const char *path,
+    int32_t fuel_limit) {
+  (void) path;
+  int index = 0;
+  int initial_count = script->waiter_count;
+  while (index < script->waiter_count && index < initial_count) {
+    if (strcmp(script->waiters[index].event_name, event_name) != 0) {
+      index++;
+      continue;
+    }
+    TriadJanetWaiter waiter = take_waiter(script, index);
+    Janet out;
+    JanetSignal signal = continue_with_timer(
+      runtime, waiter.fiber, event_value, fuel_limit, &out);
+    free(waiter.event_name);
+    waiter.event_name = NULL;
+    if (!handle_signal(runtime, script, waiter.fiber, signal, out, 1)) {
+      return 0;
+    }
+    initial_count--;
+  }
+  return 1;
+}
+
+static int dispatch_handlers(
+    TriadJanetRuntime *runtime,
+    TriadJanetScript *script,
+    const char *event_name,
+    Janet event_value,
+    int32_t fuel_limit) {
+  TriadJanetHandlerList *list = NULL;
+  for (int i = 0; i < script->handler_list_count; i++) {
+    if (strcmp(script->handler_lists[i].event_name, event_name) == 0) {
+      list = &script->handler_lists[i];
+      break;
+    }
+  }
+  if (list == NULL) return 1;
+
+  int handler_count = list->handler_count;
+  for (int32_t i = 0; i < handler_count; i++) {
+    Janet out;
+    JanetFiber *fiber = NULL;
+    JanetSignal signal = pcall_with_timer(
+      runtime,
+      list->handlers[i],
+      1,
+      &event_value,
+      fuel_limit,
+      &out,
+      &fiber);
+    if (!handle_signal(runtime, script, fiber, signal, out, 0)) {
+      return 0;
+    }
   }
   return 1;
 }
@@ -325,8 +711,10 @@ void *triad_janet_script_load(void *runtime_ptr, const char *bootstrap_source, c
   janet_gcroot(janet_wrap_table(script->env));
 
   current_runtime = runtime;
+  current_script = script;
   if (!eval_source(runtime, script->env, bootstrap_source, path)) {
     current_runtime = NULL;
+    current_script = NULL;
     triad_janet_script_free(script);
     return NULL;
   }
@@ -336,15 +724,17 @@ void *triad_janet_script_load(void *runtime_ptr, const char *bootstrap_source, c
       set_error(runtime, "Janet script load failed");
     }
     current_runtime = NULL;
+    current_script = NULL;
     triad_janet_script_free(script);
     return NULL;
   }
   current_runtime = NULL;
+  current_script = NULL;
   clear_runtime(runtime);
   return script;
 }
 
-int triad_janet_script_dispatch(void *runtime_ptr, void *script_ptr, const char *event_source, const char *path, int32_t fuel_limit) {
+int triad_janet_script_dispatch(void *runtime_ptr, void *script_ptr, const char *event_name, const char *event_source, const char *path, int32_t fuel_limit) {
   TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
   TriadJanetScript *script = (TriadJanetScript *) script_ptr;
   if (runtime == NULL || script == NULL || script->env == NULL) return 0;
@@ -352,31 +742,36 @@ int triad_janet_script_dispatch(void *runtime_ptr, void *script_ptr, const char 
   harden_sandbox();
 
   current_runtime = runtime;
+  current_script = script;
   if (!eval_source(runtime, script->env, event_source, path)) {
     current_runtime = NULL;
+    current_script = NULL;
     return 0;
   }
-  Janet out;
-  if (!eval_source_with_timer(
-        runtime,
-        script->env,
-        "(triad/dispatch-event triad/current-event)",
-        path,
-        fuel_limit,
-        &out)) {
-    if (runtime->last_error == NULL || runtime->last_error[0] == '\0') {
-      set_error(runtime, "Janet event dispatch failed");
-    }
+  Janet event_value =
+    resolve_env_symbol(script->env, "triad/current-event");
+  if (!resume_waiters(runtime, script, event_name, event_value, path, fuel_limit)) {
     current_runtime = NULL;
+    current_script = NULL;
+    return 0;
+  }
+  if (!dispatch_handlers(runtime, script, event_name, event_value, fuel_limit)) {
+    current_runtime = NULL;
+    current_script = NULL;
     return 0;
   }
   current_runtime = NULL;
+  current_script = NULL;
   return 1;
 }
 
 void triad_janet_script_free(void *script_ptr) {
   TriadJanetScript *script = (TriadJanetScript *) script_ptr;
   if (script == NULL) return;
+  clear_waiters(script);
+  if (script->waiters != NULL) free(script->waiters);
+  clear_handlers(script);
+  if (script->handler_lists != NULL) free(script->handler_lists);
   if (script->env != NULL) {
     janet_gcunroot(janet_wrap_table(script->env));
   }

@@ -181,6 +181,7 @@ proc evalScriptsDetailed*(
         triadJanetScriptDispatch(
           runtime.handle,
           entry.script,
+          cstring(event),
           cstring(eventSnapshotSource),
           cstring(entry.path),
           runtime.config.fuelLimit,

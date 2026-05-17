@@ -24,7 +24,7 @@ proc triadJanetScriptLoad*(
 proc triadJanetScriptDispatch*(
   runtime: JanetHandle,
   script: JanetScriptHandle,
-  eventSource, path: cstring,
+  eventName, eventSource, path: cstring,
   fuelLimit: int32,
 ): cint {.importc: "triad_janet_script_dispatch".}
 

@@ -575,6 +575,164 @@ suite "embedded Janet runtime":
     check results[0].messages[0].focusTag == 2
     check results[0].messages[1].focusTag == 3
 
+  test "hook fibers wait for future events and preserve local state":
+    let dir = getTempDir() / ("triad-hook-fiber-wait-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "waiter.janet",
+      """
+(triad/on :window-opened
+  (fn [opened]
+    (let [ready (triad/wait-event :window-ready)]
+      (triad/command "focus-window" (ready :window-id))
+      (triad/command "focus-tag" (opened :window-id)))))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "waiter.janet"):
+        removeFile(dir / "waiter.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let opened = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened :window-id 2}", testSnapshot()
+    )
+    let ready = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 12, appId: "kitty")),
+      testSnapshot(),
+    )
+
+    check opened.len == 1
+    check opened[0].outcome == ScriptOutcome.Evaluated
+    check opened[0].messages.len == 0
+    check ready.len == 1
+    check ready[0].outcome == ScriptOutcome.Evaluated
+    check ready[0].messages.len == 2
+    check ready[0].messages[0].kind == MsgKind.CmdFocusWindowById
+    check ready[0].messages[0].focusWindowId == 12
+    check ready[0].messages[1].kind == MsgKind.CmdFocusTag
+    check ready[0].messages[1].focusTag == 2
+
+  test "hook fibers emit before yield and resume before matching handlers":
+    let dir = getTempDir() / ("triad-hook-fiber-order-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "order.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (triad/command "focus-tag" 1)
+    (triad/wait-event :window-ready)
+    (triad/command "focus-tag" 2)))
+(triad/on :window-ready
+  (fn [_]
+    (triad/command "focus-tag" 3)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "order.janet"):
+        removeFile(dir / "order.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let opened = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let ready = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 3, appId: "kitty")),
+      testSnapshot(),
+    )
+
+    check opened.len == 1
+    check opened[0].messages.len == 1
+    check opened[0].messages[0].focusTag == 1
+    check ready.len == 1
+    check ready[0].messages.len == 2
+    check ready[0].messages[0].focusTag == 2
+    check ready[0].messages[1].focusTag == 3
+
+  test "hook fibers can re-yield for another event":
+    let dir = getTempDir() / ("triad-hook-fiber-reyield-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "relay.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (triad/wait-event :window-ready)
+    (triad/command "focus-tag" 4)
+    (triad/wait-event :window-closed)
+    (triad/command "focus-tag" 5)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "relay.janet"):
+        removeFile(dir / "relay.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    discard runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let ready = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 4, appId: "kitty")),
+      testSnapshot(),
+    )
+    let closed = runtime.evalScriptsDetailed(
+      "window-closed", "{:kind :window-closed :window-id 4 :window nil}", testSnapshot()
+    )
+
+    check ready.len == 1
+    check ready[0].messages.len == 1
+    check ready[0].messages[0].focusTag == 4
+    check closed.len == 1
+    check closed[0].messages.len == 1
+    check closed[0].messages[0].focusTag == 5
+
+  test "deleted scripts discard waiting hook fibers":
+    let dir = getTempDir() / ("triad-hook-fiber-delete-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "waiter.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (triad/wait-event :window-ready)
+    (triad/command "focus-tag" 6)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "waiter.janet"):
+        removeFile(dir / "waiter.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let opened = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    removeFile(dir / "waiter.janet")
+    let ready = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 6, appId: "kitty")),
+      testSnapshot(),
+    )
+
+    check opened.len == 1
+    check opened[0].outcome == ScriptOutcome.Evaluated
+    check opened[0].messages.len == 0
+    check ready.len == 0
+
   test "missing script directory skips evaluation":
     var runtime = initJanetRuntime(testConfig(getTempDir() / "triad-missing-scripts"))
     defer:
@@ -640,6 +798,70 @@ suite "embedded Janet runtime":
     check failed.len == 1
     check failed[0].outcome == ScriptOutcome.EvalFailed
     check failed[0].error.len > 0
+    check cached.len == 1
+    check cached[0].outcome == ScriptOutcome.CachedFailed
+
+  test "hook fiber invalid wait arguments are cached until source changes":
+    let dir = getTempDir() / ("triad-hook-fiber-invalid-wait-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "broken.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (triad/wait-event "window-ready")))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "broken.janet"):
+        removeFile(dir / "broken.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let failed = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let cached = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check failed.len == 1
+    check failed[0].outcome == ScriptOutcome.EvalFailed
+    check failed[0].error.len > 0
+    check cached.len == 1
+    check cached[0].outcome == ScriptOutcome.CachedFailed
+
+  test "hook fiber unsupported raw yields are cached until source changes":
+    let dir = getTempDir() / ("triad-hook-fiber-raw-yield-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "broken.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (yield :manual)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "broken.janet"):
+        removeFile(dir / "broken.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let failed = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let cached = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+
+    check failed.len == 1
+    check failed[0].outcome == ScriptOutcome.EvalFailed
+    check failed[0].error.contains("unsupported")
     check cached.len == 1
     check cached[0].outcome == ScriptOutcome.CachedFailed
 
@@ -1212,3 +1434,40 @@ suite "embedded Janet runtime":
     check results[0].outcome == ScriptOutcome.EvalFailed
     check results[0].error.len > 0
     check results[0].messages.len == 0
+
+  test "fuel limit rejects non-terminating resumed hook fibers":
+    let dir = getTempDir() / ("triad-resumed-fiber-fuel-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "loop.janet",
+      """
+(triad/on :window-opened
+  (fn [_]
+    (triad/wait-event :window-ready)
+    (while true nil)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfigFuel(dir, 1000))
+    defer:
+      runtime.close()
+      if fileExists(dir / "loop.janet"):
+        removeFile(dir / "loop.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let opened = runtime.evalScriptsDetailed(
+      "window-opened", "{:kind :window-opened}", testSnapshot()
+    )
+    let ready = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 7, appId: "kitty")),
+      testSnapshot(),
+    )
+
+    check opened.len == 1
+    check opened[0].outcome == ScriptOutcome.Evaluated
+    check opened[0].messages.len == 0
+    check ready.len == 1
+    check ready[0].outcome == ScriptOutcome.EvalFailed
+    check ready[0].error.len > 0
+    check ready[0].messages.len == 0

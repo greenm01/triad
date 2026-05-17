@@ -84,6 +84,17 @@ Top-level script code runs at load/reload time, not on every event. Put
 event-time commands inside `triad/on` handlers; commands emitted while loading a
 script are discarded.
 
+Handlers can suspend until a later event with `triad/wait-event`. The current
+handler yields back to Triad immediately and resumes with the matching event map:
+
+```janet
+(triad/on :window-opened
+  (fn [opened]
+    (let [ready (triad/wait-event :window-ready)]
+      (when (= (opened :window-id) (ready :window-id))
+        (triad/command "focus-window" (ready :window-id))))))
+```
+
 A single script file can handle any combination of events for a concern —
 including window placement on open and any follow-up reactions:
 
@@ -198,7 +209,8 @@ the built-in Nim layouts without recompiling Triad.
 - **Access the host filesystem, network, or OS.** `os/*`, `net/*`, file I/O,
   and `ffi` are not loaded into the sandbox environment.
 - **Block the main loop.** Scripts run synchronously in the event loop.
-  Yielding hook fibers are not scheduled yet; keep handlers short and bounded.
+  `triad/wait-event` yields back to Triad, but there is no sleep, timer, thread,
+  or Janet event-loop integration yet.
 - **Replace Quickshell.** Janet has no Qt/QML bindings. Shell UI — bars,
   panels, notifications — remains Quickshell's domain.
 
@@ -313,6 +325,7 @@ triad/media-*             playerctl playback helpers
 triad/screenshot-*        Triad screenshot command helpers
 triad/record-*            wf-recorder recipe helpers
 triad/on                  persistent event handler registration
+triad/wait-event          yield until a future event keyword
 ```
 
 `triad/workspace-empty?` and `triad/first-empty-workspace` take an

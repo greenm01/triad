@@ -76,20 +76,4 @@ const JanetPreludeSource* =
 """ &
   JanetHelperPreludeSource
 
-const JanetPersistentPreludeSource* =
-  """
-(def triad/handlers @{})
-
-(defn triad/on [event handler]
-  (let [handlers (or (triad/handlers event) @[])]
-    (array/push handlers handler)
-    (put triad/handlers event handlers))
-  nil)
-
-(defn triad/dispatch-event [event]
-  (when event
-    (when-let [handlers (triad/handlers (event :kind))]
-      (each handler handlers
-        (handler event)))))
-""" &
-  JanetHelperPreludeSource
+const JanetPersistentPreludeSource* = JanetHelperPreludeSource
