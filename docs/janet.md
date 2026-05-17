@@ -27,7 +27,8 @@ same `Model.update(msg)` reducer boundary as IPC and keybinds, and pay no
 socket or JSON round-trip cost.
 
 This is the primary integration. It currently covers synchronous event scripts;
-custom layout functions remain a future phase.
+custom layout functions have an internal Phase 1 ABI for pure geometry, but no
+user-facing config or IPC selection yet.
 
 ### 2. External client scripts (zero Triad changes required)
 
@@ -197,11 +198,26 @@ present on this tag, otherwise claim a new tag; check how many windows already
 share a tag before deciding whether to float; use a different layout when the
 main IDE window is already open.
 
-### Custom layout functions (future)
+### Custom layout functions (internal Phase 1)
 
 Pure Janet functions that receive column and window geometry data and return
 placement instructions, slotting into the layout projection pipeline alongside
 the built-in Nim layouts without recompiling Triad.
+
+The current surface is intentionally internal and test-oriented. A script may
+register a pure geometry function:
+
+```janet
+(triad/def-layout :halves
+  (fn [ctx]
+    [{:window-id 10 :x 0 :y 0 :w 960 :h 1080}
+     {:window-id 11 :x 960 :y 0 :w 960 :h 1080}]))
+```
+
+Triad validates that the result contains exactly one positive-sized rectangle
+for every tiled projected window. Layout functions cannot emit
+`triad/command`; doing so fails evaluation and falls back. Phase 2 will add the
+public config and IPC selection layer.
 
 ---
 

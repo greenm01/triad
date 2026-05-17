@@ -28,6 +28,17 @@ proc triadJanetScriptDispatch*(
   fuelLimit: int32,
 ): cint {.importc: "triad_janet_script_dispatch".}
 
+proc triadJanetScriptHasLayout*(
+  script: JanetScriptHandle, layoutName: cstring
+): cint {.importc: "triad_janet_script_has_layout".}
+
+proc triadJanetScriptEvalLayout*(
+  runtime: JanetHandle,
+  script: JanetScriptHandle,
+  layoutName, contextSource, path: cstring,
+  fuelLimit: int32,
+): cint {.importc: "triad_janet_script_eval_layout".}
+
 proc triadJanetScriptFree*(
   script: JanetScriptHandle
 ) {.importc: "triad_janet_script_free".}
@@ -51,3 +62,27 @@ proc triadJanetActionArgc*(
 proc triadJanetActionArgv*(
   runtime: JanetHandle, index, argIndex: cint
 ): cstring {.importc: "triad_janet_action_argv".}
+
+proc triadJanetLayoutInstructionCount*(
+  runtime: JanetHandle
+): cint {.importc: "triad_janet_layout_instruction_count".}
+
+proc triadJanetLayoutWindowId*(
+  runtime: JanetHandle, index: cint
+): uint32 {.importc: "triad_janet_layout_window_id".}
+
+proc triadJanetLayoutX*(
+  runtime: JanetHandle, index: cint
+): int32 {.importc: "triad_janet_layout_x".}
+
+proc triadJanetLayoutY*(
+  runtime: JanetHandle, index: cint
+): int32 {.importc: "triad_janet_layout_y".}
+
+proc triadJanetLayoutW*(
+  runtime: JanetHandle, index: cint
+): int32 {.importc: "triad_janet_layout_w".}
+
+proc triadJanetLayoutH*(
+  runtime: JanetHandle, index: cint
+): int32 {.importc: "triad_janet_layout_h".}

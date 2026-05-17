@@ -1,8 +1,8 @@
 import std/[algorithm, options, os, sequtils, strutils, tables, times]
 import chronicles
 import ../core/msg
-import ../types/[janet_manifest, runtime_values, shell_snapshot]
-import command_api, snapshot_api, binding, prelude
+import ../types/[janet_layouts, janet_manifest, runtime_values, shell_snapshot]
+import command_api, layout_api, snapshot_api, binding, prelude
 
 type
   ScriptCacheEntry* = object
@@ -204,3 +204,115 @@ proc evalScriptsDetailed*(
         evalResult.error = failedEntry.error
     evalResult.durationMs = int64((epochTime() - started) * 1000)
     result.add(evalResult)
+
+proc tiledWindowCount(context: JanetLayoutContext): int =
+  for column in context.tag.columns:
+    result += column.windows.len
+
+proc fallbackLayoutResult(
+    context: JanetLayoutContext,
+    outcome: JanetLayoutOutcome,
+    reason: string,
+    started: float,
+    path = "",
+    error = "",
+): JanetLayoutEvalResult =
+  JanetLayoutEvalResult(
+    layoutId: context.layoutId,
+    path: path,
+    outcome: outcome,
+    error: error,
+    fallbackReason: reason,
+    durationMs: int64((epochTime() - started) * 1000),
+    inputWindowCount: context.tiledWindowCount(),
+  )
+
+proc evalLayoutDetailed*(
+    runtime: var JanetRuntime, snapshot: ShellSnapshot, context: JanetLayoutContext
+): JanetLayoutEvalResult =
+  let started = epochTime()
+  if runtime.handle == nil:
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.Disabled, "janet runtime disabled", started
+    )
+    result.logLayoutEval()
+    return
+
+  let paths = runtime.scriptPaths()
+  runtime.evictMissingScripts(paths)
+  if paths.len == 0:
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.Missing, "no janet layout scripts found", started
+    )
+    result.logLayoutEval()
+    return
+
+  var firstLoadError = ""
+  var firstLoadPath = ""
+  for path in paths:
+    let loaded = runtime.loadScriptEntry(path, snapshot)
+    let entry = loaded.entry
+    if entry.failed:
+      if firstLoadError.len == 0:
+        firstLoadError = entry.error
+        firstLoadPath = entry.path
+      continue
+    if triadJanetScriptHasLayout(
+      entry.script, cstring(context.layoutId.layoutIdString())
+    ) != 1:
+      continue
+
+    let evaluated =
+      triadJanetScriptEvalLayout(
+        runtime.handle,
+        entry.script,
+        cstring(context.layoutId.layoutIdString()),
+        cstring(context.layoutContextSource()),
+        cstring(entry.path),
+        runtime.config.fuelLimit,
+      ) == 1
+    if not evaluated:
+      let error = $triadJanetLastError(runtime.handle)
+      result = context.fallbackLayoutResult(
+        JanetLayoutOutcome.EvalFailed,
+        "janet layout evaluation failed",
+        started,
+        entry.path,
+        if error.len > 0: error else: "Janet layout evaluation failed",
+      )
+      result.logLayoutEval()
+      return
+
+    let instructions = runtime.handle.extractedLayoutInstructions()
+    let validation = context.validateLayoutInstructions(instructions)
+    if not validation.ok:
+      result = context.fallbackLayoutResult(
+        JanetLayoutOutcome.Invalid, validation.error, started, entry.path,
+        validation.error,
+      )
+      result.instructionCount = instructions.len
+      result.logLayoutEval()
+      return
+
+    result = JanetLayoutEvalResult(
+      layoutId: context.layoutId,
+      path: entry.path,
+      outcome: JanetLayoutOutcome.Applied,
+      durationMs: int64((epochTime() - started) * 1000),
+      inputWindowCount: context.tiledWindowCount(),
+      instructionCount: instructions.len,
+      instructions: instructions,
+    )
+    result.logLayoutEval()
+    return
+
+  if firstLoadError.len > 0:
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.LoadFailed, "janet layout script failed to load", started,
+      firstLoadPath, firstLoadError,
+    )
+  else:
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.Missing, "janet layout is not registered", started
+    )
+  result.logLayoutEval()

@@ -1,16 +1,24 @@
-import std/[options, os, strutils, unittest]
+import std/[json, options, os, strutils, tables, unittest]
 import ../src/core/msg
 import ../src/daemon/janet_script_runtime
 from ../src/daemon/state import QueuedMsgOrigin, TriadDaemon, initTriadDaemon
 import ../src/ipc/commands
-import ../src/janet/[runtime, snapshot_api]
-import ../src/types/[ipc_commands, janet_manifest, runtime_values, shell_snapshot]
+import ../src/janet/[layout_api, runtime, snapshot_api]
+import
+  ../src/types/[
+    ipc_commands, janet_layouts, janet_manifest, projection_values, runtime_values,
+    shell_snapshot,
+  ]
+import ../src/utils/behavior_log
 
 proc testConfig(dir: string): JanetConfig =
   JanetConfig(enabled: true, scriptDir: dir, fuelLimit: 500000)
 
 proc testConfigFuel(dir: string, fuelLimit: int32): JanetConfig =
   JanetConfig(enabled: true, scriptDir: dir, fuelLimit: fuelLimit)
+
+proc restoreEnv(name, value: string) =
+  putEnv(name, value)
 
 proc testSnapshot(): ShellSnapshot =
   ShellSnapshot(
@@ -135,6 +143,24 @@ proc baseUiHookState(): JanetUiHookState =
     recentWindowsScope: RecentWindowScope.All,
     recentWindowsFilter: RecentWindowFilter.All,
     layoutSwitchToastLayout: LayoutMode.Scroller,
+  )
+
+proc testLayoutContext(): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  windows[10'u32] = ProjectedWindow(id: 10, title: "Terminal", appId: "kitty")
+  windows[11'u32] = ProjectedWindow(id: 11, title: "Browser", appId: "firefox")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("halves"),
+    screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+    outerGap: 0,
+    innerGap: 0,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 10,
+      columns: @[ProjectedColumn(windows: @[10'u32, 11'u32])],
+    ),
+    windows: windows,
   )
 
 proc expectUiHookFocusTag(
@@ -350,6 +376,124 @@ suite "embedded Janet runtime":
     let evaluated = runtime.evalSource(testSnapshot(), """(os/spawn ["foot"])""")
 
     check not evaluated.ok
+
+  test "custom Janet layout returns validated geometry":
+    let dir = getTempDir() / ("triad-janet-layout-valid-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :halves
+  (fn [ctx]
+    [{:window-id 10 :x 0 :y 0 :w 500 :h 800}
+     {:window-id 11 :x 500 :y 0 :w 500 :h 800}]))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), testLayoutContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.fallbackReason.len == 0
+    check evaluated.instructions.len == 2
+    check evaluated.instructions[0].windowId == 10'u32
+    check evaluated.instructions[0].geom == Rect(x: 0, y: 0, w: 500, h: 800)
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 800)
+
+  test "custom Janet layout validation rejects incomplete geometry":
+    let dir = getTempDir() / ("triad-janet-layout-invalid-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :halves
+  (fn [ctx]
+    [{:window-id 10 :x 0 :y 0 :w 1000 :h 800}]))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), testLayoutContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Invalid
+    check evaluated.instructions.len == 0
+    check evaluated.fallbackReason.contains("omitted tiled window")
+
+  test "custom Janet layout functions cannot emit commands":
+    let dir = getTempDir() / ("triad-janet-layout-command-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :halves
+  (fn [ctx]
+    (triad/command "focus-tag" 2)
+    [{:window-id 10 :x 0 :y 0 :w 500 :h 800}
+     {:window-id 11 :x 500 :y 0 :w 500 :h 800}]))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), testLayoutContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.EvalFailed
+    check evaluated.error.contains("emitted Triad commands")
+
+  test "custom Janet layout evaluation records behavior evidence":
+    let dir = getTempDir() / ("triad-janet-layout-log-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :halves
+  (fn [ctx]
+    [{:window-id 10 :x 0 :y 0 :w 500 :h 800}
+     {:window-id 11 :x 500 :y 0 :w 500 :h 800}]))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    discard runtime.evalLayoutDetailed(testSnapshot(), testLayoutContext())
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["event"].getStr() == "janet_layout_eval"
+    check event["layout_id"].getStr() == "halves"
+    check event["outcome"].getStr() == "Applied"
+    check event["input_windows"].getInt() == 2
+    check event["instructions"].getInt() == 2
 
   test "snapshot query helpers expose current state":
     var runtime = initJanetRuntime(testConfig(getTempDir()))

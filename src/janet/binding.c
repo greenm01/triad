@@ -19,9 +19,20 @@ typedef struct {
 } TriadJanetAction;
 
 typedef struct {
+  uint32_t window_id;
+  int32_t x;
+  int32_t y;
+  int32_t w;
+  int32_t h;
+} TriadJanetLayoutInstruction;
+
+typedef struct {
   TriadJanetAction *actions;
   int action_count;
   int action_capacity;
+  TriadJanetLayoutInstruction *layout_instructions;
+  int layout_instruction_count;
+  int layout_instruction_capacity;
   char *last_error;
 } TriadJanetRuntime;
 
@@ -38,10 +49,18 @@ typedef struct {
 } TriadJanetHandlerList;
 
 typedef struct {
+  char *name;
+  JanetFunction *function;
+} TriadJanetLayout;
+
+typedef struct {
   JanetTable *env;
   TriadJanetHandlerList *handler_lists;
   int handler_list_count;
   int handler_list_capacity;
+  TriadJanetLayout *layouts;
+  int layout_count;
+  int layout_capacity;
   TriadJanetWaiter *waiters;
   int waiter_count;
   int waiter_capacity;
@@ -118,6 +137,7 @@ static void clear_runtime(TriadJanetRuntime *runtime) {
     free_action(&runtime->actions[i]);
   }
   runtime->action_count = 0;
+  runtime->layout_instruction_count = 0;
   if (runtime->last_error != NULL) {
     free(runtime->last_error);
     runtime->last_error = NULL;
@@ -144,6 +164,27 @@ static int append_action(TriadJanetRuntime *runtime, TriadJanetAction action) {
   return 1;
 }
 
+static int append_layout_instruction(
+    TriadJanetRuntime *runtime,
+    TriadJanetLayoutInstruction instruction) {
+  if (runtime == NULL) return 0;
+  if (runtime->layout_instruction_count == runtime->layout_instruction_capacity) {
+    int new_capacity =
+      runtime->layout_instruction_capacity == 0
+        ? 8
+        : runtime->layout_instruction_capacity * 2;
+    TriadJanetLayoutInstruction *new_instructions =
+      (TriadJanetLayoutInstruction *) realloc(
+        runtime->layout_instructions,
+        sizeof(TriadJanetLayoutInstruction) * (size_t) new_capacity);
+    if (new_instructions == NULL) return 0;
+    runtime->layout_instructions = new_instructions;
+    runtime->layout_instruction_capacity = new_capacity;
+  }
+  runtime->layout_instructions[runtime->layout_instruction_count++] = instruction;
+  return 1;
+}
+
 static Janet c_command(int32_t argc, Janet *argv) {
   janet_arity(argc, 1, INT32_MAX);
   TriadJanetAction action;
@@ -163,6 +204,68 @@ static Janet c_command(int32_t argc, Janet *argv) {
     free_action(&action);
     janet_panic("failed to append action");
   }
+  return janet_wrap_nil();
+}
+
+static char *copy_layout_name(Janet value) {
+  switch (janet_type(value)) {
+    case JANET_STRING:
+      return copy_janet_string(janet_unwrap_string(value));
+    case JANET_SYMBOL:
+      return copy_janet_string(janet_unwrap_symbol(value));
+    case JANET_KEYWORD:
+      return copy_janet_string(janet_unwrap_keyword(value));
+    default:
+      janet_panic("triad/def-layout expects a string, symbol, or keyword name");
+      return NULL;
+  }
+}
+
+static Janet c_def_layout(int32_t argc, Janet *argv) {
+  janet_fixarity(argc, 2);
+  if (current_script == NULL) {
+    janet_panic("triad/def-layout is only available while loading a persistent script");
+  }
+  if (!janet_checktype(argv[1], JANET_FUNCTION)) {
+    janet_panic("triad/def-layout expects a layout function");
+  }
+
+  char *name = copy_layout_name(argv[0]);
+  if (name == NULL || name[0] == '\0') {
+    if (name != NULL) free(name);
+    janet_panic("triad/def-layout expects a non-empty layout name");
+  }
+  JanetFunction *function = janet_unwrap_function(argv[1]);
+
+  for (int i = 0; i < current_script->layout_count; i++) {
+    if (strcmp(current_script->layouts[i].name, name) == 0) {
+      janet_gcunroot(janet_wrap_function(current_script->layouts[i].function));
+      current_script->layouts[i].function = function;
+      janet_gcroot(janet_wrap_function(function));
+      free(name);
+      return janet_wrap_nil();
+    }
+  }
+
+  if (current_script->layout_count == current_script->layout_capacity) {
+    int new_capacity =
+      current_script->layout_capacity == 0
+        ? 4
+        : current_script->layout_capacity * 2;
+    TriadJanetLayout *new_layouts = (TriadJanetLayout *) realloc(
+      current_script->layouts, sizeof(TriadJanetLayout) * (size_t) new_capacity);
+    if (new_layouts == NULL) {
+      free(name);
+      janet_panic("failed to register layout");
+    }
+    current_script->layouts = new_layouts;
+    current_script->layout_capacity = new_capacity;
+  }
+
+  janet_gcroot(janet_wrap_function(function));
+  current_script->layouts[current_script->layout_count].name = name;
+  current_script->layouts[current_script->layout_count].function = function;
+  current_script->layout_count++;
   return janet_wrap_nil();
 }
 
@@ -239,6 +342,7 @@ static Janet c_on(int32_t argc, Janet *argv) {
 
 static const JanetReg triad_cfuns[] = {
   {"triad/command", c_command, NULL},
+  {"triad/def-layout", c_def_layout, NULL},
   {"triad/on", c_on, NULL},
   {"triad/wait-event", c_wait_event, NULL},
   {NULL, NULL, NULL}
@@ -484,6 +588,27 @@ static void clear_handlers(TriadJanetScript *script) {
   script->handler_list_count = 0;
 }
 
+static void clear_layouts(TriadJanetScript *script) {
+  if (script == NULL) return;
+  for (int i = 0; i < script->layout_count; i++) {
+    if (script->layouts[i].name != NULL) free(script->layouts[i].name);
+    if (script->layouts[i].function != NULL) {
+      janet_gcunroot(janet_wrap_function(script->layouts[i].function));
+    }
+  }
+  script->layout_count = 0;
+}
+
+static JanetFunction *find_layout(TriadJanetScript *script, const char *layout_name) {
+  if (script == NULL || layout_name == NULL) return NULL;
+  for (int i = 0; i < script->layout_count; i++) {
+    if (strcmp(script->layouts[i].name, layout_name) == 0) {
+      return script->layouts[i].function;
+    }
+  }
+  return NULL;
+}
+
 static int parse_wait_event(Janet value, char **event_name) {
   const Janet *items = NULL;
   int32_t len = 0;
@@ -640,6 +765,70 @@ static int dispatch_handlers(
   return 1;
 }
 
+static int janet_number_to_int32(Janet value, int32_t *out) {
+  if (!janet_checktype(value, JANET_NUMBER)) return 0;
+  double number = janet_unwrap_number(value);
+  if (number < (double) INT32_MIN || number > (double) INT32_MAX) return 0;
+  int32_t integer = (int32_t) number;
+  if ((double) integer != number) return 0;
+  *out = integer;
+  return 1;
+}
+
+static int janet_number_to_uint32(Janet value, uint32_t *out) {
+  if (!janet_checktype(value, JANET_NUMBER)) return 0;
+  double number = janet_unwrap_number(value);
+  if (number < 0.0 || number > (double) UINT32_MAX) return 0;
+  uint32_t integer = (uint32_t) number;
+  if ((double) integer != number) return 0;
+  *out = integer;
+  return 1;
+}
+
+static Janet get_instruction_field(Janet instruction, const char *name) {
+  return janet_get(instruction, janet_ckeywordv(name));
+}
+
+static int parse_layout_instruction(
+    TriadJanetRuntime *runtime,
+    Janet value,
+    TriadJanetLayoutInstruction *instruction) {
+  Janet window_id = get_instruction_field(value, "window-id");
+  if (janet_checktype(window_id, JANET_NIL)) {
+    window_id = get_instruction_field(value, "window");
+  }
+  if (!janet_number_to_uint32(window_id, &instruction->window_id) ||
+      !janet_number_to_int32(get_instruction_field(value, "x"), &instruction->x) ||
+      !janet_number_to_int32(get_instruction_field(value, "y"), &instruction->y) ||
+      !janet_number_to_int32(get_instruction_field(value, "w"), &instruction->w) ||
+      !janet_number_to_int32(get_instruction_field(value, "h"), &instruction->h)) {
+    set_error(runtime, "Janet layout returned invalid instruction fields");
+    return 0;
+  }
+  return 1;
+}
+
+static int extract_layout_result(TriadJanetRuntime *runtime, Janet value) {
+  const Janet *items = NULL;
+  int32_t len = 0;
+  if (!janet_indexed_view(value, &items, &len)) {
+    set_error(runtime, "Janet layout must return an indexed sequence");
+    return 0;
+  }
+  for (int32_t i = 0; i < len; i++) {
+    TriadJanetLayoutInstruction instruction;
+    memset(&instruction, 0, sizeof(instruction));
+    if (!parse_layout_instruction(runtime, items[i], &instruction)) {
+      return 0;
+    }
+    if (!append_layout_instruction(runtime, instruction)) {
+      set_error(runtime, "failed to append Janet layout instruction");
+      return 0;
+    }
+  }
+  return 1;
+}
+
 void *triad_janet_new(void) {
   if (janet_init_count == 0) {
     janet_init();
@@ -653,6 +842,7 @@ void triad_janet_free(void *runtime_ptr) {
   if (runtime == NULL) return;
   clear_runtime(runtime);
   if (runtime->actions != NULL) free(runtime->actions);
+  if (runtime->layout_instructions != NULL) free(runtime->layout_instructions);
   free(runtime);
   if (janet_init_count > 0) {
     janet_init_count--;
@@ -765,6 +955,54 @@ int triad_janet_script_dispatch(void *runtime_ptr, void *script_ptr, const char 
   return 1;
 }
 
+int triad_janet_script_has_layout(void *script_ptr, const char *layout_name) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  return find_layout(script, layout_name) != NULL ? 1 : 0;
+}
+
+int triad_janet_script_eval_layout(void *runtime_ptr, void *script_ptr, const char *layout_name, const char *context_source, const char *path, int32_t fuel_limit) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (runtime == NULL || script == NULL || script->env == NULL) return 0;
+  clear_runtime(runtime);
+  harden_sandbox();
+
+  JanetFunction *layout = find_layout(script, layout_name);
+  if (layout == NULL) {
+    set_error(runtime, "Janet layout is not registered");
+    return 0;
+  }
+
+  current_runtime = runtime;
+  current_script = script;
+  if (!eval_source(runtime, script->env, context_source, path)) {
+    current_runtime = NULL;
+    current_script = NULL;
+    return 0;
+  }
+  Janet context = resolve_env_symbol(script->env, "triad/current-layout-context");
+  Janet out;
+  JanetFiber *fiber = NULL;
+  JanetSignal signal = pcall_with_timer(
+    runtime,
+    layout,
+    1,
+    &context,
+    fuel_limit,
+    &out,
+    &fiber);
+  current_runtime = NULL;
+  current_script = NULL;
+  if (signal != JANET_SIGNAL_OK) {
+    return signal_failed(runtime, signal, out);
+  }
+  if (runtime->action_count > 0) {
+    set_error(runtime, "Janet layout emitted Triad commands");
+    return 0;
+  }
+  return extract_layout_result(runtime, out);
+}
+
 void triad_janet_script_free(void *script_ptr) {
   TriadJanetScript *script = (TriadJanetScript *) script_ptr;
   if (script == NULL) return;
@@ -772,6 +1010,8 @@ void triad_janet_script_free(void *script_ptr) {
   if (script->waiters != NULL) free(script->waiters);
   clear_handlers(script);
   if (script->handler_lists != NULL) free(script->handler_lists);
+  clear_layouts(script);
+  if (script->layouts != NULL) free(script->layouts);
   if (script->env != NULL) {
     janet_gcunroot(janet_wrap_table(script->env));
   }
@@ -808,4 +1048,50 @@ const char *triad_janet_action_argv(void *runtime_ptr, int index, int arg_index)
   TriadJanetAction *action = &runtime->actions[index];
   if (arg_index < 0 || arg_index >= action->argc || action->argv == NULL) return "";
   return action->argv[arg_index] == NULL ? "" : action->argv[arg_index];
+}
+
+int triad_janet_layout_instruction_count(void *runtime_ptr) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return 0;
+  return runtime->layout_instruction_count;
+}
+
+uint32_t triad_janet_layout_window_id(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].window_id;
+}
+
+int32_t triad_janet_layout_x(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].x;
+}
+
+int32_t triad_janet_layout_y(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].y;
+}
+
+int32_t triad_janet_layout_w(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].w;
+}
+
+int32_t triad_janet_layout_h(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].h;
 }

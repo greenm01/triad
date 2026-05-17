@@ -190,11 +190,17 @@ first. Janet can then help with custom frame geometry or placement policy.
 
 ### Phase 1: Pure Custom Geometry
 
-- Add a custom layout registry backed by Janet scripts.
-- Add a layout evaluation path beside the built-in projection path.
+- Add an internal custom layout registry backed by Janet scripts via
+  `triad/def-layout`.
+- Add an internal layout evaluation path beside the built-in projection path;
+  do not wire it into config, IPC, `LayoutMode`, or normal layout selection.
 - Accept only stateless projection input and validated render instructions.
 - Keep all built-ins and their commands unchanged.
 - Add behavior-log evidence for success, fallback, and timing.
+
+Phase 1 is complete when tests can evaluate a named Janet layout directly and
+observe either validated instructions or a typed fallback result. It is not
+complete user-facing layout selection; that belongs to Phase 2.
 
 ### Phase 2: Configuration And IPC
 
