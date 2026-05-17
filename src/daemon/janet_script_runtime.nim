@@ -1,9 +1,25 @@
 import std/[json, options, sets, strutils]
 import ../core/[msg, shell_focus]
 import ../janet/[runtime as janet_runtime, snapshot_api]
-import ../types/[janet_manifest, shell_snapshot]
+import ../types/[janet_manifest, model, runtime_values, shell_snapshot]
 import ../utils/[behavior_log]
 import state
+
+type
+  JanetScriptEvent = tuple[name, source: string, currentWindow: Option[ShellWindow]]
+
+  JanetUiHookState* = object
+    overviewActive*: bool
+    overviewSelectedWindow*: uint32
+    recentWindowsActive*: bool
+    recentWindowsSelectedWindow*: uint32
+    recentWindowsScope*: RecentWindowScope
+    recentWindowsFilter*: RecentWindowFilter
+    recentWindowsAppIdFilter*: string
+    hotkeyOverlayOpen*: bool
+    exitSessionConfirmOpen*: bool
+    layoutSwitchToastOpen*: bool
+    layoutSwitchToastLayout*: LayoutMode
 
 proc scriptOutcomeId(outcome: ScriptOutcome): string =
   case outcome
@@ -86,6 +102,32 @@ proc isRealOutput(output: ShellOutput): bool =
 proc activeLayoutId(snapshot: ShellSnapshot): string =
   snapshot.activeWorkspaceLayoutId()
 
+proc recentScopeId(scope: RecentWindowScope): string =
+  case scope
+  of RecentWindowScope.All: "all"
+  of RecentWindowScope.Workspace: "workspace"
+  of RecentWindowScope.Output: "output"
+
+proc recentFilterId(filter: RecentWindowFilter): string =
+  case filter
+  of RecentWindowFilter.All: "all"
+  of RecentWindowFilter.AppId: "app-id"
+
+proc janetUiHookState*(model: Model): JanetUiHookState =
+  JanetUiHookState(
+    overviewActive: model.overviewActive,
+    overviewSelectedWindow: uint32(model.overviewSelectedWindow),
+    recentWindowsActive: model.recentWindowsActive,
+    recentWindowsSelectedWindow: uint32(model.recentWindowsSelectedWindow),
+    recentWindowsScope: model.recentWindowsScope,
+    recentWindowsFilter: model.recentWindowsFilter,
+    recentWindowsAppIdFilter: model.recentWindowsAppIdFilter,
+    hotkeyOverlayOpen: model.hotkeyOverlayOpen,
+    exitSessionConfirmOpen: model.exitSessionConfirmOpen,
+    layoutSwitchToastOpen: model.layoutSwitchToastOpen,
+    layoutSwitchToastLayout: model.layoutSwitchToastLayout,
+  )
+
 proc scriptCommandPayload(msg: Msg): JsonNode =
   result = %*{"kind": $msg.kind}
   case msg.kind
@@ -153,8 +195,11 @@ proc shouldDispatchJanetScripts*(kind: MsgKind): bool =
     MsgKind.CmdSwitchLayout,
   }
 
+proc shouldDispatchJanetUiScripts*(origin: QueuedMsgOrigin): bool =
+  origin != QueuedMsgOrigin.JanetHook
+
 proc addScriptEvent(
-    events: var seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]],
+    events: var seq[JanetScriptEvent],
     name, source: string,
     currentWindow = none(ShellWindow),
 ) =
@@ -171,8 +216,7 @@ proc windowReadyEventStruct(windowId: uint32, win: Option[ShellWindow]): string 
   eventStruct("window-ready", [("window-id", $windowId), ("window", win.windowExpr())])
 
 proc addOutputLifecycleEvents(
-    events: var seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]],
-    before, after: ShellSnapshot,
+    events: var seq[JanetScriptEvent], before, after: ShellSnapshot
 ) =
   for output in after.outputs:
     if not output.isRealOutput():
@@ -221,7 +265,7 @@ proc addOutputLifecycleEvents(
 
 proc hookEvents(
     msg: Msg, before, after: ShellSnapshot, windowReadyEmitted: var HashSet[uint32]
-): seq[tuple[name, source: string, currentWindow: Option[ShellWindow]]] =
+): seq[JanetScriptEvent] =
   case msg.kind
   of MsgKind.WlWindowCreated:
     let win = after.windowById(msg.windowId)
@@ -363,16 +407,92 @@ proc hookEvents(
       ),
     )
 
-proc collectJanetScriptMessages*(
-    daemon: var TriadDaemon, msg: Msg, before, after: ShellSnapshot
+proc uiHookEvents(before, after: JanetUiHookState): seq[JanetScriptEvent] =
+  if before.overviewActive != after.overviewActive:
+    let name = if after.overviewActive: "overview-opened" else: "overview-closed"
+    result.addScriptEvent(
+      name,
+      eventStruct(
+        name,
+        [
+          ("active", $after.overviewActive),
+          ("selected-window-id", $after.overviewSelectedWindow),
+        ],
+      ),
+    )
+
+  if before.recentWindowsActive != after.recentWindowsActive:
+    let name =
+      if after.recentWindowsActive: "recent-windows-opened" else: "recent-windows-closed"
+    result.addScriptEvent(
+      name,
+      eventStruct(
+        name,
+        [
+          ("active", $after.recentWindowsActive),
+          ("selected-window-id", $after.recentWindowsSelectedWindow),
+          ("scope", after.recentWindowsScope.recentScopeId().escaped()),
+          ("filter", after.recentWindowsFilter.recentFilterId().escaped()),
+          ("app-id-filter", after.recentWindowsAppIdFilter.escaped()),
+        ],
+      ),
+    )
+
+  if before.hotkeyOverlayOpen != after.hotkeyOverlayOpen:
+    let name =
+      if after.hotkeyOverlayOpen: "hotkey-overlay-opened" else: "hotkey-overlay-closed"
+    result.addScriptEvent(
+      name, eventStruct(name, [("active", $after.hotkeyOverlayOpen)])
+    )
+
+  if before.exitSessionConfirmOpen != after.exitSessionConfirmOpen:
+    let name =
+      if after.exitSessionConfirmOpen:
+        "exit-session-confirm-opened"
+      else:
+        "exit-session-confirm-closed"
+    result.addScriptEvent(
+      name, eventStruct(name, [("active", $after.exitSessionConfirmOpen)])
+    )
+
+  if before.layoutSwitchToastOpen != after.layoutSwitchToastOpen:
+    let name =
+      if after.layoutSwitchToastOpen:
+        "layout-switch-toast-opened"
+      else:
+        "layout-switch-toast-closed"
+    result.addScriptEvent(
+      name,
+      eventStruct(
+        name,
+        [
+          ("active", $after.layoutSwitchToastOpen),
+          ("layout", after.layoutSwitchToastLayout.behaviorLayoutId().escaped()),
+        ],
+      ),
+    )
+
+proc collectScriptMessages(
+    daemon: var TriadDaemon, events: seq[JanetScriptEvent], snapshot: ShellSnapshot
 ): seq[QueuedMsg] =
   if daemon.janetRuntime.handle == nil:
     return @[]
-  for ev in hookEvents(msg, before, after, daemon.windowReadyEmitted):
+  for ev in events:
     let evalResults = daemon.janetRuntime.evalScriptsDetailed(
-      ev.name, ev.source, after, ev.currentWindow
+      ev.name, ev.source, snapshot, ev.currentWindow
     )
     for evalResult in evalResults:
       writeBehaviorEvent("janet_script_eval", evalResult.scriptEvalPayload())
       for scriptMsg in evalResult.messages:
         result.add(QueuedMsg(msg: scriptMsg, origin: QueuedMsgOrigin.JanetHook))
+
+proc collectJanetScriptMessages*(
+    daemon: var TriadDaemon, msg: Msg, before, after: ShellSnapshot
+): seq[QueuedMsg] =
+  let events = hookEvents(msg, before, after, daemon.windowReadyEmitted)
+  daemon.collectScriptMessages(events, after)
+
+proc collectJanetUiScriptMessages*(
+    daemon: var TriadDaemon, before, after: JanetUiHookState, snapshot: ShellSnapshot
+): seq[QueuedMsg] =
+  daemon.collectScriptMessages(uiHookEvents(before, after), snapshot)

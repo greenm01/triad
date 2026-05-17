@@ -157,6 +157,11 @@ early reactions that do not depend on app identity.
 | `:layout-changed` | Active layout changed | `:old-layout`, `:new-layout`, `:tag-id` |
 | `:session-locked` | Session locked | — |
 | `:session-unlocked` | Session unlocked | — |
+| `:overview-opened` / `:overview-closed` | Overview visibility changed | `:active`, `:selected-window-id` |
+| `:recent-windows-opened` / `:recent-windows-closed` | Recent-windows switcher visibility changed | `:active`, `:selected-window-id`, `:scope`, `:filter`, `:app-id-filter` |
+| `:hotkey-overlay-opened` / `:hotkey-overlay-closed` | Hotkey overlay visibility changed | `:active` |
+| `:exit-session-confirm-opened` / `:exit-session-confirm-closed` | Exit-session confirmation visibility changed | `:active` |
+| `:layout-switch-toast-opened` / `:layout-switch-toast-closed` | Layout-switch toast visibility changed | `:active`, `:layout` |
 
 Output structs include `:id`, `:name`, `:x`, `:y`, `:w`, `:h`,
 `:refresh-rate`, and `:primary`.
@@ -229,6 +234,7 @@ Wayland event / IPC command
    [manage phase — WlManageStart]
         │
         ├─ any dispatchable event? ──► janet_script_runtime.collectJanetScriptMessages(event, snap)
+        ├─ UI hook state changed? ───► janet_script_runtime.collectJanetUiScriptMessages(before, after, snap)
         │                                     │
         │                               seq[Msg] ──► Model.update(msg)  (each)
         │
@@ -243,14 +249,19 @@ are output data.
 
 ### Integration point in `app.nim`
 
-The manage-phase message processing loop evaluates all scripts on every
-dispatchable event after the model update:
+The manage-phase message processing loop evaluates scripts after the model
+update for dispatchable compositor/runtime events and for model-owned UI state
+transitions:
 
 ```nim
 if beforeSnapshot.isSome:
   let afterSnapshot = daemon.readModelSnapshot()
   nextQueuedMessages.add(
     daemon.collectJanetScriptMessages(msg, beforeSnapshot.get(), afterSnapshot)
+  )
+if beforeUiState != afterUiState:
+  nextQueuedMessages.add(
+    daemon.collectJanetUiScriptMessages(beforeUiState, afterUiState, afterSnapshot)
   )
 ```
 

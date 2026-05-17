@@ -1,7 +1,7 @@
 import std/[options, os, strutils, unittest]
 import ../src/core/msg
 import ../src/daemon/janet_script_runtime
-from ../src/daemon/state import QueuedMsgOrigin, initTriadDaemon
+from ../src/daemon/state import QueuedMsgOrigin, TriadDaemon, initTriadDaemon
 import ../src/ipc/commands
 import ../src/janet/[runtime, snapshot_api]
 import ../src/types/[ipc_commands, janet_manifest, runtime_values, shell_snapshot]
@@ -129,6 +129,23 @@ proc janetCommandSource(parts: seq[string]): string =
 proc windowReadyEvent(window: ShellWindow): string =
   "{:kind :window-ready :window-id " & $window.id & " :window " &
     window.janetWindowExpr() & "}"
+
+proc baseUiHookState(): JanetUiHookState =
+  JanetUiHookState(
+    recentWindowsScope: RecentWindowScope.All,
+    recentWindowsFilter: RecentWindowFilter.All,
+    layoutSwitchToastLayout: LayoutMode.Scroller,
+  )
+
+proc expectUiHookFocusTag(
+    daemon: var TriadDaemon, before, after: JanetUiHookState, expectedTag: uint32
+) =
+  let messages = daemon.collectJanetUiScriptMessages(before, after, testSnapshot())
+  check messages.len == 1
+  if messages.len > 0:
+    check messages[0].origin == QueuedMsgOrigin.JanetHook
+    check messages[0].msg.kind == MsgKind.CmdFocusTag
+    check messages[0].msg.focusTag == expectedTag
 
 suite "embedded Janet runtime":
   test "generic command function emits reducer messages":
@@ -1359,6 +1376,148 @@ suite "embedded Janet runtime":
     )
 
     check fallbackReplacementMessages.len == 0
+
+  test "ui lifecycle events dispatch from daemon state snapshots":
+    let dir = getTempDir() / ("triad-ui-hooks-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "ui.janet",
+      """
+(triad/on :overview-opened
+  (fn [ev]
+    (when (and (ev :active) (= (ev :selected-window-id) 10))
+      (triad/command "focus-tag" 1))))
+
+(triad/on :overview-closed
+  (fn [ev]
+    (when (not (ev :active))
+      (triad/command "focus-tag" 2))))
+
+(triad/on :recent-windows-opened
+  (fn [ev]
+    (when (and (ev :active)
+               (= (ev :selected-window-id) 11)
+               (= (ev :scope) "workspace")
+               (= (ev :filter) "app-id")
+               (= (ev :app-id-filter) "firefox"))
+      (triad/command "focus-tag" 3))))
+
+(triad/on :recent-windows-closed
+  (fn [ev]
+    (when (not (ev :active))
+      (triad/command "focus-tag" 4))))
+
+(triad/on :hotkey-overlay-opened
+  (fn [ev]
+    (when (ev :active)
+      (triad/command "focus-tag" 5))))
+
+(triad/on :hotkey-overlay-closed
+  (fn [ev]
+    (when (not (ev :active))
+      (triad/command "focus-tag" 6))))
+
+(triad/on :exit-session-confirm-opened
+  (fn [ev]
+    (when (ev :active)
+      (triad/command "focus-tag" 7))))
+
+(triad/on :exit-session-confirm-closed
+  (fn [ev]
+    (when (not (ev :active))
+      (triad/command "focus-tag" 8))))
+
+(triad/on :layout-switch-toast-opened
+  (fn [ev]
+    (when (and (ev :active) (= (ev :layout) "grid"))
+      (triad/command "focus-tag" 9))))
+
+(triad/on :layout-switch-toast-closed
+  (fn [ev]
+    (when (and (not (ev :active)) (= (ev :layout) "grid"))
+      (triad/command "focus-tag" 10))))
+""",
+    )
+    var daemon = initTriadDaemon()
+    daemon.janetRuntime = initJanetRuntime(testConfig(dir))
+    defer:
+      daemon.janetRuntime.close()
+      if fileExists(dir / "ui.janet"):
+        removeFile(dir / "ui.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let base = baseUiHookState()
+    var overviewOpen = base
+    overviewOpen.overviewActive = true
+    overviewOpen.overviewSelectedWindow = 10
+    daemon.expectUiHookFocusTag(base, overviewOpen, 1)
+    daemon.expectUiHookFocusTag(overviewOpen, base, 2)
+
+    var recentOpen = base
+    recentOpen.recentWindowsActive = true
+    recentOpen.recentWindowsSelectedWindow = 11
+    recentOpen.recentWindowsScope = RecentWindowScope.Workspace
+    recentOpen.recentWindowsFilter = RecentWindowFilter.AppId
+    recentOpen.recentWindowsAppIdFilter = "firefox"
+    daemon.expectUiHookFocusTag(base, recentOpen, 3)
+    daemon.expectUiHookFocusTag(recentOpen, base, 4)
+
+    var hotkeyOpen = base
+    hotkeyOpen.hotkeyOverlayOpen = true
+    daemon.expectUiHookFocusTag(base, hotkeyOpen, 5)
+    daemon.expectUiHookFocusTag(hotkeyOpen, base, 6)
+
+    var exitOpen = base
+    exitOpen.exitSessionConfirmOpen = true
+    daemon.expectUiHookFocusTag(base, exitOpen, 7)
+    daemon.expectUiHookFocusTag(exitOpen, base, 8)
+
+    var toastOpen = base
+    toastOpen.layoutSwitchToastOpen = true
+    toastOpen.layoutSwitchToastLayout = LayoutMode.Grid
+    var toastClosed = base
+    toastClosed.layoutSwitchToastLayout = LayoutMode.Grid
+    daemon.expectUiHookFocusTag(base, toastOpen, 9)
+    daemon.expectUiHookFocusTag(toastOpen, toastClosed, 10)
+
+    let unchangedMessages =
+      daemon.collectJanetUiScriptMessages(base, base, testSnapshot())
+    check unchangedMessages.len == 0
+
+  test "ui hook wait-event resumes and hook origin is guarded":
+    let dir = getTempDir() / ("triad-ui-hook-wait-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "wait-ui.janet",
+      """
+(triad/on :overview-opened
+  (fn [ev]
+    (let [closed (triad/wait-event :overview-closed)]
+      (when (not (closed :active))
+        (triad/command "focus-tag" 7)))))
+""",
+    )
+    var daemon = initTriadDaemon()
+    daemon.janetRuntime = initJanetRuntime(testConfig(dir))
+    defer:
+      daemon.janetRuntime.close()
+      if fileExists(dir / "wait-ui.janet"):
+        removeFile(dir / "wait-ui.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let base = baseUiHookState()
+    var overviewOpen = base
+    overviewOpen.overviewActive = true
+
+    let openMessages =
+      daemon.collectJanetUiScriptMessages(base, overviewOpen, testSnapshot())
+    check openMessages.len == 0
+
+    daemon.expectUiHookFocusTag(overviewOpen, base, 7)
+    check QueuedMsgOrigin.Normal.shouldDispatchJanetUiScripts()
+    check not QueuedMsgOrigin.JanetHook.shouldDispatchJanetUiScripts()
 
   test "sandbox blocks host access":
     var runtime = initJanetRuntime(testConfig(getTempDir()))

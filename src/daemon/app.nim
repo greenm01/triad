@@ -265,13 +265,20 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let dispatchJanetHooks =
       queued.origin != QueuedMsgOrigin.JanetHook and
       msg.kind.shouldDispatchJanetScripts()
+    let dispatchJanetUiHooks = queued.origin.shouldDispatchJanetUiScripts()
     let beforeJanetHookSnapshot =
       if dispatchJanetHooks:
         some(daemon.readModelSnapshot())
       else:
         none(ShellSnapshot)
+    let beforeJanetUiState =
+      if dispatchJanetUiHooks:
+        some(daemon.runtimeState.model.janetUiHookState())
+      else:
+        none(JanetUiHookState)
     let effects = syncRuntimeUpdate("message", msg)
     var nextQueuedMessages: seq[QueuedMsg] = @[]
+    var afterJanetHookSnapshot = none(ShellSnapshot)
     if msg.kind == MsgKind.CmdTick and
         effects.anyIt(it.kind == EffectKind.EffManageDirty):
       inc daemon.perfCounters.dirtyFrameTicks
@@ -289,12 +296,22 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.lastFullscreenRequests.del(msg.destroyedId)
       daemon.lastMaximizedRequests.del(msg.destroyedId)
     if beforeJanetHookSnapshot.isSome:
-      let afterJanetHookSnapshot = daemon.readModelSnapshot()
+      afterJanetHookSnapshot = some(daemon.readModelSnapshot())
       nextQueuedMessages.add(
         daemon.collectJanetScriptMessages(
-          msg, beforeJanetHookSnapshot.get(), afterJanetHookSnapshot
+          msg, beforeJanetHookSnapshot.get(), afterJanetHookSnapshot.get()
         )
       )
+    if beforeJanetUiState.isSome:
+      let afterJanetUiState = daemon.runtimeState.model.janetUiHookState()
+      if beforeJanetUiState.get() != afterJanetUiState:
+        if afterJanetHookSnapshot.isNone:
+          afterJanetHookSnapshot = some(daemon.readModelSnapshot())
+        nextQueuedMessages.add(
+          daemon.collectJanetUiScriptMessages(
+            beforeJanetUiState.get(), afterJanetUiState, afterJanetHookSnapshot.get()
+          )
+        )
     if nextQueuedMessages.len > 0:
       daemon.enqueueNextQueued(nextQueuedMessages)
     let recentModifiersChanged =
