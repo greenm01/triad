@@ -22,6 +22,7 @@ These documents detail how Triad is built and how to ensure it stays stable:
 - **[Child Window Behavior](child-window-behavior.md)**: Policy and decision trees for floating vs. tiling dialogs and utility windows.
 - **[Overview Navigation](triad-overview-navigation.md)**: How spatial navigation and workspace traversal work in overview mode.
 - **[Janet Scripting](janet.md)**: Details on the embedded Janet runtime and external scripting capabilities.
+- **[Janet Layouts](janet-layouts.md)**: Design plan for user-defined Janet layouts while preserving built-in layout behavior.
 
 ### Development Standards
 - **[Style Guide](triad-style-guide.md)**: Coding conventions, NEP-1 compliance, and pragmatic DOD patterns for Nim.
