@@ -1,5 +1,6 @@
 import std/[deques, options, tables]
 import fsnotify
+from posix import TPollfd
 import wayland/native/client
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -224,6 +225,10 @@ type
     lastRenderWindowStates*: Table[uint32, RenderWindowState]
     lastRenderOrder*: seq[uint32]
     lastFrameTickMs*: int64
+    lastWaitTimeoutMs*: int
+    waitBackend*: string
+    eventPollFds*: seq[TPollfd]
+    eventSwitchFds*: seq[int32]
     perfCounters*: RenderPerfCounters
     manageRequestReasonCounts*: Table[string, uint64]
     lastFullscreenRequests*: Table[uint32, FullscreenRequestState]
@@ -319,6 +324,7 @@ proc initTriadDaemon*(): TriadDaemon =
   result.layerSeatPointers = @[]
   result.xkbBindingPointers = @[]
   result.pointerBindingPointers = @[]
+  result.waitBackend = "timeout"
   result.pendingLiveRestore = none(LiveRestoreState)
 
 proc daemonData*(daemon: var TriadDaemon): pointer =

@@ -430,5 +430,5 @@ CLI and environment:
   off, and `TRIAD_BEHAVIOR_LOG=1` enables them without the full dev mode.
 - `triad msg dev-mode [on|off|toggle|status]` changes or reports the live
   daemon diagnostics mode without restarting the session.
-- `triad msg perf-status` reports frame pacing and render/manage counters for
-  live CPU investigations.
+- `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,
+  and render/manage counters for live CPU investigations.

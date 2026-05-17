@@ -8,7 +8,7 @@ import ../config/[parser, reload_policy]
 from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
 import ../ipc/socket
 import ../janet/runtime as janet_runtime
-import ../utils/[behavior_log, runtime_log, session_env, wayland_runtime]
+import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, effects_runtime, input_runtime, janet_manifest_runtime,
   live_restore_runtime, manage_requests, message_queue, output_management_runtime,
@@ -18,11 +18,13 @@ from ../types/runtime_values import nil, PointerOpKind
 import
   std/[
     asyncdispatch, asyncnet, json, nativesockets, options, os, sequtils, strutils,
-    tables, times,
+    tables, times, selectors,
   ]
 import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
+
+const IdleWakeIntervalMs = 50
 
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
@@ -139,8 +141,14 @@ proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
     )
   )
 
-proc loopPollIntervalMs(daemon: TriadDaemon, nowMs: int64): int =
-  result = daemon.targetFrameIntervalMs()
+proc nextQuickshellRecoveryMs(daemon: TriadDaemon): int64 =
+  if daemon.quickshellState.recoveryPending:
+    daemon.quickshellState.nextRecoveryMs
+  else:
+    0'i64
+
+proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
+  result = IdleWakeIntervalMs
   if daemon.frameTickNeeded():
     let frameInterval = int64(daemon.targetFrameIntervalMs())
     let elapsedMs =
@@ -151,6 +159,33 @@ proc loopPollIntervalMs(daemon: TriadDaemon, nowMs: int64): int =
     result = max(1, int(max(1'i64, frameInterval - elapsedMs)))
   if daemon.configReloadDebouncer.pending:
     result = min(result, max(1, int(daemon.configReloadDebouncer.deadlineMs - nowMs)))
+  let recoveryMs = daemon.nextQuickshellRecoveryMs()
+  if recoveryMs > 0:
+    result = min(result, max(1, int(recoveryMs - nowMs)))
+
+proc asyncSelectorFd(): int =
+  asyncdispatch.getGlobalDispatcher().getIoHandler().getFd()
+
+proc waitForRuntimeEvents(
+    daemon: var TriadDaemon, timeoutMs: int
+): RuntimeEventPollResult =
+  let waylandFd =
+    if daemon.display == nil:
+      -1
+    else:
+      daemon.display.get_fd()
+  daemon.eventSwitchFds.setLen(0)
+  for device in daemon.switchEventDevices:
+    daemon.eventSwitchFds.add(device.fd)
+
+  daemon.lastWaitTimeoutMs = timeoutMs
+  let asyncFd = asyncSelectorFd()
+  daemon.waitBackend = if asyncFd >= 0: "fd-aware" else: "timeout"
+  result = daemon.eventPollFds.waitForRuntimeEventFds(
+    waylandFd, asyncFd, daemon.eventSwitchFds, timeoutMs
+  )
+  if result.failed:
+    warn "Runtime event poll failed", error = osErrorMsg(result.errorCode)
 
 proc perfStatusJson(daemon: TriadDaemon): string =
   let counters = daemon.perfCounters
@@ -163,6 +198,9 @@ proc perfStatusJson(daemon: TriadDaemon): string =
       "type": "perf-status",
       "frame_rate": daemon.runtimeState.model.frameRate(),
       "frame_interval_ms": daemon.targetFrameIntervalMs(),
+      "idle_wake_interval_ms": IdleWakeIntervalMs,
+      "current_wait_timeout_ms": daemon.lastWaitTimeoutMs,
+      "wait_backend": daemon.waitBackend,
       "frame_tick_active": daemon.frameTickNeeded(),
       "frame_tick_reasons": daemon.frameTickReasons(),
       "counters": {
@@ -595,7 +633,7 @@ proc main*() =
 
     let nowMs = unixMs()
     daemon.enqueueFrameTickIfDue(nowMs)
-    let pollInterval = daemon.loopPollIntervalMs(nowMs)
+    let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
 
     # Poll async IPC without sleeping before Wayland events are serviced.
     asyncdispatch.poll(0)
@@ -633,11 +671,16 @@ proc main*() =
       break
 
     discard daemon.display.flush()
-    if waitForWaylandEvents(daemon.display, pollInterval):
+    let waitResult = daemon.waitForRuntimeEvents(waitTimeout)
+    if waitResult.waylandReady:
       if daemon.display.read_events() == -1:
         running = false
     else:
       daemon.display.cancel_read()
+    if waitResult.asyncReady:
+      asyncdispatch.poll(0)
+    if waitResult.switchReady:
+      daemon.pollSwitchEventDevices()
 
   daemon.closeSwitchEventDevices()
   daemon.janetRuntime.close()

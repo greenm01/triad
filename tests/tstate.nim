@@ -1,4 +1,5 @@
 import std/[json, options, os, sequtils, strutils, tables, unittest]
+from posix import TPollfd, close, pipe, read, write
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import ../src/daemon/hotkey_overlay_render
@@ -13,6 +14,7 @@ import
   ../src/systems/
     [layout_projection, overview_geometry, recent_windows, runtime_facade, update]
 import ../src/types/[model, runtime_values]
+import ../src/utils/event_poll
 
 const DeletedRuntimeModules = [
   "src/types/legacy_model.nim", "src/core/model.nim", "src/core/model_utils.nim",
@@ -157,6 +159,34 @@ suite "Runtime state primitives":
     check source.contains("asyncdispatch.poll(0)")
     check not source.contains("asyncdispatch.poll(pollInterval)")
     check not source.contains("asyncdispatch.poll(frameInterval)")
+    check source.contains("IdleWakeIntervalMs = 50")
+    check source.contains("waitForRuntimeEventFds")
+    check source.contains("\"idle_wake_interval_ms\"")
+    check source.contains("\"current_wait_timeout_ms\"")
+    check source.contains("\"wait_backend\"")
+
+  test "runtime event poll reports descriptor readiness":
+    var pipeFds: array[2, cint]
+    check pipe(pipeFds) == 0
+    defer:
+      discard close(pipeFds[0])
+      discard close(pipeFds[1])
+
+    var fds: seq[TPollfd]
+    var marker = 'x'
+    check write(pipeFds[1], addr marker, 1) == 1
+    let asyncReady = fds.waitForRuntimeEventFds(-1, int(pipeFds[0]), [], 10)
+    check asyncReady.asyncReady
+    check not asyncReady.waylandReady
+    check not asyncReady.switchReady
+
+    var drained: char
+    discard read(pipeFds[0], addr drained, 1)
+    check write(pipeFds[1], addr marker, 1) == 1
+    let switchReady = fds.waitForRuntimeEventFds(-1, -1, [int32(pipeFds[0])], 10)
+    check switchReady.switchReady
+    check not switchReady.asyncReady
+    check not switchReady.waylandReady
 
   test "types modules stay data-only":
     for path in typeFiles():
