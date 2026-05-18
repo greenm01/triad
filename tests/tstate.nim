@@ -2459,11 +2459,17 @@ suite "Runtime state primitives":
     check tag.layoutMode == LayoutMode.Scroller
     check tag.customLayoutId.layoutIdString() == "deck"
     check state.readRuntimeLiveRestoreJson().contains("\"id\":4")
+    check state.readRuntimeSnapshot().workspaces.anyIt(
+      it.tagId == 4'u32 and it.layoutId == "deck"
+    )
 
     discard state.applyRuntimeUpdate(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "Term")
     )
     check state.model.tagForSlot(4) != NullTagId
+    check state.readRuntimeSnapshot().workspaces.anyIt(
+      it.tagId == 4'u32 and it.layoutId == "deck"
+    )
 
   test "runtime live restore keeps active empty dynamic workspace":
     var state = initRuntimeStateFromConfig(baseConfig())

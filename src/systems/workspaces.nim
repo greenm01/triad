@@ -77,8 +77,11 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
   let activeSlot = model.activeWorkspaceSlot()
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
-    if slot > defaultCount and
-        (slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId)):
+    let tagOpt = model.tagData(tagId)
+    if slot > defaultCount and (
+      slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
+      (tagOpt.isSome and model.hasDurableTagState(tagOpt.get()))
+    ):
       result.add(slot)
 
   result.sort()

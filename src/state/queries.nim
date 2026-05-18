@@ -1,5 +1,6 @@
 import std/[algorithm, options, sets, tables]
 import entity_manager, id_gen, iterators
+import ../core/defaults
 from ../core/native_layout_codec import
   BspTreeLayoutId, FrameTreeLayoutId, nativeLayoutIdString
 import ../types/[core, model]
@@ -93,6 +94,31 @@ proc tagHasNonStickyLiveWindows*(model: Model, tagId: TagId): bool =
       return true
   false
 
+proc restoreDefaultMasterCount(model: Model): int =
+  if model.defaultMasterCount > 0:
+    max(1, model.defaultMasterCount)
+  else:
+    DefaultMasterCount
+
+proc restoreDefaultMasterRatio(model: Model): float32 =
+  if model.defaultMasterRatio > 0:
+    clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
+  else:
+    DefaultMasterRatio
+
+proc hasDurableTagState*(model: Model, tag: TagData): bool =
+  if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller or
+      string(tag.customLayoutId).len > 0 or
+      tag.nativeLayoutId.nativeLayoutIdString().len > 0:
+    return true
+  if tag.focusedWindow != NullWindowId and model.tagHasNonStickyLiveWindows(tag.id):
+    return true
+  if tag.targetViewportXOffset != 0 or tag.currentViewportXOffset != 0 or
+      tag.targetViewportYOffset != 0 or tag.currentViewportYOffset != 0:
+    return true
+  tag.masterCount != model.restoreDefaultMasterCount() or
+    tag.masterSplitRatio != model.restoreDefaultMasterRatio()
+
 proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if model.visibleSlots.len > 0:
     return model.visibleSlots
@@ -102,8 +128,11 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
 
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
-    if slot > model.defaultWorkspaceCount and
-        (slot == model.activeSlot or model.tagHasNonStickyLiveWindows(tagId)):
+    let tagOpt = model.tagData(tagId)
+    if slot > model.defaultWorkspaceCount and (
+      slot == model.activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
+      (tagOpt.isSome and model.hasDurableTagState(tagOpt.get()))
+    ):
       result.add(slot)
 
   result.sort()

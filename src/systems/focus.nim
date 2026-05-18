@@ -551,6 +551,9 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
   let useIntervalGeometry =
     layoutMode.isSome and
     layoutMode.get() in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+  let preferPrimaryDistance =
+    layoutMode.isSome and layoutMode.get() == LayoutMode.CenterTile and
+    direction in {Direction.DirLeft, Direction.DirRight}
 
   var bestIdx = -1
   var bestPrimary = high(int64)
@@ -604,8 +607,14 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
           (cy - currentCy, abs(currentCx - cx))
       if primary <= 0:
         continue
-    if perp < bestPerp or (perp == bestPerp and primary < bestPrimary) or
-        (perp == bestPerp and primary == bestPrimary and candidate.order < bestOrder):
+    let better =
+      if preferPrimaryDistance:
+        primary < bestPrimary or (primary == bestPrimary and perp < bestPerp) or
+          (primary == bestPrimary and perp == bestPerp and candidate.order < bestOrder)
+      else:
+        perp < bestPerp or (perp == bestPerp and primary < bestPrimary) or
+          (perp == bestPerp and primary == bestPrimary and candidate.order < bestOrder)
+    if better:
       bestIdx = idx
       bestPrimary = primary
       bestPerp = perp

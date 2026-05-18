@@ -100,6 +100,17 @@ suite "Core Runtime Logic: navigation layout":
     centerTile.focusExternal(1)
     check centerTile.focusDirection(Direction.DirRight) == 5
 
+  test "Center tile side stacks navigate horizontally through center pane":
+    var centerTile = directionalModel(LayoutMode.CenterTile, 7)
+
+    for leftId in [2'u32, 4, 6]:
+      centerTile.focusExternal(leftId)
+      check centerTile.focusDirection(Direction.DirRight) == 1
+
+    for rightId in [3'u32, 5, 7]:
+      centerTile.focusExternal(rightId)
+      check centerTile.focusDirection(Direction.DirLeft) == 1
+
   test "Overlapping layouts use ordered directional fallback":
     var deck = directionalModel(LayoutMode.Deck, 3)
     deck.focusExternal(2)

@@ -2,7 +2,7 @@ import std/[algorithm, json, options, os, tables]
 import iterators, queries
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
-import ../core/[defaults, restore_state]
+import ../core/restore_state
 import ../types/core as core_types
 import ../types/live_restore as lr
 import ../types/model
@@ -145,32 +145,6 @@ proc hasOutputTag(model: Model, tagId: TagId): bool =
     if outputTagId == tagId:
       return true
   false
-
-proc restoreDefaultMasterCount(model: Model): int =
-  if model.defaultMasterCount > 0:
-    max(1, model.defaultMasterCount)
-  else:
-    DefaultMasterCount
-
-proc restoreDefaultMasterRatio(model: Model): float32 =
-  if model.defaultMasterRatio > 0:
-    clamp(model.defaultMasterRatio, 0.05'f32, 0.95'f32)
-  else:
-    DefaultMasterRatio
-
-proc hasDurableTagState*(model: Model, tag: TagData): bool =
-  if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller or
-      tag.customLayoutId.layoutIdString().len > 0 or
-      tag.nativeLayoutId.nativeLayoutIdString().len > 0:
-    return true
-  if model.effectiveTagFocusedWindow(tag.id) != NullWindowId and
-      model.tagHasNonStickyLiveWindows(tag.id):
-    return true
-  if tag.targetViewportXOffset != 0 or tag.currentViewportXOffset != 0 or
-      tag.targetViewportYOffset != 0 or tag.currentViewportYOffset != 0:
-    return true
-  tag.masterCount != model.restoreDefaultMasterCount() or
-    tag.masterSplitRatio != model.restoreDefaultMasterRatio()
 
 proc shouldPersistTag*(model: Model, tag: TagData): bool =
   if tag.slot <= model.defaultWorkspaceCount:
