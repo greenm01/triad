@@ -436,11 +436,64 @@ proc adjustFocusedBspSplit*(
 proc syncTagBspFromPlacement*(model: var Model, tagId: TagId): bool =
   if model.tags.entity(tagId).isNone:
     return false
+
+  var visibleWindows: seq[WindowId] = @[]
+  var visibleCounts = initTable[WindowId, int]()
   for winId in model.windowsByTag.getOrDefault(tagId, @[]):
-    if model.bspWindowVisible(tagId, winId) and
-        model.bspNodeByTagWindow.getOrDefault((tagId, winId), NullBspNodeId) ==
+    if model.bspWindowVisible(tagId, winId):
+      visibleWindows.add(winId)
+      visibleCounts[winId] = visibleCounts.getOrDefault(winId, 0) + 1
+
+  var leafCounts = initTable[WindowId, int]()
+  var leafNodeByWindow = initTable[WindowId, BspNodeId]()
+  var mustRebuild = false
+  for node in model.bspNodes.entities:
+    if node.tagId != tagId or node.kind != FrameNodeKind.Leaf or
+        node.window == NullWindowId:
+      continue
+    if not visibleCounts.hasKey(node.window):
+      mustRebuild = true
+    leafCounts[node.window] = leafCounts.getOrDefault(node.window, 0) + 1
+    if leafCounts[node.window] == 1:
+      leafNodeByWindow[node.window] = node.id
+    else:
+      mustRebuild = true
+
+  var mapKeys: seq[(TagId, WindowId)] = @[]
+  var oldNodeByWindow = initTable[WindowId, BspNodeId]()
+  for key in model.bspNodeByTagWindow.keys:
+    if key[0] == tagId:
+      mapKeys.add(key)
+      oldNodeByWindow[key[1]] = model.bspNodeByTagWindow[key]
+  for key in mapKeys:
+    model.bspNodeByTagWindow.del(key)
+
+  if mustRebuild:
+    var nodeIds: seq[BspNodeId] = @[]
+    for node in model.bspNodes.entities:
+      if node.tagId == tagId:
+        nodeIds.add(node.id)
+    for nodeId in nodeIds:
+      discard model.bspNodes.delete(nodeId)
+    model.bspRootsByTag.del(tagId)
+
+  if not mustRebuild:
+    for winId, nodeId in leafNodeByWindow.pairs:
+      model.bspNodeByTagWindow[(tagId, winId)] = nodeId
+      if oldNodeByWindow.getOrDefault(winId, NullBspNodeId) != nodeId:
+        result = true
+    for winId in oldNodeByWindow.keys:
+      if not leafNodeByWindow.hasKey(winId):
+        result = true
+
+  let focused = model.tags.entity(tagId).get().focusedWindow
+  for winId in visibleWindows:
+    if model.bspNodeByTagWindow.getOrDefault((tagId, winId), NullBspNodeId) ==
         NullBspNodeId:
       result = model.addWindowToBsp(tagId, winId) or result
+  if focused != NullWindowId and visibleCounts.hasKey(focused):
+    result = model.setTagFocus(tagId, focused) or result
+  result = result or mustRebuild
 
 proc restoreTagBspNodes*(
     model: var Model, tagId: TagId, restored: RestoredTagData

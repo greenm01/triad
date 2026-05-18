@@ -78,6 +78,11 @@ proc focusedWindowId(model: Model): uint32 =
       return uint32(win.id)
   0'u32
 
+proc bspLeafWindowCount(model: Model, tagId: tc.TagId, winId: tc.WindowId): int =
+  for _, node in model.bspNodesOnTagWithId(tagId):
+    if node.kind == FrameNodeKind.Leaf and node.window == winId:
+      inc result
+
 proc sourceFiles(): seq[string] =
   for path in walkDirRec("src"):
     if path.endsWith(".nim"):
@@ -1089,6 +1094,38 @@ suite "Runtime state primitives":
     check model.bspNodeForWindowOnTag(tagId, pendingWin) != tc.NullBspNodeId
     let projection = model.layoutProjection()
     check projection.instructions.anyIt(it.windowId == 11'u32)
+
+  test "BSP sync repairs duplicate leaves before projection":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let duplicateWin = model.windowForExternal(ExternalWindowId(11))
+    check duplicateWin != tc.NullWindowId
+    model.bspNodeByTagWindow.del((tagId, duplicateWin))
+    check model.addWindowToBsp(tagId, duplicateWin)
+    check model.bspLeafWindowCount(tagId, duplicateWin) == 2
+
+    check model.syncTagBspFromPlacement(tagId)
+
+    for external in [10'u32, 11'u32, 12'u32]:
+      let winId = model.windowForExternal(ExternalWindowId(external))
+      check winId != tc.NullWindowId
+      check model.bspLeafWindowCount(tagId, winId) == 1
+      check model.bspNodeForWindowOnTag(tagId, winId) != tc.NullBspNodeId
+    let projection = model.layoutProjection()
+    check projection.instructions.len == 3
+    check projection.instructions.anyIt(it.windowId == 10'u32)
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 12'u32)
 
   test "BSP directional move swaps focused leaf window":
     var model = initRuntimeStateFromConfig(baseConfig()).model
