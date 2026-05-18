@@ -612,13 +612,21 @@ proc clearDecorationSurface(daemon: var TriadDaemon, id: uint32) =
   if surf.kind notin
       {ProtocolSurfaceKind.PskDecorationAbove, ProtocolSurfaceKind.PskDecorationBelow}:
     return
+  if surf.decoration == nil:
+    return
   let key = "clear:" & $daemon.currentModel.protocolSurfaces.visibleDebug
+  let dirty =
+    surf.offsetX != 0 or surf.offsetY != 0 or surf.inputW != 0 or surf.inputH != 0 or
+    surf.bufferCacheKey != key
   surf.decoration.setOffset(0, 0)
+  surf.offsetX = 0
+  surf.offsetY = 0
   surf.inputW = 0
   surf.inputH = 0
   if surf.bufferCacheKey != key:
     surf.setProtocolSurfaceBuffer(daemon.createProtocolBuffer(surf.kind), 1, 1)
     surf.bufferCacheKey = key
+  if dirty:
     daemon.commitProtocolSurface(surf)
   daemon.surfaceTable[id] = surf
 
@@ -626,6 +634,8 @@ proc syncFrameTabBarSurfaces*(
     daemon: var TriadDaemon, tabBars: openArray[ProjectedFrameTabBar]
 ) =
   if not daemon.currentModel.protocolSurfaces.enabled:
+    for _, surfaceId in daemon.windowDecorationAbove.pairs:
+      daemon.clearDecorationSurface(surfaceId)
     return
 
   var activeWindows = initHashSet[uint32]()
@@ -640,9 +650,13 @@ proc syncFrameTabBarSurfaces*(
     activeWindows.incl(bar.windowId)
     var surf = daemon.surfaceTable[surfaceId]
     let key = bar.frameTabBarCacheKey()
-    surf.decoration.setOffset(0, -bar.geom.h)
-    surf.inputW = max(1'i32, bar.geom.w)
-    surf.inputH = max(1'i32, bar.geom.h)
+    let ringInset = max(0'i32, bar.ringWidth)
+    let surfaceH = max(1'i32, bar.geom.h + ringInset)
+    surf.decoration.setOffset(-ringInset, -surfaceH)
+    surf.offsetX = -ringInset
+    surf.offsetY = -surfaceH
+    surf.inputW = max(1'i32, bar.geom.w + ringInset * 2)
+    surf.inputH = surfaceH
     if surf.bufferCacheKey != key:
       let rendered = renderFrameTabBarBuffer(bar)
       let buffer = daemon.createArgbShmBuffer(rendered)

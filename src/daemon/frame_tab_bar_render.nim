@@ -1,4 +1,5 @@
 import std/strutils
+import ../core/defaults
 import ../types/projection_values
 import overlay_text_render
 import pixel_buffer
@@ -7,19 +8,25 @@ export pixel_buffer
 
 const
   Transparent = 0x00000000'u32
-  ActiveFocused = 0xff3f7fd5'u32
-  ActiveUnfocused = 0xff303846'u32
-  Inactive = 0xee161a22'u32
   Separator = 0xff0b0d12'u32
   TextActive = 0xffffffff'u32
   TextInactive = 0xffaab3c2'u32
-  UnderlineFocused = 0xffffffff'u32
-  UnderlineUnfocused = 0xff62a8ff'u32
   TabPaddingX = 7'i32
   TabGap = 1'i32
   UnderlineHeight = 2'i32
   TabTextStyleActive = OverlayTextStyle(sizePx: 12.0, color: TextActive)
   TabTextStyleInactive = OverlayTextStyle(sizePx: 12.0, color: TextInactive)
+
+proc frameTabArgb(value, fallback: uint32): uint32 =
+  rgbaColorToArgb(if value != 0: value else: fallback)
+
+proc drawFrameTabRing(buf: var PixelBuffer, thickness: int32, color: uint32) =
+  if thickness <= 0 or color == 0:
+    return
+  let line = min(thickness, max(1'i32, min(buf.width, buf.height)))
+  buf.fillRect(0, 0, buf.width, line, color)
+  buf.fillRect(0, 0, line, buf.height, color)
+  buf.fillRect(buf.width - line, 0, line, buf.height, color)
 
 proc frameTabLabel(tab: ProjectedFrameTab): string =
   result = tab.title.strip()
@@ -29,10 +36,11 @@ proc frameTabLabel(tab: ProjectedFrameTab): string =
     result = "Window"
 
 proc frameTabIndexAt*(bar: ProjectedFrameTabBar, x: int32): int =
-  if bar.tabs.len == 0 or bar.geom.w <= 0 or x < 0:
+  let contentX = x - max(0'i32, bar.ringWidth)
+  if bar.tabs.len == 0 or bar.geom.w <= 0 or contentX < 0 or contentX >= bar.geom.w:
     return -1
   let tabW = max(1'i32, bar.geom.w div int32(bar.tabs.len))
-  min(bar.tabs.len - 1, int(x div tabW))
+  min(bar.tabs.len - 1, int(contentX div tabW))
 
 proc frameTabBarCacheKey*(bar: ProjectedFrameTabBar): string =
   result =
@@ -45,13 +53,32 @@ proc frameTabBarCacheKey*(bar: ProjectedFrameTabBar): string =
     result.add($tab.active)
     result.add(":")
     result.add(tab.frameTabLabel())
+  result.add(
+    ":" & $bar.frameTabs.activeColor & ":" & $bar.frameTabs.activeUnfocusedColor & ":" &
+      $bar.frameTabs.inactiveColor & ":" & $bar.frameTabs.activeLineColor & ":" &
+      $bar.frameTabs.activeUnfocusedLineColor & ":" & $bar.ringWidth & ":" &
+      $bar.ringColor
+  )
 
 proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
   let
-    width = max(1'i32, bar.geom.w)
-    height = max(1'i32, bar.geom.h)
+    ringInset = max(0'i32, bar.ringWidth)
+    contentW = max(1'i32, bar.geom.w)
+    width = max(1'i32, contentW + ringInset * 2)
+    tabH = max(1'i32, bar.geom.h)
+    height = max(1'i32, tabH + ringInset)
     count = max(1, bar.tabs.len)
-    tabW = max(1'i32, width div int32(count))
+    tabW = max(1'i32, contentW div int32(count))
+    activeFocused = bar.frameTabs.activeColor.frameTabArgb(DefaultFrameTabActiveColor)
+    activeUnfocused = bar.frameTabs.activeUnfocusedColor.frameTabArgb(
+      DefaultFrameTabActiveUnfocusedColor
+    )
+    inactive = bar.frameTabs.inactiveColor.frameTabArgb(DefaultFrameTabInactiveColor)
+    underlineFocused =
+      bar.frameTabs.activeLineColor.frameTabArgb(DefaultFrameTabActiveLineColor)
+    underlineUnfocused = bar.frameTabs.activeUnfocusedLineColor.frameTabArgb(
+      DefaultFrameTabActiveUnfocusedLineColor
+    )
   result = initPixelBuffer(width, height, Transparent)
   if bar.tabs.len == 0:
     return
@@ -59,35 +86,37 @@ proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
   for idx, tab in bar.tabs:
     let
       x = int32(idx) * tabW
+      contentX = ringInset + x
       nextX =
         if idx == bar.tabs.high:
-          width
+          ringInset + contentW
         else:
-          min(width, x + tabW)
-      w = max(1'i32, nextX - x)
+          min(ringInset + contentW, contentX + tabW)
+      w = max(1'i32, nextX - contentX)
       fill =
         if tab.active and bar.focused:
-          ActiveFocused
+          activeFocused
         elif tab.active:
-          ActiveUnfocused
+          activeUnfocused
         else:
-          Inactive
+          inactive
       textStyle = if tab.active: TabTextStyleActive else: TabTextStyleInactive
       label =
         tab.frameTabLabel().ellipsizeText(max(1'i32, w - TabPaddingX * 2), textStyle)
-      textY = max(1'i32, (height - textStyle.textHeight()) div 2)
+      textY = ringInset + max(1'i32, (tabH - textStyle.textHeight()) div 2)
 
-    result.fillRect(x, 0, w, height, fill)
+    result.fillRect(contentX, ringInset, w, tabH, fill)
     if idx > 0:
-      result.fillRect(x, 0, TabGap, height, Separator)
+      result.fillRect(contentX, ringInset, TabGap, tabH, Separator)
     if tab.active:
       result.fillRect(
-        x,
-        max(0'i32, height - UnderlineHeight),
+        contentX,
+        ringInset + max(0'i32, tabH - UnderlineHeight),
         w,
         UnderlineHeight,
-        if bar.focused: UnderlineFocused else: UnderlineUnfocused,
+        if bar.focused: underlineFocused else: underlineUnfocused,
       )
     result.drawText(
-      x + TabPaddingX, textY, max(1'i32, w - TabPaddingX * 2), label, textStyle
+      contentX + TabPaddingX, textY, max(1'i32, w - TabPaddingX * 2), label, textStyle
     )
+  result.drawFrameTabRing(bar.ringWidth, rgbaColorToArgb(bar.ringColor))

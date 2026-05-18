@@ -242,6 +242,17 @@ proc applyConfig*(model: var Model, config: Config) =
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
   model.focusedBorderColor = config.layout.focusedBorderColor
   model.unfocusedBorderColor = config.layout.unfocusedBorderColor
+  model.frameTabs = config.layout.frameTabs
+  if model.frameTabs.activeColor == 0:
+    model.frameTabs.activeColor = DefaultFrameTabActiveColor
+  if model.frameTabs.activeUnfocusedColor == 0:
+    model.frameTabs.activeUnfocusedColor = DefaultFrameTabActiveUnfocusedColor
+  if model.frameTabs.inactiveColor == 0:
+    model.frameTabs.inactiveColor = DefaultFrameTabInactiveColor
+  if model.frameTabs.activeLineColor == 0:
+    model.frameTabs.activeLineColor = DefaultFrameTabActiveLineColor
+  if model.frameTabs.activeUnfocusedLineColor == 0:
+    model.frameTabs.activeUnfocusedLineColor = DefaultFrameTabActiveUnfocusedLineColor
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.innerGaps = model.outerGaps div 2

@@ -2,6 +2,11 @@ const
   DefaultBorderWidth* = 2'i32
   DefaultFocusedBorderColor* = 0xffffffff'u32
   DefaultUnfocusedBorderColor* = 0x666666ff'u32
+  DefaultFrameTabActiveColor* = 0x3f7fd5ff'u32
+  DefaultFrameTabActiveUnfocusedColor* = 0x303846ff'u32
+  DefaultFrameTabInactiveColor* = 0x161a22ee'u32
+  DefaultFrameTabActiveLineColor* = 0xffffffff'u32
+  DefaultFrameTabActiveUnfocusedLineColor* = 0x62a8ffff'u32
   DefaultGaps* = 16'i32
   DefaultCenterFocusedColumn* = "on-overflow"
   DefaultColumnWidth* = 0.5'f32

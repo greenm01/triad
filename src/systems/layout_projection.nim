@@ -446,12 +446,21 @@ proc frameTreeTabBars*(
       )
     if tabs.len == 0:
       continue
+    let border =
+      model.effectiveWindowBorder(active, item.frameId == tagOpt.get().focusedFrame)
     result.add(
       rv.ProjectedFrameTabBar(
         frameId: uint32(item.frameId),
         windowId: model.externalWindowId(active),
         geom: rv.Rect(x: item.rect.x, y: item.rect.y, w: item.rect.w, h: tabHeight),
         focused: item.frameId == tagOpt.get().focusedFrame,
+        frameTabs: model.frameTabs,
+        ringWidth: border.width,
+        ringColor:
+          if item.frameId == tagOpt.get().focusedFrame:
+            border.activeColor
+          else:
+            border.inactiveColor,
         tabs: tabs,
       )
     )

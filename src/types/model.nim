@@ -5,7 +5,7 @@ from core import
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
-  KeyBindingConfig, LayoutMode, LayoutSelection, HotkeyOverlayConfig,
+  KeyBindingConfig, LayoutMode, LayoutSelection, HotkeyOverlayConfig, FrameTabsConfig,
   LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, ShellsConfig, RecentWindowFilter,
@@ -473,6 +473,7 @@ type
     borderWidth*: int32
     focusedBorderColor*: uint32
     unfocusedBorderColor*: uint32
+    frameTabs*: FrameTabsConfig
     overviewOuterGap*: int32
     overviewInnerGapMultiplier*: float32
     overviewZoom*: float32

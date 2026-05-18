@@ -1,5 +1,6 @@
 import std/[json, options, os, sequtils, strutils, tables, unittest]
 from posix import TPollfd, close, pipe, read, write
+import ../src/config/defaults
 import ../src/config/parser
 import
   ../src/core/[effects, layout_selection_codec, msg, native_layout_codec, restore_state]
@@ -527,6 +528,15 @@ suite "Runtime state primitives":
       windowId: 11,
       geom: pv.Rect(x: 0, y: 0, w: 120, h: 24),
       focused: true,
+      frameTabs: FrameTabsConfig(
+        activeColor: 0x010203ff'u32,
+        activeUnfocusedColor: 0x040506ff'u32,
+        inactiveColor: 0x07080980'u32,
+        activeLineColor: 0x0a0b0cff'u32,
+        activeUnfocusedLineColor: 0x0d0e0fff'u32,
+      ),
+      ringWidth: 2,
+      ringColor: 0x101112ff'u32,
       tabs:
         @[
           pv.ProjectedFrameTab(windowId: 10, title: "Term", appId: "foot"),
@@ -536,9 +546,15 @@ suite "Runtime state primitives":
         ],
     )
     let rendered = renderFrameTabBarBuffer(bar)
-    check rendered.width == 120
-    check rendered.height == 24
+    check rendered.width == 124
+    check rendered.height == 26
     check rendered.pixels.anyIt(it != 0)
+    check rendered.pixelAt(4, 4) == testArgb(0x07080980'u32)
+    check rendered.pixelAt(64, 4) == testArgb(0x010203ff'u32)
+    check rendered.pixelAt(64, 25) == testArgb(0x0a0b0cff'u32)
+    check rendered.pixelAt(0, 10) == testArgb(0x101112ff'u32)
+    check rendered.pixelAt(123, 10) == testArgb(0x101112ff'u32)
+    check rendered.pixelAt(40, 0) == testArgb(0x101112ff'u32)
     check bar.frameTabIndexAt(5) == 0
     check bar.frameTabIndexAt(75) == 1
 
@@ -910,6 +926,11 @@ suite "Runtime state primitives":
     check projection.instructions[0].windowId == 11'u32
     check projection.frameTabBars.len == 1
     check projection.frameTabBars[0].windowId == 11'u32
+    check projection.frameTabBars[0].frameTabs.activeColor == DefaultFrameTabActiveColor
+    check projection.frameTabBars[0].frameTabs.inactiveColor ==
+      DefaultFrameTabInactiveColor
+    check projection.frameTabBars[0].ringWidth == model.borderWidth
+    check projection.frameTabBars[0].ringColor == model.focusedBorderColor
     check projection.frameTabBars[0].tabs.len == 2
     check projection.instructions[0].geom.y ==
       projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h
@@ -942,6 +963,33 @@ suite "Runtime state primitives":
     let (tabNext, _) = model.update(Msg(kind: MsgKind.CmdFrameTabNext))
     model = tabNext
     check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
+
+    block:
+      var moveModel = initRuntimeStateFromConfig(baseConfig()).model
+      let (moveOutput, _) = moveModel.update(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+      )
+      moveModel = moveOutput
+      for externalId in [30'u32, 31'u32]:
+        let (withWindow, _) =
+          moveModel.update(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
+        moveModel = withWindow
+      let (moveNative, _) = moveModel.update(
+        Msg(
+          kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree")
+        )
+      )
+      moveModel = moveNative
+      let (movedToNonFrame, _) =
+        moveModel.update(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))
+      moveModel = movedToNonFrame
+      var movedProjection = moveModel.layoutProjection()
+      check movedProjection.frameTabBars.len == 0
+      let (backToFrameTree, _) =
+        moveModel.update(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+      moveModel = backToFrameTree
+      movedProjection = moveModel.layoutProjection()
+      check movedProjection.frameTabBars.allIt(it.windowId != 31'u32)
 
     var singleFrame = initRuntimeStateFromConfig(baseConfig()).model
     let (singleOutput, _) = singleFrame.update(

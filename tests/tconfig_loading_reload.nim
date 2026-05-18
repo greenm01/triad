@@ -40,6 +40,13 @@ suite "KDL Configuration Parser: loading reload":
         borderWidth: 4,
         focusedBorderColor: 0x112233ff'u32,
         unfocusedBorderColor: 0x445566ff'u32,
+        frameTabs: FrameTabsConfig(
+          activeColor: 0x010203ff'u32,
+          activeUnfocusedColor: 0x040506ff'u32,
+          inactiveColor: 0x07080980'u32,
+          activeLineColor: 0x0a0b0cff'u32,
+          activeUnfocusedLineColor: 0x0d0e0fff'u32,
+        ),
         scrollerFocusCenter: true,
         scrollerPreferCenter: true,
         enableAnimations: false,
@@ -134,6 +141,11 @@ suite "KDL Configuration Parser: loading reload":
     check state.model.outerGaps == 24
     check state.model.innerGaps == 12
     check state.model.borderWidth == 4
+    check state.model.frameTabs.activeColor == 0x010203ff'u32
+    check state.model.frameTabs.activeUnfocusedColor == 0x040506ff'u32
+    check state.model.frameTabs.inactiveColor == 0x07080980'u32
+    check state.model.frameTabs.activeLineColor == 0x0a0b0cff'u32
+    check state.model.frameTabs.activeUnfocusedLineColor == 0x0d0e0fff'u32
     check state.model.defaultWorkspaceCount == 4
     check state.model.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]

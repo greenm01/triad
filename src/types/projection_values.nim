@@ -82,6 +82,9 @@ type
     windowId*: ProjectionWindowId
     geom*: Rect
     focused*: bool
+    frameTabs*: FrameTabsConfig
+    ringWidth*: int32
+    ringColor*: uint32
     tabs*: seq[ProjectedFrameTab]
 
   ProjectedTag* = object

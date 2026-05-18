@@ -47,6 +47,7 @@ type
     borderWidth*: int32
     focusedBorderColor*: uint32
     unfocusedBorderColor*: uint32
+    frameTabs*: FrameTabsConfig
     scrollerFocusCenter*: bool
     scrollerPreferCenter*: bool
     scrollerProportionPresets*: seq[float32]

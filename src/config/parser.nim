@@ -1017,6 +1017,12 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.layout.borderWidth = DefaultBorderWidth
   result.layout.focusedBorderColor = DefaultFocusedBorderColor
   result.layout.unfocusedBorderColor = DefaultUnfocusedBorderColor
+  result.layout.frameTabs.activeColor = DefaultFrameTabActiveColor
+  result.layout.frameTabs.activeUnfocusedColor = DefaultFrameTabActiveUnfocusedColor
+  result.layout.frameTabs.inactiveColor = DefaultFrameTabInactiveColor
+  result.layout.frameTabs.activeLineColor = DefaultFrameTabActiveLineColor
+  result.layout.frameTabs.activeUnfocusedLineColor =
+    DefaultFrameTabActiveUnfocusedLineColor
   result.layout.scrollerFocusCenter = false
   result.layout.scrollerPreferCenter = false
   result.layout.enableAnimations = true
@@ -1135,6 +1141,37 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 except CatchableError as e:
                   warn "Ignoring invalid border config field",
                     field = borderChild.name, error = e.msg
+            elif child.name == "frame-tabs":
+              for tabChild in child.children:
+                try:
+                  if tabChild.name == "active-color" and tabChild.args.len > 0:
+                    result.layout.frameTabs.activeColor = parseColor(
+                      tabChild.args[0].kString(), result.layout.frameTabs.activeColor
+                    )
+                  elif tabChild.name == "active-unfocused-color" and
+                      tabChild.args.len > 0:
+                    result.layout.frameTabs.activeUnfocusedColor = parseColor(
+                      tabChild.args[0].kString(),
+                      result.layout.frameTabs.activeUnfocusedColor,
+                    )
+                  elif tabChild.name == "inactive-color" and tabChild.args.len > 0:
+                    result.layout.frameTabs.inactiveColor = parseColor(
+                      tabChild.args[0].kString(), result.layout.frameTabs.inactiveColor
+                    )
+                  elif tabChild.name == "active-line-color" and tabChild.args.len > 0:
+                    result.layout.frameTabs.activeLineColor = parseColor(
+                      tabChild.args[0].kString(),
+                      result.layout.frameTabs.activeLineColor,
+                    )
+                  elif tabChild.name == "active-unfocused-line-color" and
+                      tabChild.args.len > 0:
+                    result.layout.frameTabs.activeUnfocusedLineColor = parseColor(
+                      tabChild.args[0].kString(),
+                      result.layout.frameTabs.activeUnfocusedLineColor,
+                    )
+                except CatchableError as e:
+                  warn "Ignoring invalid frame-tabs config field",
+                    field = tabChild.name, error = e.msg
             elif child.name == "scroller-focus-center" and child.args.len > 0:
               result.layout.scrollerFocusCenter = child.args[0].kBool()
             elif child.name == "scroller-prefer-center" and child.args.len > 0:

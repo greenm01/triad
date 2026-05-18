@@ -19,6 +19,13 @@ layout {
         active-color "#ffffff"
         inactive-color "#666666"
     }
+    frame-tabs {
+        active-color "#3f7fd5"
+        active-unfocused-color "#303846"
+        inactive-color "#161a22ee"
+        active-line-color "#ffffff"
+        active-unfocused-line-color "#62a8ff"
+    }
     enable-animations #true
     animation-speed 0.15
     animation-snap-threshold 0.5

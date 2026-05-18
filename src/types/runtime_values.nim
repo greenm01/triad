@@ -60,6 +60,13 @@ type
     id*: NativeLayoutId
     fallback*: LayoutSelection
 
+  FrameTabsConfig* = object
+    activeColor*: uint32
+    activeUnfocusedColor*: uint32
+    inactiveColor*: uint32
+    activeLineColor*: uint32
+    activeUnfocusedLineColor*: uint32
+
   Direction* {.pure.} = enum
     DirLeft
     DirRight

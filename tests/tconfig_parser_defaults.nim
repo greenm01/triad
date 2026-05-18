@@ -25,6 +25,13 @@ layout {
     active-color "#112233"
     inactive-color "#445566"
   }
+  frame-tabs {
+    active-color "#010203"
+    active-unfocused-color "#040506"
+    inactive-color "#07080980"
+    active-line-color "#0a0b0c"
+    active-unfocused-line-color "#0d0e0f"
+  }
   scroller-focus-center #true
   scroller-prefer-center #true
   scroller-proportion-presets 1.2 0.25 0.5 0.5
@@ -298,6 +305,11 @@ switch-events {
     check config.layout.gaps == 32
     check config.mirrorHjklArrows
     check config.layout.borderWidth == 3
+    check config.layout.frameTabs.activeColor == 0x010203ff'u32
+    check config.layout.frameTabs.activeUnfocusedColor == 0x040506ff'u32
+    check config.layout.frameTabs.inactiveColor == 0x07080980'u32
+    check config.layout.frameTabs.activeLineColor == 0x0a0b0cff'u32
+    check config.layout.frameTabs.activeUnfocusedLineColor == 0x0d0e0fff'u32
     check config.layout.centerFocusedColumn == "always"
     check config.layout.scrollerProportionPresets ==
       @[1.0'f32, 0.25'f32, 0.5'f32, 0.5'f32]
@@ -543,6 +555,14 @@ switch-events {
     check config.presentationMode == PresentationMode.PresentationAsync
     check config.allowExitSession
     check config.protocolSurfaces.enabled
+    let defaults = loadConfigNodes(@[])
+    check defaults.layout.frameTabs.activeColor == DefaultFrameTabActiveColor
+    check defaults.layout.frameTabs.activeUnfocusedColor ==
+      DefaultFrameTabActiveUnfocusedColor
+    check defaults.layout.frameTabs.inactiveColor == DefaultFrameTabInactiveColor
+    check defaults.layout.frameTabs.activeLineColor == DefaultFrameTabActiveLineColor
+    check defaults.layout.frameTabs.activeUnfocusedLineColor ==
+      DefaultFrameTabActiveUnfocusedLineColor
     check config.hotkeyOverlay.skipAtStartup
     check config.hotkeyOverlay.hideNotBound
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center
