@@ -1,5 +1,6 @@
 from projection_values import
-  ProjectedFrameEmptyChrome, ProjectedFrameTabBar, RenderInstruction
+  ProjectedBspPreselection, ProjectedFrameEmptyChrome, ProjectedFrameTabBar,
+  RenderInstruction
 
 type
   LayoutViewportTarget* = object
@@ -11,4 +12,5 @@ type
     instructions*: seq[RenderInstruction]
     frameTabBars*: seq[ProjectedFrameTabBar]
     frameEmptyChrome*: seq[ProjectedFrameEmptyChrome]
+    bspPreselections*: seq[ProjectedBspPreselection]
     viewportTargets*: seq[LayoutViewportTarget]

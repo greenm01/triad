@@ -170,11 +170,14 @@ chrome for visible tabs plus empty frames. It follows the existing DOD split:
 
 Triad's native `bsp-tree` layout provides the BSP substrate. Nim owns the
 partition tree and inserts a new tiled window by splitting the focused leaf
-50/50 on that leaf's longer axis. Janet layouts that use `fallback="bsp-tree"`
-receive immutable `:bsp-nodes` data and may return `:bsp-node-id` geometry. The
-bundled `bsp` layout is the default Janet policy over this native tree.
-Directional focus, `focus-next`/`focus-prev`, `resize-width`, `resize-height`,
-`move-window-*`, `bsp-balance`, and `bsp-equalize` operate on the native tree.
+50/50 on that leaf's longer axis, unless the leaf has a BSP preselection. Janet
+layouts that use `fallback="bsp-tree"` receive immutable `:bsp-nodes` data and
+may return `:bsp-node-id` geometry. BSP node maps include
+`:preselect-direction` (`nil`, `:left`, `:right`, `:up`, or `:down`) and
+`:preselect-ratio` (`nil` or a ratio). The bundled `bsp` layout is the default
+Janet policy over this native tree. Directional focus, `focus-next`/`focus-prev`,
+`resize-width`, `resize-height`, `move-window-*`, `bsp-balance`, `bsp-equalize`,
+and `bsp-preselect-*` operate on the native tree.
 
 ## notion-river Feasibility Notes
 

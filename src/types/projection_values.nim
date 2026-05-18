@@ -81,8 +81,19 @@ type
     ratio*: float32
     window*: ProjectionWindowId
     focused*: bool
+    hasPreselection*: bool
+    preselectDirection*: Direction
+    preselectRatio*: float32
     rectSet*: bool
     rect*: Rect
+
+  ProjectedBspPreselection* = object
+    nodeId*: uint32
+    geom*: Rect
+    direction*: Direction
+    ringWidth*: int32
+    ringColor*: uint32
+    backgroundColor*: uint32
 
   ProjectedFrameTab* = object
     windowId*: ProjectionWindowId
@@ -115,6 +126,7 @@ type
     columns*: seq[ProjectedColumn]
     frames*: seq[ProjectedFrame]
     bspNodes*: seq[ProjectedBspNode]
+    bspPreselections*: seq[ProjectedBspPreselection]
     focusedWindow*: ProjectionWindowId
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32

@@ -417,8 +417,9 @@ Text IPC and bind commands:
   `switch-layout`,
   `master-count`, `adjust-master-count`, `master-ratio`,
   `adjust-master-ratio`, `maximize-column`, `resize-width`, `resize-height`,
-  `set-column-width`, `bsp-balance`, `bsp-equalize`, `adjust-gaps`,
-  `toggle-gaps`, `zoom`.
+  `set-column-width`, `bsp-balance`, `bsp-equalize`,
+  `bsp-preselect-left/right/up/down`, `bsp-preselect-ratio`,
+  `bsp-preselect-cancel`, `adjust-gaps`, `toggle-gaps`, `zoom`.
 - Tags, movement, and groups: `move-to-tag-left`, `move-to-tag-right`,
   `move-to-tag`, `move-to-workspace`, `move-workspace-to-output`,
   `move-to-output`, `swap-to-tag`, `rename-tag`, `move-floating`,

@@ -104,6 +104,28 @@ proc frameOrientationFromJson(node: JsonNode): FrameSplitOrientation =
     discard
   FrameSplitOrientation.Horizontal
 
+proc directionFromJson(node: JsonNode): Direction =
+  try:
+    if node.kind == JInt:
+      let value = node.getInt()
+      if value >= ord(low(Direction)) and value <= ord(high(Direction)):
+        return Direction(value)
+    elif node.kind == JString:
+      case node.getStr().normalize()
+      of "left", "dirleft":
+        return Direction.DirLeft
+      of "right", "dirright":
+        return Direction.DirRight
+      of "up", "dirup":
+        return Direction.DirUp
+      of "down", "dirdown":
+        return Direction.DirDown
+      else:
+        return parseEnum[Direction](node.getStr())
+  except CatchableError:
+    discard
+  Direction.DirRight
+
 proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
   if node.kind != JObject or not node.hasKey("id"):
     return
@@ -259,6 +281,16 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
       if nodeJson.hasKey("ratio"):
         bspNode.ratio =
           clamp(float32FromJson(nodeJson["ratio"], 0.5'f32), 0.05'f32, 0.95'f32)
+      if nodeJson.hasKey("preselect_direction") and
+          nodeJson["preselect_direction"].kind != JNull:
+        bspNode.hasPreselection = true
+        bspNode.preselectDirection = directionFromJson(nodeJson["preselect_direction"])
+        bspNode.preselectRatio = 0.5'f32
+      if nodeJson.hasKey("preselect_ratio") and nodeJson["preselect_ratio"].kind != JNull:
+        bspNode.hasPreselection = true
+        bspNode.preselectRatio = clamp(
+          float32FromJson(nodeJson["preselect_ratio"], 0.5'f32), 0.05'f32, 0.95'f32
+        )
       if nodeJson.hasKey("window"):
         let winId = uint32FromJson(nodeJson["window"])
         if winId.isSome:

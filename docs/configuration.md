@@ -533,7 +533,9 @@ adding the normal outer layout gap.
 
 When a layout uses `fallback="bsp-tree"`, it may return BSP leaf geometry with
 `:bsp-node-id`. Triad maps each BSP leaf rect to that node's tiled window, and
-falls back to the native BSP projection if the Janet policy fails.
+falls back to the native BSP projection if the Janet policy fails. BSP node
+data also exposes `:preselect-direction` and `:preselect-ratio` so Janet
+layouts can visualize or account for manual insertion targets.
 
 ### Config Notifications
 Run custom commands to notify yourself of configuration reload results.

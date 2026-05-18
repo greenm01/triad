@@ -7,12 +7,13 @@ import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/[hotkey_overlay, recent_windows]
 from ../types/core import Rect
-from ../types/projection_values import ProjectedFrameEmptyChrome, ProjectedFrameTabBar
+from ../types/projection_values import
+  ProjectedBspPreselection, ProjectedFrameEmptyChrome, ProjectedFrameTabBar
 import ../types/runtime_values
 import
-  exit_session_dialog_render, frame_tab_bar_render, hotkey_overlay_render,
-  layout_switch_toast_render, overview_overlay_render, protocol_surfaces,
-  recent_windows_overlay_render, state, wayland_helpers
+  bsp_preselection_render, exit_session_dialog_render, frame_tab_bar_render,
+  hotkey_overlay_render, layout_switch_toast_render, overview_overlay_render,
+  protocol_surfaces, recent_windows_overlay_render, state, wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -47,6 +48,9 @@ template windowDecorationBelow(daemon: TriadDaemon): untyped =
 
 template frameEmptySurfaces(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.frameEmptySurfaces
+
+template bspPreselectionSurfaces(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.bspPreselectionSurfaces
 
 proc premulColor*(value: uint32): tuple[r, g, b, a: uint32] =
   let r8 = (value shr 24) and 0xff
@@ -83,6 +87,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
     of ProtocolSurfaceKind.PskDecorationBelow:
       0x2233cc00'u32 or alpha
     of ProtocolSurfaceKind.PskFrameEmpty:
+      0x00000000'u32 or alpha
+    of ProtocolSurfaceKind.PskBspPreselection:
       0x00000000'u32 or alpha
   let rgba = premulColor(color)
   daemon.singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
@@ -667,6 +673,30 @@ proc ensureFrameEmptySurface(daemon: var TriadDaemon, frameId: uint32): uint32 =
   debug "Created frame empty chrome surface", frameId = frameId, shellSurfaceId = id
   id
 
+proc ensureBspPreselectionSurface(daemon: var TriadDaemon, nodeId: uint32): uint32 =
+  if daemon.bspPreselectionSurfaces.hasKey(nodeId):
+    let surfaceId = daemon.bspPreselectionSurfaces[nodeId]
+    if daemon.surfaceTable.hasKey(surfaceId):
+      return surfaceId
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return 0
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskBspPreselection)
+  if surf.surface == nil:
+    return 0
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    daemon.destroyProtocolSurface(surf)
+    return 0
+  surf.node = surf.shellSurface.getNode()
+  let id = surf.shellSurface.id()
+  daemon.shellSurfacePointers[id] = surf.shellSurface
+  daemon.protocolSurfaceRuntime.surfaceToOwned[surf.surface.id()] = id
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[id] = surf
+  daemon.bspPreselectionSurfaces[nodeId] = id
+  debug "Created BSP preselection surface", nodeId = nodeId, shellSurfaceId = id
+  id
+
 proc syncFrameTabBarSurfaces*(
     daemon: var TriadDaemon, tabBars: openArray[ProjectedFrameTabBar]
 ) =
@@ -759,6 +789,57 @@ proc syncFrameEmptySurfaces*(
       daemon.surfaceTable.del(surfaceId)
       daemon.destroyProtocolSurface(surf)
 
+proc syncBspPreselectionSurfaces*(
+    daemon: var TriadDaemon, preselections: openArray[ProjectedBspPreselection]
+) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    var staleIds: seq[uint32]
+    for _, surfaceId in daemon.bspPreselectionSurfaces.pairs:
+      staleIds.add(surfaceId)
+    daemon.bspPreselectionSurfaces.clear()
+    for surfaceId in staleIds:
+      if daemon.surfaceTable.hasKey(surfaceId):
+        var surf = daemon.surfaceTable[surfaceId]
+        daemon.surfaceTable.del(surfaceId)
+        daemon.destroyProtocolSurface(surf)
+    return
+
+  var activeNodes = initHashSet[uint32]()
+  for preselection in preselections:
+    if preselection.nodeId == 0 or preselection.geom.w <= 0 or preselection.geom.h <= 0:
+      continue
+    let surfaceId = daemon.ensureBspPreselectionSurface(preselection.nodeId)
+    if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
+      continue
+    activeNodes.incl(preselection.nodeId)
+    var surf = daemon.surfaceTable[surfaceId]
+    let key = preselection.bspPreselectionCacheKey()
+    surf.inputW = 0
+    surf.inputH = 0
+    if surf.bufferCacheKey != key:
+      let rendered = renderBspPreselectionBuffer(preselection)
+      let buffer = daemon.createArgbShmBuffer(rendered)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+        surf.bufferCacheKey = key
+        daemon.commitProtocolSurface(surf)
+    if surf.node != nil:
+      surf.node.setPosition(preselection.geom.x, preselection.geom.y)
+      surf.node.placeTop()
+    daemon.surfaceTable[surfaceId] = surf
+
+  var staleNodes: seq[uint32]
+  for nodeId in daemon.bspPreselectionSurfaces.keys:
+    if not activeNodes.contains(nodeId):
+      staleNodes.add(nodeId)
+  for nodeId in staleNodes:
+    let surfaceId = daemon.bspPreselectionSurfaces[nodeId]
+    daemon.bspPreselectionSurfaces.del(nodeId)
+    if daemon.surfaceTable.hasKey(surfaceId):
+      var surf = daemon.surfaceTable[surfaceId]
+      daemon.surfaceTable.del(surfaceId)
+      daemon.destroyProtocolSurface(surf)
+
 proc destroyWindowProtocolSurfaces*(daemon: var TriadDaemon, windowId: uint32) =
   if daemon.windowDecorationAbove.hasKey(windowId):
     let id = daemon.windowDecorationAbove[windowId]
@@ -792,4 +873,5 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
   daemon.windowDecorationAbove.clear()
   daemon.windowDecorationBelow.clear()
   daemon.frameEmptySurfaces.clear()
+  daemon.bspPreselectionSurfaces.clear()
   daemon.protocolSurfaceRuntime.surfaceToOwned.clear()

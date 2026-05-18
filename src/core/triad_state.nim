@@ -5,8 +5,8 @@ import layout_selection_codec
 import native_layout_codec
 import ../types/shell_snapshot
 from ../types/runtime_values import
-  FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind, LayoutSource,
-  WindowRuleIdleInhibitMode
+  Direction, FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind,
+  LayoutSource, WindowRuleIdleInhibitMode
 
 export shell_snapshot
 
@@ -106,6 +106,13 @@ proc frameSplitOrientationId(orientation: FrameSplitOrientation): string =
   of FrameSplitOrientation.Horizontal: "horizontal"
   of FrameSplitOrientation.Vertical: "vertical"
 
+proc directionId(direction: Direction): string =
+  case direction
+  of Direction.DirLeft: "left"
+  of Direction.DirRight: "right"
+  of Direction.DirUp: "up"
+  of Direction.DirDown: "down"
+
 proc triadFrameJson(frame: ShellFrame): JsonNode =
   let windows = newJArray()
   for winId in frame.windows:
@@ -166,6 +173,16 @@ proc triadBspNodeJson(node: ShellBspNode): JsonNode =
       else:
         %node.window,
     "focused": node.focused,
+    "preselect_direction":
+      if node.hasPreselection:
+        %node.preselectDirection.directionId()
+      else:
+        newJNull(),
+    "preselect_ratio":
+      if node.hasPreselection:
+        %node.preselectRatio
+      else:
+        newJNull(),
   }
 
 proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =

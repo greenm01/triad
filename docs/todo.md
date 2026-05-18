@@ -6,8 +6,6 @@
 
 ## BSP layout follow-ups
 
-- Add optional BSP preselection support if we want closer bspwm manual
-  insertion parity.
 - Add optional BSP rotate/flip/circulate commands if users ask for deeper tree
   editing.
 

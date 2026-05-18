@@ -337,6 +337,23 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdBspBalance))
   of CommandId.CidBspEqualize:
     some(Msg(kind: MsgKind.CmdBspEqualize))
+  of CommandId.CidBspPreselectLeft:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirLeft))
+  of CommandId.CidBspPreselectRight:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirRight))
+  of CommandId.CidBspPreselectUp:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirUp))
+  of CommandId.CidBspPreselectDown:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirDown))
+  of CommandId.CidBspPreselectCancel:
+    some(Msg(kind: MsgKind.CmdBspPreselectCancel))
+  of CommandId.CidBspPreselectRatio:
+    if parts.len >= 2:
+      let ratio = parseFloat32Arg(parts[1])
+      if ratio.isSome:
+        return
+          some(Msg(kind: MsgKind.CmdBspPreselectRatio, bspPreselectRatio: ratio.get()))
+    none(Msg)
   of CommandId.CidConfigReload:
     some(Msg(kind: MsgKind.CmdConfigReload))
   of CommandId.CidLayoutScroller:

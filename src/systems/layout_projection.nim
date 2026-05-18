@@ -9,7 +9,7 @@ import ../types/janet_layouts
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/projection_values as rv
-from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
+from ../types/runtime_values import Direction, FrameNodeKind, FrameSplitOrientation
 import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
@@ -270,6 +270,9 @@ proc projectedTag(
         ratio: node.ratio,
         window: model.externalWindowId(node.window),
         focused: node.window != NullWindowId and node.window == tag.focusedWindow,
+        hasPreselection: node.hasPreselection,
+        preselectDirection: node.preselectDirection,
+        preselectRatio: node.preselectRatio,
       )
     )
 
@@ -551,6 +554,44 @@ proc applyBspTreeRects(
         node.rectSet = true
         node.rect = item.rect
         break
+
+proc bspPreselectionRect(node: rv.ProjectedBspNode, gap: int32): rv.Rect =
+  let safeGap = max(0'i32, gap)
+  let ratio = clamp(node.preselectRatio, 0.05'f32, 0.95'f32)
+  let rect = node.rect
+  case node.preselectDirection
+  of Direction.DirLeft:
+    let w = max(1'i32, int32(float32(max(1'i32, rect.w - safeGap)) * ratio))
+    rv.Rect(x: rect.x, y: rect.y, w: w, h: rect.h)
+  of Direction.DirRight:
+    let firstW = max(1'i32, int32(float32(max(1'i32, rect.w - safeGap)) * ratio))
+    let w = max(1'i32, rect.w - safeGap - firstW)
+    rv.Rect(x: rect.x + firstW + safeGap, y: rect.y, w: w, h: rect.h)
+  of Direction.DirUp:
+    let h = max(1'i32, int32(float32(max(1'i32, rect.h - safeGap)) * ratio))
+    rv.Rect(x: rect.x, y: rect.y, w: rect.w, h: h)
+  of Direction.DirDown:
+    let firstH = max(1'i32, int32(float32(max(1'i32, rect.h - safeGap)) * ratio))
+    let h = max(1'i32, rect.h - safeGap - firstH)
+    rv.Rect(x: rect.x, y: rect.y + firstH + safeGap, w: rect.w, h: h)
+
+proc bspPreselectionOverlays(
+    model: Model, tag: rv.ProjectedTag, innerGap: int32
+): seq[rv.ProjectedBspPreselection] =
+  let ringWidth = max(1'i32, min(max(0'i32, model.borderWidth), 8'i32))
+  for node in tag.bspNodes:
+    if node.kind == FrameNodeKind.Leaf and node.hasPreselection and node.rectSet and
+        node.rect.w > 0 and node.rect.h > 0:
+      result.add(
+        rv.ProjectedBspPreselection(
+          nodeId: node.id,
+          geom: node.bspPreselectionRect(innerGap),
+          direction: node.preselectDirection,
+          ringWidth: ringWidth,
+          ringColor: model.focusedBorderColor,
+          backgroundColor: 0x62a8ff33'u32,
+        )
+      )
 
 proc layoutBspTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
@@ -1075,6 +1116,9 @@ proc layoutProjection*(
     result.frameEmptyChrome = model.frameTreeEmptyChrome(
       model.activeTag, screen, currentOuterGap, currentInnerGap
     )
+  elif activeTagData.bspTreeActive():
+    result.bspPreselections =
+      model.bspPreselectionOverlays(tagForLayout, currentInnerGap)
   if tagForLayout.columns.len > 0 and not custom.applied and
       not activeTagData.frameTreeActive() and not activeTagData.bspTreeActive():
     result.viewportTargets.add(
@@ -1103,6 +1147,7 @@ proc layoutProjection*(
       result.instructions =
         @[rv.RenderInstruction(windowId: model.externalWindowId(focused), geom: screen)]
       result.frameTabBars.setLen(0)
+      result.bspPreselections.setLen(0)
 
   model.addFloatingInstructions(model.activeTag, screen, result.instructions)
   model.addUnmanagedGlobalInstructions(screen, result.instructions)

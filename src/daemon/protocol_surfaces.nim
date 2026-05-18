@@ -13,6 +13,7 @@ type
     PskDecorationAbove
     PskDecorationBelow
     PskFrameEmpty
+    PskBspPreselection
 
   OwnedProtocolSurface* = object
     surface*: ptr Surface
@@ -43,4 +44,5 @@ type
     windowDecorationAbove*: Table[uint32, uint32]
     windowDecorationBelow*: Table[uint32, uint32]
     frameEmptySurfaces*: Table[uint32, uint32]
+    bspPreselectionSurfaces*: Table[uint32, uint32]
     surfaceToOwned*: Table[uint32, uint32]

@@ -1,14 +1,19 @@
 import std/[math, options, tables]
 import tag_ops
+from ../core/native_layout_codec import BspTreeLayoutId, nativeLayoutIdString
 import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
-from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
+from ../types/runtime_values import Direction, FrameNodeKind, FrameSplitOrientation
 
 type BspLeafRect* = tuple[nodeId: BspNodeId, window: WindowId, rect: Rect]
 
 proc bspUsesTag(model: Model, nodeId: BspNodeId, tagId: TagId): bool =
   let nodeOpt = model.bspNodes.entity(nodeId)
   nodeOpt.isSome and nodeOpt.get().tagId == tagId
+
+proc tagUsesBspTree(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tags.entity(tagId)
+  tagOpt.isSome and tagOpt.get().nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
 
 proc addBspNode(
     model: var Model,
@@ -29,6 +34,8 @@ proc addBspNode(
       ratio: 0.5'f32,
       orientation: FrameSplitOrientation.Horizontal,
       window: winId,
+      preselectDirection: Direction.DirRight,
+      preselectRatio: 0.5'f32,
     )
   )
 
@@ -73,6 +80,11 @@ proc splitOrientationForRect(rect: Rect): FrameSplitOrientation =
     FrameSplitOrientation.Vertical
   else:
     FrameSplitOrientation.Horizontal
+
+proc splitOrientationForDirection(direction: Direction): FrameSplitOrientation =
+  case direction
+  of Direction.DirLeft, Direction.DirRight: FrameSplitOrientation.Horizontal
+  of Direction.DirUp, Direction.DirDown: FrameSplitOrientation.Vertical
 
 proc firstBspLeaf(model: Model, nodeId: BspNodeId): BspNodeId =
   let nodeOpt = model.bspNodes.entity(nodeId)
@@ -264,6 +276,7 @@ proc addWindowToBsp*(model: var Model, tagId: TagId, winId: WindowId): bool =
     return true
 
   let oldParent = model.bspNodes.entity(target).get().parent
+  let targetNode = model.bspNodes.entity(target).get()
   let screen = Rect(
     x: 0, y: 0, w: max(1'i32, model.screenWidth), h: max(1'i32, model.screenHeight)
   )
@@ -282,16 +295,93 @@ proc addWindowToBsp*(model: var Model, tagId: TagId, winId: WindowId): bool =
       model.bspNodes.mEntity(oldParent).secondChild = split
 
   model.bspNodes.mEntity(split).orientation =
-    if targetRect.found:
+    if targetNode.hasPreselection:
+      targetNode.preselectDirection.splitOrientationForDirection()
+    elif targetRect.found:
       targetRect.rect.splitOrientationForRect()
     else:
       FrameSplitOrientation.Horizontal
-  model.bspNodes.mEntity(split).ratio = 0.5'f32
-  model.bspNodes.mEntity(split).firstChild = target
-  model.bspNodes.mEntity(split).secondChild = second
+  model.bspNodes.mEntity(split).ratio =
+    if targetNode.hasPreselection:
+      clamp(targetNode.preselectRatio, 0.05'f32, 0.95'f32)
+    else:
+      0.5'f32
+  if targetNode.hasPreselection and
+      targetNode.preselectDirection in {Direction.DirLeft, Direction.DirUp}:
+    model.bspNodes.mEntity(split).firstChild = second
+    model.bspNodes.mEntity(split).secondChild = target
+  else:
+    model.bspNodes.mEntity(split).firstChild = target
+    model.bspNodes.mEntity(split).secondChild = second
   model.bspNodes.mEntity(target).parent = split
+  model.bspNodes.mEntity(target).hasPreselection = false
   model.bspNodeByTagWindow[(tagId, winId)] = second
   discard model.setTagFocus(tagId, winId)
+  true
+
+proc setBspPreselection*(
+    model: var Model, tagId: TagId, direction: Direction, ratio = 0.5'f32
+): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  let nodeId = model.focusedBspLeafOrRoot(tagId)
+  if nodeId == NullBspNodeId:
+    return false
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Leaf:
+    return false
+  let nextRatio = clamp(ratio, 0.05'f32, 0.95'f32)
+  let node = nodeOpt.get()
+  if node.hasPreselection and node.preselectDirection == direction and
+      node.preselectRatio == nextRatio:
+    return false
+  model.bspNodes.mEntity(nodeId).hasPreselection = true
+  model.bspNodes.mEntity(nodeId).preselectDirection = direction
+  model.bspNodes.mEntity(nodeId).preselectRatio = nextRatio
+  true
+
+proc setFocusedBspPreselection*(
+    model: var Model, direction: Direction, ratio = 0.5'f32
+): bool =
+  if not model.tagUsesBspTree(model.activeTag):
+    return false
+  let nodeId = model.focusedBspLeafOrRoot(model.activeTag)
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  let nextRatio =
+    if nodeOpt.isSome and nodeOpt.get().hasPreselection:
+      nodeOpt.get().preselectRatio
+    else:
+      ratio
+  model.setBspPreselection(model.activeTag, direction, nextRatio)
+
+proc setFocusedBspPreselectionRatio*(model: var Model, ratio: float32): bool =
+  if not model.tagUsesBspTree(model.activeTag):
+    return false
+  let tagId = model.activeTag
+  let nodeId = model.focusedBspLeafOrRoot(tagId)
+  if nodeId == NullBspNodeId:
+    return false
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Leaf:
+    return false
+  let nextRatio = clamp(ratio, 0.05'f32, 0.95'f32)
+  let direction =
+    if nodeOpt.get().hasPreselection:
+      nodeOpt.get().preselectDirection
+    else:
+      Direction.DirRight
+  model.setBspPreselection(tagId, direction, nextRatio)
+
+proc cancelFocusedBspPreselection*(model: var Model): bool =
+  if not model.tagUsesBspTree(model.activeTag):
+    return false
+  let nodeId = model.focusedBspLeafOrRoot(model.activeTag)
+  if nodeId == NullBspNodeId:
+    return false
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone or not nodeOpt.get().hasPreselection:
+    return false
+  model.bspNodes.mEntity(nodeId).hasPreselection = false
   true
 
 proc replaceWindowInBsp*(
@@ -545,6 +635,9 @@ proc restoreTagBspNodes*(
         orientation: node.orientation,
         ratio: clamp(node.ratio, 0.05'f32, 0.95'f32),
         window: NullWindowId,
+        hasPreselection: node.hasPreselection,
+        preselectDirection: node.preselectDirection,
+        preselectRatio: clamp(node.preselectRatio, 0.05'f32, 0.95'f32),
       )
     )
     if node.parent == NullBspNodeId and root == NullBspNodeId:

@@ -71,6 +71,9 @@ type
     CmdFrameTabPrev
     CmdBspBalance
     CmdBspEqualize
+    CmdBspPreselect
+    CmdBspPreselectCancel
+    CmdBspPreselectRatio
     CmdFocusNext
     CmdFocusPrev
     CmdFocusDirection
@@ -320,6 +323,10 @@ type
       nativeLayoutTargetTag*: uint32
     of MsgKind.CmdFocusDirection:
       direction*: Direction
+    of MsgKind.CmdBspPreselect:
+      bspPreselectDirection*: Direction
+    of MsgKind.CmdBspPreselectRatio:
+      bspPreselectRatio*: float32
     of MsgKind.CmdRecentWindowNext, MsgKind.CmdRecentWindowPrev:
       recentScope*: RecentWindowScope
       recentScopeSet*: bool

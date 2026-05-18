@@ -282,7 +282,14 @@ proc bspTwoPaneContext(): JanetLayoutContext =
           ),
           ProjectedBspNode(id: 2, kind: FrameNodeKind.Leaf, parent: 1, window: 10),
           ProjectedBspNode(
-            id: 3, kind: FrameNodeKind.Leaf, parent: 1, window: 11, focused: true
+            id: 3,
+            kind: FrameNodeKind.Leaf,
+            parent: 1,
+            window: 11,
+            focused: true,
+            hasPreselection: true,
+            preselectDirection: Direction.DirDown,
+            preselectRatio: 0.4'f32,
           ),
         ],
     ),
@@ -774,6 +781,40 @@ suite "embedded Janet runtime":
     check evaluated.instructions[0].geom == Rect(x: 10, y: 10, w: 488, h: 780)
     check evaluated.instructions[1].windowId == 11'u32
     check evaluated.instructions[1].geom == Rect(x: 502, y: 10, w: 488, h: 780)
+
+  test "Janet layout receives BSP preselection fields":
+    let dir =
+      getTempDir() / ("triad-janet-layout-bsp-preselect-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :bsp-probe
+  (fn [ctx]
+    (def node ((ctx :bsp-nodes) 2))
+    (if (and (= (node :preselect-direction) :down)
+             (= (node :preselect-ratio) 0.4))
+      [{:bsp-node-id 2 :x 10 :y 10 :w 200 :h 400}
+       {:bsp-node-id 3 :x 1 :y 2 :w 300 :h 400}]
+      [])))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    var context = bspTwoPaneContext()
+    context.layoutId = janetLayoutId("bsp-probe")
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.instructions.len == 2
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 1, y: 2, w: 300, h: 400)
 
   test "frame substrate window output validates active tabs only":
     let dir =

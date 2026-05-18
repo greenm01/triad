@@ -33,6 +33,12 @@ type
     CidFrameTabPrev
     CidBspBalance
     CidBspEqualize
+    CidBspPreselectLeft
+    CidBspPreselectRight
+    CidBspPreselectUp
+    CidBspPreselectDown
+    CidBspPreselectCancel
+    CidBspPreselectRatio
     CidConfigReload
     CidLayoutScroller
     CidLayoutVerticalScroller
@@ -253,6 +259,26 @@ const CommandSpecs* = [
   CommandSpec(id: CommandId.CidFrameTabPrev, name: "frame-tab-prev", argShape: NoArgs),
   CommandSpec(id: CommandId.CidBspBalance, name: "bsp-balance", argShape: NoArgs),
   CommandSpec(id: CommandId.CidBspEqualize, name: "bsp-equalize", argShape: NoArgs),
+  CommandSpec(
+    id: CommandId.CidBspPreselectLeft, name: "bsp-preselect-left", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidBspPreselectRight, name: "bsp-preselect-right", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidBspPreselectUp, name: "bsp-preselect-up", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidBspPreselectDown, name: "bsp-preselect-down", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidBspPreselectCancel, name: "bsp-preselect-cancel", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidBspPreselectRatio,
+    name: "bsp-preselect-ratio",
+    argShape: RequiredFloatValue,
+  ),
   CommandSpec(id: CommandId.CidConfigReload, name: "config-reload", argShape: NoArgs),
   CommandSpec(
     id: CommandId.CidLayoutScroller, name: "layout-scroller", argShape: NoArgs

@@ -858,14 +858,18 @@ janet {
           binding.mode == other.mode
         )
 
-    check config.msgKindForBinding("h", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
-    check config.msgKindForBinding("Left", Super + Ctrl) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("h", Super + Ctrl) == MsgKind.CmdMoveWindowLeft
+    check config.msgKindForBinding("Left", Super + Ctrl) == MsgKind.CmdMoveWindowLeft
     check config.msgKindForBinding("j", Super + Ctrl) == MsgKind.CmdMoveWindowDown
     check config.msgKindForBinding("Down", Super + Ctrl) == MsgKind.CmdMoveWindowDown
     check config.msgKindForBinding("k", Super + Ctrl) == MsgKind.CmdMoveWindowUp
-    check config.msgKindForBinding("l", Super + Ctrl) == MsgKind.CmdMoveColumnRight
-    check config.msgKindForBinding("h", Super + Alt) == MsgKind.CmdMoveWindowLeft
-    check config.msgKindForBinding("Right", Super + Alt) == MsgKind.CmdMoveWindowRight
+    check config.msgKindForBinding("Up", Super + Ctrl) == MsgKind.CmdMoveWindowUp
+    check config.msgKindForBinding("l", Super + Ctrl) == MsgKind.CmdMoveWindowRight
+    check config.msgKindForBinding("Right", Super + Ctrl) == MsgKind.CmdMoveWindowRight
+    check config.msgKindForBinding("h", Super + Alt) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("Left", Super + Alt) == MsgKind.CmdMoveColumnLeft
+    check config.msgKindForBinding("l", Super + Alt) == MsgKind.CmdMoveColumnRight
+    check config.msgKindForBinding("Right", Super + Alt) == MsgKind.CmdMoveColumnRight
     check config.scratchpad.widthRatio == 0.8'f32
     check config.scratchpad.heightRatio == 0.9'f32
     check config.msgKindForBinding("i", Super) == MsgKind.CmdMoveToScratchpad

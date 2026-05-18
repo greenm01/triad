@@ -94,6 +94,16 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = not model.overviewActive and model.balanceBspTree(model.activeTag)
   of MsgKind.CmdBspEqualize:
     result.dirty = not model.overviewActive and model.equalizeBspTree(model.activeTag)
+  of MsgKind.CmdBspPreselect:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedBspPreselection(msg.bspPreselectDirection)
+  of MsgKind.CmdBspPreselectCancel:
+    result.dirty = not model.overviewActive and model.cancelFocusedBspPreselection()
+  of MsgKind.CmdBspPreselectRatio:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedBspPreselectionRatio(msg.bspPreselectRatio)
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
     if result.dirty:

@@ -347,6 +347,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       let projection = syncRuntimeLayoutProjection("manage layout", msg)
       daemon.currentFrameTabBars = projection.frameTabBars
       daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
+      daemon.currentBspPreselections = projection.bspPreselections
       daemon.proposeDesiredDimensions(projection.instructions)
       daemon.applyManageState()
       daemon.flushPendingManageEffects()
@@ -386,6 +387,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       let projection = syncRuntimeLayoutProjection("render layout", msg)
       daemon.currentFrameTabBars = projection.frameTabBars
       daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
+      daemon.currentBspPreselections = projection.bspPreselections
       daemon.recordDesiredPlacements(projection.instructions)
       daemon.renderDesiredPlacements()
       for windowId in daemon.runtimeState.pendingAdmissionWindowIds():

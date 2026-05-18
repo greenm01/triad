@@ -13,7 +13,8 @@ from runtime_values import
   TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
   WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
-from runtime_values import FrameNodeKind, FrameSplitOrientation, NativeLayoutId
+from runtime_values import
+  Direction, FrameNodeKind, FrameSplitOrientation, NativeLayoutId
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -102,6 +103,9 @@ type
     orientation*: FrameSplitOrientation
     ratio*: float32
     window*: WindowId
+    hasPreselection*: bool
+    preselectDirection*: Direction
+    preselectRatio*: float32
 
   OutputData* = object
     id*: OutputId
@@ -358,6 +362,9 @@ type
     orientation*: FrameSplitOrientation
     ratio*: float32
     window*: ExternalWindowId
+    hasPreselection*: bool
+    preselectDirection*: Direction
+    preselectRatio*: float32
 
   RestoredTagData* = object
     slot*: uint32

@@ -112,6 +112,9 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
         orientation: node.orientation,
         ratio: node.ratio,
         window: ExternalWindowId(uint32(node.window)),
+        hasPreselection: node.hasPreselection,
+        preselectDirection: node.preselectDirection,
+        preselectRatio: node.preselectRatio,
       )
     )
 
@@ -272,6 +275,9 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
         orientation: node.orientation,
         ratio: node.ratio,
         window: model.externalWindowId(node.window),
+        hasPreselection: node.hasPreselection,
+        preselectDirection: node.preselectDirection,
+        preselectRatio: node.preselectRatio,
       )
       if node.kind == FrameNodeKind.Leaf and restoredNode.window != 0:
         let winOpt = model.windowData(node.window)
@@ -442,6 +448,16 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
         "orientation": ord(node.orientation),
         "ratio": node.ratio,
         "window": node.window,
+        "preselect_direction":
+          if node.hasPreselection:
+            %ord(node.preselectDirection)
+          else:
+            newJNull(),
+        "preselect_ratio":
+          if node.hasPreselection:
+            %node.preselectRatio
+          else:
+            newJNull(),
       }
     )
 

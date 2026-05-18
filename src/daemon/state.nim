@@ -234,6 +234,7 @@ type
     desiredPlacementOrder*: seq[uint32]
     currentFrameTabBars*: seq[ProjectedFrameTabBar]
     currentFrameEmptyChrome*: seq[ProjectedFrameEmptyChrome]
+    currentBspPreselections*: seq[ProjectedBspPreselection]
     lastRenderWindowStates*: Table[uint32, RenderWindowState]
     lastRenderOrder*: seq[uint32]
     lastFrameTickMs*: int64

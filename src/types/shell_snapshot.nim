@@ -1,8 +1,8 @@
 import std/options
 from core import Rect
 from runtime_values import
-  FrameNodeKind, FrameSplitOrientation, JanetLayoutConfig, LayoutMode, LayoutSelection,
-  NativeLayoutConfig, WindowRuleIdleInhibitMode
+  Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutConfig, LayoutMode,
+  LayoutSelection, NativeLayoutConfig, WindowRuleIdleInhibitMode
 
 const TriadIpcVersion* = 1
 
@@ -36,6 +36,9 @@ type
     ratio*: float32
     window*: uint32
     focused*: bool
+    hasPreselection*: bool
+    preselectDirection*: Direction
+    preselectRatio*: float32
 
   ShellWorkspace* = object
     tagId*: uint32

@@ -2,7 +2,7 @@ import std/[algorithm, json, sets, strutils, tables]
 import ../core/layout_selection_codec
 import ../types/janet_layouts
 import ../types/projection_values as rv
-from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
+from ../types/runtime_values import Direction, FrameNodeKind, FrameSplitOrientation
 import ../utils/behavior_log
 import binding
 
@@ -50,6 +50,13 @@ proc frameOrientationExpr(orientation: FrameSplitOrientation): string =
   of FrameSplitOrientation.Horizontal: ":horizontal"
   of FrameSplitOrientation.Vertical: ":vertical"
 
+proc directionExpr(direction: Direction): string =
+  case direction
+  of Direction.DirLeft: ":left"
+  of Direction.DirRight: ":right"
+  of Direction.DirUp: ":up"
+  of Direction.DirDown: ":down"
+
 proc frameExpr(frame: rv.ProjectedFrame): string =
   var windows: seq[string] = @[]
   for winId in frame.windows:
@@ -65,7 +72,11 @@ proc bspNodeExpr(node: rv.ProjectedBspNode): string =
   "{:id " & $node.id & " :kind " & node.kind.frameKindExpr() & " :parent " & $node.parent &
     " :first-child " & $node.firstChild & " :second-child " & $node.secondChild &
     " :orientation " & node.orientation.frameOrientationExpr() & " :ratio " & $node.ratio &
-    " :window " & $node.window & " :focused " & node.focused.boolValue() & " :rect-set " &
+    " :window " & $node.window & " :focused " & node.focused.boolValue() &
+    " :preselect-direction " &
+    (if node.hasPreselection: node.preselectDirection.directionExpr()
+    else: "nil") & " :preselect-ratio " &
+    (if node.hasPreselection: $node.preselectRatio else: "nil") & " :rect-set " &
     node.rectSet.boolValue() & " :rect " & node.rect.rectExpr() & "}"
 
 proc windowExpr(window: rv.ProjectedWindow): string =

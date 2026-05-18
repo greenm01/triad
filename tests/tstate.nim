@@ -1306,6 +1306,148 @@ suite "Runtime state primitives":
     check model.instructionGeom(11) == leftGeom
     check model.instructionGeom(10) == focusedGeom
 
+  test "BSP preselection controls next split direction and clears after insert":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    let focusedWin = model.windowForExternal(ExternalWindowId(10))
+    let oldNode = model.bspNodeForWindowOnTag(model.activeTag, focusedWin)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirLeft)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdBspPreselectRatio, bspPreselectRatio: 0.25'f32))
+
+    let withPreselection = model.layoutProjection()
+    check withPreselection.bspPreselections.len == 1
+    check withPreselection.bspPreselections[0].direction == Direction.DirLeft
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    let newWin = model.windowForExternal(ExternalWindowId(12))
+    let oldNodeAfter = model.bspNodeForWindowOnTag(model.activeTag, focusedWin)
+    let newNode = model.bspNodeForWindowOnTag(model.activeTag, newWin)
+    let parent = model.bspNodeData(oldNodeAfter).get().parent
+    let parentData = model.bspNodeData(parent).get()
+
+    check oldNodeAfter == oldNode
+    check parentData.orientation == FrameSplitOrientation.Horizontal
+    check abs(parentData.ratio - 0.25'f32) < 0.001'f32
+    check parentData.firstChild == newNode
+    check parentData.secondChild == oldNodeAfter
+    check not model.bspNodeData(oldNodeAfter).get().hasPreselection
+    check model.layoutProjection().bspPreselections.len == 0
+    check model.instructionGeom(12).x < model.instructionGeom(10).x
+
+  test "BSP preselection ratio before direction defaults right and preserves ratio":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    let focusedWin = model.windowForExternal(ExternalWindowId(10))
+    model.applyMsg(Msg(kind: MsgKind.CmdBspPreselectRatio, bspPreselectRatio: 0.3'f32))
+    var focusedNode =
+      model.bspNodeData(model.bspNodeForWindowOnTag(model.activeTag, focusedWin)).get()
+    check focusedNode.hasPreselection
+    check focusedNode.preselectDirection == Direction.DirRight
+    check abs(focusedNode.preselectRatio - 0.3'f32) < 0.001'f32
+
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirUp)
+    )
+    focusedNode =
+      model.bspNodeData(model.bspNodeForWindowOnTag(model.activeTag, focusedWin)).get()
+    check focusedNode.preselectDirection == Direction.DirUp
+    check abs(focusedNode.preselectRatio - 0.3'f32) < 0.001'f32
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    let newWin = model.windowForExternal(ExternalWindowId(12))
+    let newNode = model.bspNodeForWindowOnTag(model.activeTag, newWin)
+    let oldNode = model.bspNodeForWindowOnTag(model.activeTag, focusedWin)
+    let parent = model.bspNodeData(oldNode).get().parent
+    let parentData = model.bspNodeData(parent).get()
+
+    check parentData.orientation == FrameSplitOrientation.Vertical
+    check abs(parentData.ratio - 0.3'f32) < 0.001'f32
+    check parentData.firstChild == newNode
+    check parentData.secondChild == oldNode
+    check model.instructionGeom(12).y < model.instructionGeom(10).y
+
+  test "BSP preselection cancel and overview projection hide overlay":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirDown)
+    )
+    check model.layoutProjection().bspPreselections.len == 1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    check model.layoutProjection().bspPreselections.len == 0
+    model.applyMsg(Msg(kind: MsgKind.CmdCloseOverview))
+    check model.layoutProjection().bspPreselections.len == 1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdBspPreselectCancel))
+    check model.layoutProjection().bspPreselections.len == 0
+    let node = model.bspNodeForWindowOnTag(
+      model.activeTag, model.windowForExternal(ExternalWindowId(11))
+    )
+    check not model.bspNodeData(node).get().hasPreselection
+
+  test "BSP live restore preserves preselection state":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirDown)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdBspPreselectRatio, bspPreselectRatio: 0.4'f32))
+
+    let restore = model.liveRestoreState().pendingRestoreState()
+    let restoredNodes = restore.tags[1].bspNodes.filterIt(it.hasPreselection)
+    check restoredNodes.len == 1
+    check restoredNodes[0].preselectDirection == Direction.DirDown
+    check abs(restoredNodes[0].preselectRatio - 0.4'f32) < 0.001'f32
+
+    var restored = initRuntimeStateFromConfig(baseConfig()).model
+    restored.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    restored.applyLiveRestore(restore)
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let restoredPreselectNodes = toSeq(restored.bspNodesOnTagWithId(restored.activeTag))
+      .filterIt(it.node.hasPreselection)
+    check restoredPreselectNodes.len == 1
+    check restoredPreselectNodes[0].node.preselectDirection == Direction.DirDown
+    check abs(restoredPreselectNodes[0].node.preselectRatio - 0.4'f32) < 0.001'f32
+
   test "BSP resize adjusts the focused split fence":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

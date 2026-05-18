@@ -77,6 +77,9 @@ proc shellBspNodes(model: Model, tagId: TagId): seq[ShellBspNode] =
         focused:
           tagOpt.isSome and node.window != NullWindowId and
           node.window == tagOpt.get().focusedWindow,
+        hasPreselection: node.hasPreselection,
+        preselectDirection: node.preselectDirection,
+        preselectRatio: node.preselectRatio,
       )
     )
 

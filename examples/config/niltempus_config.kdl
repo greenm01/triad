@@ -317,13 +317,13 @@ bindings {
     bind "Super+Shift+c" "layout-right-tile"
     bind "Super+Ctrl+x" "layout-monocle"
 
-    // Scroller movement and stack surgery.
-    bind "Super+Ctrl+h" "move-column-left"
+    // Window movement and column movement.
+    bind "Super+Ctrl+h" "move-window-left"
     bind "Super+Ctrl+j" "move-window-down"
     bind "Super+Ctrl+k" "move-window-up"
-    bind "Super+Ctrl+l" "move-column-right"
-    bind "Super+Alt+h" "move-window-left"
-    bind "Super+Alt+l" "move-window-right"
+    bind "Super+Ctrl+l" "move-window-right"
+    bind "Super+Alt+h" "move-column-left"
+    bind "Super+Alt+l" "move-column-right"
     bind "Super+Alt+Home" "move-column-to-first"
     bind "Super+Alt+End" "move-column-to-last"
     bind "Super+z" "zoom"

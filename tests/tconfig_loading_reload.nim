@@ -420,6 +420,19 @@ layout {
     check toggleFullscreen.get().kind == MsgKind.CmdToggleFullscreenById
     check toggleFullscreen.get().fullscreenWindowId == 45
 
+  test "Text command parser accepts BSP preselection commands":
+    let left = parseTextCommand("bsp-preselect-left")
+    check left.isSome
+    check left.get().kind == MsgKind.CmdBspPreselect
+    check left.get().bspPreselectDirection == Direction.DirLeft
+
+    let ratio = parseTextCommand("bsp-preselect-ratio 0.35")
+    check ratio.isSome
+    check ratio.get().kind == MsgKind.CmdBspPreselectRatio
+    check abs(ratio.get().bspPreselectRatio - 0.35'f32) < 0.001'f32
+
+    check parseTextCommand("bsp-preselect-ratio nope").isNone
+
     let focusedToggle = parseTextCommand("toggle-fullscreen")
     check focusedToggle.isSome
     check focusedToggle.get().kind == MsgKind.CmdToggleFullscreen

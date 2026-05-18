@@ -67,7 +67,7 @@ type LayoutSource* = enum
 | **notion** | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |
 | **frame-tree** | Persistent leaf frames hold tabs; split nodes divide space; empty frames survive | Notion, Ion, StumpWM | `lkFrame` | `lsNative` |
 | **bsp** | Janet geometry policy over Triad-owned binary partition tree; new windows split the focused leaf automatically | bspwm, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
-| **bsp-tree** | Persistent binary partition tree; each leaf owns one tiled window; Triad owns insertion, directional focus, tree-order cycle, resize, balance/equalize, removal, restore, and fallback projection | bspwm | `lkBsp` | `lsNative` |
+| **bsp-tree** | Persistent binary partition tree; each leaf owns one tiled window; Triad owns insertion, preselection, directional focus, tree-order cycle, resize, balance/equalize, removal, restore, and fallback projection | bspwm | `lkBsp` | `lsNative` |
 | **split h/v** | User-directed binary split; builds a tree of containers each with their own layout mode | i3, Sway, Herbstluftwm | `lkFrame` or `lkBsp` | future native substrate |
 | **tabbed** | Windows stacked as tabs within a container; no spatial tiling | i3, Sway | `lkFrame` | `lsNative` substrate behavior |
 | **stacked** | Windows stacked vertically with visible titlebars; no spatial tiling | i3, Sway | `lkFrame` | future native substrate behavior |

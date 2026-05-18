@@ -386,6 +386,7 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
 
   daemon.syncFrameTabBarSurfaces(daemon.currentFrameTabBars)
   daemon.syncFrameEmptySurfaces(daemon.currentFrameEmptyChrome)
+  daemon.syncBspPreselectionSurfaces(daemon.currentBspPreselections)
 
   if orderChanged:
     for id in ids:
