@@ -170,39 +170,39 @@ proc splitFocusedFrame*(model: var Model, orientation: FrameSplitOrientation): b
   discard model.repairFrameActiveWindow(target)
   let active = model.frames.entity(target).get().activeWindow
   let oldWindows = model.windowsByFrame.getOrDefault(target, @[])
-  if oldWindows.len == 0:
-    return false
   let moveActive =
     oldWindows.len > 1 and active != NullWindowId and oldWindows.find(active) != -1
-  let first = model.addFrame(tagId, parent = target)
-  let second = model.addFrame(tagId, parent = target)
-  if first == NullFrameId or second == NullFrameId:
+  let oldParent = model.frames.entity(target).get().parent
+  let split = model.addFrame(tagId, kind = FrameNodeKind.Split, parent = oldParent)
+  let second = model.addFrame(tagId, parent = split)
+  if split == NullFrameId or second == NullFrameId:
     return false
-  model.windowsByFrame.del(target)
-  model.windowsByFrame[first] = @[]
-  model.windowsByFrame[second] = @[]
-  for winId in oldWindows:
-    if moveActive and winId == active:
-      model.windowsByFrame[second].add(winId)
-      model.frameByTagWindow[(tagId, winId)] = second
+  if oldParent == NullFrameId:
+    model.frameRootsByTag[tagId] = split
+  else:
+    if model.frames.mEntity(oldParent).firstChild == target:
+      model.frames.mEntity(oldParent).firstChild = split
     else:
-      model.windowsByFrame[first].add(winId)
-      model.frameByTagWindow[(tagId, winId)] = first
-  model.frames.mEntity(first).activeWindow = active
+      model.frames.mEntity(oldParent).secondChild = split
+  model.frames.mEntity(target).parent = split
+  model.windowsByFrame[second] = @[]
   if moveActive:
+    let idx = model.windowsByFrame[target].find(active)
+    if idx != -1:
+      model.windowsByFrame[target].delete(idx)
+    model.windowsByFrame[second].add(active)
+    model.frameByTagWindow[(tagId, active)] = second
     model.frames.mEntity(second).activeWindow = active
-  model.frames.mEntity(target).kind = FrameNodeKind.Split
-  model.frames.mEntity(target).orientation = orientation
-  model.frames.mEntity(target).ratio = 0.5'f32
-  model.frames.mEntity(target).firstChild = first
-  model.frames.mEntity(target).secondChild = second
-  model.frames.mEntity(target).activeWindow = NullWindowId
-  discard model.repairFrameActiveWindow(first)
+  model.frames.mEntity(split).orientation = orientation
+  model.frames.mEntity(split).ratio = 0.5'f32
+  model.frames.mEntity(split).firstChild = target
+  model.frames.mEntity(split).secondChild = second
+  discard model.repairFrameActiveWindow(target)
   if moveActive:
     discard model.setFocusedFrame(tagId, second)
     model.tags.mEntity(tagId).focusedWindow = active
   else:
-    discard model.setFocusedFrame(tagId, first)
+    discard model.setFocusedFrame(tagId, target)
   true
 
 proc unsplitFocusedFrame*(model: var Model): bool =

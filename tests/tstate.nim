@@ -949,6 +949,7 @@ suite "Runtime state primitives":
     check model.windowsForFrame(active.focusedFrame) == @[
       tc.WindowId(1), tc.WindowId(2)
     ]
+    let initialFrame = active.focusedFrame
 
     var projection = model.layoutProjection()
     check projection.instructions.len == 1
@@ -966,6 +967,11 @@ suite "Runtime state primitives":
 
     let (split, _) = model.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
     model = split
+    let splitParent = model.frameData(initialFrame).get().parent
+    check splitParent != tc.NullFrameId
+    check model.frameData(splitParent).get().firstChild == initialFrame
+    check model.windowsForFrame(initialFrame) == @[tc.WindowId(1)]
+    check model.tagData(model.activeTag).get().focusedFrame != initialFrame
     let (withThird, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
     model = withThird
     projection = model.layoutProjection()
@@ -1255,12 +1261,15 @@ suite "Runtime state primitives":
       Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
     )
     emptyFrame = emptyNative
+    let initialEmptyModelFrame =
+      emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame
     let (emptySplit, _) = emptyFrame.update(Msg(kind: MsgKind.CmdFrameSplitVertical))
     emptyFrame = emptySplit
     let emptyProjection = emptyFrame.layoutProjection()
     check emptyProjection.frameEmptyChrome.len == 1
     let emptyTag = emptyFrame.tagData(emptyFrame.activeTag).get()
     let occupiedLeaf = emptyTag.focusedFrame
+    check occupiedLeaf == initialEmptyModelFrame
     var emptyLeaf = tc.NullFrameId
     for frameId, frame in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
       if frame.kind == FrameNodeKind.Leaf and
@@ -1294,17 +1303,30 @@ suite "Runtime state primitives":
     emptyFrame = emptyFocusDown
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedWindow == tc.WindowId(1)
-    var emptyFrameCountBeforeNoop = 0
+    var emptyFrameCountBeforeEmptySplit = 0
     for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
-      inc emptyFrameCountBeforeNoop
-    let (emptyNoopSplit, _) =
+      inc emptyFrameCountBeforeEmptySplit
+    let originalEmptyLeaf = emptyLeaf
+    let (emptyNestedSplit, _) =
       emptyFrame.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
-    emptyFrame = emptyNoopSplit
-    var emptyFrameCountAfterNoop = 0
+    emptyFrame = emptyNestedSplit
+    var emptyFrameCountAfterEmptySplit = 0
     for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
-      inc emptyFrameCountAfterNoop
-    check emptyFrameCountAfterNoop == emptyFrameCountBeforeNoop
-    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
+      inc emptyFrameCountAfterEmptySplit
+    check emptyFrameCountAfterEmptySplit == emptyFrameCountBeforeEmptySplit + 2
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame ==
+      originalEmptyLeaf
+    check emptyFrame.layoutProjection().frameEmptyChrome.len == 2
+    let (emptyNestedUnsplit, _) = emptyFrame.update(Msg(kind: MsgKind.CmdFrameUnsplit))
+    emptyFrame = emptyNestedUnsplit
+    var emptyFrameCountAfterNestedUnsplit = 0
+    for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
+      inc emptyFrameCountAfterNestedUnsplit
+    check emptyFrameCountAfterNestedUnsplit == emptyFrameCountBeforeEmptySplit
+    emptyLeaf = emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame
+    check emptyLeaf != tc.NullFrameId
+    check emptyLeaf != originalEmptyLeaf
+    check emptyFrame.windowsForFrame(emptyLeaf).len == 0
     let (emptyFocusUpAgain, _) = emptyFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
     )
@@ -1320,7 +1342,7 @@ suite "Runtime state primitives":
     var emptyFrameCountAfterUnsplit = 0
     for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
       inc emptyFrameCountAfterUnsplit
-    check emptyFrameCountAfterUnsplit == emptyFrameCountBeforeNoop - 2
+    check emptyFrameCountAfterUnsplit == emptyFrameCountBeforeEmptySplit - 2
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
     check emptyFrame.windowsForFrame(occupiedLeaf) == @[tc.WindowId(1)]
     check emptyFrame.layoutProjection().frameEmptyChrome.len == 0
