@@ -12,7 +12,7 @@ import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
 import ../src/daemon/recent_windows_overlay_render
 import ../src/state/engine except WindowId
-import ../src/state/[invariants, snapshot]
+import ../src/state/[entity_manager, invariants, snapshot]
 import
   ../src/systems/
     [layout_projection, overview_geometry, recent_windows, runtime_facade, update]
@@ -1202,6 +1202,46 @@ suite "Runtime state primitives":
     )
     twoFrame = focusDown
     check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == rightFrameFocus
+
+    block:
+      var staleFrameFocus = twoFrame
+      let focusedBefore = staleFrameFocus.tagData(staleFrameFocus.activeTag).get()
+      var firstSplit = tc.NullFrameId
+      for frameId, frame in staleFrameFocus.framesOnTagWithId(staleFrameFocus.activeTag):
+        if frame.kind == FrameNodeKind.Split:
+          firstSplit = frameId
+          break
+      check firstSplit != tc.NullFrameId
+      staleFrameFocus.tags.mEntity(staleFrameFocus.activeTag).focusedFrame = firstSplit
+      let (repairedFocus, _) = staleFrameFocus.update(
+        Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
+      )
+      staleFrameFocus = repairedFocus
+      check staleFrameFocus.tagData(staleFrameFocus.activeTag).get().focusedWindow ==
+        tc.WindowId(1)
+      check staleFrameFocus.tagData(staleFrameFocus.activeTag).get().focusedFrame !=
+        firstSplit
+      check staleFrameFocus.tagData(staleFrameFocus.activeTag).get().focusedFrame !=
+        focusedBefore.focusedFrame
+
+    block:
+      var mismatchedFrameFocus = twoFrame
+      let wrongOccupiedFrame = mismatchedFrameFocus.frameForWindowOnTag(
+        mismatchedFrameFocus.activeTag, tc.WindowId(1)
+      )
+      check wrongOccupiedFrame != tc.NullFrameId
+      check mismatchedFrameFocus
+      .tagData(mismatchedFrameFocus.activeTag)
+      .get().focusedWindow == rightFrameFocus
+      mismatchedFrameFocus.tags.mEntity(mismatchedFrameFocus.activeTag).focusedFrame =
+        wrongOccupiedFrame
+      let (repairedFocus, _) = mismatchedFrameFocus.update(
+        Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
+      )
+      mismatchedFrameFocus = repairedFocus
+      check mismatchedFrameFocus
+      .tagData(mismatchedFrameFocus.activeTag)
+      .get().focusedWindow == tc.WindowId(1)
 
     var emptyFrame = initRuntimeStateFromConfig(baseConfig()).model
     let (emptyOutput, _) = emptyFrame.update(

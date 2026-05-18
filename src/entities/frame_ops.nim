@@ -89,9 +89,24 @@ proc focusedFrameOrRoot*(model: var Model, tagId: TagId): FrameId =
   if tagOpt.isNone:
     return NullFrameId
   let focused = tagOpt.get().focusedFrame
+  let focusedWindow = tagOpt.get().focusedWindow
+  let focusedWindowFrame =
+    model.frameByTagWindow.getOrDefault((tagId, focusedWindow), NullFrameId)
+  if focusedWindowFrame != NullFrameId and
+      (
+        focused == NullFrameId or model.windowsByFrame.getOrDefault(focused, @[]).len > 0
+      ) and model.frameUsesTag(focusedWindowFrame, tagId) and
+      model.frames.entity(focusedWindowFrame).get().kind == FrameNodeKind.Leaf and
+      focusedWindowFrame != focused:
+    discard model.setFocusedFrame(tagId, focusedWindowFrame)
+    return focusedWindowFrame
   if focused != NullFrameId and model.frameUsesTag(focused, tagId) and
       model.frames.entity(focused).get().kind == FrameNodeKind.Leaf:
     return focused
+  if focusedWindowFrame != NullFrameId and model.frameUsesTag(focusedWindowFrame, tagId) and
+      model.frames.entity(focusedWindowFrame).get().kind == FrameNodeKind.Leaf:
+    discard model.setFocusedFrame(tagId, focusedWindowFrame)
+    return focusedWindowFrame
   result = model.ensureFrameRoot(tagId)
   discard model.setFocusedFrame(tagId, result)
 
