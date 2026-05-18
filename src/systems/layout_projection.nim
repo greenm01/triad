@@ -236,46 +236,48 @@ proc projectedTag(
         )
       )
 
-  for frameId, frame in model.framesOnTagWithId(tagId):
-    var frameWindows: seq[rv.ProjectionWindowId] = @[]
-    for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
-      let winOpt = model.windowData(winId)
-      if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
-          not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal and
-          not model.windowHiddenByGroup(winId):
-        frameWindows.add(model.externalWindowId(winId))
-    result.tag.frames.add(
-      rv.ProjectedFrame(
-        id: uint32(frame.id),
-        kind: frame.kind,
-        parent: uint32(frame.parent),
-        firstChild: uint32(frame.firstChild),
-        secondChild: uint32(frame.secondChild),
-        orientation: frame.orientation,
-        ratio: frame.ratio,
-        windows: frameWindows,
-        activeWindow: model.externalWindowId(frame.activeWindow),
-        focused: frameId == tag.focusedFrame,
+  if tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId:
+    for frameId, frame in model.framesOnTagWithId(tagId):
+      var frameWindows: seq[rv.ProjectionWindowId] = @[]
+      for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+        let winOpt = model.windowData(winId)
+        if winOpt.isSome and winOpt.get().windowAdmitted() and
+            not winOpt.get().isFloating and not winOpt.get().isMinimized and
+            not winOpt.get().isUnmanagedGlobal and not model.windowHiddenByGroup(winId):
+          frameWindows.add(model.externalWindowId(winId))
+      result.tag.frames.add(
+        rv.ProjectedFrame(
+          id: uint32(frame.id),
+          kind: frame.kind,
+          parent: uint32(frame.parent),
+          firstChild: uint32(frame.firstChild),
+          secondChild: uint32(frame.secondChild),
+          orientation: frame.orientation,
+          ratio: frame.ratio,
+          windows: frameWindows,
+          activeWindow: model.externalWindowId(frame.activeWindow),
+          focused: frameId == tag.focusedFrame,
+        )
       )
-    )
 
-  for nodeId, node in model.bspNodesOnTagWithId(tagId):
-    result.tag.bspNodes.add(
-      rv.ProjectedBspNode(
-        id: uint32(nodeId),
-        kind: node.kind,
-        parent: uint32(node.parent),
-        firstChild: uint32(node.firstChild),
-        secondChild: uint32(node.secondChild),
-        orientation: node.orientation,
-        ratio: node.ratio,
-        window: model.externalWindowId(node.window),
-        focused: node.window != NullWindowId and node.window == tag.focusedWindow,
-        hasPreselection: node.hasPreselection,
-        preselectDirection: node.preselectDirection,
-        preselectRatio: node.preselectRatio,
+  if tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId:
+    for nodeId, node in model.bspNodesOnTagWithId(tagId):
+      result.tag.bspNodes.add(
+        rv.ProjectedBspNode(
+          id: uint32(nodeId),
+          kind: node.kind,
+          parent: uint32(node.parent),
+          firstChild: uint32(node.firstChild),
+          secondChild: uint32(node.secondChild),
+          orientation: node.orientation,
+          ratio: node.ratio,
+          window: model.externalWindowId(node.window),
+          focused: node.window != NullWindowId and node.window == tag.focusedWindow,
+          hasPreselection: node.hasPreselection,
+          preselectDirection: node.preselectDirection,
+          preselectRatio: node.preselectRatio,
+        )
       )
-    )
 
 proc layoutForTag(
     tag: var rv.ProjectedTag,

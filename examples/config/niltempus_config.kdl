@@ -25,7 +25,7 @@ layout {
     animation-speed 0.15
     frame-rate "auto"
     smart-gaps #false
-    layout-cycle "scroller" "notion" "tile" "grid" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
+    layout-cycle "scroller" "notion" "bsp" "dwindle" "tile" "grid" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
 }
 
 scratchpad {

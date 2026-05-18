@@ -128,6 +128,27 @@ suite "Core Runtime Logic: window movement":
     check geom.x == baselineGeom.x
     check geom.y == baselineGeom.y
 
+  test "Bundled grid ignores stale BSP substrate after layout switch":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("grid"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Window 3")
+    )
+
+    let projection = model.layoutProjection()
+    let first = projection.instructions.filterIt(uint32(it.windowId) == 1)[0]
+    let third = projection.instructions.filterIt(uint32(it.windowId) == 3)[0]
+
+    check projection.instructions.len == 3
+    check projection.viewportTargets.len == 0
+    check third.geom.y > first.geom.y
+
   test "Switching to native layout clears stale viewport offset":
     var model = cameraModel()
     model.seedCameraWindows(4)
