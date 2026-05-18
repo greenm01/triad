@@ -77,15 +77,19 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
         result.dirty =
           model.showLayoutSwitchToast(native.get().fallback.builtin) or result.dirty
   of MsgKind.CmdFrameSplitHorizontal:
-    result.dirty = model.splitFocusedFrame(FrameSplitOrientation.Horizontal)
+    result.dirty =
+      not model.overviewActive and
+      model.splitFocusedFrame(FrameSplitOrientation.Horizontal)
   of MsgKind.CmdFrameSplitVertical:
-    result.dirty = model.splitFocusedFrame(FrameSplitOrientation.Vertical)
+    result.dirty =
+      not model.overviewActive and
+      model.splitFocusedFrame(FrameSplitOrientation.Vertical)
   of MsgKind.CmdFrameUnsplit:
-    result.dirty = model.unsplitFocusedFrame()
+    result.dirty = not model.overviewActive and model.unsplitFocusedFrame()
   of MsgKind.CmdFrameTabNext:
-    result.dirty = model.focusFrameTab(1)
+    result.dirty = not model.overviewActive and model.focusFrameTab(1)
   of MsgKind.CmdFrameTabPrev:
-    result.dirty = model.focusFrameTab(-1)
+    result.dirty = not model.overviewActive and model.focusFrameTab(-1)
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
     if result.dirty:

@@ -1,5 +1,6 @@
 import std/options
 import workspaces
+import ../core/[layout_descriptor_codec, layout_selection_codec]
 from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 from ../types/projection_values import RenderInstruction
@@ -211,6 +212,8 @@ proc focusableWindowsOnTag(model: Model, tagId: TagId): seq[WindowId] =
       result.add(winId)
 
 proc focusCycle*(model: var Model, step: int): bool =
+  if model.overviewActive and model.tagUsesAggregateOverview(model.activeTag):
+    return false
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)
   if tagOpt.isNone:
@@ -414,6 +417,18 @@ proc visualFocusCandidates(model: Model): seq[FocusCandidate] =
       continue
     result.add(FocusCandidate(winId: winId, geom: instr.geom, order: order))
 
+proc focusNavigationLayoutMode(model: Model): Option[LayoutMode] =
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isNone:
+    return none(LayoutMode)
+  let tag = tagOpt.get()
+  let customId = tag.customLayoutId.layoutIdString()
+  if customId.len > 0:
+    let bundled = layoutModeForBundledId(customId)
+    if bundled.isSome:
+      return bundled
+  some(tag.layoutMode)
+
 proc orderedFallbackFocus(
     model: var Model,
     candidates: openArray[FocusCandidate],
@@ -447,14 +462,14 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
   let current = candidates[currentIdx]
   let currentCx = current.geom.centerX()
   let currentCy = current.geom.centerY()
-  let tagOpt = model.tagData(model.activeTag)
-  if tagOpt.isSome and tagOpt.get().layoutMode == LayoutMode.Scroller and
+  let layoutMode = model.focusNavigationLayoutMode()
+  if layoutMode.isSome and layoutMode.get() == LayoutMode.Scroller and
       direction in {Direction.DirUp, Direction.DirDown}:
     return false
 
   let useIntervalGeometry =
-    tagOpt.isSome and
-    tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+    layoutMode.isSome and
+    layoutMode.get() in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
 
   var bestIdx = -1
   var bestPrimary = high(int64)
@@ -595,6 +610,8 @@ proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
     false
 
 proc focusByDirection*(model: var Model, direction: Direction): bool =
+  if model.overviewActive and model.tagUsesAggregateOverview(model.activeTag):
+    return model.focusOverviewBoundaryStep(direction)
   if model.focusByVisualDirection(direction):
     return true
   if model.activeTagUsesFrameTree():

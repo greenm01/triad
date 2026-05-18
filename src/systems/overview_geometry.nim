@@ -1,4 +1,5 @@
 import std/[math, options]
+import ../core/[layout_descriptor_codec, layout_selection_codec, native_layout_codec]
 import ../state/engine
 import ../types/core as core_types
 import ../types/model as model_types
@@ -114,6 +115,14 @@ proc effectiveOverviewColumnProportion(
   else:
     overviewClampProportion(column.widthProportion)
 
+proc overviewSelectedLayoutMode(tag: TagData): Option[rv.LayoutMode] =
+  let customId = tag.customLayoutId.layoutIdString()
+  if customId.len > 0:
+    return layoutModeForBundledId(customId)
+  if tag.nativeLayoutId.nativeLayoutIdString().len > 0:
+    return none(rv.LayoutMode)
+  some(tag.layoutMode)
+
 proc overviewHiddenCountBadge*(
     model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
 ): OverviewHiddenCountBadge =
@@ -128,6 +137,10 @@ proc overviewHiddenCountBadge*(
     return
 
   let tag = tagOpt.get()
+  let modeOpt = overviewSelectedLayoutMode(tag)
+  if modeOpt.isNone:
+    return
+  let mode = modeOpt.get()
   let windowCount = model.overviewTiledWindowCount(tagId)
   if windowCount <= 1:
     return
@@ -138,7 +151,7 @@ proc overviewHiddenCountBadge*(
   let masterCount = min(windowCount, max(1, tag.masterCount))
 
   result.slot = slot
-  case tag.layoutMode
+  case mode
   of rv.LayoutMode.Monocle:
     result.count = windowCount - 1
     result.rect = usable
@@ -185,7 +198,11 @@ proc overviewScrollIndicator*(
     return
 
   let tag = tagOpt.get()
-  if tag.layoutMode notin {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}:
+  let modeOpt = overviewSelectedLayoutMode(tag)
+  if modeOpt.isNone:
+    return
+  let mode = modeOpt.get()
+  if mode notin {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}:
     return
 
   let columns = model.overviewVisibleColumnProportions(tagId)
@@ -199,7 +216,7 @@ proc overviewScrollIndicator*(
 
   result.slot = slot
   result.rect = preview
-  case tag.layoutMode
+  case mode
   of rv.LayoutMode.Scroller:
     var totalWidth = 0'i32
     for column in columns:

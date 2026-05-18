@@ -1,6 +1,8 @@
 import std/[algorithm, options, sets, tables]
 import entity_manager, id_gen, iterators
+from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../types/[core, model]
+from ../types/runtime_values import FrameNodeKind, LayoutMode
 
 proc tagForSlot*(model: Model, slot: uint32): TagId =
   model.tagBySlot.getOrDefault(slot, NullTagId)
@@ -142,10 +144,63 @@ proc frameRootForTag*(model: Model, tagId: TagId): FrameId =
 proc frameForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): FrameId =
   model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId)
 
+proc tagUsesAggregateOverview*(tag: TagData): bool =
+  string(tag.customLayoutId).len > 0 or string(tag.nativeLayoutId).len > 0 or
+    tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+
+proc tagUsesAggregateOverview*(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and tagOpt.get().tagUsesAggregateOverview()
+
+proc tagUsesFrameOverview*(tag: TagData): bool =
+  tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
+
+proc tagUsesFrameOverview*(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and tagOpt.get().tagUsesFrameOverview()
+
+proc overviewFrameWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
+  for _, frame in model.framesOnTagWithId(tagId):
+    if frame.kind != FrameNodeKind.Leaf or frame.activeWindow == NullWindowId:
+      continue
+    let winId = frame.activeWindow
+    let winOpt = model.windowData(winId)
+    if winOpt.isSome:
+      let win = winOpt.get()
+      if not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+          win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+        result.add(winId)
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+        win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+      result.add(winId)
+
+proc overviewRepresentativeWindow*(model: Model, tagId: TagId): WindowId =
+  for columnId, _ in model.columnsOnTagWithId(tagId):
+    for winId, win in model.windowsOnColumnWithId(columnId):
+      if not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+          win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+        return winId
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+        win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+      return winId
+  NullWindowId
+
 proc overviewWindowIds*(model: Model): seq[WindowId] =
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
     if tagId == NullTagId:
+      continue
+    if model.tagUsesAggregateOverview(tagId):
+      if model.tagUsesFrameOverview(tagId):
+        for winId in model.overviewFrameWindowIds(tagId):
+          if result.find(winId) == -1:
+            result.add(winId)
+      else:
+        let representative = model.overviewRepresentativeWindow(tagId)
+        if representative != NullWindowId and result.find(representative) == -1:
+          result.add(representative)
       continue
     for winId, win in model.windowsOnTagWithId(tagId):
       if not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted() and
@@ -170,6 +225,11 @@ proc initialOverviewWindow*(model: Model): WindowId =
   windows[0]
 
 proc overviewWindowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isSome and tagOpt.get().tagUsesAggregateOverview():
+    if tagOpt.get().tagUsesFrameOverview():
+      return model.overviewFrameWindowIds(tagId).find(winId) != -1
+    return winId != NullWindowId and winId == model.overviewRepresentativeWindow(tagId)
   for candidate, win in model.windowsOnTagWithId(tagId):
     if candidate == winId:
       return not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted()
@@ -179,6 +239,9 @@ proc activeOverviewWindow(model: Model): WindowId =
   let tagOpt = model.tagData(model.activeTag)
   if tagOpt.isNone:
     return NullWindowId
+
+  if tagOpt.get().tagUsesAggregateOverview() and not tagOpt.get().tagUsesFrameOverview():
+    return model.overviewRepresentativeWindow(model.activeTag)
 
   let focused = tagOpt.get().focusedWindow
   if model.overviewWindowOnTag(model.activeTag, focused):

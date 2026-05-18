@@ -1,5 +1,7 @@
 import std/algorithm
 import tcore_support
+import ../src/core/[layout_selection_codec, native_layout_codec]
+import ../src/types/janet_layouts
 
 proc geomWithinPreview(geom, preview: Rect): bool =
   geom.x >= preview.x and geom.y >= preview.y and
@@ -526,9 +528,10 @@ suite "Core Runtime Logic: overview navigation":
       [scrollerLane, gridPreview],
       requireRawInsideClip = false,
     )
-    discard projection.instructions.checkOverviewGroup(
-      [7'u32, 8'u32, 9'u32], gridPreview, [scrollerLane, verticalPreview]
+    let gridGroup = projection.instructions.checkOverviewGroup(
+      [7'u32], gridPreview, [scrollerLane, verticalPreview]
     )
+    check gridGroup.len == 1
 
   test "Overview clips overflowing workspace preview contents":
     var model = configuredModel()
@@ -592,20 +595,317 @@ suite "Core Runtime Logic: overview navigation":
 
     check model.overviewStyle() == OverviewStyle.WorkspaceStrip
     check model.overviewUsesWorkspacePreviews()
-    check projection.instructions.len == 2
-    check projection.instructions.allIt(it.geom.x >= activePreview.x)
-    check projection.instructions.allIt(it.geom.y >= activePreview.y)
-    check projection.instructions.allIt(
-      it.geom.x + it.geom.w <= activePreview.x + activePreview.w
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 1'u32
+    check projection.instructions[0].geom == activePreview
+
+  test "Overview aggregates bundled Janet layout by workspace":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
     )
-    check projection.instructions.allIt(
-      it.geom.y + it.geom.h <= activePreview.y + activePreview.h
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("right-tile"))
+    )
+    for id in 1'u32 .. 3'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let preview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
+    let projection = model.layoutProjection()
+    let workspaceTwo = projection.instructions.overviewInstructionsFor([1'u32, 2, 3])
+
+    check workspaceTwo.len == 1
+    check workspaceTwo[0].windowId == 1'u32
+    check workspaceTwo[0].clip == preview
+    check workspaceTwo[0].geom == preview
+
+  test "Overview aggregates user Janet layout without evaluator":
+    let config = Config(
+      janet: JanetConfig(
+        layouts:
+          @[
+            JanetLayoutConfig(
+              id: janetLayoutId("custom-overview"),
+              fallback: builtinSelection(LayoutMode.Scroller),
+            )
+          ]
+      ),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+    )
+    var model = initRuntimeStateFromConfig(config).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("custom-overview")
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    var evaluated = false
+    proc customEval(context: JanetLayoutContext): JanetLayoutEvalResult =
+      evaluated = true
+      JanetLayoutEvalResult(
+        layoutId: context.layoutId,
+        outcome: JanetLayoutOutcome.Applied,
+        outputTargetKind: JanetLayoutTargetKind.Window,
+        instructions:
+          @[
+            RenderInstruction(windowId: 1, geom: Rect(x: 700, y: 20, w: 200, h: 200)),
+            RenderInstruction(windowId: 2, geom: Rect(x: 100, y: 20, w: 200, h: 200)),
+          ],
+      )
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let projection = model.layoutProjection(customEval)
+    let workspaceOne = projection.instructions.overviewInstructionsFor([1'u32, 2])
+
+    check not evaluated
+    check workspaceOne.len == 1
+    check workspaceOne[0].windowId == 1'u32
+    check workspaceOne[0].geom == preview
+
+  test "Overview renders frame layouts as full frame previews":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let frameWindows =
+      model.layoutProjection().instructions.overviewInstructionsFor([1'u32, 2, 3])
+
+    check frameWindows.len == 2
+    check frameWindows.anyIt(it.windowId == 1'u32)
+    check frameWindows.anyIt(it.windowId == 3'u32)
+
+    discard model.updateModel(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 3))
+    check not model.overviewActive
+    check model.focusedWindowId() == 3
+
+    var notion = configuredModel()
+    notion.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    notion.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    notion.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 4, appId: "app", title: "Four")
+    )
+    notion.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 5, appId: "app", title: "Five")
+    )
+    notion.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    notion.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 6, appId: "app", title: "Six")
+    )
+    notion.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let notionWindows =
+      notion.layoutProjection().instructions.overviewInstructionsFor([4'u32, 5, 6])
+    check notionWindows.len == 2
+    check notionWindows.anyIt(it.windowId == 4'u32)
+    check notionWindows.anyIt(it.windowId == 6'u32)
+
+  test "Overview overlay resolves bundled Janet badges and custom indicators":
+    var bundled = configuredModel()
+    bundled.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    bundled.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("deck"))
+    )
+    for id in 1'u32 .. 4'u32:
+      bundled.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    bundled.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let bundledScreen = bundled.primaryScreen()
+    let bundledSlots = bundled.previewSlots()
+    let badge = bundled.overviewHiddenCountBadge(
+      bundledScreen, bundledSlots, bundledSlots.find(1'u32)
+    )
+    check badge.count > 0
+
+    let config = Config(
+      janet: JanetConfig(
+        layouts:
+          @[
+            JanetLayoutConfig(
+              id: janetLayoutId("custom-overview"),
+              fallback: builtinSelection(LayoutMode.Scroller),
+            )
+          ]
+      ),
+      workspaces: WorkspaceConfig(defaultCount: 3),
+    )
+    var custom = initRuntimeStateFromConfig(config).model
+    custom.overviewScrollerIndicators = true
+    custom.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    custom.applyMsg(
+      Msg(
+        kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("custom-overview")
+      )
+    )
+    for id in 1'u32 .. 3'u32:
+      custom.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    custom.setViewport(1, targetX = 100.0, currentX = 100.0)
+    custom.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let customScreen = custom.primaryScreen()
+    let customSlots = custom.previewSlots()
+    let indicator =
+      custom.overviewScrollIndicator(customScreen, customSlots, customSlots.find(1'u32))
+    check not indicator.before
+    check not indicator.after
+
+  test "Overview aggregate layout uses floating representative when no tiled window":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("grid"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.CmdSetWindowFloatingById,
+        floatingWindowId: 1,
+        windowFloating: true,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let workspaceOne =
+      model.layoutProjection().instructions.overviewInstructionsFor([1'u32])
+
+    check workspaceOne.len == 1
+    check workspaceOne[0].windowId == 1'u32
+
+  test "Unified overview aggregate layout disables internal navigation":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("grid"))
+    )
+    for id in 1'u32 .. 5'u32:
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: id,
+          appId: "app",
+          title: "Window " & $id,
+        )
+      )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
+
+    let activeTag = model.activeTag
+    let beforeFocus = model.focusedWindowId()
+
+    check model.overviewActive
+    check model.selectedOverviewWindow() == WindowId(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
+    check model.activeTag == activeTag
+    check model.focusedWindowId() == beforeFocus
+    check model.selectedOverviewWindow() == WindowId(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
+    check model.focusedWindowId() == beforeFocus
+    check model.selectedOverviewWindow() == WindowId(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
+    check model.activeTag == model.tagForSlot(2)
+    check model.selectedOverviewWindow() == NullWindowId
+
+  test "Overview blocks frame commands while active":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    let tagId = model.activeTag
+    let frameId = model.tagData(tagId).get().focusedFrame
+    let frameCount = model.shellSnapshot().workspaces[0].frames.len
+    let focused = model.focusedWindowId()
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameTabNext))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickFrameId: uint32(frameId),
+        frameClickTabIndex: 0,
+      )
     )
 
-  test "Unified overview direction focus follows workspace layout":
+    check model.overviewActive
+    check model.activeTag == tagId
+    check model.shellSnapshot().workspaces[0].frames.len == frameCount
+    check model.focusedWindowId() == focused
+
+  test "Unified overview scroller direction focus follows strip layout":
     var model = configuredModel()
-    model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
-    for id in 1'u32 .. 5'u32:
+    for id in 1'u32 .. 3'u32:
       model.applyMsg(
         Msg(
           kind: MsgKind.WlWindowCreated,
@@ -647,34 +947,20 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
     check model.selectedOverviewWindow() == WindowId(1)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
-    check model.selectedOverviewWindow() == WindowId(5)
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
     check model.selectedOverviewWindow() == WindowId(2)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 3))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
-    check model.selectedOverviewWindow() == WindowId(5)
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
-    check model.selectedOverviewWindow() == WindowId(3)
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
-    check model.selectedOverviewWindow() == WindowId(4)
-
     model.applyMsg(Msg(kind: MsgKind.CmdFocusPrev))
-    check model.selectedOverviewWindow() == WindowId(3)
+    check model.selectedOverviewWindow() == WindowId(1)
 
     check model.activeTag == activeTag
 
     let closeEffects = model.updateModel(Msg(kind: MsgKind.CmdCloseOverview))
     check not model.overviewActive
     check model.overviewSelectedWindow == NullWindowId
-    check model.activeWorkspaceFocusId() == 3
+    check model.activeWorkspaceFocusId() == 1
     check closeEffects.anyIt(
-      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 3
+      it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 1
     )
 
   test "Unified overview horizontal boundary stays in focused workspace":
@@ -850,7 +1136,7 @@ suite "Core Runtime Logic: overview navigation":
         it.jsonPayload.contains("WorkspaceActivated")
     )
 
-  test "Unified overview fallback up key stays inside grid before workspace edge":
+  test "Unified overview aggregate up key moves workspace before internal grid":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
@@ -869,9 +1155,9 @@ suite "Core Runtime Logic: overview navigation":
     let effects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp))
 
     check model.overviewActive
-    check model.activeTag == model.tagForSlot(3)
-    check model.selectedOverviewWindow() == WindowId(1)
-    check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
+    check model.activeTag == model.tagForSlot(2)
+    check model.selectedOverviewWindow() == NullWindowId
+    check effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview workspace navigation visits visible previews and wraps":
     var model = configuredModel()

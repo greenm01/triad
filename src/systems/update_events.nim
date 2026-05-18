@@ -175,9 +175,11 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       result.dirty = model.setHotkeyOverlayOpen(false)
   of MsgKind.WlFrameTabClicked:
     result.dirty =
+      not model.overviewActive and
       model.focusFrameTabAt(FrameId(msg.frameClickFrameId), msg.frameClickTabIndex)
   of MsgKind.WlFrameEmptyFocused:
-    result.dirty = model.focusFrameOnly(FrameId(msg.frameFocusFrameId))
+    result.dirty =
+      not model.overviewActive and model.focusFrameOnly(FrameId(msg.frameFocusFrameId))
   of MsgKind.WlModifiersChanged:
     discard model.setActiveModifiers(msg.newModifiers)
     if model.overviewTabModeActive and

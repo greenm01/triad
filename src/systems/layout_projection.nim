@@ -22,6 +22,14 @@ type
     dest: rv.Rect
     clip: rv.Rect
 
+  OverviewTagLayout = object
+    tag: rv.ProjectedTag
+    mode: rv.LayoutMode
+    instructions: seq[rv.RenderInstruction]
+    viewportTarget: bool
+    aggregate: bool
+    representativeOnly: bool
+
 const FrameTreeTabBarHeight* = 24'i32
 
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.ProjectionWindowId =
@@ -784,6 +792,70 @@ proc applyOverviewMaximizedColumnSizing(
     if col.columnHasMaximizedWindow(windows):
       col.isFullWidth = true
 
+proc applyFrameInstructionClientRects(
+    model: Model, tagId: TagId, instructions: var seq[rv.RenderInstruction]
+) =
+  for instr in instructions.mitems:
+    let logicalId = model.windowForExternal(ExternalWindowId(uint32(instr.windowId)))
+    let frameId = model.frameForWindowOnTag(tagId, logicalId)
+    let focused =
+      frameId != NullFrameId and model.tagData(tagId).isSome and
+      frameId == model.tagData(tagId).get().focusedFrame
+    let border = model.effectiveWindowBorder(logicalId, focused)
+    instr.geom = frameTreeClientRect(instr.geom, border.width)
+
+proc overviewTagLayout(
+    model: Model,
+    tagId: TagId,
+    tag: rv.ProjectedTag,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    screen: rv.Rect,
+): OverviewTagLayout =
+  let tagDataOpt = model.tagData(tagId)
+  if tagDataOpt.isNone:
+    return
+
+  let tagData = tagDataOpt.get()
+  let retargetViewport = model.viewportRetargetRequested(tagId)
+  result.tag = tag
+  model.applyPopupLayoutFocus(result.tag, model.activeFocus())
+
+  if tagData.tagUsesFrameOverview():
+    result.mode = rv.LayoutMode.Grid
+    result.aggregate = true
+    result.instructions =
+      model.layoutFrameTree(tagId, screen, model.outerGaps, model.innerGaps)
+    return
+
+  if tagData.tagUsesAggregateOverview():
+    result.mode = rv.LayoutMode.Grid
+    result.aggregate = true
+    result.representativeOnly = true
+    let representative = model.overviewRepresentativeWindow(tagId)
+    if representative != NullWindowId:
+      result.instructions.add(
+        rv.RenderInstruction(
+          windowId: model.externalWindowId(representative), geom: screen
+        )
+      )
+    return
+
+  result.tag.applyBundledAlgorithmicMode(tagData.customLayoutId)
+  result.tag.applyOverviewMaximizedColumnSizing(windows)
+  result.mode = result.tag.layoutMode
+  result.instructions = layoutForTag(
+    result.tag,
+    windows,
+    screen,
+    model.outerGaps,
+    model.innerGaps,
+    retargetViewport and model.scrollerFocusCenter,
+    retargetViewport and model.scrollerPreferCenter,
+    if retargetViewport: model.centerFocusedColumn else: "never",
+  )
+  result.tag.applyLayoutViewportOffset(result.instructions)
+  result.viewportTarget = result.tag.columns.len > 0
+
 proc layoutWorkspaceStripOverview(
     model: Model,
     windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
@@ -802,36 +874,20 @@ proc layoutWorkspaceStripOverview(
     var projected = model.projectedTag(tagId)
     if not projected.found:
       continue
-    model.applyPopupLayoutFocus(projected.tag, model.activeFocus())
-    projected.tag.applyOverviewMaximizedColumnSizing(windows)
-    let retargetViewport = model.viewportRetargetRequested(tagId)
-    var targetTag = projected.tag
-    let previewTagData = model.tagData(tagId)
-    if previewTagData.isSome:
-      targetTag.applyBundledAlgorithmicMode(previewTagData.get().customLayoutId)
-    var instructions = layoutForTag(
-      targetTag,
-      windows,
-      workspaceScreen,
-      model.outerGaps,
-      model.innerGaps,
-      retargetViewport and model.scrollerFocusCenter,
-      retargetViewport and model.scrollerPreferCenter,
-      if retargetViewport: model.centerFocusedColumn else: "never",
-    )
-    targetTag.applyLayoutViewportOffset(instructions)
-    if targetTag.columns.len > 0:
+    let layout = model.overviewTagLayout(tagId, projected.tag, windows, workspaceScreen)
+    var instructions = layout.instructions
+    if layout.viewportTarget:
       result.viewportTargets.add(
         LayoutViewportTarget(
-          tagSlot: targetTag.tagId,
-          targetX: targetTag.targetViewportXOffset,
-          targetY: targetTag.targetViewportYOffset,
+          tagSlot: layout.tag.tagId,
+          targetX: layout.tag.targetViewportXOffset,
+          targetY: layout.tag.targetViewportYOffset,
         )
       )
 
-    let overviewNeedsFullStrip = projected.tag.layoutMode.layoutUsesNativeViewport()
+    let overviewNeedsFullStrip = layout.mode.layoutUsesNativeViewport()
     if overviewNeedsFullStrip:
-      var overviewTag = projected.tag
+      var overviewTag = layout.tag
       overviewTag.currentViewportXOffset = 0.0'f32
       overviewTag.currentViewportYOffset = 0.0'f32
       instructions = layoutForTag(
@@ -841,10 +897,10 @@ proc layoutWorkspaceStripOverview(
 
     let preview = model.workspacePreviewRect(screen, slots, idx)
     let transform = overviewTransform(
-      projected.tag.layoutMode, projected.tag, instructions, workspaceScreen, screen,
-      preview, zoom,
+      layout.mode, layout.tag, instructions, workspaceScreen, screen, preview, zoom
     )
-    model.addFloatingInstructions(tagId, workspaceScreen, instructions)
+    if not layout.representativeOnly:
+      model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     for instr in instructions:
       result.instructions.add(
         rv.RenderInstruction(
@@ -912,15 +968,7 @@ proc layoutProjection*(
           frameTreeFrameRectsFromInstructions(custom.frameInstructions)
         else:
           tagForLayout.frameTreeFrameRectsFromInstructions(result.instructions)
-      for instr in result.instructions.mitems:
-        let logicalId =
-          model.windowForExternal(ExternalWindowId(uint32(instr.windowId)))
-        let frameId = model.frameForWindowOnTag(model.activeTag, logicalId)
-        let focused =
-          frameId != NullFrameId and model.tagData(model.activeTag).isSome and
-          frameId == model.tagData(model.activeTag).get().focusedFrame
-        let border = model.effectiveWindowBorder(logicalId, focused)
-        instr.geom = frameTreeClientRect(instr.geom, border.width)
+      model.applyFrameInstructionClientRects(model.activeTag, result.instructions)
   elif activeTagData.frameTreeActive():
     result.instructions =
       model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
