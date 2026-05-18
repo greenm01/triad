@@ -276,7 +276,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       if node.kind == FrameNodeKind.Leaf and restoredNode.window != 0:
         let winOpt = model.windowData(node.window)
         if winOpt.isSome and winOpt.get().windowAdmitted() and
-            not winOpt.get().isFloating and not winOpt.get().isSticky and
+            not winOpt.get().isMinimized and not winOpt.get().isSticky and
             not winOpt.get().isUnmanagedGlobal:
           result.tagByWindow[restoredNode.window] = tag.slot
         else:

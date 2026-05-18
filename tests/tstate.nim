@@ -1112,6 +1112,95 @@ suite "Runtime state primitives":
       check restored.bspLeafWindowCount(tagId, winId) == 1
       check restored.bspNodeForWindowOnTag(tagId, winId) != tc.NullBspNodeId
 
+  test "native BSP treats floating leaves as vacant until unfloated":
+    var baseline = initRuntimeStateFromConfig(baseConfig()).model
+    baseline.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    baseline.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    baseline.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    let singleGeom = baseline.instructionGeom(10)
+
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+
+    let tagId = model.activeTag
+    let floatingWin = model.windowForExternal(ExternalWindowId(11))
+    let floatingNode = model.bspNodeForWindowOnTag(tagId, floatingWin)
+    let tiledGeom = model.instructionGeom(10)
+    check floatingNode != tc.NullBspNodeId
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    check model.windowData(floatingWin).get().isFloating
+    check model.bspNodeForWindowOnTag(tagId, floatingWin) == floatingNode
+    check model.instructionGeom(10) == singleGeom
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    check not model.windowData(floatingWin).get().isFloating
+    check model.bspNodeForWindowOnTag(tagId, floatingWin) == floatingNode
+    check model.instructionGeom(10) == tiledGeom
+
+  test "native BSP live restore preserves floating leaf ownership":
+    var baseline = initRuntimeStateFromConfig(baseConfig()).model
+    baseline.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    baseline.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    baseline.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    let singleGeom = baseline.instructionGeom(10)
+
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    let restore = model.liveRestoreState().pendingRestoreState()
+    let restoredNode =
+      restore.tags[1].bspNodes.filterIt(it.window == ExternalWindowId(11))
+    check restoredNode.len == 1
+
+    var restored = initRuntimeStateFromConfig(baseConfig()).model
+    restored.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    restored.applyLiveRestore(restore)
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = restored.activeTag
+    let floatingWin = restored.windowForExternal(ExternalWindowId(11))
+    check restored.windowData(floatingWin).get().isFloating
+    check restored.bspNodeForWindowOnTag(tagId, floatingWin) == restoredNode[0].id
+    check restored.instructionGeom(10) == singleGeom
+
+    restored.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    restored.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    check not restored.windowData(floatingWin).get().isFloating
+    check restored.bspNodeForWindowOnTag(tagId, floatingWin) == restoredNode[0].id
+    check restored.layoutProjection().instructions.anyIt(it.windowId == 11'u32)
+
   test "BSP focus uses tree order and directional geometry":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

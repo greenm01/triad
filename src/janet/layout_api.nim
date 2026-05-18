@@ -208,7 +208,9 @@ proc activeBspWindowIds(context: JanetLayoutContext): HashSet[rv.ProjectionWindo
   for node in context.tag.bspNodes:
     if node.kind == FrameNodeKind.Leaf and node.window != 0 and
         context.windows.hasKey(node.window):
-      result.incl(node.window)
+      let win = context.windows[node.window]
+      if not win.isFloating and not win.isMinimized and not win.isUnmanagedGlobal:
+        result.incl(node.window)
 
 proc activeWindowForFrame(
     context: JanetLayoutContext, frameId: uint32
@@ -226,7 +228,9 @@ proc activeWindowForBspNode(
   for node in context.tag.bspNodes:
     if node.id == nodeId and node.kind == FrameNodeKind.Leaf and node.window != 0 and
         context.windows.hasKey(node.window):
-      return node.window
+      let win = context.windows[node.window]
+      if not win.isFloating and not win.isMinimized and not win.isUnmanagedGlobal:
+        return node.window
   0'u32
 
 proc validateLayoutInstructions*(

@@ -41,6 +41,26 @@ proc bspWindowVisible(model: Model, tagId: TagId, winId: WindowId): bool =
     not win.isMinimized and not win.isUnmanagedGlobal and
     model.placementByTagWindow.hasKey((tagId, winId))
 
+proc bspWindowRetained(model: Model, tagId: TagId, winId: WindowId): bool =
+  let winOpt = model.windows.entity(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  win.admissionState == WindowAdmissionState.Admitted and not win.isMinimized and
+    not win.isUnmanagedGlobal and not win.isSticky and
+    model.placementByTagWindow.hasKey((tagId, winId))
+
+proc bspNodeVacant(model: Model, nodeId: BspNodeId): bool =
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone:
+    return true
+  let node = nodeOpt.get()
+  case node.kind
+  of FrameNodeKind.Leaf:
+    node.window == NullWindowId or not model.bspWindowVisible(node.tagId, node.window)
+  of FrameNodeKind.Split:
+    model.bspNodeVacant(node.firstChild) and model.bspNodeVacant(node.secondChild)
+
 proc bspNodeWindow(model: Model, nodeId: BspNodeId): WindowId =
   let nodeOpt = model.bspNodes.entity(nodeId)
   if nodeOpt.isSome:
@@ -155,9 +175,13 @@ proc collectBspLeafRects(
   of FrameNodeKind.Leaf:
     outRects.add((nodeId, node.window, area))
   of FrameNodeKind.Split:
-    let rects = bspChildRects(node, area, gap)
-    model.collectBspLeafRects(node.firstChild, rects.first, gap, outRects)
-    model.collectBspLeafRects(node.secondChild, rects.second, gap, outRects)
+    if model.bspNodeVacant(node.firstChild) or model.bspNodeVacant(node.secondChild):
+      model.collectBspLeafRects(node.firstChild, area, gap, outRects)
+      model.collectBspLeafRects(node.secondChild, area, gap, outRects)
+    else:
+      let rects = bspChildRects(node, area, gap)
+      model.collectBspLeafRects(node.firstChild, rects.first, gap, outRects)
+      model.collectBspLeafRects(node.secondChild, rects.second, gap, outRects)
 
 proc bspTreeLeafRects*(
     model: Model, tagId: TagId, screen: Rect, outerGap, innerGap: int32
@@ -366,7 +390,10 @@ proc countBspLeavesAndBalance(model: var Model, nodeId: BspNodeId): int =
   let node = nodeOpt.get()
   case node.kind
   of FrameNodeKind.Leaf:
-    if node.window != NullWindowId: 1 else: 0
+    if node.window != NullWindowId and model.bspWindowVisible(node.tagId, node.window):
+      1
+    else:
+      0
   of FrameNodeKind.Split:
     let firstCount = model.countBspLeavesAndBalance(node.firstChild)
     let secondCount = model.countBspLeavesAndBalance(node.secondChild)
@@ -451,7 +478,7 @@ proc syncTagBspFromPlacement*(model: var Model, tagId: TagId): bool =
     if node.tagId != tagId or node.kind != FrameNodeKind.Leaf or
         node.window == NullWindowId:
       continue
-    if not visibleCounts.hasKey(node.window):
+    if not model.bspWindowRetained(tagId, node.window):
       mustRebuild = true
     leafCounts[node.window] = leafCounts.getOrDefault(node.window, 0) + 1
     if leafCounts[node.window] == 1:

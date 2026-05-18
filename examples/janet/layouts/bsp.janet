@@ -22,12 +22,14 @@
 (defn triad/bsp-push-node-rects [nodes node rect gap instructions]
   (when node
     (if (= (node :kind) :leaf)
-      (array/push instructions
-        {:bsp-node-id (node :id)
-         :x (rect :x)
-         :y (rect :y)
-         :w (rect :w)
-         :h (rect :h)})
+      (do
+        (def leaf-rect (if (node :rect-set) (node :rect) rect))
+        (array/push instructions
+          {:bsp-node-id (node :id)
+           :x (leaf-rect :x)
+           :y (leaf-rect :y)
+           :w (leaf-rect :w)
+           :h (leaf-rect :h)}))
       (do
         (def ratio (triad/layout-clamp-ratio (node :ratio)))
         (def span-w (max 1 (- (rect :w) gap)))
