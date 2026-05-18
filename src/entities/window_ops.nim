@@ -508,6 +508,7 @@ proc setWindowFloating*(
   model.windows.mEntity(winId).manualFloatingPosition = false
   if floating:
     model.windows.mEntity(winId).floatingGeom = floatingGeom
+  discard model.syncWindowFrameSubstrateForFloating(winId, floating)
   true
 
 proc setWindowFloatingGeom*(

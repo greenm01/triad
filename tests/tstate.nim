@@ -1544,6 +1544,114 @@ suite "Runtime state primitives":
     check projection.instructions[0].geom.y ==
       projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h
 
+  test "frame-tree floating detaches from frame chrome and reinserts on unfloat":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+
+    let tagId = model.activeTag
+    let winId = model.windowForExternal(ExternalWindowId(10))
+    let frameId = model.frameForWindowOnTag(tagId, winId)
+    check frameId != tc.NullFrameId
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    check model.windowData(winId).get().isFloating
+    check model.frameForWindowOnTag(tagId, winId) == tc.NullFrameId
+    check model.windowsForFrame(frameId).len == 0
+    var projection = model.layoutProjection()
+    check projection.instructions.anyIt(it.windowId == 10'u32)
+    check projection.frameTabBars.len == 0
+    check projection.frameEmptyChrome.anyIt(it.frameId == uint32(frameId))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    check not model.windowData(winId).get().isFloating
+    check model.frameForWindowOnTag(tagId, winId) == frameId
+    check model.windowsForFrame(frameId) == @[winId]
+    projection = model.layoutProjection()
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].windowId == 10'u32
+
+  test "frame-tree floating active tab promotes tiled chrome anchor":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+
+    let tagId = model.activeTag
+    let first = model.windowForExternal(ExternalWindowId(10))
+    let second = model.windowForExternal(ExternalWindowId(11))
+    let frameId = model.frameForWindowOnTag(tagId, second)
+    check model.windowsForFrame(frameId) == @[first, second]
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+
+    check model.windowData(second).get().isFloating
+    check model.frameForWindowOnTag(tagId, second) == tc.NullFrameId
+    check model.windowsForFrame(frameId) == @[first]
+    var projection = model.layoutProjection()
+    check projection.instructions.anyIt(it.windowId == 10'u32)
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].windowId == 10'u32
+    check projection.frameTabBars[0].tabs.len == 1
+    check projection.frameTabBars[0].tabs[0].windowId == 10'u32
+    check projection.frameTabBars[0].tabs[0].active
+
+    model.frameByTagWindow[(tagId, second)] = frameId
+    model.windowsByFrame[frameId].add(second)
+    model.frames.mEntity(frameId).activeWindow = second
+
+    projection = model.layoutProjection()
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].windowId == 10'u32
+    check projection.frameTabBars[0].tabs.allIt(it.windowId != 11'u32)
+
+  test "targeted frame-tree floating command follows detach and reinsert":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+
+    let tagId = model.activeTag
+    let winId = model.windowForExternal(ExternalWindowId(10))
+    let frameId = model.frameForWindowOnTag(tagId, winId)
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.CmdSetWindowFloatingById,
+        floatingWindowId: 10,
+        windowFloating: true,
+      )
+    )
+    check model.windowData(winId).get().isFloating
+    check model.frameForWindowOnTag(tagId, winId) == tc.NullFrameId
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.CmdSetWindowFloatingById,
+        floatingWindowId: 10,
+        windowFloating: false,
+      )
+    )
+    check not model.windowData(winId).get().isFloating
+    check model.frameForWindowOnTag(tagId, winId) == frameId
+
   test "group-windows consolidates frame-tree neighbors into focused frame":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

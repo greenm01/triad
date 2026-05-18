@@ -419,6 +419,27 @@ proc applyFrameTreeRects(
         frame.rect = item.rect
         break
 
+proc frameTreeVisibleWindowIds(model: Model, frameId: FrameId): seq[WindowId] =
+  let frameOpt = model.frameData(frameId)
+  if frameOpt.isNone:
+    return
+  for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+    let winOpt = model.windowData(winId)
+    if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
+        winOpt.get().isMinimized or winOpt.get().isUnmanagedGlobal or
+        model.windowHiddenByGroup(winId):
+      continue
+    result.add(winId)
+
+proc frameTreeVisibleActiveWindow(model: Model, frameId: FrameId): WindowId =
+  let visible = model.frameTreeVisibleWindowIds(frameId)
+  if visible.len == 0:
+    return NullWindowId
+  let frameOpt = model.frameData(frameId)
+  if frameOpt.isSome and visible.find(frameOpt.get().activeWindow) != -1:
+    return frameOpt.get().activeWindow
+  visible[^1]
+
 proc layoutFrameTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
@@ -428,31 +449,26 @@ proc layoutFrameTree*(
     let frameOpt = model.frameData(item.frameId)
     if frameOpt.isNone:
       continue
-    let active = frameOpt.get().activeWindow
+    let active = model.frameTreeVisibleActiveWindow(item.frameId)
     if active == NullWindowId:
       continue
-    let winOpt = model.windowData(active)
-    if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
-        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
-      let focused = tagOpt.isSome and item.frameId == tagOpt.get().focusedFrame
-      let border = model.effectiveWindowBorder(active, focused)
-      result.add(
-        rv.RenderInstruction(
-          windowId: model.externalWindowId(active),
-          geom: frameTreeClientRect(item.rect, border.width),
-        )
+    let focused = tagOpt.isSome and item.frameId == tagOpt.get().focusedFrame
+    let border = model.effectiveWindowBorder(active, focused)
+    result.add(
+      rv.RenderInstruction(
+        windowId: model.externalWindowId(active),
+        geom: frameTreeClientRect(item.rect, border.width),
       )
+    )
 
 proc frameTreeVisibleTabs(model: Model, frameId: FrameId): seq[rv.ProjectedFrameTab] =
   let frameOpt = model.frameData(frameId)
   if frameOpt.isNone:
     return
-  let active = frameOpt.get().activeWindow
-  for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+  let active = model.frameTreeVisibleActiveWindow(frameId)
+  for winId in model.frameTreeVisibleWindowIds(frameId):
     let winOpt = model.windowData(winId)
-    if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
-        winOpt.get().isMinimized or winOpt.get().isUnmanagedGlobal or
-        model.windowHiddenByGroup(winId):
+    if winOpt.isNone:
       continue
     let win = winOpt.get()
     result.add(
@@ -475,7 +491,7 @@ proc frameTreeTabBars*(
     if frameOpt.isNone:
       continue
     let frame = frameOpt.get()
-    let active = frame.activeWindow
+    let active = model.frameTreeVisibleActiveWindow(item.frameId)
     if active == NullWindowId:
       continue
     let tabHeight = frameTreeTabHeight(item.rect)

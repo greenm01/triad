@@ -1,6 +1,6 @@
 import std/[options, tables]
 import bsp_ops, frame_ops
-import ../state/[entity_manager, id_gen]
+import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
 from ../core/native_layout_codec import
   BspTreeLayoutId, FrameTreeLayoutId, nativeLayoutIdString
@@ -20,6 +20,24 @@ proc syncTagNativeSubstrateFromPlacement*(model: var Model, tagId: TagId): bool 
   if tagOpt.get().tagUsesBspTree():
     return model.syncTagBspFromPlacement(tagId)
   false
+
+proc syncWindowFrameSubstrateForFloating*(
+    model: var Model, winId: WindowId, floating: bool
+): bool =
+  let winOpt = model.windows.entity(winId)
+  if winOpt.isNone:
+    return false
+  for tagId, tag in model.tagsWithId():
+    if not tag.tagUsesFrameTree():
+      continue
+    if not model.placementByTagWindow.hasKey((tagId, winId)):
+      continue
+    if floating:
+      result = model.removeWindowFromFrame(tagId, winId) or result
+    elif winOpt.get().admissionState == WindowAdmissionState.Admitted and
+        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal and
+        model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId) == NullFrameId:
+      result = model.addWindowToFrame(tagId, winId) or result
 
 proc refreshWindowIndexes(model: var Model, tagId: TagId, columnId: ColumnId) =
   if model.windowsByColumn.hasKey(columnId):
