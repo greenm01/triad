@@ -174,7 +174,8 @@ from the hard part.
 
 The easy part is the recursive split geometry: given a split tree, a screen
 rect, and a gap, calculate a rect for each leaf frame. That is scriptable and
-belongs in layouts such as `examples/janet/layouts/notion.janet`.
+is shipped as the bundled `notion` Janet layout, with
+`examples/janet/layouts/notion.janet` kept as an editable reference.
 
 The hard part is that notion-river's layout is not only a geometry formula. Its
 core model includes:

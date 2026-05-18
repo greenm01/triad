@@ -64,6 +64,7 @@ type LayoutSource* = enum
 | **dwindle** | Recursive alternating splits forming a spiral; BSP-shaped but stateless because it is re-applied on every window event | Mango, Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
 | **master** | Single master with configurable stack count; similar to tile | Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
 | **spiral** | Fibonacci-ratio recursive splits; each new window takes half the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
+| **notion** | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |
 | **frame-tree** | Persistent leaf frames hold tabs; split nodes divide space; empty frames survive | Notion, Ion, StumpWM | `lkFrame` | `lsNative` |
 | **BSP** | Persistent binary partition tree; each split node independently addressable and adjustable; Triad owns the tree | bspwm | `lkBsp` | future `lsNative` substrate with Janet policy hooks |
 | **split h/v** | User-directed binary split; builds a tree of containers each with their own layout mode | i3, Sway, Herbstluftwm | `lkFrame` or `lkBsp` | future native substrate |

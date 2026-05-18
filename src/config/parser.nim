@@ -173,7 +173,8 @@ proc collectJanetLayoutDeclarations(doc: KdlDoc): seq[JanetLayoutConfig] =
         let name = child.args[0].kString().strip()
         if name.len == 0:
           continue
-        if parseLayoutModeId(name).isSome or parseNativeLayoutId(name).isSome:
+        if parseLayoutModeId(name).isSome or parseNativeLayoutId(name).isSome or
+            name.isBundledLayoutId():
           warn "Ignoring janet layout with reserved layout id", layout = name
           continue
         let id = janetLayoutId(name)

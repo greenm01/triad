@@ -444,8 +444,7 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
           nativeLayoutTargetTag: target.tag,
         )
       )
-    elif isBundledAlgorithmicLayoutId(layoutId) or
-        snapshot.customLayoutFallback(layoutId).isSome:
+    elif isBundledLayoutId(layoutId) or snapshot.customLayoutFallback(layoutId).isSome:
       result.messages.add(
         Msg(
           kind: MsgKind.CmdSetCustomLayout,

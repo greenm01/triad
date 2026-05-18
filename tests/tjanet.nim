@@ -661,15 +661,22 @@ suite "embedded Janet runtime":
     check evaluated.instructions[0].windowId == 11'u32
     check evaluated.instructions[0].geom == Rect(x: 10, y: 20, w: 300, h: 400)
 
-  test "notion Janet example computes horizontal frame split geometry":
-    var runtime = initJanetRuntime(testConfig("examples/janet/layouts"))
+  test "bundled notion Janet layout computes horizontal frame split geometry":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
     defer:
       runtime.close()
 
     let evaluated = runtime.evalLayoutDetailed(testSnapshot(), notionTwoPaneContext())
 
     check evaluated.outcome == JanetLayoutOutcome.Applied
-    check evaluated.path.endsWith("notion.janet")
+    check evaluated.path == bundledLayoutPath("notion")
     check evaluated.outputTargetKind == JanetLayoutTargetKind.Frame
     check evaluated.inputFrameCount == 2
     check evaluated.instructionCount == 2
@@ -680,8 +687,15 @@ suite "embedded Janet runtime":
     check evaluated.instructions[1].windowId == 11'u32
     check evaluated.instructions[1].geom == Rect(x: 962, y: 0, w: 958, h: 1080)
 
-  test "notion Janet example computes nested frame split geometry":
-    var runtime = initJanetRuntime(testConfig("examples/janet/layouts"))
+  test "bundled notion Janet layout computes nested frame split geometry":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
     defer:
       runtime.close()
 

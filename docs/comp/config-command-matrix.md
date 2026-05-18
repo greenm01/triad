@@ -111,9 +111,9 @@ protocol-dependent or tracked in the feature matrix below.
 | Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
 | Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
 | Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window` | X | Triad has explicit groups and consume/expel commands. |
-| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, `layout-custom`, native `set-layout`, native action parity | X | Triad supports scroller, tile, grid, monocle, deck, tgmix, variants, and declared Janet layouts. |
-| Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order, including declared Janet layouts. |
-| Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | Built-in ids and declared Janet layout names are accepted. |
+| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, `layout-custom`, native `set-layout`, native action parity | X | Triad supports scroller, bundled Janet layouts, native layouts, and declared user Janet layouts. |
+| Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order, including bundled and declared Janet layouts. |
+| Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | Built-in ids, bundled Janet ids, native ids, and declared Janet layout names are accepted. |
 | Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |
 | Layouts | Master ratio | `setmfact`, `default_mfact`, `mfact` | WM policy | `master-ratio`, `adjust-master-ratio`, `layout.master.split-ratio` | X | |
 | Layouts | Scroller width/proportion | `set_proportion`, `scroller_default_proportion` | WM policy | `set-column-width`, `resize-width`, `default-column-width`, `scroller-proportion`, `scroller-single-proportion` | X | Triad uses column/window width proportions; scroller rule proportions apply at new-window placement time. |
@@ -340,7 +340,8 @@ KDL config nodes and fields:
 - `quickshell`: legacy fallback accepted when `shells` is absent.
 - `janet`: `enabled`, `automation-dir`, `layout-dir`, `fuel-limit`,
   `layout <name> fallback=<builtin|frame-tree>`; legacy `script-dir` is accepted
-  as an `automation-dir` alias.
+  as an `automation-dir` alias. User layout names must not collide with bundled
+  Janet layout ids such as `notion`.
   Scripts receive `triad/snapshot`, `triad/current-window`, and
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can

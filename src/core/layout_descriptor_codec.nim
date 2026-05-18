@@ -8,6 +8,8 @@ const BundledAlgorithmicLayoutIds* = [
   "vertical-grid", "vertical-deck", "tgmix",
 ]
 
+const BundledFrameLayoutIds* = ["notion"]
+
 proc layoutKindId*(kind: LayoutKind): string =
   case kind
   of LayoutKind.Algorithmic: "algorithmic"
@@ -28,6 +30,15 @@ proc isBundledAlgorithmicLayoutId*(id: string): bool =
     if id == candidate:
       return true
   false
+
+proc isBundledFrameLayoutId*(id: string): bool =
+  for candidate in BundledFrameLayoutIds:
+    if id == candidate:
+      return true
+  false
+
+proc isBundledLayoutId*(id: string): bool =
+  id.isBundledAlgorithmicLayoutId() or id.isBundledFrameLayoutId()
 
 proc parseCoreLayoutModeId*(value: string): Option[LayoutMode] =
   case value
@@ -51,6 +62,8 @@ proc layoutSource*(mode: LayoutMode): LayoutSource =
 proc layoutKindForId*(id: string): LayoutKind =
   if id.isBundledAlgorithmicLayoutId():
     return LayoutKind.Algorithmic
+  if id.isBundledFrameLayoutId():
+    return LayoutKind.Frame
   if parseCoreLayoutModeId(id).isSome:
     return LayoutKind.Scrolling
   if parseNativeLayoutId(id).isSome:
@@ -58,7 +71,7 @@ proc layoutKindForId*(id: string): LayoutKind =
   LayoutKind.Algorithmic
 
 proc layoutSourceForId*(id: string): LayoutSource =
-  if id.isBundledAlgorithmicLayoutId():
+  if id.isBundledLayoutId():
     return LayoutSource.BundledJanet
   if parseCoreLayoutModeId(id).isSome:
     return LayoutSource.Core

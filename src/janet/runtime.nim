@@ -339,7 +339,7 @@ proc evalLayoutDetailed*(
     return
 
   let layoutId = context.layoutId.layoutIdString()
-  if layoutId.isBundledAlgorithmicLayoutId():
+  if layoutId.isBundledLayoutId():
     let bundled = runtime.loadBundledLayoutEntry(layoutId, snapshot)
     if not bundled.entry.failed and
         triadJanetScriptHasLayout(bundled.entry.script, cstring(layoutId)) == 1:

@@ -990,7 +990,7 @@ workspace-rules {
 janet {
   layout "spiral" fallback="scroller"
   layout "wide-master" fallback="tile"
-  layout "notion" fallback="frame-tree"
+  layout "frame-policy" fallback="frame-tree"
 }
 """
       )
@@ -1001,7 +1001,7 @@ janet {
     check config.janet.layouts[0].fallback.builtin == LayoutMode.Scroller
     check config.janet.layouts[1].id.layoutIdString() == "wide-master"
     check config.janet.layouts[1].fallback.builtin == LayoutMode.Scroller
-    check config.janet.layouts[2].id.layoutIdString() == "notion"
+    check config.janet.layouts[2].id.layoutIdString() == "frame-policy"
     check config.janet.layouts[2].fallback.kind == LayoutSelectionKind.Native
     check config.janet.layouts[2].fallback.nativeId.nativeLayoutIdString() ==
       "frame-tree"
@@ -1024,3 +1024,25 @@ janet {
     check config.tagRules[0].defaultLayoutSelection.kind == LayoutSelectionKind.Custom
     check config.tagRules[0].defaultLayoutSelection.customId.layoutIdString() ==
       "wide-master"
+
+  test "Parser reserves bundled Janet layout names":
+    let config = loadConfigNodes(
+      parseKdl(
+        """
+layout {
+  layout-cycle "notion"
+}
+
+janet {
+  layout "notion" fallback="scroller"
+}
+"""
+      )
+    )
+
+    check config.janet.layouts.len == 0
+    check config.layout.layoutSelections.len == 1
+    check config.layout.layoutSelections[0].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[0].customId.layoutIdString() == "notion"
+    check config.layout.layoutSelections[0].nativeId.nativeLayoutIdString() ==
+      "frame-tree"
