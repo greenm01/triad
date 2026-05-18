@@ -18,17 +18,21 @@ Tags provide stable, concurrent labels for windows. Rules, written in KDL, provi
 
 Static rules cover the predictable. [Janet](https://janet-lang.org/) covers everything else.
 
-Some window behavior can't be expressed as a rule: send GIMP to a dedicated workspace, but only if one exists; float a dialog when its parent is already open; switch the layout when a particular app arrives. Triad embeds Janet—a small Lisp—so you can write that logic directly, in plain code, without running a separate process or piping commands through a shell.
+Some window behavior can't be expressed as a rule: send GIMP to a dedicated workspace, but only if one exists; float a dialog when its parent is already open; switch the layout when a particular app arrives. Triad embeds Janet—a small, fast Lisp—so you can write that logic directly, in plain code, without running a separate process or piping commands through a shell.
+
+Janet is a natural fit for Triad's architecture: it is data-oriented rather than object-oriented, and its immutable values map cleanly onto Triad's snapshot-in, messages-out runtime model.
+
+This makes Janet a modern, executable successor to the static ICCCM and EWMH hints that X11 apps used to self-describe their placement preferences: instead of rigid binary properties, a script is live app-placement policy that reads context and responds to it.
 
 Scripts live in `~/.config/triad/janet/` and react to session events as they happen. Open an app and it lands where you want it. Close it and the workspace cleans up. Switch tags and the layout follows. All of it expressed once, in one place.
 
 That scripting surface is also where users can create custom layouts: Janet can describe window placement across algorithmic tiling, scrollable strips, BSP/tree policies, frame/tab systems, and floating placement without baking every paradigm into the compositor. See the layout taxonomy in [docs/tiling_wm_categories.md](docs/tiling_wm_categories.md).
 
-### Scrolling and Other Layouts
+### Multi-Paradigm Layouts
 
-Triad features a scrolling layout that provides a fluid canvas for your workflow.
+Triad ships with scrolling, master-stack, grid, monocle, deck, and other built-in layouts. Each workspace can choose its own layout independently.
 
-It also supports 11 other layout modes, including Master-Stack, Grid, and Monocle. You can toggle between them independently for every workspace.
+The layout model is not limited to one tiling family: Janet custom layouts can express algorithmic tiling, scrollable strips, BSP/tree policies, frame/tab systems, and floating placement from the same session data.
 
 ### The Shell Ecosystem
 
