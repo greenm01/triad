@@ -595,9 +595,6 @@ proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
     false
 
 proc focusByDirection*(model: var Model, direction: Direction): bool =
-  if model.activeTagUsesFrameTree() and
-      direction in {Direction.DirLeft, Direction.DirRight}:
-    return model.focusFrameTab(if direction == Direction.DirLeft: -1 else: 1)
   if model.focusByVisualDirection(direction):
     return true
   if model.activeTagUsesFrameTree():

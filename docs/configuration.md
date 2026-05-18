@@ -104,7 +104,7 @@ Control the geometry and behavior of your windows.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `gaps` | `Pixels` | Outer gaps around windows (0..512). |
+| `gaps` | `Pixels` | Gaps around windows (0..512). In native `frame-tree` layouts this is the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. |
 | `center-focused-column`| `"never"`, `"always"`, `"on-overflow"` | How to position the active scroller column. |
 | `scroller-focus-center`| `Bool` | Keeps the focus at the screen center while scrolling. |
 | `scroller-prefer-center`| `Bool` | Attempts to center columns even when not focused. |
@@ -518,7 +518,9 @@ Declared Janet layout names can be used in `layout-cycle`,
 `workspaces default-layout`, and `workspace-rules default-layout=...`.
 When a layout uses `fallback="frame-tree"`, it may return frame geometry with
 `:frame-id` instead of direct `:window-id` geometry. Triad maps each frame rect
-to that frame's active visible tab.
+to that frame's active visible tab, preserves empty frame rects for native
+chrome, and lets the native frame tree fill the output usable rect without
+adding the normal outer layout gap.
 
 ### Config Notifications
 Run custom commands to notify yourself of configuration reload results.

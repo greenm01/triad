@@ -41,3 +41,4 @@ type
     instructionCount*: int
     outputTargetKind*: JanetLayoutTargetKind
     instructions*: seq[RenderInstruction]
+    frameInstructions*: seq[JanetLayoutInstruction]

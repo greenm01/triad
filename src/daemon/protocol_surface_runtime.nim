@@ -6,7 +6,7 @@ import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/[hotkey_overlay, recent_windows]
 from ../types/core import Rect
-from ../types/projection_values import ProjectedFrameTabBar
+from ../types/projection_values import ProjectedFrameEmptyChrome, ProjectedFrameTabBar
 import ../types/runtime_values
 import
   exit_session_dialog_render, frame_tab_bar_render, hotkey_overlay_render,
@@ -44,6 +44,9 @@ template windowDecorationAbove(daemon: TriadDaemon): untyped =
 template windowDecorationBelow(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.windowDecorationBelow
 
+template frameEmptySurfaces(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.frameEmptySurfaces
+
 proc premulColor*(value: uint32): tuple[r, g, b, a: uint32] =
   let r8 = (value shr 24) and 0xff
   let g8 = (value shr 16) and 0xff
@@ -78,6 +81,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
       0xffcc0000'u32 or alpha
     of ProtocolSurfaceKind.PskDecorationBelow:
       0x2233cc00'u32 or alpha
+    of ProtocolSurfaceKind.PskFrameEmpty:
+      0x00000000'u32 or alpha
   let rgba = premulColor(color)
   daemon.singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
 
@@ -630,6 +635,30 @@ proc clearDecorationSurface(daemon: var TriadDaemon, id: uint32) =
     daemon.commitProtocolSurface(surf)
   daemon.surfaceTable[id] = surf
 
+proc ensureFrameEmptySurface(daemon: var TriadDaemon, frameId: uint32): uint32 =
+  if daemon.frameEmptySurfaces.hasKey(frameId):
+    let surfaceId = daemon.frameEmptySurfaces[frameId]
+    if daemon.surfaceTable.hasKey(surfaceId):
+      return surfaceId
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return 0
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskFrameEmpty)
+  if surf.surface == nil:
+    return 0
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    daemon.destroyProtocolSurface(surf)
+    return 0
+  surf.node = surf.shellSurface.getNode()
+  let id = surf.shellSurface.id()
+  daemon.shellSurfacePointers[id] = surf.shellSurface
+  daemon.protocolSurfaceRuntime.surfaceToOwned[surf.surface.id()] = id
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[id] = surf
+  daemon.frameEmptySurfaces[frameId] = id
+  debug "Created frame empty chrome surface", frameId = frameId, shellSurfaceId = id
+  id
+
 proc syncFrameTabBarSurfaces*(
     daemon: var TriadDaemon, tabBars: openArray[ProjectedFrameTabBar]
 ) =
@@ -670,6 +699,57 @@ proc syncFrameTabBarSurfaces*(
     if not activeWindows.contains(windowId):
       daemon.clearDecorationSurface(surfaceId)
 
+proc syncFrameEmptySurfaces*(
+    daemon: var TriadDaemon, frames: openArray[ProjectedFrameEmptyChrome]
+) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    var staleIds: seq[uint32]
+    for _, surfaceId in daemon.frameEmptySurfaces.pairs:
+      staleIds.add(surfaceId)
+    daemon.frameEmptySurfaces.clear()
+    for surfaceId in staleIds:
+      if daemon.surfaceTable.hasKey(surfaceId):
+        var surf = daemon.surfaceTable[surfaceId]
+        daemon.surfaceTable.del(surfaceId)
+        daemon.destroyProtocolSurface(surf)
+    return
+
+  var activeFrames = initHashSet[uint32]()
+  for frame in frames:
+    if frame.frameId == 0 or frame.geom.w <= 0 or frame.geom.h <= 0:
+      continue
+    let surfaceId = daemon.ensureFrameEmptySurface(frame.frameId)
+    if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
+      continue
+    activeFrames.incl(frame.frameId)
+    var surf = daemon.surfaceTable[surfaceId]
+    let key = frame.frameEmptyChromeCacheKey()
+    surf.inputW = 0
+    surf.inputH = 0
+    if surf.bufferCacheKey != key:
+      let rendered = renderFrameEmptyChromeBuffer(frame)
+      let buffer = daemon.createArgbShmBuffer(rendered)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+        surf.bufferCacheKey = key
+        daemon.commitProtocolSurface(surf)
+    if surf.node != nil:
+      surf.node.setPosition(frame.geom.x, frame.geom.y)
+      surf.node.placeTop()
+    daemon.surfaceTable[surfaceId] = surf
+
+  var staleFrames: seq[uint32]
+  for frameId in daemon.frameEmptySurfaces.keys:
+    if not activeFrames.contains(frameId):
+      staleFrames.add(frameId)
+  for frameId in staleFrames:
+    let surfaceId = daemon.frameEmptySurfaces[frameId]
+    daemon.frameEmptySurfaces.del(frameId)
+    if daemon.surfaceTable.hasKey(surfaceId):
+      var surf = daemon.surfaceTable[surfaceId]
+      daemon.surfaceTable.del(surfaceId)
+      daemon.destroyProtocolSurface(surf)
+
 proc destroyWindowProtocolSurfaces*(daemon: var TriadDaemon, windowId: uint32) =
   if daemon.windowDecorationAbove.hasKey(windowId):
     let id = daemon.windowDecorationAbove[windowId]
@@ -702,4 +782,5 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
   daemon.recentWindowsChromeSurfaceId = 0
   daemon.windowDecorationAbove.clear()
   daemon.windowDecorationBelow.clear()
+  daemon.frameEmptySurfaces.clear()
   daemon.protocolSurfaceRuntime.surfaceToOwned.clear()

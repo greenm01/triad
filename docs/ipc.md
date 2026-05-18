@@ -15,8 +15,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus
     spatially within the active tag. In overview, these keep normal layout
     semantics inside the focused workspace and switch workspaces at the edge.
-    In frame-tree layouts, left/right cycle tabs in the focused frame while
-    up/down navigate between frames.
+    In frame-tree layouts, all four directions navigate between frames.
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.
@@ -86,6 +85,13 @@ To dispatch a command to the running Triad instance, use the following syntax:
     Niri-compatible `SwitchLayout` is separate keyboard-layout vocabulary and
     switches configured River XKB keyboard layouts instead of triggering this
     command.
+*   `frame-split-horizontal`, `frame-split-vertical`: Splits the focused
+    frame. When the frame has multiple tabs, the active tab moves into the new
+    sibling frame; when it has one tab, focus stays on the original frame and
+    the new sibling starts empty. Splitting an already-empty frame is a no-op;
+    use `frame-unsplit` to remove the focused empty frame.
+*   `frame-unsplit`: Removes the focused empty frame and promotes its sibling.
+*   `frame-tab-next`, `frame-tab-prev`: Cycles tabs in the focused frame.
 
 #### Manipulation
 *   `move-to-tag <id>`: Moves the focused window to the specified tag and focuses that tag.

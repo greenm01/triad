@@ -591,6 +591,7 @@ suite "embedded Janet runtime":
     check evaluated.inputFrameCount == 2
     check evaluated.instructionCount == 2
     check evaluated.instructions.len == 1
+    check evaluated.frameInstructions.len == 2
     check evaluated.instructions[0].windowId == 11'u32
     check evaluated.instructions[0].geom == Rect(x: 10, y: 20, w: 300, h: 400)
 
@@ -607,6 +608,7 @@ suite "embedded Janet runtime":
     check evaluated.inputFrameCount == 2
     check evaluated.instructionCount == 2
     check evaluated.instructions.len == 2
+    check evaluated.frameInstructions.len == 2
     check evaluated.instructions[0].windowId == 10'u32
     check evaluated.instructions[0].geom == Rect(x: 0, y: 0, w: 958, h: 1080)
     check evaluated.instructions[1].windowId == 11'u32
@@ -624,6 +626,7 @@ suite "embedded Janet runtime":
     check evaluated.inputFrameCount == 3
     check evaluated.instructionCount == 3
     check evaluated.instructions.len == 3
+    check evaluated.frameInstructions.len == 3
     check evaluated.instructions.hasInstruction(
       10'u32, Rect(x: 0, y: 0, w: 594, h: 800)
     )

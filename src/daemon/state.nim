@@ -233,6 +233,7 @@ type
     desiredPlacementClips*: Table[uint32, Rect]
     desiredPlacementOrder*: seq[uint32]
     currentFrameTabBars*: seq[ProjectedFrameTabBar]
+    currentFrameEmptyChrome*: seq[ProjectedFrameEmptyChrome]
     lastRenderWindowStates*: Table[uint32, RenderWindowState]
     lastRenderOrder*: seq[uint32]
     lastFrameTickMs*: int64

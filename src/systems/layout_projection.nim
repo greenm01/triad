@@ -295,10 +295,14 @@ proc frameTreeActive(tag: TagData): bool =
 proc frameTreeTabHeight(rect: rv.Rect): int32 =
   min(FrameTreeTabBarHeight, max(0'i32, rect.h - 1'i32))
 
-proc frameTreeClientRect(rect: rv.Rect): rv.Rect =
+proc frameTreeClientRect(rect: rv.Rect, borderWidth: int32): rv.Rect =
   let tabHeight = frameTreeTabHeight(rect)
+  let border = max(0'i32, borderWidth)
   rv.Rect(
-    x: rect.x, y: rect.y + tabHeight, w: rect.w, h: max(1'i32, rect.h - tabHeight)
+    x: rect.x + border,
+    y: rect.y + border + tabHeight,
+    w: max(1'i32, rect.w - border * 2),
+    h: max(1'i32, rect.h - border * 2 - tabHeight),
   )
 
 proc frameTreeRects(
@@ -356,13 +360,7 @@ proc frameTreeLayoutRects*(
   let root = model.frameRootForTag(tagId)
   if root == NullFrameId:
     return @[]
-  let safeOuterGap = max(0'i32, outerGap)
-  let usable = rv.Rect(
-    x: screen.x + safeOuterGap,
-    y: screen.y + safeOuterGap,
-    w: max(1'i32, screen.w - 2 * safeOuterGap),
-    h: max(1'i32, screen.h - 2 * safeOuterGap),
-  )
+  let usable = rv.Rect(x: screen.x, y: screen.y, w: screen.w, h: screen.h)
   model.frameTreeRects(root, usable, innerGap, result)
 
 proc applyFrameTreeRects(
@@ -375,13 +373,7 @@ proc applyFrameTreeRects(
   let root = model.frameRootForTag(tagId)
   if root == NullFrameId:
     return
-  let safeOuterGap = max(0'i32, outerGap)
-  let usable = rv.Rect(
-    x: screen.x + safeOuterGap,
-    y: screen.y + safeOuterGap,
-    w: max(1'i32, screen.w - 2 * safeOuterGap),
-    h: max(1'i32, screen.h - 2 * safeOuterGap),
-  )
+  let usable = rv.Rect(x: screen.x, y: screen.y, w: screen.w, h: screen.h)
   var rects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
   model.frameTreeRects(root, usable, innerGap, rects)
   for item in rects:
@@ -395,6 +387,7 @@ proc layoutFrameTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
   let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
+  let tagOpt = model.tagData(tagId)
   for item in rects:
     let frameOpt = model.frameData(item.frameId)
     if frameOpt.isNone:
@@ -405,11 +398,35 @@ proc layoutFrameTree*(
     let winOpt = model.windowData(active)
     if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
         not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
+      let focused = tagOpt.isSome and item.frameId == tagOpt.get().focusedFrame
+      let border = model.effectiveWindowBorder(active, focused)
       result.add(
         rv.RenderInstruction(
-          windowId: model.externalWindowId(active), geom: frameTreeClientRect(item.rect)
+          windowId: model.externalWindowId(active),
+          geom: frameTreeClientRect(item.rect, border.width),
         )
       )
+
+proc frameTreeVisibleTabs(model: Model, frameId: FrameId): seq[rv.ProjectedFrameTab] =
+  let frameOpt = model.frameData(frameId)
+  if frameOpt.isNone:
+    return
+  let active = frameOpt.get().activeWindow
+  for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+    let winOpt = model.windowData(winId)
+    if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
+        winOpt.get().isMinimized or winOpt.get().isUnmanagedGlobal or
+        model.windowHiddenByGroup(winId):
+      continue
+    let win = winOpt.get()
+    result.add(
+      rv.ProjectedFrameTab(
+        windowId: model.externalWindowId(winId),
+        title: win.title,
+        appId: win.appId,
+        active: winId == active,
+      )
+    )
 
 proc frameTreeTabBars*(
     model: Model, tagId: TagId, rects: openArray[tuple[frameId: FrameId, rect: rv.Rect]]
@@ -428,22 +445,7 @@ proc frameTreeTabBars*(
     let tabHeight = frameTreeTabHeight(item.rect)
     if tabHeight <= 0:
       continue
-    var tabs: seq[rv.ProjectedFrameTab] = @[]
-    for winId in model.windowsByFrame.getOrDefault(item.frameId, @[]):
-      let winOpt = model.windowData(winId)
-      if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
-          winOpt.get().isMinimized or winOpt.get().isUnmanagedGlobal or
-          model.windowHiddenByGroup(winId):
-        continue
-      let win = winOpt.get()
-      tabs.add(
-        rv.ProjectedFrameTab(
-          windowId: model.externalWindowId(winId),
-          title: win.title,
-          appId: win.appId,
-          active: winId == active,
-        )
-      )
+    let tabs = model.frameTreeVisibleTabs(item.frameId)
     if tabs.len == 0:
       continue
     let border =
@@ -471,6 +473,36 @@ proc frameTreeTabBars*(
   let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
   model.frameTreeTabBars(tagId, rects)
 
+proc frameTreeEmptyChrome*(
+    model: Model, tagId: TagId, rects: openArray[tuple[frameId: FrameId, rect: rv.Rect]]
+): seq[rv.ProjectedFrameEmptyChrome] =
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return @[]
+  for item in rects:
+    let frameOpt = model.frameData(item.frameId)
+    if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf:
+      continue
+    if model.frameTreeVisibleTabs(item.frameId).len > 0:
+      continue
+    let focused = item.frameId == tagOpt.get().focusedFrame
+    let border = model.effectiveWindowBorder(NullWindowId, focused)
+    result.add(
+      rv.ProjectedFrameEmptyChrome(
+        frameId: uint32(item.frameId),
+        geom: item.rect,
+        focused: focused,
+        ringWidth: border.width,
+        ringColor: if focused: border.activeColor else: border.inactiveColor,
+      )
+    )
+
+proc frameTreeEmptyChrome*(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.ProjectedFrameEmptyChrome] =
+  let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
+  model.frameTreeEmptyChrome(tagId, rects)
+
 proc frameTreeFrameRectsFromInstructions(
     tag: rv.ProjectedTag, instructions: openArray[rv.RenderInstruction]
 ): seq[tuple[frameId: FrameId, rect: rv.Rect]] =
@@ -479,6 +511,13 @@ proc frameTreeFrameRectsFromInstructions(
       if frame.kind == FrameNodeKind.Leaf and frame.activeWindow == instr.windowId:
         result.add((FrameId(frame.id), instr.geom))
         break
+
+proc frameTreeFrameRectsFromInstructions(
+    instructions: openArray[JanetLayoutInstruction]
+): seq[tuple[frameId: FrameId, rect: rv.Rect]] =
+  for instr in instructions:
+    if instr.targetKind == JanetLayoutTargetKind.Frame:
+      result.add((FrameId(instr.targetId), instr.geom))
 
 proc applyLayoutViewportOffset(
     tag: rv.ProjectedTag, instructions: var seq[rv.RenderInstruction]
@@ -571,6 +610,7 @@ proc customLayoutInstructions(
   applied: bool,
   outputTargetKind: JanetLayoutTargetKind,
   instructions: seq[rv.RenderInstruction],
+  frameInstructions: seq[JanetLayoutInstruction],
 ] =
   if layoutEval == nil or customLayoutId.layoutIdString().len == 0:
     return
@@ -586,7 +626,10 @@ proc customLayoutInstructions(
   )
   if evalResult.outcome != JanetLayoutOutcome.Applied:
     return
-  (true, evalResult.outputTargetKind, evalResult.instructions)
+  (
+    true, evalResult.outputTargetKind, evalResult.instructions,
+    evalResult.frameInstructions,
+  )
 
 proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
@@ -843,9 +886,10 @@ proc layoutProjection*(
     model.applyFrameTreeRects(
       model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
     )
+  let customOuterGap = if activeTagData.frameTreeActive(): 0'i32 else: currentOuterGap
   let custom = customLayoutInstructions(
     layoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
-    currentOuterGap, currentInnerGap,
+    customOuterGap, currentInnerGap,
   )
   var customFrameRects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
   if custom.applied:
@@ -853,9 +897,19 @@ proc layoutProjection*(
     if activeTagData.frameTreeActive() and
         custom.outputTargetKind == JanetLayoutTargetKind.Frame:
       customFrameRects =
-        tagForLayout.frameTreeFrameRectsFromInstructions(result.instructions)
+        if custom.frameInstructions.len > 0:
+          frameTreeFrameRectsFromInstructions(custom.frameInstructions)
+        else:
+          tagForLayout.frameTreeFrameRectsFromInstructions(result.instructions)
       for instr in result.instructions.mitems:
-        instr.geom = frameTreeClientRect(instr.geom)
+        let logicalId =
+          model.windowForExternal(ExternalWindowId(uint32(instr.windowId)))
+        let frameId = model.frameForWindowOnTag(model.activeTag, logicalId)
+        let focused =
+          frameId != NullFrameId and model.tagData(model.activeTag).isSome and
+          frameId == model.tagData(model.activeTag).get().focusedFrame
+        let border = model.effectiveWindowBorder(logicalId, focused)
+        instr.geom = frameTreeClientRect(instr.geom, border.width)
   elif activeTagData.frameTreeActive():
     result.instructions =
       model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
@@ -873,9 +927,14 @@ proc layoutProjection*(
     tagForLayout.applyLayoutViewportOffset(result.instructions)
   if customFrameRects.len > 0:
     result.frameTabBars = model.frameTreeTabBars(model.activeTag, customFrameRects)
+    result.frameEmptyChrome =
+      model.frameTreeEmptyChrome(model.activeTag, customFrameRects)
   elif activeTagData.frameTreeActive() and not custom.applied:
     result.frameTabBars =
       model.frameTreeTabBars(model.activeTag, screen, currentOuterGap, currentInnerGap)
+    result.frameEmptyChrome = model.frameTreeEmptyChrome(
+      model.activeTag, screen, currentOuterGap, currentInnerGap
+    )
   if tagForLayout.columns.len > 0 and not custom.applied and
       not activeTagData.frameTreeActive():
     result.viewportTargets.add(

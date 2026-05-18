@@ -1,4 +1,5 @@
-from projection_values import ProjectedFrameTabBar, RenderInstruction
+from projection_values import
+  ProjectedFrameEmptyChrome, ProjectedFrameTabBar, RenderInstruction
 
 type
   LayoutViewportTarget* = object
@@ -9,4 +10,5 @@ type
   LayoutProjection* = object
     instructions*: seq[RenderInstruction]
     frameTabBars*: seq[ProjectedFrameTabBar]
+    frameEmptyChrome*: seq[ProjectedFrameEmptyChrome]
     viewportTargets*: seq[LayoutViewportTarget]

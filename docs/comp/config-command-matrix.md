@@ -120,9 +120,9 @@ protocol-dependent or tracked in the feature matrix below.
 | Layouts | Scroller focus centering | `scroller_focus_center`, `scroller_prefer_center` | WM policy | `scroller-focus-center`, `scroller-prefer-center` | X | |
 | Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | `scroller-proportion-presets`, `switch-proportion-preset` | X | Triad cycles focused horizontal or vertical scroller columns through configured clamped presets. |
 | Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
-| Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | |
+| Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | Native `frame-tree` uses gaps between split frames and fills the output usable rect without an outer frame-tree margin. |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
-| Layouts | Frame-tree tab colors | | protocol decoration surfaces | `frame-tabs { active-color; active-unfocused-color; inactive-color; active-line-color; active-unfocused-line-color }` | X | Native frame-tree tab chrome uses configurable colors with current hard-coded values as defaults. |
+| Layouts | Frame-tree tab colors | | protocol decoration surfaces | `frame-tabs { active-color; active-unfocused-color; inactive-color; active-line-color; active-unfocused-line-color }` | X | Native frame-tree tab chrome uses configurable colors with current hard-coded values as defaults; empty frames render native border chrome from the same frame geometry substrate. |
 | Layouts | Layout switch toast | | WM policy | `layout-switch-toast { enabled; timeout-ms; ring-color }` | X | Native centered toast shown after active-workspace layout commands; follows command bindings rather than a hard-coded key. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
@@ -347,8 +347,13 @@ KDL config nodes and fields:
   `set-layout`, and `set-layout-for-workspace`. Native layouts can be selected
   with `layout-native <name>`; `frame-tree` is the first native layout id and
   supports `frame-split-horizontal`, `frame-split-vertical`, `frame-unsplit`,
-  `frame-tab-next`, and `frame-tab-prev`. Default configs bind frame tab cycling
-  to `Super+Page_Up` and `Super+Page_Down`.
+  `frame-tab-next`, and `frame-tab-prev`. Frame splits move the active tab to
+  the new sibling only when the focused frame has multiple tabs; one-tab frames
+  create an empty sibling and keep focus on the original frame; already-empty
+  frames do not split. Use `frame-unsplit` to remove the focused empty frame. Default
+  configs bind frame tab cycling to `Super+Page_Up` and `Super+Page_Down`.
+  Frame-tree geometry fills the output usable rect, uses layout gaps only
+  between split frames, and retains empty frame rects for native chrome.
 - `layout.frame-tabs`: `active-color`, `active-unfocused-color`,
   `inactive-color`, `active-line-color`, `active-unfocused-line-color`.
 - `terminal`: `command`.
@@ -389,9 +394,9 @@ Text IPC and bind commands:
   `recent-window-next`, `recent-window-prev`, `recent-window-confirm`,
   `recent-window-cancel`, `recent-window-first`, `recent-window-last`,
   `recent-window-scope`, `recent-window-cycle-scope`,
-  `recent-window-close-current`. In frame-tree layouts, `focus-left` and
-  `focus-right` cycle frame tabs while `focus-up` and `focus-down` navigate
-  between frames.
+  `recent-window-close-current`. In frame-tree layouts, directional focus
+  commands navigate between frames; explicit `frame-tab-next` and
+  `frame-tab-prev` commands cycle tabs.
 - Window and session: `close-window`, `toggle-floating`,
   `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen`,
   `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize`,

@@ -154,11 +154,15 @@ A native frame/tab substrate would help several layout families:
 It is not required for simple formula layouts such as grids, spirals,
 monocle-like stacks, or basic master-stack variants.
 
-If Triad adds this substrate, it should follow the existing DOD split:
+Triad's native `frame-tree` layout provides this substrate. Its frame tree fills
+the output usable rect, applies `layout.gaps` only between split frames, insets
+occupied clients below the tab strip and configured border, and renders native
+chrome for visible tabs plus empty frames. It follows the existing DOD split:
 
 - frame and tab records live in `types/model.nim`;
 - indexes and persistence live in `state` and `entities`;
-- split, unsplit, tab focus, and window-to-frame movement are reducer commands;
+- split, unsplit, tab focus, directional frame focus, and window-to-frame
+  movement are reducer commands;
 - projection receives immutable frame data and emits render instructions;
 - Janet can observe frame projection data and optionally calculate frame
   geometry, but cannot directly mutate frames.
@@ -169,7 +173,8 @@ If Triad adds this substrate, it should follow the existing DOD split:
 from the hard part.
 
 The easy part is the recursive split geometry: given a split tree, a screen
-rect, and a gap, calculate a rect for each leaf frame. That is scriptable.
+rect, and a gap, calculate a rect for each leaf frame. That is scriptable and
+belongs in layouts such as `examples/janet/layouts/notion.janet`.
 
 The hard part is that notion-river's layout is not only a geometry formula. Its
 core model includes:
@@ -184,8 +189,8 @@ core model includes:
 - state save and restore;
 - visible empty-frame and tab decorations.
 
-A faithful Notion-style Triad mode therefore needs native frame/tab state
-first. Janet can then help with custom frame geometry or placement policy.
+A faithful Notion-style Triad mode therefore uses native frame/tab state for
+behavior. Janet helps with custom frame geometry or placement policy only.
 
 ## Implementation Phases
 
@@ -245,6 +250,9 @@ Implemented.
   projection data.
 - Frame-aware scripts may return `:frame-id` instructions; Triad maps each leaf
   frame rect to that frame's active visible tab.
+- Frame-aware evaluation retains all returned frame instructions, including
+  empty frames, so native tab and empty-frame chrome can be rendered from the
+  script's full frame geometry rather than only occupied windows.
 - Frame mutation remains in native commands.
 - A 25-frame Janet evaluation test records behavior-log evidence for substrate,
   target kind, frame count, and instruction count.

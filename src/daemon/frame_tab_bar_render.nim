@@ -28,6 +28,15 @@ proc drawFrameTabRing(buf: var PixelBuffer, thickness: int32, color: uint32) =
   buf.fillRect(0, 0, line, buf.height, color)
   buf.fillRect(buf.width - line, 0, line, buf.height, color)
 
+proc drawFrameRectRing(buf: var PixelBuffer, thickness: int32, color: uint32) =
+  if thickness <= 0 or color == 0:
+    return
+  let line = min(thickness, max(1'i32, min(buf.width, buf.height)))
+  buf.fillRect(0, 0, buf.width, line, color)
+  buf.fillRect(0, buf.height - line, buf.width, line, color)
+  buf.fillRect(0, 0, line, buf.height, color)
+  buf.fillRect(buf.width - line, 0, line, buf.height, color)
+
 proc frameTabLabel(tab: ProjectedFrameTab): string =
   result = tab.title.strip()
   if result.len == 0:
@@ -120,3 +129,12 @@ proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
       contentX + TabPaddingX, textY, max(1'i32, w - TabPaddingX * 2), label, textStyle
     )
   result.drawFrameTabRing(bar.ringWidth, rgbaColorToArgb(bar.ringColor))
+
+proc frameEmptyChromeCacheKey*(frame: ProjectedFrameEmptyChrome): string =
+  $frame.frameId & ":" & $frame.geom.w & ":" & $frame.geom.h & ":" & $frame.focused & ":" &
+    $frame.ringWidth & ":" & $frame.ringColor
+
+proc renderFrameEmptyChromeBuffer*(frame: ProjectedFrameEmptyChrome): PixelBuffer =
+  result =
+    initPixelBuffer(max(1'i32, frame.geom.w), max(1'i32, frame.geom.h), Transparent)
+  result.drawFrameRectRing(frame.ringWidth, rgbaColorToArgb(frame.ringColor))

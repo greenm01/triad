@@ -12,6 +12,7 @@ type
     PskRecentWindowsChrome
     PskDecorationAbove
     PskDecorationBelow
+    PskFrameEmpty
 
   OwnedProtocolSurface* = object
     surface*: ptr Surface
@@ -40,4 +41,5 @@ type
     recentWindowsChromeSurfaceId*: uint32
     windowDecorationAbove*: Table[uint32, uint32]
     windowDecorationBelow*: Table[uint32, uint32]
+    frameEmptySurfaces*: Table[uint32, uint32]
     surfaceToOwned*: Table[uint32, uint32]

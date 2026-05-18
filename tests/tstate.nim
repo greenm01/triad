@@ -943,13 +943,13 @@ suite "Runtime state primitives":
 
     check projection.instructions.len == 2
     check projection.frameTabBars.len == 2
-    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 10'u32)
     check projection.instructions.anyIt(it.windowId == 12'u32)
     check projection.instructions[0].geom.x < projection.instructions[1].geom.x
 
     var clickedFrame = tc.NullFrameId
     for frameId, _ in model.framesOnTagWithId(model.activeTag):
-      if model.windowsForFrame(frameId) == @[tc.WindowId(1), tc.WindowId(2)]:
+      if model.windowsForFrame(frameId) == @[tc.WindowId(2), tc.WindowId(3)]:
         clickedFrame = frameId
     let (tabClick, _) = model.update(
       Msg(
@@ -959,10 +959,60 @@ suite "Runtime state primitives":
       )
     )
     model = tabClick
-    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(1)
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
     let (tabNext, _) = model.update(Msg(kind: MsgKind.CmdFrameTabNext))
     model = tabNext
-    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(3)
+
+    block:
+      var parityConfig = baseConfig()
+      parityConfig.layout.gaps = 4
+      parityConfig.layout.borderWidth = 2
+      parityConfig.layout.focusedBorderColor = 0x9b8ec4ff'u32
+      parityConfig.layout.unfocusedBorderColor = 0x2a2636ff'u32
+      var parityModel = initRuntimeStateFromConfig(parityConfig).model
+      let (parityOutput, _) = parityModel.update(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1920, height: 1080)
+      )
+      parityModel = parityOutput
+      for externalId in [60'u32, 61'u32]:
+        let (withWindow, _) =
+          parityModel.update(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
+        parityModel = withWindow
+      let (parityNative, _) = parityModel.update(
+        Msg(
+          kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree")
+        )
+      )
+      parityModel = parityNative
+      let (paritySplit, _) =
+        parityModel.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+      parityModel = paritySplit
+
+      let parityRects = parityModel.frameTreeLayoutRects(
+        parityModel.activeTag, pv.Rect(x: 0, y: 0, w: 1920, h: 1080), 99, 4
+      )
+      check parityRects.anyIt(it.rect == pv.Rect(x: 0, y: 0, w: 958, h: 1080))
+      check parityRects.anyIt(it.rect == pv.Rect(x: 962, y: 0, w: 958, h: 1080))
+
+      let parityInstructions = parityModel.layoutFrameTree(
+        parityModel.activeTag, pv.Rect(x: 0, y: 0, w: 1920, h: 1080), 99, 4
+      )
+      let parityBars = parityModel.frameTreeTabBars(
+        parityModel.activeTag, pv.Rect(x: 0, y: 0, w: 1920, h: 1080), 99, 4
+      )
+      let parityEmpty = parityModel.frameTreeEmptyChrome(
+        parityModel.activeTag, pv.Rect(x: 0, y: 0, w: 1920, h: 1080), 99, 4
+      )
+      check parityEmpty.len == 0
+      check parityBars.anyIt(it.geom == pv.Rect(x: 0, y: 0, w: 958, h: 24))
+      check parityBars.anyIt(it.geom == pv.Rect(x: 962, y: 0, w: 958, h: 24))
+      check parityInstructions.anyIt(
+        it.windowId == 60'u32 and it.geom == pv.Rect(x: 2, y: 26, w: 954, h: 1052)
+      )
+      check parityInstructions.anyIt(
+        it.windowId == 61'u32 and it.geom == pv.Rect(x: 964, y: 26, w: 954, h: 1052)
+      )
 
     block:
       var moveModel = initRuntimeStateFromConfig(baseConfig()).model
@@ -1010,7 +1060,7 @@ suite "Runtime state primitives":
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
     )
     singleFrame = singleFocusLeft
-    check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow !=
+    check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow ==
       singleFrameInitialFocus
     let (singleFocusRight, _) = singleFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
@@ -1070,7 +1120,7 @@ suite "Runtime state primitives":
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
     )
     notionFrame = notionFocusLeft
-    check notionFrame.tagData(notionFrame.activeTag).get().focusedWindow !=
+    check notionFrame.tagData(notionFrame.activeTag).get().focusedWindow ==
       notionInitialFocus
     let (notionFocusRight, _) = notionFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
@@ -1117,7 +1167,7 @@ suite "Runtime state primitives":
     let (focusUp, _) =
       twoFrame.update(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp))
     twoFrame = focusUp
-    check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == tc.WindowId(2)
+    check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == tc.WindowId(1)
     let (focusDown, _) = twoFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
     )
@@ -1138,33 +1188,55 @@ suite "Runtime state primitives":
     emptyFrame = emptyNative
     let (emptySplit, _) = emptyFrame.update(Msg(kind: MsgKind.CmdFrameSplitVertical))
     emptyFrame = emptySplit
+    let emptyProjection = emptyFrame.layoutProjection()
+    check emptyProjection.frameEmptyChrome.len == 1
     let emptyTag = emptyFrame.tagData(emptyFrame.activeTag).get()
-    let emptyLeaf = emptyTag.focusedFrame
-    var occupiedLeaf = tc.NullFrameId
+    let occupiedLeaf = emptyTag.focusedFrame
+    var emptyLeaf = tc.NullFrameId
     for frameId, frame in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
       if frame.kind == FrameNodeKind.Leaf and
-          emptyFrame.windowsForFrame(frameId) == @[tc.WindowId(1)]:
-        occupiedLeaf = frameId
+          emptyFrame.windowsForFrame(frameId).len == 0:
+        emptyLeaf = frameId
     check emptyLeaf != tc.NullFrameId
     check occupiedLeaf != tc.NullFrameId
     check emptyLeaf != occupiedLeaf
-    let (emptyFocusUp, _) = emptyFrame.update(
-      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
-    )
-    emptyFrame = emptyFocusUp
-    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
-    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedWindow == tc.WindowId(1)
+    check emptyFrame.windowsForFrame(occupiedLeaf) == @[tc.WindowId(1)]
     let (emptyFocusDown, _) = emptyFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
     )
     emptyFrame = emptyFocusDown
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedWindow == tc.WindowId(1)
+    var emptyFrameCountBeforeNoop = 0
+    for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
+      inc emptyFrameCountBeforeNoop
+    let (emptyNoopSplit, _) =
+      emptyFrame.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    emptyFrame = emptyNoopSplit
+    var emptyFrameCountAfterNoop = 0
+    for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
+      inc emptyFrameCountAfterNoop
+    check emptyFrameCountAfterNoop == emptyFrameCountBeforeNoop
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
     let (emptyFocusUpAgain, _) = emptyFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
     )
     emptyFrame = emptyFocusUpAgain
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
+    let (emptyFocusDownAgain, _) = emptyFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
+    )
+    emptyFrame = emptyFocusDownAgain
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
+    let (emptyUnsplit, _) = emptyFrame.update(Msg(kind: MsgKind.CmdFrameUnsplit))
+    emptyFrame = emptyUnsplit
+    var emptyFrameCountAfterUnsplit = 0
+    for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
+      inc emptyFrameCountAfterUnsplit
+    check emptyFrameCountAfterUnsplit == emptyFrameCountBeforeNoop - 2
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
+    check emptyFrame.windowsForFrame(occupiedLeaf) == @[tc.WindowId(1)]
+    check emptyFrame.layoutProjection().frameEmptyChrome.len == 0
 
     let snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].layoutId == "frame-tree"
@@ -1187,15 +1259,15 @@ suite "Runtime state primitives":
     check restoredSnapshot.workspaces[0].layoutKind == "native"
     check restoredSnapshot.workspaces[0].frames.len == 3
     check restoredSnapshot.workspaces[0].frames.anyIt(
-      it.windows == @[10'u32, 11'u32] and it.activeWindow == 11'u32
+      it.windows == @[10'u32] and it.activeWindow == 10'u32
     )
     check restoredSnapshot.workspaces[0].frames.anyIt(
-      it.windows == @[12'u32] and it.activeWindow == 12'u32
+      it.windows == @[11'u32, 12'u32] and it.activeWindow == 12'u32
     )
 
     let restoredProjection = restored.applyRuntimeLayoutProjection()
     check restoredProjection.instructions.len == 2
-    check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
 
   test "custom layout with frame-tree fallback receives frame rects and falls back native":
@@ -1236,7 +1308,7 @@ suite "Runtime state primitives":
         instructions:
           @[
             pv.RenderInstruction(
-              windowId: pv.ProjectionWindowId(11),
+              windowId: pv.ProjectionWindowId(10),
               geom: pv.Rect(x: 5, y: 6, w: 300, h: 400),
             ),
             pv.RenderInstruction(
@@ -1249,21 +1321,21 @@ suite "Runtime state primitives":
     var projection = model.layoutProjection(customEval)
     check projection.instructions.len == 2
     check projection.instructions.anyIt(
-      it.windowId == 11'u32 and it.geom == pv.Rect(x: 5, y: 30, w: 300, h: 376)
+      it.windowId == 10'u32 and it.geom == pv.Rect(x: 5, y: 30, w: 300, h: 376)
     )
     check projection.instructions.anyIt(
       it.windowId == 12'u32 and it.geom == pv.Rect(x: 305, y: 30, w: 300, h: 376)
     )
     check projection.frameTabBars.len == 2
     check projection.frameTabBars.anyIt(
-      it.windowId == 11'u32 and it.geom == pv.Rect(x: 5, y: 6, w: 300, h: 24) and
-        it.tabs.len == 2
+      it.windowId == 10'u32 and it.geom == pv.Rect(x: 5, y: 6, w: 300, h: 24) and
+        it.tabs.len == 1
     )
     let customInitialFocus = model.tagData(model.activeTag).get().focusedWindow
     let (customFocusLeft, _) =
       model.update(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
     model = customFocusLeft
-    check model.tagData(model.activeTag).get().focusedWindow == customInitialFocus
+    check model.tagData(model.activeTag).get().focusedWindow != customInitialFocus
 
     proc invalidEval(context: JanetLayoutContext): JanetLayoutEvalResult =
       JanetLayoutEvalResult(
@@ -1272,7 +1344,7 @@ suite "Runtime state primitives":
 
     projection = model.layoutProjection(invalidEval)
     check projection.instructions.len == 2
-    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 10'u32)
     check projection.instructions.anyIt(it.windowId == 12'u32)
     check projection.instructions[0].geom.x < projection.instructions[1].geom.x
 

@@ -311,6 +311,11 @@ proc evalLayoutDetailed*(
       instructionCount: instructions.len,
       outputTargetKind: validation.outputTargetKind,
       instructions: validation.instructions,
+      frameInstructions:
+        if validation.outputTargetKind == JanetLayoutTargetKind.Frame:
+          instructions
+        else:
+          @[],
     )
     result.logLayoutEval()
     return

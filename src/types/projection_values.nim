@@ -87,6 +87,13 @@ type
     ringColor*: uint32
     tabs*: seq[ProjectedFrameTab]
 
+  ProjectedFrameEmptyChrome* = object
+    frameId*: uint32
+    geom*: Rect
+    focused*: bool
+    ringWidth*: int32
+    ringColor*: uint32
+
   ProjectedTag* = object
     tagId*: uint32
     name*: string

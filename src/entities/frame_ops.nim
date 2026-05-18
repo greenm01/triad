@@ -152,24 +152,42 @@ proc splitFocusedFrame*(model: var Model, orientation: FrameSplitOrientation): b
     return false
   if model.frames.entity(target).get().kind != FrameNodeKind.Leaf:
     return false
+  discard model.repairFrameActiveWindow(target)
+  let active = model.frames.entity(target).get().activeWindow
+  let oldWindows = model.windowsByFrame.getOrDefault(target, @[])
+  if oldWindows.len == 0:
+    return false
+  let moveActive =
+    oldWindows.len > 1 and active != NullWindowId and oldWindows.find(active) != -1
   let first = model.addFrame(tagId, parent = target)
   let second = model.addFrame(tagId, parent = target)
   if first == NullFrameId or second == NullFrameId:
     return false
-  let oldWindows = model.windowsByFrame.getOrDefault(target, @[])
   model.windowsByFrame.del(target)
-  model.windowsByFrame[first] = oldWindows
+  model.windowsByFrame[first] = @[]
+  model.windowsByFrame[second] = @[]
   for winId in oldWindows:
-    model.frameByTagWindow[(tagId, winId)] = first
-  model.frames.mEntity(first).activeWindow =
-    model.frames.entity(target).get().activeWindow
+    if moveActive and winId == active:
+      model.windowsByFrame[second].add(winId)
+      model.frameByTagWindow[(tagId, winId)] = second
+    else:
+      model.windowsByFrame[first].add(winId)
+      model.frameByTagWindow[(tagId, winId)] = first
+  model.frames.mEntity(first).activeWindow = active
+  if moveActive:
+    model.frames.mEntity(second).activeWindow = active
   model.frames.mEntity(target).kind = FrameNodeKind.Split
   model.frames.mEntity(target).orientation = orientation
   model.frames.mEntity(target).ratio = 0.5'f32
   model.frames.mEntity(target).firstChild = first
   model.frames.mEntity(target).secondChild = second
   model.frames.mEntity(target).activeWindow = NullWindowId
-  discard model.setFocusedFrame(tagId, second)
+  discard model.repairFrameActiveWindow(first)
+  if moveActive:
+    discard model.setFocusedFrame(tagId, second)
+    model.tags.mEntity(tagId).focusedWindow = active
+  else:
+    discard model.setFocusedFrame(tagId, first)
   true
 
 proc unsplitFocusedFrame*(model: var Model): bool =
