@@ -489,6 +489,14 @@ suite "Shell compatibility contracts":
           fallback: nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
         )
       ]
+    snapshot.layoutCycleSelections =
+      @[
+        builtinSelection(LayoutMode.Scroller),
+        customSelection(
+          janetLayoutId("notion"),
+          nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+        ),
+      ]
 
     let stateReply =
       handleTriadRequest("""{"triad":{"version":1,"request":"state"}}""", snapshot)
@@ -523,6 +531,10 @@ suite "Shell compatibility contracts":
     )
     let layoutState = parseJson(layoutStateReply.reply)["triad"]["state"]
     check layoutState["layouts"].getElems().anyIt(
+      it["kind"].getStr() == "custom" and it["id"].getStr() == "notion" and
+        it["fallback_layout"].getStr() == "frame-tree"
+    )
+    check layoutState["layout_cycle_entries"].getElems().anyIt(
       it["kind"].getStr() == "custom" and it["id"].getStr() == "notion" and
         it["fallback_layout"].getStr() == "frame-tree"
     )

@@ -21,11 +21,11 @@ proc layoutSwitchToastPlacement*(screen: Rect, bufferW, bufferH: int32): Rect =
   result.x = screen.x + max(0'i32, (screen.w - bufferW) div 2)
   result.y = screen.y + max(0'i32, (screen.h - bufferH) div 2)
 
-proc renderLayoutSwitchToastBuffer*(
-    screen: Rect, layout: LayoutMode, ringWidth: int32, ringColor: uint32
+proc renderLayoutSwitchToastLabelBuffer*(
+    screen: Rect, layoutLabel: string, ringWidth: int32, ringColor: uint32
 ): PixelBuffer =
   let
-    line = "Layout: " & layout.layoutModeId()
+    line = "Layout: " & layoutLabel
     lineH = max(22'i32, ToastTextStyle.textHeight())
     maxW = max(ToastMinWidth, screen.w - ToastScreenMargin * 2)
     desiredW = max(ToastMinWidth, line.textWidth(ToastTextStyle) + ToastPaddingX * 2)
@@ -42,4 +42,11 @@ proc renderLayoutSwitchToastBuffer*(
     width - ToastPaddingX * 2,
     line,
     ToastTextStyle,
+  )
+
+proc renderLayoutSwitchToastBuffer*(
+    screen: Rect, layout: LayoutMode, ringWidth: int32, ringColor: uint32
+): PixelBuffer =
+  renderLayoutSwitchToastLabelBuffer(
+    screen, layout.layoutModeId(), ringWidth, ringColor
   )

@@ -1,5 +1,6 @@
 import std/[os, sets, tables]
 import chronicles
+import ../core/layout_mode_codec
 import wayland/native/client
 import protocols/river/client as river
 import wayland/protocols/wayland/client as wlCore
@@ -478,9 +479,15 @@ proc syncLayoutSwitchToastSurface*(daemon: var TriadDaemon, screen: Rect) =
       not daemon.surfaceTable.hasKey(daemon.layoutSwitchToastSurfaceId):
     return
 
-  let rendered = renderLayoutSwitchToastBuffer(
-    screen, daemon.currentModel.layoutSwitchToastLayout,
-    daemon.currentModel.borderWidth, daemon.currentModel.layoutSwitchToast.ringColor,
+  let customLayout = string(daemon.currentModel.layoutSwitchToastCustomLayout)
+  let layoutLabel =
+    if customLayout.len > 0:
+      customLayout
+    else:
+      daemon.currentModel.layoutSwitchToastLayout.layoutModeId()
+  let rendered = renderLayoutSwitchToastLabelBuffer(
+    screen, layoutLabel, daemon.currentModel.borderWidth,
+    daemon.currentModel.layoutSwitchToast.ringColor,
   )
   var surf = daemon.surfaceTable[daemon.layoutSwitchToastSurfaceId]
   let buffer = daemon.createArgbShmBuffer(rendered)

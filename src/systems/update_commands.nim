@@ -2,7 +2,7 @@ import std/[options, strutils]
 import ../core/[effects, msg, shell_profiles]
 import ../state/engine
 from ../types/runtime_values import
-  Direction, FrameSplitOrientation, LayoutMode, RecentWindowDirection
+  Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, RecentWindowDirection
 import
   dialog_focus, focus, output_navigation, placement, recent_windows, runtime,
   scratchpad, update_effects, window_state, window_rules, workspaces
@@ -48,8 +48,10 @@ proc switchKeyboardLayout(
   model.keyboardLayoutIndex = next
   (true, next)
 
-proc showLayoutSwitchToast(model: var Model, layout: LayoutMode): bool =
-  model.openLayoutSwitchToast(layout)
+proc showLayoutSwitchToast(
+    model: var Model, layout: LayoutMode, customLayout = JanetLayoutId("")
+): bool =
+  model.openLayoutSwitchToast(layout, customLayout)
 
 proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   case msg.kind
@@ -63,9 +65,9 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     if result.dirty and msg.customLayoutTargetTag == 0:
       let custom = model.customLayoutConfig(msg.customLayout)
       if custom.isSome:
-        model.layoutSwitchToastCustomLayout = msg.customLayout
         result.dirty =
-          model.showLayoutSwitchToast(custom.get().fallback.builtin) or result.dirty
+          model.showLayoutSwitchToast(custom.get().fallback.builtin, msg.customLayout) or
+          result.dirty
   of MsgKind.CmdSetNativeLayout:
     result.dirty =
       model.setNativeLayoutForSlot(msg.nativeLayoutTargetTag, msg.nativeLayout)
@@ -89,9 +91,10 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     if result.dirty:
       let tagOpt = model.tagData(model.activeTag)
       if tagOpt.isSome:
-        model.layoutSwitchToastCustomLayout = tagOpt.get().customLayoutId
         result.dirty =
-          model.showLayoutSwitchToast(tagOpt.get().layoutMode) or result.dirty
+          model.showLayoutSwitchToast(
+            tagOpt.get().layoutMode, tagOpt.get().customLayoutId
+          ) or result.dirty
   of MsgKind.CmdSetMasterCount:
     result.dirty = model.setMasterCount(msg.count)
   of MsgKind.CmdAdjustMasterCount:

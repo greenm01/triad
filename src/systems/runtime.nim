@@ -1,7 +1,7 @@
 import std/[math, options]
 import ../state/engine
 import ../types/projection_values as rv
-from ../types/runtime_values import LayoutMode, PointerOpKind
+from ../types/runtime_values import JanetLayoutId, LayoutMode, PointerOpKind
 import focus, overview_geometry, placement
 
 const
@@ -482,15 +482,19 @@ proc frameTickReasons*(model: Model): seq[string] =
   if model.pendingDialogFocusWindows.len > 0:
     result.add("dialog-focus")
 
-proc openLayoutSwitchToast*(model: var Model, layout: LayoutMode): bool =
+proc openLayoutSwitchToast*(
+    model: var Model, layout: LayoutMode, customLayout = JanetLayoutId("")
+): bool =
   if not model.layoutSwitchToast.enabled or model.layoutSwitchToast.timeoutMs <= 0:
     return false
   result =
     not model.layoutSwitchToastOpen or model.layoutSwitchToastElapsedMs != 0 or
-    model.layoutSwitchToastLayout != layout
+    model.layoutSwitchToastLayout != layout or
+    string(model.layoutSwitchToastCustomLayout) != string(customLayout)
   model.layoutSwitchToastOpen = true
   model.layoutSwitchToastElapsedMs = 0
   model.layoutSwitchToastLayout = layout
+  model.layoutSwitchToastCustomLayout = customLayout
 
 proc tickLayoutSwitchToast*(
     model: var Model, elapsedMs = DefaultFrameIntervalMs

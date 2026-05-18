@@ -1447,6 +1447,30 @@ suite "Runtime state primitives":
 
     check model.layoutSwitchToastOpen
     check model.layoutSwitchToastLayout == LayoutMode.Grid
+    check model.layoutSwitchToastCustomLayout.layoutIdString() == ""
+
+  test "custom layout command opens toast with custom layout id":
+    var config = baseConfig()
+    config.layoutSwitchToast.enabled = true
+    config.layoutSwitchToast.timeoutMs = 900
+    config.janet.layouts =
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("notion"),
+          fallback:
+            nativeSelection(nativeLayoutId(FrameTreeLayoutId), LayoutMode.Scroller),
+        )
+      ]
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (setNotion, _) = model.update(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    model = setNotion
+
+    check model.layoutSwitchToastOpen
+    check model.layoutSwitchToastLayout == LayoutMode.Scroller
+    check model.layoutSwitchToastCustomLayout.layoutIdString() == "notion"
 
   test "layout switch toast ignores targeted layout command and disabled config":
     var config = baseConfig()
