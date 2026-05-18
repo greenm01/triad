@@ -16,13 +16,16 @@ layout {
         active-color "#7fc8ff"
         inactive-color "#505050"
     }
+    frame-tabs {
+        empty-background-color "#000000f5"
+    }
     scroller-focus-center #false
     scroller-prefer-center #false
     enable-animations #true
     animation-speed 0.15
     frame-rate "auto"
     smart-gaps #false
-    layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
+    layout-cycle "scroller" "notion" "tile" "grid" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
 }
 
 scratchpad {
@@ -112,6 +115,8 @@ janet {
     automation-dir "~/.config/triad/automation"
     layout-dir "~/.config/triad/layouts"
     fuel-limit 500000
+    layout "janet-grid" fallback="grid"
+    layout "janet-frame-tree" fallback="frame-tree"
 }
 
 input {
@@ -301,6 +306,9 @@ bindings {
     bind "Super+n" "switch-layout"
     bind "Super+s" "layout-scroller"
     bind "Super+Shift+s" "layout-vertical-scroller"
+    bind "Alt+s" "frame-split-horizontal"
+    bind "Alt+v" "frame-split-vertical"
+    bind "Alt+x" "frame-unsplit"
     bind "Super+d" "layout-tile"
     bind "Super+g" "layout-grid"
     bind "Super+Shift+g" "layout-vertical-grid"

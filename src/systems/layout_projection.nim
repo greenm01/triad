@@ -26,6 +26,7 @@ type
     tag: rv.ProjectedTag
     mode: rv.LayoutMode
     instructions: seq[rv.RenderInstruction]
+    frameEmptyChrome: seq[rv.ProjectedFrameEmptyChrome]
     viewportTarget: bool
     aggregate: bool
     representativeOnly: bool
@@ -823,8 +824,11 @@ proc overviewTagLayout(
   if tagData.tagUsesFrameOverview():
     result.mode = rv.LayoutMode.Grid
     result.aggregate = true
+    let rects =
+      model.frameTreeLayoutRects(tagId, screen, model.outerGaps, model.innerGaps)
     result.instructions =
       model.layoutFrameTree(tagId, screen, model.outerGaps, model.innerGaps)
+    result.frameEmptyChrome = model.frameTreeEmptyChrome(tagId, rects)
     return
 
   if tagData.tagUsesAggregateOverview():
@@ -908,6 +912,17 @@ proc layoutWorkspaceStripOverview(
           geom: scaledOverviewRect(transform.source, transform.dest, instr.geom, zoom),
           clipSet: true,
           clip: transform.clip,
+        )
+      )
+    for frame in layout.frameEmptyChrome:
+      result.frameEmptyChrome.add(
+        rv.ProjectedFrameEmptyChrome(
+          frameId: frame.frameId,
+          geom: scaledOverviewRect(transform.source, transform.dest, frame.geom, zoom),
+          focused: frame.focused,
+          ringWidth: frame.ringWidth,
+          ringColor: frame.ringColor,
+          backgroundColor: frame.backgroundColor,
         )
       )
   model.applyOverviewDrag(result.instructions)

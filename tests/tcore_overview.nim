@@ -742,6 +742,34 @@ suite "Core Runtime Logic: overview navigation":
     check notionWindows.anyIt(it.windowId == 4'u32)
     check notionWindows.anyIt(it.windowId == 6'u32)
 
+  test "Overview renders empty frame chrome in notion previews":
+    var notion = configuredModel()
+    notion.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    notion.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    notion.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 4, appId: "app", title: "Four")
+    )
+    notion.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    check notion.tagData(notion.activeTag).get().nativeLayoutId.nativeLayoutIdString() ==
+      "frame-tree"
+    notion.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = notion.primaryScreen()
+    let slots = notion.previewSlots()
+    let preview = notion.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let projection = notion.layoutProjection()
+    let notionWindows = projection.instructions.overviewInstructionsFor([4'u32])
+
+    check notionWindows.len == 1
+    check notionWindows[0].geom.geomWithinPreview(preview)
+    check projection.frameEmptyChrome.len == 1
+    check projection.frameEmptyChrome[0].geom.geomWithinPreview(preview)
+    check not projection.frameEmptyChrome[0].focused
+
   test "Overview overlay resolves bundled Janet badges and custom indicators":
     var bundled = configuredModel()
     bundled.applyMsg(
