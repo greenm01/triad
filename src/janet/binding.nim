@@ -71,6 +71,14 @@ proc triadJanetLayoutWindowId*(
   runtime: JanetHandle, index: cint
 ): uint32 {.importc: "triad_janet_layout_window_id".}
 
+proc triadJanetLayoutTargetKind*(
+  runtime: JanetHandle, index: cint
+): cint {.importc: "triad_janet_layout_target_kind".}
+
+proc triadJanetLayoutTargetId*(
+  runtime: JanetHandle, index: cint
+): uint32 {.importc: "triad_janet_layout_target_id".}
+
 proc triadJanetLayoutX*(
   runtime: JanetHandle, index: cint
 ): int32 {.importc: "triad_janet_layout_x".}

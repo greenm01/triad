@@ -3,6 +3,16 @@ import projection_values
 import runtime_values
 
 type
+  JanetLayoutTargetKind* {.pure.} = enum
+    None
+    Window
+    Frame
+
+  JanetLayoutInstruction* = object
+    targetKind*: JanetLayoutTargetKind
+    targetId*: uint32
+    geom*: Rect
+
   JanetLayoutContext* = object
     layoutId*: runtime_values.JanetLayoutId
     screen*: Rect
@@ -27,5 +37,7 @@ type
     fallbackReason*: string
     durationMs*: int64
     inputWindowCount*: int
+    inputFrameCount*: int
     instructionCount*: int
+    outputTargetKind*: JanetLayoutTargetKind
     instructions*: seq[RenderInstruction]

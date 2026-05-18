@@ -930,6 +930,64 @@ suite "Runtime state primitives":
     check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
 
+  test "custom layout with frame-tree fallback receives frame rects and falls back native":
+    var config = baseConfig()
+    config.janet.layouts =
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("frame-custom"),
+          fallback: nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+        )
+      ]
+    var model = initRuntimeStateFromConfig(config).model
+    let (withFirst, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model = withFirst
+    let (withSecond, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model = withSecond
+    let (customSet, _) = model.update(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("frame-custom"))
+    )
+    model = customSet
+    let (split, _) = model.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    model = split
+    let (withThird, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model = withThird
+
+    proc customEval(context: JanetLayoutContext): JanetLayoutEvalResult =
+      check context.layoutId.layoutIdString() == "frame-custom"
+      check context.tag.frames.len == 3
+      check context.tag.frames.anyIt(it.kind == FrameNodeKind.Leaf and it.rectSet)
+      JanetLayoutEvalResult(
+        layoutId: context.layoutId,
+        outcome: JanetLayoutOutcome.Applied,
+        instructions:
+          @[
+            pv.RenderInstruction(
+              windowId: pv.ProjectionWindowId(11),
+              geom: pv.Rect(x: 5, y: 6, w: 300, h: 400),
+            ),
+            pv.RenderInstruction(
+              windowId: pv.ProjectionWindowId(12),
+              geom: pv.Rect(x: 305, y: 6, w: 300, h: 400),
+            ),
+          ],
+      )
+
+    var projection = model.layoutProjection(customEval)
+    check projection.instructions.len == 2
+    check projection.instructions[0].geom == pv.Rect(x: 5, y: 6, w: 300, h: 400)
+
+    proc invalidEval(context: JanetLayoutContext): JanetLayoutEvalResult =
+      JanetLayoutEvalResult(
+        layoutId: context.layoutId, outcome: JanetLayoutOutcome.Invalid
+      )
+
+    projection = model.layoutProjection(invalidEval)
+    check projection.instructions.len == 2
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 12'u32)
+    check projection.instructions[0].geom.x < projection.instructions[1].geom.x
+
   test "explicit active layout command opens layout switch toast":
     var config = baseConfig()
     config.layoutSwitchToast.enabled = true

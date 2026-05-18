@@ -7,7 +7,9 @@
 #include <sys/time.h>
 
 enum {
-  TRIAD_JANET_COMMAND = 1
+  TRIAD_JANET_COMMAND = 1,
+  TRIAD_JANET_LAYOUT_TARGET_WINDOW = 1,
+  TRIAD_JANET_LAYOUT_TARGET_FRAME = 2
 };
 
 #define TRIAD_JANET_MAX_WAITERS 64
@@ -19,7 +21,8 @@ typedef struct {
 } TriadJanetAction;
 
 typedef struct {
-  uint32_t window_id;
+  int target_kind;
+  uint32_t target_id;
   int32_t x;
   int32_t y;
   int32_t w;
@@ -797,12 +800,33 @@ static int parse_layout_instruction(
   if (janet_checktype(window_id, JANET_NIL)) {
     window_id = get_instruction_field(value, "window");
   }
-  if (!janet_number_to_uint32(window_id, &instruction->window_id) ||
-      !janet_number_to_int32(get_instruction_field(value, "x"), &instruction->x) ||
+  Janet frame_id = get_instruction_field(value, "frame-id");
+  if (janet_checktype(frame_id, JANET_NIL)) {
+    frame_id = get_instruction_field(value, "frame");
+  }
+  if (!janet_checktype(window_id, JANET_NIL) &&
+      !janet_checktype(frame_id, JANET_NIL)) {
+    set_error(runtime, "Janet layout instruction cannot target both window and frame");
+    return 0;
+  }
+  if (!janet_checktype(frame_id, JANET_NIL)) {
+    instruction->target_kind = TRIAD_JANET_LAYOUT_TARGET_FRAME;
+    if (!janet_number_to_uint32(frame_id, &instruction->target_id)) {
+      set_error(runtime, "Janet layout returned invalid frame instruction target");
+      return 0;
+    }
+  } else {
+    instruction->target_kind = TRIAD_JANET_LAYOUT_TARGET_WINDOW;
+    if (!janet_number_to_uint32(window_id, &instruction->target_id)) {
+      set_error(runtime, "Janet layout returned invalid window instruction target");
+      return 0;
+    }
+  }
+  if (!janet_number_to_int32(get_instruction_field(value, "x"), &instruction->x) ||
       !janet_number_to_int32(get_instruction_field(value, "y"), &instruction->y) ||
       !janet_number_to_int32(get_instruction_field(value, "w"), &instruction->w) ||
       !janet_number_to_int32(get_instruction_field(value, "h"), &instruction->h)) {
-    set_error(runtime, "Janet layout returned invalid instruction fields");
+    set_error(runtime, "Janet layout returned invalid instruction geometry");
     return 0;
   }
   return 1;
@@ -1061,7 +1085,27 @@ uint32_t triad_janet_layout_window_id(void *runtime_ptr, int index) {
   if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
     return 0;
   }
-  return runtime->layout_instructions[index].window_id;
+  if (runtime->layout_instructions[index].target_kind !=
+      TRIAD_JANET_LAYOUT_TARGET_WINDOW) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].target_id;
+}
+
+int triad_janet_layout_target_kind(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].target_kind;
+}
+
+uint32_t triad_janet_layout_target_id(void *runtime_ptr, int index) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL || index < 0 || index >= runtime->layout_instruction_count) {
+    return 0;
+  }
+  return runtime->layout_instructions[index].target_id;
 }
 
 int32_t triad_janet_layout_x(void *runtime_ptr, int index) {

@@ -209,6 +209,11 @@ proc tiledWindowCount(context: JanetLayoutContext): int =
   for column in context.tag.columns:
     result += column.windows.len
 
+proc leafFrameCount(context: JanetLayoutContext): int =
+  for frame in context.tag.frames:
+    if frame.kind == FrameNodeKind.Leaf:
+      inc result
+
 proc fallbackLayoutResult(
     context: JanetLayoutContext,
     outcome: JanetLayoutOutcome,
@@ -225,6 +230,7 @@ proc fallbackLayoutResult(
     fallbackReason: reason,
     durationMs: int64((epochTime() - started) * 1000),
     inputWindowCount: context.tiledWindowCount(),
+    inputFrameCount: context.leafFrameCount(),
   )
 
 proc evalLayoutDetailed*(
@@ -291,6 +297,7 @@ proc evalLayoutDetailed*(
         validation.error,
       )
       result.instructionCount = instructions.len
+      result.outputTargetKind = validation.outputTargetKind
       result.logLayoutEval()
       return
 
@@ -300,8 +307,10 @@ proc evalLayoutDetailed*(
       outcome: JanetLayoutOutcome.Applied,
       durationMs: int64((epochTime() - started) * 1000),
       inputWindowCount: context.tiledWindowCount(),
+      inputFrameCount: context.leafFrameCount(),
       instructionCount: instructions.len,
-      instructions: instructions,
+      outputTargetKind: validation.outputTargetKind,
+      instructions: validation.instructions,
     )
     result.logLayoutEval()
     return

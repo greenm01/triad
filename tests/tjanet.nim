@@ -163,6 +163,52 @@ proc testLayoutContext(): JanetLayoutContext =
     windows: windows,
   )
 
+proc testFrameLayoutContext(): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  windows[10'u32] = ProjectedWindow(id: 10, title: "Terminal", appId: "kitty")
+  windows[11'u32] = ProjectedWindow(id: 11, title: "Browser", appId: "firefox")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("frame-aware"),
+    screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+    outerGap: 0,
+    innerGap: 0,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 10,
+      columns: @[ProjectedColumn(windows: @[10'u32, 11'u32])],
+      frames:
+        @[
+          ProjectedFrame(
+            id: 1,
+            kind: FrameNodeKind.Split,
+            firstChild: 2,
+            secondChild: 3,
+            orientation: FrameSplitOrientation.Horizontal,
+            ratio: 0.5,
+          ),
+          ProjectedFrame(
+            id: 2,
+            kind: FrameNodeKind.Leaf,
+            parent: 1,
+            windows: @[10'u32, 11'u32],
+            activeWindow: 11,
+            focused: true,
+            rectSet: true,
+            rect: Rect(x: 0, y: 0, w: 500, h: 800),
+          ),
+          ProjectedFrame(
+            id: 3,
+            kind: FrameNodeKind.Leaf,
+            parent: 1,
+            rectSet: true,
+            rect: Rect(x: 500, y: 0, w: 500, h: 800),
+          ),
+        ],
+    ),
+    windows: windows,
+  )
+
 proc expectUiHookFocusTag(
     daemon: var TriadDaemon, before, after: JanetUiHookState, expectedTag: uint32
 ) =
@@ -407,6 +453,208 @@ suite "embedded Janet runtime":
     check evaluated.instructions[1].windowId == 11'u32
     check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 800)
 
+  test "frame-aware Janet layout returns frame geometry":
+    let dir = getTempDir() / ("triad-janet-layout-frame-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :frame-aware
+  (fn [ctx]
+    [{:frame-id 2 :x 10 :y 20 :w 300 :h 400}
+     {:frame-id 3 :x 320 :y 20 :w 300 :h 400}]))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), testFrameLayoutContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.Frame
+    check evaluated.inputFrameCount == 2
+    check evaluated.instructionCount == 2
+    check evaluated.instructions.len == 1
+    check evaluated.instructions[0].windowId == 11'u32
+    check evaluated.instructions[0].geom == Rect(x: 10, y: 20, w: 300, h: 400)
+
+  test "frame substrate window output validates active tabs only":
+    let dir =
+      getTempDir() / ("triad-janet-layout-frame-window-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :frame-aware
+  (fn [ctx]
+    [{:window-id 11 :x 0 :y 0 :w 1000 :h 800}]))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    var evaluated = runtime.evalLayoutDetailed(testSnapshot(), testFrameLayoutContext())
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.Window
+    check evaluated.instructions.len == 1
+    check evaluated.instructions[0].windowId == 11'u32
+
+  test "frame-aware Janet layout handles 25 frame workspace and logs evidence":
+    let dir =
+      getTempDir() / ("triad-janet-layout-frame-budget-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :frame-aware
+  (fn [ctx]
+    (def instructions @[])
+    (each frame ((ctx :tag) :frames)
+      (when (= (frame :kind) :leaf)
+        (def rect (frame :rect))
+        (array/push instructions
+          {:frame-id (frame :id)
+           :x (rect :x)
+           :y (rect :y)
+           :w (rect :w)
+           :h (rect :h)})))
+    instructions))
+""",
+    )
+    var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+    var frames: seq[ProjectedFrame] = @[]
+    for idx in 0 ..< 25:
+      let winId = uint32(100 + idx)
+      let frameId = uint32(idx + 1)
+      windows[winId] = ProjectedWindow(id: winId, title: "win-" & $idx)
+      frames.add(
+        ProjectedFrame(
+          id: frameId,
+          kind: FrameNodeKind.Leaf,
+          windows: @[winId],
+          activeWindow: winId,
+          rectSet: true,
+          rect: Rect(x: int32(idx * 10), y: 0, w: 10, h: 20),
+        )
+      )
+    let context = JanetLayoutContext(
+      layoutId: janetLayoutId("frame-aware"),
+      screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+      tag: ProjectedTag(tagId: 1, frames: frames),
+      windows: windows,
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.Frame
+    check evaluated.inputFrameCount == 25
+    check evaluated.instructionCount == 25
+    check evaluated.instructions.len == 25
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    check lines.len == 1
+    let event = parseJson(lines[0])
+    check event["input_frames"].getInt() == 25
+    check event["substrate"].getStr() == "frames"
+    check event["output_target"].getStr() == "Frame"
+
+  test "frame instruction validation rejects invalid frame outputs":
+    let context = testFrameLayoutContext()
+
+    var validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Frame,
+          targetId: 1,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("unknown leaf frame")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Frame,
+          targetId: 2,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        ),
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Window,
+          targetId: 11,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        ),
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("mixed")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Frame,
+          targetId: 2,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("omitted frame")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Frame,
+          targetId: 2,
+          geom: Rect(x: 0, y: 0, w: 0, h: 100),
+        ),
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Frame,
+          targetId: 3,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        ),
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("non-positive")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Window,
+          targetId: 10,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("unknown tiled window")
+
   test "custom Janet layout validation rejects incomplete geometry":
     let dir = getTempDir() / ("triad-janet-layout-invalid-" & $getCurrentProcessId())
     createDir(dir)
@@ -493,6 +741,9 @@ suite "embedded Janet runtime":
     check event["layout_id"].getStr() == "halves"
     check event["outcome"].getStr() == "Applied"
     check event["input_windows"].getInt() == 2
+    check event["input_frames"].getInt() == 0
+    check event["substrate"].getStr() == "columns"
+    check event["output_target"].getStr() == "Window"
     check event["instructions"].getInt() == 2
 
   test "snapshot query helpers expose current state":

@@ -501,12 +501,15 @@ janet {
   fuel-limit 500000
   layout "spiral" fallback="scroller"
   layout "wide-master" fallback="tile"
-  layout "notion" fallback="frame-tree"
+  layout "janet-frame-tree" fallback="frame-tree"
 }
 ```
 
 Declared Janet layout names can be used in `layout-cycle`,
 `workspaces default-layout`, and `workspace-rules default-layout=...`.
+When a layout uses `fallback="frame-tree"`, it may return frame geometry with
+`:frame-id` instead of direct `:window-id` geometry. Triad maps each frame rect
+to that frame's active visible tab.
 
 ### Config Notifications
 Run custom commands to notify yourself of configuration reload results.

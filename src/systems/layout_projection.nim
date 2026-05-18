@@ -339,6 +339,32 @@ proc frameTreeRects(
         outRects,
       )
 
+proc applyFrameTreeRects(
+    model: Model,
+    tagId: TagId,
+    tag: var rv.ProjectedTag,
+    screen: rv.Rect,
+    outerGap, innerGap: int32,
+) =
+  let root = model.frameRootForTag(tagId)
+  if root == NullFrameId:
+    return
+  let safeOuterGap = max(0'i32, outerGap)
+  let usable = rv.Rect(
+    x: screen.x + safeOuterGap,
+    y: screen.y + safeOuterGap,
+    w: max(1'i32, screen.w - 2 * safeOuterGap),
+    h: max(1'i32, screen.h - 2 * safeOuterGap),
+  )
+  var rects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
+  model.frameTreeRects(root, usable, innerGap, rects)
+  for item in rects:
+    for frame in tag.frames.mitems:
+      if frame.id == uint32(item.frameId):
+        frame.rectSet = true
+        frame.rect = item.rect
+        break
+
 proc layoutFrameTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
@@ -723,6 +749,10 @@ proc layoutProjection*(
   var tagForLayout = projected.tag
   model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
   let activeTagData = model.tagData(model.activeTag).get()
+  if activeTagData.frameTreeActive():
+    model.applyFrameTreeRects(
+      model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
+    )
   let custom = customLayoutInstructions(
     layoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
     currentOuterGap, currentInnerGap,

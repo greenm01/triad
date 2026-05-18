@@ -26,9 +26,8 @@ A Janet interpreter hosted inside the Triad process. Scripts receive the
 same `Model.update(msg)` reducer boundary as IPC and keybinds, and pay no
 socket or JSON round-trip cost.
 
-This is the primary integration. It currently covers synchronous event scripts;
-custom layout functions have an internal Phase 1 ABI for pure geometry, but no
-user-facing config or IPC selection yet.
+This is the primary integration. It covers synchronous event scripts and named
+custom layout functions selected from config, IPC, or layout cycles.
 
 ### 2. External client scripts (zero Triad changes required)
 
@@ -198,14 +197,13 @@ present on this tag, otherwise claim a new tag; check how many windows already
 share a tag before deciding whether to float; use a different layout when the
 main IDE window is already open.
 
-### Custom layout functions (internal Phase 1)
+### Custom layout functions
 
 Pure Janet functions that receive column and window geometry data and return
 placement instructions, slotting into the layout projection pipeline alongside
 the built-in Nim layouts without recompiling Triad.
 
-The current surface is intentionally internal and test-oriented. A script may
-register a pure geometry function:
+A script may register a pure geometry function:
 
 ```janet
 (triad/def-layout :halves
@@ -216,8 +214,31 @@ register a pure geometry function:
 
 Triad validates that the result contains exactly one positive-sized rectangle
 for every tiled projected window. Layout functions cannot emit
-`triad/command`; doing so fails evaluation and falls back. Phase 2 will add the
-public config and IPC selection layer.
+`triad/command`; doing so fails evaluation and falls back.
+
+Frame-aware layouts use a native `frame-tree` fallback:
+
+```kdl
+janet {
+  enabled #true
+  script-dir "~/.config/triad/janet"
+  layout "janet-frame-tree" fallback="frame-tree"
+}
+```
+
+When native frame data is active, `ctx` includes top-level `:frames`, mirrors
+the same data at `((ctx :tag) :frames)`, and sets `:substrate :frames`. Leaf
+frames include `:windows`, `:active-window`, `:focused`, `:rect-set`, and
+`:rect`. A layout may either keep returning active tab window instructions or
+return frame instructions:
+
+```janet
+{:frame-id 7 :x 0 :y 0 :w 960 :h 1080}
+```
+
+Frame instructions target leaf frames only. Triad maps each frame rectangle to
+that frame's active visible tab; empty frames validate but do not render a
+window. A single result must not mix `:window-id` and `:frame-id`.
 
 ---
 

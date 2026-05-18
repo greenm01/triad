@@ -137,11 +137,17 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
     windows.join(" "),
   ]
 
-proc extractedLayoutInstructions*(handle: JanetHandle): seq[rv.RenderInstruction] =
+proc extractedLayoutInstructions*(handle: JanetHandle): seq[JanetLayoutInstruction] =
   for idx in 0 ..< int(triadJanetLayoutInstructionCount(handle)):
+    let targetKind =
+      case int(triadJanetLayoutTargetKind(handle, cint(idx)))
+      of 1: JanetLayoutTargetKind.Window
+      of 2: JanetLayoutTargetKind.Frame
+      else: JanetLayoutTargetKind.None
     result.add(
-      rv.RenderInstruction(
-        windowId: rv.ProjectionWindowId(triadJanetLayoutWindowId(handle, cint(idx))),
+      JanetLayoutInstruction(
+        targetKind: targetKind,
+        targetId: triadJanetLayoutTargetId(handle, cint(idx)),
         geom: rv.Rect(
           x: triadJanetLayoutX(handle, cint(idx)),
           y: triadJanetLayoutY(handle, cint(idx)),
@@ -156,25 +162,126 @@ proc tiledWindowIds(context: JanetLayoutContext): HashSet[rv.ProjectionWindowId]
     for winId in column.windows:
       result.incl(winId)
 
-proc validateLayoutInstructions*(
-    context: JanetLayoutContext, instructions: openArray[rv.RenderInstruction]
-): tuple[ok: bool, error: string] =
-  let expected = context.tiledWindowIds()
-  var seen = initHashSet[rv.ProjectionWindowId]()
-  for instr in instructions:
-    if instr.windowId notin expected:
-      return (false, "instruction references unknown tiled window " & $instr.windowId)
-    if instr.windowId in seen:
-      return (false, "instruction references duplicate window " & $instr.windowId)
-    if instr.geom.w <= 0 or instr.geom.h <= 0:
-      return
-        (false, "instruction has non-positive geometry for window " & $instr.windowId)
-    seen.incl(instr.windowId)
+proc frameSubstrateActive(context: JanetLayoutContext): bool =
+  context.tag.frames.len > 0
 
-  for winId in expected:
-    if winId notin seen:
-      return (false, "layout omitted tiled window " & $winId)
-  (true, "")
+proc leafFrameIds(context: JanetLayoutContext): HashSet[uint32] =
+  for frame in context.tag.frames:
+    if frame.kind == FrameNodeKind.Leaf:
+      result.incl(frame.id)
+
+proc activeFrameWindowIds(context: JanetLayoutContext): HashSet[rv.ProjectionWindowId] =
+  for frame in context.tag.frames:
+    if frame.kind == FrameNodeKind.Leaf and frame.activeWindow != 0 and
+        frame.windows.find(frame.activeWindow) != -1 and
+        context.windows.hasKey(frame.activeWindow):
+      result.incl(frame.activeWindow)
+
+proc activeWindowForFrame(
+    context: JanetLayoutContext, frameId: uint32
+): rv.ProjectionWindowId =
+  for frame in context.tag.frames:
+    if frame.id == frameId and frame.kind == FrameNodeKind.Leaf and
+        frame.activeWindow != 0 and frame.windows.find(frame.activeWindow) != -1 and
+        context.windows.hasKey(frame.activeWindow):
+      return frame.activeWindow
+  0'u32
+
+proc validateLayoutInstructions*(
+    context: JanetLayoutContext, instructions: openArray[JanetLayoutInstruction]
+): tuple[
+  ok: bool,
+  error: string,
+  outputTargetKind: JanetLayoutTargetKind,
+  instructions: seq[rv.RenderInstruction],
+] =
+  if instructions.len == 0:
+    if context.frameSubstrateActive():
+      let expectedFrames = context.leafFrameIds()
+      for frameId in expectedFrames:
+        return
+          (false, "layout omitted frame " & $frameId, JanetLayoutTargetKind.None, @[])
+    else:
+      let expectedWindows = context.tiledWindowIds()
+      for winId in expectedWindows:
+        return (
+          false,
+          "layout omitted tiled window " & $winId,
+          JanetLayoutTargetKind.None,
+          @[],
+        )
+    return (true, "", JanetLayoutTargetKind.None, @[])
+
+  let targetKind = instructions[0].targetKind
+  if targetKind == JanetLayoutTargetKind.None:
+    return (false, "layout instruction has no target", targetKind, @[])
+  for instr in instructions:
+    if instr.targetKind != targetKind:
+      return (false, "layout mixed window and frame instructions", targetKind, @[])
+    if instr.geom.w <= 0 or instr.geom.h <= 0:
+      return (
+        false,
+        "instruction has non-positive geometry for target " & $instr.targetId,
+        targetKind,
+        @[],
+      )
+
+  case targetKind
+  of JanetLayoutTargetKind.Window:
+    let expected =
+      if context.frameSubstrateActive():
+        context.activeFrameWindowIds()
+      else:
+        context.tiledWindowIds()
+    var seen = initHashSet[rv.ProjectionWindowId]()
+    for instr in instructions:
+      let winId = rv.ProjectionWindowId(instr.targetId)
+      if winId notin expected:
+        return (
+          false,
+          "instruction references unknown tiled window " & $winId,
+          targetKind,
+          @[],
+        )
+      if winId in seen:
+        return
+          (false, "instruction references duplicate window " & $winId, targetKind, @[])
+      seen.incl(winId)
+      result.instructions.add(rv.RenderInstruction(windowId: winId, geom: instr.geom))
+    for winId in expected:
+      if winId notin seen:
+        return (false, "layout omitted tiled window " & $winId, targetKind, @[])
+  of JanetLayoutTargetKind.Frame:
+    if not context.frameSubstrateActive():
+      return (false, "frame instructions require native frame data", targetKind, @[])
+    let expected = context.leafFrameIds()
+    var seen = initHashSet[uint32]()
+    for instr in instructions:
+      let frameId = instr.targetId
+      if frameId notin expected:
+        return (
+          false,
+          "instruction references unknown leaf frame " & $frameId,
+          targetKind,
+          @[],
+        )
+      if frameId in seen:
+        return
+          (false, "instruction references duplicate frame " & $frameId, targetKind, @[])
+      seen.incl(frameId)
+      let active = context.activeWindowForFrame(frameId)
+      if active != 0:
+        result.instructions.add(
+          rv.RenderInstruction(windowId: active, geom: instr.geom)
+        )
+    for frameId in expected:
+      if frameId notin seen:
+        return (false, "layout omitted frame " & $frameId, targetKind, @[])
+  of JanetLayoutTargetKind.None:
+    discard
+
+  result.ok = true
+  result.outputTargetKind = targetKind
 
 proc layoutBehaviorPayload*(evalResult: JanetLayoutEvalResult): JsonNode =
   %*{
@@ -184,7 +291,10 @@ proc layoutBehaviorPayload*(evalResult: JanetLayoutEvalResult): JsonNode =
     "error": evalResult.error,
     "fallback_reason": evalResult.fallbackReason,
     "duration_ms": evalResult.durationMs,
+    "substrate": if evalResult.inputFrameCount > 0: "frames" else: "columns",
+    "output_target": $evalResult.outputTargetKind,
     "input_windows": evalResult.inputWindowCount,
+    "input_frames": evalResult.inputFrameCount,
     "instructions": evalResult.instructionCount,
   }
 

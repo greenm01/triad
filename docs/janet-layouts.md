@@ -239,11 +239,15 @@ Initial implementation is in place.
 
 ### Phase 4: Frame-Aware Janet Layouts
 
-- Let Janet functions calculate frame rects or window rects from native frame
+Implemented.
+
+- Janet functions can calculate frame rects or window rects from native frame
   projection data.
-- Keep frame mutation in native commands.
-- Benchmark realistic workspaces before enabling frame-aware scripts by
-  default.
+- Frame-aware scripts may return `:frame-id` instructions; Triad maps each leaf
+  frame rect to that frame's active visible tab.
+- Frame mutation remains in native commands.
+- A 25-frame Janet evaluation test records behavior-log evidence for substrate,
+  target kind, frame count, and instruction count.
 
 ## Testing And Acceptance Criteria
 
