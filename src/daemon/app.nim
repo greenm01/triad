@@ -32,6 +32,15 @@ proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
 
+proc triadMsgRequestPayload(cmd: string): Option[string] =
+  case cmd
+  of "layout-state":
+    some($(%*{"triad": {"version": TriadIpcVersion, "request": "layout-state"}}))
+  of "switch-layout":
+    some($(%*{"triad": {"version": TriadIpcVersion, "request": "switch-layout"}}))
+  else:
+    none(string)
+
 proc configPathFromArgs(args: seq[string]): string =
   result = getEnv("TRIAD_CONFIG", "")
   var i = 0
@@ -458,7 +467,11 @@ proc main*() =
         cmd.add(" ")
       cmd.add(args[i])
     try:
-      if cmd == "dump-live-restore-state" or cmd == "perf-status" or cmd == "dev-mode" or
+      let requestPayload = triadMsgRequestPayload(cmd)
+      if requestPayload.isSome:
+        let reply = waitFor sendIpcRequest(triadSocketPath(), requestPayload.get())
+        stdout.writeLine(reply)
+      elif cmd == "dump-live-restore-state" or cmd == "perf-status" or cmd == "dev-mode" or
           cmd.startsWith("dev-mode "):
         let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
         stdout.writeLine(reply)

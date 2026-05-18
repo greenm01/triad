@@ -437,9 +437,9 @@ Text IPC and bind commands:
 Native JSON IPC requests:
 
 - `state`
-- `layout-state`
+- `layout-state` (`triad msg layout-state` prints this reply)
 - `set-layout`
-- `switch-layout`
+- `switch-layout` (`triad msg switch-layout` prints the ack)
 - `event-stream`
 
 CLI and environment:

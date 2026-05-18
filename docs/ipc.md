@@ -81,7 +81,11 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `set-layout-for-workspace <tag> <layout>`: Sets a stable tag id to a
     built-in layout id or declared custom layout name without changing focus.
 *   `layout-custom <name>`: Sets the active tag to a declared Janet layout.
+*   `layout-state`: Prints the native JSON layout-state reply for the running
+    session.
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
+    `triad msg switch-layout` prints the native JSON ack after the request is
+    accepted.
     Niri-compatible `SwitchLayout` is separate keyboard-layout vocabulary and
     switches configured River XKB keyboard layouts instead of triggering this
     command.
