@@ -1,5 +1,5 @@
 import std/[json, options, strutils]
-import ../core/layout_mode_codec
+import ../core/layout_descriptor_codec
 import ../core/native_layout_codec
 import ../core/layout_selection_codec
 import ../core/[msg, triad_state]
@@ -423,7 +423,7 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
     )
   of "set-layout":
     let layoutId = stringFromField(payload, "layout")
-    let layout = parseLayoutModeId(layoutId)
+    let layout = parseCoreLayoutModeId(layoutId)
     let target = targetTagFromPayload(payload, snapshot)
     if not target.ok:
       result.reply = errReply(target.error)
@@ -444,11 +444,8 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
           nativeLayoutTargetTag: target.tag,
         )
       )
-    else:
-      let custom = snapshot.customLayoutFallback(layoutId)
-      if custom.isNone:
-        result.reply = errReply("unknown layout: " & layoutId)
-        return
+    elif isBundledAlgorithmicLayoutId(layoutId) or
+        snapshot.customLayoutFallback(layoutId).isSome:
       result.messages.add(
         Msg(
           kind: MsgKind.CmdSetCustomLayout,
@@ -456,6 +453,9 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
           customLayoutTargetTag: target.tag,
         )
       )
+    else:
+      result.reply = errReply("unknown layout: " & layoutId)
+      return
     result.reply = ackReply()
   of "switch-layout":
     result.messages.add(Msg(kind: MsgKind.CmdSwitchLayout))

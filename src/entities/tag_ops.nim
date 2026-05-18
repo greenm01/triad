@@ -1,10 +1,13 @@
 import std/[options, sets, tables]
 import active_workspace_ops, history_ops
+import ../core/layout_descriptor_codec
 import ../core/native_layout_codec
+import ../core/layout_mode_codec
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
 from ../types/runtime_values import
-  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind, NativeLayoutId
+  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind, LayoutSource,
+  NativeLayoutId
 
 proc addTag*(
     model: var Model,
@@ -184,13 +187,18 @@ proc setTagRestoredState*(
     model.tags.mEntity(tagId).name = name
   model.tags.mEntity(tagId).layoutMode = layoutMode
   var customFallback: Option[LayoutSelection] = none(LayoutSelection)
+  var restoredCustomLayoutId = customLayoutId
+  if string(restoredCustomLayoutId).len == 0 and
+      layoutMode.layoutSource() == LayoutSource.BundledJanet:
+    restoredCustomLayoutId = JanetLayoutId(layoutMode.layoutModeId())
+    model.tags.mEntity(tagId).layoutMode = LayoutMode.Scroller
   for layout in model.customLayouts:
-    if string(layout.id) == string(customLayoutId):
+    if string(layout.id) == string(restoredCustomLayoutId):
       customFallback = some(layout.fallback)
       break
   model.tags.mEntity(tagId).customLayoutId =
-    if string(customLayoutId).len > 0 and customFallback.isSome:
-      customLayoutId
+    if string(restoredCustomLayoutId).len > 0 and customFallback.isSome:
+      restoredCustomLayoutId
     else:
       JanetLayoutId("")
   model.tags.mEntity(tagId).nativeLayoutId =

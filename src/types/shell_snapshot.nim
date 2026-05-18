@@ -33,6 +33,8 @@ type
     layoutMode*: LayoutMode
     layoutId*: string
     layoutKind*: string
+    runtimeLayoutKind*: string
+    layoutSource*: string
     fallbackLayout*: string
     isActive*: bool
     isOutputVisible*: bool

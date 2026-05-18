@@ -3,7 +3,7 @@ import ../src/core/msg
 import ../src/daemon/janet_script_runtime
 from ../src/daemon/state import QueuedMsgOrigin, TriadDaemon, initTriadDaemon
 import ../src/ipc/commands
-import ../src/janet/[layout_api, runtime, snapshot_api]
+import ../src/janet/[bundled_layouts, layout_api, runtime, snapshot_api]
 import
   ../src/types/[
     ipc_commands, janet_layouts, janet_manifest, projection_values, runtime_values,
@@ -355,8 +355,8 @@ suite "embedded Janet runtime":
     check evaluated.messages.len == 9
     check evaluated.messages[0].kind == MsgKind.CmdMoveToTag
     check evaluated.messages[0].targetTag == 2
-    check evaluated.messages[1].kind == MsgKind.CmdSetLayout
-    check evaluated.messages[1].newLayout == LayoutMode.Grid
+    check evaluated.messages[1].kind == MsgKind.CmdSetCustomLayout
+    check evaluated.messages[1].customLayout.layoutIdString() == "grid"
     check evaluated.messages[2].kind == MsgKind.CmdToggleFloating
     check evaluated.messages[3].kind == MsgKind.CmdMoveWindowToTag
     check evaluated.messages[3].moveWindowId == 12
@@ -557,6 +557,30 @@ suite "embedded Janet runtime":
     let evaluated = runtime.evalLayoutDetailed(testSnapshot(), testLayoutContext())
 
     check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.fallbackReason.len == 0
+    check evaluated.instructions.len == 2
+    check evaluated.instructions[0].windowId == 10'u32
+    check evaluated.instructions[0].geom == Rect(x: 0, y: 0, w: 500, h: 800)
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 800)
+
+  test "bundled Janet layouts apply with user scripting disabled":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        scriptDir: getTempDir() / "triad-unused-janet-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    var context = testLayoutContext()
+    context.layoutId = janetLayoutId("grid")
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.path == BundledLayoutsPath
     check evaluated.fallbackReason.len == 0
     check evaluated.instructions.len == 2
     check evaluated.instructions[0].windowId == 10'u32
@@ -941,9 +965,9 @@ suite "embedded Janet runtime":
     check evaluated.messages[0].focusTag == 2
     check evaluated.messages[1].kind == MsgKind.CmdMoveToTag
     check evaluated.messages[1].targetTag == 2
-    check evaluated.messages[2].kind == MsgKind.CmdSetLayout
-    check evaluated.messages[2].layoutTargetTag == 3
-    check evaluated.messages[2].newLayout == LayoutMode.Grid
+    check evaluated.messages[2].kind == MsgKind.CmdSetCustomLayout
+    check evaluated.messages[2].customLayoutTargetTag == 3
+    check evaluated.messages[2].customLayout.layoutIdString() == "grid"
 
   test "current window exposes opening metadata":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
@@ -1662,9 +1686,9 @@ suite "embedded Janet runtime":
     check mainWindow.messages[0].moveWindowId == 18
     check mainWindow.messages[0].moveTargetTag == 4
     check mainWindow.messages[0].moveFollowWindow
-    check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
-    check mainWindow.messages[1].layoutTargetTag == 4
-    check mainWindow.messages[1].newLayout == LayoutMode.Deck
+    check mainWindow.messages[1].kind == MsgKind.CmdSetCustomLayout
+    check mainWindow.messages[1].customLayoutTargetTag == 4
+    check mainWindow.messages[1].customLayout.layoutIdString() == "deck"
     check mainWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check mainWindow.messages[2].floatingWindowId == 18
     check not mainWindow.messages[2].windowFloating
@@ -1689,9 +1713,9 @@ suite "embedded Janet runtime":
     check parentedDialog.messages[0].moveWindowId == 19
     check parentedDialog.messages[0].moveTargetTag == 4
     check parentedDialog.messages[0].moveFollowWindow
-    check parentedDialog.messages[1].kind == MsgKind.CmdSetLayout
-    check parentedDialog.messages[1].layoutTargetTag == 4
-    check parentedDialog.messages[1].newLayout == LayoutMode.Deck
+    check parentedDialog.messages[1].kind == MsgKind.CmdSetCustomLayout
+    check parentedDialog.messages[1].customLayoutTargetTag == 4
+    check parentedDialog.messages[1].customLayout.layoutIdString() == "deck"
     check parentedDialog.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check parentedDialog.messages[2].floatingWindowId == 19
     check parentedDialog.messages[2].windowFloating
@@ -1734,9 +1758,9 @@ suite "embedded Janet runtime":
     check results[0].messages[0].moveWindowId == 21
     check results[0].messages[0].moveTargetTag == 4
     check results[0].messages[0].moveFollowWindow
-    check results[0].messages[1].kind == MsgKind.CmdSetLayout
-    check results[0].messages[1].layoutTargetTag == 4
-    check results[0].messages[1].newLayout == LayoutMode.Deck
+    check results[0].messages[1].kind == MsgKind.CmdSetCustomLayout
+    check results[0].messages[1].customLayoutTargetTag == 4
+    check results[0].messages[1].customLayout.layoutIdString() == "deck"
     check results[0].messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check results[0].messages[2].floatingWindowId == 21
     check not results[0].messages[2].windowFloating
@@ -1761,7 +1785,9 @@ suite "embedded Janet runtime":
     check dialogResults[0].messages[0].kind == MsgKind.CmdMoveWindowToTag
     check dialogResults[0].messages[0].moveWindowId == 22
     check dialogResults[0].messages[0].moveTargetTag == 4
-    check dialogResults[0].messages[1].kind == MsgKind.CmdSetLayout
+    check dialogResults[0].messages[1].kind == MsgKind.CmdSetCustomLayout
+    check dialogResults[0].messages[1].customLayoutTargetTag == 4
+    check dialogResults[0].messages[1].customLayout.layoutIdString() == "deck"
     check dialogResults[0].messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check dialogResults[0].messages[2].floatingWindowId == 22
     check dialogResults[0].messages[2].windowFloating

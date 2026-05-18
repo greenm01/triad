@@ -506,16 +506,17 @@ suite "Shell compatibility contracts":
     )
     check parseJson(setLayout.reply)["ok"].getBool()
     check setLayout.messages.len == 1
-    check setLayout.messages[0].kind == MsgKind.CmdSetLayout
-    check setLayout.messages[0].newLayout == LayoutMode.Deck
-    check setLayout.messages[0].layoutTargetTag == 2
+    check setLayout.messages[0].kind == MsgKind.CmdSetCustomLayout
+    check setLayout.messages[0].customLayout.layoutIdString() == "deck"
+    check setLayout.messages[0].customLayoutTargetTag == 2
 
     let setTGMix = handleTriadRequest(
       """{"triad":{"version":1,"request":"set-layout","layout":"tgmix"}}""", snapshot
     )
     check parseJson(setTGMix.reply)["ok"].getBool()
     check setTGMix.messages.len == 1
-    check setTGMix.messages[0].newLayout == LayoutMode.TGMix
+    check setTGMix.messages[0].kind == MsgKind.CmdSetCustomLayout
+    check setTGMix.messages[0].customLayout.layoutIdString() == "tgmix"
 
     let layoutStateReply = handleTriadRequest(
       """{"triad":{"version":1,"request":"layout-state"}}""", snapshot

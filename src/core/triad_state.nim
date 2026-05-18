@@ -1,10 +1,11 @@
 import std/[json, options]
+import layout_descriptor_codec
 import layout_mode_codec
 import layout_selection_codec
 import native_layout_codec
 import ../types/shell_snapshot
 from ../types/runtime_values import
-  FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind,
+  FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind, LayoutSource,
   WindowRuleIdleInhibitMode
 
 export shell_snapshot
@@ -18,21 +19,36 @@ proc nullableString(value: string): JsonNode =
 proc triadSupportedLayoutsJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for mode in LayoutMode:
-    result.add(%*{"kind": "builtin", "id": layoutModeId(mode), "ordinal": ord(mode)})
+    if mode.layoutSource() == LayoutSource.Core:
+      result.add(
+        %*{
+          "kind": "builtin",
+          "id": layoutModeId(mode),
+          "ordinal": ord(mode),
+          "runtime_kind": mode.layoutKind().layoutKindId(),
+          "layout_source": mode.layoutSource().layoutSourceId(),
+        }
+      )
   for layout in snapshot.customLayouts:
+    let id = layout.id.layoutIdString()
     result.add(
       %*{
         "kind": "custom",
-        "id": layout.id.layoutIdString(),
+        "id": id,
         "fallback_layout": layout.fallback.selectionFallbackId(),
+        "runtime_kind": id.layoutKindForId().layoutKindId(),
+        "layout_source": id.layoutSourceForId().layoutSourceId(),
       }
     )
   for layout in snapshot.nativeLayouts:
+    let id = layout.id.nativeLayoutIdString()
     result.add(
       %*{
         "kind": "native",
-        "id": layout.id.nativeLayoutIdString(),
+        "id": id,
         "fallback_layout": layout.fallback.selectionFallbackId(),
+        "runtime_kind": id.layoutKindForId().layoutKindId(),
+        "layout_source": id.layoutSourceForId().layoutSourceId(),
       }
     )
 
@@ -137,6 +153,8 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     "name": nullableString(workspace.name),
     "layout": workspace.layoutId,
     "layout_kind": workspace.layoutKind,
+    "runtime_kind": workspace.runtimeLayoutKind,
+    "layout_source": workspace.layoutSource,
     "fallback_layout": workspace.fallbackLayout,
     "is_active": workspace.isActive,
     "focused_window_id":

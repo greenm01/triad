@@ -318,7 +318,11 @@ switch-events {
     check config.layout.animationSnapThreshold == 2.5'f32
     check config.layout.frameRate == 144
     check config.layout.layoutCycle ==
-      @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]
+      @[LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller]
+    check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[1].customId.layoutIdString() == "deck"
+    check config.layout.layoutSelections[2].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[2].customId.layoutIdString() == "vertical-grid"
     check config.workspaces.defaultCount == 4
     check config.workspaces.defaultLayout == LayoutMode.Scroller
     check config.outputRules.len == 2
@@ -351,7 +355,9 @@ switch-events {
     check not config.tagRules[0].defaultLayoutSet
     check config.tagRules[1].tagId == 2
     check config.tagRules[1].defaultLayoutSet
-    check config.tagRules[1].defaultLayout == LayoutMode.Grid
+    check config.tagRules[1].defaultLayout == LayoutMode.Scroller
+    check config.tagRules[1].defaultLayoutSelection.kind == LayoutSelectionKind.Custom
+    check config.tagRules[1].defaultLayoutSelection.customId.layoutIdString() == "grid"
     check config.tagRules[1].openOnOutput == "HDMI-A-1"
     check config.windowRules.len == 1
     check config.windowRules[0].matches.len == 1
@@ -871,11 +877,13 @@ cursor {
         config.keyBindings.filterIt(it.key == key and it.modifiers == Super)
       check bindings.len == 1
       check bindings[0].bypassShortcutsInhibit
-    check config.layoutForBinding("c", Super + Ctrl) == LayoutMode.CenterTile
-    check config.layoutForBinding("v", Super + Ctrl) == LayoutMode.Deck
-    check config.layoutForBinding("x", Super + Ctrl) == LayoutMode.Monocle
-    check config.layoutForBinding("c", Super + Shift) == LayoutMode.RightTile
-    check parseTextCommand("layout-tgmix").get().newLayout == LayoutMode.TGMix
+    check config.layoutIdForBinding("c", Super + Ctrl) == "center-tile"
+    check config.layoutIdForBinding("v", Super + Ctrl) == "deck"
+    check config.layoutIdForBinding("x", Super + Ctrl) == "monocle"
+    check config.layoutIdForBinding("c", Super + Shift) == "right-tile"
+    let tgmix = parseTextCommand("layout-tgmix").get()
+    check tgmix.kind == MsgKind.CmdSetCustomLayout
+    check tgmix.customLayout.layoutIdString() == "tgmix"
     let preset = parseTextCommand("switch-proportion-preset -1").get()
     check preset.kind == MsgKind.CmdSwitchProportionPreset
     check preset.proportionPresetDelta == -1
@@ -958,22 +966,27 @@ janet {
     check config.janet.layouts[0].id.layoutIdString() == "spiral"
     check config.janet.layouts[0].fallback.builtin == LayoutMode.Scroller
     check config.janet.layouts[1].id.layoutIdString() == "wide-master"
-    check config.janet.layouts[1].fallback.builtin == LayoutMode.MasterStack
+    check config.janet.layouts[1].fallback.builtin == LayoutMode.Scroller
     check config.janet.layouts[2].id.layoutIdString() == "notion"
     check config.janet.layouts[2].fallback.kind == LayoutSelectionKind.Native
     check config.janet.layouts[2].fallback.nativeId.nativeLayoutIdString() ==
       "frame-tree"
     check config.layout.layoutCycle ==
-      @[LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Grid]
+      @[
+        LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller,
+        LayoutMode.Scroller,
+      ]
     check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[1].customId.layoutIdString() == "spiral"
     check config.layout.layoutSelections[2].kind == LayoutSelectionKind.Native
     check config.layout.layoutSelections[2].nativeId.nativeLayoutIdString() ==
       "frame-tree"
+    check config.layout.layoutSelections[3].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[3].customId.layoutIdString() == "grid"
     check config.workspaces.defaultLayout == LayoutMode.Scroller
     check config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom
     check config.workspaces.defaultLayoutSelection.customId.layoutIdString() == "spiral"
-    check config.tagRules[0].defaultLayout == LayoutMode.MasterStack
+    check config.tagRules[0].defaultLayout == LayoutMode.Scroller
     check config.tagRules[0].defaultLayoutSelection.kind == LayoutSelectionKind.Custom
     check config.tagRules[0].defaultLayoutSelection.customId.layoutIdString() ==
       "wide-master"

@@ -1,4 +1,5 @@
 import std/[algorithm, math, options, tables]
+import ../core/layout_descriptor_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../layouts/[scroller, tiling]
@@ -291,6 +292,11 @@ proc layoutUsesNativeViewport(mode: rv.LayoutMode): bool =
 
 proc frameTreeActive(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
+
+proc applyBundledAlgorithmicMode(tag: var rv.ProjectedTag, customId: JanetLayoutId) =
+  let mode = layoutModeForBundledId(customId.layoutIdString())
+  if mode.isSome:
+    tag.layoutMode = mode.get()
 
 proc frameTreeTabHeight(rect: rv.Rect): int32 =
   min(FrameTreeTabBarHeight, max(0'i32, rect.h - 1'i32))
@@ -585,6 +591,7 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
     result =
       model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
+    tagForLayout.applyBundledAlgorithmicMode(activeTagData.customLayoutId)
     result = layoutForTag(
       tagForLayout,
       windows,
@@ -799,6 +806,9 @@ proc layoutWorkspaceStripOverview(
     projected.tag.applyOverviewMaximizedColumnSizing(windows)
     let retargetViewport = model.viewportRetargetRequested(tagId)
     var targetTag = projected.tag
+    let previewTagData = model.tagData(tagId)
+    if previewTagData.isSome:
+      targetTag.applyBundledAlgorithmicMode(previewTagData.get().customLayoutId)
     var instructions = layoutForTag(
       targetTag,
       windows,
@@ -915,6 +925,7 @@ proc layoutProjection*(
     result.instructions =
       model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
+    tagForLayout.applyBundledAlgorithmicMode(activeTagData.customLayoutId)
     result.instructions = layoutForTag(
       tagForLayout,
       windows,

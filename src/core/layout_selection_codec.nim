@@ -1,4 +1,5 @@
 import std/options
+import layout_descriptor_codec
 import layout_mode_codec
 import native_layout_codec
 from ../types/runtime_values import
@@ -45,10 +46,12 @@ proc selectionFallback*(selection: LayoutSelection): LayoutMode =
   selection.builtin
 
 proc selectionFallbackId*(selection: LayoutSelection): string =
-  if selection.kind in {LayoutSelectionKind.Custom, LayoutSelectionKind.Native} and
-      selection.nativeId.nativeLayoutIdString().len > 0:
+  case selection.kind
+  of LayoutSelectionKind.Custom:
+    selection.customId.layoutIdString()
+  of LayoutSelectionKind.Native:
     selection.nativeId.nativeLayoutIdString()
-  else:
+  of LayoutSelectionKind.Builtin:
     layoutModeId(selection.builtin)
 
 proc findCustomLayout*(
@@ -65,7 +68,7 @@ proc parseCustomLayoutId*(value: string): JanetLayoutId =
 proc parseLayoutSelectionId*(
     value: string, customLayouts: openArray[JanetLayoutConfig]
 ): Option[LayoutSelection] =
-  let builtin = parseLayoutModeId(value)
+  let builtin = parseCoreLayoutModeId(value)
   if builtin.isSome:
     return some(builtinSelection(builtin.get()))
 

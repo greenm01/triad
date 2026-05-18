@@ -1,5 +1,6 @@
 import std/[options, strutils, tables]
 import iterators, queries
+import ../core/layout_descriptor_codec
 import ../core/layout_mode_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
@@ -170,6 +171,8 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         layoutMode: tag.layoutMode,
         layoutId: layoutId,
         layoutKind: layoutKind,
+        runtimeLayoutKind: layoutKindForId(layoutId).layoutKindId(),
+        layoutSource: layoutSourceForId(layoutId).layoutSourceId(),
         fallbackLayout: fallbackLayout,
         isActive: slot == model.activeSlot,
         isOutputVisible: tagId != NullTagId and model.tagVisibleOnOutput(tagId),

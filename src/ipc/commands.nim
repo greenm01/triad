@@ -1,5 +1,5 @@
 import std/[options, strutils]
-import ../core/layout_mode_codec
+import ../core/layout_descriptor_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../core/msg
@@ -274,7 +274,7 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
   of CommandId.CidSetLayoutForWorkspace:
     if parts.len == 3:
       let tag = parseUInt32Arg(parts[1])
-      let layout = parseLayoutModeId(parts[2])
+      let layout = parseCoreLayoutModeId(parts[2])
       if tag.isSome and layout.isSome:
         some(
           Msg(
@@ -340,25 +340,41 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
   of CommandId.CidLayoutVerticalScroller:
     some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalScroller))
   of CommandId.CidLayoutTile:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.MasterStack))
+    some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("tile")))
   of CommandId.CidLayoutGrid:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
+    some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("grid")))
   of CommandId.CidLayoutMonocle:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Monocle))
+    some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("monocle")))
   of CommandId.CidLayoutDeck:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Deck))
+    some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("deck")))
   of CommandId.CidLayoutCenterTile:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.CenterTile))
+    some(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("center-tile"))
+    )
   of CommandId.CidLayoutRightTile:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.RightTile))
+    some(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("right-tile"))
+    )
   of CommandId.CidLayoutVerticalTile:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalTile))
+    some(
+      Msg(
+        kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("vertical-tile")
+      )
+    )
   of CommandId.CidLayoutVerticalGrid:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalGrid))
+    some(
+      Msg(
+        kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("vertical-grid")
+      )
+    )
   of CommandId.CidLayoutVerticalDeck:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.VerticalDeck))
+    some(
+      Msg(
+        kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("vertical-deck")
+      )
+    )
   of CommandId.CidLayoutTGMix:
-    some(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.TGMix))
+    some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("tgmix")))
   of CommandId.CidSwitchLayout:
     some(Msg(kind: MsgKind.CmdSwitchLayout))
   of CommandId.CidToggleOverview:

@@ -1544,7 +1544,9 @@ suite "Runtime state primitives":
     check restoredSnapshot.activeTag == 2
     check restoredSnapshot.activeWorkspaceIdx == 2
     check restoredSnapshot.workspaces[1].isActive
-    check restoredSnapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check restoredSnapshot.workspaces[1].layoutMode == LayoutMode.Scroller
+    check restoredSnapshot.workspaces[1].layoutId == "deck"
+    check restoredSnapshot.workspaces[1].layoutSource == "bundled-janet"
     check restoredSnapshot.workspaces[1].targetViewportXOffset == 320.0'f32
     check restoredSnapshot.workspaces[1].currentViewportXOffset == 280.0'f32
     check restoredSnapshot.workspaces[1].targetViewportYOffset == 40.0'f32
@@ -1562,7 +1564,9 @@ suite "Runtime state primitives":
     check snapshot.windows.len == 1
     check snapshot.windows[0].id == 50
     check snapshot.windows[0].workspaceIdx == 2
-    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[1].layoutId == "deck"
+    check snapshot.workspaces[1].layoutSource == "bundled-janet"
     check snapshot.workspaces[1].targetViewportXOffset == 320.0'f32
     check snapshot.workspaces[1].currentViewportXOffset == 280.0'f32
     check snapshot.workspaces[1].targetViewportYOffset == 40.0'f32
@@ -1594,7 +1598,8 @@ suite "Runtime state primitives":
     check tagId != NullTagId
     let tag = state.model.tagData(tagId).get()
     check tag.name == "chat"
-    check tag.layoutMode == LayoutMode.Deck
+    check tag.layoutMode == LayoutMode.Scroller
+    check tag.customLayoutId.layoutIdString() == "deck"
     check state.readRuntimeLiveRestoreJson().contains("\"id\":4")
 
     discard state.applyRuntimeUpdate(
@@ -1619,7 +1624,9 @@ suite "Runtime state primitives":
     check state.model.activeSlot == 4
     check state.model.tagData(state.model.activeTag).get().name == "chat"
     check state.model.tagData(state.model.activeTag).get().layoutMode ==
-      LayoutMode.Monocle
+      LayoutMode.Scroller
+    check state.model.tagData(state.model.activeTag).get().customLayoutId.layoutIdString() ==
+      "monocle"
 
   test "layout projection reads and applies directly from state":
     var state = initRuntimeStateFromConfig(baseConfig())

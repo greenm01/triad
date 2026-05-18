@@ -2,9 +2,11 @@ import std/[options, os, re, strutils]
 import chronicles, kdl
 import defaults
 import keysyms
+import ../core/layout_descriptor_codec
 import ../core/layout_mode_codec
 import ../core/native_layout_codec
 import ../core/layout_selection_codec
+import ../janet/bundled_layouts
 import ../types/config_values
 import ../types/runtime_values
 
@@ -136,7 +138,7 @@ proc customLayoutById(
 proc parseLayoutSelectionName(
     name: string, layouts: openArray[JanetLayoutConfig], fallback: LayoutSelection
 ): LayoutSelection =
-  let builtin = parseLayoutModeId(name)
+  let builtin = parseCoreLayoutModeId(name)
   if builtin.isSome:
     return builtinLayoutSelection(builtin.get())
 
@@ -152,7 +154,7 @@ proc parseLayoutSelectionName(
   fallback
 
 proc parseFallbackLayoutSelectionName(name: string): LayoutSelection =
-  let builtin = parseLayoutModeId(name)
+  let builtin = parseCoreLayoutModeId(name)
   if builtin.isSome:
     return builtinLayoutSelection(builtin.get())
   let native = parseNativeLayoutId(name)
@@ -1033,15 +1035,15 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.layout.smartGaps = false
   result.layout.layoutCycle =
     @[
-      LayoutMode.Scroller, LayoutMode.MasterStack, LayoutMode.Grid, LayoutMode.Monocle,
-      LayoutMode.VerticalScroller,
+      LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller,
+      LayoutMode.Scroller, LayoutMode.VerticalScroller,
     ]
   result.layout.layoutSelections =
     @[
       builtinLayoutSelection(LayoutMode.Scroller),
-      builtinLayoutSelection(LayoutMode.MasterStack),
-      builtinLayoutSelection(LayoutMode.Grid),
-      builtinLayoutSelection(LayoutMode.Monocle),
+      customSelection(janetLayoutId("tile"), LayoutMode.Scroller),
+      customSelection(janetLayoutId("grid"), LayoutMode.Scroller),
+      customSelection(janetLayoutId("monocle"), LayoutMode.Scroller),
       builtinLayoutSelection(LayoutMode.VerticalScroller),
     ]
   result.workspaces.defaultCount = DefaultWorkspaceCount
@@ -1080,6 +1082,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.janet.scriptDir = DefaultJanetScriptDir
   result.janet.fuelLimit = DefaultJanetFuelLimit
   result.janet.layouts = collectJanetLayoutDeclarations(doc)
+  let availableJanetLayouts = bundledLayoutConfigs() & result.janet.layouts
   result.hotkeyOverlay.skipAtStartup = true
   result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
   result.hotkeyOverlay.columns = 2
@@ -1210,7 +1213,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
               for arg in child.args:
                 let selection = parseLayoutSelectionName(
                   arg.kString(),
-                  result.janet.layouts,
+                  availableJanetLayouts,
                   builtinLayoutSelection(LayoutMode.Scroller),
                 )
                 result.layout.layoutSelections.add(selection)
@@ -1227,7 +1230,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
             elif child.name == "default-layout" and child.args.len > 0:
               let fallback = result.workspaces.defaultLayoutSelection
               let selection = parseLayoutSelectionName(
-                child.args[0].kString(), result.janet.layouts, fallback
+                child.args[0].kString(), availableJanetLayouts, fallback
               )
               result.workspaces.defaultLayoutSelection = selection
               result.workspaces.defaultLayout = selection.builtin
@@ -1296,7 +1299,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 layoutSet = true
                 layoutSelection = parseLayoutSelectionName(
                   child.props["default-layout"].kString(),
-                  result.janet.layouts,
+                  availableJanetLayouts,
                   layoutSelection,
                 )
                 layout = layoutSelection.builtin

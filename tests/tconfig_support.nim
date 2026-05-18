@@ -1,5 +1,6 @@
 import std/[options, os, sequtils, strutils, unittest]
 import ../src/config/[apply, defaults, parser, reload_policy]
+import ../src/core/[layout_selection_codec, native_layout_codec]
 import ../src/core/msg
 import ../src/ipc/commands
 import ../src/state/[engine, invariants, snapshot]
@@ -41,6 +42,21 @@ proc layoutForBinding*(config: Config, key: string, modifiers: uint32): LayoutMo
   check parsed.isSome
   check parsed.get().kind == MsgKind.CmdSetLayout
   parsed.get().newLayout
+
+proc layoutIdForBinding*(config: Config, key: string, modifiers: uint32): string =
+  let command = config.commandForBinding(key, modifiers)
+  check command.len > 0
+  let parsed = parseTextCommand(command)
+  check parsed.isSome
+  case parsed.get().kind
+  of MsgKind.CmdSetLayout:
+    result = $parsed.get().newLayout
+  of MsgKind.CmdSetCustomLayout:
+    result = parsed.get().customLayout.layoutIdString()
+  of MsgKind.CmdSetNativeLayout:
+    result = parsed.get().nativeLayout.nativeLayoutIdString()
+  else:
+    check false
 
 proc spawnForBinding*(config: Config, key: string, modifiers: uint32): seq[string] =
   let command = config.commandForBinding(key, modifiers)

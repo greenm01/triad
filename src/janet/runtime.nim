@@ -2,7 +2,7 @@ import std/[algorithm, options, os, sequtils, strutils, tables, times]
 import chronicles
 import ../core/msg
 import ../types/[janet_layouts, janet_manifest, runtime_values, shell_snapshot]
-import command_api, layout_api, snapshot_api, binding, prelude
+import bundled_layouts, command_api, layout_api, snapshot_api, binding, prelude
 
 type
   ScriptCacheEntry* = object
@@ -23,8 +23,7 @@ type
 proc initJanetRuntime*(config: JanetConfig): JanetRuntime =
   result.config = config
   result.scripts = initTable[string, ScriptCacheEntry]()
-  if config.enabled:
-    result.handle = triadJanetNew()
+  result.handle = triadJanetNew()
 
 proc freeScript(entry: var ScriptCacheEntry) =
   if entry.script != nil:
@@ -44,14 +43,9 @@ proc close*(runtime: var JanetRuntime) =
     runtime.handle = nil
 
 proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
-  let wasEnabled = runtime.handle != nil
-  if wasEnabled and not config.enabled:
-    runtime.close()
-    runtime.config = config
-    return
   runtime.config = config
   runtime.clearScripts()
-  if config.enabled and runtime.handle == nil:
+  if runtime.handle == nil:
     runtime.handle = triadJanetNew()
 
 proc evalSource*(
@@ -62,7 +56,7 @@ proc evalSource*(
     currentWindow = none(ShellWindow),
     currentEvent = "nil",
 ): tuple[ok: bool, messages: seq[Msg], error: string] =
-  if runtime.handle == nil:
+  if not runtime.config.enabled or runtime.handle == nil:
     return (true, @[], "")
 
   let snapshotSource =
@@ -140,6 +134,33 @@ proc loadScriptEntry(
     warn "Janet script failed", path = path, error = result.entry.error
   runtime.scripts[path] = result.entry
 
+proc loadBundledLayoutEntry(
+    runtime: var JanetRuntime, snapshot: ShellSnapshot
+): ScriptEntryResult =
+  if runtime.scripts.hasKey(BundledLayoutsPath):
+    return (runtime.scripts[BundledLayoutsPath], false)
+
+  result.entry = ScriptCacheEntry(
+    path: BundledLayoutsPath, modified: Time(), source: BundledLayoutsSource
+  )
+  result.reloaded = true
+  let bootstrapSource =
+    snapshot.janetSnapshotSource(none(ShellWindow), "nil") & JanetPersistentPreludeSource
+  result.entry.script = triadJanetScriptLoad(
+    runtime.handle,
+    cstring(bootstrapSource),
+    cstring(result.entry.source),
+    cstring(result.entry.path),
+    runtime.config.fuelLimit,
+  )
+  if result.entry.script == nil:
+    let error = $triadJanetLastError(runtime.handle)
+    result.entry.failed = true
+    result.entry.error =
+      if error.len > 0: error else: "Bundled Janet layout load failed"
+    warn "Bundled Janet layouts failed", error = result.entry.error
+  runtime.scripts[BundledLayoutsPath] = result.entry
+
 proc evictMissingScripts(runtime: var JanetRuntime, paths: seq[string]) =
   for path in runtime.scripts.keys.toSeq:
     if path notin paths:
@@ -154,7 +175,7 @@ proc evalScriptsDetailed*(
     snapshot: ShellSnapshot,
     currentWindow = none(ShellWindow),
 ): seq[ScriptEvalResult] =
-  if runtime.handle == nil:
+  if not runtime.config.enabled or runtime.handle == nil:
     return @[]
 
   let paths = runtime.scriptPaths()
@@ -240,6 +261,70 @@ proc evalLayoutDetailed*(
   if runtime.handle == nil:
     result = context.fallbackLayoutResult(
       JanetLayoutOutcome.Disabled, "janet runtime disabled", started
+    )
+    result.logLayoutEval()
+    return
+
+  let bundled = runtime.loadBundledLayoutEntry(snapshot)
+  if not bundled.entry.failed and
+      triadJanetScriptHasLayout(
+        bundled.entry.script, cstring(context.layoutId.layoutIdString())
+      ) == 1:
+    let evaluated =
+      triadJanetScriptEvalLayout(
+        runtime.handle,
+        bundled.entry.script,
+        cstring(context.layoutId.layoutIdString()),
+        cstring(context.layoutContextSource()),
+        cstring(bundled.entry.path),
+        runtime.config.fuelLimit,
+      ) == 1
+    if not evaluated:
+      let error = $triadJanetLastError(runtime.handle)
+      result = context.fallbackLayoutResult(
+        JanetLayoutOutcome.EvalFailed,
+        "bundled janet layout evaluation failed",
+        started,
+        bundled.entry.path,
+        if error.len > 0: error else: "Bundled Janet layout evaluation failed",
+      )
+      result.logLayoutEval()
+      return
+
+    let instructions = runtime.handle.extractedLayoutInstructions()
+    let validation = context.validateLayoutInstructions(instructions)
+    if not validation.ok:
+      result = context.fallbackLayoutResult(
+        JanetLayoutOutcome.Invalid, validation.error, started, bundled.entry.path,
+        validation.error,
+      )
+      result.instructionCount = instructions.len
+      result.outputTargetKind = validation.outputTargetKind
+      result.logLayoutEval()
+      return
+
+    result = JanetLayoutEvalResult(
+      layoutId: context.layoutId,
+      path: bundled.entry.path,
+      outcome: JanetLayoutOutcome.Applied,
+      durationMs: int64((epochTime() - started) * 1000),
+      inputWindowCount: context.tiledWindowCount(),
+      inputFrameCount: context.leafFrameCount(),
+      instructionCount: instructions.len,
+      outputTargetKind: validation.outputTargetKind,
+      instructions: validation.instructions,
+      frameInstructions:
+        if validation.outputTargetKind == JanetLayoutTargetKind.Frame:
+          instructions
+        else:
+          @[],
+    )
+    result.logLayoutEval()
+    return
+
+  if not runtime.config.enabled:
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.Disabled, "user janet runtime disabled", started
     )
     result.logLayoutEval()
     return

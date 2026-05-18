@@ -3,6 +3,7 @@ import chronicles
 import parser
 import defaults
 import ../core/layout_selection_codec
+import ../janet/bundled_layouts
 import ../core/shell_profiles
 import ../state/engine
 import ../systems/outputs
@@ -318,7 +319,7 @@ proc applyConfig*(model: var Model, config: Config) =
   if model.janet.scriptDir.strip().len == 0:
     model.janet.scriptDir = DefaultJanetScriptDir
   model.janet.fuelLimit = configClamp32(model.janet.fuelLimit, 1_000, 10_000_000)
-  model.customLayouts = model.janet.layouts
+  model.customLayouts = bundledLayoutConfigs() & model.janet.layouts
   for tagId, tag in model.tagsWithId():
     if tag.customLayoutId.layoutIdString().len > 0 and
         model.customLayoutConfig(tag.customLayoutId).isNone:

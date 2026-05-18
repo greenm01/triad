@@ -38,6 +38,19 @@ type
     Custom
     Native
 
+  LayoutKind* {.pure.} = enum
+    Algorithmic
+    Scrolling
+    Frame
+    Bsp
+    Float
+
+  LayoutSource* {.pure.} = enum
+    Core
+    BundledJanet
+    UserJanet
+    Native
+
   FrameNodeKind* {.pure.} = enum
     Leaf
     Split
