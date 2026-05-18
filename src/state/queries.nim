@@ -2,7 +2,7 @@ import std/[algorithm, options, sets, tables]
 import entity_manager, id_gen, iterators
 import ../core/defaults
 from ../core/native_layout_codec import
-  BspTreeLayoutId, FrameTreeLayoutId, nativeLayoutIdString
+  BspTreeLayoutId, FrameTreeLayoutId, SplitTreeLayoutId, nativeLayoutIdString
 import ../types/[core, model]
 from ../types/runtime_values import FrameNodeKind, LayoutMode
 
@@ -47,6 +47,9 @@ proc frameData*(model: Model, frameId: FrameId): Option[FrameData] =
 
 proc bspNodeData*(model: Model, nodeId: BspNodeId): Option[BspNodeData] =
   model.bspNodes.entity(nodeId)
+
+proc splitNodeData*(model: Model, nodeId: SplitNodeId): Option[SplitNodeData] =
+  model.splitNodes.entity(nodeId)
 
 proc outputData*(model: Model, outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
@@ -183,6 +186,14 @@ proc bspRootForTag*(model: Model, tagId: TagId): BspNodeId =
 proc bspNodeForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): BspNodeId =
   model.bspNodeByTagWindow.getOrDefault((tagId, winId), NullBspNodeId)
 
+proc splitRootForTag*(model: Model, tagId: TagId): SplitNodeId =
+  model.splitRootsByTag.getOrDefault(tagId, NullSplitNodeId)
+
+proc splitNodeForWindowOnTag*(
+    model: Model, tagId: TagId, winId: WindowId
+): SplitNodeId =
+  model.splitNodeByTagWindow.getOrDefault((tagId, winId), NullSplitNodeId)
+
 proc tagUsesAggregateOverview*(tag: TagData): bool =
   string(tag.customLayoutId).len > 0 or string(tag.nativeLayoutId).len > 0 or
     tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}
@@ -197,6 +208,9 @@ proc tagUsesFrameOverview*(tag: TagData): bool =
 proc tagUsesBspOverview*(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
 
+proc tagUsesSplitTreeOverview*(tag: TagData): bool =
+  tag.nativeLayoutId.nativeLayoutIdString() == SplitTreeLayoutId
+
 proc tagUsesFrameOverview*(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   tagOpt.isSome and tagOpt.get().tagUsesFrameOverview()
@@ -204,6 +218,10 @@ proc tagUsesFrameOverview*(model: Model, tagId: TagId): bool =
 proc tagUsesBspOverview*(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   tagOpt.isSome and tagOpt.get().tagUsesBspOverview()
+
+proc tagUsesSplitTreeOverview*(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and tagOpt.get().tagUsesSplitTreeOverview()
 
 proc overviewFrameWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
   for _, frame in model.framesOnTagWithId(tagId):
@@ -223,6 +241,22 @@ proc overviewFrameWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
 
 proc overviewBspWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
   for _, node in model.bspNodesOnTagWithId(tagId):
+    if node.kind != FrameNodeKind.Leaf or node.window == NullWindowId:
+      continue
+    let winId = node.window
+    let winOpt = model.windowData(winId)
+    if winOpt.isSome:
+      let win = winOpt.get()
+      if not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+          win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+        result.add(winId)
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+        win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+      result.add(winId)
+
+proc overviewSplitTreeWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
+  for _, node in model.splitNodesOnTagWithId(tagId):
     if node.kind != FrameNodeKind.Leaf or node.window == NullWindowId:
       continue
     let winId = node.window
@@ -261,6 +295,10 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
             result.add(winId)
       elif model.tagUsesBspOverview(tagId):
         for winId in model.overviewBspWindowIds(tagId):
+          if result.find(winId) == -1:
+            result.add(winId)
+      elif model.tagUsesSplitTreeOverview(tagId):
+        for winId in model.overviewSplitTreeWindowIds(tagId):
           if result.find(winId) == -1:
             result.add(winId)
       else:

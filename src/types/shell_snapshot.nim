@@ -2,7 +2,7 @@ import std/options
 from core import Rect
 from runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutConfig, LayoutMode,
-  LayoutSelection, NativeLayoutConfig, WindowRuleIdleInhibitMode
+  LayoutSelection, NativeLayoutConfig, SplitTreeNodeMode, WindowRuleIdleInhibitMode
 
 const TriadIpcVersion* = 1
 
@@ -40,6 +40,16 @@ type
     preselectDirection*: Direction
     preselectRatio*: float32
 
+  ShellSplitNode* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    children*: seq[uint32]
+    mode*: SplitTreeNodeMode
+    weight*: float32
+    window*: uint32
+    focused*: bool
+
   ShellWorkspace* = object
     tagId*: uint32
     workspaceIdx*: uint32
@@ -58,6 +68,7 @@ type
     columns*: seq[ShellColumn]
     frames*: seq[ShellFrame]
     bspNodes*: seq[ShellBspNode]
+    splitNodes*: seq[ShellSplitNode]
     masterCount*: int
     masterSplitRatio*: float32
     targetViewportXOffset*: float32

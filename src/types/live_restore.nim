@@ -2,7 +2,7 @@ import std/tables
 from core import Rect
 from runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId, LayoutMode,
-  NativeLayoutId
+  NativeLayoutId, SplitTreeNodeMode
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
 const
@@ -64,6 +64,15 @@ type
     preselectDirection*: Direction
     preselectRatio*: float32
 
+  RestoredSplitNodeState* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    children*: seq[uint32]
+    mode*: SplitTreeNodeMode
+    weight*: float32
+    window*: uint32
+
   RestoredTagState* = object
     tagId*: uint32
     name*: string
@@ -73,6 +82,7 @@ type
     columns*: seq[RestoredColumnState]
     frames*: seq[RestoredFrameState]
     bspNodes*: seq[RestoredBspNodeState]
+    splitNodes*: seq[RestoredSplitNodeState]
     focusedWindow*: uint32
     focusedFrame*: uint32
     targetViewportXOffset*: float32

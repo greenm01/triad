@@ -175,6 +175,7 @@ proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
     )
     discard model.restoreTagFrames(result, restored)
     discard model.restoreTagBspNodes(result, restored)
+    discard model.restoreTagSplitNodes(result, restored)
   if result != NullTagId:
     discard model.syncStickyWindowsForWorkspace(result)
 
@@ -235,6 +236,9 @@ proc placeRestoredWindow(
       model.restoreWindowFramePlacement(tagId, restoredTag, restoredExternalId, winId)
     discard
       model.restoreWindowBspPlacement(tagId, restoredTag, restoredExternalId, winId)
+    discard model.restoreWindowSplitTreePlacement(
+      tagId, restoredTag, restoredExternalId, winId
+    )
     let restoredFocused = model.restoredWindowId(restoredTag.focusedWindow)
     if restoredFocused != NullWindowId:
       discard model.setTagFocus(tagId, restoredFocused)

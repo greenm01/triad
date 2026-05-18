@@ -109,6 +109,18 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
         preselectRatio: node.preselectRatio,
       )
     )
+  for node in source.splitNodes:
+    var restoredNode = RestoredSplitNodeData(
+      id: SplitNodeId(node.id),
+      kind: node.kind,
+      parent: SplitNodeId(node.parent),
+      mode: node.mode,
+      weight: node.weight,
+      window: ExternalWindowId(uint32(node.window)),
+    )
+    for child in node.children:
+      restoredNode.children.add(SplitNodeId(child))
+    result.splitNodes.add(restoredNode)
 
 proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
   result.activeSlot = source.activeTag
@@ -256,6 +268,27 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
           restoredNode.window = 0
       restoredTag.bspNodes.add(restoredNode)
 
+    for nodeId, node in model.splitNodesOnTagWithId(tagId):
+      var restoredNode = lr.RestoredSplitNodeState(
+        id: uint32(nodeId),
+        kind: node.kind,
+        parent: uint32(node.parent),
+        mode: node.mode,
+        weight: node.weight,
+        window: model.externalWindowId(node.window),
+      )
+      for child in node.children:
+        restoredNode.children.add(uint32(child))
+      if node.kind == FrameNodeKind.Leaf and restoredNode.window != 0:
+        let winOpt = model.windowData(node.window)
+        if winOpt.isSome and winOpt.get().windowAdmitted() and
+            not winOpt.get().isMinimized and not winOpt.get().isSticky and
+            not winOpt.get().isUnmanagedGlobal:
+          result.tagByWindow[restoredNode.window] = tag.slot
+        else:
+          restoredNode.window = 0
+      restoredTag.splitNodes.add(restoredNode)
+
     result.tags[tag.slot] = restoredTag
 
   for winId in model.sortedWindowIdsByExternal():
@@ -336,7 +369,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
 
   for tagId in model.workspaceHistoryIds():
     let tagOpt = model.tagData(tagId)
-    if tagOpt.isSome and tagOpt.get().slot != 0:
+    if tagOpt.isSome and tagOpt.get().slot != 0 and model.shouldPersistTag(tagOpt.get()):
       result.workspaceHistory.add(tagOpt.get().slot)
 
 proc rectJson(rect: core_types.Rect): JsonNode =

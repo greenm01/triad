@@ -69,6 +69,9 @@ type
     CmdFrameUnsplit
     CmdFrameTabNext
     CmdFrameTabPrev
+    CmdSplitTreeSplitHorizontal
+    CmdSplitTreeSplitVertical
+    CmdSplitTreeSplitToggle
     CmdBspBalance
     CmdBspEqualize
     CmdBspPreselect

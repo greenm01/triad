@@ -23,6 +23,9 @@ proc generateFrameId*(counters: var IdCounters): FrameId =
 proc generateBspNodeId*(counters: var IdCounters): BspNodeId =
   BspNodeId(nextRaw(counters.nextBspNodeId))
 
+proc generateSplitNodeId*(counters: var IdCounters): SplitNodeId =
+  SplitNodeId(nextRaw(counters.nextSplitNodeId))
+
 proc generateOutputId*(counters: var IdCounters): OutputId =
   OutputId(nextRaw(counters.nextOutputId))
 

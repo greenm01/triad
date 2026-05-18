@@ -10,6 +10,7 @@ import restore_ops
 import runtime_ops
 import scratchpad_ops
 import swallow_ops
+import split_tree_ops
 import tag_ops
 import window_ops
 
@@ -25,5 +26,6 @@ export restore_ops
 export runtime_ops
 export scratchpad_ops
 export swallow_ops
+export split_tree_ops
 export tag_ops
 export window_ops

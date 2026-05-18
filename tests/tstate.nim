@@ -1541,6 +1541,174 @@ suite "Runtime state primitives":
     check rootData.kind == FrameNodeKind.Split
     check rootData.orientation == FrameSplitOrientation.Horizontal
 
+  test "native split-tree supports i3-style focused splits":
+    check parseNativeLayoutId("split-tree").get().id.nativeLayoutIdString() == "i3"
+
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let first = model.windowForExternal(ExternalWindowId(10))
+    let second = model.windowForExternal(ExternalWindowId(11))
+    let third = model.windowForExternal(ExternalWindowId(12))
+    check model.tagData(tagId).get().nativeLayoutId.nativeLayoutIdString() == "i3"
+    check model.splitRootForTag(tagId) != tc.NullSplitNodeId
+    check model.splitNodeForWindowOnTag(tagId, first) != tc.NullSplitNodeId
+    check model.splitNodeForWindowOnTag(tagId, second) != tc.NullSplitNodeId
+    check model.splitNodeForWindowOnTag(tagId, third) != tc.NullSplitNodeId
+
+    let projection = model.layoutProjection()
+    let firstGeom = projection.instructions.filterIt(it.windowId == 10'u32)[0].geom
+    let secondGeom = projection.instructions.filterIt(it.windowId == 11'u32)[0].geom
+    let thirdGeom = projection.instructions.filterIt(it.windowId == 12'u32)[0].geom
+    check projection.instructions.len == 3
+    check firstGeom.x < secondGeom.x
+    check thirdGeom.x < secondGeom.x
+    check firstGeom.y < thirdGeom.y
+
+  test "split-tree movement mirrors directional focus and swaps windows":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    check model.directionalTarget(Direction.DirDown).window ==
+      model.windowForExternal(ExternalWindowId(12))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowDown))
+
+    let projection = model.layoutProjection()
+    let firstGeom = projection.instructions.filterIt(it.windowId == 10'u32)[0].geom
+    let thirdGeom = projection.instructions.filterIt(it.windowId == 12'u32)[0].geom
+    check firstGeom.y > thirdGeom.y
+    check model.tagData(model.activeTag).get().focusedWindow ==
+      model.windowForExternal(ExternalWindowId(10))
+
+  test "split-tree floating removes and reinserts tiled leaves":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = model.activeTag
+    let second = model.windowForExternal(ExternalWindowId(11))
+    check model.splitNodeForWindowOnTag(tagId, second) != tc.NullSplitNodeId
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+    check model.windowData(second).get().isFloating
+    check model.splitNodeForWindowOnTag(tagId, second) == tc.NullSplitNodeId
+    check model.layoutProjection().instructions.anyIt(it.windowId == 11'u32)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFloating))
+    check not model.windowData(second).get().isFloating
+    check model.splitNodeForWindowOnTag(tagId, second) != tc.NullSplitNodeId
+    check model.layoutProjection().instructions.len == 2
+
+  test "custom Janet layout can project over split-tree substrate":
+    var config = baseConfig()
+    config.janet.layouts =
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("split-policy"),
+          fallback: nativeSelection(nativeLayoutId("i3"), LayoutMode.Scroller),
+        )
+      ]
+    var model = initRuntimeStateFromConfig(config).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("split-policy"))
+    )
+
+    proc customEval(context: JanetLayoutContext): JanetLayoutEvalResult =
+      check context.tag.splitNodes.countIt(it.kind == FrameNodeKind.Leaf) == 2
+      check context.tag.splitNodes.allIt(not it.rectSet or it.rect.w > 0)
+      JanetLayoutEvalResult(
+        layoutId: context.layoutId,
+        outcome: JanetLayoutOutcome.Applied,
+        outputTargetKind: JanetLayoutTargetKind.SplitNode,
+        instructions:
+          @[
+            pv.RenderInstruction(
+              windowId: pv.ProjectionWindowId(10),
+              geom: pv.Rect(x: 0, y: 0, w: 500, h: 700),
+            ),
+            pv.RenderInstruction(
+              windowId: pv.ProjectionWindowId(11),
+              geom: pv.Rect(x: 500, y: 0, w: 500, h: 700),
+            ),
+          ],
+      )
+
+    let projection = model.layoutProjection(customEval)
+    check projection.instructions.len == 2
+    check projection.instructions[0].geom.w == 500
+    check model.tagData(model.activeTag).get().nativeLayoutId.nativeLayoutIdString() ==
+      "i3"
+
+  test "native split-tree persists through live restore":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let restore = model.liveRestoreState()
+    check restore.tags[1].nativeLayoutId.nativeLayoutIdString() == "i3"
+    check restore.tags[1].splitNodes.len == 5
+
+    var restored = initRuntimeStateFromConfig(baseConfig()).model
+    restored.applyLiveRestore(restore.pendingRestoreState())
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = restored.tagForSlot(1)
+    let snapshot = restored.shellSnapshot()
+    check snapshot.workspaces[0].layoutId == "i3"
+    check snapshot.workspaces[0].splitNodes.len == 5
+    for externalId in [10'u32, 11'u32, 12'u32]:
+      let winId = restored.windowForExternal(tc.ExternalWindowId(externalId))
+      check restored.splitNodeForWindowOnTag(tagId, winId) != tc.NullSplitNodeId
+    let restoredProjection = restored.layoutProjection()
+    check restoredProjection.instructions.len == 3
+    check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(
@@ -2515,6 +2683,20 @@ suite "Runtime state primitives":
     check restoreJson["schema"].getStr() == LiveRestoreSchema
     check restoreJson["restore_status"].getStr() == LiveRestoreStatusPending
     check restoreJson["windows"][0]["id"].getInt() == 10
+
+  test "live restore skips transient dynamic workspace history":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    let dynamicTag = model.addTag(
+      slot = 4,
+      layoutMode = LayoutMode.Scroller,
+      masterCount = model.defaultMasterCount,
+      masterSplitRatio = model.defaultMasterRatio,
+    )
+    discard model.recordWorkspace(dynamicTag)
+
+    let restore = model.liveRestoreState()
+    check not restore.tags.hasKey(4'u32)
+    check 4'u32 notin restore.workspaceHistory
 
   test "direct reducer keeps invariants over a short lifecycle":
     var model = initRuntimeStateFromConfig(baseConfig()).model

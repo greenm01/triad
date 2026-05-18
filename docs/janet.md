@@ -258,6 +258,25 @@ Frame instructions target leaf frames only. Triad maps each frame rectangle to
 that frame's active visible tab; empty frames validate but do not render a
 window. A single result must not mix `:window-id` and `:frame-id`.
 
+Native `i3` layouts expose immutable i3/Sway-style split nodes:
+
+```kdl
+janet {
+  enabled #true
+  layout-dir "~/.config/triad/layouts"
+  layout "janet-split-tree" fallback="i3"
+}
+```
+
+When split-tree data is active, `ctx` includes top-level `:split-nodes`,
+mirrors the same data at `((ctx :tag) :split-nodes)`, and sets
+`:substrate :split-tree`. Leaf split nodes include `:window`, `:focused`,
+`:rect-set`, and `:rect`; container nodes include `:children`, `:mode`, and
+`:weight`. A layout may return `:split-node-id` geometry for leaf nodes. Triad
+maps each split leaf rectangle to that node's tiled window. Janet cannot mutate
+the split tree; split h/v, insertion, movement, resize, flattening, and restore
+remain native reducer behavior.
+
 ---
 
 ## What Embedded Janet Cannot Do

@@ -4,7 +4,7 @@ import ../core/layout_selection_codec
 import ../types/janet_layouts
 import ../types/projection_values as rv
 from ../types/runtime_values import
-  Direction, FrameNodeKind, FrameSplitOrientation, SpiralLayoutConfig
+  Direction, FrameNodeKind, FrameSplitOrientation, SpiralLayoutConfig, SplitTreeNodeMode
 import ../utils/behavior_log
 import binding
 
@@ -70,6 +70,11 @@ proc frameOrientationExpr(orientation: FrameSplitOrientation): string =
   of FrameSplitOrientation.Horizontal: ":horizontal"
   of FrameSplitOrientation.Vertical: ":vertical"
 
+proc splitModeExpr(mode: SplitTreeNodeMode): string =
+  case mode
+  of SplitTreeNodeMode.SplitH: ":splith"
+  of SplitTreeNodeMode.SplitV: ":splitv"
+
 proc directionExpr(direction: Direction): string =
   case direction
   of Direction.DirLeft: ":left"
@@ -106,6 +111,16 @@ proc bspNodeExpr(node: rv.ProjectedBspNode): string =
     (if node.hasPreselection: $node.preselectRatio else: "nil") & " :rect-set " &
     node.rectSet.boolValue() & " :rect " & node.rect.rectExpr() & "}"
 
+proc splitNodeExpr(node: rv.ProjectedSplitNode): string =
+  var children: seq[string] = @[]
+  for child in node.children:
+    children.add($child)
+  "{:id " & $node.id & " :kind " & node.kind.frameKindExpr() & " :parent " & $node.parent &
+    " :children [" & children.join(" ") & "] :mode " & node.mode.splitModeExpr() &
+    " :weight " & $node.weight & " :window " & $node.window & " :focused " &
+    node.focused.boolValue() & " :rect-set " & node.rectSet.boolValue() & " :rect " &
+    node.rect.rectExpr() & "}"
+
 proc windowExpr(window: rv.ProjectedWindow): string =
   "{:id " & $window.id & " :pid " & $window.pid & " :title " & window.title.escaped() &
     " :app-id " & window.appId.escaped() & " :width-proportion " &
@@ -130,6 +145,7 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
   var columns: seq[string] = @[]
   var frames: seq[string] = @[]
   var bspNodes: seq[string] = @[]
+  var splitNodes: seq[string] = @[]
   var windows: seq[string] = @[]
   var windowIds: seq[rv.ProjectionWindowId] = @[]
   for id in context.windows.keys:
@@ -141,6 +157,8 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
     frames.add(frame.frameExpr())
   for node in context.tag.bspNodes:
     bspNodes.add(node.bspNodeExpr())
+  for node in context.tag.splitNodes:
+    splitNodes.add(node.splitNodeExpr())
   for id in windowIds:
     windows.add(context.windows[id].windowExpr())
 
@@ -161,12 +179,14 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
          :master-split-ratio $13
          :columns [$14]
          :frames [$15]
-         :bsp-nodes [$16]}
-   :substrate $17
+         :bsp-nodes [$16]
+         :split-nodes [$17]}
+   :substrate $18
    :frames [$15]
    :bsp-nodes [$16]
-   :windows [$18]
-   :layout-options {:spiral $19}})
+   :split-nodes [$17]
+   :windows [$19]
+   :layout-options {:spiral $20}})
 """ %
   [
     context.layoutId.layoutIdString().escaped(),
@@ -185,7 +205,10 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
     columns.join(" "),
     frames.join(" "),
     bspNodes.join(" "),
-    if context.tag.bspNodes.len > 0:
+    splitNodes.join(" "),
+    if context.tag.splitNodes.len > 0:
+      ":split-tree"
+    elif context.tag.bspNodes.len > 0:
       ":bsp"
     elif context.tag.frames.len > 0:
       ":frames"
@@ -202,6 +225,7 @@ proc extractedLayoutInstructions*(handle: JanetHandle): seq[JanetLayoutInstructi
       of 1: JanetLayoutTargetKind.Window
       of 2: JanetLayoutTargetKind.Frame
       of 3: JanetLayoutTargetKind.BspNode
+      of 4: JanetLayoutTargetKind.SplitNode
       else: JanetLayoutTargetKind.None
     result.add(
       JanetLayoutInstruction(
@@ -242,6 +266,9 @@ proc frameSubstrateActive(context: JanetLayoutContext): bool =
 proc bspSubstrateActive(context: JanetLayoutContext): bool =
   context.tag.bspNodes.len > 0
 
+proc splitTreeSubstrateActive(context: JanetLayoutContext): bool =
+  context.tag.splitNodes.len > 0
+
 proc leafFrameIds(context: JanetLayoutContext): HashSet[uint32] =
   for frame in context.tag.frames:
     if frame.kind == FrameNodeKind.Leaf:
@@ -259,8 +286,21 @@ proc leafBspNodeIds(context: JanetLayoutContext): HashSet[uint32] =
     if node.kind == FrameNodeKind.Leaf:
       result.incl(node.id)
 
+proc leafSplitNodeIds(context: JanetLayoutContext): HashSet[uint32] =
+  for node in context.tag.splitNodes:
+    if node.kind == FrameNodeKind.Leaf:
+      result.incl(node.id)
+
 proc activeBspWindowIds(context: JanetLayoutContext): HashSet[rv.ProjectionWindowId] =
   for node in context.tag.bspNodes:
+    if node.kind == FrameNodeKind.Leaf and node.window != 0 and
+        context.windows.hasKey(node.window):
+      let win = context.windows[node.window]
+      if not win.isFloating and not win.isMinimized and not win.isUnmanagedGlobal:
+        result.incl(node.window)
+
+proc activeSplitWindowIds(context: JanetLayoutContext): HashSet[rv.ProjectionWindowId] =
+  for node in context.tag.splitNodes:
     if node.kind == FrameNodeKind.Leaf and node.window != 0 and
         context.windows.hasKey(node.window):
       let win = context.windows[node.window]
@@ -288,6 +328,17 @@ proc activeWindowForBspNode(
         return node.window
   0'u32
 
+proc activeWindowForSplitNode(
+    context: JanetLayoutContext, nodeId: uint32
+): rv.ProjectionWindowId =
+  for node in context.tag.splitNodes:
+    if node.id == nodeId and node.kind == FrameNodeKind.Leaf and node.window != 0 and
+        context.windows.hasKey(node.window):
+      let win = context.windows[node.window]
+      if not win.isFloating and not win.isMinimized and not win.isUnmanagedGlobal:
+        return node.window
+  0'u32
+
 proc validateLayoutInstructions*(
     context: JanetLayoutContext, instructions: openArray[JanetLayoutInstruction]
 ): tuple[
@@ -307,6 +358,15 @@ proc validateLayoutInstructions*(
       for nodeId in expectedNodes:
         return
           (false, "layout omitted BSP node " & $nodeId, JanetLayoutTargetKind.None, @[])
+    elif context.splitTreeSubstrateActive():
+      let expectedNodes = context.leafSplitNodeIds()
+      for nodeId in expectedNodes:
+        return (
+          false,
+          "layout omitted split-tree node " & $nodeId,
+          JanetLayoutTargetKind.None,
+          @[],
+        )
     else:
       let expectedWindows = context.tiledWindowIds()
       for winId in expectedWindows:
@@ -339,6 +399,8 @@ proc validateLayoutInstructions*(
         context.activeFrameWindowIds()
       elif context.bspSubstrateActive():
         context.activeBspWindowIds()
+      elif context.splitTreeSubstrateActive():
+        context.activeSplitWindowIds()
       else:
         context.tiledWindowIds()
     var seen = initHashSet[rv.ProjectionWindowId]()
@@ -412,6 +474,41 @@ proc validateLayoutInstructions*(
     for nodeId in expected:
       if nodeId notin seen:
         return (false, "layout omitted BSP node " & $nodeId, targetKind, @[])
+  of JanetLayoutTargetKind.SplitNode:
+    if not context.splitTreeSubstrateActive():
+      return (
+        false,
+        "split-tree node instructions require native split-tree data",
+        targetKind,
+        @[],
+      )
+    let expected = context.leafSplitNodeIds()
+    var seen = initHashSet[uint32]()
+    for instr in instructions:
+      let nodeId = instr.targetId
+      if nodeId notin expected:
+        return (
+          false,
+          "instruction references unknown leaf split-tree node " & $nodeId,
+          targetKind,
+          @[],
+        )
+      if nodeId in seen:
+        return (
+          false,
+          "instruction references duplicate split-tree node " & $nodeId,
+          targetKind,
+          @[],
+        )
+      seen.incl(nodeId)
+      let active = context.activeWindowForSplitNode(nodeId)
+      if active != 0:
+        result.instructions.add(
+          rv.RenderInstruction(windowId: active, geom: instr.geom)
+        )
+    for nodeId in expected:
+      if nodeId notin seen:
+        return (false, "layout omitted split-tree node " & $nodeId, targetKind, @[])
   of JanetLayoutTargetKind.None:
     discard
 
@@ -427,7 +524,9 @@ proc layoutBehaviorPayload*(evalResult: JanetLayoutEvalResult): JsonNode =
     "fallback_reason": evalResult.fallbackReason,
     "duration_ms": evalResult.durationMs,
     "substrate":
-      if evalResult.inputBspNodeCount > 0:
+      if evalResult.inputSplitNodeCount > 0:
+        "split-tree"
+      elif evalResult.inputBspNodeCount > 0:
         "bsp"
       elif evalResult.inputFrameCount > 0:
         "frames"
@@ -437,6 +536,7 @@ proc layoutBehaviorPayload*(evalResult: JanetLayoutEvalResult): JsonNode =
     "input_windows": evalResult.inputWindowCount,
     "input_frames": evalResult.inputFrameCount,
     "input_bsp_nodes": evalResult.inputBspNodeCount,
+    "input_split_nodes": evalResult.inputSplitNodeCount,
     "instructions": evalResult.instructionCount,
   }
 

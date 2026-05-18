@@ -87,6 +87,18 @@ type
     rectSet*: bool
     rect*: Rect
 
+  ProjectedSplitNode* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    children*: seq[uint32]
+    mode*: SplitTreeNodeMode
+    weight*: float32
+    window*: ProjectionWindowId
+    focused*: bool
+    rectSet*: bool
+    rect*: Rect
+
   ProjectedBspPreselection* = object
     nodeId*: uint32
     geom*: Rect
@@ -126,6 +138,7 @@ type
     columns*: seq[ProjectedColumn]
     frames*: seq[ProjectedFrame]
     bspNodes*: seq[ProjectedBspNode]
+    splitNodes*: seq[ProjectedSplitNode]
     bspPreselections*: seq[ProjectedBspPreselection]
     focusedWindow*: ProjectionWindowId
     targetViewportXOffset*: float32

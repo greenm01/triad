@@ -17,6 +17,7 @@ proc layoutKindId*(kind: LayoutKind): string =
   of LayoutKind.Scrolling: "scrolling"
   of LayoutKind.Frame: "frame"
   of LayoutKind.Bsp: "bsp"
+  of LayoutKind.SplitTree: "split-tree"
   of LayoutKind.Float: "float"
 
 proc layoutSourceId*(source: LayoutSource): string =
@@ -80,6 +81,8 @@ proc layoutKindForId*(id: string): LayoutKind =
   if native.isSome:
     if id == BspTreeLayoutId:
       return LayoutKind.Bsp
+    if native.get().id.nativeLayoutIdString() == SplitTreeLayoutId:
+      return LayoutKind.SplitTree
     return LayoutKind.Frame
   LayoutKind.Algorithmic
 

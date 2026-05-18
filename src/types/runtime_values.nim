@@ -43,6 +43,7 @@ type
     Scrolling
     Frame
     Bsp
+    SplitTree
     Float
 
   LayoutSource* {.pure.} = enum
@@ -66,6 +67,10 @@ type
   FrameSplitOrientation* {.pure.} = enum
     Horizontal
     Vertical
+
+  SplitTreeNodeMode* {.pure.} = enum
+    SplitH
+    SplitV
 
   LayoutSelection* = object
     kind*: LayoutSelectionKind

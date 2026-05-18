@@ -52,12 +52,16 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
         discard model.syncTagFramesFromPlacement(result)
       elif selection.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
         discard model.syncTagBspFromPlacement(result)
+      elif selection.nativeId.nativeLayoutIdString() == SplitTreeLayoutId:
+        discard model.syncTagSplitTreeFromPlacement(result)
     of LayoutSelectionKind.Native:
       discard model.setTagNativeLayout(result, selection.nativeId, selection.builtin)
       if selection.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
         discard model.syncTagFramesFromPlacement(result)
       elif selection.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
         discard model.syncTagBspFromPlacement(result)
+      elif selection.nativeId.nativeLayoutIdString() == SplitTreeLayoutId:
+        discard model.syncTagSplitTreeFromPlacement(result)
     of LayoutSelectionKind.Builtin:
       discard
   if tagRule.found and tagRule.rule.openOnOutput.len > 0:

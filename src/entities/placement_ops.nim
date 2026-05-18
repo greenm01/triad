@@ -1,15 +1,18 @@
 import std/[options, tables]
-import bsp_ops, frame_ops
+import bsp_ops, frame_ops, split_tree_ops
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
 from ../core/native_layout_codec import
-  BspTreeLayoutId, FrameTreeLayoutId, nativeLayoutIdString
+  BspTreeLayoutId, FrameTreeLayoutId, SplitTreeLayoutId, nativeLayoutIdString
 
 proc tagUsesFrameTree(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
 
 proc tagUsesBspTree(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
+
+proc tagUsesSplitTree(tag: TagData): bool =
+  tag.nativeLayoutId.nativeLayoutIdString() == SplitTreeLayoutId
 
 proc syncTagNativeSubstrateFromPlacement*(model: var Model, tagId: TagId): bool =
   let tagOpt = model.tags.entity(tagId)
@@ -19,6 +22,8 @@ proc syncTagNativeSubstrateFromPlacement*(model: var Model, tagId: TagId): bool 
     return model.syncTagFramesFromPlacement(tagId)
   if tagOpt.get().tagUsesBspTree():
     return model.syncTagBspFromPlacement(tagId)
+  if tagOpt.get().tagUsesSplitTree():
+    return model.syncTagSplitTreeFromPlacement(tagId)
   false
 
 proc syncWindowFrameSubstrateForFloating*(
@@ -28,16 +33,24 @@ proc syncWindowFrameSubstrateForFloating*(
   if winOpt.isNone:
     return false
   for tagId, tag in model.tagsWithId():
-    if not tag.tagUsesFrameTree():
+    if not tag.tagUsesFrameTree() and not tag.tagUsesSplitTree():
       continue
     if not model.placementByTagWindow.hasKey((tagId, winId)):
       continue
     if floating:
-      result = model.removeWindowFromFrame(tagId, winId) or result
+      if tag.tagUsesFrameTree():
+        result = model.removeWindowFromFrame(tagId, winId) or result
+      elif tag.tagUsesSplitTree():
+        result = model.removeWindowFromSplitTree(tagId, winId) or result
     elif winOpt.get().admissionState == WindowAdmissionState.Admitted and
-        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal and
-        model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId) == NullFrameId:
-      result = model.addWindowToFrame(tagId, winId) or result
+        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
+      if tag.tagUsesFrameTree() and
+          model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId) == NullFrameId:
+        result = model.addWindowToFrame(tagId, winId) or result
+      elif tag.tagUsesSplitTree() and
+          model.splitNodeByTagWindow.getOrDefault((tagId, winId), NullSplitNodeId) ==
+          NullSplitNodeId:
+        result = model.addWindowToSplitTree(tagId, winId) or result
 
 proc refreshWindowIndexes(model: var Model, tagId: TagId, columnId: ColumnId) =
   if model.windowsByColumn.hasKey(columnId):
@@ -94,6 +107,8 @@ proc placeWindow*(model: var Model, tagId: TagId, columnId: ColumnId, winId: Win
     discard model.addWindowToFrame(tagId, winId)
   elif tagOpt.get().tagUsesBspTree():
     discard model.addWindowToBsp(tagId, winId)
+  elif tagOpt.get().tagUsesSplitTree():
+    discard model.addWindowToSplitTree(tagId, winId)
 
 proc removeWindowFromTag*(model: var Model, tagId: TagId, winId: WindowId): bool =
   let key = (tagId, winId)
@@ -116,6 +131,7 @@ proc removeWindowFromTag*(model: var Model, tagId: TagId, winId: WindowId): bool
   model.placementByTagWindow.del(key)
   discard model.removeWindowFromFrame(tagId, winId)
   discard model.removeWindowFromBsp(tagId, winId)
+  discard model.removeWindowFromSplitTree(tagId, winId)
   let tagOpt = model.tags.entity(tagId)
   if model.windowTags.hasKey(winId) and tagOpt.isSome:
     var mask = model.windowTags[winId]
@@ -176,6 +192,8 @@ proc moveWindowToColumn*(
     discard model.addWindowToFrame(tagId, winId)
   elif tagOptForFrame.isSome and tagOptForFrame.get().tagUsesBspTree():
     discard model.addWindowToBsp(tagId, winId)
+  elif tagOptForFrame.isSome and tagOptForFrame.get().tagUsesSplitTree():
+    discard model.addWindowToSplitTree(tagId, winId)
   model.refreshWindowIndexes(tagId, targetColumnId)
   if oldColumn != NullColumnId and oldColumn != targetColumnId:
     model.deleteColumnIfEmpty(tagId, oldColumn)
@@ -227,6 +245,7 @@ proc replacePlacedWindow*(
       model.tags.mEntity(tagId).focusedWindow = newWinId
 
   discard model.replaceWindowInBsp(tagId, oldWinId, newWinId)
+  discard model.replaceWindowInSplitTree(tagId, oldWinId, newWinId)
 
   true
 
@@ -294,4 +313,5 @@ proc swapPlacedWindows*(
     windowIdx: uint32(secondIdx + 1),
   )
   discard model.swapWindowsInBsp(firstTagId, firstWinId, secondTagId, secondWinId)
+  discard model.swapWindowsInSplitTree(firstTagId, firstWinId, secondTagId, secondWinId)
   true

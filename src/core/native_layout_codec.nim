@@ -4,6 +4,8 @@ from ../types/runtime_values import
 
 const FrameTreeLayoutId* = "frame-tree"
 const BspTreeLayoutId* = "bsp-tree"
+const SplitTreeLayoutId* = "i3"
+const LegacySplitTreeLayoutId* = "split-tree"
 
 proc nativeLayoutId*(value: string): NativeLayoutId =
   NativeLayoutId(value)
@@ -24,10 +26,17 @@ proc nativeLayouts*(): seq[NativeLayoutConfig] =
       id: nativeLayoutId(BspTreeLayoutId),
       fallback: builtinSelection(LayoutMode.Scroller),
     ),
+    NativeLayoutConfig(
+      id: nativeLayoutId(SplitTreeLayoutId),
+      fallback: builtinSelection(LayoutMode.Scroller),
+    ),
   ]
 
 proc parseNativeLayoutId*(value: string): Option[NativeLayoutConfig] =
   for layout in nativeLayouts():
-    if layout.id.nativeLayoutIdString() == value:
+    if layout.id.nativeLayoutIdString() == value or (
+      layout.id.nativeLayoutIdString() == SplitTreeLayoutId and
+      value == LegacySplitTreeLayoutId
+    ):
       return some(layout)
   none(NativeLayoutConfig)

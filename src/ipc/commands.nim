@@ -333,6 +333,12 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdFrameTabNext))
   of CommandId.CidFrameTabPrev:
     some(Msg(kind: MsgKind.CmdFrameTabPrev))
+  of CommandId.CidSplitTreeSplitHorizontal:
+    some(Msg(kind: MsgKind.CmdSplitTreeSplitHorizontal))
+  of CommandId.CidSplitTreeSplitVertical:
+    some(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+  of CommandId.CidSplitTreeSplitToggle:
+    some(Msg(kind: MsgKind.CmdSplitTreeSplitToggle))
   of CommandId.CidBspBalance:
     some(Msg(kind: MsgKind.CmdBspBalance))
   of CommandId.CidBspEqualize:

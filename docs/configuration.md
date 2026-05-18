@@ -104,7 +104,7 @@ Control the geometry and behavior of your windows.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `gaps` | `Pixels` | Gaps around windows (0..512). In native `frame-tree` layouts this is the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. |
+| `gaps` | `Pixels` | Gaps around windows (0..512). In native `frame-tree` layouts this is the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. Native `bsp-tree` and `i3` use normal outer and inner gaps. |
 | `center-focused-column`| `"never"`, `"always"`, `"on-overflow"` | How to position the active scroller column. |
 | `scroller-focus-center`| `Bool` | Keeps the focus at the screen center while scrolling. |
 | `scroller-prefer-center`| `Bool` | Attempts to center columns even when not focused. |
@@ -509,8 +509,9 @@ bare id that must not collide with a core, native, or bundled Janet layout id
 such as `notion`, `bsp`, `dwindle`, or `spiral`. Each declaration has a safe fallback used
 for overview, compatibility projections, and any failed custom evaluation. The
 fallback may be `scroller`, `vertical-scroller`, or a native substrate layout
-such as `frame-tree` or `bsp-tree`. Algorithmic fallback ids such as `grid` or
-`tile` are accepted for compatibility but normalize to `scroller`.
+such as `frame-tree`, `bsp-tree`, or `i3`. Algorithmic fallback ids
+such as `grid` or `tile` are accepted for compatibility but normalize to
+`scroller`.
 Bundled Janet layouts are embedded from repository `.janet` source files at
 compile time and evaluated lazily when selected. User custom layouts are loaded
 lazily from `layout-dir/<name>.janet`. The legacy `script-dir` key remains
@@ -531,6 +532,7 @@ janet {
   layout "cascade" fallback="scroller"
   layout "janet-frame-tree" fallback="frame-tree"
   layout "janet-bsp" fallback="bsp-tree"
+  layout "janet-split-tree" fallback="i3"
 }
 ```
 
@@ -548,6 +550,13 @@ falls back to the native BSP projection if the Janet policy fails. BSP node
 data also exposes `:preselect-direction` and `:preselect-ratio` so Janet
 layouts can visualize or account for manual insertion targets. Bundled BSP
 policies include `bsp` and `dwindle`; both use Triad-owned tree state.
+
+When a layout uses `fallback="i3"`, it may return split leaf geometry
+with `:split-node-id`. Triad maps each split leaf rect to that node's tiled
+window and falls back to native `i3` projection if the Janet policy
+fails. Janet receives immutable `:split-nodes`; split commands, insertion,
+movement, resize, removal, flattening, and restore remain native state
+mutations.
 
 ### Config Notifications
 Run custom commands to notify yourself of configuration reload results.

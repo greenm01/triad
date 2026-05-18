@@ -31,6 +31,9 @@ type
     CidFrameUnsplit
     CidFrameTabNext
     CidFrameTabPrev
+    CidSplitTreeSplitHorizontal
+    CidSplitTreeSplitVertical
+    CidSplitTreeSplitToggle
     CidBspBalance
     CidBspEqualize
     CidBspPreselectLeft
@@ -258,6 +261,21 @@ const CommandSpecs* = [
   CommandSpec(id: CommandId.CidFrameUnsplit, name: "frame-unsplit", argShape: NoArgs),
   CommandSpec(id: CommandId.CidFrameTabNext, name: "frame-tab-next", argShape: NoArgs),
   CommandSpec(id: CommandId.CidFrameTabPrev, name: "frame-tab-prev", argShape: NoArgs),
+  CommandSpec(
+    id: CommandId.CidSplitTreeSplitHorizontal,
+    name: "split-tree-split-horizontal",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeSplitVertical,
+    name: "split-tree-split-vertical",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeSplitToggle,
+    name: "split-tree-split-toggle",
+    argShape: NoArgs,
+  ),
   CommandSpec(id: CommandId.CidBspBalance, name: "bsp-balance", argShape: NoArgs),
   CommandSpec(id: CommandId.CidBspEqualize, name: "bsp-equalize", argShape: NoArgs),
   CommandSpec(

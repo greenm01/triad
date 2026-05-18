@@ -44,6 +44,8 @@ proc setCommandCustomLayout(
         discard model.syncTagFramesFromPlacement(tagId)
       elif fallback.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
         discard model.syncTagBspFromPlacement(tagId)
+      elif fallback.nativeId.nativeLayoutIdString() == SplitTreeLayoutId:
+        discard model.syncTagSplitTreeFromPlacement(tagId)
     result = model.resetLayoutViewport(tagId) or result
 
 proc setCommandNativeLayout(
@@ -55,6 +57,8 @@ proc setCommandNativeLayout(
       discard model.syncTagFramesFromPlacement(tagId)
     elif id.nativeLayoutIdString() == BspTreeLayoutId:
       discard model.syncTagBspFromPlacement(tagId)
+    elif id.nativeLayoutIdString() == SplitTreeLayoutId:
+      discard model.syncTagSplitTreeFromPlacement(tagId)
     result = model.resetLayoutViewport(tagId) or result
 
 proc focusedPosition(
@@ -223,6 +227,10 @@ proc resizeWidth*(model: var Model, delta: float32): bool =
     return model.adjustFocusedBspSplit(
       model.activeTag, FrameSplitOrientation.Horizontal, delta
     )
+  if model.activeTagUsesSplitTree():
+    return model.adjustFocusedSplitTreeSplit(
+      model.activeTag, FrameSplitOrientation.Horizontal, delta
+    )
   let pos = model.focusedPosition()
   if not pos.found:
     return false
@@ -244,6 +252,10 @@ proc resizeWidth*(model: var Model, delta: float32): bool =
 proc resizeHeight*(model: var Model, delta: float32): bool =
   if model.activeTagUsesBspTree():
     return model.adjustFocusedBspSplit(
+      model.activeTag, FrameSplitOrientation.Vertical, delta
+    )
+  if model.activeTagUsesSplitTree():
+    return model.adjustFocusedSplitTreeSplit(
       model.activeTag, FrameSplitOrientation.Vertical, delta
     )
   let pos = model.focusedPosition()

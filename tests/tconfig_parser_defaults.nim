@@ -1008,7 +1008,7 @@ janet {
       parseKdl(
         """
 layout {
-  layout-cycle "scroller" "spiral" "frame-tree" "grid"
+  layout-cycle "scroller" "spiral" "frame-tree" "i3" "grid"
 }
 
 workspaces {
@@ -1023,12 +1023,13 @@ janet {
   layout "cascade" fallback="scroller"
   layout "wide-master" fallback="tile"
   layout "frame-policy" fallback="frame-tree"
+  layout "split-policy" fallback="i3"
 }
 """
       )
     )
 
-    check config.janet.layouts.len == 3
+    check config.janet.layouts.len == 4
     check config.janet.layouts[0].id.layoutIdString() == "cascade"
     check config.janet.layouts[0].fallback.builtin == LayoutMode.Scroller
     check config.janet.layouts[1].id.layoutIdString() == "wide-master"
@@ -1037,18 +1038,23 @@ janet {
     check config.janet.layouts[2].fallback.kind == LayoutSelectionKind.Native
     check config.janet.layouts[2].fallback.nativeId.nativeLayoutIdString() ==
       "frame-tree"
+    check config.janet.layouts[3].id.layoutIdString() == "split-policy"
+    check config.janet.layouts[3].fallback.kind == LayoutSelectionKind.Native
+    check config.janet.layouts[3].fallback.nativeId.nativeLayoutIdString() == "i3"
     check config.layout.layoutCycle ==
       @[
         LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller,
-        LayoutMode.Scroller,
+        LayoutMode.Scroller, LayoutMode.Scroller,
       ]
     check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[1].customId.layoutIdString() == "spiral"
     check config.layout.layoutSelections[2].kind == LayoutSelectionKind.Native
     check config.layout.layoutSelections[2].nativeId.nativeLayoutIdString() ==
       "frame-tree"
-    check config.layout.layoutSelections[3].kind == LayoutSelectionKind.Custom
-    check config.layout.layoutSelections[3].customId.layoutIdString() == "grid"
+    check config.layout.layoutSelections[3].kind == LayoutSelectionKind.Native
+    check config.layout.layoutSelections[3].nativeId.nativeLayoutIdString() == "i3"
+    check config.layout.layoutSelections[4].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[4].customId.layoutIdString() == "grid"
     check config.workspaces.defaultLayout == LayoutMode.Scroller
     check config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom
     check config.workspaces.defaultLayoutSelection.customId.layoutIdString() == "cascade"

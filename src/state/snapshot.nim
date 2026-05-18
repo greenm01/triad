@@ -83,6 +83,27 @@ proc shellBspNodes(model: Model, tagId: TagId): seq[ShellBspNode] =
       )
     )
 
+proc shellSplitNodes(model: Model, tagId: TagId): seq[ShellSplitNode] =
+  let tagOpt = model.tagData(tagId)
+  let focused = model.effectiveTagFocusedWindow(tagId)
+  for nodeId, node in model.splitNodesOnTagWithId(tagId):
+    var children: seq[uint32] = @[]
+    for child in node.children:
+      children.add(uint32(child))
+    result.add(
+      ShellSplitNode(
+        id: uint32(nodeId),
+        kind: node.kind,
+        parent: uint32(node.parent),
+        children: children,
+        mode: node.mode,
+        weight: node.weight,
+        window: model.externalWindowId(node.window),
+        focused:
+          tagOpt.isSome and node.window != NullWindowId and node.window == focused,
+      )
+    )
+
 proc snapshotDefaultMasterCount(model: Model): int =
   if model.defaultMasterCount > 0:
     max(1, model.defaultMasterCount)
@@ -221,6 +242,11 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         bspNodes:
           if tagId != NullTagId:
             model.shellBspNodes(tagId)
+          else:
+            @[],
+        splitNodes:
+          if tagId != NullTagId:
+            model.shellSplitNodes(tagId)
           else:
             @[],
         masterCount: tag.masterCount,

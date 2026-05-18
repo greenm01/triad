@@ -1,4 +1,4 @@
-import std/[json, options, os, strutils, tables, unittest]
+import std/[json, options, os, sequtils, strutils, tables, unittest]
 import ../src/core/msg
 import ../src/daemon/janet_script_runtime
 from ../src/daemon/state import QueuedMsgOrigin, TriadDaemon, initTriadDaemon
@@ -321,6 +321,38 @@ proc bspTwoPaneContext(): JanetLayoutContext =
             hasPreselection: true,
             preselectDirection: Direction.DirDown,
             preselectRatio: 0.4'f32,
+          ),
+        ],
+    ),
+    windows: windows,
+  )
+
+proc splitTreeTwoPaneContext(): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  windows[10'u32] = ProjectedWindow(id: 10, title: "Terminal", appId: "kitty")
+  windows[11'u32] = ProjectedWindow(id: 11, title: "Browser", appId: "firefox")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("split-aware"),
+    screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+    outerGap: 10,
+    innerGap: 4,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 11,
+      columns: @[ProjectedColumn(windows: @[10'u32, 11'u32])],
+      splitNodes:
+        @[
+          ProjectedSplitNode(
+            id: 1,
+            kind: FrameNodeKind.Split,
+            children: @[2'u32, 3'u32],
+            mode: SplitTreeNodeMode.SplitH,
+            weight: 1.0'f32,
+          ),
+          ProjectedSplitNode(id: 2, kind: FrameNodeKind.Leaf, parent: 1, window: 10),
+          ProjectedSplitNode(
+            id: 3, kind: FrameNodeKind.Leaf, parent: 1, window: 11, focused: true
           ),
         ],
     ),
@@ -1275,6 +1307,71 @@ suite "embedded Janet runtime":
     )
     check not validation.ok
     check validation.error.contains("mixed")
+
+  test "split-tree Janet layout handles split node instructions":
+    let dir = getTempDir() / ("triad-janet-layout-split-tree-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "layout.janet",
+      """
+(triad/def-layout :split-aware
+  (fn [ctx]
+    (def instructions @[])
+    (each node ((ctx :tag) :split-nodes)
+      (when (= (node :kind) :leaf)
+        (array/push instructions
+          {:split-node-id (node :id)
+           :x 0
+           :y 0
+           :w 100
+           :h 100})))
+    instructions))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "layout.janet"):
+        removeFile(dir / "layout.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let evaluated =
+      runtime.evalLayoutDetailed(testSnapshot(), splitTreeTwoPaneContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.SplitNode
+    check evaluated.inputSplitNodeCount == 2
+    check evaluated.instructions.len == 2
+    check evaluated.instructions.anyIt(it.windowId == 10'u32)
+    check evaluated.instructions.anyIt(it.windowId == 11'u32)
+
+  test "split-tree instruction validation rejects invalid split outputs":
+    let context = splitTreeTwoPaneContext()
+
+    var validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.SplitNode,
+          targetId: 1,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("unknown leaf split-tree node")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.SplitNode,
+          targetId: 2,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("omitted split-tree node")
 
   test "custom Janet layout validation rejects incomplete geometry":
     let dir = getTempDir() / ("triad-janet-layout-invalid-" & $getCurrentProcessId())

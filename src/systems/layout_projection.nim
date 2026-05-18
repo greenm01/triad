@@ -281,6 +281,26 @@ proc projectedTag(
         )
       )
 
+  if tag.nativeLayoutId.nativeLayoutIdString() == SplitTreeLayoutId:
+    for nodeId, node in model.splitNodesOnTagWithId(tagId):
+      var children: seq[uint32] = @[]
+      for child in node.children:
+        children.add(uint32(child))
+      result.tag.splitNodes.add(
+        rv.ProjectedSplitNode(
+          id: uint32(nodeId),
+          kind: node.kind,
+          parent: uint32(node.parent),
+          children: children,
+          mode: node.mode,
+          weight: node.weight,
+          window: model.externalWindowId(node.window),
+          focused:
+            node.window != NullWindowId and
+            node.window == model.effectiveTagFocusedWindow(tagId),
+        )
+      )
+
 proc layoutForTag(
     tag: var rv.ProjectedTag,
     windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
@@ -350,6 +370,9 @@ proc frameTreeActive(tag: TagData): bool =
 
 proc bspTreeActive(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
+
+proc splitTreeActive(tag: TagData): bool =
+  tag.nativeLayoutId.nativeLayoutIdString() == SplitTreeLayoutId
 
 proc frameTreeTabHeight(rect: rv.Rect): int32 =
   min(FrameTreeTabBarHeight, max(0'i32, rect.h - 1'i32))
@@ -594,6 +617,21 @@ proc applyBspTreeRects(
         node.rect = item.rect
         break
 
+proc applySplitTreeRects(
+    model: Model,
+    tagId: TagId,
+    tag: var rv.ProjectedTag,
+    screen: rv.Rect,
+    outerGap, innerGap: int32,
+) =
+  let rects = model.splitTreeLeafRects(tagId, screen, outerGap, innerGap)
+  for item in rects:
+    for node in tag.splitNodes.mitems:
+      if node.id == uint32(item.nodeId):
+        node.rectSet = true
+        node.rect = item.rect
+        break
+
 proc bspPreselectionRect(node: rv.ProjectedBspNode, gap: int32): rv.Rect =
   let safeGap = max(0'i32, gap)
   let ratio = clamp(node.preselectRatio, 0.05'f32, 0.95'f32)
@@ -636,6 +674,21 @@ proc layoutBspTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
   let rects = model.bspTreeLeafRects(tagId, screen, outerGap, innerGap)
+  for item in rects:
+    let winId = item.window
+    if winId == NullWindowId:
+      continue
+    let winOpt = model.windowData(winId)
+    if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
+        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
+      result.add(
+        rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: item.rect)
+      )
+
+proc layoutSplitTree*(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.RenderInstruction] =
+  let rects = model.splitTreeLeafRects(tagId, screen, outerGap, innerGap)
   for item in rects:
     let winId = item.window
     if winId == NullWindowId:
@@ -751,6 +804,9 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   elif activeTagData.bspTreeActive():
     result =
       model.layoutBspTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
+  elif activeTagData.splitTreeActive():
+    result =
+      model.layoutSplitTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
     var custom:
       tuple[
@@ -1013,6 +1069,13 @@ proc overviewTagLayout(
       model.layoutBspTree(tagId, screen, model.outerGaps, model.innerGaps)
     return
 
+  if tagData.tagUsesSplitTreeOverview():
+    result.mode = rv.LayoutMode.Grid
+    result.aggregate = true
+    result.instructions =
+      model.layoutSplitTree(tagId, screen, model.outerGaps, model.innerGaps)
+    return
+
   if tagData.tagUsesAggregateOverview():
     result.mode = rv.LayoutMode.Grid
     result.aggregate = true
@@ -1198,6 +1261,10 @@ proc layoutProjection*(
     model.applyBspTreeRects(
       model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
     )
+  elif activeTagData.splitTreeActive():
+    model.applySplitTreeRects(
+      model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
+    )
   let customOuterGap = if activeTagData.frameTreeActive(): 0'i32 else: currentOuterGap
   let custom = customLayoutInstructions(
     effectiveLayoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
@@ -1220,6 +1287,9 @@ proc layoutProjection*(
   elif activeTagData.bspTreeActive():
     result.instructions =
       model.layoutBspTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
+  elif activeTagData.splitTreeActive():
+    result.instructions =
+      model.layoutSplitTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
     result.instructions = layoutForTag(
       tagForLayout,

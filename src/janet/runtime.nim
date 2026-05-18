@@ -255,6 +255,11 @@ proc leafBspNodeCount(context: JanetLayoutContext): int =
     if node.kind == FrameNodeKind.Leaf:
       inc result
 
+proc leafSplitNodeCount(context: JanetLayoutContext): int =
+  for node in context.tag.splitNodes:
+    if node.kind == FrameNodeKind.Leaf:
+      inc result
+
 proc fallbackLayoutResult(
     context: JanetLayoutContext,
     outcome: JanetLayoutOutcome,
@@ -273,6 +278,7 @@ proc fallbackLayoutResult(
     inputWindowCount: context.tiledWindowCount(),
     inputFrameCount: context.leafFrameCount(),
     inputBspNodeCount: context.leafBspNodeCount(),
+    inputSplitNodeCount: context.leafSplitNodeCount(),
   )
 
 proc evalLoadedLayout(
@@ -323,6 +329,7 @@ proc evalLoadedLayout(
     inputWindowCount: context.tiledWindowCount(),
     inputFrameCount: context.leafFrameCount(),
     inputBspNodeCount: context.leafBspNodeCount(),
+    inputSplitNodeCount: context.leafSplitNodeCount(),
     instructionCount: instructions.len,
     outputTargetKind: validation.outputTargetKind,
     instructions: validation.instructions,

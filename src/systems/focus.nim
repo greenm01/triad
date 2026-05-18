@@ -2,7 +2,7 @@ import std/options
 import workspaces
 import ../core/[layout_descriptor_codec, layout_selection_codec]
 from ../core/native_layout_codec import
-  BspTreeLayoutId, FrameTreeLayoutId, nativeLayoutIdString
+  BspTreeLayoutId, FrameTreeLayoutId, SplitTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 from ../types/projection_values import RenderInstruction
 from ../types/runtime_values import Direction, LayoutMode
@@ -57,6 +57,11 @@ proc activeTagUsesFrameTree*(model: Model): bool =
 proc activeTagUsesBspTree*(model: Model): bool =
   let tagOpt = model.tagData(model.activeTag)
   tagOpt.isSome and tagOpt.get().nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
+
+proc activeTagUsesSplitTree*(model: Model): bool =
+  let tagOpt = model.tagData(model.activeTag)
+  tagOpt.isSome and
+    tagOpt.get().nativeLayoutId.nativeLayoutIdString() == SplitTreeLayoutId
 
 proc focusableFrameWindow(model: Model, tagId: TagId, frameId: FrameId): WindowId =
   let frameOpt = model.frameData(frameId)
@@ -212,6 +217,10 @@ proc focusCycle*(model: var Model, step: int): bool =
     for winId in model.bspLeafWindowsInOrder(tagId):
       if model.isFocusableWindow(winId):
         windows.add(winId)
+  elif model.activeTagUsesSplitTree():
+    for winId in model.splitLeafWindowsInOrder(tagId):
+      if model.isFocusableWindow(winId):
+        windows.add(winId)
   else:
     windows = model.focusableWindowsOnTag(tagId)
   if windows.len == 0:
@@ -340,6 +349,21 @@ proc activeBspLeafRects(model: Model): seq[BspLeafRect] =
     model.activeTag, model.primaryScreen(), currentOuterGap, currentInnerGap
   )
 
+proc activeSplitLeafRects(model: Model): seq[SplitLeafRect] =
+  var currentOuterGap = model.outerGaps
+  var currentInnerGap = model.innerGaps
+  var tiledWindowCount = 0
+  for _, win in model.windowsOnTagWithId(model.activeTag):
+    if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
+        not win.isUnmanagedGlobal:
+      inc tiledWindowCount
+  if model.smartGaps and tiledWindowCount <= 1:
+    currentOuterGap = 0
+    currentInnerGap = 0
+  model.splitTreeLeafRects(
+    model.activeTag, model.primaryScreen(), currentOuterGap, currentInnerGap
+  )
+
 proc frameTreeNeighborCandidate(
     current, candidate: typeof(RenderInstruction().geom), direction: Direction
 ): tuple[found: bool, distance: int64] =
@@ -416,6 +440,41 @@ proc bspNeighborWindow*(model: Model, direction: Direction): WindowId =
     return NullWindowId
 
   let leaves = model.activeBspLeafRects()
+  var current = Rect()
+  var currentFound = false
+  for leaf in leaves:
+    if leaf.window == focused:
+      current = leaf.rect
+      currentFound = true
+      break
+  if not currentFound:
+    return NullWindowId
+
+  var best = NullWindowId
+  var bestDistance = high(int64)
+  var bestRank = high(int)
+  for leaf in leaves:
+    if leaf.window == NullWindowId or leaf.window == focused or
+        not model.isFocusableWindow(leaf.window):
+      continue
+    let candidate = bspNeighborCandidate(current, leaf.rect, direction)
+    if candidate.found:
+      let rank = model.focusHistoryRank(leaf.window)
+      if candidate.distance < bestDistance or
+          (candidate.distance == bestDistance and rank < bestRank):
+        best = leaf.window
+        bestDistance = candidate.distance
+        bestRank = rank
+  best
+
+proc splitTreeNeighborWindow*(model: Model, direction: Direction): WindowId =
+  if not model.activeTagUsesSplitTree():
+    return NullWindowId
+  let focused = model.focusedOnActiveTag()
+  if focused == NullWindowId:
+    return NullWindowId
+
+  let leaves = model.activeSplitLeafRects()
   var current = Rect()
   var currentFound = false
   for leaf in leaves:
@@ -668,7 +727,11 @@ proc directionalTarget*(model: var Model, direction: Direction): DirectionalTarg
   let bspTarget = model.bspNeighborWindow(direction)
   if bspTarget != NullWindowId:
     return DirectionalTarget(kind: DirectionalTargetKind.Window, window: bspTarget)
-  if model.activeTagUsesFrameTree() or model.activeTagUsesBspTree():
+  let splitTarget = model.splitTreeNeighborWindow(direction)
+  if splitTarget != NullWindowId:
+    return DirectionalTarget(kind: DirectionalTargetKind.Window, window: splitTarget)
+  if model.activeTagUsesFrameTree() or model.activeTagUsesBspTree() or
+      model.activeTagUsesSplitTree():
     return DirectionalTarget(kind: DirectionalTargetKind.None)
 
   let visualTarget = model.visualDirectionalWindow(direction)

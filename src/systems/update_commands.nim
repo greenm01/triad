@@ -3,7 +3,8 @@ import ../core/[effects, msg, shell_profiles]
 import ../state/engine
 import ../types/janet_layouts
 from ../types/runtime_values import
-  Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, RecentWindowDirection
+  Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, RecentWindowDirection,
+  SplitTreeNodeMode
 import
   dialog_focus, focus, output_navigation, placement, recent_windows, runtime,
   scratchpad, update_effects, window_state, window_rules, workspaces
@@ -93,6 +94,34 @@ proc applyCommand*(
     result.dirty = not model.overviewActive and model.focusFrameTab(1)
   of MsgKind.CmdFrameTabPrev:
     result.dirty = not model.overviewActive and model.focusFrameTab(-1)
+  of MsgKind.CmdSplitTreeSplitHorizontal:
+    result.dirty =
+      not model.overviewActive and
+      model.splitFocusedSplitTree(FrameSplitOrientation.Horizontal)
+  of MsgKind.CmdSplitTreeSplitVertical:
+    result.dirty =
+      not model.overviewActive and
+      model.splitFocusedSplitTree(FrameSplitOrientation.Vertical)
+  of MsgKind.CmdSplitTreeSplitToggle:
+    result.dirty =
+      not model.overviewActive and (
+        if model.activeTagUsesSplitTree():
+          let nodeId = model.focusedSplitLeafOrRoot(model.activeTag)
+          if nodeId != NullSplitNodeId:
+            let node = model.splitNodeData(nodeId)
+            if node.isSome and node.get().parent != NullSplitNodeId:
+              let parent = model.splitNodeData(node.get().parent)
+              if parent.isSome and parent.get().mode == SplitTreeNodeMode.SplitH:
+                model.splitFocusedSplitTree(FrameSplitOrientation.Vertical)
+              else:
+                model.splitFocusedSplitTree(FrameSplitOrientation.Horizontal)
+            else:
+              model.splitFocusedSplitTree(FrameSplitOrientation.Vertical)
+          else:
+            model.splitFocusedSplitTree(FrameSplitOrientation.Vertical)
+        else:
+          false
+      )
   of MsgKind.CmdBspBalance:
     result.dirty = not model.overviewActive and model.balanceBspTree(model.activeTag)
   of MsgKind.CmdBspEqualize:

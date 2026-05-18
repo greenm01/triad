@@ -1,7 +1,7 @@
 import std/[re, sets, tables]
 from core import
   BspNodeId, ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId,
-  FrameId, GroupId, IdCounters, OutputId, Rect, TagId, TagMask, WindowId
+  FrameId, GroupId, IdCounters, OutputId, Rect, SplitNodeId, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
@@ -12,7 +12,7 @@ from runtime_values import
   RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
   TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
   WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
-  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy, SplitTreeNodeMode
 from runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, NativeLayoutId
 
@@ -106,6 +106,16 @@ type
     hasPreselection*: bool
     preselectDirection*: Direction
     preselectRatio*: float32
+
+  SplitNodeData* = object
+    id*: SplitNodeId
+    tagId*: TagId
+    kind*: FrameNodeKind
+    parent*: SplitNodeId
+    children*: seq[SplitNodeId]
+    mode*: SplitTreeNodeMode
+    weight*: float32
+    window*: WindowId
 
   OutputData* = object
     id*: OutputId
@@ -366,6 +376,15 @@ type
     preselectDirection*: Direction
     preselectRatio*: float32
 
+  RestoredSplitNodeData* = object
+    id*: SplitNodeId
+    kind*: FrameNodeKind
+    parent*: SplitNodeId
+    children*: seq[SplitNodeId]
+    mode*: SplitTreeNodeMode
+    weight*: float32
+    window*: ExternalWindowId
+
   RestoredTagData* = object
     slot*: uint32
     name*: string
@@ -375,6 +394,7 @@ type
     columns*: seq[RestoredColumnData]
     frames*: seq[RestoredFrameData]
     bspNodes*: seq[RestoredBspNodeData]
+    splitNodes*: seq[RestoredSplitNodeData]
     focusedWindow*: ExternalWindowId
     focusedFrame*: FrameId
     targetViewportXOffset*: float32
@@ -426,6 +446,7 @@ type
     columns*: EntityManager[ColumnId, ColumnData]
     frames*: EntityManager[FrameId, FrameData]
     bspNodes*: EntityManager[BspNodeId, BspNodeData]
+    splitNodes*: EntityManager[SplitNodeId, SplitNodeData]
     outputs*: EntityManager[OutputId, OutputData]
     groups*: EntityManager[GroupId, GroupData]
 
@@ -442,6 +463,8 @@ type
     frameByTagWindow*: Table[(TagId, WindowId), FrameId]
     bspRootsByTag*: Table[TagId, BspNodeId]
     bspNodeByTagWindow*: Table[(TagId, WindowId), BspNodeId]
+    splitRootsByTag*: Table[TagId, SplitNodeId]
+    splitNodeByTagWindow*: Table[(TagId, WindowId), SplitNodeId]
     outputTags*: Table[OutputId, TagId]
     tagOutputs*: Table[TagId, OutputId]
     tagHomeOutputTargets*: Table[TagId, string]

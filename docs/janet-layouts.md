@@ -154,8 +154,8 @@ Reject and fall back when:
 - coordinates overflow practical `int32` geometry.
 
 The fallback should be a configured safe layout, defaulting to `Scroller`.
-Native fallbacks such as `frame-tree` and `bsp-tree` may render native substrate
-state when the custom script fails. Behavior logs should record the custom
+Native fallbacks such as `frame-tree`, `bsp-tree`, and `i3` may render
+native substrate state when the custom script fails. Behavior logs should record the custom
 layout id, failure reason, window count, instruction count, duration, and
 fallback layout.
 
@@ -202,6 +202,14 @@ Directional focus, `focus-next`/`focus-prev`, `resize-width`, `resize-height`,
 `move-window-*`, `bsp-balance`, `bsp-equalize`, and `bsp-preselect-*` operate
 on the native tree. Directional window movement swaps with the same BSP leaf
 neighbor chosen by directional focus.
+
+Triad's native `i3` layout provides the i3/Sway-style manual split
+substrate. Nim owns split commands, insertion, ordered containers, child
+weights, directional focus, movement, resize, removal, flattening, and restore.
+Janet layouts that use `fallback="i3"` receive immutable
+`:split-nodes` data and may return `:split-node-id` geometry. Janet projection
+is stateless: it can place existing split leaves, but it cannot create,
+delete, reorder, split, flatten, or resize tree nodes.
 
 ## notion-river Feasibility Notes
 
