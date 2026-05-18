@@ -2,7 +2,7 @@
 
 https://github.com/user-attachments/assets/27e4bde8-95fc-40cf-9830-5373ac0bcc74
 
-Triad is a programmable Wayland window manager for River. Built-in dynamic layouts are one policy layer; Janet lets users define their own placement models. Triad separates display from policy: River handles the Wayland protocol while Triad manages window placement. This decoupling ensures resilience; if Triad restarts, your windows remain in place.
+Triad is a programmable Wayland window manager for River. Built-in dynamic layouts are one policy layer; Janet scripting lets users define their own placement models. Triad separates display from policy: River handles the Wayland protocol while Triad manages window placement. This decoupling ensures resilience; if Triad restarts, your windows remain in place.
 
 Triad treats your session as flat data. Windows carry tags rather than living in a rigid hierarchy. This makes conditional logic efficient, turning window management into a scriptable engine.
 
