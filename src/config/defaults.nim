@@ -25,6 +25,7 @@ layout {
         inactive-color "#161a22ee"
         active-line-color "#ffffff"
         active-unfocused-line-color "#62a8ff"
+        empty-background-color "#00000001"
     }
     enable-animations #true
     animation-speed 0.15

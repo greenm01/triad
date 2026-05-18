@@ -93,6 +93,7 @@ type
     focused*: bool
     ringWidth*: int32
     ringColor*: uint32
+    backgroundColor*: uint32
 
   ProjectedTag* = object
     tagId*: uint32

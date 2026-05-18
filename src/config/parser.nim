@@ -1023,6 +1023,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.layout.frameTabs.activeLineColor = DefaultFrameTabActiveLineColor
   result.layout.frameTabs.activeUnfocusedLineColor =
     DefaultFrameTabActiveUnfocusedLineColor
+  result.layout.frameTabs.emptyBackgroundColor = DefaultFrameEmptyBackgroundColor
   result.layout.scrollerFocusCenter = false
   result.layout.scrollerPreferCenter = false
   result.layout.enableAnimations = true
@@ -1168,6 +1169,12 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                     result.layout.frameTabs.activeUnfocusedLineColor = parseColor(
                       tabChild.args[0].kString(),
                       result.layout.frameTabs.activeUnfocusedLineColor,
+                    )
+                  elif tabChild.name == "empty-background-color" and
+                      tabChild.args.len > 0:
+                    result.layout.frameTabs.emptyBackgroundColor = parseColor(
+                      tabChild.args[0].kString(),
+                      result.layout.frameTabs.emptyBackgroundColor,
                     )
                 except CatchableError as e:
                   warn "Ignoring invalid frame-tabs config field",

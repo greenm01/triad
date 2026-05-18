@@ -46,6 +46,7 @@ suite "KDL Configuration Parser: loading reload":
           inactiveColor: 0x07080980'u32,
           activeLineColor: 0x0a0b0cff'u32,
           activeUnfocusedLineColor: 0x0d0e0fff'u32,
+          emptyBackgroundColor: 0x11121340'u32,
         ),
         scrollerFocusCenter: true,
         scrollerPreferCenter: true,
@@ -146,6 +147,7 @@ suite "KDL Configuration Parser: loading reload":
     check state.model.frameTabs.inactiveColor == 0x07080980'u32
     check state.model.frameTabs.activeLineColor == 0x0a0b0cff'u32
     check state.model.frameTabs.activeUnfocusedLineColor == 0x0d0e0fff'u32
+    check state.model.frameTabs.emptyBackgroundColor == 0x11121340'u32
     check state.model.defaultWorkspaceCount == 4
     check state.model.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.VerticalGrid]

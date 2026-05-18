@@ -253,6 +253,8 @@ proc applyConfig*(model: var Model, config: Config) =
     model.frameTabs.activeLineColor = DefaultFrameTabActiveLineColor
   if model.frameTabs.activeUnfocusedLineColor == 0:
     model.frameTabs.activeUnfocusedLineColor = DefaultFrameTabActiveUnfocusedLineColor
+  if model.frameTabs.emptyBackgroundColor == 0:
+    model.frameTabs.emptyBackgroundColor = DefaultFrameEmptyBackgroundColor
   model.scrollerFocusCenter = config.layout.scrollerFocusCenter
   model.scrollerPreferCenter = config.layout.scrollerPreferCenter
   model.innerGaps = model.outerGaps div 2

@@ -494,6 +494,7 @@ proc frameTreeEmptyChrome*(
         focused: focused,
         ringWidth: border.width,
         ringColor: if focused: border.activeColor else: border.inactiveColor,
+        backgroundColor: model.frameTabs.emptyBackgroundColor,
       )
     )
 

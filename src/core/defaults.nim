@@ -7,6 +7,7 @@ const
   DefaultFrameTabInactiveColor* = 0x161a22ee'u32
   DefaultFrameTabActiveLineColor* = 0xffffffff'u32
   DefaultFrameTabActiveUnfocusedLineColor* = 0x62a8ffff'u32
+  DefaultFrameEmptyBackgroundColor* = 0x00000001'u32
   DefaultGaps* = 16'i32
   DefaultCenterFocusedColumn* = "on-overflow"
   DefaultColumnWidth* = 0.5'f32

@@ -31,6 +31,7 @@ layout {
     inactive-color "#07080980"
     active-line-color "#0a0b0c"
     active-unfocused-line-color "#0d0e0f"
+    empty-background-color "#11121340"
   }
   scroller-focus-center #true
   scroller-prefer-center #true
@@ -310,6 +311,7 @@ switch-events {
     check config.layout.frameTabs.inactiveColor == 0x07080980'u32
     check config.layout.frameTabs.activeLineColor == 0x0a0b0cff'u32
     check config.layout.frameTabs.activeUnfocusedLineColor == 0x0d0e0fff'u32
+    check config.layout.frameTabs.emptyBackgroundColor == 0x11121340'u32
     check config.layout.centerFocusedColumn == "always"
     check config.layout.scrollerProportionPresets ==
       @[1.0'f32, 0.25'f32, 0.5'f32, 0.5'f32]
@@ -563,6 +565,8 @@ switch-events {
     check defaults.layout.frameTabs.activeLineColor == DefaultFrameTabActiveLineColor
     check defaults.layout.frameTabs.activeUnfocusedLineColor ==
       DefaultFrameTabActiveUnfocusedLineColor
+    check defaults.layout.frameTabs.emptyBackgroundColor ==
+      DefaultFrameEmptyBackgroundColor
     check config.hotkeyOverlay.skipAtStartup
     check config.hotkeyOverlay.hideNotBound
     check config.hotkeyOverlay.position == HotkeyOverlayPosition.Center

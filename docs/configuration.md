@@ -114,7 +114,7 @@ Control the geometry and behavior of your windows.
 | `default-window-height`| `Block` | Default height for new windows. |
 | `master` | `Block` | Configure `count` and `split-ratio` (0.05..0.95). |
 | `border` | `Block` | Global `width` (0..64), `active-color`, and `inactive-color`. |
-| `frame-tabs` | `Block` | Native frame-tree tab colors: `active-color`, `active-unfocused-color`, `inactive-color`, `active-line-color`, and `active-unfocused-line-color`. |
+| `frame-tabs` | `Block` | Native frame-tree tab and empty-frame colors: `active-color`, `active-unfocused-color`, `inactive-color`, `active-line-color`, `active-unfocused-line-color`, and `empty-background-color`. |
 | `smart-gaps` | `Bool` | Remove gaps when only one window is visible. |
 | `enable-animations` | `Bool` | Toggles viewport animations. |
 | `animation-speed` | `0.0..1.0` | Speed of camera movement (0.0 is instant). |
@@ -141,6 +141,7 @@ layout {
     inactive-color "#161a22ee"
     active-line-color "#ffffff"
     active-unfocused-line-color "#62a8ff"
+    empty-background-color "#00000001"
   }
   
   master {
@@ -149,6 +150,8 @@ layout {
   }
 }
 ```
+Colors accept `#RRGGBB` or `#RRGGBBAA`; use the alpha byte in
+`empty-background-color` for translucent empty frame placeholders.
 
 ### Workspaces
 Workspaces are your virtual rooms. You can name them, pin them to specific monitors, and set their default layouts.

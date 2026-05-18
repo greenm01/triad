@@ -567,6 +567,7 @@ suite "Runtime state primitives":
       focused: false,
       ringWidth: 2,
       ringColor: 0x101112ff'u32,
+      backgroundColor: 0x00000001'u32,
     )
     let rendered = renderFrameEmptyChromeBuffer(frame)
     check rendered.width == 120
@@ -574,6 +575,17 @@ suite "Runtime state primitives":
     check rendered.pixelAt(10, 10) == 0x01000000'u32
     check rendered.pixelAt(0, 10) == testArgb(0x101112ff'u32)
     check rendered.pixelAt(119, 10) == testArgb(0x101112ff'u32)
+
+    let tinted = renderFrameEmptyChromeBuffer(
+      pv.ProjectedFrameEmptyChrome(
+        frameId: 9,
+        geom: pv.Rect(x: 0, y: 0, w: 120, h: 80),
+        ringWidth: 1,
+        ringColor: 0x101112ff'u32,
+        backgroundColor: 0x01020340'u32,
+      )
+    )
+    check tinted.pixelAt(10, 10) == testArgb(0x01020340'u32)
 
   test "recent windows chrome converts RGBA config colors to ARGB pixels":
     var config = baseConfig()

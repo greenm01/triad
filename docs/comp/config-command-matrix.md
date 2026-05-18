@@ -122,7 +122,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | Native `frame-tree` uses gaps between split frames and fills the output usable rect without an outer frame-tree margin. |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
-| Layouts | Frame-tree tab colors | | protocol decoration surfaces | `frame-tabs { active-color; active-unfocused-color; inactive-color; active-line-color; active-unfocused-line-color }` | X | Native frame-tree tab chrome uses configurable colors with current hard-coded values as defaults; empty frames render native border chrome from the same frame geometry substrate. |
+| Layouts | Frame-tree tab colors | | protocol decoration surfaces | `frame-tabs { active-color; active-unfocused-color; inactive-color; active-line-color; active-unfocused-line-color; empty-background-color }` | X | Native frame-tree tab chrome uses configurable colors with current hard-coded values as defaults; empty frames render configurable background plus native border chrome from the same frame geometry substrate. |
 | Layouts | Layout switch toast | | WM policy | `layout-switch-toast { enabled; timeout-ms; ring-color }` | X | Native centered toast shown after active-workspace layout commands; follows command bindings rather than a hard-coded key. |
 | Overview | Toggle overview | `toggleoverview` | WM policy | `toggle-overview`, `open-overview`, `close-overview` | X | |
 | Overview | Overview layout gaps and zoom | `overviewgappi`, `overviewgappo` | WM policy | `overview { inner-gap-multiplier; outer-gap; zoom }` | X | All layouts use the unified workspace-preview overview with Niri-style workspace navigation/camera behavior. See [Niri overview compatibility](./niri-overview-comp.md). |
@@ -355,7 +355,8 @@ KDL config nodes and fields:
   Frame-tree geometry fills the output usable rect, uses layout gaps only
   between split frames, and retains empty frame rects for native chrome.
 - `layout.frame-tabs`: `active-color`, `active-unfocused-color`,
-  `inactive-color`, `active-line-color`, `active-unfocused-line-color`.
+  `inactive-color`, `active-line-color`, `active-unfocused-line-color`,
+  `empty-background-color`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.

@@ -8,7 +8,6 @@ export pixel_buffer
 
 const
   Transparent = 0x00000000'u32
-  InputCapableTransparent = 0x01000000'u32
   Separator = 0xff0b0d12'u32
   TextActive = 0xffffffff'u32
   TextInactive = 0xffaab3c2'u32
@@ -135,11 +134,15 @@ proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
   result.drawFrameTabRing(bar.ringWidth, rgbaColorToArgb(bar.ringColor))
 
 proc frameEmptyChromeCacheKey*(frame: ProjectedFrameEmptyChrome): string =
-  "empty-v2:" & $frame.frameId & ":" & $frame.geom.w & ":" & $frame.geom.h & ":" &
+  result =
+    "empty-v2:" & $frame.frameId & ":" & $frame.geom.w & ":" & $frame.geom.h & ":" &
     $frame.focused & ":" & $frame.ringWidth & ":" & $frame.ringColor
+  result.add(":" & $frame.backgroundColor)
 
 proc renderFrameEmptyChromeBuffer*(frame: ProjectedFrameEmptyChrome): PixelBuffer =
   result = initPixelBuffer(
-    max(1'i32, frame.geom.w), max(1'i32, frame.geom.h), InputCapableTransparent
+    max(1'i32, frame.geom.w),
+    max(1'i32, frame.geom.h),
+    frame.backgroundColor.frameTabArgb(DefaultFrameEmptyBackgroundColor),
   )
   result.drawFrameRectRing(frame.ringWidth, rgbaColorToArgb(frame.ringColor))

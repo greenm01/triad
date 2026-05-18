@@ -66,6 +66,7 @@ type
     inactiveColor*: uint32
     activeLineColor*: uint32
     activeUnfocusedLineColor*: uint32
+    emptyBackgroundColor*: uint32
 
   Direction* {.pure.} = enum
     DirLeft
