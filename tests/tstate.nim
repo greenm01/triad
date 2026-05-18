@@ -15,8 +15,8 @@ import ../src/state/engine except WindowId
 import ../src/state/[entity_manager, invariants, live_restore, snapshot]
 import
   ../src/systems/[
-    daemon_view, layout_projection, overview_geometry, recent_windows, runtime_facade,
-    update, window_lifecycle,
+    daemon_view, focus, layout_projection, overview_geometry, recent_windows,
+    runtime_facade, update, window_lifecycle,
   ]
 import ../src/types/janet_layouts
 import ../src/types/core as tc
@@ -2155,6 +2155,41 @@ suite "Runtime state primitives":
     check restoredProjection.instructions.len == 2
     check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
+
+  test "frame-tree snapshots repair stale tag focus from focused frame":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 20))
+
+    let tag1 = model.tagForSlot(1)
+    let staleWindow = model.windowForExternal(tc.ExternalWindowId(20))
+    let focusedFrame = model.tagData(tag1).get().focusedFrame
+    let frameFocus = model.frameData(focusedFrame).get().activeWindow
+    check staleWindow != tc.NullWindowId
+    check frameFocus != tc.NullWindowId
+    check staleWindow != frameFocus
+
+    model.tags.mEntity(tag1).focusedWindow = staleWindow
+
+    let frameFocusExternal = uint32(model.windowData(frameFocus).get().externalId)
+    check model.effectiveTagFocusedWindow(tag1) == frameFocus
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces.anyIt(
+      it.tagId == 1'u32 and it.focusedWindow == frameFocusExternal
+    )
+    let restore = model.liveRestoreState()
+    check uint32(restore.tags[1].focusedWindow) == frameFocusExternal
+
+    check model.recomputeVisibleFocus(tag1) == frameFocus
+    check model.tagData(tag1).get().focusedWindow == frameFocus
 
   test "custom layout with frame-tree fallback receives frame rects and falls back native":
     var config = baseConfig()

@@ -77,7 +77,8 @@ proc customMovementContext(model: Model): Option[JanetLayoutContext] =
         tagId: tag.slot,
         name: tag.name,
         layoutMode: tag.layoutMode,
-        focusedWindow: model.projectionWindowId(tag.focusedWindow),
+        focusedWindow:
+          model.projectionWindowId(model.effectiveTagFocusedWindow(model.activeTag)),
         columns: columns,
         masterCount: tag.masterCount,
         masterSplitRatio: tag.masterSplitRatio,

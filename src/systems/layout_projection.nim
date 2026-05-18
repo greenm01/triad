@@ -211,7 +211,7 @@ proc projectedTag(
     tagId: tag.slot,
     name: tag.name,
     layoutMode: tag.layoutMode,
-    focusedWindow: model.externalWindowId(tag.focusedWindow),
+    focusedWindow: model.externalWindowId(model.effectiveTagFocusedWindow(tagId)),
     targetViewportXOffset: tag.targetViewportXOffset,
     currentViewportXOffset: tag.currentViewportXOffset,
     targetViewportYOffset: tag.targetViewportYOffset,
@@ -272,7 +272,9 @@ proc projectedTag(
           orientation: node.orientation,
           ratio: node.ratio,
           window: model.externalWindowId(node.window),
-          focused: node.window != NullWindowId and node.window == tag.focusedWindow,
+          focused:
+            node.window != NullWindowId and
+            node.window == model.effectiveTagFocusedWindow(tagId),
           hasPreselection: node.hasPreselection,
           preselectDirection: node.preselectDirection,
           preselectRatio: node.preselectRatio,

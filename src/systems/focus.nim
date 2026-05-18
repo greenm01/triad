@@ -18,38 +18,10 @@ proc windowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
 
 proc focusedOnActiveTag*(model: Model): WindowId =
-  let tagOpt = model.tagData(model.activeTag)
-  if tagOpt.isNone:
-    return NullWindowId
-  let focused = tagOpt.get().focusedWindow
-  let winOpt = model.windowData(focused)
-  if focused != NullWindowId and winOpt.isSome and not winOpt.get().isMinimized and
-      not winOpt.get().isUnmanagedGlobal and winOpt.get().windowAdmitted() and
-      model.windowOnTag(model.activeTag, focused):
-    return focused
-  NullWindowId
-
-proc firstFocusableWindow(model: Model, tagId: TagId): WindowId =
-  for winId, win in model.windowsOnTagWithId(tagId):
-    if not win.isSticky and not win.isUnmanagedGlobal and not win.isMinimized and
-        win.windowAdmitted():
-      return winId
-  for winId, win in model.windowsOnTagWithId(tagId):
-    if not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted():
-      return winId
-  NullWindowId
+  model.effectiveTagFocusedWindow(model.activeTag)
 
 proc recomputeVisibleFocus*(model: var Model, tagId: TagId): WindowId =
-  let tagOpt = model.tagData(tagId)
-  if tagOpt.isNone:
-    return NullWindowId
-  let focused = tagOpt.get().focusedWindow
-  let winOpt = model.windowData(focused)
-  if focused != NullWindowId and winOpt.isSome and not winOpt.get().isMinimized and
-      winOpt.get().windowAdmitted() and model.windowOnTag(tagId, focused):
-    return focused
-
-  result = model.firstFocusableWindow(tagId)
+  result = model.effectiveTagFocusedWindow(tagId)
   discard model.setTagFocus(tagId, result)
 
 proc tagForWindow*(model: Model, winId: WindowId): TagId =

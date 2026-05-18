@@ -157,13 +157,11 @@ proc modelFocusedWindowId(model: Model): uint32 =
       return uint32(winOpt.get().externalId)
   if model.activeTag == NullTagId:
     return 0
-  let tagOpt = model.tagData(model.activeTag)
-  if tagOpt.isSome:
-    let focused = tagOpt.get().focusedWindow
-    if focused != NullWindowId:
-      let winOpt = model.windowData(focused)
-      if winOpt.isSome:
-        return uint32(winOpt.get().externalId)
+  let focused = model.effectiveTagFocusedWindow(model.activeTag)
+  if focused != NullWindowId:
+    let winOpt = model.windowData(focused)
+    if winOpt.isSome:
+      return uint32(winOpt.get().externalId)
   0
 
 proc layoutTransitionPayload(before, after: ShellSnapshot): JsonNode =

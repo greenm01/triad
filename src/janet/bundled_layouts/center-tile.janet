@@ -64,3 +64,4 @@
       instructions)))
 
 (triad/def-layout :center-tile triad/layout-center-tile)
+(triad/def-layout-movement :center-tile triad/layout-movement-vertical-order)

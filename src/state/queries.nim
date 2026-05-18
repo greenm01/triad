@@ -353,6 +353,56 @@ proc placementForWindowOnTag*(
     return none(WindowPlacement)
   some(placement)
 
+proc tagFocusWindowValid*(
+    model: Model, tagId: TagId, winId: WindowId, allowFloating = true
+): bool =
+  if winId == NullWindowId or model.placementForWindowOnTag(tagId, winId).isNone:
+    return false
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  win.windowAdmitted() and not win.isMinimized and not win.isUnmanagedGlobal and
+    (allowFloating or not win.isFloating)
+
+proc frameFocusCandidate(model: Model, tagId: TagId, frameId: FrameId): WindowId =
+  let frameOpt = model.frameData(frameId)
+  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf or
+      frameOpt.get().tagId != tagId:
+    return NullWindowId
+  let active = frameOpt.get().activeWindow
+  if model.tagFocusWindowValid(tagId, active, allowFloating = false):
+    return active
+  for winId in model.windowsForFrame(frameId):
+    if model.tagFocusWindowValid(tagId, winId, allowFloating = false):
+      return winId
+  NullWindowId
+
+proc firstTagFocusCandidate(model: Model, tagId: TagId): WindowId =
+  for winId, _ in model.windowsOnTagWithId(tagId):
+    if model.tagFocusWindowValid(tagId, winId) and
+        not model.windowData(winId).get().isSticky:
+      return winId
+  for winId, _ in model.windowsOnTagWithId(tagId):
+    if model.tagFocusWindowValid(tagId, winId):
+      return winId
+  NullWindowId
+
+proc effectiveTagFocusedWindow*(model: Model, tagId: TagId): WindowId =
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return NullWindowId
+  let tag = tagOpt.get()
+  if model.tagFocusWindowValid(tagId, tag.focusedWindow):
+    return tag.focusedWindow
+  let focusedFrame = model.frameFocusCandidate(tagId, tag.focusedFrame)
+  if focusedFrame != NullWindowId:
+    return focusedFrame
+  let rootFrame = model.frameFocusCandidate(tagId, model.frameRootForTag(tagId))
+  if rootFrame != NullWindowId:
+    return rootFrame
+  model.firstTagFocusCandidate(tagId)
+
 proc columnFullWidthForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): bool =
   let placementOpt = model.placementForWindowOnTag(tagId, winId)
   if placementOpt.isNone:

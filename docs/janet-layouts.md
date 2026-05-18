@@ -131,6 +131,9 @@ The hook receives the same projected context plus a direction keyword:
 focused tiled window with the previous or next window in the projected tiling
 order. Hooks cannot emit `triad/command`; doing so fails the hook and consumes
 the movement command without falling back to unrelated native movement.
+Bundled algorithmic layouts use this hook only when flat tiled-window order is
+their real movement model; frame and BSP layouts keep their native movement
+semantics.
 
 ## Validation And Fallback
 

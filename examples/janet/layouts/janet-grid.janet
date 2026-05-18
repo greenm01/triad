@@ -8,6 +8,13 @@
       (array/push windows win-id)))
   windows)
 
+(defn move-horizontal-order [ctx direction]
+  (if (= direction :left)
+    {:op :move-order :delta -1}
+    (if (= direction :right)
+      {:op :move-order :delta 1}
+      {:op :noop})))
+
 (triad/def-layout :janet-grid
   (fn [ctx]
     (def screen (ctx :screen))
@@ -38,3 +45,5 @@
              :w (clamp-dim cell-w)
              :h (clamp-dim cell-h)}))
         instructions))))
+
+(triad/def-layout-movement :janet-grid move-horizontal-order)

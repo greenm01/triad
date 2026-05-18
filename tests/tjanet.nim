@@ -760,6 +760,75 @@ suite "embedded Janet runtime":
     check right.ok
     check right.op == JanetLayoutMovementOp.Noop
 
+  test "bundled algorithmic Janet layouts expose flat order movement":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    proc movement(
+        layoutId: string, direction: Direction
+    ): JanetLayoutMovementEvalResult =
+      var context = testLayoutContext()
+      context.layoutId = janetLayoutId(layoutId)
+      runtime.evalLayoutMovementDetailed(testSnapshot(), context, direction)
+
+    proc checkMove(layoutId: string, direction: Direction, delta: int32) =
+      let evaluated = movement(layoutId, direction)
+      check evaluated.handled
+      check evaluated.ok
+      check evaluated.path == bundledLayoutPath(layoutId)
+      check evaluated.op == JanetLayoutMovementOp.MoveOrder
+      check evaluated.delta == delta
+
+    proc checkNoop(layoutId: string, direction: Direction) =
+      let evaluated = movement(layoutId, direction)
+      check evaluated.handled
+      check evaluated.ok
+      check evaluated.path == bundledLayoutPath(layoutId)
+      check evaluated.op == JanetLayoutMovementOp.Noop
+
+    for layoutId in ["tile", "right-tile", "center-tile", "spiral", "vertical-grid"]:
+      checkMove(layoutId, Direction.DirUp, -1)
+      checkMove(layoutId, Direction.DirDown, 1)
+      checkNoop(layoutId, Direction.DirLeft)
+      checkNoop(layoutId, Direction.DirRight)
+
+    for layoutId in ["vertical-tile", "grid"]:
+      checkMove(layoutId, Direction.DirLeft, -1)
+      checkMove(layoutId, Direction.DirRight, 1)
+      checkNoop(layoutId, Direction.DirUp)
+      checkNoop(layoutId, Direction.DirDown)
+
+  test "bundled non-flat Janet layouts do not expose movement hooks":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    for layoutId in [
+      "deck", "vertical-deck", "monocle", "notion", "bsp", "dwindle", "tgmix"
+    ]:
+      var context = testLayoutContext()
+      context.layoutId = janetLayoutId(layoutId)
+      let evaluated =
+        runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirUp)
+      check not evaluated.handled
+      check not evaluated.ok
+      check evaluated.op == JanetLayoutMovementOp.None
+
   test "Janet layout movement hook is optional":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:

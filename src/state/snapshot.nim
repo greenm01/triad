@@ -63,6 +63,7 @@ proc shellFrames(model: Model, tagId: TagId): seq[ShellFrame] =
 
 proc shellBspNodes(model: Model, tagId: TagId): seq[ShellBspNode] =
   let tagOpt = model.tagData(tagId)
+  let focused = model.effectiveTagFocusedWindow(tagId)
   for nodeId, node in model.bspNodesOnTagWithId(tagId):
     result.add(
       ShellBspNode(
@@ -75,8 +76,7 @@ proc shellBspNodes(model: Model, tagId: TagId): seq[ShellBspNode] =
         ratio: node.ratio,
         window: model.externalWindowId(node.window),
         focused:
-          tagOpt.isSome and node.window != NullWindowId and
-          node.window == tagOpt.get().focusedWindow,
+          tagOpt.isSome and node.window != NullWindowId and node.window == focused,
         hasPreselection: node.hasPreselection,
         preselectDirection: node.preselectDirection,
         preselectRatio: node.preselectRatio,
@@ -201,7 +201,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         fallbackLayout: fallbackLayout,
         isActive: slot == model.activeSlot,
         isOutputVisible: tagId != NullTagId and model.tagVisibleOnOutput(tagId),
-        focusedWindow: model.externalWindowId(tag.focusedWindow),
+        focusedWindow: model.externalWindowId(model.effectiveTagFocusedWindow(tagId)),
         occupied: tagId != NullTagId and model.tagHasNonStickyLiveWindows(tagId),
         outputName:
           if tagId != NullTagId:
@@ -232,6 +232,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
       )
     )
 
+  let activeFocused = model.effectiveTagFocusedWindow(model.activeTag)
   for winId in model.sortedWindowIdsByExternal():
     let win = model.windowData(winId).get()
     if not win.windowAdmitted():
@@ -239,14 +240,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     if model.windowHiddenBySwallow(winId):
       continue
     let pos = model.firstWindowPosition(winId)
-    let tagOpt =
-      if pos.found:
-        model.tagData(pos.tagId)
-      else:
-        none(TagData)
-    let focused =
-      pos.found and pos.tagId == model.activeTag and tagOpt.isSome and
-      tagOpt.get().focusedWindow == winId
+    let focused = pos.found and pos.tagId == model.activeTag and winId == activeFocused
     let isFocused =
       winId == activeScratchpad or (activeScratchpad == NullWindowId and focused)
     result.windows.add(

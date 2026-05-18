@@ -89,11 +89,4 @@
       instructions)))
 
 (triad/def-layout :spiral triad/layout-spiral)
-
-(triad/def-layout-movement :spiral
-  (fn [ctx direction]
-    (if (= direction :up)
-      {:op :move-order :delta -1}
-      (if (= direction :down)
-        {:op :move-order :delta 1}
-        {:op :noop}))))
+(triad/def-layout-movement :spiral triad/layout-movement-vertical-order)

@@ -22,18 +22,10 @@ proc externalWindowId(model: Model, winId: core_types.WindowId): uint32 =
 proc focusedOnActiveTag(model: Model): uint32 =
   if model.activeTag == NullTagId:
     return 0'u32
-  let tagOpt = model.tagData(model.activeTag)
-  if tagOpt.isNone:
-    return 0'u32
-  let winId = tagOpt.get().focusedWindow
+  let winId = model.effectiveTagFocusedWindow(model.activeTag)
   if winId == NullWindowId:
     return 0'u32
-  if model.placementForWindowOnTag(model.activeTag, winId).isNone:
-    return 0'u32
-  let winOpt = model.windowData(winId)
-  if winOpt.isNone or winOpt.get().isMinimized or not winOpt.get().windowAdmitted():
-    return 0'u32
-  winOpt.get().runtimeWindowId()
+  model.externalWindowId(winId)
 
 proc restoredWindowData*(source: lr.RestoredWindowState): RestoredWindowData =
   RestoredWindowData(
@@ -171,7 +163,8 @@ proc hasDurableTagState*(model: Model, tag: TagData): bool =
       tag.customLayoutId.layoutIdString().len > 0 or
       tag.nativeLayoutId.nativeLayoutIdString().len > 0:
     return true
-  if tag.focusedWindow != NullWindowId and model.tagHasNonStickyLiveWindows(tag.id):
+  if model.effectiveTagFocusedWindow(tag.id) != NullWindowId and
+      model.tagHasNonStickyLiveWindows(tag.id):
     return true
   if tag.targetViewportXOffset != 0 or tag.currentViewportXOffset != 0 or
       tag.targetViewportYOffset != 0 or tag.currentViewportYOffset != 0:
@@ -207,7 +200,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       layoutMode: tag.layoutMode,
       customLayoutId: tag.customLayoutId,
       nativeLayoutId: tag.nativeLayoutId,
-      focusedWindow: model.externalWindowId(tag.focusedWindow),
+      focusedWindow: model.externalWindowId(model.effectiveTagFocusedWindow(tagId)),
       focusedFrame: uint32(tag.focusedFrame),
       targetViewportXOffset: tag.targetViewportXOffset,
       currentViewportXOffset: tag.currentViewportXOffset,

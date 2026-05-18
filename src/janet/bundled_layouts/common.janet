@@ -31,6 +31,20 @@
           (array/push ordered (windows i))))
       ordered)))
 
+(defn triad/layout-movement-vertical-order [ctx direction]
+  (if (= direction :up)
+    {:op :move-order :delta -1}
+    (if (= direction :down)
+      {:op :move-order :delta 1}
+      {:op :noop})))
+
+(defn triad/layout-movement-horizontal-order [ctx direction]
+  (if (= direction :left)
+    {:op :move-order :delta -1}
+    (if (= direction :right)
+      {:op :move-order :delta 1}
+      {:op :noop})))
+
 (defn triad/layout-common [ctx]
   (def screen (ctx :screen))
   (def outer-gap (ctx :outer-gap))

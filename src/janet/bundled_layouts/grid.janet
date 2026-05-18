@@ -37,3 +37,4 @@
       instructions)))
 
 (triad/def-layout :grid (fn [ctx] (triad/layout-grid ctx false)))
+(triad/def-layout-movement :grid triad/layout-movement-horizontal-order)
