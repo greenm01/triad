@@ -890,6 +890,46 @@ suite "Runtime state primitives":
 
     check not model.layoutSwitchToastOpen
 
+  test "group commands join, cycle, and dissolve visible neighbors":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    let first = model.windowForExternal(ExternalWindowId(10))
+    let second = model.windowForExternal(ExternalWindowId(11))
+    check first != tc.NullWindowId
+    check second != tc.NullWindowId
+    check model.layoutProjection().instructions.len == 2
+
+    model.applyMsg(Msg(kind: MsgKind.CmdGroupWindows))
+
+    let groupId = model.groupForWindow(first)
+    check groupId != tc.NullGroupId
+    check model.groupForWindow(second) == groupId
+    check model.groupData(groupId).get().activeWindow == first
+    var groupedProjection = model.layoutProjection()
+    check groupedProjection.instructions.len == 1
+    check groupedProjection.instructions.anyIt(it.windowId == 10'u32)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusNextInGroup))
+
+    check model.focusedWindowId() == 11
+    check model.groupData(groupId).get().activeWindow == second
+    groupedProjection = model.layoutProjection()
+    check groupedProjection.instructions.len == 1
+    check groupedProjection.instructions.anyIt(it.windowId == 11'u32)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdUngroupWindow))
+
+    check model.groupForWindow(first) == tc.NullGroupId
+    check model.groupForWindow(second) == tc.NullGroupId
+    check model.groupsCount() == 0
+    check model.layoutProjection().instructions.len == 2
+
   test "custom layout command stores custom selection with fallback":
     var config = baseConfig()
     config.janet.layouts =
@@ -1243,6 +1283,43 @@ suite "Runtime state primitives":
     check projection.frameTabBars[0].tabs.len == 2
     check projection.instructions[0].geom.y ==
       projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h
+
+  test "group-windows consolidates frame-tree neighbors into focused frame":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    let first = model.windowForExternal(ExternalWindowId(10))
+    let second = model.windowForExternal(ExternalWindowId(11))
+    let focusedFrame = model.frameForWindowOnTag(model.activeTag, first)
+    check focusedFrame != tc.NullFrameId
+    check model.frameForWindowOnTag(model.activeTag, second) != focusedFrame
+
+    model.applyMsg(Msg(kind: MsgKind.CmdGroupWindows))
+
+    let groupId = model.groupForWindow(first)
+    check groupId != tc.NullGroupId
+    check model.groupForWindow(second) == groupId
+    check model.frameForWindowOnTag(model.activeTag, second) == focusedFrame
+    check model.groupData(groupId).get().activeWindow == first
+    var projection = model.layoutProjection()
+    check projection.instructions.len == 1
+    check projection.instructions.anyIt(it.windowId == 10'u32)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdUngroupWindow))
+
+    check model.groupForWindow(first) == tc.NullGroupId
+    check model.groupForWindow(second) == tc.NullGroupId
+    projection = model.layoutProjection()
+    check projection.frameTabBars.anyIt(it.tabs.len == 2)
 
   test "native frame-tree split keeps focused window in original frame":
     var model = initRuntimeStateFromConfig(baseConfig()).model

@@ -121,6 +121,7 @@ proc focusWindow*(
   if model.windowData(target).isNone:
     return false
 
+  discard model.setGroupActiveWindow(target)
   discard model.setWindowMinimized(target, false)
   discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()

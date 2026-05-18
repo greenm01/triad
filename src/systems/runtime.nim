@@ -1,8 +1,9 @@
 import std/[math, options]
+import ../core/native_layout_codec
 import ../state/engine
 import ../types/projection_values as rv
 from ../types/runtime_values import JanetLayoutId, LayoutMode, PointerOpKind
-import focus, overview_geometry, placement
+import focus, layout_projection, overview_geometry, placement
 
 const
   OverviewHoldMs = 752'i32
@@ -369,11 +370,87 @@ proc groupFocusedWindow*(model: var Model): bool =
   let tagOpt = model.tagData(model.activeTag)
   if tagOpt.isNone:
     return false
+  if tagOpt.get().nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId:
+    return false
   let focused = tagOpt.get().focusedWindow
   if focused == NullWindowId or
       model.placementForWindowOnTag(model.activeTag, focused).isNone:
     return false
-  model.addGroup(@[focused], focused) != NullGroupId
+
+  var visible: seq[WindowId] = @[]
+  for instr in model.activeFocusLayoutInstructions():
+    let winId = model.windowForExternal(ExternalWindowId(uint32(instr.windowId)))
+    if winId != NullWindowId and visible.find(winId) == -1 and
+        model.placementForWindowOnTag(model.activeTag, winId).isSome:
+      visible.add(winId)
+  let focusedIdx = visible.find(focused)
+  if focusedIdx == -1 or visible.len <= 1:
+    return false
+
+  let neighbor = visible[(focusedIdx + 1) mod visible.len]
+  var members: seq[WindowId] = @[]
+  for winId in [focused, neighbor]:
+    let groupId = model.groupForWindow(winId)
+    if groupId != NullGroupId:
+      let groupOpt = model.groupData(groupId)
+      if groupOpt.isSome:
+        for member in groupOpt.get().windows:
+          if members.find(member) == -1:
+            members.add(member)
+    elif members.find(winId) == -1:
+      members.add(winId)
+  if members.len <= 1:
+    return false
+
+  if tagOpt.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId:
+    var frameId = model.frameForWindowOnTag(model.activeTag, focused)
+    if frameId == NullFrameId:
+      frameId = model.focusedFrameOrRoot(model.activeTag)
+    if frameId == NullFrameId:
+      return false
+    for member in members:
+      discard model.addWindowToFrame(model.activeTag, member, frameId)
+    discard model.setFrameActiveWindow(frameId, focused)
+    discard model.setFocusedFrame(model.activeTag, frameId)
+  else:
+    let placement = model.placementForWindowOnTag(model.activeTag, focused)
+    if placement.isNone:
+      return false
+    let columnId = placement.get().columnId
+    var targetIdx = int(placement.get().windowIdx)
+    for member in members:
+      if member == focused:
+        continue
+      discard model.moveWindowToColumn(model.activeTag, member, columnId, targetIdx)
+      inc targetIdx
+
+  let groupId = model.addGroup(members, focused)
+  if groupId == NullGroupId:
+    return false
+  discard model.setTagFocus(model.activeTag, focused)
+  true
+
+proc ungroupFocusedWindow*(model: var Model): bool =
+  let focused = model.focusedOnActiveTag()
+  focused != NullWindowId and model.ungroupWindow(focused)
+
+proc focusNextInGroup*(model: var Model): bool =
+  let focused = model.focusedOnActiveTag()
+  if focused == NullWindowId:
+    return false
+  let groupId = model.groupForWindow(focused)
+  let groupOpt = model.groupData(groupId)
+  if groupOpt.isNone or groupOpt.get().windows.len <= 1:
+    return false
+  let group = groupOpt.get()
+  var idx = group.windows.find(group.activeWindow)
+  if idx == -1:
+    idx = group.windows.find(focused)
+  if idx == -1:
+    return false
+  let next = group.windows[(idx + 1) mod group.windows.len]
+  discard model.setGroupActiveWindow(next)
+  model.focusWindow(next)
 
 proc animatedViewportOffset(
     current, target, speed, snapThreshold: float32

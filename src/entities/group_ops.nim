@@ -60,6 +60,40 @@ proc removeWindowFromGroups*(model: var Model, winId: WindowId): bool =
     if model.removeWindowFromGroup(groupId, winId):
       result = true
 
+proc dissolveGroup*(model: var Model, groupId: GroupId): bool =
+  let groupOpt = model.groups.entity(groupId)
+  if groupOpt.isNone:
+    return false
+  for winId in groupOpt.get().windows:
+    if model.groupByWindow.getOrDefault(winId, NullGroupId) == groupId:
+      model.groupByWindow.del(winId)
+  discard model.groups.delete(groupId)
+  true
+
+proc ungroupWindow*(model: var Model, winId: WindowId): bool =
+  let groupId = model.groupByWindow.getOrDefault(winId, NullGroupId)
+  if groupId == NullGroupId:
+    return false
+  let groupOpt = model.groups.entity(groupId)
+  if groupOpt.isNone:
+    model.groupByWindow.del(winId)
+    return true
+  if groupOpt.get().windows.len <= 2:
+    return model.dissolveGroup(groupId)
+  model.removeWindowFromGroup(groupId, winId)
+
+proc setGroupActiveWindow*(model: var Model, winId: WindowId): bool =
+  let groupId = model.groupByWindow.getOrDefault(winId, NullGroupId)
+  if groupId == NullGroupId:
+    return false
+  let groupOpt = model.groups.entity(groupId)
+  if groupOpt.isNone or groupOpt.get().windows.find(winId) == -1:
+    return false
+  if groupOpt.get().activeWindow == winId:
+    return false
+  model.groups.mEntity(groupId).activeWindow = winId
+  true
+
 proc addGroupWithId*(
     model: var Model,
     groupId: GroupId,

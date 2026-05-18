@@ -2,8 +2,7 @@
 
 ## Visible Frame Tabs For frame-tree plan
 
-- Follow-ups: empty-frame chrome, drag/drop between frames,
-  app-to-frame targeting, and existing `group-windows` command behavior.
+- Remaining follow-ups: drag/drop between frames and app-to-frame targeting.
 
 ## BSP layout follow-ups
 

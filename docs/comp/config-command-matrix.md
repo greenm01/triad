@@ -110,7 +110,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Window movement | Stack exchange | `exchange_stack_client` | WM policy | `swap-window-up/down` | X | |
 | Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
 | Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
-| Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window` | X | Triad has explicit groups and consume/expel commands. |
+| Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window`, `focus-next-in-group` | X | Triad groups the focused window with the next rendered neighbor in scroller and frame-tree layouts; BSP ignores grouping to avoid hidden tree leaves. |
 | Layouts | Set layout | `setlayout` | WM policy | `layout-*`, `layout-custom`, native `set-layout`, native action parity | X | Triad supports scroller, bundled Janet layouts, native layouts, and declared user Janet layouts. |
 | Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order, including bundled and declared Janet layouts. |
 | Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | Built-in ids, bundled Janet ids, native ids, and declared Janet layout names are accepted. |

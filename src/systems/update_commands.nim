@@ -127,8 +127,10 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
       result.effects.add(broadcastWorkspaceActivated(shellSnapshot(model)))
   of MsgKind.CmdGroupWindows:
     result.dirty = model.groupFocusedWindow()
-  of MsgKind.CmdUngroupWindow, MsgKind.CmdFocusNextInGroup:
-    result.dirty = true
+  of MsgKind.CmdUngroupWindow:
+    result.dirty = model.ungroupFocusedWindow()
+  of MsgKind.CmdFocusNextInGroup:
+    result.dirty = model.focusNextInGroup()
   of MsgKind.CmdFocusNext:
     result.dirty = model.focusCycle(1)
   of MsgKind.CmdFocusPrev:

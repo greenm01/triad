@@ -109,9 +109,11 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `move-to-scratchpad`: Moves the focused window to the scratchpad.
 *   `move-to-named-scratchpad <name>`: Moves the focused window to a named scratchpad.
 *   `close-window`: Politely requests that the focused window close.
-*   `group-windows`: Orchestrates the union of the focused window and its neighbor into a single tabbed group.
-*   `ungroup-window`: Dissolves the group, granting the focused window its independence.
-*   `focus-next-in-group`: Cycles focus through the windows of a tabbed group.
+*   `group-windows`: Groups the focused window with its next rendered neighbor.
+    Scroller layouts first move the neighbor into the focused column; frame-tree
+    layouts move it into the focused frame. BSP layouts ignore this command.
+*   `ungroup-window`: Dissolves the focused window's group.
+*   `focus-next-in-group`: Cycles focus through the windows of the focused group.
 *   `toggle-floating`: Toggles the focused window between tiled and floating states.
 *   `set-window-floating <id> true|false`: Sets floating state for a specific
     compositor window ID.

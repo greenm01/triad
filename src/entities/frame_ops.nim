@@ -261,6 +261,18 @@ proc focusFrameTab*(model: var Model, delta: int): bool =
   model.tags.mEntity(tagId).focusedWindow = next
   true
 
+proc setFrameActiveWindow*(model: var Model, frameId: FrameId, winId: WindowId): bool =
+  let frameOpt = model.frames.entity(frameId)
+  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf:
+    return false
+  if winId != NullWindowId and
+      model.windowsByFrame.getOrDefault(frameId, @[]).find(winId) == -1:
+    return false
+  if frameOpt.get().activeWindow == winId:
+    return false
+  model.frames.mEntity(frameId).activeWindow = winId
+  true
+
 proc selectableFrameTabWindows(model: Model, frameId: FrameId): seq[WindowId] =
   for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
     let winOpt = model.windows.entity(winId)
