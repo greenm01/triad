@@ -197,13 +197,13 @@ uses live touchpad swipe events when the compositor advertises
 *   `move-column-right`: Swaps the focused column with its neighbor to the right.
 *   `move-column-to-first`: Moves the focused column to the first position.
 *   `move-column-to-last`: Moves the focused column to the last position.
-*   `move-window-left`: Transports the focused window to the adjacent column on the left, creating a new column if necessary. In BSP layouts, swaps with the directional BSP neighbor.
-*   `move-window-right`: Transports the focused window to the adjacent column on the right. In BSP layouts, swaps with the directional BSP neighbor.
-*   `move-window-up`: Swaps the focused window with the one above it in a stack. In BSP layouts, swaps with the directional BSP neighbor.
-*   `move-window-down`: Swaps the focused window with the one below it. In BSP layouts, swaps with the directional BSP neighbor.
-*   `move-window-up-or-to-workspace-up`: Moves the focused window up in its column, or to the previous tag at the edge.
-*   `move-window-down-or-to-workspace-down`: Moves the focused window down in its column, or to the next tag at the edge.
-*   `swap-window-up`: An alias for `move-window-up`, reordering windows within their column.
+*   `move-window-left`: Swaps the focused window with the same leftward target that directional focus would choose. In frame layouts, an empty target frame receives the focused window.
+*   `move-window-right`: Swaps the focused window with the same rightward target that directional focus would choose. In frame layouts, an empty target frame receives the focused window.
+*   `move-window-up`: Swaps the focused window with the same upward target that directional focus would choose. In frame layouts, an empty target frame receives the focused window.
+*   `move-window-down`: Swaps the focused window with the same downward target that directional focus would choose. In frame layouts, an empty target frame receives the focused window.
+*   `move-window-up-or-to-workspace-up`: Moves the focused window upward within the current layout, or to the previous tag when there is no upward layout target.
+*   `move-window-down-or-to-workspace-down`: Moves the focused window downward within the current layout, or to the next tag when there is no downward layout target.
+*   `swap-window-up`: An alias for `move-window-up`.
 *   `swap-window-down`: An alias for `move-window-down`.
 *   `consume-window`: Merges the first window of the column to the right into the currently focused column.
 *   `expel-window`: Liberates the focused window from its stack, granting it a new column to its immediate right.

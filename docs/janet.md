@@ -216,8 +216,10 @@ Triad validates that the result contains exactly one positive-sized rectangle
 for every tiled projected window. Layout functions cannot emit
 `triad/command`; doing so fails evaluation and falls back.
 
-A layout may optionally register movement behavior for commands such as
-`move-window-up` and `move-window-down`:
+A user layout may optionally register movement behavior for commands such as
+`move-window-up` and `move-window-down`. Core and bundled layouts mirror
+directional focus and swap with the selected target without using Janet
+movement hooks:
 
 ```janet
 (triad/def-layout-movement :halves
@@ -229,7 +231,8 @@ A layout may optionally register movement behavior for commands such as
 
 The direction argument is one of `:left`, `:right`, `:up`, or `:down`. V1 hooks
 support only `{:op :noop}` and `{:op :move-order :delta -1|1}`. Movement hooks
-share the layout purity rule: they cannot emit `triad/command`.
+override the core mirrored-navigation movement for that layout. They share the
+layout purity rule: they cannot emit `triad/command`.
 
 Frame-aware layouts use a native `frame-tree` fallback:
 

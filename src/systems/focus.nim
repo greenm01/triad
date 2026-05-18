@@ -14,6 +14,17 @@ type FocusCandidate = object
   geom: typeof(RenderInstruction().geom)
   order: int
 
+type
+  DirectionalTargetKind* {.pure.} = enum
+    None
+    Window
+    Frame
+
+  DirectionalTarget* = object
+    kind*: DirectionalTargetKind
+    window*: WindowId
+    frame*: FrameId
+
 proc windowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
   model.placementForWindowOnTag(tagId, winId).isSome
 
@@ -38,7 +49,7 @@ proc isFocusableWindow*(model: Model, winId: WindowId): bool =
   winOpt.isSome and not winOpt.get().isUnmanagedGlobal and not winOpt.get().isMinimized and
     winOpt.get().windowAdmitted()
 
-proc activeTagUsesFrameTree(model: Model): bool =
+proc activeTagUsesFrameTree*(model: Model): bool =
   let tagOpt = model.tagData(model.activeTag)
   tagOpt.isSome and
     tagOpt.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
@@ -432,22 +443,18 @@ proc bspNeighborWindow*(model: Model, direction: Direction): WindowId =
         bestRank = rank
   best
 
-proc focusBspByDirection(model: var Model, direction: Direction): bool =
-  let target = model.bspNeighborWindow(direction)
-  target != NullWindowId and model.focusWindow(target)
-
-proc focusFrameByDirection(model: var Model, direction: Direction): bool =
+proc frameNeighborTarget*(model: var Model, direction: Direction): DirectionalTarget =
   if not model.activeTagUsesFrameTree():
-    return false
+    return DirectionalTarget(kind: DirectionalTargetKind.None)
   let tagId = model.activeTag
   if tagId == NullTagId:
-    return false
+    return DirectionalTarget(kind: DirectionalTargetKind.None)
   var currentFrame = model.focusedFrameOrRoot(tagId)
   if currentFrame == NullFrameId:
     let focused = model.focusedOnActiveTag()
     currentFrame = model.frameForWindowOnTag(tagId, focused)
     if currentFrame == NullFrameId:
-      return false
+      return DirectionalTarget(kind: DirectionalTargetKind.None)
 
   let rects = model.frameTreeFocusRects()
   var currentRect = typeof(RenderInstruction().geom)()
@@ -458,7 +465,7 @@ proc focusFrameByDirection(model: var Model, direction: Direction): bool =
       currentFound = true
       break
   if not currentFound:
-    return false
+    return DirectionalTarget(kind: DirectionalTargetKind.None)
 
   var bestFrame = NullFrameId
   var bestDistance = high(int64)
@@ -471,12 +478,10 @@ proc focusFrameByDirection(model: var Model, direction: Direction): bool =
       bestDistance = candidate.distance
 
   if bestFrame == NullFrameId:
-    return false
+    return DirectionalTarget(kind: DirectionalTargetKind.None)
 
   let target = model.focusableFrameWindow(tagId, bestFrame)
-  if target != NullWindowId:
-    return model.focusWindow(target)
-  model.setFocusedFrame(tagId, bestFrame)
+  DirectionalTarget(kind: DirectionalTargetKind.Frame, window: target, frame: bestFrame)
 
 proc focusCandidateIndex(candidates: openArray[FocusCandidate], winId: WindowId): int =
   for idx, candidate in candidates:
@@ -506,47 +511,40 @@ proc focusNavigationLayoutMode(model: Model): Option[LayoutMode] =
     return none(LayoutMode)
   some(tag.layoutMode)
 
-proc orderedFallbackFocus(
-    model: var Model,
-    candidates: openArray[FocusCandidate],
-    currentIdx: int,
-    direction: Direction,
-): bool =
+proc orderedFallbackTarget(
+    candidates: openArray[FocusCandidate], currentIdx: int, direction: Direction
+): WindowId =
   if candidates.len <= 1:
-    return false
+    return NullWindowId
 
   let step =
     case direction
     of Direction.DirLeft, Direction.DirUp: -1
     of Direction.DirRight, Direction.DirDown: 1
   let targetIdx = (currentIdx + step + candidates.len) mod candidates.len
-  model.focusWindow(candidates[targetIdx].winId)
+  candidates[targetIdx].winId
 
-proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
-  if model.focusFrameByDirection(direction):
-    return true
-  if model.focusBspByDirection(direction):
-    return true
+proc visualDirectionalWindow*(model: Model, direction: Direction): WindowId =
   if model.activeTagUsesFrameTree():
-    return false
+    return NullWindowId
   if model.activeTagUsesBspTree():
-    return false
+    return NullWindowId
 
   let focused = model.focusedOnActiveTag()
   if focused == NullWindowId:
-    return false
+    return NullWindowId
 
   let candidates = model.visualFocusCandidates()
   let currentIdx = candidates.focusCandidateIndex(focused)
   if currentIdx < 0:
-    return false
+    return NullWindowId
   let current = candidates[currentIdx]
   let currentCx = current.geom.centerX()
   let currentCy = current.geom.centerY()
   let layoutMode = model.focusNavigationLayoutMode()
   if layoutMode.isSome and layoutMode.get() == LayoutMode.Scroller and
       direction in {Direction.DirUp, Direction.DirDown}:
-    return false
+    return NullWindowId
 
   let useIntervalGeometry =
     layoutMode.isSome and
@@ -621,13 +619,81 @@ proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
       bestOrder = candidate.order
 
   if bestIdx >= 0:
-    return model.focusWindow(candidates[bestIdx].winId)
+    return candidates[bestIdx].winId
 
   for idx, candidate in candidates:
     if idx != currentIdx and candidate.geom.sameRect(current.geom):
-      return model.orderedFallbackFocus(candidates, currentIdx, direction)
+      return candidates.orderedFallbackTarget(currentIdx, direction)
 
-  false
+  NullWindowId
+
+proc placementDirectionalWindow*(model: Model, direction: Direction): WindowId =
+  let tagId = model.activeTag
+  let focused = model.focusedOnActiveTag()
+  let pos = model.findWindowPosition(tagId, focused)
+  if not pos.found:
+    return NullWindowId
+
+  let columnCount = model.columnCountForTag(tagId)
+  case direction
+  of Direction.DirLeft:
+    var i = pos.colIdx - 1
+    while i >= 0:
+      result = model.visibleWindowNear(model.columnAt(tagId, i), pos.winIdx)
+      if result != NullWindowId:
+        return
+      dec i
+  of Direction.DirRight:
+    var i = pos.colIdx + 1
+    while i < columnCount:
+      result = model.visibleWindowNear(model.columnAt(tagId, i), pos.winIdx)
+      if result != NullWindowId:
+        return
+      inc i
+  of Direction.DirUp:
+    if pos.winIdx > 0:
+      result = model.windowAt(pos.columnId, pos.winIdx - 1)
+  of Direction.DirDown:
+    let count = model.windowCountForColumn(pos.columnId)
+    if pos.winIdx >= 0 and pos.winIdx < count - 1:
+      result = model.windowAt(pos.columnId, pos.winIdx + 1)
+  if result != NullWindowId and not model.isFocusableWindow(result):
+    result = NullWindowId
+
+proc directionalTarget*(model: var Model, direction: Direction): DirectionalTarget =
+  let frameTarget = model.frameNeighborTarget(direction)
+  if frameTarget.kind != DirectionalTargetKind.None:
+    return frameTarget
+
+  let bspTarget = model.bspNeighborWindow(direction)
+  if bspTarget != NullWindowId:
+    return DirectionalTarget(kind: DirectionalTargetKind.Window, window: bspTarget)
+  if model.activeTagUsesFrameTree() or model.activeTagUsesBspTree():
+    return DirectionalTarget(kind: DirectionalTargetKind.None)
+
+  let visualTarget = model.visualDirectionalWindow(direction)
+  if visualTarget != NullWindowId:
+    return DirectionalTarget(kind: DirectionalTargetKind.Window, window: visualTarget)
+
+  let placementTarget = model.placementDirectionalWindow(direction)
+  if placementTarget != NullWindowId:
+    return
+      DirectionalTarget(kind: DirectionalTargetKind.Window, window: placementTarget)
+
+  DirectionalTarget(kind: DirectionalTargetKind.None)
+
+proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
+  let target = model.directionalTarget(direction)
+  case target.kind
+  of DirectionalTargetKind.Window:
+    model.focusWindow(target.window)
+  of DirectionalTargetKind.Frame:
+    if target.window != NullWindowId:
+      model.focusWindow(target.window)
+    else:
+      model.setFocusedFrame(model.activeTag, target.frame)
+  of DirectionalTargetKind.None:
+    false
 
 proc focusColumnByStep*(model: var Model, step: int): bool =
   if step == 0:
@@ -704,40 +770,6 @@ proc focusByDirection*(model: var Model, direction: Direction): bool =
     return model.focusOverviewBoundaryStep(direction)
   if model.focusByVisualDirection(direction):
     return true
-  if model.activeTagUsesFrameTree():
-    return false
-
-  let tagId = model.activeTag
-  let focused = model.focusedOnActiveTag()
-  let pos = model.findWindowPosition(tagId, focused)
-  if not pos.found:
-    if model.overviewActive:
-      return model.focusOverviewBoundaryStep(direction)
-    return false
-
-  let columnCount = model.columnCountForTag(tagId)
-  var target = NullWindowId
-  case direction
-  of Direction.DirLeft:
-    var i = pos.colIdx - 1
-    while i >= 0 and target == NullWindowId:
-      target = model.visibleWindowNear(model.columnAt(tagId, i), pos.winIdx)
-      dec i
-  of Direction.DirRight:
-    var i = pos.colIdx + 1
-    while i < columnCount and target == NullWindowId:
-      target = model.visibleWindowNear(model.columnAt(tagId, i), pos.winIdx)
-      inc i
-  of Direction.DirUp:
-    if pos.winIdx > 0:
-      target = model.windowAt(pos.columnId, pos.winIdx - 1)
-  of Direction.DirDown:
-    let count = model.windowCountForColumn(pos.columnId)
-    if pos.winIdx >= 0 and pos.winIdx < count - 1:
-      target = model.windowAt(pos.columnId, pos.winIdx + 1)
-
-  if target != NullWindowId and model.isFocusableWindow(target):
-    return model.focusWindow(target)
 
   if model.overviewActive:
     return model.focusOverviewBoundaryStep(direction)

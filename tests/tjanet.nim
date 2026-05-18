@@ -722,45 +722,7 @@ suite "embedded Janet runtime":
     check anticlockwise.instructions[1].geom == Rect(x: 500, y: 400, w: 500, h: 400)
     check anticlockwise.instructions[2].geom == Rect(x: 500, y: 0, w: 500, h: 400)
 
-  test "bundled spiral Janet movement uses qtile order semantics":
-    var runtime = initJanetRuntime(
-      JanetConfig(
-        enabled: false,
-        automationDir: getTempDir() / "triad-unused-janet-dir",
-        layoutDir: getTempDir() / "triad-unused-layout-dir",
-        fuelLimit: 500000,
-      )
-    )
-    defer:
-      runtime.close()
-
-    let context = spiralLayoutContext(3)
-    let up =
-      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirUp)
-    let down =
-      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirDown)
-    let left =
-      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirLeft)
-    let right =
-      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirRight)
-
-    check up.handled
-    check up.ok
-    check up.path == bundledLayoutPath("spiral")
-    check up.op == JanetLayoutMovementOp.MoveOrder
-    check up.delta == -1
-    check down.handled
-    check down.ok
-    check down.op == JanetLayoutMovementOp.MoveOrder
-    check down.delta == 1
-    check left.handled
-    check left.ok
-    check left.op == JanetLayoutMovementOp.Noop
-    check right.handled
-    check right.ok
-    check right.op == JanetLayoutMovementOp.Noop
-
-  test "bundled algorithmic Janet layouts expose flat order movement":
+  test "bundled algorithmic Janet layouts do not expose movement hooks":
     var runtime = initJanetRuntime(
       JanetConfig(
         enabled: false,
@@ -779,32 +741,21 @@ suite "embedded Janet runtime":
       context.layoutId = janetLayoutId(layoutId)
       runtime.evalLayoutMovementDetailed(testSnapshot(), context, direction)
 
-    proc checkMove(layoutId: string, direction: Direction, delta: int32) =
+    proc checkNoHook(layoutId: string, direction: Direction) =
       let evaluated = movement(layoutId, direction)
-      check evaluated.handled
-      check evaluated.ok
-      check evaluated.path == bundledLayoutPath(layoutId)
-      check evaluated.op == JanetLayoutMovementOp.MoveOrder
-      check evaluated.delta == delta
+      check not evaluated.handled
+      check not evaluated.ok
+      check evaluated.path == ""
+      check evaluated.op == JanetLayoutMovementOp.None
 
-    proc checkNoop(layoutId: string, direction: Direction) =
-      let evaluated = movement(layoutId, direction)
-      check evaluated.handled
-      check evaluated.ok
-      check evaluated.path == bundledLayoutPath(layoutId)
-      check evaluated.op == JanetLayoutMovementOp.Noop
-
-    for layoutId in ["tile", "right-tile", "center-tile", "spiral", "vertical-grid"]:
-      checkMove(layoutId, Direction.DirUp, -1)
-      checkMove(layoutId, Direction.DirDown, 1)
-      checkNoop(layoutId, Direction.DirLeft)
-      checkNoop(layoutId, Direction.DirRight)
-
-    for layoutId in ["vertical-tile", "grid"]:
-      checkMove(layoutId, Direction.DirLeft, -1)
-      checkMove(layoutId, Direction.DirRight, 1)
-      checkNoop(layoutId, Direction.DirUp)
-      checkNoop(layoutId, Direction.DirDown)
+    for layoutId in [
+      "tile", "right-tile", "center-tile", "spiral", "vertical-grid", "vertical-tile",
+      "grid",
+    ]:
+      checkNoHook(layoutId, Direction.DirUp)
+      checkNoHook(layoutId, Direction.DirDown)
+      checkNoHook(layoutId, Direction.DirLeft)
+      checkNoHook(layoutId, Direction.DirRight)
 
   test "bundled non-flat Janet layouts do not expose movement hooks":
     var runtime = initJanetRuntime(

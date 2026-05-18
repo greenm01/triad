@@ -62,4 +62,3 @@
 
 (triad/def-layout :vertical-tile
   (fn [ctx] (triad/layout-vertical-tile ctx false)))
-(triad/def-layout-movement :vertical-tile triad/layout-movement-horizontal-order)

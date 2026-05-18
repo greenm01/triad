@@ -89,4 +89,3 @@
       instructions)))
 
 (triad/def-layout :spiral triad/layout-spiral)
-(triad/def-layout-movement :spiral triad/layout-movement-vertical-order)

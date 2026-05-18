@@ -116,8 +116,9 @@ The return value should be a sequence of placement instructions:
 Janet layout functions should not emit Triad commands. Event scripts can still
 use `triad/command`; layout functions are a separate pure projection ABI.
 
-Layouts may also register a narrow movement hook for layout-owned window
-movement policy:
+User layouts may also register a narrow movement hook for layout-owned window
+movement policy. Core and bundled layouts mirror directional focus and swap with
+the selected target without using Janet movement hooks:
 
 ```janet
 (triad/def-layout-movement :my-layout
@@ -129,7 +130,8 @@ The hook receives the same projected context plus a direction keyword:
 `:left`, `:right`, `:up`, or `:down`. V1 movement hooks may return only
 `{:op :noop}` or `{:op :move-order :delta -1|1}`. `:move-order` swaps the
 focused tiled window with the previous or next window in the projected tiling
-order. Hooks cannot emit `triad/command`; doing so fails the hook and consumes
+order. Hooks override the core mirrored-navigation movement for that layout.
+Hooks cannot emit `triad/command`; doing so fails the hook and consumes
 the movement command without falling back to unrelated native movement.
 Bundled algorithmic layouts use this hook only when flat tiled-window order is
 their real movement model; frame and BSP layouts keep their native movement
@@ -198,7 +200,8 @@ Janet policy over this native tree. The bundled `dwindle` layout is the
 Mango/Hyprland-style policy name for the same persistent focused-split tree.
 Directional focus, `focus-next`/`focus-prev`, `resize-width`, `resize-height`,
 `move-window-*`, `bsp-balance`, `bsp-equalize`, and `bsp-preselect-*` operate
-on the native tree.
+on the native tree. Directional window movement swaps with the same BSP leaf
+neighbor chosen by directional focus.
 
 ## notion-river Feasibility Notes
 

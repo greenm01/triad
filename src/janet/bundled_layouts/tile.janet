@@ -55,4 +55,3 @@
           instructions)))))
 
 (triad/def-layout :tile triad/layout-master-stack)
-(triad/def-layout-movement :tile triad/layout-movement-vertical-order)

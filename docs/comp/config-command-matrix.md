@@ -106,7 +106,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Window state | Managed overlay | `toggleoverlay`, `isoverlay` | WM policy | `window-rule open-overlay` | X | Declarative managed stacking policy; not floating, sticky, or unmanaged. |
 | Window state | Global unmanaged | `isunglobal` | Layer/shell primitives | `window-rule open-unmanaged-global` | X | Triad keeps the surface River-managed but gives it unmanaged-like global render and no workspace placement/focus/occupancy. |
 | Window state | Center floating window | `centerwin`, `no_force_center` | WM policy | `window-rule center-floating`, `floating { x-ratio; y-ratio; ... }` | X | Rule-level centering controls generated floating geometry; Triad has no separate center command. |
-| Window movement | Swap/move by direction | `exchange_client` | WM policy | `move-window-*`, `swap-window-up/down` | X | Triad separates moves and stack swaps. |
+| Window movement | Swap/move by direction | `exchange_client` | WM policy | `move-window-*`, `swap-window-up/down` | X | Directional movement mirrors directional focus and swaps with that target; empty frame targets receive the focused window. |
 | Window movement | Stack exchange | `exchange_stack_client` | WM policy | `swap-window-up/down` | X | |
 | Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
 | Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
@@ -350,8 +350,9 @@ KDL config nodes and fields:
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can
   participate in `layout-cycle`, workspace defaults, `layout-custom`, native
-  `set-layout`, and `set-layout-for-workspace`. Janet layouts may register a
-  narrow movement hook for `move-window-*` commands. Native layouts can be selected
+  `set-layout`, and `set-layout-for-workspace`. Core movement mirrors
+  directional focus; Janet layouts may register a narrow advanced override hook
+  for `move-window-*` commands. Native layouts can be selected
   with `layout-native <name>`; `frame-tree` and `bsp-tree` are native layout ids.
   `frame-tree` supports `frame-split-horizontal`, `frame-split-vertical`, `frame-unsplit`,
   `frame-tab-next`, and `frame-tab-prev`. Frame splits move the active tab to

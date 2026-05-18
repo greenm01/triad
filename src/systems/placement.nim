@@ -333,17 +333,55 @@ proc retargetMovedFocus(model: var Model, tagId: TagId, moved: bool): bool =
   discard model.requestTagViewportRetarget(tagId)
   true
 
-proc swapFocusedBspNeighbor(model: var Model, direction: Direction): bool =
-  if not model.activeTagUsesBspTree():
-    return false
+proc moveFocusedWindowToFrameTarget(
+    model: var Model, targetFrame: FrameId, targetWindow: WindowId
+): bool =
   let tagId = model.activeTag
   let focused = model.focusedOnActiveTag()
-  let target = model.bspNeighborWindow(direction)
-  if tagId == NullTagId or focused == NullWindowId or target == NullWindowId:
+  if tagId == NullTagId or focused == NullWindowId or targetFrame == NullFrameId:
     return false
-  model.preserveMovedFocus(
-    tagId, focused, model.swapPlacedWindows(tagId, focused, tagId, target)
-  )
+
+  let sourceFrame = model.frameForWindowOnTag(tagId, focused)
+  if sourceFrame == NullFrameId or sourceFrame == targetFrame:
+    return false
+
+  if targetWindow == NullWindowId:
+    return model.preserveMovedFocus(
+      tagId, focused, model.addWindowToFrame(tagId, focused, targetFrame)
+    )
+
+  let targetWindowFrame = model.frameForWindowOnTag(tagId, targetWindow)
+  if targetWindowFrame != targetFrame:
+    return false
+
+  let focusedMoved = model.addWindowToFrame(tagId, focused, targetFrame)
+  let targetMoved = model.addWindowToFrame(tagId, targetWindow, sourceFrame)
+  if not focusedMoved or not targetMoved:
+    return false
+
+  discard model.setFrameActiveWindow(targetFrame, focused)
+  discard model.setFrameActiveWindow(sourceFrame, targetWindow)
+  discard model.setFocusedFrame(tagId, targetFrame)
+  model.preserveMovedFocus(tagId, focused, true)
+
+proc moveFocusedWindowByDirection(model: var Model, direction: Direction): bool =
+  let tagId = model.activeTag
+  let focused = model.focusedOnActiveTag()
+  if tagId == NullTagId or focused == NullWindowId:
+    return false
+
+  let target = model.directionalTarget(direction)
+  case target.kind
+  of DirectionalTargetKind.Frame:
+    model.moveFocusedWindowToFrameTarget(target.frame, target.window)
+  of DirectionalTargetKind.Window:
+    if target.window == NullWindowId or target.window == focused:
+      return false
+    model.preserveMovedFocus(
+      tagId, focused, model.swapPlacedWindows(tagId, focused, tagId, target.window)
+    )
+  of DirectionalTargetKind.None:
+    false
 
 proc preserveEmptyTargetLayoutContext(
     model: var Model, sourceTag, targetTag: TagId, targetWasEmpty: bool
@@ -448,24 +486,7 @@ proc moveFocusedWindowLeft*(
   let custom = model.applyCustomLayoutMovement(Direction.DirLeft, movementEval)
   if custom.handled:
     return custom.dirty
-  if model.activeTagUsesBspTree():
-    return model.swapFocusedBspNeighbor(Direction.DirLeft)
-  let pos = model.focusedPosition()
-  if not pos.found:
-    return false
-  if pos.colIdx > 0:
-    let target = model.columnAt(pos.tagId, pos.colIdx - 1)
-    let targetIdx = model.windowCountForColumn(target)
-    return model.preserveMovedFocus(
-      pos.tagId,
-      pos.winId,
-      model.moveWindowToColumn(pos.tagId, pos.winId, target, targetIdx),
-    )
-  else:
-    let target = model.insertColumn(pos.tagId, 0, model.defaultColumnWidth())
-    return model.preserveMovedFocus(
-      pos.tagId, pos.winId, model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
-    )
+  model.moveFocusedWindowByDirection(Direction.DirLeft)
 
 proc moveFocusedWindowRight*(
     model: var Model, movementEval: CustomLayoutMovementEval = nil
@@ -473,25 +494,7 @@ proc moveFocusedWindowRight*(
   let custom = model.applyCustomLayoutMovement(Direction.DirRight, movementEval)
   if custom.handled:
     return custom.dirty
-  if model.activeTagUsesBspTree():
-    return model.swapFocusedBspNeighbor(Direction.DirRight)
-  let pos = model.focusedPosition()
-  if not pos.found:
-    return false
-  let columnCount = model.columnCountForTag(pos.tagId)
-  if pos.colIdx < columnCount - 1:
-    return model.preserveMovedFocus(
-      pos.tagId,
-      pos.winId,
-      model.moveWindowToColumn(
-        pos.tagId, pos.winId, model.columnAt(pos.tagId, pos.colIdx + 1), 0
-      ),
-    )
-  else:
-    let target = model.addColumn(pos.tagId, model.defaultColumnWidth())
-    return model.preserveMovedFocus(
-      pos.tagId, pos.winId, model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
-    )
+  model.moveFocusedWindowByDirection(Direction.DirRight)
 
 proc moveFocusedWindowUp*(
     model: var Model, movementEval: CustomLayoutMovementEval = nil
@@ -499,16 +502,7 @@ proc moveFocusedWindowUp*(
   let custom = model.applyCustomLayoutMovement(Direction.DirUp, movementEval)
   if custom.handled:
     return custom.dirty
-  if model.activeTagUsesBspTree():
-    return model.swapFocusedBspNeighbor(Direction.DirUp)
-  let pos = model.focusedPosition()
-  if not pos.found or pos.winIdx <= 0:
-    return false
-  model.preserveMovedFocus(
-    pos.tagId,
-    pos.winId,
-    model.moveWindowToColumn(pos.tagId, pos.winId, pos.columnId, pos.winIdx - 1),
-  )
+  model.moveFocusedWindowByDirection(Direction.DirUp)
 
 proc moveFocusedWindowDown*(
     model: var Model, movementEval: CustomLayoutMovementEval = nil
@@ -516,19 +510,7 @@ proc moveFocusedWindowDown*(
   let custom = model.applyCustomLayoutMovement(Direction.DirDown, movementEval)
   if custom.handled:
     return custom.dirty
-  if model.activeTagUsesBspTree():
-    return model.swapFocusedBspNeighbor(Direction.DirDown)
-  let pos = model.focusedPosition()
-  if not pos.found:
-    return false
-  let windowCount = model.windowCountForColumn(pos.columnId)
-  if pos.winIdx < 0 or pos.winIdx >= windowCount - 1:
-    return false
-  model.preserveMovedFocus(
-    pos.tagId,
-    pos.winId,
-    model.moveWindowToColumn(pos.tagId, pos.winId, pos.columnId, pos.winIdx + 1),
-  )
+  model.moveFocusedWindowByDirection(Direction.DirDown)
 
 proc moveFocusedWindowUpOrWorkspace*(
     model: var Model, movementEval: CustomLayoutMovementEval = nil
@@ -536,11 +518,8 @@ proc moveFocusedWindowUpOrWorkspace*(
   let custom = model.applyCustomLayoutMovement(Direction.DirUp, movementEval)
   if custom.handled:
     return custom.dirty
-  let pos = model.focusedPosition()
-  if not pos.found:
-    return false
-  if pos.winIdx > 0:
-    return model.moveFocusedWindowUp()
+  if model.moveFocusedWindowByDirection(Direction.DirUp):
+    return true
   let target = model.nearestWorkspaceSlot(-1, false)
   target != 0 and model.moveFocusedWindowToSlotAndFocus(target)
 
@@ -550,12 +529,8 @@ proc moveFocusedWindowDownOrWorkspace*(
   let custom = model.applyCustomLayoutMovement(Direction.DirDown, movementEval)
   if custom.handled:
     return custom.dirty
-  let pos = model.focusedPosition()
-  if not pos.found:
-    return false
-  let windowCount = model.windowCountForColumn(pos.columnId)
-  if pos.winIdx >= 0 and pos.winIdx < windowCount - 1:
-    return model.moveFocusedWindowDown()
+  if model.moveFocusedWindowByDirection(Direction.DirDown):
+    return true
   let target = model.nearestWorkspaceSlot(1, false)
   target != 0 and model.moveFocusedWindowToSlotAndFocus(target)
 

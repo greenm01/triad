@@ -40,6 +40,40 @@ proc spiralMovement(
       op: JanetLayoutMovementOp.Noop,
     )
 
+proc moveWindowMsg(direction: Direction): Msg =
+  case direction
+  of Direction.DirLeft:
+    Msg(kind: MsgKind.CmdMoveWindowLeft)
+  of Direction.DirRight:
+    Msg(kind: MsgKind.CmdMoveWindowRight)
+  of Direction.DirUp:
+    Msg(kind: MsgKind.CmdMoveWindowUp)
+  of Direction.DirDown:
+    Msg(kind: MsgKind.CmdMoveWindowDown)
+
+proc expectedSwapOrder(order: seq[uint32], focused, target: uint32): seq[uint32] =
+  result = order
+  let focusedIdx = result.find(focused)
+  let targetIdx = result.find(target)
+  if focusedIdx != -1 and targetIdx != -1:
+    swap(result[focusedIdx], result[targetIdx])
+
+proc checkMoveMirrorsNavigation(base: Model, focused: uint32, direction: Direction) =
+  var navigation = base
+  navigation.focusExternal(focused)
+  let target = navigation.focusDirection(direction)
+  if target == 0 or target == focused:
+    return
+
+  var moved = base
+  moved.focusExternal(focused)
+  let beforeOrder = moved.activeTiledOrder()
+
+  moved.applyMsg(direction.moveWindowMsg())
+
+  check moved.focusedWindowId() == focused
+  check moved.activeTiledOrder() == beforeOrder.expectedSwapOrder(focused, target)
+
 suite "Core Runtime Logic: window movement":
   test "Viewport animation uses configured snap threshold":
     var model = initRuntimeStateFromConfig(
@@ -213,6 +247,92 @@ suite "Core Runtime Logic: window movement":
     check effects.len > 0
     check model.activeTiledOrder() == @[1'u32, 2, 3, 4]
     check model.focusedWindowId() == 3
+
+  test "Built-in layout movement mirrors directional focus target":
+    for mode in [
+      LayoutMode.Scroller, LayoutMode.VerticalScroller, LayoutMode.MasterStack,
+      LayoutMode.RightTile, LayoutMode.CenterTile, LayoutMode.VerticalTile,
+      LayoutMode.Grid, LayoutMode.VerticalGrid, LayoutMode.Deck,
+      LayoutMode.VerticalDeck, LayoutMode.Monocle,
+    ]:
+      let base = directionalModel(mode, 6)
+      for direction in [
+        Direction.DirLeft, Direction.DirRight, Direction.DirUp, Direction.DirDown
+      ]:
+        base.checkMoveMirrorsNavigation(3, direction)
+
+  test "Bundled Janet layout movement mirrors directional focus target":
+    for layoutId in [
+      "tile", "right-tile", "center-tile", "vertical-tile", "grid", "vertical-grid",
+      "spiral", "dwindle", "deck", "vertical-deck", "monocle",
+    ]:
+      var base = directionalModel(LayoutMode.Scroller, 6)
+      base.applyMsg(
+        Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId(layoutId))
+      )
+      for direction in [
+        Direction.DirLeft, Direction.DirRight, Direction.DirUp, Direction.DirDown
+      ]:
+        base.checkMoveMirrorsNavigation(3, direction)
+
+  test "Center tile side-stack movement swaps through center pane":
+    var base = directionalModel(LayoutMode.CenterTile, 7)
+    let centerBefore = base.instructionGeom(1)
+
+    for leftId in [2'u32, 4, 6]:
+      var model = base
+      model.focusExternal(leftId)
+      let sideBefore = model.instructionGeom(leftId)
+      model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowRight))
+      check model.focusedWindowId() == leftId
+      check model.instructionGeom(leftId) == centerBefore
+      check model.instructionGeom(1) == sideBefore
+
+    for rightId in [3'u32, 5, 7]:
+      var model = base
+      model.focusExternal(rightId)
+      let sideBefore = model.instructionGeom(rightId)
+      model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowLeft))
+      check model.focusedWindowId() == rightId
+      check model.instructionGeom(rightId) == centerBefore
+      check model.instructionGeom(1) == sideBefore
+
+  test "Frame-tree movement swaps occupied directional target frames":
+    var model = cameraModel()
+    model.seedCameraWindows(2)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let firstBefore = model.instructionGeom(1)
+    let secondBefore = model.instructionGeom(2)
+    model.focusExternal(2)
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowLeft))
+
+    check model.focusedWindowId() == 2
+    check model.instructionGeom(2) == firstBefore
+    check model.instructionGeom(1) == secondBefore
+
+  test "Frame-tree movement moves into empty directional target frames":
+    var model = cameraModel()
+    model.seedCameraWindows(1)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let projection = model.layoutProjection()
+    check projection.frameEmptyChrome.len == 1
+    let emptyFrame = FrameId(projection.frameEmptyChrome[0].frameId)
+    let emptyBefore = projection.frameEmptyChrome[0].geom
+
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowRight))
+
+    check model.focusedWindowId() == 1
+    check model.windowsForFrame(emptyFrame) == @[WindowId(1)]
+    check model.instructionGeom(1).x == emptyBefore.x
+    check model.instructionGeom(1).w == emptyBefore.w
 
   test "Switching to native layout clears stale viewport offset":
     var model = cameraModel()

@@ -49,4 +49,3 @@
       instructions)))
 
 (triad/def-layout :right-tile triad/layout-right-tile)
-(triad/def-layout-movement :right-tile triad/layout-movement-vertical-order)
