@@ -1,5 +1,10 @@
 # Triad TODO
 
+## Visible Frame Tabs For frame-tree plan
+
+- Follow-ups: empty-frame chrome, drag/drop between frames,
+  app-to-frame targeting, and existing `group-windows` command behavior.
+
 ## Blocked / Watchlist
 
 - Janet follow-ups: user-facing custom layout selection, custom layout config,

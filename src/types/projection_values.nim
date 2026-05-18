@@ -71,6 +71,19 @@ type
     rectSet*: bool
     rect*: Rect
 
+  ProjectedFrameTab* = object
+    windowId*: ProjectionWindowId
+    title*: string
+    appId*: string
+    active*: bool
+
+  ProjectedFrameTabBar* = object
+    frameId*: uint32
+    windowId*: ProjectionWindowId
+    geom*: Rect
+    focused*: bool
+    tabs*: seq[ProjectedFrameTab]
+
   ProjectedTag* = object
     tagId*: uint32
     name*: string

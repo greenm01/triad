@@ -56,6 +56,7 @@ type
     WlPointerDelta
     WlPointerRelease
     WlShellSurfaceInteraction
+    WlFrameTabClicked
     WlModifiersChanged
 
     # User Commands (IPC/Keybinds)
@@ -293,6 +294,9 @@ type
       dx*, dy*: int32
     of MsgKind.WlShellSurfaceInteraction:
       shellSurfaceId*: uint32
+    of MsgKind.WlFrameTabClicked:
+      frameClickFrameId*: uint32
+      frameClickTabIndex*: int
     of MsgKind.WlModifiersChanged:
       oldModifiers*: uint32
       newModifiers*: uint32

@@ -21,6 +21,8 @@ type
     dest: rv.Rect
     clip: rv.Rect
 
+const FrameTreeTabBarHeight* = 24'i32
+
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.ProjectionWindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
@@ -290,6 +292,15 @@ proc layoutUsesNativeViewport(mode: rv.LayoutMode): bool =
 proc frameTreeActive(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
 
+proc frameTreeTabHeight(rect: rv.Rect): int32 =
+  min(FrameTreeTabBarHeight, max(0'i32, rect.h - 1'i32))
+
+proc frameTreeClientRect(rect: rv.Rect): rv.Rect =
+  let tabHeight = frameTreeTabHeight(rect)
+  rv.Rect(
+    x: rect.x, y: rect.y + tabHeight, w: rect.w, h: max(1'i32, rect.h - tabHeight)
+  )
+
 proc frameTreeRects(
     model: Model,
     frameId: FrameId,
@@ -391,8 +402,65 @@ proc layoutFrameTree*(
     if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
         not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
       result.add(
-        rv.RenderInstruction(windowId: model.externalWindowId(active), geom: item.rect)
+        rv.RenderInstruction(
+          windowId: model.externalWindowId(active), geom: frameTreeClientRect(item.rect)
+        )
       )
+
+proc frameTreeTabBars*(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.ProjectedFrameTabBar] =
+  let root = model.frameRootForTag(tagId)
+  let tagOpt = model.tagData(tagId)
+  if root == NullFrameId or tagOpt.isNone:
+    return @[]
+  let safeOuterGap = max(0'i32, outerGap)
+  let usable = rv.Rect(
+    x: screen.x + safeOuterGap,
+    y: screen.y + safeOuterGap,
+    w: max(1'i32, screen.w - 2 * safeOuterGap),
+    h: max(1'i32, screen.h - 2 * safeOuterGap),
+  )
+  var rects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
+  model.frameTreeRects(root, usable, innerGap, rects)
+  for item in rects:
+    let frameOpt = model.frameData(item.frameId)
+    if frameOpt.isNone:
+      continue
+    let frame = frameOpt.get()
+    let active = frame.activeWindow
+    if active == NullWindowId:
+      continue
+    let tabHeight = frameTreeTabHeight(item.rect)
+    if tabHeight <= 0:
+      continue
+    var tabs: seq[rv.ProjectedFrameTab] = @[]
+    for winId in model.windowsByFrame.getOrDefault(item.frameId, @[]):
+      let winOpt = model.windowData(winId)
+      if winOpt.isNone or not winOpt.get().windowAdmitted() or winOpt.get().isFloating or
+          winOpt.get().isMinimized or winOpt.get().isUnmanagedGlobal or
+          model.windowHiddenByGroup(winId):
+        continue
+      let win = winOpt.get()
+      tabs.add(
+        rv.ProjectedFrameTab(
+          windowId: model.externalWindowId(winId),
+          title: win.title,
+          appId: win.appId,
+          active: winId == active,
+        )
+      )
+    if tabs.len == 0:
+      continue
+    result.add(
+      rv.ProjectedFrameTabBar(
+        frameId: uint32(item.frameId),
+        windowId: model.externalWindowId(active),
+        geom: rv.Rect(x: item.rect.x, y: item.rect.y, w: item.rect.w, h: tabHeight),
+        focused: item.frameId == tagOpt.get().focusedFrame,
+        tabs: tabs,
+      )
+    )
 
 proc applyLayoutViewportOffset(
     tag: rv.ProjectedTag, instructions: var seq[rv.RenderInstruction]
@@ -774,6 +842,9 @@ proc layoutProjection*(
       if retargetViewport: model.centerFocusedColumn else: "never",
     )
     tagForLayout.applyLayoutViewportOffset(result.instructions)
+  if activeTagData.frameTreeActive():
+    result.frameTabBars =
+      model.frameTreeTabBars(model.activeTag, screen, currentOuterGap, currentInnerGap)
   if tagForLayout.columns.len > 0 and not custom.applied and
       not activeTagData.frameTreeActive():
     result.viewportTargets.add(
@@ -801,6 +872,7 @@ proc layoutProjection*(
     if win.isFullscreen or effectivelyMaximized:
       result.instructions =
         @[rv.RenderInstruction(windowId: model.externalWindowId(focused), geom: screen)]
+      result.frameTabBars.setLen(0)
 
   model.addFloatingInstructions(model.activeTag, screen, result.instructions)
   model.addUnmanagedGlobalInstructions(screen, result.instructions)

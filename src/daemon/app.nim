@@ -3,6 +3,7 @@ import ../core/[defaults, effects, msg, restore_state, shell_profiles]
 import ../systems/[runtime, runtime_facade]
 import ../state/engine
 import ../types/[model, shell_snapshot]
+import ../types/layout_projection
 import ../types/projection_values
 import ../config/[parser, reload_policy]
 from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
@@ -62,13 +63,13 @@ proc validateConfigFromArgs(args: seq[string]) =
 proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
   daemon.runtimeState.applyRuntimeUpdate(msg)
 
-proc syncRuntimeLayoutProjection(context: string, msg: Msg): seq[RenderInstruction] =
+proc syncRuntimeLayoutProjection(context: string, msg: Msg): LayoutProjection =
   proc evalCustomLayout(context: JanetLayoutContext): JanetLayoutEvalResult =
     daemon.janetRuntime.evalLayoutDetailed(
       daemon.runtimeState.readRuntimeSnapshot(), context
     )
 
-  daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind, evalCustomLayout).instructions
+  daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind, evalCustomLayout)
 
 proc refreshRateFps(refreshRate: int32): int32 =
   if refreshRate <= 0:
@@ -334,8 +335,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     if msg.kind == MsgKind.WlManageStart:
       daemon.riverPhase = RiverPhase.RiverManage
-      let instructions = syncRuntimeLayoutProjection("manage layout", msg)
-      daemon.proposeDesiredDimensions(instructions)
+      let projection = syncRuntimeLayoutProjection("manage layout", msg)
+      daemon.currentFrameTabBars = projection.frameTabBars
+      daemon.proposeDesiredDimensions(projection.instructions)
       daemon.applyManageState()
       daemon.flushPendingManageEffects()
       for eff in effects:
@@ -371,8 +373,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         daemon.riverPhase = RiverPhase.RiverIdle
         continue
       inc daemon.perfCounters.renderLayoutProjections
-      let instructions = syncRuntimeLayoutProjection("render layout", msg)
-      daemon.recordDesiredPlacements(instructions)
+      let projection = syncRuntimeLayoutProjection("render layout", msg)
+      daemon.currentFrameTabBars = projection.frameTabBars
+      daemon.recordDesiredPlacements(projection.instructions)
       daemon.renderDesiredPlacements()
       for windowId in daemon.runtimeState.pendingAdmissionWindowIds():
         daemon.enqueue(

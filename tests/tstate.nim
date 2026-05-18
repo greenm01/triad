@@ -5,6 +5,7 @@ import
   ../src/core/[effects, layout_selection_codec, msg, native_layout_codec, restore_state]
 import ../src/daemon/hotkey_overlay_render
 import ../src/daemon/exit_session_dialog_render
+import ../src/daemon/frame_tab_bar_render
 import ../src/daemon/layout_switch_toast_render
 import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
@@ -520,6 +521,27 @@ suite "Runtime state primitives":
           premulEdgeFound = true
       check premulEdgeFound
 
+  test "frame tab bar renderer draws tabs and hit tests":
+    let bar = pv.ProjectedFrameTabBar(
+      frameId: 7,
+      windowId: 11,
+      geom: pv.Rect(x: 0, y: 0, w: 120, h: 24),
+      focused: true,
+      tabs:
+        @[
+          pv.ProjectedFrameTab(windowId: 10, title: "Term", appId: "foot"),
+          pv.ProjectedFrameTab(
+            windowId: 11, title: "Browser", appId: "firefox", active: true
+          ),
+        ],
+    )
+    let rendered = renderFrameTabBarBuffer(bar)
+    check rendered.width == 120
+    check rendered.height == 24
+    check rendered.pixels.anyIt(it != 0)
+    check bar.frameTabIndexAt(5) == 0
+    check bar.frameTabIndexAt(75) == 1
+
   test "recent windows chrome converts RGBA config colors to ARGB pixels":
     var config = baseConfig()
     config.recentWindows.enabled = true
@@ -863,6 +885,10 @@ suite "Runtime state primitives":
 
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
+    let (withOutput, _) = model.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model = withOutput
     let (withFirst, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
     model = withFirst
     let (withSecond, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
@@ -881,6 +907,11 @@ suite "Runtime state primitives":
     var projection = model.layoutProjection()
     check projection.instructions.len == 1
     check projection.instructions[0].windowId == 11'u32
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].windowId == 11'u32
+    check projection.frameTabBars[0].tabs.len == 2
+    check projection.instructions[0].geom.y ==
+      projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h
 
     let (split, _) = model.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
     model = split
@@ -889,11 +920,24 @@ suite "Runtime state primitives":
     projection = model.layoutProjection()
 
     check projection.instructions.len == 2
+    check projection.frameTabBars.len == 2
     check projection.instructions.anyIt(it.windowId == 11'u32)
     check projection.instructions.anyIt(it.windowId == 12'u32)
     check projection.instructions[0].geom.x < projection.instructions[1].geom.x
 
-    discard model.setTagFocus(model.activeTag, tc.WindowId(1))
+    var clickedFrame = tc.NullFrameId
+    for frameId, _ in model.framesOnTagWithId(model.activeTag):
+      if model.windowsForFrame(frameId) == @[tc.WindowId(1), tc.WindowId(2)]:
+        clickedFrame = frameId
+    let (tabClick, _) = model.update(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickFrameId: uint32(clickedFrame),
+        frameClickTabIndex: 0,
+      )
+    )
+    model = tabClick
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(1)
     let (tabNext, _) = model.update(Msg(kind: MsgKind.CmdFrameTabNext))
     model = tabNext
     check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
@@ -940,6 +984,10 @@ suite "Runtime state primitives":
         )
       ]
     var model = initRuntimeStateFromConfig(config).model
+    let (withOutput, _) = model.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model = withOutput
     let (withFirst, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
     model = withFirst
     let (withSecond, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
@@ -976,6 +1024,8 @@ suite "Runtime state primitives":
     var projection = model.layoutProjection(customEval)
     check projection.instructions.len == 2
     check projection.instructions[0].geom == pv.Rect(x: 5, y: 6, w: 300, h: 400)
+    check projection.frameTabBars.len == 2
+    check projection.frameTabBars.anyIt(it.windowId == 11'u32 and it.tabs.len == 2)
 
     proc invalidEval(context: JanetLayoutContext): JanetLayoutEvalResult =
       JanetLayoutEvalResult(

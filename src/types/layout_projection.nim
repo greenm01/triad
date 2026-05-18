@@ -1,4 +1,4 @@
-from projection_values import RenderInstruction
+from projection_values import ProjectedFrameTabBar, RenderInstruction
 
 type
   LayoutViewportTarget* = object
@@ -8,4 +8,5 @@ type
 
   LayoutProjection* = object
     instructions*: seq[RenderInstruction]
+    frameTabBars*: seq[ProjectedFrameTabBar]
     viewportTargets*: seq[LayoutViewportTarget]

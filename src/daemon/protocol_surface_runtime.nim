@@ -1,4 +1,4 @@
-import std/[os, tables]
+import std/[os, sets, tables]
 import chronicles
 import wayland/native/client
 import protocols/river/client as river
@@ -6,11 +6,12 @@ import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
 import ../systems/[hotkey_overlay, recent_windows]
 from ../types/core import Rect
+from ../types/projection_values import ProjectedFrameTabBar
 import ../types/runtime_values
 import
-  exit_session_dialog_render, hotkey_overlay_render, layout_switch_toast_render,
-  overview_overlay_render, protocol_surfaces, recent_windows_overlay_render, state,
-  wayland_helpers
+  exit_session_dialog_render, frame_tab_bar_render, hotkey_overlay_render,
+  layout_switch_toast_render, overview_overlay_render, protocol_surfaces,
+  recent_windows_overlay_render, state, wayland_helpers
 from std/posix import nil
 
 template currentModel(daemon: TriadDaemon): untyped =
@@ -166,6 +167,7 @@ proc destroyProtocolSurface*(daemon: var TriadDaemon, surf: var OwnedProtocolSur
     surf.shellSurface.destroy()
     surf.shellSurface = nil
   if surf.surface != nil:
+    daemon.protocolSurfaceRuntime.surfaceToOwned.del(surf.surface.id())
     surf.surface.attach(nil, 0, 0)
     surf.surface.commit()
     surf.surface.destroy()
@@ -593,6 +595,7 @@ proc ensureDecorationSurface*(
   daemon.commitProtocolSurface(surf)
   let id = surf.decoration.id()
   daemon.surfaceTable[id] = surf
+  daemon.protocolSurfaceRuntime.surfaceToOwned[surf.surface.id()] = id
   if kind == ProtocolSurfaceKind.PskDecorationAbove:
     daemon.windowDecorationAbove[windowId] = id
   elif kind == ProtocolSurfaceKind.PskDecorationBelow:
@@ -601,6 +604,57 @@ proc ensureDecorationSurface*(
   debug "Created protocol decoration surface",
     windowId = windowId, decorationId = id, kind = kindText
   id
+
+proc clearDecorationSurface(daemon: var TriadDaemon, id: uint32) =
+  if not daemon.surfaceTable.hasKey(id):
+    return
+  var surf = daemon.surfaceTable[id]
+  if surf.kind notin
+      {ProtocolSurfaceKind.PskDecorationAbove, ProtocolSurfaceKind.PskDecorationBelow}:
+    return
+  let key = "clear:" & $daemon.currentModel.protocolSurfaces.visibleDebug
+  surf.decoration.setOffset(0, 0)
+  surf.inputW = 0
+  surf.inputH = 0
+  if surf.bufferCacheKey != key:
+    surf.setProtocolSurfaceBuffer(daemon.createProtocolBuffer(surf.kind), 1, 1)
+    surf.bufferCacheKey = key
+    daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[id] = surf
+
+proc syncFrameTabBarSurfaces*(
+    daemon: var TriadDaemon, tabBars: openArray[ProjectedFrameTabBar]
+) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    return
+
+  var activeWindows = initHashSet[uint32]()
+  for bar in tabBars:
+    if bar.windowId == 0 or bar.geom.w <= 0 or bar.geom.h <= 0 or bar.tabs.len == 0:
+      continue
+    let surfaceId = daemon.ensureDecorationSurface(
+      bar.windowId, ProtocolSurfaceKind.PskDecorationAbove
+    )
+    if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
+      continue
+    activeWindows.incl(bar.windowId)
+    var surf = daemon.surfaceTable[surfaceId]
+    let key = bar.frameTabBarCacheKey()
+    surf.decoration.setOffset(0, -bar.geom.h)
+    surf.inputW = max(1'i32, bar.geom.w)
+    surf.inputH = max(1'i32, bar.geom.h)
+    if surf.bufferCacheKey != key:
+      let rendered = renderFrameTabBarBuffer(bar)
+      let buffer = daemon.createArgbShmBuffer(rendered)
+      if buffer != nil:
+        surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
+        surf.bufferCacheKey = key
+        daemon.commitProtocolSurface(surf)
+    daemon.surfaceTable[surfaceId] = surf
+
+  for windowId, surfaceId in daemon.windowDecorationAbove.pairs:
+    if not activeWindows.contains(windowId):
+      daemon.clearDecorationSurface(surfaceId)
 
 proc destroyWindowProtocolSurfaces*(daemon: var TriadDaemon, windowId: uint32) =
   if daemon.windowDecorationAbove.hasKey(windowId):
@@ -634,3 +688,4 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
   daemon.recentWindowsChromeSurfaceId = 0
   daemon.windowDecorationAbove.clear()
   daemon.windowDecorationBelow.clear()
+  daemon.protocolSurfaceRuntime.surfaceToOwned.clear()

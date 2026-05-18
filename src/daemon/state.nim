@@ -232,6 +232,7 @@ type
     desiredPlacements*: Table[uint32, Rect]
     desiredPlacementClips*: Table[uint32, Rect]
     desiredPlacementOrder*: seq[uint32]
+    currentFrameTabBars*: seq[ProjectedFrameTabBar]
     lastRenderWindowStates*: Table[uint32, RenderWindowState]
     lastRenderOrder*: seq[uint32]
     lastFrameTickMs*: int64
@@ -291,6 +292,8 @@ type
     wlPointerRiverSeats*: Table[uint32, uint32]
     wlPointerWheelFrames*: Table[uint32, WlPointerWheelFrame]
     wlPointerWheelRemainders*: Table[uint32, WlPointerWheelRemainder]
+    wlPointerSurfaceIds*: Table[uint32, uint32]
+    wlPointerSurfaceXs*: Table[uint32, int32]
     wlSwipePointers*: Table[uint32, ptr pointerGestures.ZwpPointerGestureSwipeV1]
     wlSwipePointerIds*: Table[uint32, uint32]
     wlSwipeStates*: Table[uint32, WlSwipeState]

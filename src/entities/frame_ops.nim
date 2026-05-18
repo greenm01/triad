@@ -228,6 +228,46 @@ proc focusFrameTab*(model: var Model, delta: int): bool =
   model.tags.mEntity(tagId).focusedWindow = next
   true
 
+proc selectableFrameTabWindows(model: Model, frameId: FrameId): seq[WindowId] =
+  for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+    let winOpt = model.windows.entity(winId)
+    if winOpt.isNone:
+      continue
+    let win = winOpt.get()
+    if win.admissionState != WindowAdmissionState.Admitted or win.isFloating or
+        win.isMinimized or win.isUnmanagedGlobal:
+      continue
+    let groupId = model.groupByWindow.getOrDefault(winId, NullGroupId)
+    if groupId != NullGroupId:
+      let groupOpt = model.groups.entity(groupId)
+      if groupOpt.isSome and groupOpt.get().activeWindow != winId:
+        continue
+    result.add(winId)
+
+proc focusFrameTabAt*(model: var Model, frameId: FrameId, tabIndex: int): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId or tabIndex < 0:
+    return false
+  let frameOpt = model.frames.entity(frameId)
+  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf or
+      not model.frameUsesTag(frameId, tagId):
+    return false
+  discard model.repairFrameActiveWindow(frameId)
+  let windows = model.selectableFrameTabWindows(frameId)
+  if tabIndex >= windows.len:
+    return false
+  let next = windows[tabIndex]
+  let activeChanged = model.frames.entity(frameId).get().activeWindow != next
+  let focusChanged =
+    model.tags.entity(tagId).isSome and
+    model.tags.entity(tagId).get().focusedWindow != next
+  let frameChanged = model.setFocusedFrame(tagId, frameId)
+  if activeChanged:
+    model.frames.mEntity(frameId).activeWindow = next
+  if focusChanged:
+    model.tags.mEntity(tagId).focusedWindow = next
+  activeChanged or focusChanged or frameChanged
+
 proc restoreTagFrames*(
     model: var Model, tagId: TagId, restored: RestoredTagData
 ): bool =

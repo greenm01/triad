@@ -15,8 +15,8 @@ import
     [daemon_view, overview_geometry, overview_hot_corners, runtime, window_rules]
 import ../types/[model, runtime_values]
 import
-  cursor_shake, manage_requests, message_queue, protocol_surface_runtime,
-  protocol_surfaces, render_runtime, state, wayland_helpers
+  cursor_shake, frame_tab_bar_render, manage_requests, message_queue,
+  protocol_surface_runtime, protocol_surfaces, render_runtime, state, wayland_helpers
 import ../utils/behavior_log
 
 const
@@ -1059,7 +1059,7 @@ var wlSwipeListener* = pointerGestures.ZwpPointerGestureSwipeV1Listener(
   begin: onWlSwipeBegin, update: onWlSwipeUpdate, `end`: onWlSwipeEnd
 )
 
-proc ignoreWlPointerEnter(
+proc onWlPointerEnter(
     data: pointer,
     pointer: ptr Pointer,
     serial: uint32,
@@ -1067,19 +1067,55 @@ proc ignoreWlPointerEnter(
     surfaceX: Fixed,
     surfaceY: Fixed,
 ) =
-  discard
+  let daemon = callbackDaemon(data, "wl_pointer enter")
+  if daemon == nil or pointer == nil or surface == nil:
+    return
+  daemon[].wlPointerSurfaceIds[pointer.id()] = surface.id()
+  daemon[].wlPointerSurfaceXs[pointer.id()] = int32(surfaceX.fixedToFloat())
 
-proc ignoreWlPointerLeave(
+proc onWlPointerLeave(
     data: pointer, pointer: ptr Pointer, serial: uint32, surface: ptr Surface
 ) =
-  discard
+  let daemon = callbackDaemon(data, "wl_pointer leave")
+  if daemon == nil or pointer == nil:
+    return
+  daemon[].wlPointerSurfaceIds.del(pointer.id())
+  daemon[].wlPointerSurfaceXs.del(pointer.id())
 
-proc ignoreWlPointerMotion(
+proc onWlPointerMotion(
     data: pointer, pointer: ptr Pointer, time: uint32, surfaceX: Fixed, surfaceY: Fixed
 ) =
-  discard
+  let daemon = callbackDaemon(data, "wl_pointer motion")
+  if daemon == nil or pointer == nil:
+    return
+  daemon[].wlPointerSurfaceXs[pointer.id()] = int32(surfaceX.fixedToFloat())
 
-proc ignoreWlPointerButton(
+proc dispatchFrameTabClick(
+    daemon: var TriadDaemon, surfaceId: uint32, surfaceX: int32
+): bool =
+  let ownedId =
+    daemon.protocolSurfaceRuntime.surfaceToOwned.getOrDefault(surfaceId, 0'u32)
+  if ownedId == 0 or not daemon.protocolSurfaceRuntime.surfaces.hasKey(ownedId):
+    return false
+  let surf = daemon.protocolSurfaceRuntime.surfaces[ownedId]
+  if surf.kind != ProtocolSurfaceKind.PskDecorationAbove or surf.windowId == 0:
+    return false
+  for bar in daemon.currentFrameTabBars:
+    if bar.windowId == surf.windowId:
+      let tabIndex = bar.frameTabIndexAt(surfaceX)
+      if tabIndex < 0:
+        return false
+      daemon.enqueue(
+        Msg(
+          kind: MsgKind.WlFrameTabClicked,
+          frameClickFrameId: bar.frameId,
+          frameClickTabIndex: tabIndex,
+        )
+      )
+      return true
+  false
+
+proc onWlPointerButton(
     data: pointer,
     pointer: ptr Pointer,
     serial: uint32,
@@ -1087,7 +1123,20 @@ proc ignoreWlPointerButton(
     button: uint32,
     state: uint32,
 ) =
-  discard
+  const
+    BtnLeft = 0x110'u32
+    ButtonPressed = 1'u32
+  let daemon = callbackDaemon(data, "wl_pointer button")
+  if daemon == nil or pointer == nil:
+    return
+  if button != BtnLeft or state != ButtonPressed:
+    return
+  let pointerId = pointer.id()
+  let surfaceId = daemon[].wlPointerSurfaceIds.getOrDefault(pointerId, 0'u32)
+  if surfaceId == 0:
+    return
+  let surfaceX = daemon[].wlPointerSurfaceXs.getOrDefault(pointerId, 0'i32)
+  discard daemon[].dispatchFrameTabClick(surfaceId, surfaceX)
 
 proc ignoreWlPointerAxis(
     data: pointer, pointer: ptr Pointer, time: uint32, axis: uint32, value: Fixed
@@ -1105,10 +1154,10 @@ proc ignoreWlPointerAxisRelativeDirection(
   discard
 
 var wlPointerListener* = PointerListener(
-  enter: ignoreWlPointerEnter,
-  leave: ignoreWlPointerLeave,
-  motion: ignoreWlPointerMotion,
-  button: ignoreWlPointerButton,
+  enter: onWlPointerEnter,
+  leave: onWlPointerLeave,
+  motion: onWlPointerMotion,
+  button: onWlPointerButton,
   axis: ignoreWlPointerAxis,
   frame: onWlPointerFrame,
   axisSource: onWlPointerAxisSource,
@@ -1438,6 +1487,8 @@ proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   daemon.wlPointerRiverSeats.del(pointerId)
   daemon.wlPointerWheelFrames.del(pointerId)
   daemon.wlPointerWheelRemainders.del(pointerId)
+  daemon.wlPointerSurfaceIds.del(pointerId)
+  daemon.wlPointerSurfaceXs.del(pointerId)
 
 proc destroyPointerGesturesRuntime*(daemon: var TriadDaemon) =
   for swipe in daemon.wlSwipePointers.values:

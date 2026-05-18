@@ -1,5 +1,6 @@
 import std/options
 import ../core/[effects, msg]
+from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 from ../types/runtime_values import PointerOpKind
 import focus
@@ -138,6 +139,10 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = titleUpdate.dirty
     if titleUpdate.manageDirty:
       result.effects.add(Effect(kind: EffectKind.EffManageDirty))
+    let activeTag = model.tagData(model.activeTag)
+    if titleUpdate.dirty and activeTag.isSome and
+        activeTag.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId:
+      result.effects.add(Effect(kind: EffectKind.EffManageDirty))
   of MsgKind.WlWindowDimensionsHint:
     result.dirty = model.updateWindowDimensionsHintForExternal(
       msg.hintWindowId.externalWindowId(),
@@ -168,6 +173,9 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       )
     if model.hotkeyOverlayOpen:
       result.dirty = model.setHotkeyOverlayOpen(false)
+  of MsgKind.WlFrameTabClicked:
+    result.dirty =
+      model.focusFrameTabAt(FrameId(msg.frameClickFrameId), msg.frameClickTabIndex)
   of MsgKind.WlModifiersChanged:
     discard model.setActiveModifiers(msg.newModifiers)
     if model.overviewTabModeActive and

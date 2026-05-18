@@ -384,6 +384,8 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
   for id in staleCachedIds:
     daemon.lastRenderWindowStates.del(id)
 
+  daemon.syncFrameTabBarSurfaces(daemon.currentFrameTabBars)
+
   if orderChanged:
     for id in ids:
       if daemon.windowNodes.hasKey(id):
