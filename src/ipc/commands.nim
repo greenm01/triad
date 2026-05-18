@@ -333,6 +333,10 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdFrameTabNext))
   of CommandId.CidFrameTabPrev:
     some(Msg(kind: MsgKind.CmdFrameTabPrev))
+  of CommandId.CidBspBalance:
+    some(Msg(kind: MsgKind.CmdBspBalance))
+  of CommandId.CidBspEqualize:
+    some(Msg(kind: MsgKind.CmdBspEqualize))
   of CommandId.CidConfigReload:
     some(Msg(kind: MsgKind.CmdConfigReload))
   of CommandId.CidLayoutScroller:

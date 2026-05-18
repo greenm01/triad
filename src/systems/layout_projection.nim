@@ -537,70 +537,6 @@ proc frameTreeEmptyChrome*(
   let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
   model.frameTreeEmptyChrome(tagId, rects)
 
-proc bspTreeRects(
-    model: Model,
-    nodeId: BspNodeId,
-    area: rv.Rect,
-    gap: int32,
-    outRects: var seq[tuple[nodeId: BspNodeId, rect: rv.Rect]],
-) =
-  let nodeOpt = model.bspNodeData(nodeId)
-  if nodeOpt.isNone:
-    return
-  let node = nodeOpt.get()
-  case node.kind
-  of FrameNodeKind.Leaf:
-    outRects.add((nodeId, area))
-  of FrameNodeKind.Split:
-    let safeGap = max(0'i32, gap)
-    let ratio = clamp(node.ratio, 0.05'f32, 0.95'f32)
-    case node.orientation
-    of FrameSplitOrientation.Horizontal:
-      let firstW = max(1'i32, int32(float32(max(1'i32, area.w - safeGap)) * ratio))
-      let secondW = max(1'i32, area.w - safeGap - firstW)
-      model.bspTreeRects(
-        node.firstChild,
-        rv.Rect(x: area.x, y: area.y, w: firstW, h: area.h),
-        safeGap,
-        outRects,
-      )
-      model.bspTreeRects(
-        node.secondChild,
-        rv.Rect(x: area.x + firstW + safeGap, y: area.y, w: secondW, h: area.h),
-        safeGap,
-        outRects,
-      )
-    of FrameSplitOrientation.Vertical:
-      let firstH = max(1'i32, int32(float32(max(1'i32, area.h - safeGap)) * ratio))
-      let secondH = max(1'i32, area.h - safeGap - firstH)
-      model.bspTreeRects(
-        node.firstChild,
-        rv.Rect(x: area.x, y: area.y, w: area.w, h: firstH),
-        safeGap,
-        outRects,
-      )
-      model.bspTreeRects(
-        node.secondChild,
-        rv.Rect(x: area.x, y: area.y + firstH + safeGap, w: area.w, h: secondH),
-        safeGap,
-        outRects,
-      )
-
-proc bspTreeLayoutRects*(
-    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
-): seq[tuple[nodeId: BspNodeId, rect: rv.Rect]] =
-  let root = model.bspRootForTag(tagId)
-  if root == NullBspNodeId:
-    return @[]
-  let safeOuterGap = max(0'i32, outerGap)
-  let usable = rv.Rect(
-    x: screen.x + safeOuterGap,
-    y: screen.y + safeOuterGap,
-    w: max(1'i32, screen.w - safeOuterGap * 2),
-    h: max(1'i32, screen.h - safeOuterGap * 2),
-  )
-  model.bspTreeRects(root, usable, innerGap, result)
-
 proc applyBspTreeRects(
     model: Model,
     tagId: TagId,
@@ -608,7 +544,7 @@ proc applyBspTreeRects(
     screen: rv.Rect,
     outerGap, innerGap: int32,
 ) =
-  let rects = model.bspTreeLayoutRects(tagId, screen, outerGap, innerGap)
+  let rects = model.bspTreeLeafRects(tagId, screen, outerGap, innerGap)
   for item in rects:
     for node in tag.bspNodes.mitems:
       if node.id == uint32(item.nodeId):
@@ -619,12 +555,9 @@ proc applyBspTreeRects(
 proc layoutBspTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
-  let rects = model.bspTreeLayoutRects(tagId, screen, outerGap, innerGap)
+  let rects = model.bspTreeLeafRects(tagId, screen, outerGap, innerGap)
   for item in rects:
-    let nodeOpt = model.bspNodeData(item.nodeId)
-    if nodeOpt.isNone:
-      continue
-    let winId = nodeOpt.get().window
+    let winId = item.window
     if winId == NullWindowId:
       continue
     let winOpt = model.windowData(winId)

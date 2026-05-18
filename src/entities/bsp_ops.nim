@@ -4,6 +4,8 @@ import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
 from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
 
+type BspLeafRect* = tuple[nodeId: BspNodeId, window: WindowId, rect: Rect]
+
 proc bspUsesTag(model: Model, nodeId: BspNodeId, tagId: TagId): bool =
   let nodeOpt = model.bspNodes.entity(nodeId)
   nodeOpt.isSome and nodeOpt.get().tagId == tagId
@@ -45,6 +47,12 @@ proc bspNodeWindow(model: Model, nodeId: BspNodeId): WindowId =
     nodeOpt.get().window
   else:
     NullWindowId
+
+proc splitOrientationForRect(rect: Rect): FrameSplitOrientation =
+  if rect.h > rect.w:
+    FrameSplitOrientation.Vertical
+  else:
+    FrameSplitOrientation.Horizontal
 
 proc firstBspLeaf(model: Model, nodeId: BspNodeId): BspNodeId =
   let nodeOpt = model.bspNodes.entity(nodeId)
@@ -111,6 +119,80 @@ proc bspTreeRect(
       Rect(x: area.x, y: area.y + firstH, w: area.w, h: secondH),
     )
 
+proc bspChildRects(
+    node: BspNodeData, area: Rect, gap: int32
+): tuple[first, second: Rect] =
+  let safeGap = max(0'i32, gap)
+  let ratio = clamp(node.ratio, 0.05'f32, 0.95'f32)
+  case node.orientation
+  of FrameSplitOrientation.Horizontal:
+    let firstW = max(1'i32, int32(float32(max(1'i32, area.w - safeGap)) * ratio))
+    let secondW = max(1'i32, area.w - safeGap - firstW)
+    (
+      Rect(x: area.x, y: area.y, w: firstW, h: area.h),
+      Rect(x: area.x + firstW + safeGap, y: area.y, w: secondW, h: area.h),
+    )
+  of FrameSplitOrientation.Vertical:
+    let firstH = max(1'i32, int32(float32(max(1'i32, area.h - safeGap)) * ratio))
+    let secondH = max(1'i32, area.h - safeGap - firstH)
+    (
+      Rect(x: area.x, y: area.y, w: area.w, h: firstH),
+      Rect(x: area.x, y: area.y + firstH + safeGap, w: area.w, h: secondH),
+    )
+
+proc collectBspLeafRects(
+    model: Model,
+    nodeId: BspNodeId,
+    area: Rect,
+    gap: int32,
+    outRects: var seq[BspLeafRect],
+) =
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone:
+    return
+  let node = nodeOpt.get()
+  case node.kind
+  of FrameNodeKind.Leaf:
+    outRects.add((nodeId, node.window, area))
+  of FrameNodeKind.Split:
+    let rects = bspChildRects(node, area, gap)
+    model.collectBspLeafRects(node.firstChild, rects.first, gap, outRects)
+    model.collectBspLeafRects(node.secondChild, rects.second, gap, outRects)
+
+proc bspTreeLeafRects*(
+    model: Model, tagId: TagId, screen: Rect, outerGap, innerGap: int32
+): seq[BspLeafRect] =
+  let root = model.bspRootsByTag.getOrDefault(tagId, NullBspNodeId)
+  if root == NullBspNodeId:
+    return @[]
+  let safeOuterGap = max(0'i32, outerGap)
+  let usable = Rect(
+    x: screen.x + safeOuterGap,
+    y: screen.y + safeOuterGap,
+    w: max(1'i32, screen.w - safeOuterGap * 2),
+    h: max(1'i32, screen.h - safeOuterGap * 2),
+  )
+  model.collectBspLeafRects(root, usable, innerGap, result)
+
+proc collectBspLeafWindows(
+    model: Model, nodeId: BspNodeId, outWindows: var seq[WindowId]
+) =
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone:
+    return
+  let node = nodeOpt.get()
+  case node.kind
+  of FrameNodeKind.Leaf:
+    if node.window != NullWindowId:
+      outWindows.add(node.window)
+  of FrameNodeKind.Split:
+    model.collectBspLeafWindows(node.firstChild, outWindows)
+    model.collectBspLeafWindows(node.secondChild, outWindows)
+
+proc bspLeafWindowsInOrder*(model: Model, tagId: TagId): seq[WindowId] =
+  let root = model.bspRootsByTag.getOrDefault(tagId, NullBspNodeId)
+  model.collectBspLeafWindows(root, result)
+
 proc focusedBspLeafOrRoot*(model: var Model, tagId: TagId): BspNodeId =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
@@ -158,6 +240,10 @@ proc addWindowToBsp*(model: var Model, tagId: TagId, winId: WindowId): bool =
     return true
 
   let oldParent = model.bspNodes.entity(target).get().parent
+  let screen = Rect(
+    x: 0, y: 0, w: max(1'i32, model.screenWidth), h: max(1'i32, model.screenHeight)
+  )
+  let targetRect = model.bspTreeRect(root, target, screen)
   let split = model.addBspNode(tagId, kind = FrameNodeKind.Split, parent = oldParent)
   let second = model.addBspNode(tagId, parent = split, winId = winId)
   if split == NullBspNodeId or second == NullBspNodeId:
@@ -171,13 +257,9 @@ proc addWindowToBsp*(model: var Model, tagId: TagId, winId: WindowId): bool =
     else:
       model.bspNodes.mEntity(oldParent).secondChild = split
 
-  let screen = Rect(
-    x: 0, y: 0, w: max(1'i32, model.screenWidth), h: max(1'i32, model.screenHeight)
-  )
-  let rect = model.bspTreeRect(root, target, screen)
   model.bspNodes.mEntity(split).orientation =
-    if rect.found and rect.rect.h > rect.rect.w:
-      FrameSplitOrientation.Vertical
+    if targetRect.found:
+      targetRect.rect.splitOrientationForRect()
     else:
       FrameSplitOrientation.Horizontal
   model.bspNodes.mEntity(split).ratio = 0.5'f32
@@ -223,6 +305,20 @@ proc swapWindowsInBsp*(
   model.bspNodeByTagWindow[(secondTagId, firstWinId)] = secondNode
   true
 
+proc adjustPromotedBspSibling(model: var Model, tagId: TagId, siblingId: BspNodeId) =
+  if siblingId == NullBspNodeId:
+    return
+  let siblingOpt = model.bspNodes.entity(siblingId)
+  if siblingOpt.isNone or siblingOpt.get().kind != FrameNodeKind.Split:
+    return
+  let root = model.bspRootsByTag.getOrDefault(tagId, NullBspNodeId)
+  let screen = Rect(
+    x: 0, y: 0, w: max(1'i32, model.screenWidth), h: max(1'i32, model.screenHeight)
+  )
+  let rect = model.bspTreeRect(root, siblingId, screen)
+  if rect.found:
+    model.bspNodes.mEntity(siblingId).orientation = rect.rect.splitOrientationForRect()
+
 proc removeWindowFromBsp*(model: var Model, tagId: TagId, winId: WindowId): bool =
   let nodeId = model.bspNodeByTagWindow.getOrDefault((tagId, winId), NullBspNodeId)
   if nodeId == NullBspNodeId:
@@ -258,9 +354,84 @@ proc removeWindowFromBsp*(model: var Model, tagId: TagId, winId: WindowId): bool
       model.bspNodes.mEntity(grandParentId).firstChild = siblingId
     else:
       model.bspNodes.mEntity(grandParentId).secondChild = siblingId
+  model.adjustPromotedBspSibling(tagId, siblingId)
   discard model.bspNodes.delete(nodeId)
   discard model.bspNodes.delete(parentId)
   true
+
+proc countBspLeavesAndBalance(model: var Model, nodeId: BspNodeId): int =
+  let nodeOpt = model.bspNodes.entity(nodeId)
+  if nodeOpt.isNone:
+    return 0
+  let node = nodeOpt.get()
+  case node.kind
+  of FrameNodeKind.Leaf:
+    if node.window != NullWindowId: 1 else: 0
+  of FrameNodeKind.Split:
+    let firstCount = model.countBspLeavesAndBalance(node.firstChild)
+    let secondCount = model.countBspLeavesAndBalance(node.secondChild)
+    let total = firstCount + secondCount
+    if firstCount > 0 and secondCount > 0:
+      model.bspNodes.mEntity(nodeId).ratio = float32(firstCount) / float32(total)
+    total
+
+proc balanceBspTree*(model: var Model, tagId: TagId): bool =
+  let root = model.bspRootsByTag.getOrDefault(tagId, NullBspNodeId)
+  if root == NullBspNodeId:
+    return false
+  discard model.countBspLeavesAndBalance(root)
+  true
+
+proc equalizeBspTree*(model: var Model, tagId: TagId): bool =
+  let root = model.bspRootsByTag.getOrDefault(tagId, NullBspNodeId)
+  if root == NullBspNodeId:
+    return false
+  var stack = @[root]
+  while stack.len > 0:
+    let nodeId = stack.pop()
+    let nodeOpt = model.bspNodes.entity(nodeId)
+    if nodeOpt.isNone:
+      continue
+    let node = nodeOpt.get()
+    if node.kind == FrameNodeKind.Split:
+      model.bspNodes.mEntity(nodeId).ratio = 0.5'f32
+      stack.add(node.firstChild)
+      stack.add(node.secondChild)
+  true
+
+proc adjustFocusedBspSplit*(
+    model: var Model, tagId: TagId, orientation: FrameSplitOrientation, delta: float32
+): bool =
+  let focused = model.tags.entity(tagId)
+  if focused.isNone:
+    return false
+  var childId = model.bspNodeByTagWindow.getOrDefault(
+    (tagId, focused.get().focusedWindow), NullBspNodeId
+  )
+  while childId != NullBspNodeId:
+    let childOpt = model.bspNodes.entity(childId)
+    if childOpt.isNone:
+      return false
+    let parentId = childOpt.get().parent
+    if parentId == NullBspNodeId:
+      return false
+    let parentOpt = model.bspNodes.entity(parentId)
+    if parentOpt.isNone:
+      return false
+    let parent = parentOpt.get()
+    if parent.orientation == orientation:
+      let signedDelta =
+        if parent.firstChild == childId:
+          delta
+        else:
+          -delta
+      let next = clamp(parent.ratio + signedDelta, 0.05'f32, 0.95'f32)
+      if next == parent.ratio:
+        return false
+      model.bspNodes.mEntity(parentId).ratio = next
+      return true
+    childId = parentId
+  false
 
 proc syncTagBspFromPlacement*(model: var Model, tagId: TagId): bool =
   if model.tags.entity(tagId).isNone:

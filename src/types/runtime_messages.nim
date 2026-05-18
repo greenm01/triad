@@ -69,6 +69,8 @@ type
     CmdFrameUnsplit
     CmdFrameTabNext
     CmdFrameTabPrev
+    CmdBspBalance
+    CmdBspEqualize
     CmdFocusNext
     CmdFocusPrev
     CmdFocusDirection

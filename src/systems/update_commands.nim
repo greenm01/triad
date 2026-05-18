@@ -90,6 +90,10 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = not model.overviewActive and model.focusFrameTab(1)
   of MsgKind.CmdFrameTabPrev:
     result.dirty = not model.overviewActive and model.focusFrameTab(-1)
+  of MsgKind.CmdBspBalance:
+    result.dirty = not model.overviewActive and model.balanceBspTree(model.activeTag)
+  of MsgKind.CmdBspEqualize:
+    result.dirty = not model.overviewActive and model.equalizeBspTree(model.activeTag)
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
     if result.dirty:

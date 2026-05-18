@@ -173,6 +173,8 @@ partition tree and inserts a new tiled window by splitting the focused leaf
 50/50 on that leaf's longer axis. Janet layouts that use `fallback="bsp-tree"`
 receive immutable `:bsp-nodes` data and may return `:bsp-node-id` geometry. The
 bundled `bsp` layout is the default Janet policy over this native tree.
+Directional focus, `focus-next`/`focus-prev`, `resize-width`, `resize-height`,
+`move-window-*`, `bsp-balance`, and `bsp-equalize` operate on the native tree.
 
 ## notion-river Feasibility Notes
 

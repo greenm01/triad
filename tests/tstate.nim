@@ -61,6 +61,23 @@ proc baseConfig(): Config =
     terminal: TerminalConfig(command: @["foot"]),
   )
 
+proc instructionGeom(model: Model, id: uint32): pv.Rect =
+  let projection = model.layoutProjection()
+  for instr in projection.instructions:
+    if uint32(instr.windowId) == id:
+      return instr.geom
+  pv.Rect()
+
+proc applyMsg(model: var Model, msg: Msg) =
+  let (nextModel, _) = model.update(msg)
+  model = nextModel
+
+proc focusedWindowId(model: Model): uint32 =
+  for win in model.shellSnapshot().windows:
+    if win.isFocused:
+      return uint32(win.id)
+  0'u32
+
 proc sourceFiles(): seq[string] =
   for path in walkDirRec("src"):
     if path.endsWith(".nim"):
@@ -1020,6 +1037,113 @@ suite "Runtime state primitives":
     check restoredProjection.instructions.len == 2
     check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
+
+  test "BSP focus uses tree order and directional geometry":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
+    check model.focusedWindowId() == 10
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusPrev))
+    check model.focusedWindowId() == 12
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
+    check model.focusedWindowId() == 10
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
+    check model.focusedWindowId() == 12
+
+  test "BSP directional move swaps focused leaf window":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    let leftGeom = model.instructionGeom(10)
+    let focusedGeom = model.instructionGeom(11)
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowLeft))
+
+    check model.focusedWindowId() == 11
+    check model.instructionGeom(11) == leftGeom
+    check model.instructionGeom(10) == focusedGeom
+
+  test "BSP resize adjusts the focused split fence":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let focusedWin = model.windowForExternal(ExternalWindowId(11))
+    let focusedNode = model.bspNodeForWindowOnTag(tagId, focusedWin)
+    let parent = model.bspNodeData(focusedNode).get().parent
+    let before = model.bspNodeData(parent).get().ratio
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdResizeHeight, deltaH: 0.1'f32))
+
+    check model.bspNodeData(parent).get().ratio > before
+
+  test "BSP balance and equalize update split ratios":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let root = model.bspRootForTag(model.activeTag)
+    model.applyMsg(Msg(kind: MsgKind.CmdBspBalance))
+    check abs(model.bspNodeData(root).get().ratio - (1.0'f32 / 3.0'f32)) < 0.001'f32
+
+    model.applyMsg(Msg(kind: MsgKind.CmdBspEqualize))
+    check abs(model.bspNodeData(root).get().ratio - 0.5'f32) < 0.001'f32
+
+  test "BSP removal adjusts promoted split by longest side":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 13))
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 10))
+
+    let root = model.bspRootForTag(model.activeTag)
+    let rootData = model.bspNodeData(root).get()
+    check rootData.kind == FrameNodeKind.Split
+    check rootData.orientation == FrameSplitOrientation.Horizontal
 
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model

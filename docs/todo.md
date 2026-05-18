@@ -7,8 +7,10 @@
 
 ## BSP layout follow-ups
 
-- Add focused split resize controls for native `bsp-tree`.
-- Add focused window/node swap controls for native `bsp-tree`.
+- Add optional BSP preselection support if we want closer bspwm manual
+  insertion parity.
+- Add optional BSP rotate/flip/circulate commands if users ask for deeper tree
+  editing.
 
 ## Blocked / Watchlist
 

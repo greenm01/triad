@@ -4,7 +4,8 @@ import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import
-  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind, NativeLayoutId
+  Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, LayoutSelection,
+  LayoutSelectionKind, NativeLayoutId
 
 proc resetLayoutViewport(model: var Model, tagId: TagId): bool =
   result = model.setTagViewportTarget(tagId, 0.0'f32, 0.0'f32) or result
@@ -207,6 +208,10 @@ proc adjustMasterRatio*(model: var Model, delta: float32): bool =
   model.setTagMasterRatio(tagId, tagOpt.get().masterSplitRatio + delta)
 
 proc resizeWidth*(model: var Model, delta: float32): bool =
+  if model.activeTagUsesBspTree():
+    return model.adjustFocusedBspSplit(
+      model.activeTag, FrameSplitOrientation.Horizontal, delta
+    )
   let pos = model.focusedPosition()
   if not pos.found:
     return false
@@ -224,6 +229,10 @@ proc resizeWidth*(model: var Model, delta: float32): bool =
     false
 
 proc resizeHeight*(model: var Model, delta: float32): bool =
+  if model.activeTagUsesBspTree():
+    return model.adjustFocusedBspSplit(
+      model.activeTag, FrameSplitOrientation.Vertical, delta
+    )
   let pos = model.focusedPosition()
   if not pos.found:
     return false
@@ -308,6 +317,18 @@ proc retargetMovedFocus(model: var Model, tagId: TagId, moved: bool): bool =
     return false
   discard model.requestTagViewportRetarget(tagId)
   true
+
+proc swapFocusedBspNeighbor(model: var Model, direction: Direction): bool =
+  if not model.activeTagUsesBspTree():
+    return false
+  let tagId = model.activeTag
+  let focused = model.focusedOnActiveTag()
+  let target = model.bspNeighborWindow(direction)
+  if tagId == NullTagId or focused == NullWindowId or target == NullWindowId:
+    return false
+  model.preserveMovedFocus(
+    tagId, focused, model.swapPlacedWindows(tagId, focused, tagId, target)
+  )
 
 proc preserveEmptyTargetLayoutContext(
     model: var Model, sourceTag, targetTag: TagId, targetWasEmpty: bool
@@ -407,6 +428,8 @@ proc swapFocusedWindowToSlot*(model: var Model, targetSlot: uint32): bool =
   false
 
 proc moveFocusedWindowLeft*(model: var Model): bool =
+  if model.activeTagUsesBspTree():
+    return model.swapFocusedBspNeighbor(Direction.DirLeft)
   let pos = model.focusedPosition()
   if not pos.found:
     return false
@@ -425,6 +448,8 @@ proc moveFocusedWindowLeft*(model: var Model): bool =
     )
 
 proc moveFocusedWindowRight*(model: var Model): bool =
+  if model.activeTagUsesBspTree():
+    return model.swapFocusedBspNeighbor(Direction.DirRight)
   let pos = model.focusedPosition()
   if not pos.found:
     return false
@@ -444,6 +469,8 @@ proc moveFocusedWindowRight*(model: var Model): bool =
     )
 
 proc moveFocusedWindowUp*(model: var Model): bool =
+  if model.activeTagUsesBspTree():
+    return model.swapFocusedBspNeighbor(Direction.DirUp)
   let pos = model.focusedPosition()
   if not pos.found or pos.winIdx <= 0:
     return false
@@ -454,6 +481,8 @@ proc moveFocusedWindowUp*(model: var Model): bool =
   )
 
 proc moveFocusedWindowDown*(model: var Model): bool =
+  if model.activeTagUsesBspTree():
+    return model.swapFocusedBspNeighbor(Direction.DirDown)
   let pos = model.focusedPosition()
   if not pos.found:
     return false

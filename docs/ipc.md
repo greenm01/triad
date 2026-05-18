@@ -122,8 +122,10 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `move-floating <dx> <dy>`: Displaces a floating window by the specified pixel deltas.
 *   `resize-floating <dw> <dh>`: Adjusts the physical dimensions of a floating window.
 *   `zoom`: Swaps the focused window with the primary window in the master position.
-*   `resize-width <delta>`: Adjusts the width proportion (e.g., `0.1` or `-0.1`).
-*   `resize-height <delta>`: Adjusts the height proportion.
+*   `resize-width <delta>`: Adjusts the width proportion (e.g., `0.1` or `-0.1`). In BSP layouts, adjusts the nearest horizontal split fence for the focused leaf.
+*   `resize-height <delta>`: Adjusts the height proportion. In BSP layouts, adjusts the nearest vertical split fence for the focused leaf.
+*   `bsp-balance`: Rebalances the active BSP tree by leaf counts.
+*   `bsp-equalize`: Resets active BSP split ratios to `0.5`.
 *   `maximize-column`: Toggles the focused column to full width while keeping gaps, borders, and client state unchanged.
 *   `set-column-width <proportion>`: Precisely dictates the width of the focused column (e.g., `0.5`, `1.0`).
 *   `switch-proportion-preset [delta]`: Cycles the focused scroller column through `layout.scroller-proportion-presets`; negative deltas cycle backward.
@@ -189,10 +191,10 @@ uses live touchpad swipe events when the compositor advertises
 *   `move-column-right`: Swaps the focused column with its neighbor to the right.
 *   `move-column-to-first`: Moves the focused column to the first position.
 *   `move-column-to-last`: Moves the focused column to the last position.
-*   `move-window-left`: Transports the focused window to the adjacent column on the left, creating a new column if necessary.
-*   `move-window-right`: Transports the focused window to the adjacent column on the right.
-*   `move-window-up`: Swaps the focused window with the one above it in a stack.
-*   `move-window-down`: Swaps the focused window with the one below it.
+*   `move-window-left`: Transports the focused window to the adjacent column on the left, creating a new column if necessary. In BSP layouts, swaps with the directional BSP neighbor.
+*   `move-window-right`: Transports the focused window to the adjacent column on the right. In BSP layouts, swaps with the directional BSP neighbor.
+*   `move-window-up`: Swaps the focused window with the one above it in a stack. In BSP layouts, swaps with the directional BSP neighbor.
+*   `move-window-down`: Swaps the focused window with the one below it. In BSP layouts, swaps with the directional BSP neighbor.
 *   `move-window-up-or-to-workspace-up`: Moves the focused window up in its column, or to the previous tag at the edge.
 *   `move-window-down-or-to-workspace-down`: Moves the focused window down in its column, or to the next tag at the edge.
 *   `swap-window-up`: An alias for `move-window-up`, reordering windows within their column.
