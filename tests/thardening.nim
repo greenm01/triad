@@ -10,7 +10,7 @@ import
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[commands, niri_compat, socket]
-import ../src/layouts/[scroller, tiling]
+import ../src/layouts/scroller
 import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model
@@ -1080,8 +1080,6 @@ config-notification {
       false,
       "never",
     )
-    let tiled = layoutMasterStack(tag, screen, 4, 2)
-
-    for instruction in scroller & tiled:
+    for instruction in scroller:
       check instruction.geom.w >= 0
       check instruction.geom.h >= 0

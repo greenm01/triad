@@ -93,7 +93,8 @@ suite "Core Runtime Logic: navigation layout":
   test "Overlapping layouts use ordered directional fallback":
     var deck = directionalModel(LayoutMode.Deck, 3)
     deck.focusExternal(2)
-    check deck.focusDirection(Direction.DirDown) == 3
+    check deck.focusDirection(Direction.DirRight) == 1
+    deck.focusExternal(2)
     check deck.focusDirection(Direction.DirUp) == 2
 
     var verticalDeck = directionalModel(LayoutMode.VerticalDeck, 3)

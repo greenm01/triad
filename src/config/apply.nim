@@ -2,6 +2,7 @@ import std/[options, re, sets, strutils]
 import chronicles
 import parser
 import defaults
+import ../core/layout_mode_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../janet/bundled_layouts
@@ -11,6 +12,28 @@ import ../systems/outputs
 import ../systems/window_rules
 import ../systems/workspaces
 import ../types/runtime_values as rv
+
+proc coreLayoutMode(mode: LayoutMode): bool =
+  mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+
+proc runtimeLayoutSelection(selection: LayoutSelection): LayoutSelection =
+  if selection.kind == LayoutSelectionKind.Builtin and
+      not selection.builtin.coreLayoutMode():
+    return customSelection(
+      janetLayoutId(selection.builtin.layoutModeId()), LayoutMode.Scroller
+    )
+  if selection.kind == LayoutSelectionKind.Custom and
+      selection.nativeId.nativeLayoutIdString().len == 0 and
+      not selection.builtin.coreLayoutMode():
+    return customSelection(selection.customId, LayoutMode.Scroller)
+  if selection.kind == LayoutSelectionKind.Native and
+      not selection.builtin.coreLayoutMode():
+    return nativeSelection(selection.nativeId, LayoutMode.Scroller)
+  selection
+
+proc runtimeJanetLayoutConfig(layout: JanetLayoutConfig): JanetLayoutConfig =
+  result = layout
+  result.fallback = layout.fallback.runtimeLayoutSelection()
 
 proc legacyWindowRuleMatcher(rule: rv.WindowRule): rv.WindowRuleMatcher =
   if rule.appIdMatch.len > 0:
@@ -182,9 +205,9 @@ proc tagRuleData(rule: rv.TagRule): TagRuleData =
       if rule.defaultLayoutSet and
           rule.defaultLayoutSelection.kind in
           {LayoutSelectionKind.Custom, LayoutSelectionKind.Native}:
-        rule.defaultLayoutSelection
+        rule.defaultLayoutSelection.runtimeLayoutSelection()
       else:
-        builtinSelection(rule.defaultLayout),
+        runtimeLayoutSelection(builtinSelection(rule.defaultLayout)),
     openOnOutput: rule.openOnOutput.strip(),
   )
 
@@ -278,13 +301,13 @@ proc applyConfig*(model: var Model, config: Config) =
   model.frameRate = runtimeFrameRate(config.layout.frameRate)
   model.smartGaps = config.layout.smartGaps
   model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
-  model.defaultWorkspaceLayout = config.workspaces.defaultLayout
   model.defaultWorkspaceLayoutSelection =
     if config.workspaces.defaultLayoutSelection.kind in
         {LayoutSelectionKind.Custom, LayoutSelectionKind.Native}:
-      config.workspaces.defaultLayoutSelection
+      config.workspaces.defaultLayoutSelection.runtimeLayoutSelection()
     else:
-      builtinSelection(config.workspaces.defaultLayout)
+      runtimeLayoutSelection(builtinSelection(config.workspaces.defaultLayout))
+  model.defaultWorkspaceLayout = model.defaultWorkspaceLayoutSelection.builtin
 
   var pinnedTagOutputs: seq[TagId] = @[]
   for tagId in model.tagHomeOutputPinned:
@@ -325,7 +348,9 @@ proc applyConfig*(model: var Model, config: Config) =
   if model.janet.layoutDir.strip().len == 0:
     model.janet.layoutDir = DefaultJanetLayoutDir
   model.janet.fuelLimit = configClamp32(model.janet.fuelLimit, 1_000, 10_000_000)
-  model.customLayouts = bundledLayoutConfigs() & model.janet.layouts
+  model.customLayouts = bundledLayoutConfigs()
+  for layout in model.janet.layouts:
+    model.customLayouts.add(layout.runtimeJanetLayoutConfig())
   for tagId, tag in model.tagsWithId():
     if tag.customLayoutId.layoutIdString().len > 0 and
         model.customLayoutConfig(tag.customLayoutId).isNone:
@@ -407,12 +432,16 @@ proc applyConfig*(model: var Model, config: Config) =
   model.layoutCycle = runtimeLayoutCycle(config.layout.layoutCycle)
   model.layoutCycleSelections =
     if config.layout.layoutSelections.len > 0:
-      config.layout.layoutSelections
+      block:
+        var selections: seq[LayoutSelection] = @[]
+        for selection in config.layout.layoutSelections:
+          selections.add(selection.runtimeLayoutSelection())
+        selections
     else:
       @[]
   if model.layoutCycleSelections.len == 0:
     for mode in model.layoutCycle:
-      model.layoutCycleSelections.add(builtinSelection(mode))
+      model.layoutCycleSelections.add(runtimeLayoutSelection(builtinSelection(mode)))
 
   for slot in 1'u32 .. model.defaultWorkspaceCount:
     discard model.ensureWorkspaceSlot(slot)

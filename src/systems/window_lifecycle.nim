@@ -2,12 +2,15 @@ import std/[options, tables]
 import
   focus, outputs, placement, popup_tree, sticky_windows, window_policy, scratchpad,
   window_rules, window_state, workspaces
+import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import LayoutMode, ParentedRole, WindowRuleIdleInhibitMode
 
 proc supportsOpenColumnMaximize(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
-  tagOpt.isSome and
+  tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len == 0 and
+    tagOpt.get().nativeLayoutId.nativeLayoutIdString().len == 0 and
     tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
 
 proc applyOpenColumnMaximize(model: var Model, tagId: TagId, columnId: ColumnId): bool =

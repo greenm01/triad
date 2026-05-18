@@ -501,14 +501,13 @@ Named Janet layouts are declared in the same block. A custom layout name is a
 bare id that must not collide with a core, native, or bundled Janet layout id
 such as `notion`, `bsp`, or `dwindle`. Each declaration has a safe fallback used
 for overview, compatibility projections, and any failed custom evaluation. The
-fallback may be a built-in layout id or a native substrate layout such as
-`frame-tree` or `bsp-tree`. A native fallback exposes immutable substrate data
-to the layout script and lets Triad render the same native state when Janet
-evaluation fails.
+fallback may be `scroller`, `vertical-scroller`, or a native substrate layout
+such as `frame-tree` or `bsp-tree`. Algorithmic fallback ids such as `grid` or
+`tile` are accepted for compatibility but normalize to `scroller`.
 Bundled Janet layouts are embedded from repository `.janet` source files at
-compile time. User custom layouts are loaded lazily from
-`layout-dir/<name>.janet`. The legacy `script-dir` key remains accepted as an
-alias for `automation-dir`.
+compile time and evaluated lazily when selected. User custom layouts are loaded
+lazily from `layout-dir/<name>.janet`. The legacy `script-dir` key remains
+accepted as an alias for `automation-dir`.
 
 **Example Janet Configuration:**
 ```kdl
@@ -518,7 +517,6 @@ janet {
   layout-dir "~/.config/triad/layouts"
   fuel-limit 500000
   layout "spiral" fallback="scroller"
-  layout "wide-master" fallback="tile"
   layout "janet-frame-tree" fallback="frame-tree"
   layout "janet-bsp" fallback="bsp-tree"
 }

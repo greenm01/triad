@@ -130,10 +130,13 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     if model.layoutCycleSelections.len > 0:
       model.layoutCycleSelections
     else:
-      @[]
-  if result.layoutCycleSelections.len == 0:
-    for mode in result.layoutCycle:
-      result.layoutCycleSelections.add(builtinSelection(mode))
+      @[
+        builtinSelection(LayoutMode.Scroller),
+        customSelection(janetLayoutId("tile"), LayoutMode.Scroller),
+        customSelection(janetLayoutId("grid"), LayoutMode.Scroller),
+        customSelection(janetLayoutId("monocle"), LayoutMode.Scroller),
+        builtinSelection(LayoutMode.VerticalScroller),
+      ]
   result.customLayouts = model.customLayouts
   result.nativeLayouts = nativeLayouts()
   result.keyboardLayoutNames = model.keyboardLayoutNames()

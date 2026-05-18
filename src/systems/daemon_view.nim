@@ -1,4 +1,5 @@
 import std/options
+from ../core/layout_selection_codec import layoutIdString
 from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 import presentation_policy
@@ -82,7 +83,9 @@ proc visibleScratchpadRiverId*(model: Model): uint32 =
 
 proc activeLayoutSupportsMaximize*(model: Model): bool =
   let tagOpt = model.tagData(model.activeTag)
-  tagOpt.isSome and tagOpt.get().layoutMode.layoutSupportsMaximize()
+  tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len == 0 and
+    tagOpt.get().nativeLayoutId.nativeLayoutIdString().len == 0 and
+    tagOpt.get().layoutMode.layoutSupportsMaximize()
 
 proc effectivelyMaximizedForRiverId*(model: Model, winId: uint32): bool =
   let logicalId = model.windowForRiverId(winId)

@@ -439,7 +439,8 @@ suite "Runtime state primitives":
     check snapshot.activeTag == 1
     check snapshot.workspaces.len == 3
     check snapshot.workspaces[0].name == "main"
-    check snapshot.workspaces[1].layoutMode == LayoutMode.Grid
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[1].layoutId == "grid"
 
   test "runtime init keeps hotkey overlay hidden by default":
     let hidden = initRuntimeStateFromConfig(baseConfig())
@@ -882,7 +883,8 @@ suite "Runtime state primitives":
     model = switched
 
     check model.layoutSwitchToastOpen
-    check model.layoutSwitchToastLayout == LayoutMode.Deck
+    check model.layoutSwitchToastLayout == LayoutMode.Scroller
+    check model.layoutSwitchToastCustomLayout.layoutIdString() == "deck"
     check model.layoutSwitchToastElapsedMs == 0
 
     let (ticked, _) = model.update(Msg(kind: MsgKind.CmdTick))
@@ -952,16 +954,16 @@ suite "Runtime state primitives":
     model = customSet
     let active = model.tagData(model.activeTag).get()
 
-    check active.layoutMode == LayoutMode.Grid
+    check active.layoutMode == LayoutMode.Scroller
     check active.customLayoutId.layoutIdString() == "spiral"
 
     let snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].layoutId == "spiral"
     check snapshot.workspaces[0].layoutKind == "custom"
-    check snapshot.workspaces[0].fallbackLayout == "grid"
+    check snapshot.workspaces[0].fallbackLayout == "scroller"
 
     let (builtinSet, _) =
-      model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Monocle))
+      model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Scroller))
     model = builtinSet
     check model.tagData(model.activeTag).get().customLayoutId.layoutIdString() == ""
 

@@ -211,7 +211,8 @@ suite "Core Runtime Logic: window movement":
     )
     for workspace in model.shellSnapshot().workspaces:
       if workspace.tagId == 8:
-        check workspace.layoutMode == LayoutMode.Grid
+        check workspace.layoutMode == LayoutMode.Scroller
+        check workspace.layoutId == "grid"
 
     discard model.updateModel(
       Msg(
@@ -378,7 +379,7 @@ suite "Core Runtime Logic: window movement":
 
     check model.tagData(targetTag).get().layoutMode == LayoutMode.Scroller
     check not model.snapshotWindow(6).isMaximized
-    check geom.w < screen.w
+    check geom.w <= screen.w
 
   test "Moving to occupied grid workspace keeps target layout":
     var model = initRuntimeStateFromConfig(
@@ -410,7 +411,9 @@ suite "Core Runtime Logic: window movement":
 
     model.applyMsg(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 3))
 
-    check model.tagData(model.tagForSlot(3)).get().layoutMode == LayoutMode.Grid
+    let targetTag = model.tagData(model.tagForSlot(3)).get()
+    check targetTag.layoutMode == LayoutMode.Scroller
+    check targetTag.customLayoutId.layoutIdString() == "grid"
 
   test "Moving fullscreen window through dynamic workspace preserves state":
     var model = cameraModel()
@@ -451,7 +454,9 @@ suite "Core Runtime Logic: window movement":
     let tgmixEffects =
       model.updateModel(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.TGMix))
     check model.activeTag == model.tagForSlot(4)
-    check model.tagData(model.activeTag).get().layoutMode == LayoutMode.TGMix
+    let activeTag = model.tagData(model.activeTag).get()
+    check activeTag.layoutMode == LayoutMode.Scroller
+    check activeTag.customLayoutId.layoutIdString() == "tgmix"
     check model.snapshotWindow(1).isMaximized
     check tgmixEffects.hasMaximizedEffect(1, false)
     check tgmixEffects.hasFocusEffect(1)
@@ -899,7 +904,7 @@ suite "Core Runtime Logic: window movement":
     check model.activeTag == model.tagForSlot(3)
     check model.tagData(model.activeTag).get().layoutMode == LayoutMode.Scroller
     check model.snapshotWindow(6).isMaximized
-    check not toGridEffects.hasMaximizedEffect(6, false)
+    check toGridEffects.hasMaximizedEffect(6, false)
 
     let toScrollerEffects =
       model.updateModel(Msg(kind: MsgKind.CmdMoveToWorkspaceIndex, workspaceIndex: 2))

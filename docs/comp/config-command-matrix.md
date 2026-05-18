@@ -339,9 +339,11 @@ KDL config nodes and fields:
   `exclusive-focus-timeout-ms`, `profile`, `launch`, `stop`, `niri-compat`.
 - `quickshell`: legacy fallback accepted when `shells` is absent.
 - `janet`: `enabled`, `automation-dir`, `layout-dir`, `fuel-limit`,
-  `layout <name> fallback=<builtin|frame-tree|bsp-tree>`; legacy `script-dir` is accepted
-  as an `automation-dir` alias. User layout names must not collide with bundled
-  Janet layout ids such as `notion`, `bsp`, and `dwindle`.
+  `layout <name> fallback=<scroller|vertical-scroller|frame-tree|bsp-tree>`;
+  legacy `script-dir` is accepted as an `automation-dir` alias. User layout
+  names must not collide with bundled Janet layout ids such as `notion`, `bsp`,
+  and `dwindle`. Algorithmic fallback ids are compatibility aliases that
+  normalize to `scroller`.
   Scripts receive `triad/snapshot`, `triad/current-window`, and
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can

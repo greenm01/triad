@@ -5,6 +5,9 @@ from ../types/runtime_values import LayoutMode
 proc layoutSupportsMaximize*(mode: LayoutMode): bool =
   mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
 
+proc workspaceLayoutSupportsMaximize*(workspace: ShellWorkspace): bool =
+  workspace.layoutSource == "core" and workspace.runtimeLayoutKind == "scrolling"
+
 proc workspaceForTag(snapshot: ShellSnapshot, tagId: uint32): Option[ShellWorkspace] =
   for workspace in snapshot.workspaces:
     if workspace.tagId == tagId:
@@ -39,7 +42,7 @@ proc windowLayoutSupportsMaximize*(snapshot: ShellSnapshot, win: ShellWindow): b
   if win.tagId.isNone:
     return false
   let workspace = snapshot.workspaceForTag(win.tagId.get())
-  workspace.isSome and workspace.get().layoutMode.layoutSupportsMaximize()
+  workspace.isSome and workspace.get().workspaceLayoutSupportsMaximize()
 
 proc windowInFullWidthColumn*(snapshot: ShellSnapshot, win: ShellWindow): bool =
   if win.tagId.isNone:

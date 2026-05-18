@@ -1,4 +1,5 @@
 import tconfig_support
+import ../src/core/layout_selection_codec
 
 suite "KDL Configuration Parser: window rules workspace":
   test "Window rule parser preserves explicit false policy fields":
@@ -283,15 +284,18 @@ window-rule {
 
     var snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].name == "term"
-    check snapshot.workspaces[0].layoutMode == LayoutMode.Grid
-    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check snapshot.workspaces[0].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[0].layoutId == "grid"
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[1].layoutId == "deck"
 
     let dynamicTag = model.ensureWorkspaceSlot(3)
     check dynamicTag != NullTagId
     let dynamic = model.tagData(dynamicTag)
     check dynamic.isSome
     check dynamic.get().name == "dynamic"
-    check dynamic.get().layoutMode == LayoutMode.Deck
+    check dynamic.get().layoutMode == LayoutMode.Scroller
+    check dynamic.get().customLayoutId.layoutIdString() == "deck"
 
   test "legacy tag config names are not accepted":
     let path = getTempDir() / "triad-legacy-tag-config.kdl"

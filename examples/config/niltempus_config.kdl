@@ -115,7 +115,7 @@ janet {
     automation-dir "~/.config/triad/automation"
     layout-dir "~/.config/triad/layouts"
     fuel-limit 500000
-    layout "janet-grid" fallback="grid"
+    layout "janet-grid" fallback="scroller"
     layout "janet-frame-tree" fallback="frame-tree"
 }
 

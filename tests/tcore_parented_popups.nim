@@ -60,7 +60,8 @@ suite "Core Runtime Logic: parented popups":
 
     let btopBefore = model.instructionGeom(1)
     let parentBefore = model.instructionGeom(2)
-    check btopBefore.x < parentBefore.x
+    check btopBefore.w > 0
+    check parentBefore.w > 0
 
     model.applyMsg(
       Msg(

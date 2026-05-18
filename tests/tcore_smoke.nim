@@ -171,7 +171,8 @@ suite "Core Runtime Logic: smoke":
 
     check snapshot.activeTag == 1
     check snapshot.workspaces[0].layoutMode == LayoutMode.Scroller
-    check snapshot.workspaces[1].layoutMode == LayoutMode.Deck
+    check snapshot.workspaces[1].layoutMode == LayoutMode.Scroller
+    check snapshot.workspaces[1].layoutId == "deck"
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(
       it.kind == EffectKind.EffBroadcastTriadJson and

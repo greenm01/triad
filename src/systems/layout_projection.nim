@@ -1,15 +1,16 @@
 import std/[algorithm, math, options, tables]
-import ../core/layout_descriptor_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
-import ../layouts/[scroller, tiling]
+import ../janet/runtime as janet_runtime
+import ../layouts/scroller
 import ../state/engine
 import ../types/core as core_types
 import ../types/janet_layouts
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/projection_values as rv
-from ../types/runtime_values import Direction, FrameNodeKind, FrameSplitOrientation
+from ../types/runtime_values import
+  Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId
 import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
@@ -286,47 +287,65 @@ proc layoutForTag(
 ): seq[rv.RenderInstruction] =
   case tag.layoutMode
   of rv.LayoutMode.Scroller:
-    layoutScroller(
+    result = layoutScroller(
       tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter, centerMode
     )
   of rv.LayoutMode.VerticalScroller:
-    layoutVerticalScroller(
+    result = layoutVerticalScroller(
       tag, windows, screen, outerGap, innerGap, focusCenter, preferCenter, centerMode
     )
-  of rv.LayoutMode.MasterStack:
-    layoutMasterStack(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.Grid:
-    layoutGrid(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.Monocle:
-    layoutMonocle(tag, screen, outerGap)
-  of rv.LayoutMode.Deck:
-    layoutDeck(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.CenterTile:
-    layoutCenterTile(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.RightTile:
-    layoutRightTile(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.VerticalTile:
-    layoutVerticalMasterStack(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.VerticalGrid:
-    layoutVerticalGrid(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.VerticalDeck:
-    layoutVerticalDeck(tag, screen, outerGap, innerGap)
-  of rv.LayoutMode.TGMix:
-    layoutTGMix(tag, screen, outerGap, innerGap)
+  else:
+    let safeOuterGap = max(0'i32, outerGap)
+    let safeInnerGap = max(0'i32, innerGap)
+    let usable = rv.Rect(
+      x: screen.x + safeOuterGap,
+      y: screen.y + safeOuterGap,
+      w: max(1'i32, screen.w - safeOuterGap * 2),
+      h: max(1'i32, screen.h - safeOuterGap * 2),
+    )
+    var allWindows: seq[rv.ProjectionWindowId] = @[]
+    for col in tag.columns:
+      for winId in col.windows:
+        allWindows.add(winId)
+    if allWindows.len == 0:
+      return
+    let count = int32(allWindows.len)
+    let maxTotalGap = max(0'i32, usable.w - count)
+    let totalGap = min(safeInnerGap * max(0'i32, count - 1), maxTotalGap)
+    let gap =
+      if count > 1:
+        totalGap div (count - 1)
+      else:
+        0'i32
+    let baseWidth = max(1'i32, (usable.w - gap * max(0'i32, count - 1)) div count)
+    var x = usable.x
+    for idx, winId in allWindows:
+      let remaining = max(1'i32, usable.x + usable.w - x)
+      let width =
+        if idx == allWindows.high:
+          remaining
+        else:
+          min(baseWidth, remaining)
+      result.add(
+        rv.RenderInstruction(
+          windowId: winId, geom: rv.Rect(x: x, y: usable.y, w: width, h: usable.h)
+        )
+      )
+      x += width + gap
 
 proc layoutUsesNativeViewport(mode: rv.LayoutMode): bool =
   mode in {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}
+
+proc tagDataUsesCoreScroller(tag: TagData): bool =
+  tag.customLayoutId.layoutIdString().len == 0 and
+    tag.nativeLayoutId.nativeLayoutIdString().len == 0 and
+    tag.layoutMode.layoutUsesNativeViewport()
 
 proc frameTreeActive(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
 
 proc bspTreeActive(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
-
-proc applyBundledAlgorithmicMode(tag: var rv.ProjectedTag, customId: JanetLayoutId) =
-  let mode = layoutModeForBundledId(customId.layoutIdString())
-  if mode.isSome:
-    tag.layoutMode = mode.get()
 
 proc frameTreeTabHeight(rect: rv.Rect): int32 =
   min(FrameTreeTabBarHeight, max(0'i32, rect.h - 1'i32))
@@ -677,6 +696,20 @@ proc addUnmanagedGlobalInstructions(
       rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: geom)
     )
 
+proc customLayoutInstructions(
+  layoutEval: CustomLayoutEval,
+  tag: rv.ProjectedTag,
+  windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+  screen: rv.Rect,
+  customLayoutId: JanetLayoutId,
+  outerGap, innerGap: int32,
+): tuple[
+  applied: bool,
+  outputTargetKind: JanetLayoutTargetKind,
+  instructions: seq[rv.RenderInstruction],
+  frameInstructions: seq[JanetLayoutInstruction],
+]
+
 proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   if model.activeTag == NullTagId:
     return
@@ -701,6 +734,12 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   var tagForLayout = projected.tag
   model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
   let activeTagData = model.tagData(model.activeTag).get()
+  var localRuntime: janet_runtime.JanetRuntime
+  var localRuntimeOpen = false
+  defer:
+    if localRuntimeOpen:
+      localRuntime.close()
+
   if activeTagData.frameTreeActive():
     result =
       model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
@@ -708,18 +747,38 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
     result =
       model.layoutBspTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
-    tagForLayout.applyBundledAlgorithmicMode(activeTagData.customLayoutId)
-    result = layoutForTag(
-      tagForLayout,
-      windows,
-      screen,
-      currentOuterGap,
-      currentInnerGap,
-      retargetViewport and model.scrollerFocusCenter,
-      retargetViewport and model.scrollerPreferCenter,
-      if retargetViewport: model.centerFocusedColumn else: "never",
-    )
-    tagForLayout.applyLayoutViewportOffset(result)
+    var custom:
+      tuple[
+        applied: bool,
+        outputTargetKind: JanetLayoutTargetKind,
+        instructions: seq[rv.RenderInstruction],
+        frameInstructions: seq[JanetLayoutInstruction],
+      ]
+    if activeTagData.customLayoutId.layoutIdString().len > 0:
+      localRuntime = janet_runtime.initJanetRuntime(model.janet)
+      localRuntimeOpen = true
+      let snapshot = model.shellSnapshot()
+      proc evalLocalLayout(context: JanetLayoutContext): JanetLayoutEvalResult =
+        localRuntime.evalLayoutDetailed(snapshot, context)
+
+      custom = customLayoutInstructions(
+        evalLocalLayout, tagForLayout, windows, screen, activeTagData.customLayoutId,
+        currentOuterGap, currentInnerGap,
+      )
+    if custom.applied:
+      result = custom.instructions
+    else:
+      result = layoutForTag(
+        tagForLayout,
+        windows,
+        screen,
+        currentOuterGap,
+        currentInnerGap,
+        retargetViewport and model.scrollerFocusCenter,
+        retargetViewport and model.scrollerPreferCenter,
+        if retargetViewport: model.centerFocusedColumn else: "never",
+      )
+      tagForLayout.applyLayoutViewportOffset(result)
 
   model.addFloatingInstructions(model.activeTag, screen, result)
   model.addUnmanagedGlobalInstructions(screen, result)
@@ -770,7 +829,7 @@ proc preserveBackingPresentation(
     scopedRoot = NullWindowId,
 ) =
   let tagOpt = model.tagData(model.activeTag)
-  let maxSupported = tagOpt.isSome and tagOpt.get().layoutMode.layoutSupportsMaximize()
+  let maxSupported = tagOpt.isSome and tagOpt.get().tagDataUsesCoreScroller()
   for winId, win in model.windowsOnTagWithId(model.activeTag):
     if scopedRoot != NullWindowId and winId != scopedRoot:
       continue
@@ -919,6 +978,7 @@ proc overviewTagLayout(
     tag: rv.ProjectedTag,
     windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
     screen: rv.Rect,
+    layoutEval: CustomLayoutEval,
 ): OverviewTagLayout =
   let tagDataOpt = model.tagData(tagId)
   if tagDataOpt.isNone:
@@ -959,8 +1019,17 @@ proc overviewTagLayout(
       )
     return
 
-  result.tag.applyBundledAlgorithmicMode(tagData.customLayoutId)
-  result.tag.applyOverviewMaximizedColumnSizing(windows)
+  if tagData.tagDataUsesCoreScroller():
+    result.tag.applyOverviewMaximizedColumnSizing(windows)
+  let custom = customLayoutInstructions(
+    layoutEval, result.tag, windows, screen, tagData.customLayoutId, model.outerGaps,
+    model.innerGaps,
+  )
+  if custom.applied:
+    result.mode = rv.LayoutMode.Grid
+    result.instructions = custom.instructions
+    return
+
   result.mode = result.tag.layoutMode
   result.instructions = layoutForTag(
     result.tag,
@@ -973,12 +1042,14 @@ proc overviewTagLayout(
     if retargetViewport: model.centerFocusedColumn else: "never",
   )
   result.tag.applyLayoutViewportOffset(result.instructions)
-  result.viewportTarget = result.tag.columns.len > 0
+  result.viewportTarget =
+    result.tag.columns.len > 0 and result.mode.layoutUsesNativeViewport()
 
 proc layoutWorkspaceStripOverview(
     model: Model,
     windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
     screen: rv.Rect,
+    layoutEval: CustomLayoutEval,
 ): LayoutProjection =
   let slots = model.previewSlots()
   if slots.len == 0:
@@ -993,7 +1064,9 @@ proc layoutWorkspaceStripOverview(
     var projected = model.projectedTag(tagId)
     if not projected.found:
       continue
-    let layout = model.overviewTagLayout(tagId, projected.tag, windows, workspaceScreen)
+    let layout = model.overviewTagLayout(
+      tagId, projected.tag, windows, workspaceScreen, layoutEval
+    )
     var instructions = layout.instructions
     if layout.viewportTarget:
       result.viewportTargets.add(
@@ -1042,14 +1115,45 @@ proc layoutWorkspaceStripOverview(
       )
   model.applyOverviewDrag(result.instructions)
 
+proc needsLocalLayoutEval(model: Model): bool =
+  if model.overviewActive:
+    for slot in model.previewSlots():
+      let tagId = model.tagForSlot(slot)
+      if tagId == NullTagId:
+        continue
+      let tagOpt = model.tagData(tagId)
+      if tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len > 0:
+        return true
+    return false
+
+  if model.activeTag == NullTagId:
+    return false
+  let tagOpt = model.tagData(model.activeTag)
+  tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len > 0
+
 proc layoutProjection*(
     model: Model, layoutEval: CustomLayoutEval = nil
 ): LayoutProjection =
+  var localRuntime: janet_runtime.JanetRuntime
+  var localRuntimeOpen = false
+  var effectiveLayoutEval = layoutEval
+  if effectiveLayoutEval == nil and model.needsLocalLayoutEval():
+    localRuntime = janet_runtime.initJanetRuntime(model.janet)
+    localRuntimeOpen = true
+    let snapshot = model.shellSnapshot()
+    proc evalLocalLayout(context: JanetLayoutContext): JanetLayoutEvalResult =
+      localRuntime.evalLayoutDetailed(snapshot, context)
+
+    effectiveLayoutEval = evalLocalLayout
+  defer:
+    if localRuntimeOpen:
+      localRuntime.close()
+
   let screen = model.primaryScreen()
   let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
-    result = model.layoutWorkspaceStripOverview(windows, screen)
+    result = model.layoutWorkspaceStripOverview(windows, screen, effectiveLayoutEval)
     model.addUnmanagedGlobalInstructions(screen, result.instructions)
     return
 
@@ -1089,7 +1193,7 @@ proc layoutProjection*(
     )
   let customOuterGap = if activeTagData.frameTreeActive(): 0'i32 else: currentOuterGap
   let custom = customLayoutInstructions(
-    layoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
+    effectiveLayoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
     customOuterGap, currentInnerGap,
   )
   var customFrameRects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
@@ -1110,7 +1214,6 @@ proc layoutProjection*(
     result.instructions =
       model.layoutBspTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
-    tagForLayout.applyBundledAlgorithmicMode(activeTagData.customLayoutId)
     result.instructions = layoutForTag(
       tagForLayout,
       windows,
@@ -1155,7 +1258,7 @@ proc layoutProjection*(
     )
   elif focusedOpt.isSome:
     let win = focusedOpt.get()
-    let maxSupported = projected.tag.layoutMode.layoutSupportsMaximize()
+    let maxSupported = activeTagData.tagDataUsesCoreScroller()
     let effectivelyMaximized =
       win.isMaximized and maxSupported and
       not model.columnFullWidthForWindowOnTag(model.activeTag, focused)

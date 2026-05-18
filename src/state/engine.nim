@@ -93,12 +93,20 @@ proc layoutCycle*(model: Model): seq[LayoutMode] =
       LayoutMode.VerticalScroller,
     ]
 
+proc defaultLayoutSelectionCycle(): seq[LayoutSelection] =
+  @[
+    builtinSelection(LayoutMode.Scroller),
+    customSelection(janetLayoutId("tile"), LayoutMode.Scroller),
+    customSelection(janetLayoutId("grid"), LayoutMode.Scroller),
+    customSelection(janetLayoutId("monocle"), LayoutMode.Scroller),
+    builtinSelection(LayoutMode.VerticalScroller),
+  ]
+
 proc layoutSelectionCycle*(model: Model): seq[LayoutSelection] =
   if model.layoutCycleSelections.len > 0:
     result = model.layoutCycleSelections
   else:
-    for mode in model.layoutCycle():
-      result.add(builtinSelection(mode))
+    result = defaultLayoutSelectionCycle()
 
 proc customLayoutConfig*(model: Model, id: JanetLayoutId): Option[JanetLayoutConfig] =
   model.customLayouts.findCustomLayout(id)

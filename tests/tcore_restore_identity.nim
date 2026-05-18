@@ -334,7 +334,7 @@ suite "Core Runtime Logic: restore identity":
     check model.activeWorkspaceFocusId() == 10
     check model.focusHistory == @[WindowId(2), WindowId(1)]
 
-  test "Non-scroller layouts render with workspace viewport offsets":
+  test "Non-scroller layouts ignore workspace viewport offsets":
     for mode in [LayoutMode.Grid, LayoutMode.Deck]:
       var baseline = cameraModel()
       baseline.seedCameraWindows(3)
@@ -351,8 +351,8 @@ suite "Core Runtime Logic: restore identity":
 
       check shifted.viewport(1).currentViewportXOffset == 100.0'f32
       check shifted.viewport(1).currentViewportYOffset == 25.0'f32
-      check shiftedGeom.x == baselineGeom.x - 100
-      check shiftedGeom.y == baselineGeom.y - 25
+      check shiftedGeom.x == baselineGeom.x
+      check shiftedGeom.y == baselineGeom.y
 
   test "Rule-placed new window does not steal active camera":
     var model = initRuntimeStateFromConfig(

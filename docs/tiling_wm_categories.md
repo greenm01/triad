@@ -24,9 +24,9 @@ geometry formula. The descriptor has three separate concerns:
 - **Source**: where the implementation comes from: core Nim, bundled Janet,
   user Janet, or native state systems.
 
-The scroller is the core built-in fallback. Stateless geometric layouts should
-move toward bundled or user Janet implementations. Native layouts are reserved
-for layouts that require reducer-managed persistent state.
+The scroller is the core built-in fallback. Stateless geometric layouts live in
+bundled or user Janet implementations. Native layouts are reserved for layouts
+that require reducer-managed persistent state.
 
 ```nim
 type LayoutKind* = enum
@@ -50,7 +50,7 @@ type LayoutSource* = enum
 | Layout | Algorithm | WM examples | Kind | Intended source |
 |---|---|---|---|---|
 | **scroller** | Infinite horizontal strip; windows scroll left/right; no fixed screen boundary | Mango, Niri, PaperWM | `lkScrolling` | `lsCore` |
-| **vertical-scroller** | Scroller oriented vertically | Mango | `lkScrolling` | `lsCore` or bundled Janet-derived scrolling policy |
+| **vertical-scroller** | Scroller oriented vertically | Mango | `lkScrolling` | `lsCore` |
 | **tile** (master-stack) | One master window takes a fixed portion; remaining windows stack on the other side | Mango, dwm, dwl, awesome, qtile, spectrwm | `lkAlgorithmic` | `lsBundledJanet` |
 | **vertical-tile** | Master on top, stack fills the bottom; portrait orientation of tile | Mango | `lkAlgorithmic` | `lsBundledJanet` |
 | **right-tile** | Master on right, stack on left; mirrored tile | Mango | `lkAlgorithmic` | `lsBundledJanet` |
@@ -85,6 +85,7 @@ Fallback should preserve the state substrate whenever possible:
   projection.
 
 Existing geometric built-in names such as `tile`, `grid`, `deck`, and
-`monocle` should continue to work during migration, but their long-term home is
-bundled Janet rather than new closed `LayoutMode` cases. This keeps ordinary
-configs usable while shrinking the core built-in fallback surface to scroller.
+`monocle` continue to work as bundled Janet layout ids. Runtime snapshots expose
+the selected layout through `layoutId`; the stored `layoutMode` for these
+layouts is the safe fallback (`scroller`). This keeps ordinary configs usable
+while shrinking the core built-in surface to scroller and vertical scroller.

@@ -1,5 +1,7 @@
 import std/options
 import window_policy, window_rules
+import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import LayoutMode, WindowRuleMaximizePolicy
 
@@ -171,7 +173,8 @@ proc firstPolicyColumnPosition(
   if not position.found:
     return (false, NullTagId, NullColumnId)
   let tagOpt = model.tagData(position.tagId)
-  if tagOpt.isNone or
+  if tagOpt.isNone or tagOpt.get().customLayoutId.layoutIdString().len > 0 or
+      tagOpt.get().nativeLayoutId.nativeLayoutIdString().len > 0 or
       tagOpt.get().layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
     return (false, NullTagId, NullColumnId)
   let placement = model.placementForWindowOnTag(position.tagId, winId)

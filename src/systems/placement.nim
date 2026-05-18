@@ -1,5 +1,6 @@
 import std/options
 import focus, workspaces
+import ../core/layout_mode_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../state/engine
@@ -17,6 +18,14 @@ proc resetNonScrollerViewport(model: var Model, tagId: TagId, mode: LayoutMode):
   if mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
     return false
   model.resetLayoutViewport(tagId)
+
+proc coreLayoutMode(mode: LayoutMode): bool =
+  mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+
+proc usesCoreScrollerLayout(tag: TagData): bool =
+  tag.customLayoutId.layoutIdString().len == 0 and
+    tag.nativeLayoutId.nativeLayoutIdString().len == 0 and
+    tag.layoutMode.coreLayoutMode()
 
 proc setCommandLayout(model: var Model, tagId: TagId, mode: LayoutMode): bool =
   result = model.setTagLayout(tagId, mode)
@@ -95,32 +104,39 @@ proc sourceWorkspaceFallbackFocus*(model: var Model, tagId: TagId): WindowId =
     return model.focusedOnActiveTag()
   model.recomputeVisibleFocus(tagId)
 
-proc setLayoutForSlot*(model: var Model, slot: uint32, mode: LayoutMode): bool =
-  let tagId =
+proc layoutTargetTag(model: var Model, slot: uint32): TagId =
+  result =
     if slot == 0:
       model.ensureActiveWorkspace()
     else:
       model.tagForSlot(slot)
+
+proc layoutTargetAcceptsChange(model: Model, slot: uint32, tagId: TagId): bool =
   if tagId == NullTagId:
     return false
   if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
       not model.tagHasNonStickyLiveWindows(tagId):
     return false
-  tagId != NullTagId and model.setCommandLayout(tagId, mode)
+  true
+
+proc setLayoutForSlot*(model: var Model, slot: uint32, mode: LayoutMode): bool =
+  let tagId = model.layoutTargetTag(slot)
+  if not model.layoutTargetAcceptsChange(slot, tagId):
+    return false
+  if not mode.coreLayoutMode():
+    let id = janetLayoutId(mode.layoutModeId())
+    let custom = model.customLayoutConfig(id)
+    if custom.isNone:
+      return false
+    return model.setCommandCustomLayout(tagId, id, custom.get().fallback)
+  model.setCommandLayout(tagId, mode)
 
 proc setCustomLayoutForSlot*(model: var Model, slot: uint32, id: JanetLayoutId): bool =
   let custom = model.customLayoutConfig(id)
   if custom.isNone:
     return false
-  let tagId =
-    if slot == 0:
-      model.ensureActiveWorkspace()
-    else:
-      model.tagForSlot(slot)
-  if tagId == NullTagId:
-    return false
-  if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
-      not model.tagHasNonStickyLiveWindows(tagId):
+  let tagId = model.layoutTargetTag(slot)
+  if not model.layoutTargetAcceptsChange(slot, tagId):
     return false
   model.setCommandCustomLayout(tagId, id, custom.get().fallback)
 
@@ -128,15 +144,8 @@ proc setNativeLayoutForSlot*(model: var Model, slot: uint32, id: NativeLayoutId)
   let native = parseNativeLayoutId(id.nativeLayoutIdString())
   if native.isNone:
     return false
-  let tagId =
-    if slot == 0:
-      model.ensureActiveWorkspace()
-    else:
-      model.tagForSlot(slot)
-  if tagId == NullTagId:
-    return false
-  if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
-      not model.tagHasNonStickyLiveWindows(tagId):
+  let tagId = model.layoutTargetTag(slot)
+  if not model.layoutTargetAcceptsChange(slot, tagId):
     return false
   model.setCommandNativeLayout(tagId, id, native.get().fallback.builtin)
 
@@ -216,6 +225,8 @@ proc resizeWidth*(model: var Model, delta: float32): bool =
   if not pos.found:
     return false
   let tag = model.tagData(pos.tagId).get()
+  if not tag.usesCoreScrollerLayout():
+    return false
   case tag.layoutMode
   of LayoutMode.Scroller:
     let column = model.column(pos.columnId).get()
@@ -237,6 +248,8 @@ proc resizeHeight*(model: var Model, delta: float32): bool =
   if not pos.found:
     return false
   let tag = model.tagData(pos.tagId).get()
+  if not tag.usesCoreScrollerLayout():
+    return false
   case tag.layoutMode
   of LayoutMode.VerticalScroller:
     let column = model.column(pos.columnId).get()
@@ -252,7 +265,7 @@ proc setFocusedColumnWidth*(model: var Model, width: float32): bool =
   if not pos.found:
     return false
   let tag = model.tagData(pos.tagId).get()
-  if tag.layoutMode != LayoutMode.Scroller:
+  if not tag.usesCoreScrollerLayout() or tag.layoutMode != LayoutMode.Scroller:
     return false
   model.setColumnWidth(pos.columnId, width)
 
@@ -263,7 +276,7 @@ proc switchProportionPreset*(model: var Model, delta: int): bool =
   if not pos.found:
     return false
   let tag = model.tagData(pos.tagId).get()
-  if tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+  if not tag.usesCoreScrollerLayout():
     return false
   let presets = model.scrollerProportionPresets()
   if presets.len == 0:
@@ -297,7 +310,7 @@ proc toggleFocusedColumnFullWidth*(model: var Model): bool =
   if not pos.found:
     return false
   let tag = model.tagData(pos.tagId).get()
-  if tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+  if not tag.usesCoreScrollerLayout():
     return false
   result = model.toggleColumnFullWidth(pos.columnId)
   if result:
