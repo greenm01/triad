@@ -289,7 +289,7 @@ proc desiredRenderWindowState(
     daemon: TriadDaemon, id: uint32, geom, visibilityBounds: Rect, clipSet: bool
 ): RenderWindowState =
   let logicalId = daemon.currentModel.windowForRiverId(id)
-  let focused = id == daemon.currentModel.highlightRiverId()
+  let focused = daemon.currentModel.windowRenderFocused(id)
   let clipBorder = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
   let renderBorder = daemon.currentModel.renderWindowBorder(logicalId, focused)
   let visibility =

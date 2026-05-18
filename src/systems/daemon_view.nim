@@ -1,4 +1,5 @@
 import std/options
+from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 import presentation_policy
 import recent_windows
@@ -51,6 +52,24 @@ proc highlightRiverId*(model: Model): uint32 =
   if model.overviewActive:
     return model.riverIdForWindow(model.selectedOverviewWindow())
   model.activeFocusRiverId()
+
+proc windowRenderFocused*(model: Model, winId: uint32): bool =
+  if winId == 0:
+    return false
+  if model.recentWindowsActive or model.overviewActive:
+    return winId == model.highlightRiverId()
+  let logicalId = model.windowForRiverId(winId)
+  if logicalId == NullWindowId:
+    return false
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isSome and
+      tagOpt.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId:
+    let winOpt = model.windowData(logicalId)
+    if winOpt.isSome and not winOpt.get().isFloating and
+        not winOpt.get().isUnmanagedGlobal:
+      let frameId = model.frameForWindowOnTag(model.activeTag, logicalId)
+      return frameId != NullFrameId and frameId == tagOpt.get().focusedFrame
+  winId == model.activeFocusRiverId()
 
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)

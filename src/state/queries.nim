@@ -240,6 +240,15 @@ proc activeOverviewWindow(model: Model): WindowId =
   if tagOpt.isNone:
     return NullWindowId
 
+  if tagOpt.get().tagUsesFrameOverview():
+    let frameOpt = model.frameData(tagOpt.get().focusedFrame)
+    if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf:
+      return NullWindowId
+    let focusedFrameWindow = frameOpt.get().activeWindow
+    if model.overviewWindowOnTag(model.activeTag, focusedFrameWindow):
+      return focusedFrameWindow
+    return NullWindowId
+
   if tagOpt.get().tagUsesAggregateOverview() and not tagOpt.get().tagUsesFrameOverview():
     return model.overviewRepresentativeWindow(model.activeTag)
 

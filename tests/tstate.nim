@@ -14,8 +14,10 @@ import ../src/daemon/recent_windows_overlay_render
 import ../src/state/engine except WindowId
 import ../src/state/[entity_manager, invariants, snapshot]
 import
-  ../src/systems/
-    [layout_projection, overview_geometry, recent_windows, runtime_facade, update]
+  ../src/systems/[
+    daemon_view, layout_projection, overview_geometry, recent_windows, runtime_facade,
+    update,
+  ]
 import ../src/types/janet_layouts
 import ../src/types/core as tc
 import ../src/types/[model, runtime_values]
@@ -1303,6 +1305,15 @@ suite "Runtime state primitives":
     emptyFrame = emptyFocusDown
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedWindow == tc.WindowId(1)
+    check not emptyFrame.windowRenderFocused(40'u32)
+    block:
+      var emptyOverview = emptyFrame
+      let (emptyOverviewOpen, _) =
+        emptyOverview.update(Msg(kind: MsgKind.CmdOpenOverview))
+      emptyOverview = emptyOverviewOpen
+      check emptyOverview.overviewActive
+      check emptyOverview.selectedOverviewWindow() == tc.NullWindowId
+      check not emptyOverview.windowRenderFocused(40'u32)
     var emptyFrameCountBeforeEmptySplit = 0
     for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
       inc emptyFrameCountBeforeEmptySplit
@@ -1332,6 +1343,7 @@ suite "Runtime state primitives":
     )
     emptyFrame = emptyFocusUpAgain
     check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
+    check emptyFrame.windowRenderFocused(40'u32)
     let (emptyFocusDownAgain, _) = emptyFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
     )
