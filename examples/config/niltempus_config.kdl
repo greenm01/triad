@@ -240,6 +240,8 @@ bindings {
     bind "Super+l" "focus-right"
     bind "Super+Tab" "focus-last"
     bind "Super+Shift+Tab" "focus-prev"
+    bind "Super+Page_Up" "frame-tab-prev"
+    bind "Super+Page_Down" "frame-tab-next"
     bind "Super+u" "focus-occupied-tag-right"
     bind "Super+Shift+u" "focus-tag-right"
 

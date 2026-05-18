@@ -943,6 +943,69 @@ suite "Runtime state primitives":
     model = tabNext
     check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
 
+    var singleFrame = initRuntimeStateFromConfig(baseConfig()).model
+    let (singleOutput, _) = singleFrame.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    singleFrame = singleOutput
+    for externalId in [20'u32, 21'u32, 22'u32, 23'u32]:
+      let (withWindow, _) =
+        singleFrame.update(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
+      singleFrame = withWindow
+    let (singleNative, _) = singleFrame.update(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    singleFrame = singleNative
+    let singleFrameInitialFocus =
+      singleFrame.tagData(singleFrame.activeTag).get().focusedWindow
+    for direction in [
+      Direction.DirLeft, Direction.DirRight, Direction.DirUp, Direction.DirDown
+    ]:
+      let (afterFocus, _) =
+        singleFrame.update(Msg(kind: MsgKind.CmdFocusDirection, direction: direction))
+      singleFrame = afterFocus
+      check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow ==
+        singleFrameInitialFocus
+    let (tabPrev, _) = singleFrame.update(Msg(kind: MsgKind.CmdFrameTabPrev))
+    singleFrame = tabPrev
+    check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow !=
+      singleFrameInitialFocus
+    let (singleTabNext, _) = singleFrame.update(Msg(kind: MsgKind.CmdFrameTabNext))
+    singleFrame = singleTabNext
+    check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow ==
+      singleFrameInitialFocus
+
+    var twoFrame = initRuntimeStateFromConfig(baseConfig()).model
+    let (twoOutput, _) = twoFrame.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    twoFrame = twoOutput
+    let (twoFirst, _) =
+      twoFrame.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 30))
+    twoFrame = twoFirst
+    let (twoNative, _) = twoFrame.update(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    twoFrame = twoNative
+    for externalId in [31'u32, 32'u32, 33'u32]:
+      let (withWindow, _) =
+        twoFrame.update(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
+      twoFrame = withWindow
+      if externalId == 31'u32:
+        let (twoSplit, _) = twoFrame.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+        twoFrame = twoSplit
+    let rightFrameFocus = twoFrame.tagData(twoFrame.activeTag).get().focusedWindow
+    let (focusLeft, _) = twoFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
+    )
+    twoFrame = focusLeft
+    check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == tc.WindowId(2)
+    let (focusRight, _) = twoFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+    )
+    twoFrame = focusRight
+    check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == rightFrameFocus
+
     let snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].layoutId == "frame-tree"
     check snapshot.workspaces[0].layoutKind == "native"
@@ -1036,6 +1099,10 @@ suite "Runtime state primitives":
       it.windowId == 11'u32 and it.geom == pv.Rect(x: 5, y: 6, w: 300, h: 24) and
         it.tabs.len == 2
     )
+    let (customFocusLeft, _) =
+      model.update(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
+    model = customFocusLeft
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
 
     proc invalidEval(context: JanetLayoutContext): JanetLayoutEvalResult =
       JanetLayoutEvalResult(

@@ -152,6 +152,8 @@ bindings {
     bind "Alt+Print" "screenshot-window"
     bind "Super+Print" "screenshot --clipboard-only"
     bind "Super+Tab" "focus-next"
+    bind "Super+Page_Up" "frame-tab-prev"
+    bind "Super+Page_Down" "frame-tab-next"
     bind "Alt+Left" "focus-left"
     bind "Alt+Right" "focus-right"
     bind "Alt+Up" "focus-up"

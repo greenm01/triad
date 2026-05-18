@@ -350,7 +350,7 @@ proc frameTreeRects(
         outRects,
       )
 
-proc frameTreeLayoutRects(
+proc frameTreeLayoutRects*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[tuple[frameId: FrameId, rect: rv.Rect]] =
   let root = model.frameRootForTag(tagId)

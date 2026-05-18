@@ -832,6 +832,8 @@ cursor {
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowPrev
     check config.commandForBinding("Tab", Super) == "focus-last"
+    check config.commandForBinding("Page_Up", Super) == "frame-tab-prev"
+    check config.commandForBinding("Page_Down", Super) == "frame-tab-next"
     for key in ["c", "v", "x"]:
       let bindings =
         config.keyBindings.filterIt(it.key == key and it.modifiers == Super)

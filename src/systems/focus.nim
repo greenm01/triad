@@ -1,5 +1,6 @@
 import std/options
 import workspaces
+from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 from ../types/projection_values import RenderInstruction
 from ../types/runtime_values import Direction, LayoutMode
@@ -62,6 +63,24 @@ proc isFocusableWindow*(model: Model, winId: WindowId): bool =
   let winOpt = model.windowData(winId)
   winOpt.isSome and not winOpt.get().isUnmanagedGlobal and not winOpt.get().isMinimized and
     winOpt.get().windowAdmitted()
+
+proc activeTagUsesFrameTree(model: Model): bool =
+  let tagOpt = model.tagData(model.activeTag)
+  tagOpt.isSome and
+    tagOpt.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
+
+proc focusableFrameWindow(model: Model, tagId: TagId, frameId: FrameId): WindowId =
+  let frameOpt = model.frameData(frameId)
+  if frameOpt.isNone:
+    return NullWindowId
+  let active = frameOpt.get().activeWindow
+  if active != NullWindowId and model.isFocusableWindow(active) and
+      model.windowOnTag(tagId, active):
+    return active
+  for winId in model.windowsForFrame(frameId):
+    if model.isFocusableWindow(winId) and model.windowOnTag(tagId, winId):
+      return winId
+  NullWindowId
 
 proc popupFocusTarget(
     model: Model, winId: WindowId, tagId: TagId, restorePopupTree: bool
@@ -288,6 +307,101 @@ proc horizontalDistance(a, b: typeof(RenderInstruction().geom)): int64 =
 proc sameRect(a, b: typeof(RenderInstruction().geom)): bool =
   a.x == b.x and a.y == b.y and a.w == b.w and a.h == b.h
 
+proc overlapLen(aStart, aLen, bStart, bLen: int64): int64 =
+  max(0'i64, min(aStart + aLen, bStart + bLen) - max(aStart, bStart))
+
+proc frameTreeFocusRects(
+    model: Model
+): seq[tuple[frameId: FrameId, rect: typeof(RenderInstruction().geom)]] =
+  var currentOuterGap = model.outerGaps
+  var currentInnerGap = model.innerGaps
+  var tiledWindowCount = 0
+  for _, win in model.windowsOnTagWithId(model.activeTag):
+    if win.windowAdmitted() and not win.isFloating and not win.isMinimized and
+        not win.isUnmanagedGlobal:
+      inc tiledWindowCount
+  if model.smartGaps and tiledWindowCount <= 1:
+    currentOuterGap = 0
+    currentInnerGap = 0
+  model.frameTreeLayoutRects(
+    model.activeTag, model.primaryScreen(), currentOuterGap, currentInnerGap
+  )
+
+proc frameTreeNeighborCandidate(
+    current, candidate: typeof(RenderInstruction().geom), direction: Direction
+): tuple[found: bool, distance: int64] =
+  case direction
+  of Direction.DirLeft:
+    let overlap = overlapLen(
+      int64(current.y), int64(current.h), int64(candidate.y), int64(candidate.h)
+    )
+    if candidate.x + candidate.w <= current.x and overlap > 0:
+      return (true, int64(current.x) - int64(candidate.x + candidate.w))
+  of Direction.DirRight:
+    let overlap = overlapLen(
+      int64(current.y), int64(current.h), int64(candidate.y), int64(candidate.h)
+    )
+    if candidate.x >= current.x + current.w and overlap > 0:
+      return (true, int64(candidate.x) - int64(current.x + current.w))
+  of Direction.DirUp:
+    let overlap = overlapLen(
+      int64(current.x), int64(current.w), int64(candidate.x), int64(candidate.w)
+    )
+    if candidate.y + candidate.h <= current.y and overlap > 0:
+      return (true, int64(current.y) - int64(candidate.y + candidate.h))
+  of Direction.DirDown:
+    let overlap = overlapLen(
+      int64(current.x), int64(current.w), int64(candidate.x), int64(candidate.w)
+    )
+    if candidate.y >= current.y + current.h and overlap > 0:
+      return (true, int64(candidate.y) - int64(current.y + current.h))
+  (false, 0'i64)
+
+proc focusFrameByDirection(model: var Model, direction: Direction): bool =
+  if not model.activeTagUsesFrameTree():
+    return false
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  var currentFrame = model.tagData(tagId).get().focusedFrame
+  let focused = model.focusedOnActiveTag()
+  let focusedFrame = model.frameForWindowOnTag(tagId, focused)
+  if focusedFrame != NullFrameId:
+    currentFrame = focusedFrame
+  if currentFrame == NullFrameId:
+    currentFrame = model.focusedFrameOrRoot(tagId)
+  if currentFrame == NullFrameId:
+    return false
+
+  let rects = model.frameTreeFocusRects()
+  var currentRect = typeof(RenderInstruction().geom)()
+  var currentFound = false
+  for item in rects:
+    if item.frameId == currentFrame:
+      currentRect = item.rect
+      currentFound = true
+      break
+  if not currentFound:
+    return false
+
+  var bestFrame = NullFrameId
+  var bestDistance = high(int64)
+  for item in rects:
+    if item.frameId == currentFrame:
+      continue
+    let candidate = frameTreeNeighborCandidate(currentRect, item.rect, direction)
+    if candidate.found and candidate.distance < bestDistance:
+      bestFrame = item.frameId
+      bestDistance = candidate.distance
+
+  if bestFrame == NullFrameId:
+    return false
+
+  let target = model.focusableFrameWindow(tagId, bestFrame)
+  if target != NullWindowId:
+    return model.focusWindow(target)
+  model.setFocusedFrame(tagId, bestFrame)
+
 proc focusCandidateIndex(candidates: openArray[FocusCandidate], winId: WindowId): int =
   for idx, candidate in candidates:
     if candidate.winId == winId:
@@ -320,6 +434,11 @@ proc orderedFallbackFocus(
   model.focusWindow(candidates[targetIdx].winId)
 
 proc focusByVisualDirection*(model: var Model, direction: Direction): bool =
+  if model.focusFrameByDirection(direction):
+    return true
+  if model.activeTagUsesFrameTree():
+    return false
+
   let focused = model.focusedOnActiveTag()
   if focused == NullWindowId:
     return false
@@ -481,6 +600,8 @@ proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
 proc focusByDirection*(model: var Model, direction: Direction): bool =
   if model.focusByVisualDirection(direction):
     return true
+  if model.activeTagUsesFrameTree():
+    return false
 
   let tagId = model.activeTag
   let focused = model.focusedOnActiveTag()

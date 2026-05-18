@@ -343,7 +343,8 @@ KDL config nodes and fields:
   `set-layout`, and `set-layout-for-workspace`. Native layouts can be selected
   with `layout-native <name>`; `frame-tree` is the first native layout id and
   supports `frame-split-horizontal`, `frame-split-vertical`, `frame-unsplit`,
-  `frame-tab-next`, and `frame-tab-prev`.
+  `frame-tab-next`, and `frame-tab-prev`. Default configs bind frame tab cycling
+  to `Super+Page_Up` and `Super+Page_Down`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.
