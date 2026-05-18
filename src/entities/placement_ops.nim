@@ -11,6 +11,16 @@ proc tagUsesFrameTree(tag: TagData): bool =
 proc tagUsesBspTree(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
 
+proc syncTagNativeSubstrateFromPlacement*(model: var Model, tagId: TagId): bool =
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+  if tagOpt.get().tagUsesFrameTree():
+    return model.syncTagFramesFromPlacement(tagId)
+  if tagOpt.get().tagUsesBspTree():
+    return model.syncTagBspFromPlacement(tagId)
+  false
+
 proc refreshWindowIndexes(model: var Model, tagId: TagId, columnId: ColumnId) =
   if model.windowsByColumn.hasKey(columnId):
     for idx, winId in model.windowsByColumn[columnId]:

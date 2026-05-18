@@ -1062,6 +1062,34 @@ suite "Runtime state primitives":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
     check model.focusedWindowId() == 12
 
+  test "BSP syncs deferred admission windows into native tree":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, deferAdmission: true)
+    )
+
+    let tagId = model.activeTag
+    let pendingWin = model.windowForExternal(ExternalWindowId(11))
+    check pendingWin != tc.NullWindowId
+    check model.windowData(pendingWin).get().admissionState ==
+      WindowAdmissionState.PendingAdmission
+    check model.bspNodeForWindowOnTag(tagId, pendingWin) == tc.NullBspNodeId
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: 11))
+
+    check model.windowData(pendingWin).get().admissionState ==
+      WindowAdmissionState.Admitted
+    check model.bspNodeForWindowOnTag(tagId, pendingWin) != tc.NullBspNodeId
+    let projection = model.layoutProjection()
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+
   test "BSP directional move swaps focused leaf window":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(
@@ -1165,8 +1193,6 @@ suite "Runtime state primitives":
     check model.windowsForFrame(active.focusedFrame) == @[
       tc.WindowId(1), tc.WindowId(2)
     ]
-    let initialFrame = active.focusedFrame
-
     var projection = model.layoutProjection()
     check projection.instructions.len == 1
     check projection.instructions[0].windowId == 11'u32
@@ -1181,6 +1207,18 @@ suite "Runtime state primitives":
     check projection.instructions[0].geom.y ==
       projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h
 
+  test "native frame-tree split keeps focused window in original frame":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    let initialFrame = model.tagData(model.activeTag).get().focusedFrame
+
     let (split, _) = model.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
     model = split
     let splitParent = model.frameData(initialFrame).get().parent
@@ -1190,7 +1228,7 @@ suite "Runtime state primitives":
     check model.tagData(model.activeTag).get().focusedFrame != initialFrame
     let (withThird, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
     model = withThird
-    projection = model.layoutProjection()
+    var projection = model.layoutProjection()
 
     check projection.instructions.len == 2
     check projection.frameTabBars.len == 2

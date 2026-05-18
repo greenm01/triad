@@ -864,6 +864,12 @@ proc settleWindowAdmissionForExternal*(
     return false
   let focusAfterAdmission = winOpt.get().focusAfterAdmission
   result = model.setWindowAdmission(winId, WindowAdmissionState.Admitted)
+  var affectedTags: seq[TagId] = @[]
+  for tagId, placementWinId, _ in model.placementsWithId():
+    if placementWinId == winId and affectedTags.find(tagId) == -1:
+      affectedTags.add(tagId)
+  for tagId in affectedTags:
+    result = model.syncTagNativeSubstrateFromPlacement(tagId) or result
   if focusAfterAdmission and not model.sessionLocked:
     let tagId = model.tagForWindow(winId)
     if tagId != NullTagId and tagId == model.activeTag:
