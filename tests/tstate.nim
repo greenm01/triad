@@ -155,6 +155,21 @@ suite "Runtime state primitives":
     let source = readFile("src/triad.nim")
     check not source.contains("MsgKind.WlFocusChanged")
 
+  test "empty frame focus is click-only":
+    let source = readFile("src/daemon/bindings_runtime.nim")
+    let enterStart = source.find("proc onWlPointerEnter")
+    let enterEnd = source.find("proc onWlPointerLeave")
+    let buttonStart = source.find("proc onWlPointerButton")
+    let axisStart = source.find("proc ignoreWlPointerAxis")
+    check enterStart != -1
+    check enterEnd > enterStart
+    check buttonStart != -1
+    check axisStart > buttonStart
+    let enterBody = source[enterStart ..< enterEnd]
+    let buttonBody = source[buttonStart ..< axisStart]
+    check not enterBody.contains("dispatchFrameEmptyFocus")
+    check buttonBody.contains("dispatchFrameEmptyFocus")
+
   test "triad entrypoint stays thin":
     let source = readFile("src/triad.nim")
     check source.splitLines().len <= 30

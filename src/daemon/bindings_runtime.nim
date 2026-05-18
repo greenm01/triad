@@ -1074,7 +1074,6 @@ proc onWlPointerEnter(
     return
   daemon[].wlPointerSurfaceIds[pointer.id()] = surface.id()
   daemon[].wlPointerSurfaceXs[pointer.id()] = int32(surfaceX.fixedToFloat())
-  discard daemon[].dispatchFrameEmptyFocus(surface.id())
 
 proc onWlPointerLeave(
     data: pointer, pointer: ptr Pointer, serial: uint32, surface: ptr Surface
