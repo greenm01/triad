@@ -499,11 +499,12 @@ Triad includes an embedded Janet runtime for advanced automation. Scripts in
 normal Triad commands through `triad/command`.
 Named Janet layouts are declared in the same block. A custom layout name is a
 bare id that must not collide with a core, native, or bundled Janet layout id
-such as `notion` or `bsp`. Each declaration has a safe fallback used for overview,
-compatibility projections, and any failed custom evaluation. The fallback may be
-a built-in layout id or a native substrate layout such as `frame-tree` or
-`bsp-tree`. A native fallback exposes immutable substrate data to the layout
-script and lets Triad render the same native state when Janet evaluation fails.
+such as `notion`, `bsp`, or `dwindle`. Each declaration has a safe fallback used
+for overview, compatibility projections, and any failed custom evaluation. The
+fallback may be a built-in layout id or a native substrate layout such as
+`frame-tree` or `bsp-tree`. A native fallback exposes immutable substrate data
+to the layout script and lets Triad render the same native state when Janet
+evaluation fails.
 Bundled Janet layouts are embedded from repository `.janet` source files at
 compile time. User custom layouts are loaded lazily from
 `layout-dir/<name>.janet`. The legacy `script-dir` key remains accepted as an
@@ -535,7 +536,8 @@ When a layout uses `fallback="bsp-tree"`, it may return BSP leaf geometry with
 `:bsp-node-id`. Triad maps each BSP leaf rect to that node's tiled window, and
 falls back to the native BSP projection if the Janet policy fails. BSP node
 data also exposes `:preselect-direction` and `:preselect-ratio` so Janet
-layouts can visualize or account for manual insertion targets.
+layouts can visualize or account for manual insertion targets. Bundled BSP
+policies include `bsp` and `dwindle`; both use Triad-owned tree state.
 
 ### Config Notifications
 Run custom commands to notify yourself of configuration reload results.

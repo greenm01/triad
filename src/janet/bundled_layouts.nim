@@ -18,7 +18,9 @@ const VerticalGridLayoutSource = staticRead("bundled_layouts/vertical-grid.janet
 const VerticalDeckLayoutSource = staticRead("bundled_layouts/vertical-deck.janet")
 const TgmixLayoutSource = staticRead("bundled_layouts/tgmix.janet")
 const NotionLayoutSource = staticRead("bundled_layouts/notion.janet")
+const BspCommonLayoutSource = staticRead("bundled_layouts/bsp-common.janet")
 const BspLayoutSource = staticRead("bundled_layouts/bsp.janet")
+const DwindleLayoutSource = staticRead("bundled_layouts/dwindle.janet")
 
 proc bundledLayoutPath*(id: string): string =
   BundledLayoutsPathPrefix & id & ">"
@@ -55,7 +57,9 @@ proc bundledLayoutSource*(id: string): Option[string] =
     of "notion":
       bundledSource(NotionLayoutSource)
     of "bsp":
-      bundledSource(BspLayoutSource)
+      bundledSource(BspCommonLayoutSource, BspLayoutSource)
+    of "dwindle":
+      bundledSource(BspCommonLayoutSource, DwindleLayoutSource)
     else:
       ""
   if source.len == 0:

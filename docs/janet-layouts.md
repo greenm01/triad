@@ -175,9 +175,11 @@ layouts that use `fallback="bsp-tree"` receive immutable `:bsp-nodes` data and
 may return `:bsp-node-id` geometry. BSP node maps include
 `:preselect-direction` (`nil`, `:left`, `:right`, `:up`, or `:down`) and
 `:preselect-ratio` (`nil` or a ratio). The bundled `bsp` layout is the default
-Janet policy over this native tree. Directional focus, `focus-next`/`focus-prev`,
-`resize-width`, `resize-height`, `move-window-*`, `bsp-balance`, `bsp-equalize`,
-and `bsp-preselect-*` operate on the native tree.
+Janet policy over this native tree. The bundled `dwindle` layout is the
+Mango/Hyprland-style policy name for the same persistent focused-split tree.
+Directional focus, `focus-next`/`focus-prev`, `resize-width`, `resize-height`,
+`move-window-*`, `bsp-balance`, `bsp-equalize`, and `bsp-preselect-*` operate
+on the native tree.
 
 ## notion-river Feasibility Notes
 

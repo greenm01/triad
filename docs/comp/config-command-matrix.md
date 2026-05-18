@@ -341,7 +341,7 @@ KDL config nodes and fields:
 - `janet`: `enabled`, `automation-dir`, `layout-dir`, `fuel-limit`,
   `layout <name> fallback=<builtin|frame-tree|bsp-tree>`; legacy `script-dir` is accepted
   as an `automation-dir` alias. User layout names must not collide with bundled
-  Janet layout ids such as `notion` and `bsp`.
+  Janet layout ids such as `notion`, `bsp`, and `dwindle`.
   Scripts receive `triad/snapshot`, `triad/current-window`, and
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can

@@ -9,7 +9,7 @@ const BundledAlgorithmicLayoutIds* = [
 ]
 
 const BundledFrameLayoutIds* = ["notion"]
-const BundledBspLayoutIds* = ["bsp"]
+const BundledBspLayoutIds* = ["bsp", "dwindle"]
 
 proc layoutKindId*(kind: LayoutKind): string =
   case kind

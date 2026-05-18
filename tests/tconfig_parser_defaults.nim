@@ -1034,19 +1034,23 @@ janet {
       parseKdl(
         """
 layout {
-  layout-cycle "notion"
+  layout-cycle "notion" "dwindle"
 }
 
 janet {
   layout "notion" fallback="scroller"
+  layout "dwindle" fallback="scroller"
 }
 """
       )
     )
 
     check config.janet.layouts.len == 0
-    check config.layout.layoutSelections.len == 1
+    check config.layout.layoutSelections.len == 2
     check config.layout.layoutSelections[0].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[0].customId.layoutIdString() == "notion"
     check config.layout.layoutSelections[0].nativeId.nativeLayoutIdString() ==
       "frame-tree"
+    check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[1].customId.layoutIdString() == "dwindle"
+    check config.layout.layoutSelections[1].nativeId.nativeLayoutIdString() == "bsp-tree"

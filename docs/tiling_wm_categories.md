@@ -61,7 +61,7 @@ type LayoutSource* = enum
 | **deck** | Master window visible; remaining windows stacked behind it as layers | Mango, dwm (patch) | `lkAlgorithmic` | `lsBundledJanet` |
 | **vertical-deck** | Deck oriented vertically | Mango | `lkAlgorithmic` | `lsBundledJanet` |
 | **tgmix** | Tag-mixed hybrid; windows from multiple tags shown under one layout | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **dwindle** | Recursive alternating splits forming a spiral; BSP-shaped but stateless because it is re-applied on every window event | Mango, Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
+| **dwindle** | Focused-window insertion into a persistent binary split tree; new leaves split the target container and produce spiral-like tiling | Mango, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
 | **master** | Single master with configurable stack count; similar to tile | Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
 | **spiral** | Fibonacci-ratio recursive splits; each new window takes half the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
 | **notion** | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |

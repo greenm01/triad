@@ -782,6 +782,33 @@ suite "embedded Janet runtime":
     check evaluated.instructions[1].windowId == 11'u32
     check evaluated.instructions[1].geom == Rect(x: 502, y: 10, w: 488, h: 780)
 
+  test "bundled dwindle Janet layout uses native BSP geometry":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    var context = bspTwoPaneContext()
+    context.layoutId = janetLayoutId("dwindle")
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.path == bundledLayoutPath("dwindle")
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.BspNode
+    check evaluated.inputBspNodeCount == 2
+    check evaluated.instructionCount == 2
+    check evaluated.instructions.len == 2
+    check evaluated.instructions[0].windowId == 10'u32
+    check evaluated.instructions[0].geom == Rect(x: 10, y: 10, w: 488, h: 780)
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 502, y: 10, w: 488, h: 780)
+
   test "Janet layout receives BSP preselection fields":
     let dir =
       getTempDir() / ("triad-janet-layout-bsp-preselect-" & $getCurrentProcessId())

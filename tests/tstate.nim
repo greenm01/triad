@@ -1049,6 +1049,35 @@ suite "Runtime state primitives":
     check collapsed.instructions.anyIt(it.windowId == 10'u32)
     check collapsed.instructions.anyIt(it.windowId == 11'u32)
 
+  test "dwindle selects bundled BSP policy over native tree":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("dwindle"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let active = model.tagData(tagId).get()
+    check active.customLayoutId.layoutIdString() == "dwindle"
+    check active.nativeLayoutId.nativeLayoutIdString() == "bsp-tree"
+    check model.bspRootForTag(tagId) != tc.NullBspNodeId
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(1)) != tc.NullBspNodeId
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(2)) != tc.NullBspNodeId
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(3)) != tc.NullBspNodeId
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces[0].layoutId == "dwindle"
+    let projection = model.layoutProjection()
+    check projection.instructions.len == 3
+    check projection.instructions.anyIt(it.windowId == 10'u32)
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 12'u32)
+
   test "native BSP persists through live restore":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     var updated = model.update(
