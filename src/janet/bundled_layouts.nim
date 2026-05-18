@@ -1,10 +1,11 @@
+import std/options
 import ../core/layout_descriptor_codec
 import ../core/layout_selection_codec
 from ../types/runtime_values import JanetLayoutConfig, LayoutMode
 
-const BundledLayoutsPath* = "<triad-bundled-layouts>"
+const BundledLayoutsPathPrefix* = "<triad-bundled-layout:"
 
-const BundledLayoutsSource* =
+const BundledLayoutPreludeSource =
   """
 (defn triad/layout-clamp-dim [value]
   (max 1 (math/floor value)))
@@ -50,7 +51,10 @@ const BundledLayoutsSource* =
    :usable-y (+ (screen :y) outer-gap)
    :usable-w (max 0 (- (screen :w) (* 2 outer-gap)))
    :usable-h (max 0 (- (screen :h) (* 2 outer-gap)))})
+"""
 
+const MasterStackLayoutSource =
+  """
 (defn triad/layout-master-stack [ctx]
   (def tag (ctx :tag))
   (def windows (triad/layout-flatten-windows (tag :columns)))
@@ -106,7 +110,10 @@ const BundledLayoutsSource* =
                  :h sh})
               (set y (+ y sh (c :inner-gap)))))
           instructions)))))
+"""
 
+const GridLayoutSource =
+  """
 (defn triad/layout-grid [ctx vertical]
   (def tag (ctx :tag))
   (def windows (triad/layout-flatten-windows (tag :columns)))
@@ -144,7 +151,10 @@ const BundledLayoutsSource* =
            :w win-w
            :h win-h}))
       instructions)))
+"""
 
+const MonocleLayoutSource =
+  """
 (defn triad/layout-monocle [ctx]
   (def tag (ctx :tag))
   (def windows (triad/layout-flatten-windows (tag :columns)))
@@ -158,7 +168,10 @@ const BundledLayoutsSource* =
        :w (c :usable-w)
        :h (c :usable-h)}))
   instructions)
+"""
 
+const DeckLayoutSource =
+  """
 (defn triad/layout-deck [ctx vertical]
   (def tag (ctx :tag))
   (def windows (triad/layout-focused-first
@@ -236,7 +249,10 @@ const BundledLayoutsSource* =
                  :w stack-w
                  :h (c :usable-h)})))))
       instructions)))
+"""
 
+const RightTileLayoutSource =
+  """
 (defn triad/layout-right-tile [ctx]
   (def tag (ctx :tag))
   (def windows (triad/layout-flatten-windows (tag :columns)))
@@ -286,7 +302,10 @@ const BundledLayoutsSource* =
              :h mh})
           (set y (+ y mh (c :inner-gap)))))
       instructions)))
+"""
 
+const CenterTileLayoutSource =
+  """
 (defn triad/layout-center-tile [ctx]
   (def tag (ctx :tag))
   (def windows (triad/layout-flatten-windows (tag :columns)))
@@ -351,7 +370,10 @@ const BundledLayoutsSource* =
                  (+ master-x master-w (if (> side-right 0) (c :inner-gap) 0))
                  right-w)
       instructions)))
+"""
 
+const VerticalTileLayoutSource =
+  """
 (defn triad/layout-vertical-tile [ctx deck?]
   (def tag (ctx :tag))
   (def windows (if deck?
@@ -413,16 +435,44 @@ const BundledLayoutsSource* =
                  :h stack-h})
               (set x (+ x sw (c :inner-gap)))))))
       instructions)))
+"""
 
-(triad/def-layout :tile triad/layout-master-stack)
-(triad/def-layout :grid (fn [ctx] (triad/layout-grid ctx false)))
-(triad/def-layout :monocle triad/layout-monocle)
-(triad/def-layout :deck (fn [ctx] (triad/layout-deck ctx false)))
-(triad/def-layout :center-tile triad/layout-center-tile)
-(triad/def-layout :right-tile triad/layout-right-tile)
-(triad/def-layout :vertical-tile (fn [ctx] (triad/layout-vertical-tile ctx false)))
-(triad/def-layout :vertical-grid (fn [ctx] (triad/layout-grid ctx true)))
-(triad/def-layout :vertical-deck (fn [ctx] (triad/layout-vertical-tile ctx true)))
+proc bundledLayoutPath*(id: string): string =
+  BundledLayoutsPathPrefix & id & ">"
+
+proc bundledLayoutSource*(id: string): Option[string] =
+  let source =
+    case id
+    of "tile":
+      BundledLayoutPreludeSource & MasterStackLayoutSource &
+        "\n(triad/def-layout :tile triad/layout-master-stack)\n"
+    of "grid":
+      BundledLayoutPreludeSource & GridLayoutSource &
+        "\n(triad/def-layout :grid (fn [ctx] (triad/layout-grid ctx false)))\n"
+    of "monocle":
+      BundledLayoutPreludeSource & MonocleLayoutSource &
+        "\n(triad/def-layout :monocle triad/layout-monocle)\n"
+    of "deck":
+      BundledLayoutPreludeSource & DeckLayoutSource &
+        "\n(triad/def-layout :deck (fn [ctx] (triad/layout-deck ctx false)))\n"
+    of "center-tile":
+      BundledLayoutPreludeSource & CenterTileLayoutSource &
+        "\n(triad/def-layout :center-tile triad/layout-center-tile)\n"
+    of "right-tile":
+      BundledLayoutPreludeSource & RightTileLayoutSource &
+        "\n(triad/def-layout :right-tile triad/layout-right-tile)\n"
+    of "vertical-tile":
+      BundledLayoutPreludeSource & VerticalTileLayoutSource &
+        "\n(triad/def-layout :vertical-tile (fn [ctx] (triad/layout-vertical-tile ctx false)))\n"
+    of "vertical-grid":
+      BundledLayoutPreludeSource & GridLayoutSource &
+        "\n(triad/def-layout :vertical-grid (fn [ctx] (triad/layout-grid ctx true)))\n"
+    of "vertical-deck":
+      BundledLayoutPreludeSource & VerticalTileLayoutSource &
+        "\n(triad/def-layout :vertical-deck (fn [ctx] (triad/layout-vertical-tile ctx true)))\n"
+    of "tgmix":
+      BundledLayoutPreludeSource & MasterStackLayoutSource & GridLayoutSource &
+        """
 (triad/def-layout :tgmix
   (fn [ctx]
     (def tag (ctx :tag))
@@ -431,6 +481,12 @@ const BundledLayoutsSource* =
       (triad/layout-master-stack ctx)
       (triad/layout-grid ctx false))))
 """
+    else:
+      ""
+  if source.len == 0:
+    none(string)
+  else:
+    some(source)
 
 proc bundledLayoutConfigs*(): seq[JanetLayoutConfig] =
   for id in BundledAlgorithmicLayoutIds:

@@ -298,6 +298,9 @@ type
 
   JanetConfig* = object
     enabled*: bool
+    automationDir*: string
+    layoutDir*: string
+    ## Deprecated compatibility alias for automationDir.
     scriptDir*: string
     fuelLimit*: int32
     layouts*: seq[JanetLayoutConfig]

@@ -49,8 +49,8 @@ The stability of IDs reinforces this. Tag IDs and window IDs are Triad-owned log
 The logical extension of the IPC scripting model is to bring the script inside the process entirely. Janet is a small, embeddable Lisp with a clean C API and a data-oriented character that fits Triad's model naturally. Rather than a script opening a socket and speaking JSON, a Janet script receives the snapshot as a native table and calls placement functions directly. The socket overhead and JSON round-trip disappear.
 
 The more interesting possibility is app-specific placement policy. A user keeps
-a small Janet script in Triad's `script-dir`; when matching events fire, Triad
-evaluates that script against the current snapshot. The script can encode
+a small Janet script in Triad's `automation-dir`; when matching events fire,
+Triad evaluates that script against the current snapshot. The script can encode
 knowledge generic rules do not have: which dialogs should float, which
 secondary windows belong on a dedicated tag, whether the main canvas works
 better in scroller or monocle. A script can express conditionality that KDL

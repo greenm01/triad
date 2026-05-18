@@ -74,10 +74,10 @@ model where data flows one way through the reducer.
 
 ### Scripts
 
-Triad loads every `*.janet` file from `script-dir` (default
-`~/.config/triad/janet`) in lexicographic order. Each file is loaded into a
-retained sandbox environment, registers event handlers with `triad/on`, and is
-reloaded only when the source file changes. Handler state survives across
+Triad loads every `*.janet` automation file from `automation-dir` (default
+`~/.config/triad/automation`) in lexicographic order. Each file is loaded into
+a retained sandbox environment, registers event handlers with `triad/on`, and
+is reloaded only when the source file changes. Handler state survives across
 events until reload.
 
 Top-level script code runs at load/reload time, not on every event. Put
@@ -99,7 +99,7 @@ A single script file can handle any combination of events for a concern —
 including window placement on open and any follow-up reactions:
 
 ```janet
-# ~/.config/triad/janet/firefox.janet
+# ~/.config/triad/automation/firefox.janet
 (triad/on :window-ready
   (fn [ev]
     (let [window (ev :window)]
@@ -221,7 +221,7 @@ Frame-aware layouts use a native `frame-tree` fallback:
 ```kdl
 janet {
   enabled #true
-  script-dir "~/.config/triad/janet"
+  layout-dir "~/.config/triad/layouts"
   layout "janet-frame-tree" fallback="frame-tree"
 }
 ```
@@ -393,7 +393,8 @@ event path indefinitely.
 ```kdl
 janet {
   enabled #true
-  script-dir "~/.config/triad/janet"
+  automation-dir "~/.config/triad/automation"
+  layout-dir "~/.config/triad/layouts"
   fuel-limit 500000
 }
 ```
@@ -475,14 +476,18 @@ portal session API.
 
 ## Script Discovery and Caching
 
-Triad loads all `*.janet` files from `script-dir` in lexicographic order. The
-default is `~/.config/triad/janet`. Change it in `config.kdl`:
+Triad loads all automation `*.janet` files from `automation-dir` in
+lexicographic order. The default is `~/.config/triad/automation`. Change it in
+`config.kdl`:
 
 ```kdl
 janet {
-  script-dir "~/.config/triad/janet"
+  automation-dir "~/.config/triad/automation"
 }
 ```
+
+Declared custom layouts load from `layout-dir/<name>.janet`; `script-dir`
+remains accepted as a deprecated alias for `automation-dir`.
 
 Script source is read on first load and cached with the file modification time.
 Editing a script takes effect on the next matching event — no Triad restart
@@ -543,9 +548,9 @@ like in practice:
 - **KDL window rules** — static, unconditional placement. Fast lookup, no
   conditionality. Defined in `config.kdl`.
 - **Embedded Janet scripts** — conditional placement and event-driven logic.
-  All `*.janet` files in `script-dir` load into retained sandbox environments.
-  Scripts register event handlers with `triad/on` and emit `Msg` values through
-  the reducer during handler dispatch.
+  All `*.janet` files in `automation-dir` load into retained sandbox
+  environments. Scripts register event handlers with `triad/on` and emit `Msg`
+  values through the reducer during handler dispatch.
 - **External Janet (or any language) via IPC** — out-of-process scripts.
   Socket latency, full OS isolation. Suitable for long-running automations.
 - **Parallel `river-layout-v3` clients** — custom layout generators that

@@ -143,7 +143,8 @@ shells {
 }
 janet {
   enabled #true
-  script-dir "~/triad-janet"
+  automation-dir "~/triad-automation"
+  layout-dir "~/triad-layouts"
   fuel-limit 1000000
 }
 terminal { command "kitty" }
@@ -455,7 +456,8 @@ switch-events {
     check config.shells.profiles[1].stop == @["pkill", "-x", "waybar"]
     check config.shells.profiles[1].niriCompat
     check config.janet.enabled
-    check config.janet.scriptDir == "~/triad-janet"
+    check config.janet.automationDir == "~/triad-automation"
+    check config.janet.layoutDir == "~/triad-layouts"
     check config.janet.fuelLimit == 1000000
     check config.terminal.command.len > 0
     check config.screenshot.directory == "~/shots"
@@ -809,9 +811,41 @@ cursor {
     check config.shells.watchdog.exclusiveFocusTimeoutMs ==
       DefaultShellWatchdogExclusiveFocusTimeoutMs
     check config.janet.enabled
-    check config.janet.scriptDir == DefaultJanetScriptDir
+    check config.janet.automationDir == DefaultJanetAutomationDir
+    check config.janet.layoutDir == DefaultJanetLayoutDir
     check config.janet.fuelLimit == DefaultJanetFuelLimit
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
+
+  test "Janet script-dir remains a compatibility alias for automation-dir":
+    let legacy = loadConfigNodes(
+      parseKdl(
+        """
+janet {
+  script-dir "~/legacy-janet"
+}
+"""
+      )
+    )
+
+    check legacy.janet.scriptDir == "~/legacy-janet"
+    check legacy.janet.automationDir == "~/legacy-janet"
+    check legacy.janet.layoutDir == DefaultJanetLayoutDir
+
+    let explicit = loadConfigNodes(
+      parseKdl(
+        """
+janet {
+  script-dir "~/legacy-janet"
+  automation-dir "~/automation"
+  layout-dir "~/layouts"
+}
+"""
+      )
+    )
+
+    check explicit.janet.scriptDir == "~/legacy-janet"
+    check explicit.janet.automationDir == "~/automation"
+    check explicit.janet.layoutDir == "~/layouts"
 
   test "Default bindings follow Niri-style movement and scratchpad chords":
     let config = loadConfig(getCurrentDir() / "config.default.kdl")

@@ -12,10 +12,14 @@ import
 import ../src/utils/behavior_log
 
 proc testConfig(dir: string): JanetConfig =
-  JanetConfig(enabled: true, scriptDir: dir, fuelLimit: 500000)
+  JanetConfig(
+    enabled: true, automationDir: dir, layoutDir: dir / "layouts", fuelLimit: 500000
+  )
 
 proc testConfigFuel(dir: string, fuelLimit: int32): JanetConfig =
-  JanetConfig(enabled: true, scriptDir: dir, fuelLimit: fuelLimit)
+  JanetConfig(
+    enabled: true, automationDir: dir, layoutDir: dir / "layouts", fuelLimit: fuelLimit
+  )
 
 proc restoreEnv(name, value: string) =
   putEnv(name, value)
@@ -568,7 +572,8 @@ suite "embedded Janet runtime":
     var runtime = initJanetRuntime(
       JanetConfig(
         enabled: false,
-        scriptDir: getTempDir() / "triad-unused-janet-dir",
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
         fuelLimit: 500000,
       )
     )
@@ -580,13 +585,50 @@ suite "embedded Janet runtime":
     let evaluated = runtime.evalLayoutDetailed(testSnapshot(), context)
 
     check evaluated.outcome == JanetLayoutOutcome.Applied
-    check evaluated.path == BundledLayoutsPath
+    check evaluated.path == bundledLayoutPath("grid")
     check evaluated.fallbackReason.len == 0
     check evaluated.instructions.len == 2
     check evaluated.instructions[0].windowId == 10'u32
     check evaluated.instructions[0].geom == Rect(x: 0, y: 0, w: 500, h: 800)
     check evaluated.instructions[1].windowId == 11'u32
     check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 800)
+    check runtime.scripts.hasKey(bundledLayoutPath("grid"))
+    check not runtime.scripts.hasKey(bundledLayoutPath("tile"))
+
+  test "declared Janet layouts load from layout dir by id":
+    let dir = getTempDir() / ("triad-janet-layout-dir-" & $getCurrentProcessId())
+    let automationDir = dir / "automation"
+    let layoutDir = dir / "layouts"
+    createDir(dir)
+    createDir(automationDir)
+    createDir(layoutDir)
+    writeFile(
+      layoutDir / "halves.janet",
+      """
+(triad/def-layout :halves
+  (fn [ctx]
+    [{:window-id 10 :x 0 :y 0 :w 500 :h 800}
+     {:window-id 11 :x 500 :y 0 :w 500 :h 800}]))
+""",
+    )
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: true,
+        automationDir: automationDir,
+        layoutDir: layoutDir,
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+      if dirExists(dir):
+        removeDir(dir)
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), testLayoutContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.path == layoutDir / "halves.janet"
+    check evaluated.instructions.len == 2
 
   test "frame-aware Janet layout returns frame geometry":
     let dir = getTempDir() / ("triad-janet-layout-frame-" & $getCurrentProcessId())

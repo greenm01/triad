@@ -1,5 +1,6 @@
 import std/[algorithm, options, os, sequtils, strutils, tables, times]
 import chronicles
+import ../core/layout_descriptor_codec
 import ../core/msg
 import ../types/[janet_layouts, janet_manifest, runtime_values, shell_snapshot]
 import bundled_layouts, command_api, layout_api, snapshot_api, binding, prelude
@@ -89,12 +90,20 @@ proc expandJanetDir(path: string): string =
     stripped
 
 proc scriptPaths(runtime: JanetRuntime): seq[string] =
-  let expanded = runtime.config.scriptDir.expandJanetDir()
+  let expanded = runtime.config.automationDir.expandJanetDir()
   if expanded.len == 0 or not dirExists(expanded):
     return @[]
   for path in walkFiles(expanded / "*.janet"):
     result.add(path)
   result.sort()
+
+proc layoutScriptPath(runtime: JanetRuntime, layoutId: string): string =
+  if layoutId.contains("/") or layoutId.contains("\\"):
+    return ""
+  let expanded = runtime.config.layoutDir.expandJanetDir()
+  if expanded.len == 0:
+    return ""
+  expanded / (layoutId & ".janet")
 
 proc loadScriptEntry(
     runtime: var JanetRuntime, path: string, snapshot: ShellSnapshot
@@ -135,15 +144,21 @@ proc loadScriptEntry(
   runtime.scripts[path] = result.entry
 
 proc loadBundledLayoutEntry(
-    runtime: var JanetRuntime, snapshot: ShellSnapshot
+    runtime: var JanetRuntime, layoutId: string, snapshot: ShellSnapshot
 ): ScriptEntryResult =
-  if runtime.scripts.hasKey(BundledLayoutsPath):
-    return (runtime.scripts[BundledLayoutsPath], false)
+  let path = bundledLayoutPath(layoutId)
+  if runtime.scripts.hasKey(path):
+    return (runtime.scripts[path], false)
 
-  result.entry = ScriptCacheEntry(
-    path: BundledLayoutsPath, modified: Time(), source: BundledLayoutsSource
-  )
+  let source = bundledLayoutSource(layoutId)
+  result.entry = ScriptCacheEntry(path: path, modified: Time())
   result.reloaded = true
+  if source.isNone:
+    result.entry.failed = true
+    result.entry.error = "unknown bundled Janet layout: " & layoutId
+    runtime.scripts[path] = result.entry
+    return
+  result.entry.source = source.get()
   let bootstrapSource =
     snapshot.janetSnapshotSource(none(ShellWindow), "nil") & JanetPersistentPreludeSource
   result.entry.script = triadJanetScriptLoad(
@@ -159,7 +174,7 @@ proc loadBundledLayoutEntry(
     result.entry.error =
       if error.len > 0: error else: "Bundled Janet layout load failed"
     warn "Bundled Janet layouts failed", error = result.entry.error
-  runtime.scripts[BundledLayoutsPath] = result.entry
+  runtime.scripts[path] = result.entry
 
 proc evictMissingScripts(runtime: var JanetRuntime, paths: seq[string]) =
   for path in runtime.scripts.keys.toSeq:
@@ -254,6 +269,64 @@ proc fallbackLayoutResult(
     inputFrameCount: context.leafFrameCount(),
   )
 
+proc evalLoadedLayout(
+    runtime: var JanetRuntime,
+    context: JanetLayoutContext,
+    entry: ScriptCacheEntry,
+    started: float,
+    evalFailureReason: string,
+): JanetLayoutEvalResult =
+  let evaluated =
+    triadJanetScriptEvalLayout(
+      runtime.handle,
+      entry.script,
+      cstring(context.layoutId.layoutIdString()),
+      cstring(context.layoutContextSource()),
+      cstring(entry.path),
+      runtime.config.fuelLimit,
+    ) == 1
+  if not evaluated:
+    let error = $triadJanetLastError(runtime.handle)
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.EvalFailed,
+      evalFailureReason,
+      started,
+      entry.path,
+      if error.len > 0: error else: evalFailureReason,
+    )
+    result.logLayoutEval()
+    return
+
+  let instructions = runtime.handle.extractedLayoutInstructions()
+  let validation = context.validateLayoutInstructions(instructions)
+  if not validation.ok:
+    result = context.fallbackLayoutResult(
+      JanetLayoutOutcome.Invalid, validation.error, started, entry.path,
+      validation.error,
+    )
+    result.instructionCount = instructions.len
+    result.outputTargetKind = validation.outputTargetKind
+    result.logLayoutEval()
+    return
+
+  result = JanetLayoutEvalResult(
+    layoutId: context.layoutId,
+    path: entry.path,
+    outcome: JanetLayoutOutcome.Applied,
+    durationMs: int64((epochTime() - started) * 1000),
+    inputWindowCount: context.tiledWindowCount(),
+    inputFrameCount: context.leafFrameCount(),
+    instructionCount: instructions.len,
+    outputTargetKind: validation.outputTargetKind,
+    instructions: validation.instructions,
+    frameInstructions:
+      if validation.outputTargetKind == JanetLayoutTargetKind.Frame:
+        instructions
+      else:
+        @[],
+  )
+  result.logLayoutEval()
+
 proc evalLayoutDetailed*(
     runtime: var JanetRuntime, snapshot: ShellSnapshot, context: JanetLayoutContext
 ): JanetLayoutEvalResult =
@@ -265,62 +338,14 @@ proc evalLayoutDetailed*(
     result.logLayoutEval()
     return
 
-  let bundled = runtime.loadBundledLayoutEntry(snapshot)
-  if not bundled.entry.failed and
-      triadJanetScriptHasLayout(
-        bundled.entry.script, cstring(context.layoutId.layoutIdString())
-      ) == 1:
-    let evaluated =
-      triadJanetScriptEvalLayout(
-        runtime.handle,
-        bundled.entry.script,
-        cstring(context.layoutId.layoutIdString()),
-        cstring(context.layoutContextSource()),
-        cstring(bundled.entry.path),
-        runtime.config.fuelLimit,
-      ) == 1
-    if not evaluated:
-      let error = $triadJanetLastError(runtime.handle)
-      result = context.fallbackLayoutResult(
-        JanetLayoutOutcome.EvalFailed,
-        "bundled janet layout evaluation failed",
-        started,
-        bundled.entry.path,
-        if error.len > 0: error else: "Bundled Janet layout evaluation failed",
+  let layoutId = context.layoutId.layoutIdString()
+  if layoutId.isBundledAlgorithmicLayoutId():
+    let bundled = runtime.loadBundledLayoutEntry(layoutId, snapshot)
+    if not bundled.entry.failed and
+        triadJanetScriptHasLayout(bundled.entry.script, cstring(layoutId)) == 1:
+      return runtime.evalLoadedLayout(
+        context, bundled.entry, started, "bundled janet layout evaluation failed"
       )
-      result.logLayoutEval()
-      return
-
-    let instructions = runtime.handle.extractedLayoutInstructions()
-    let validation = context.validateLayoutInstructions(instructions)
-    if not validation.ok:
-      result = context.fallbackLayoutResult(
-        JanetLayoutOutcome.Invalid, validation.error, started, bundled.entry.path,
-        validation.error,
-      )
-      result.instructionCount = instructions.len
-      result.outputTargetKind = validation.outputTargetKind
-      result.logLayoutEval()
-      return
-
-    result = JanetLayoutEvalResult(
-      layoutId: context.layoutId,
-      path: bundled.entry.path,
-      outcome: JanetLayoutOutcome.Applied,
-      durationMs: int64((epochTime() - started) * 1000),
-      inputWindowCount: context.tiledWindowCount(),
-      inputFrameCount: context.leafFrameCount(),
-      instructionCount: instructions.len,
-      outputTargetKind: validation.outputTargetKind,
-      instructions: validation.instructions,
-      frameInstructions:
-        if validation.outputTargetKind == JanetLayoutTargetKind.Frame:
-          instructions
-        else:
-          @[],
-    )
-    result.logLayoutEval()
-    return
 
   if not runtime.config.enabled:
     result = context.fallbackLayoutResult(
@@ -328,6 +353,28 @@ proc evalLayoutDetailed*(
     )
     result.logLayoutEval()
     return
+
+  let directLayoutPath = runtime.layoutScriptPath(layoutId)
+  if directLayoutPath.len > 0 and fileExists(directLayoutPath):
+    let loaded = runtime.loadScriptEntry(directLayoutPath, snapshot)
+    let entry = loaded.entry
+    if entry.failed:
+      result = context.fallbackLayoutResult(
+        JanetLayoutOutcome.LoadFailed, "janet layout script failed to load", started,
+        entry.path, entry.error,
+      )
+      result.logLayoutEval()
+      return
+    if triadJanetScriptHasLayout(entry.script, cstring(layoutId)) != 1:
+      result = context.fallbackLayoutResult(
+        JanetLayoutOutcome.Missing, "janet layout file did not register layout",
+        started, entry.path,
+      )
+      result.logLayoutEval()
+      return
+    return runtime.evalLoadedLayout(
+      context, entry, started, "janet layout evaluation failed"
+    )
 
   let paths = runtime.scriptPaths()
   runtime.evictMissingScripts(paths)
@@ -353,57 +400,9 @@ proc evalLayoutDetailed*(
     ) != 1:
       continue
 
-    let evaluated =
-      triadJanetScriptEvalLayout(
-        runtime.handle,
-        entry.script,
-        cstring(context.layoutId.layoutIdString()),
-        cstring(context.layoutContextSource()),
-        cstring(entry.path),
-        runtime.config.fuelLimit,
-      ) == 1
-    if not evaluated:
-      let error = $triadJanetLastError(runtime.handle)
-      result = context.fallbackLayoutResult(
-        JanetLayoutOutcome.EvalFailed,
-        "janet layout evaluation failed",
-        started,
-        entry.path,
-        if error.len > 0: error else: "Janet layout evaluation failed",
-      )
-      result.logLayoutEval()
-      return
-
-    let instructions = runtime.handle.extractedLayoutInstructions()
-    let validation = context.validateLayoutInstructions(instructions)
-    if not validation.ok:
-      result = context.fallbackLayoutResult(
-        JanetLayoutOutcome.Invalid, validation.error, started, entry.path,
-        validation.error,
-      )
-      result.instructionCount = instructions.len
-      result.outputTargetKind = validation.outputTargetKind
-      result.logLayoutEval()
-      return
-
-    result = JanetLayoutEvalResult(
-      layoutId: context.layoutId,
-      path: entry.path,
-      outcome: JanetLayoutOutcome.Applied,
-      durationMs: int64((epochTime() - started) * 1000),
-      inputWindowCount: context.tiledWindowCount(),
-      inputFrameCount: context.leafFrameCount(),
-      instructionCount: instructions.len,
-      outputTargetKind: validation.outputTargetKind,
-      instructions: validation.instructions,
-      frameInstructions:
-        if validation.outputTargetKind == JanetLayoutTargetKind.Frame:
-          instructions
-        else:
-          @[],
+    return runtime.evalLoadedLayout(
+      context, entry, started, "janet layout evaluation failed"
     )
-    result.logLayoutEval()
-    return
 
   if firstLoadError.len > 0:
     result = context.fallbackLayoutResult(

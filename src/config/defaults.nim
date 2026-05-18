@@ -72,7 +72,8 @@ screenshot {
 
 janet {
     enabled #true
-    script-dir "~/.config/triad/janet"
+    automation-dir "~/.config/triad/automation"
+    layout-dir "~/.config/triad/layouts"
     fuel-limit 500000
 }
 

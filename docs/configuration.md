@@ -495,8 +495,8 @@ When a shell profile is started with `niri-compat #true`, Triad creates a privat
 
 ### Janet Scripting
 Triad includes an embedded Janet runtime for advanced automation. Scripts in
-`script-dir` can subscribe to runtime events with `triad/on` and emit normal
-Triad commands through `triad/command`.
+`automation-dir` can subscribe to runtime events with `triad/on` and emit
+normal Triad commands through `triad/command`.
 Named Janet layouts are declared in the same block. A custom layout name is a
 bare id that must not collide with a built-in layout id. Each declaration has a
 safe fallback used for overview, compatibility projections, and any failed
@@ -504,12 +504,15 @@ custom evaluation. The fallback may be a built-in layout id or the native
 `frame-tree` layout. A `frame-tree` fallback exposes immutable frame/tab data to
 the layout script and lets Triad render the same native frame state when Janet
 evaluation fails.
+Declared custom layouts are loaded from `layout-dir/<name>.janet`. The legacy
+`script-dir` key remains accepted as an alias for `automation-dir`.
 
 **Example Janet Configuration:**
 ```kdl
 janet {
   enabled #true
-  script-dir "~/.config/triad/janet"
+  automation-dir "~/.config/triad/automation"
+  layout-dir "~/.config/triad/layouts"
   fuel-limit 500000
   layout "spiral" fallback="scroller"
   layout "wide-master" fallback="tile"

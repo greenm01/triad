@@ -316,8 +316,13 @@ proc applyConfig*(model: var Model, config: Config) =
       model.quickshell.legacyShellsFromQuickshell()
   model.shells.normalizeShells()
   model.janet = config.janet
-  if model.janet.scriptDir.strip().len == 0:
-    model.janet.scriptDir = DefaultJanetScriptDir
+  if model.janet.automationDir.strip().len == 0:
+    if model.janet.scriptDir.strip().len > 0:
+      model.janet.automationDir = model.janet.scriptDir
+    else:
+      model.janet.automationDir = DefaultJanetAutomationDir
+  if model.janet.layoutDir.strip().len == 0:
+    model.janet.layoutDir = DefaultJanetLayoutDir
   model.janet.fuelLimit = configClamp32(model.janet.fuelLimit, 1_000, 10_000_000)
   model.customLayouts = bundledLayoutConfigs() & model.janet.layouts
   for tagId, tag in model.tagsWithId():

@@ -1079,10 +1079,12 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.shells.watchdog.exclusiveFocusTimeoutMs =
     DefaultShellWatchdogExclusiveFocusTimeoutMs
   result.janet.enabled = true
-  result.janet.scriptDir = DefaultJanetScriptDir
+  result.janet.automationDir = DefaultJanetAutomationDir
+  result.janet.layoutDir = DefaultJanetLayoutDir
   result.janet.fuelLimit = DefaultJanetFuelLimit
   result.janet.layouts = collectJanetLayoutDeclarations(doc)
   let availableJanetLayouts = bundledLayoutConfigs() & result.janet.layouts
+  var janetAutomationDirSet = false
   result.hotkeyOverlay.skipAtStartup = true
   result.hotkeyOverlay.position = HotkeyOverlayPosition.Top
   result.hotkeyOverlay.columns = 2
@@ -1707,8 +1709,19 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
           try:
             if child.name == "enabled" and child.args.len > 0:
               result.janet.enabled = child.args[0].kBool()
+            elif child.name == "automation-dir" and child.args.len > 0:
+              if result.janet.scriptDir.strip().len > 0:
+                warn "Ignoring deprecated janet script-dir because automation-dir is set"
+              result.janet.automationDir = child.args[0].kString()
+              janetAutomationDirSet = true
+            elif child.name == "layout-dir" and child.args.len > 0:
+              result.janet.layoutDir = child.args[0].kString()
             elif child.name == "script-dir" and child.args.len > 0:
               result.janet.scriptDir = child.args[0].kString()
+              if janetAutomationDirSet:
+                warn "Ignoring deprecated janet script-dir because automation-dir is set"
+              else:
+                result.janet.automationDir = result.janet.scriptDir
             elif child.name == "fuel-limit" and child.args.len > 0:
               result.janet.fuelLimit =
                 clamp32(int32(child.args[0].kInt()), 1_000, 10_000_000)

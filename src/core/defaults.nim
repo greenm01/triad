@@ -50,6 +50,8 @@ const
   DefaultFloatingMinHeight* = 50'i32
   DefaultQuickshellCommand* = "qs"
   DefaultShellWatchdogExclusiveFocusTimeoutMs* = 30000'i32
+  DefaultJanetAutomationDir* = "~/.config/triad/automation"
+  DefaultJanetLayoutDir* = "~/.config/triad/layouts"
   DefaultJanetScriptDir* = "~/.config/triad/janet"
   DefaultJanetFuelLimit* = 500000'i32
   DefaultScreenshotDirectory* = "~/Pictures/Screenshots"

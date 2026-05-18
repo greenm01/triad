@@ -338,8 +338,9 @@ KDL config nodes and fields:
 - `shells`: `enabled`, `active`, `cycle`, `watchdog`, `fallback`,
   `exclusive-focus-timeout-ms`, `profile`, `launch`, `stop`, `niri-compat`.
 - `quickshell`: legacy fallback accepted when `shells` is absent.
-- `janet`: `enabled`, `script-dir`, `fuel-limit`, `layout <name>
-  fallback=<builtin|frame-tree>`.
+- `janet`: `enabled`, `automation-dir`, `layout-dir`, `fuel-limit`,
+  `layout <name> fallback=<builtin|frame-tree>`; legacy `script-dir` is accepted
+  as an `automation-dir` alias.
   Scripts receive `triad/snapshot`, `triad/current-window`, and
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can
