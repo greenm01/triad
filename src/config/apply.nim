@@ -178,7 +178,8 @@ proc tagRuleData(rule: rv.TagRule): TagRuleData =
     defaultLayout: rule.defaultLayout,
     defaultLayoutSelection:
       if rule.defaultLayoutSet and
-          rule.defaultLayoutSelection.kind == LayoutSelectionKind.Custom:
+          rule.defaultLayoutSelection.kind in
+          {LayoutSelectionKind.Custom, LayoutSelectionKind.Native}:
         rule.defaultLayoutSelection
       else:
         builtinSelection(rule.defaultLayout),
@@ -264,7 +265,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.defaultWorkspaceCount = runtimeWorkspaceCount(config.workspaces.defaultCount)
   model.defaultWorkspaceLayout = config.workspaces.defaultLayout
   model.defaultWorkspaceLayoutSelection =
-    if config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom:
+    if config.workspaces.defaultLayoutSelection.kind in
+        {LayoutSelectionKind.Custom, LayoutSelectionKind.Native}:
       config.workspaces.defaultLayoutSelection
     else:
       builtinSelection(config.workspaces.defaultLayout)
@@ -428,7 +430,9 @@ proc applyConfig*(model: var Model, config: Config) =
         of LayoutSelectionKind.Builtin:
           discard model.setTagLayout(tagId, selection.builtin)
         of LayoutSelectionKind.Custom:
-          discard model.setTagCustomLayout(tagId, selection.customId, selection.builtin)
+          discard model.setTagCustomLayout(tagId, selection.customId, selection)
+        of LayoutSelectionKind.Native:
+          discard model.setTagNativeLayout(tagId, selection.nativeId, selection.builtin)
       if tagRule.found:
         discard model.setTagName(tagId, tagRule.rule.name)
         if tagRule.rule.openOnOutput.len > 0:

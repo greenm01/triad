@@ -61,6 +61,12 @@ type
     # User Commands (IPC/Keybinds)
     CmdSetLayout
     CmdSetCustomLayout
+    CmdSetNativeLayout
+    CmdFrameSplitHorizontal
+    CmdFrameSplitVertical
+    CmdFrameUnsplit
+    CmdFrameTabNext
+    CmdFrameTabPrev
     CmdFocusNext
     CmdFocusPrev
     CmdFocusDirection
@@ -300,6 +306,9 @@ type
     of MsgKind.CmdSetCustomLayout:
       customLayout*: JanetLayoutId
       customLayoutTargetTag*: uint32
+    of MsgKind.CmdSetNativeLayout:
+      nativeLayout*: NativeLayoutId
+      nativeLayoutTargetTag*: uint32
     of MsgKind.CmdFocusDirection:
       direction*: Direction
     of MsgKind.CmdRecentWindowNext, MsgKind.CmdRecentWindowPrev:

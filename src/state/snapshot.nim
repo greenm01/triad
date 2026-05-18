@@ -1,7 +1,8 @@
-import std/[options, strutils]
+import std/[options, strutils, tables]
 import iterators, queries
 import ../core/layout_mode_codec
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../core/defaults
 import ../types/[core, model, shell_snapshot]
 from ../types/runtime_values import LayoutMode
@@ -31,6 +32,31 @@ proc shellColumns(model: Model, tagId: TagId): seq[ShellColumn] =
         scrollerSingleProportion: column.scrollerSingleProportion,
         isFullWidth: column.isFullWidth,
         windows: windows,
+      )
+    )
+
+proc shellFrames(model: Model, tagId: TagId): seq[ShellFrame] =
+  for frameId, frame in model.framesOnTagWithId(tagId):
+    var windows: seq[uint32] = @[]
+    for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+      let winOpt = model.windowData(winId)
+      if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
+          not winOpt.get().isUnmanagedGlobal:
+        windows.add(model.externalWindowId(winId))
+    result.add(
+      ShellFrame(
+        id: uint32(frame.id),
+        kind: frame.kind,
+        parent: uint32(frame.parent),
+        firstChild: uint32(frame.firstChild),
+        secondChild: uint32(frame.secondChild),
+        orientation: frame.orientation,
+        ratio: frame.ratio,
+        windows: windows,
+        activeWindow: model.externalWindowId(frame.activeWindow),
+        focused:
+          model.tagData(tagId).isSome and
+          model.tagData(tagId).get().focusedFrame == frameId,
       )
     )
 
@@ -86,6 +112,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     for mode in result.layoutCycle:
       result.layoutCycleSelections.add(builtinSelection(mode))
   result.customLayouts = model.customLayouts
+  result.nativeLayouts = nativeLayouts()
   result.keyboardLayoutNames = model.keyboardLayoutNames()
   result.keyboardLayoutIndex =
     if result.keyboardLayoutNames.len == 0:
@@ -111,10 +138,27 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
           masterSplitRatio: model.snapshotDefaultMasterRatio(),
         )
     let layoutKind =
-      if tag.customLayoutId.layoutIdString().len > 0: "custom" else: "builtin"
+      if tag.customLayoutId.layoutIdString().len > 0:
+        "custom"
+      elif tag.nativeLayoutId.nativeLayoutIdString().len > 0:
+        "native"
+      else:
+        "builtin"
     let layoutId =
-      if layoutKind == "custom":
+      case layoutKind
+      of "custom":
         tag.customLayoutId.layoutIdString()
+      of "native":
+        tag.nativeLayoutId.nativeLayoutIdString()
+      else:
+        layoutModeId(tag.layoutMode)
+    let fallbackLayout =
+      if layoutKind == "custom":
+        let custom = model.customLayouts.findCustomLayout(tag.customLayoutId)
+        if custom.isSome:
+          custom.get().fallback.selectionFallbackId()
+        else:
+          layoutModeId(tag.layoutMode)
       else:
         layoutModeId(tag.layoutMode)
 
@@ -126,7 +170,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         layoutMode: tag.layoutMode,
         layoutId: layoutId,
         layoutKind: layoutKind,
-        fallbackLayout: tag.layoutMode,
+        fallbackLayout: fallbackLayout,
         isActive: slot == model.activeSlot,
         isOutputVisible: tagId != NullTagId and model.tagVisibleOnOutput(tagId),
         focusedWindow: model.externalWindowId(tag.focusedWindow),
@@ -139,6 +183,11 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         columns:
           if tagId != NullTagId:
             model.shellColumns(tagId)
+          else:
+            @[],
+        frames:
+          if tagId != NullTagId:
+            model.shellFrames(tagId)
           else:
             @[],
         masterCount: tag.masterCount,

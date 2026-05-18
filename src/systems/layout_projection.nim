@@ -1,5 +1,6 @@
 import std/[algorithm, math, options, tables]
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../layouts/[scroller, tiling]
 import ../state/engine
 import ../types/core as core_types
@@ -7,6 +8,7 @@ import ../types/janet_layouts
 import ../types/layout_projection
 import ../types/model as model_types
 import ../types/projection_values as rv
+from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
 import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
@@ -221,6 +223,29 @@ proc projectedTag(
         )
       )
 
+  for frameId, frame in model.framesOnTagWithId(tagId):
+    var frameWindows: seq[rv.ProjectionWindowId] = @[]
+    for winId in model.windowsByFrame.getOrDefault(frameId, @[]):
+      let winOpt = model.windowData(winId)
+      if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
+          not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal and
+          not model.windowHiddenByGroup(winId):
+        frameWindows.add(model.externalWindowId(winId))
+    result.tag.frames.add(
+      rv.ProjectedFrame(
+        id: uint32(frame.id),
+        kind: frame.kind,
+        parent: uint32(frame.parent),
+        firstChild: uint32(frame.firstChild),
+        secondChild: uint32(frame.secondChild),
+        orientation: frame.orientation,
+        ratio: frame.ratio,
+        windows: frameWindows,
+        activeWindow: model.externalWindowId(frame.activeWindow),
+        focused: frameId == tag.focusedFrame,
+      )
+    )
+
 proc layoutForTag(
     tag: var rv.ProjectedTag,
     windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
@@ -261,6 +286,87 @@ proc layoutForTag(
 
 proc layoutUsesNativeViewport(mode: rv.LayoutMode): bool =
   mode in {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}
+
+proc frameTreeActive(tag: TagData): bool =
+  tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
+
+proc frameTreeRects(
+    model: Model,
+    frameId: FrameId,
+    area: rv.Rect,
+    gap: int32,
+    outRects: var seq[tuple[frameId: FrameId, rect: rv.Rect]],
+) =
+  let frameOpt = model.frameData(frameId)
+  if frameOpt.isNone:
+    return
+  let frame = frameOpt.get()
+  case frame.kind
+  of FrameNodeKind.Leaf:
+    outRects.add((frameId, area))
+  of FrameNodeKind.Split:
+    let safeGap = max(0'i32, gap)
+    let ratio = clamp(frame.ratio, 0.05'f32, 0.95'f32)
+    case frame.orientation
+    of FrameSplitOrientation.Horizontal:
+      let firstW = max(1'i32, int32(float32(max(1'i32, area.w - safeGap)) * ratio))
+      let secondW = max(1'i32, area.w - safeGap - firstW)
+      model.frameTreeRects(
+        frame.firstChild,
+        rv.Rect(x: area.x, y: area.y, w: firstW, h: area.h),
+        safeGap,
+        outRects,
+      )
+      model.frameTreeRects(
+        frame.secondChild,
+        rv.Rect(x: area.x + firstW + safeGap, y: area.y, w: secondW, h: area.h),
+        safeGap,
+        outRects,
+      )
+    of FrameSplitOrientation.Vertical:
+      let firstH = max(1'i32, int32(float32(max(1'i32, area.h - safeGap)) * ratio))
+      let secondH = max(1'i32, area.h - safeGap - firstH)
+      model.frameTreeRects(
+        frame.firstChild,
+        rv.Rect(x: area.x, y: area.y, w: area.w, h: firstH),
+        safeGap,
+        outRects,
+      )
+      model.frameTreeRects(
+        frame.secondChild,
+        rv.Rect(x: area.x, y: area.y + firstH + safeGap, w: area.w, h: secondH),
+        safeGap,
+        outRects,
+      )
+
+proc layoutFrameTree*(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.RenderInstruction] =
+  let root = model.frameRootForTag(tagId)
+  if root == NullFrameId:
+    return @[]
+  let safeOuterGap = max(0'i32, outerGap)
+  let usable = rv.Rect(
+    x: screen.x + safeOuterGap,
+    y: screen.y + safeOuterGap,
+    w: max(1'i32, screen.w - 2 * safeOuterGap),
+    h: max(1'i32, screen.h - 2 * safeOuterGap),
+  )
+  var rects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
+  model.frameTreeRects(root, usable, innerGap, rects)
+  for item in rects:
+    let frameOpt = model.frameData(item.frameId)
+    if frameOpt.isNone:
+      continue
+    let active = frameOpt.get().activeWindow
+    if active == NullWindowId:
+      continue
+    let winOpt = model.windowData(active)
+    if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
+        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
+      result.add(
+        rv.RenderInstruction(windowId: model.externalWindowId(active), geom: item.rect)
+      )
 
 proc applyLayoutViewportOffset(
     tag: rv.ProjectedTag, instructions: var seq[rv.RenderInstruction]
@@ -322,17 +428,22 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   let retargetViewport = model.viewportRetargetRequested(model.activeTag)
   var tagForLayout = projected.tag
   model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
-  result = layoutForTag(
-    tagForLayout,
-    windows,
-    screen,
-    currentOuterGap,
-    currentInnerGap,
-    retargetViewport and model.scrollerFocusCenter,
-    retargetViewport and model.scrollerPreferCenter,
-    if retargetViewport: model.centerFocusedColumn else: "never",
-  )
-  tagForLayout.applyLayoutViewportOffset(result)
+  let activeTagData = model.tagData(model.activeTag).get()
+  if activeTagData.frameTreeActive():
+    result =
+      model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
+  else:
+    result = layoutForTag(
+      tagForLayout,
+      windows,
+      screen,
+      currentOuterGap,
+      currentInnerGap,
+      retargetViewport and model.scrollerFocusCenter,
+      retargetViewport and model.scrollerPreferCenter,
+      if retargetViewport: model.centerFocusedColumn else: "never",
+    )
+    tagForLayout.applyLayoutViewportOffset(result)
 
   model.addFloatingInstructions(model.activeTag, screen, result)
   model.addUnmanagedGlobalInstructions(screen, result)
@@ -618,6 +729,9 @@ proc layoutProjection*(
   )
   if custom.applied:
     result.instructions = custom.instructions
+  elif activeTagData.frameTreeActive():
+    result.instructions =
+      model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
   else:
     result.instructions = layoutForTag(
       tagForLayout,
@@ -630,7 +744,8 @@ proc layoutProjection*(
       if retargetViewport: model.centerFocusedColumn else: "never",
     )
     tagForLayout.applyLayoutViewportOffset(result.instructions)
-  if tagForLayout.columns.len > 0 and not custom.applied:
+  if tagForLayout.columns.len > 0 and not custom.applied and
+      not activeTagData.frameTreeActive():
     result.viewportTargets.add(
       LayoutViewportTarget(
         tagSlot: projected.tag.tagId,

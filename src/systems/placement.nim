@@ -1,9 +1,10 @@
 import std/options
 import focus, workspaces
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import
-  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind
+  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind, NativeLayoutId
 
 proc resetNonScrollerViewport(model: var Model, tagId: TagId, mode: LayoutMode): bool =
   if mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
@@ -19,10 +20,20 @@ proc setCommandLayout(model: var Model, tagId: TagId, mode: LayoutMode): bool =
     result = model.resetNonScrollerViewport(tagId, mode) or result
 
 proc setCommandCustomLayout(
-    model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutMode
+    model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutSelection
 ): bool =
   result = model.setTagCustomLayout(tagId, id, fallback)
   if result:
+    if fallback.kind == LayoutSelectionKind.Native:
+      discard model.syncTagFramesFromPlacement(tagId)
+    result = model.resetNonScrollerViewport(tagId, fallback.builtin) or result
+
+proc setCommandNativeLayout(
+    model: var Model, tagId: TagId, id: NativeLayoutId, fallback: LayoutMode
+): bool =
+  result = model.setTagNativeLayout(tagId, id, fallback)
+  if result:
+    discard model.syncTagFramesFromPlacement(tagId)
     result = model.resetNonScrollerViewport(tagId, fallback) or result
 
 proc focusedPosition(
@@ -103,9 +114,32 @@ proc setCustomLayoutForSlot*(model: var Model, slot: uint32, id: JanetLayoutId):
     return false
   model.setCommandCustomLayout(tagId, id, custom.get().fallback)
 
+proc setNativeLayoutForSlot*(model: var Model, slot: uint32, id: NativeLayoutId): bool =
+  let native = parseNativeLayoutId(id.nativeLayoutIdString())
+  if native.isNone:
+    return false
+  let tagId =
+    if slot == 0:
+      model.ensureActiveWorkspace()
+    else:
+      model.tagForSlot(slot)
+  if tagId == NullTagId:
+    return false
+  if slot > model.defaultWorkspaceCount() and slot != model.activeWorkspaceSlot() and
+      not model.tagHasNonStickyLiveWindows(tagId):
+    return false
+  model.setCommandNativeLayout(tagId, id, native.get().fallback.builtin)
+
 proc tagLayoutSelection(tag: TagData): LayoutSelection =
   if tag.customLayoutId.layoutIdString().len > 0:
-    customSelection(tag.customLayoutId, tag.layoutMode)
+    let fallback =
+      if tag.nativeLayoutId.nativeLayoutIdString().len > 0:
+        nativeSelection(tag.nativeLayoutId, tag.layoutMode)
+      else:
+        builtinSelection(tag.layoutMode)
+    customSelection(tag.customLayoutId, fallback)
+  elif tag.nativeLayoutId.nativeLayoutIdString().len > 0:
+    nativeSelection(tag.nativeLayoutId, tag.layoutMode)
   else:
     builtinSelection(tag.layoutMode)
 
@@ -138,6 +172,8 @@ proc switchLayout*(model: var Model): bool =
     if custom.isNone:
       return model.setCommandLayout(tagId, next.builtin)
     model.setCommandCustomLayout(tagId, next.customId, custom.get().fallback)
+  of LayoutSelectionKind.Native:
+    model.setCommandNativeLayout(tagId, next.nativeId, next.builtin)
 
 proc setMasterCount*(model: var Model, count: int): bool =
   let tagId = model.ensureActiveWorkspace()

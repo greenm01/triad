@@ -2,6 +2,7 @@ import tconfig_support
 import kdl
 import ../src/config/keysyms
 import ../src/core/layout_selection_codec
+import ../src/core/native_layout_codec
 
 suite "KDL Configuration Parser: parser defaults":
   test "Parser reads layout, workspace, binding, and command settings":
@@ -899,7 +900,7 @@ cursor {
       parseKdl(
         """
 layout {
-  layout-cycle "scroller" "spiral" "grid"
+  layout-cycle "scroller" "spiral" "frame-tree" "grid"
 }
 
 workspaces {
@@ -913,20 +914,28 @@ workspace-rules {
 janet {
   layout "spiral" fallback="scroller"
   layout "wide-master" fallback="tile"
+  layout "notion" fallback="frame-tree"
 }
 """
       )
     )
 
-    check config.janet.layouts.len == 2
+    check config.janet.layouts.len == 3
     check config.janet.layouts[0].id.layoutIdString() == "spiral"
-    check config.janet.layouts[0].fallback == LayoutMode.Scroller
+    check config.janet.layouts[0].fallback.builtin == LayoutMode.Scroller
     check config.janet.layouts[1].id.layoutIdString() == "wide-master"
-    check config.janet.layouts[1].fallback == LayoutMode.MasterStack
+    check config.janet.layouts[1].fallback.builtin == LayoutMode.MasterStack
+    check config.janet.layouts[2].id.layoutIdString() == "notion"
+    check config.janet.layouts[2].fallback.kind == LayoutSelectionKind.Native
+    check config.janet.layouts[2].fallback.nativeId.nativeLayoutIdString() ==
+      "frame-tree"
     check config.layout.layoutCycle ==
-      @[LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Grid]
+      @[LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Grid]
     check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[1].customId.layoutIdString() == "spiral"
+    check config.layout.layoutSelections[2].kind == LayoutSelectionKind.Native
+    check config.layout.layoutSelections[2].nativeId.nativeLayoutIdString() ==
+      "frame-tree"
     check config.workspaces.defaultLayout == LayoutMode.Scroller
     check config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom
     check config.workspaces.defaultLayoutSelection.customId.layoutIdString() == "spiral"

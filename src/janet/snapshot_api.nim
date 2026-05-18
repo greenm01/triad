@@ -58,7 +58,7 @@ proc workspaceExpr(workspace: ShellWorkspace): string =
     " :name " & workspace.name.escaped() & " :layout-mode " &
     workspace.layoutMode.layoutName().escaped() & " :layout-id " &
     workspace.layoutId.escaped() & " :layout-kind " & workspace.layoutKind.escaped() &
-    " :fallback-layout " & workspace.fallbackLayout.layoutName().escaped() & " :active " &
+    " :fallback-layout " & workspace.fallbackLayout.escaped() & " :active " &
     workspace.isActive.boolValue() & " :output-visible " &
     workspace.isOutputVisible.boolValue() & " :focused-window " &
     $workspace.focusedWindow & " :occupied " & workspace.occupied.boolValue() &

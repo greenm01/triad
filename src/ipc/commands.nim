@@ -1,6 +1,7 @@
 import std/[options, strutils]
 import ../core/layout_mode_codec
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../core/msg
 import ../types/runtime_values
 import command_registry
@@ -282,6 +283,14 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
             newLayout: layout.get(),
           )
         )
+      elif tag.isSome and parseNativeLayoutId(parts[2]).isSome:
+        some(
+          Msg(
+            kind: MsgKind.CmdSetNativeLayout,
+            nativeLayoutTargetTag: tag.get(),
+            nativeLayout: nativeLayoutId(parts[2].strip()),
+          )
+        )
       elif tag.isSome and parts[2].strip().len > 0:
         some(
           Msg(
@@ -304,6 +313,26 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
       )
     else:
       none(Msg)
+  of CommandId.CidLayoutNative:
+    if parts.len >= 2 and parts[1 ..^ 1].join(" ").strip().len > 0:
+      some(
+        Msg(
+          kind: MsgKind.CmdSetNativeLayout,
+          nativeLayout: nativeLayoutId(parts[1 ..^ 1].join(" ").strip()),
+        )
+      )
+    else:
+      none(Msg)
+  of CommandId.CidFrameSplitHorizontal:
+    some(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+  of CommandId.CidFrameSplitVertical:
+    some(Msg(kind: MsgKind.CmdFrameSplitVertical))
+  of CommandId.CidFrameUnsplit:
+    some(Msg(kind: MsgKind.CmdFrameUnsplit))
+  of CommandId.CidFrameTabNext:
+    some(Msg(kind: MsgKind.CmdFrameTabNext))
+  of CommandId.CidFrameTabPrev:
+    some(Msg(kind: MsgKind.CmdFrameTabPrev))
   of CommandId.CidConfigReload:
     some(Msg(kind: MsgKind.CmdConfigReload))
   of CommandId.CidLayoutScroller:

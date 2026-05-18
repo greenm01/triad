@@ -1,8 +1,10 @@
 import std/[options, sets, tables]
 import active_workspace_ops, history_ops
-import ../state/[entity_manager, id_gen]
+import ../core/native_layout_codec
+import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
-from ../types/runtime_values import JanetLayoutId, LayoutMode
+from ../types/runtime_values import
+  JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind, NativeLayoutId
 
 proc addTag*(
     model: var Model,
@@ -50,6 +52,10 @@ proc setTagFocus*(model: var Model, tagId: TagId, winId: WindowId): bool =
   if winId != NullWindowId:
     let winOpt = model.windows.entity(winId)
     let key = (tagId, winId)
+    let frameId = model.frameByTagWindow.getOrDefault(key, NullFrameId)
+    if frameId != NullFrameId and model.frames.entity(frameId).isSome:
+      model.tags.mEntity(tagId).focusedFrame = frameId
+      model.frames.mEntity(frameId).activeWindow = winId
     if winOpt.isSome and not winOpt.get().isFloating and
         model.placementByTagWindow.hasKey(key):
       let columnId = model.placementByTagWindow[key].columnId
@@ -62,15 +68,38 @@ proc setTagLayout*(model: var Model, tagId: TagId, mode: LayoutMode): bool =
     return false
   model.tags.mEntity(tagId).layoutMode = mode
   model.tags.mEntity(tagId).customLayoutId = JanetLayoutId("")
+  model.tags.mEntity(tagId).nativeLayoutId = NativeLayoutId("")
+  true
+
+proc setTagCustomLayout*(
+    model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutSelection
+): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  model.tags.mEntity(tagId).layoutMode = fallback.builtin
+  model.tags.mEntity(tagId).customLayoutId = id
+  model.tags.mEntity(tagId).nativeLayoutId =
+    if fallback.kind == LayoutSelectionKind.Native:
+      fallback.nativeId
+    else:
+      NativeLayoutId("")
   true
 
 proc setTagCustomLayout*(
     model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutMode
 ): bool =
+  model.setTagCustomLayout(
+    tagId, id, LayoutSelection(kind: LayoutSelectionKind.Builtin, builtin: fallback)
+  )
+
+proc setTagNativeLayout*(
+    model: var Model, tagId: TagId, id: NativeLayoutId, fallback: LayoutMode
+): bool =
   if model.tags.entity(tagId).isNone:
     return false
   model.tags.mEntity(tagId).layoutMode = fallback
-  model.tags.mEntity(tagId).customLayoutId = id
+  model.tags.mEntity(tagId).customLayoutId = JanetLayoutId("")
+  model.tags.mEntity(tagId).nativeLayoutId = id
   true
 
 proc setTagName*(model: var Model, tagId: TagId, name: string): bool =
@@ -143,6 +172,7 @@ proc setTagRestoredState*(
     name: string,
     layoutMode: LayoutMode,
     customLayoutId: JanetLayoutId,
+    nativeLayoutId: NativeLayoutId,
     targetViewportXOffset, currentViewportXOffset, targetViewportYOffset,
       currentViewportYOffset: float32,
     masterCount: int,
@@ -153,16 +183,23 @@ proc setTagRestoredState*(
   if name.len > 0 and model.tags.mEntity(tagId).name.len == 0:
     model.tags.mEntity(tagId).name = name
   model.tags.mEntity(tagId).layoutMode = layoutMode
-  var customKnown = false
+  var customFallback: Option[LayoutSelection] = none(LayoutSelection)
   for layout in model.customLayouts:
     if string(layout.id) == string(customLayoutId):
-      customKnown = true
+      customFallback = some(layout.fallback)
       break
   model.tags.mEntity(tagId).customLayoutId =
-    if string(customLayoutId).len > 0 and customKnown:
+    if string(customLayoutId).len > 0 and customFallback.isSome:
       customLayoutId
     else:
       JanetLayoutId("")
+  model.tags.mEntity(tagId).nativeLayoutId =
+    if customFallback.isSome and customFallback.get().kind == LayoutSelectionKind.Native:
+      customFallback.get().nativeId
+    elif parseNativeLayoutId(nativeLayoutId.nativeLayoutIdString()).isSome:
+      nativeLayoutId
+    else:
+      NativeLayoutId("")
   model.tags.mEntity(tagId).targetViewportXOffset = targetViewportXOffset
   model.tags.mEntity(tagId).currentViewportXOffset = currentViewportXOffset
   model.tags.mEntity(tagId).targetViewportYOffset = targetViewportYOffset
@@ -191,6 +228,19 @@ proc destroyTag*(model: var Model, tagId: TagId): bool =
 
   model.columnsByTag.del(tagId)
   model.windowsByTag.del(tagId)
+  var frameIds: seq[FrameId] = @[]
+  for frameId, _ in model.framesOnTagWithId(tagId):
+    frameIds.add(frameId)
+  for frameId in frameIds:
+    model.windowsByFrame.del(frameId)
+    discard model.frames.delete(frameId)
+  var frameKeys: seq[(TagId, WindowId)] = @[]
+  for key in model.frameByTagWindow.keys:
+    if key[0] == tagId:
+      frameKeys.add(key)
+  for key in frameKeys:
+    model.frameByTagWindow.del(key)
+  model.frameRootsByTag.del(tagId)
   model.tagBySlot.del(tag.slot)
   discard model.clearTagViewportRetarget(tagId)
   model.overviewViewportSnapshot.del(tagId)

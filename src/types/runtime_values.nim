@@ -2,6 +2,7 @@ import core
 
 type
   JanetLayoutId* = distinct string
+  NativeLayoutId* = distinct string
 
   PresentationMode* {.pure.} = enum
     PresentationDefault
@@ -35,15 +36,29 @@ type
   LayoutSelectionKind* {.pure.} = enum
     Builtin
     Custom
+    Native
+
+  FrameNodeKind* {.pure.} = enum
+    Leaf
+    Split
+
+  FrameSplitOrientation* {.pure.} = enum
+    Horizontal
+    Vertical
 
   LayoutSelection* = object
     kind*: LayoutSelectionKind
     builtin*: LayoutMode
     customId*: JanetLayoutId
+    nativeId*: NativeLayoutId
 
   JanetLayoutConfig* = object
     id*: JanetLayoutId
-    fallback*: LayoutMode
+    fallback*: LayoutSelection
+
+  NativeLayoutConfig* = object
+    id*: NativeLayoutId
+    fallback*: LayoutSelection
 
   Direction* {.pure.} = enum
     DirLeft

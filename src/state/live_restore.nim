@@ -1,11 +1,12 @@
 import std/[algorithm, json, options, os, tables]
 import iterators, queries
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../core/[defaults, restore_state]
 import ../types/core as core_types
 import ../types/live_restore as lr
 import ../types/model
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import FrameNodeKind, LayoutMode
 
 proc runtimeWindowId(win: model.WindowData): uint32 =
   uint32(win.externalId)
@@ -67,7 +68,9 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
     name: source.name,
     layoutMode: source.layoutMode,
     customLayoutId: source.customLayoutId,
+    nativeLayoutId: source.nativeLayoutId,
     focusedWindow: ExternalWindowId(uint32(source.focusedWindow)),
+    focusedFrame: FrameId(source.focusedFrame),
     targetViewportXOffset: source.targetViewportXOffset,
     currentViewportXOffset: source.currentViewportXOffset,
     targetViewportYOffset: source.targetViewportYOffset,
@@ -84,6 +87,20 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
     for winId in col.windows:
       restoredCol.windows.add(ExternalWindowId(uint32(winId)))
     result.columns.add(restoredCol)
+  for frame in source.frames:
+    var restoredFrame = RestoredFrameData(
+      id: FrameId(frame.id),
+      kind: frame.kind,
+      parent: FrameId(frame.parent),
+      firstChild: FrameId(frame.firstChild),
+      secondChild: FrameId(frame.secondChild),
+      orientation: frame.orientation,
+      ratio: frame.ratio,
+      activeWindow: ExternalWindowId(uint32(frame.activeWindow)),
+    )
+    for winId in frame.windows:
+      restoredFrame.windows.add(ExternalWindowId(uint32(winId)))
+    result.frames.add(restoredFrame)
 
 proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
   result.activeSlot = source.activeTag
@@ -135,7 +152,8 @@ proc restoreDefaultMasterRatio(model: Model): float32 =
 
 proc hasDurableTagState*(model: Model, tag: TagData): bool =
   if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller or
-      tag.customLayoutId.layoutIdString().len > 0:
+      tag.customLayoutId.layoutIdString().len > 0 or
+      tag.nativeLayoutId.nativeLayoutIdString().len > 0:
     return true
   if tag.focusedWindow != NullWindowId and model.tagHasNonStickyLiveWindows(tag.id):
     return true
@@ -172,7 +190,9 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       name: tag.name,
       layoutMode: tag.layoutMode,
       customLayoutId: tag.customLayoutId,
+      nativeLayoutId: tag.nativeLayoutId,
       focusedWindow: model.externalWindowId(tag.focusedWindow),
+      focusedFrame: uint32(tag.focusedFrame),
       targetViewportXOffset: tag.targetViewportXOffset,
       currentViewportXOffset: tag.currentViewportXOffset,
       targetViewportYOffset: tag.targetViewportYOffset,
@@ -203,6 +223,31 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       if restoredCol.windows.len == 0:
         continue
       restoredTag.columns.add(restoredCol)
+
+    for frameId, frame in model.framesOnTagWithId(tagId):
+      var restoredFrame = lr.RestoredFrameState(
+        id: uint32(frameId),
+        kind: frame.kind,
+        parent: uint32(frame.parent),
+        firstChild: uint32(frame.firstChild),
+        secondChild: uint32(frame.secondChild),
+        orientation: frame.orientation,
+        ratio: frame.ratio,
+        activeWindow: model.externalWindowId(frame.activeWindow),
+      )
+      if frame.kind == FrameNodeKind.Leaf:
+        for winId in model.windowsForFrame(frameId):
+          let winOpt = model.windowData(winId)
+          if winOpt.isNone or not winOpt.get().windowAdmitted() or
+              winOpt.get().isFloating or winOpt.get().isSticky or
+              winOpt.get().isUnmanagedGlobal:
+            continue
+          let external = model.externalWindowId(winId)
+          if external == 0:
+            continue
+          restoredFrame.windows.add(external)
+          result.tagByWindow[external] = tag.slot
+      restoredTag.frames.add(restoredFrame)
 
     result.tags[tag.slot] = restoredTag
 
@@ -332,16 +377,42 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
         "is_full_width": col.isFullWidth,
       }
     )
+  let frames = newJArray()
+  for frame in tag.frames:
+    let windows = newJArray()
+    for winId in frame.windows:
+      windows.add(%winId)
+    frames.add(
+      %*{
+        "id": frame.id,
+        "kind": ord(frame.kind),
+        "parent": frame.parent,
+        "first_child": frame.firstChild,
+        "second_child": frame.secondChild,
+        "orientation": ord(frame.orientation),
+        "ratio": frame.ratio,
+        "windows": windows,
+        "active_window": frame.activeWindow,
+      }
+    )
 
   %*{
     "id": tag.tagId,
     "name": tag.name,
     "layout_mode": ord(tag.layoutMode),
     "layout_kind":
-      if tag.customLayoutId.layoutIdString().len > 0: "custom" else: "builtin",
+      if tag.customLayoutId.layoutIdString().len > 0:
+        "custom"
+      elif tag.nativeLayoutId.nativeLayoutIdString().len > 0:
+        "native"
+      else:
+        "builtin",
     "custom_layout": tag.customLayoutId.layoutIdString(),
+    "native_layout": tag.nativeLayoutId.nativeLayoutIdString(),
     "columns": columns,
+    "frames": frames,
     "focused_window": tag.focusedWindow,
+    "focused_frame": tag.focusedFrame,
     "target_viewport_x_offset": tag.targetViewportXOffset,
     "current_viewport_x_offset": tag.currentViewportXOffset,
     "target_viewport_y_offset": tag.targetViewportYOffset,

@@ -166,10 +166,11 @@ proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
     let restored = restoredTag.get()
     discard model.setTagRestoredState(
       result, restored.name, restored.layoutMode, restored.customLayoutId,
-      restored.targetViewportXOffset, restored.currentViewportXOffset,
-      restored.targetViewportYOffset, restored.currentViewportYOffset,
-      restored.masterCount, restored.masterSplitRatio,
+      restored.nativeLayoutId, restored.targetViewportXOffset,
+      restored.currentViewportXOffset, restored.targetViewportYOffset,
+      restored.currentViewportYOffset, restored.masterCount, restored.masterSplitRatio,
     )
+    discard model.restoreTagFrames(result, restored)
   if result != NullTagId:
     discard model.syncStickyWindowsForWorkspace(result)
 
@@ -226,6 +227,8 @@ proc placeRestoredWindow(
         break
     if not inserted:
       discard model.addPlacedWindowColumn(tagId, winId)
+    discard
+      model.restoreWindowFramePlacement(tagId, restoredTag, restoredExternalId, winId)
     if restoredTag.focusedWindow == restoredExternalId:
       discard model.setTagFocus(tagId, winId)
     else:

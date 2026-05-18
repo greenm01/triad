@@ -26,6 +26,17 @@ iterator columnsWithId*(model: Model): tuple[id: ColumnId, column: ColumnData] =
   for column in model.columns.entities:
     yield (column.id, column)
 
+iterator framesWithId*(model: Model): tuple[id: FrameId, frame: FrameData] =
+  for frame in model.frames.entities:
+    yield (frame.id, frame)
+
+iterator framesOnTagWithId*(
+    model: Model, tagId: TagId
+): tuple[id: FrameId, frame: FrameData] =
+  for frame in model.frames.entities:
+    if frame.tagId == tagId:
+      yield (frame.id, frame)
+
 iterator columnsOnTagWithId*(
     model: Model, tagId: TagId
 ): tuple[id: ColumnId, column: ColumnData] =

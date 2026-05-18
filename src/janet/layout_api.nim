@@ -2,6 +2,7 @@ import std/[algorithm, json, sets, strutils, tables]
 import ../core/layout_selection_codec
 import ../types/janet_layouts
 import ../types/projection_values as rv
+from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
 import ../utils/behavior_log
 import binding
 
@@ -39,6 +40,27 @@ proc columnExpr(column: rv.ProjectedColumn): string =
     " :scroller-single-proportion " & $column.scrollerSingleProportion & " :full-width " &
     column.isFullWidth.boolValue() & "}"
 
+proc frameKindExpr(kind: FrameNodeKind): string =
+  case kind
+  of FrameNodeKind.Leaf: ":leaf"
+  of FrameNodeKind.Split: ":split"
+
+proc frameOrientationExpr(orientation: FrameSplitOrientation): string =
+  case orientation
+  of FrameSplitOrientation.Horizontal: ":horizontal"
+  of FrameSplitOrientation.Vertical: ":vertical"
+
+proc frameExpr(frame: rv.ProjectedFrame): string =
+  var windows: seq[string] = @[]
+  for winId in frame.windows:
+    windows.add($winId)
+  "{:id " & $frame.id & " :kind " & frame.kind.frameKindExpr() & " :parent " &
+    $frame.parent & " :first-child " & $frame.firstChild & " :second-child " &
+    $frame.secondChild & " :orientation " & frame.orientation.frameOrientationExpr() &
+    " :ratio " & $frame.ratio & " :windows [" & windows.join(" ") & "] :active-window " &
+    $frame.activeWindow & " :focused " & frame.focused.boolValue() & " :rect-set " &
+    frame.rectSet.boolValue() & " :rect " & frame.rect.rectExpr() & "}"
+
 proc windowExpr(window: rv.ProjectedWindow): string =
   "{:id " & $window.id & " :pid " & $window.pid & " :title " & window.title.escaped() &
     " :app-id " & window.appId.escaped() & " :width-proportion " &
@@ -61,6 +83,7 @@ proc windowExpr(window: rv.ProjectedWindow): string =
 
 proc layoutContextSource*(context: JanetLayoutContext): string =
   var columns: seq[string] = @[]
+  var frames: seq[string] = @[]
   var windows: seq[string] = @[]
   var windowIds: seq[rv.ProjectionWindowId] = @[]
   for id in context.windows.keys:
@@ -68,6 +91,8 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
   windowIds.sort()
   for column in context.tag.columns:
     columns.add(column.columnExpr())
+  for frame in context.tag.frames:
+    frames.add(frame.frameExpr())
   for id in windowIds:
     windows.add(context.windows[id].windowExpr())
 
@@ -86,8 +111,11 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
          :current-viewport-y-offset $11
          :master-count $12
          :master-split-ratio $13
-         :columns [$14]}
-   :windows [$15]})
+         :columns [$14]
+         :frames [$15]}
+   :substrate $16
+   :frames [$15]
+   :windows [$17]})
 """ %
   [
     context.layoutId.layoutIdString().escaped(),
@@ -104,6 +132,8 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
     $context.tag.masterCount,
     $context.tag.masterSplitRatio,
     columns.join(" "),
+    frames.join(" "),
+    if context.tag.frames.len > 0: ":frames" else: ":columns",
     windows.join(" "),
   ]
 

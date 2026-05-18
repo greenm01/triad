@@ -1,6 +1,8 @@
 import std/[options, tables]
+import frame_ops
 import ../state/[entity_manager, id_gen]
 import ../types/[core, model]
+from ../core/native_layout_codec import nativeLayoutIdString
 
 proc refreshWindowIndexes(model: var Model, tagId: TagId, columnId: ColumnId) =
   if model.windowsByColumn.hasKey(columnId):
@@ -53,6 +55,8 @@ proc placeWindow*(model: var Model, tagId: TagId, columnId: ColumnId, winId: Win
   var mask = model.windowTags.getOrDefault(winId, EmptyTagMask)
   mask.incl(tagOpt.get().bit)
   model.windowTags[winId] = mask
+  if tagOpt.get().nativeLayoutId.nativeLayoutIdString().len > 0:
+    discard model.addWindowToFrame(tagId, winId)
 
 proc removeWindowFromTag*(model: var Model, tagId: TagId, winId: WindowId): bool =
   let key = (tagId, winId)
@@ -73,6 +77,7 @@ proc removeWindowFromTag*(model: var Model, tagId: TagId, winId: WindowId): bool
       model.windowsByTag[tagId].delete(idx)
 
   model.placementByTagWindow.del(key)
+  discard model.removeWindowFromFrame(tagId, winId)
   let tagOpt = model.tags.entity(tagId)
   if model.windowTags.hasKey(winId) and tagOpt.isSome:
     var mask = model.windowTags[winId]
@@ -128,6 +133,10 @@ proc moveWindowToColumn*(
     columnId: targetColumnId,
     windowIdx: uint32(insertIdx + 1),
   )
+  let tagOptForFrame = model.tags.entity(tagId)
+  if tagOptForFrame.isSome and
+      tagOptForFrame.get().nativeLayoutId.nativeLayoutIdString().len > 0:
+    discard model.addWindowToFrame(tagId, winId)
   model.refreshWindowIndexes(tagId, targetColumnId)
   if oldColumn != NullColumnId and oldColumn != targetColumnId:
     model.deleteColumnIfEmpty(tagId, oldColumn)

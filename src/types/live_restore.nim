@@ -1,6 +1,7 @@
 import std/tables
 from core import Rect
-from runtime_values import JanetLayoutId, LayoutMode
+from runtime_values import
+  FrameNodeKind, FrameSplitOrientation, JanetLayoutId, LayoutMode, NativeLayoutId
 
 const LiveRestoreSchema* = "triad-live-restore-v2"
 const
@@ -38,13 +39,27 @@ type
     scrollerSingleProportion*: float32
     isFullWidth*: bool
 
+  RestoredFrameState* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    firstChild*: uint32
+    secondChild*: uint32
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    windows*: seq[uint32]
+    activeWindow*: uint32
+
   RestoredTagState* = object
     tagId*: uint32
     name*: string
     layoutMode*: LayoutMode
     customLayoutId*: JanetLayoutId
+    nativeLayoutId*: NativeLayoutId
     columns*: seq[RestoredColumnState]
+    frames*: seq[RestoredFrameState]
     focusedWindow*: uint32
+    focusedFrame*: uint32
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32
     targetViewportYOffset*: float32

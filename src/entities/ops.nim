@@ -1,5 +1,6 @@
 import active_workspace_ops
 import column_ops
+import frame_ops
 import group_ops
 import history_ops
 import output_ops
@@ -13,6 +14,7 @@ import window_ops
 
 export active_workspace_ops
 export column_ops
+export frame_ops
 export group_ops
 export history_ops
 export output_ops

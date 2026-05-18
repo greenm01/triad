@@ -1,6 +1,7 @@
 import std/[algorithm, json, options, os, strutils, tables, times]
 import defaults
 import layout_selection_codec
+import native_layout_codec
 from ../types/core import Rect
 import ../types/live_restore
 import ../types/runtime_values
@@ -78,6 +79,31 @@ proc layoutModeFromJson(node: JsonNode): LayoutMode =
     discard
   LayoutMode.Scroller
 
+proc frameKindFromJson(node: JsonNode): FrameNodeKind =
+  try:
+    if node.kind == JInt:
+      let value = node.getInt()
+      if value >= ord(low(FrameNodeKind)) and value <= ord(high(FrameNodeKind)):
+        return FrameNodeKind(value)
+    elif node.kind == JString:
+      return parseEnum[FrameNodeKind](node.getStr())
+  except CatchableError:
+    discard
+  FrameNodeKind.Leaf
+
+proc frameOrientationFromJson(node: JsonNode): FrameSplitOrientation =
+  try:
+    if node.kind == JInt:
+      let value = node.getInt()
+      if value >= ord(low(FrameSplitOrientation)) and
+          value <= ord(high(FrameSplitOrientation)):
+        return FrameSplitOrientation(value)
+    elif node.kind == JString:
+      return parseEnum[FrameSplitOrientation](node.getStr())
+  except CatchableError:
+    discard
+  FrameSplitOrientation.Horizontal
+
 proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
   if node.kind != JObject or not node.hasKey("id"):
     return
@@ -102,10 +128,18 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
     let custom = stringFromJson(node["custom_layout"]).strip()
     if custom.len > 0:
       tag.customLayoutId = janetLayoutId(custom)
+  if node.hasKey("native_layout"):
+    let native = parseNativeLayoutId(stringFromJson(node["native_layout"]).strip())
+    if native.isSome:
+      tag.nativeLayoutId = native.get().id
   if node.hasKey("focused_window"):
     let focused = uint32FromJson(node["focused_window"])
     if focused.isSome:
       tag.focusedWindow = focused.get()
+  if node.hasKey("focused_frame"):
+    let focusedFrame = uint32FromJson(node["focused_frame"])
+    if focusedFrame.isSome:
+      tag.focusedFrame = focusedFrame.get()
   if node.hasKey("target_viewport_x_offset"):
     tag.targetViewportXOffset = float32FromJson(node["target_viewport_x_offset"])
   if node.hasKey("current_viewport_x_offset"):
@@ -140,6 +174,54 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
             col.windows.add(winId.get())
             state.tagByWindow[winId.get()] = tag.tagId
       tag.columns.add(col)
+
+  if node.hasKey("frames") and node["frames"].kind == JArray:
+    for frameNode in node["frames"]:
+      if frameNode.kind != JObject or not frameNode.hasKey("id"):
+        continue
+      let frameId = uint32FromJson(frameNode["id"])
+      if frameId.isNone:
+        continue
+      var frame = RestoredFrameState(
+        id: frameId.get(),
+        kind:
+          if frameNode.hasKey("kind"):
+            frameKindFromJson(frameNode["kind"])
+          else:
+            FrameNodeKind.Leaf,
+        orientation:
+          if frameNode.hasKey("orientation"):
+            frameOrientationFromJson(frameNode["orientation"])
+          else:
+            FrameSplitOrientation.Horizontal,
+        ratio: 0.5'f32,
+      )
+      if frameNode.hasKey("parent"):
+        let parent = uint32FromJson(frameNode["parent"])
+        if parent.isSome:
+          frame.parent = parent.get()
+      if frameNode.hasKey("first_child"):
+        let child = uint32FromJson(frameNode["first_child"])
+        if child.isSome:
+          frame.firstChild = child.get()
+      if frameNode.hasKey("second_child"):
+        let child = uint32FromJson(frameNode["second_child"])
+        if child.isSome:
+          frame.secondChild = child.get()
+      if frameNode.hasKey("ratio"):
+        frame.ratio =
+          clamp(float32FromJson(frameNode["ratio"], 0.5'f32), 0.05'f32, 0.95'f32)
+      if frameNode.hasKey("active_window"):
+        let active = uint32FromJson(frameNode["active_window"])
+        if active.isSome:
+          frame.activeWindow = active.get()
+      if frameNode.hasKey("windows") and frameNode["windows"].kind == JArray:
+        for winNode in frameNode["windows"]:
+          let winId = uint32FromJson(winNode)
+          if winId.isSome:
+            frame.windows.add(winId.get())
+            state.tagByWindow[winId.get()] = tag.tagId
+      tag.frames.add(frame)
 
   state.tags[tag.tagId] = tag
 

@@ -38,6 +38,9 @@ proc hasPendingAdmissionWindow*(model: Model): bool =
 proc columnData*(model: Model, columnId: ColumnId): Option[ColumnData] =
   model.columns.entity(columnId)
 
+proc frameData*(model: Model, frameId: FrameId): Option[FrameData] =
+  model.frames.entity(frameId)
+
 proc outputData*(model: Model, outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
 
@@ -126,9 +129,18 @@ proc windowsForColumn*(model: Model, columnId: ColumnId): seq[WindowId] =
   for winId, _ in model.windowsOnColumnWithId(columnId):
     result.add(winId)
 
+proc windowsForFrame*(model: Model, frameId: FrameId): seq[WindowId] =
+  model.windowsByFrame.getOrDefault(frameId, @[])
+
 proc windowsForTag*(model: Model, tagId: TagId): seq[WindowId] =
   for winId, _ in model.windowsOnTagWithId(tagId):
     result.add(winId)
+
+proc frameRootForTag*(model: Model, tagId: TagId): FrameId =
+  model.frameRootsByTag.getOrDefault(tagId, NullFrameId)
+
+proc frameForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): FrameId =
+  model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId)
 
 proc overviewWindowIds*(model: Model): seq[WindowId] =
   for slot in model.sortedSlots():

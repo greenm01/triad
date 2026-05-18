@@ -64,16 +64,19 @@ layout or a custom layout:
 ```text
 LayoutSelection =
   builtin LayoutMode
-  custom  JanetLayoutId + fallback LayoutMode
+  custom  JanetLayoutId + fallback LayoutSelection
+  native  NativeLayoutId + fallback LayoutMode
 ```
 
 - existing commands such as `layout-grid` keep targeting built-ins;
 - `layout-custom <name>` selects a declared custom layout;
-- layout cycles can include built-ins and declared custom names;
+- `layout-native <name>` selects a native substrate-backed layout;
+- layout cycles can include built-ins, declared custom names, and native layout
+  ids;
 - snapshots expose both the effective layout id and whether it is built-in or
-  custom;
+  custom/native;
 - restoring an unknown custom layout falls back to the tag's configured safe
-  built-in layout.
+  built-in or native fallback layout.
 
 This avoids destabilizing every consumer that already assumes `LayoutMode` is a
 small closed set.
@@ -100,6 +103,7 @@ The input context should include:
 - projected columns and their ordered window ids;
 - projected windows keyed or listed by id with app id, title, size hints,
   proportions, floating/fullscreen/maximized/minimized flags, and parent id;
+- optional projected frame data when a native frame substrate is active;
 - optional projected groups once group-aware layout scripts need them.
 
 The return value should be a sequence of placement instructions:
@@ -128,9 +132,10 @@ Reject and fall back when:
 - required tiled windows are missing;
 - coordinates overflow practical `int32` geometry.
 
-The fallback should be a configured safe built-in layout, defaulting to
-`Scroller`. Behavior logs should record the custom layout id, failure reason,
-window count, instruction count, duration, and fallback layout.
+The fallback should be a configured safe layout, defaulting to `Scroller`.
+Native fallbacks such as `frame-tree` may render native substrate state when the
+custom script fails. Behavior logs should record the custom layout id, failure
+reason, window count, instruction count, duration, and fallback layout.
 
 ## Native Frame/Tab Substrate
 
@@ -217,10 +222,20 @@ Implemented.
 
 ### Phase 3: Native Frame/Tab Substrate
 
-- Add native frame/tab records, indexes, reducer commands, restore support, and
-  projection structs.
-- Implement one native frame-aware layout to prove the substrate.
-- Expose immutable frame data to Janet layout functions.
+Initial implementation is in place.
+
+- Add native frame/tab records, indexes, reducer commands, and projection
+  structs.
+- Implement `frame-tree` as the first native frame-aware layout to prove the
+  substrate.
+- Support native layout selection through config layout selections, IPC,
+  `layout-native`, and layout snapshots without adding a 13th `LayoutMode`.
+- Add frame reducer commands for split, unsplit, next tab, and previous tab.
+- Expose immutable projected frame data to Janet layout functions.
+- Allow custom Janet layouts to declare `fallback="frame-tree"` so native
+  frame/tab state survives invalid or missing script output.
+- Persist native frame topology, active tabs, focused frame, and native layout
+  selection through live restore.
 
 ### Phase 4: Frame-Aware Janet Layouts
 

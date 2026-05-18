@@ -25,6 +25,12 @@ type
     CidSetWindowMaximized
     CidSetLayoutForWorkspace
     CidLayoutCustom
+    CidLayoutNative
+    CidFrameSplitHorizontal
+    CidFrameSplitVertical
+    CidFrameUnsplit
+    CidFrameTabNext
+    CidFrameTabPrev
     CidConfigReload
     CidLayoutScroller
     CidLayoutVerticalScroller
@@ -229,6 +235,20 @@ const CommandSpecs* = [
   CommandSpec(
     id: CommandId.CidLayoutCustom, name: "layout-custom", argShape: RequiredName
   ),
+  CommandSpec(
+    id: CommandId.CidLayoutNative, name: "layout-native", argShape: RequiredName
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameSplitHorizontal,
+    name: "frame-split-horizontal",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameSplitVertical, name: "frame-split-vertical", argShape: NoArgs
+  ),
+  CommandSpec(id: CommandId.CidFrameUnsplit, name: "frame-unsplit", argShape: NoArgs),
+  CommandSpec(id: CommandId.CidFrameTabNext, name: "frame-tab-next", argShape: NoArgs),
+  CommandSpec(id: CommandId.CidFrameTabPrev, name: "frame-tab-prev", argShape: NoArgs),
   CommandSpec(id: CommandId.CidConfigReload, name: "config-reload", argShape: NoArgs),
   CommandSpec(
     id: CommandId.CidLayoutScroller, name: "layout-scroller", argShape: NoArgs

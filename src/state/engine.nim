@@ -2,10 +2,12 @@ import std/[algorithm, options]
 import entity_manager, id_gen, invariants, iterators, live_restore, queries, snapshot
 import ../core/defaults
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../entities/ops
 import ../types/[core, model, shell_snapshot]
 from ../types/runtime_values import
-  JanetLayoutConfig, JanetLayoutId, LayoutMode, LayoutSelection
+  JanetLayoutConfig, JanetLayoutId, LayoutMode, LayoutSelection, NativeLayoutConfig,
+  NativeLayoutId
 
 export defaults
 export iterators
@@ -100,6 +102,9 @@ proc layoutSelectionCycle*(model: Model): seq[LayoutSelection] =
 
 proc customLayoutConfig*(model: Model, id: JanetLayoutId): Option[JanetLayoutConfig] =
   model.customLayouts.findCustomLayout(id)
+
+proc nativeLayoutConfig*(model: Model, id: NativeLayoutId): Option[NativeLayoutConfig] =
+  parseNativeLayoutId(id.nativeLayoutIdString())
 
 proc setHotkeyOverlayOpen*(model: var Model, open: bool): bool =
   if model.hotkeyOverlayOpen == open:

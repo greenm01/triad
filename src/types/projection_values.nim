@@ -57,11 +57,26 @@ type
     scrollerSingleProportion*: float32
     isFullWidth*: bool
 
+  ProjectedFrame* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    firstChild*: uint32
+    secondChild*: uint32
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    windows*: seq[ProjectionWindowId]
+    activeWindow*: ProjectionWindowId
+    focused*: bool
+    rectSet*: bool
+    rect*: Rect
+
   ProjectedTag* = object
     tagId*: uint32
     name*: string
     layoutMode*: LayoutMode
     columns*: seq[ProjectedColumn]
+    frames*: seq[ProjectedFrame]
     focusedWindow*: ProjectionWindowId
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32

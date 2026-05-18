@@ -1,7 +1,8 @@
 import std/[options, strutils]
 import ../core/[effects, msg, shell_profiles]
 import ../state/engine
-from ../types/runtime_values import Direction, LayoutMode, RecentWindowDirection
+from ../types/runtime_values import
+  Direction, FrameSplitOrientation, LayoutMode, RecentWindowDirection
 import
   dialog_focus, focus, output_navigation, placement, recent_windows, runtime,
   scratchpad, update_effects, window_state, window_rules, workspaces
@@ -64,7 +65,25 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
       if custom.isSome:
         model.layoutSwitchToastCustomLayout = msg.customLayout
         result.dirty =
-          model.showLayoutSwitchToast(custom.get().fallback) or result.dirty
+          model.showLayoutSwitchToast(custom.get().fallback.builtin) or result.dirty
+  of MsgKind.CmdSetNativeLayout:
+    result.dirty =
+      model.setNativeLayoutForSlot(msg.nativeLayoutTargetTag, msg.nativeLayout)
+    if result.dirty and msg.nativeLayoutTargetTag == 0:
+      let native = model.nativeLayoutConfig(msg.nativeLayout)
+      if native.isSome:
+        result.dirty =
+          model.showLayoutSwitchToast(native.get().fallback.builtin) or result.dirty
+  of MsgKind.CmdFrameSplitHorizontal:
+    result.dirty = model.splitFocusedFrame(FrameSplitOrientation.Horizontal)
+  of MsgKind.CmdFrameSplitVertical:
+    result.dirty = model.splitFocusedFrame(FrameSplitOrientation.Vertical)
+  of MsgKind.CmdFrameUnsplit:
+    result.dirty = model.unsplitFocusedFrame()
+  of MsgKind.CmdFrameTabNext:
+    result.dirty = model.focusFrameTab(1)
+  of MsgKind.CmdFrameTabPrev:
+    result.dirty = model.focusFrameTab(-1)
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
     if result.dirty:

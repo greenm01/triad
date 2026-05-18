@@ -1,11 +1,12 @@
 import std/[json, options, strutils]
 import ../core/layout_mode_codec
+import ../core/native_layout_codec
 import ../core/layout_selection_codec
 import ../core/[msg, triad_state]
 import command_registry
 import commands
 import ../types/shell_snapshot
-from ../types/runtime_values import LayoutMode
+from ../types/runtime_values import LayoutMode, LayoutSelection
 
 type TriadIpcResult* = object
   handled*: bool
@@ -73,11 +74,11 @@ proc tagForWorkspaceIndex(snapshot: ShellSnapshot, workspaceIdx: uint32): uint32
 
 proc customLayoutFallback(
     snapshot: ShellSnapshot, layoutId: string
-): Option[LayoutMode] =
+): Option[LayoutSelection] =
   for layout in snapshot.customLayouts:
     if layout.id.layoutIdString() == layoutId:
       return some(layout.fallback)
-  none(LayoutMode)
+  none(LayoutSelection)
 
 proc intFromField(node: JsonNode, field: string): Option[int] =
   if node.kind != JObject or not node.hasKey(field):
@@ -433,6 +434,14 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
           kind: MsgKind.CmdSetLayout,
           newLayout: layout.get(),
           layoutTargetTag: target.tag,
+        )
+      )
+    elif parseNativeLayoutId(layoutId).isSome:
+      result.messages.add(
+        Msg(
+          kind: MsgKind.CmdSetNativeLayout,
+          nativeLayout: nativeLayoutId(layoutId),
+          nativeLayoutTargetTag: target.tag,
         )
       )
     else:

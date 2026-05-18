@@ -335,12 +335,15 @@ KDL config nodes and fields:
   `exclusive-focus-timeout-ms`, `profile`, `launch`, `stop`, `niri-compat`.
 - `quickshell`: legacy fallback accepted when `shells` is absent.
 - `janet`: `enabled`, `script-dir`, `fuel-limit`, `layout <name>
-  fallback=<builtin>`.
+  fallback=<builtin|frame-tree>`.
   Scripts receive `triad/snapshot`, `triad/current-window`, and
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can
   participate in `layout-cycle`, workspace defaults, `layout-custom`, native
-  `set-layout`, and `set-layout-for-workspace`.
+  `set-layout`, and `set-layout-for-workspace`. Native layouts can be selected
+  with `layout-native <name>`; `frame-tree` is the first native layout id and
+  supports `frame-split-horizontal`, `frame-split-vertical`, `frame-unsplit`,
+  `frame-tab-next`, and `frame-tab-prev`.
 - `terminal`: `command`.
 - `screen-lock`: `command`.
 - `scratchpad`: `width-ratio`, `height-ratio`.

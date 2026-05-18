@@ -3,6 +3,7 @@ import chronicles, kdl
 import defaults
 import keysyms
 import ../core/layout_mode_codec
+import ../core/native_layout_codec
 import ../core/layout_selection_codec
 import ../types/config_values
 import ../types/runtime_values
@@ -112,8 +113,17 @@ proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
 proc builtinLayoutSelection(mode: LayoutMode): LayoutSelection =
   LayoutSelection(kind: LayoutSelectionKind.Builtin, builtin: mode)
 
-proc customLayoutSelection(id: JanetLayoutId, fallback: LayoutMode): LayoutSelection =
-  LayoutSelection(kind: LayoutSelectionKind.Custom, builtin: fallback, customId: id)
+proc customLayoutSelection(
+    id: JanetLayoutId, fallback: LayoutSelection
+): LayoutSelection =
+  customSelection(id, fallback)
+
+proc nativeLayoutSelection(
+    id: NativeLayoutId, fallback: LayoutSelection
+): LayoutSelection =
+  LayoutSelection(
+    kind: LayoutSelectionKind.Native, builtin: fallback.builtin, nativeId: id
+  )
 
 proc customLayoutById(
     layouts: openArray[JanetLayoutConfig], id: JanetLayoutId
@@ -135,7 +145,20 @@ proc parseLayoutSelectionName(
   if custom.isSome:
     return customLayoutSelection(id, custom.get().fallback)
 
+  let native = parseNativeLayoutId(name)
+  if native.isSome:
+    return nativeLayoutSelection(native.get().id, native.get().fallback)
+
   fallback
+
+proc parseFallbackLayoutSelectionName(name: string): LayoutSelection =
+  let builtin = parseLayoutModeId(name)
+  if builtin.isSome:
+    return builtinLayoutSelection(builtin.get())
+  let native = parseNativeLayoutId(name)
+  if native.isSome:
+    return nativeLayoutSelection(native.get().id, native.get().fallback)
+  builtinLayoutSelection(LayoutMode.Scroller)
 
 proc collectJanetLayoutDeclarations(doc: KdlDoc): seq[JanetLayoutConfig] =
   for node in doc:
@@ -148,8 +171,8 @@ proc collectJanetLayoutDeclarations(doc: KdlDoc): seq[JanetLayoutConfig] =
         let name = child.args[0].kString().strip()
         if name.len == 0:
           continue
-        if parseLayoutModeId(name).isSome:
-          warn "Ignoring janet layout with reserved built-in id", layout = name
+        if parseLayoutModeId(name).isSome or parseNativeLayoutId(name).isSome:
+          warn "Ignoring janet layout with reserved layout id", layout = name
           continue
         let id = janetLayoutId(name)
         if result.customLayoutById(id).isSome:
@@ -162,7 +185,7 @@ proc collectJanetLayoutDeclarations(doc: KdlDoc): seq[JanetLayoutConfig] =
             "scroller"
         result.add(
           JanetLayoutConfig(
-            id: id, fallback: parseLayoutName(fallbackName, LayoutMode.Scroller)
+            id: id, fallback: parseFallbackLayoutSelectionName(fallbackName)
           )
         )
       except CatchableError as e:

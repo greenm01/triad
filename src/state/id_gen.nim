@@ -17,6 +17,9 @@ proc generateTagId*(counters: var IdCounters): TagId =
 proc generateColumnId*(counters: var IdCounters): ColumnId =
   ColumnId(nextRaw(counters.nextColumnId))
 
+proc generateFrameId*(counters: var IdCounters): FrameId =
+  FrameId(nextRaw(counters.nextFrameId))
+
 proc generateOutputId*(counters: var IdCounters): OutputId =
   OutputId(nextRaw(counters.nextOutputId))
 

@@ -1,7 +1,9 @@
 import std/options
 import layout_mode_codec
+import native_layout_codec
 from ../types/runtime_values import
-  JanetLayoutConfig, JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind
+  JanetLayoutConfig, JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind,
+  NativeLayoutId
 
 proc janetLayoutId*(value: string): JanetLayoutId =
   JanetLayoutId(value)
@@ -12,8 +14,23 @@ proc layoutIdString*(layoutId: JanetLayoutId): string =
 proc builtinSelection*(mode: LayoutMode): LayoutSelection =
   LayoutSelection(kind: LayoutSelectionKind.Builtin, builtin: mode)
 
+proc customSelection*(id: JanetLayoutId, fallback: LayoutSelection): LayoutSelection =
+  LayoutSelection(
+    kind: LayoutSelectionKind.Custom,
+    builtin: fallback.builtin,
+    customId: id,
+    nativeId:
+      if fallback.kind == LayoutSelectionKind.Native:
+        fallback.nativeId
+      else:
+        NativeLayoutId(""),
+  )
+
 proc customSelection*(id: JanetLayoutId, fallback: LayoutMode): LayoutSelection =
-  LayoutSelection(kind: LayoutSelectionKind.Custom, builtin: fallback, customId: id)
+  customSelection(id, builtinSelection(fallback))
+
+proc nativeSelection*(id: NativeLayoutId, fallback: LayoutMode): LayoutSelection =
+  LayoutSelection(kind: LayoutSelectionKind.Native, builtin: fallback, nativeId: id)
 
 proc selectionId*(selection: LayoutSelection): string =
   case selection.kind
@@ -21,9 +38,18 @@ proc selectionId*(selection: LayoutSelection): string =
     layoutModeId(selection.builtin)
   of LayoutSelectionKind.Custom:
     selection.customId.layoutIdString()
+  of LayoutSelectionKind.Native:
+    selection.nativeId.nativeLayoutIdString()
 
 proc selectionFallback*(selection: LayoutSelection): LayoutMode =
   selection.builtin
+
+proc selectionFallbackId*(selection: LayoutSelection): string =
+  if selection.kind == LayoutSelectionKind.Custom and
+      selection.nativeId.nativeLayoutIdString().len > 0:
+    selection.nativeId.nativeLayoutIdString()
+  else:
+    layoutModeId(selection.builtin)
 
 proc findCustomLayout*(
     layouts: openArray[JanetLayoutConfig], id: JanetLayoutId
@@ -47,5 +73,9 @@ proc parseLayoutSelectionId*(
   let custom = customLayouts.findCustomLayout(customId)
   if custom.isSome:
     return some(customSelection(customId, custom.get().fallback))
+
+  let native = parseNativeLayoutId(value)
+  if native.isSome:
+    return some(nativeSelection(native.get().id, native.get().fallback.builtin))
 
   none(LayoutSelection)

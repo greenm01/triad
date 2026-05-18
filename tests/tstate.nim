@@ -1,7 +1,8 @@
 import std/[json, options, os, sequtils, strutils, tables, unittest]
 from posix import TPollfd, close, pipe, read, write
 import ../src/config/parser
-import ../src/core/[effects, layout_selection_codec, msg, restore_state]
+import
+  ../src/core/[effects, layout_selection_codec, msg, native_layout_codec, restore_state]
 import ../src/daemon/hotkey_overlay_render
 import ../src/daemon/exit_session_dialog_render
 import ../src/daemon/layout_switch_toast_render
@@ -14,6 +15,7 @@ import
   ../src/systems/
     [layout_projection, overview_geometry, recent_windows, runtime_facade, update]
 import ../src/types/janet_layouts
+import ../src/types/core as tc
 import ../src/types/[model, runtime_values]
 import ../src/types/projection_values as pv
 import ../src/utils/event_poll
@@ -785,7 +787,11 @@ suite "Runtime state primitives":
   test "custom layout command stores custom selection with fallback":
     var config = baseConfig()
     config.janet.layouts =
-      @[JanetLayoutConfig(id: janetLayoutId("spiral"), fallback: LayoutMode.Grid)]
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("spiral"), fallback: builtinSelection(LayoutMode.Grid)
+        )
+      ]
     config.layout.layoutSelections =
       @[
         builtinSelection(LayoutMode.Scroller),
@@ -806,7 +812,7 @@ suite "Runtime state primitives":
     let snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].layoutId == "spiral"
     check snapshot.workspaces[0].layoutKind == "custom"
-    check snapshot.workspaces[0].fallbackLayout == LayoutMode.Grid
+    check snapshot.workspaces[0].fallbackLayout == "grid"
 
     let (builtinSet, _) =
       model.update(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Monocle))
@@ -816,7 +822,11 @@ suite "Runtime state primitives":
   test "custom layout projection uses Janet geometry callback":
     var config = baseConfig()
     config.janet.layouts =
-      @[JanetLayoutConfig(id: janetLayoutId("spiral"), fallback: LayoutMode.Grid)]
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("spiral"), fallback: builtinSelection(LayoutMode.Grid)
+        )
+      ]
     var model = initRuntimeStateFromConfig(config).model
     let (withFirst, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
     model = withFirst
@@ -850,6 +860,75 @@ suite "Runtime state primitives":
     check projection.instructions.len == 2
     check projection.instructions[0].geom == pv.Rect(x: 1, y: 2, w: 300, h: 400)
     check projection.instructions[1].geom == pv.Rect(x: 301, y: 2, w: 300, h: 400)
+
+  test "native frame-tree stores tabs and projects active frame windows":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    let (withFirst, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model = withFirst
+    let (withSecond, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model = withSecond
+    let (nativeSet, _) = model.update(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model = nativeSet
+
+    let active = model.tagData(model.activeTag).get()
+    check active.nativeLayoutId.nativeLayoutIdString() == "frame-tree"
+    check model.windowsForFrame(active.focusedFrame) == @[
+      tc.WindowId(1), tc.WindowId(2)
+    ]
+
+    var projection = model.layoutProjection()
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 11'u32
+
+    let (split, _) = model.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+    model = split
+    let (withThird, _) = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model = withThird
+    projection = model.layoutProjection()
+
+    check projection.instructions.len == 2
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 12'u32)
+    check projection.instructions[0].geom.x < projection.instructions[1].geom.x
+
+    discard model.setTagFocus(model.activeTag, tc.WindowId(1))
+    let (tabNext, _) = model.update(Msg(kind: MsgKind.CmdFrameTabNext))
+    model = tabNext
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces[0].layoutId == "frame-tree"
+    check snapshot.workspaces[0].layoutKind == "native"
+    check snapshot.workspaces[0].fallbackLayout == "scroller"
+    check snapshot.workspaces[0].frames.len == 3
+
+    let restore = model.liveRestoreState()
+    check restore.tags[1].nativeLayoutId.nativeLayoutIdString() == "frame-tree"
+    check restore.tags[1].frames.len == 3
+
+    var restored = initRuntimeStateFromConfig(baseConfig())
+    check restored.applyRuntimeLiveRestore(restore)
+    for externalId in [10'u32, 11'u32, 12'u32]:
+      discard restored.applyRuntimeUpdate(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: externalId)
+      )
+    let restoredSnapshot = restored.readRuntimeSnapshot()
+    check restoredSnapshot.workspaces[0].layoutId == "frame-tree"
+    check restoredSnapshot.workspaces[0].layoutKind == "native"
+    check restoredSnapshot.workspaces[0].frames.len == 3
+    check restoredSnapshot.workspaces[0].frames.anyIt(
+      it.windows == @[10'u32, 11'u32] and it.activeWindow == 11'u32
+    )
+    check restoredSnapshot.workspaces[0].frames.anyIt(
+      it.windows == @[12'u32] and it.activeWindow == 12'u32
+    )
+
+    let restoredProjection = restored.applyRuntimeLayoutProjection()
+    check restoredProjection.instructions.len == 2
+    check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
 
   test "explicit active layout command opens layout switch toast":
     var config = baseConfig()

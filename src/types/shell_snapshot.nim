@@ -1,7 +1,8 @@
 import std/options
 from core import Rect
 from runtime_values import
-  JanetLayoutConfig, LayoutMode, LayoutSelection, WindowRuleIdleInhibitMode
+  FrameNodeKind, FrameSplitOrientation, JanetLayoutConfig, LayoutMode, LayoutSelection,
+  NativeLayoutConfig, WindowRuleIdleInhibitMode
 
 const TriadIpcVersion* = 1
 
@@ -13,6 +14,18 @@ type
     isFullWidth*: bool
     windows*: seq[uint32]
 
+  ShellFrame* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    firstChild*: uint32
+    secondChild*: uint32
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    windows*: seq[uint32]
+    activeWindow*: uint32
+    focused*: bool
+
   ShellWorkspace* = object
     tagId*: uint32
     workspaceIdx*: uint32
@@ -20,13 +33,14 @@ type
     layoutMode*: LayoutMode
     layoutId*: string
     layoutKind*: string
-    fallbackLayout*: LayoutMode
+    fallbackLayout*: string
     isActive*: bool
     isOutputVisible*: bool
     focusedWindow*: uint32
     occupied*: bool
     outputName*: string
     columns*: seq[ShellColumn]
+    frames*: seq[ShellFrame]
     masterCount*: int
     masterSplitRatio*: float32
     targetViewportXOffset*: float32
@@ -86,6 +100,7 @@ type
     layoutCycle*: seq[LayoutMode]
     layoutCycleSelections*: seq[LayoutSelection]
     customLayouts*: seq[JanetLayoutConfig]
+    nativeLayouts*: seq[NativeLayoutConfig]
     keyboardLayoutNames*: seq[string]
     keyboardLayoutIndex*: uint32
     workspaces*: seq[ShellWorkspace]

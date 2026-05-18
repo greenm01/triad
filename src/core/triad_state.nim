@@ -1,9 +1,11 @@
 import std/[json, options]
 import layout_mode_codec
 import layout_selection_codec
+import native_layout_codec
 import ../types/shell_snapshot
 from ../types/runtime_values import
-  LayoutMode, LayoutSelectionKind, WindowRuleIdleInhibitMode
+  FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind,
+  WindowRuleIdleInhibitMode
 
 export shell_snapshot
 
@@ -22,7 +24,15 @@ proc triadSupportedLayoutsJson*(snapshot: ShellSnapshot): JsonNode =
       %*{
         "kind": "custom",
         "id": layout.id.layoutIdString(),
-        "fallback_layout": layoutModeId(layout.fallback),
+        "fallback_layout": layout.fallback.selectionFallbackId(),
+      }
+    )
+  for layout in snapshot.nativeLayouts:
+    result.add(
+      %*{
+        "kind": "native",
+        "id": layout.id.nativeLayoutIdString(),
+        "fallback_layout": layout.fallback.selectionFallbackId(),
       }
     )
 
@@ -46,6 +56,14 @@ proc triadLayoutCycleEntriesJson*(snapshot: ShellSnapshot): JsonNode =
         %*{
           "kind": "custom",
           "id": selection.customId.layoutIdString(),
+          "fallback_layout": selection.selectionFallbackId(),
+        }
+      )
+    of LayoutSelectionKind.Native:
+      result.add(
+        %*{
+          "kind": "native",
+          "id": selection.nativeId.nativeLayoutIdString(),
           "fallback_layout": layoutModeId(selection.builtin),
         }
       )
@@ -62,10 +80,56 @@ proc triadColumnJson(col: ShellColumn): JsonNode =
     "windows": windows,
   }
 
+proc frameNodeKindId(kind: FrameNodeKind): string =
+  case kind
+  of FrameNodeKind.Leaf: "leaf"
+  of FrameNodeKind.Split: "split"
+
+proc frameSplitOrientationId(orientation: FrameSplitOrientation): string =
+  case orientation
+  of FrameSplitOrientation.Horizontal: "horizontal"
+  of FrameSplitOrientation.Vertical: "vertical"
+
+proc triadFrameJson(frame: ShellFrame): JsonNode =
+  let windows = newJArray()
+  for winId in frame.windows:
+    windows.add(%winId)
+  %*{
+    "id": frame.id,
+    "kind": frame.kind.frameNodeKindId(),
+    "parent":
+      if frame.parent == 0:
+        newJNull()
+      else:
+        %frame.parent,
+    "first_child":
+      if frame.firstChild == 0:
+        newJNull()
+      else:
+        %frame.firstChild,
+    "second_child":
+      if frame.secondChild == 0:
+        newJNull()
+      else:
+        %frame.secondChild,
+    "orientation": frame.orientation.frameSplitOrientationId(),
+    "ratio": frame.ratio,
+    "windows": windows,
+    "active_window_id":
+      if frame.activeWindow == 0:
+        newJNull()
+      else:
+        %frame.activeWindow,
+    "focused": frame.focused,
+  }
+
 proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
   let columns = newJArray()
   for col in workspace.columns:
     columns.add(triadColumnJson(col))
+  let frames = newJArray()
+  for frame in workspace.frames:
+    frames.add(triadFrameJson(frame))
 
   %*{
     "tag_id": workspace.tagId,
@@ -73,7 +137,7 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     "name": nullableString(workspace.name),
     "layout": workspace.layoutId,
     "layout_kind": workspace.layoutKind,
-    "fallback_layout": layoutModeId(workspace.fallbackLayout),
+    "fallback_layout": workspace.fallbackLayout,
     "is_active": workspace.isActive,
     "focused_window_id":
       if workspace.focusedWindow == 0:
@@ -81,6 +145,7 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
       else:
         %workspace.focusedWindow,
     "columns": columns,
+    "frames": frames,
     "master_count": workspace.masterCount,
     "master_split_ratio": workspace.masterSplitRatio,
     "viewport": {

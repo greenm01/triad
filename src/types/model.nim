@@ -1,7 +1,7 @@
 import std/[re, sets, tables]
 from core import
-  ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, GroupId,
-  IdCounters, OutputId, Rect, TagId, TagMask, WindowId
+  ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, FrameId,
+  GroupId, IdCounters, OutputId, Rect, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
@@ -13,6 +13,7 @@ from runtime_values import
   TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
   WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy
+from runtime_values import FrameNodeKind, FrameSplitOrientation, NativeLayoutId
 
 type
   WindowAdmissionState* {.pure.} = enum
@@ -62,6 +63,8 @@ type
     name*: string
     layoutMode*: LayoutMode
     customLayoutId*: JanetLayoutId
+    nativeLayoutId*: NativeLayoutId
+    focusedFrame*: FrameId
     focusedWindow*: WindowId
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32
@@ -77,6 +80,17 @@ type
     scrollerSingleProportion*: float32
     isFullWidth*: bool
     focusedWindow*: WindowId
+
+  FrameData* = object
+    id*: FrameId
+    tagId*: TagId
+    kind*: FrameNodeKind
+    parent*: FrameId
+    firstChild*: FrameId
+    secondChild*: FrameId
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    activeWindow*: WindowId
 
   OutputData* = object
     id*: OutputId
@@ -313,13 +327,27 @@ type
     scrollerSingleProportion*: float32
     isFullWidth*: bool
 
+  RestoredFrameData* = object
+    id*: FrameId
+    kind*: FrameNodeKind
+    parent*: FrameId
+    firstChild*: FrameId
+    secondChild*: FrameId
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    windows*: seq[ExternalWindowId]
+    activeWindow*: ExternalWindowId
+
   RestoredTagData* = object
     slot*: uint32
     name*: string
     layoutMode*: LayoutMode
     customLayoutId*: JanetLayoutId
+    nativeLayoutId*: NativeLayoutId
     columns*: seq[RestoredColumnData]
+    frames*: seq[RestoredFrameData]
     focusedWindow*: ExternalWindowId
+    focusedFrame*: FrameId
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32
     targetViewportYOffset*: float32
@@ -367,6 +395,7 @@ type
     windows*: EntityManager[WindowId, WindowData]
     tags*: EntityManager[TagId, TagData]
     columns*: EntityManager[ColumnId, ColumnData]
+    frames*: EntityManager[FrameId, FrameData]
     outputs*: EntityManager[OutputId, OutputData]
     groups*: EntityManager[GroupId, GroupData]
 
@@ -378,6 +407,9 @@ type
     windowsByTag*: Table[TagId, seq[WindowId]]
     windowsByColumn*: Table[ColumnId, seq[WindowId]]
     placementByTagWindow*: Table[(TagId, WindowId), WindowPlacement]
+    frameRootsByTag*: Table[TagId, FrameId]
+    windowsByFrame*: Table[FrameId, seq[WindowId]]
+    frameByTagWindow*: Table[(TagId, WindowId), FrameId]
     outputTags*: Table[OutputId, TagId]
     tagOutputs*: Table[TagId, OutputId]
     tagHomeOutputTargets*: Table[TagId, string]
