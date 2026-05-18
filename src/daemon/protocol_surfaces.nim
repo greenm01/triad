@@ -25,6 +25,7 @@ type
     inputW*: int32
     inputH*: int32
     windowId*: uint32
+    frameId*: uint32
     kind*: ProtocolSurfaceKind
     offsetX*: int32
     offsetY*: int32

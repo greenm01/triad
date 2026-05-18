@@ -8,6 +8,7 @@ export pixel_buffer
 
 const
   Transparent = 0x00000000'u32
+  InputCapableTransparent = 0x01000000'u32
   Separator = 0xff0b0d12'u32
   TextActive = 0xffffffff'u32
   TextInactive = 0xffaab3c2'u32
@@ -45,16 +46,19 @@ proc frameTabLabel(tab: ProjectedFrameTab): string =
     result = "Window"
 
 proc frameTabIndexAt*(bar: ProjectedFrameTabBar, x: int32): int =
-  let contentX = x - max(0'i32, bar.ringWidth)
-  if bar.tabs.len == 0 or bar.geom.w <= 0 or contentX < 0 or contentX >= bar.geom.w:
+  let
+    ringInset = max(0'i32, bar.ringWidth)
+    contentW = max(1'i32, bar.geom.w - ringInset * 2)
+    contentX = x - ringInset
+  if bar.tabs.len == 0 or bar.geom.w <= 0 or contentX < 0 or contentX >= contentW:
     return -1
-  let tabW = max(1'i32, bar.geom.w div int32(bar.tabs.len))
+  let tabW = max(1'i32, contentW div int32(bar.tabs.len))
   min(bar.tabs.len - 1, int(contentX div tabW))
 
 proc frameTabBarCacheKey*(bar: ProjectedFrameTabBar): string =
   result =
-    $bar.frameId & ":" & $bar.windowId & ":" & $bar.geom.w & ":" & $bar.geom.h & ":" &
-    $bar.focused
+    "tab-v2:" & $bar.frameId & ":" & $bar.windowId & ":" & $bar.geom.w & ":" &
+    $bar.geom.h & ":" & $bar.focused
   for tab in bar.tabs:
     result.add("|")
     result.add($tab.windowId)
@@ -72,8 +76,8 @@ proc frameTabBarCacheKey*(bar: ProjectedFrameTabBar): string =
 proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
   let
     ringInset = max(0'i32, bar.ringWidth)
-    contentW = max(1'i32, bar.geom.w)
-    width = max(1'i32, contentW + ringInset * 2)
+    width = max(1'i32, bar.geom.w)
+    contentW = max(1'i32, width - ringInset * 2)
     tabH = max(1'i32, bar.geom.h)
     height = max(1'i32, tabH + ringInset)
     count = max(1, bar.tabs.len)
@@ -131,10 +135,11 @@ proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
   result.drawFrameTabRing(bar.ringWidth, rgbaColorToArgb(bar.ringColor))
 
 proc frameEmptyChromeCacheKey*(frame: ProjectedFrameEmptyChrome): string =
-  $frame.frameId & ":" & $frame.geom.w & ":" & $frame.geom.h & ":" & $frame.focused & ":" &
-    $frame.ringWidth & ":" & $frame.ringColor
+  "empty-v2:" & $frame.frameId & ":" & $frame.geom.w & ":" & $frame.geom.h & ":" &
+    $frame.focused & ":" & $frame.ringWidth & ":" & $frame.ringColor
 
 proc renderFrameEmptyChromeBuffer*(frame: ProjectedFrameEmptyChrome): PixelBuffer =
-  result =
-    initPixelBuffer(max(1'i32, frame.geom.w), max(1'i32, frame.geom.h), Transparent)
+  result = initPixelBuffer(
+    max(1'i32, frame.geom.w), max(1'i32, frame.geom.h), InputCapableTransparent
+  )
   result.drawFrameRectRing(frame.ringWidth, rgbaColorToArgb(frame.ringColor))

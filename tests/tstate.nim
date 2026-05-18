@@ -546,17 +546,34 @@ suite "Runtime state primitives":
         ],
     )
     let rendered = renderFrameTabBarBuffer(bar)
-    check rendered.width == 124
+    check rendered.width == 120
     check rendered.height == 26
     check rendered.pixels.anyIt(it != 0)
     check rendered.pixelAt(4, 4) == testArgb(0x07080980'u32)
     check rendered.pixelAt(64, 4) == testArgb(0x010203ff'u32)
     check rendered.pixelAt(64, 25) == testArgb(0x0a0b0cff'u32)
     check rendered.pixelAt(0, 10) == testArgb(0x101112ff'u32)
-    check rendered.pixelAt(123, 10) == testArgb(0x101112ff'u32)
+    check rendered.pixelAt(119, 10) == testArgb(0x101112ff'u32)
     check rendered.pixelAt(40, 0) == testArgb(0x101112ff'u32)
     check bar.frameTabIndexAt(5) == 0
     check bar.frameTabIndexAt(75) == 1
+    check bar.frameTabIndexAt(1) == -1
+    check bar.frameTabIndexAt(119) == -1
+
+  test "empty frame chrome renderer keeps an input-capable interior":
+    let frame = pv.ProjectedFrameEmptyChrome(
+      frameId: 8,
+      geom: pv.Rect(x: 0, y: 0, w: 120, h: 80),
+      focused: false,
+      ringWidth: 2,
+      ringColor: 0x101112ff'u32,
+    )
+    let rendered = renderFrameEmptyChromeBuffer(frame)
+    check rendered.width == 120
+    check rendered.height == 80
+    check rendered.pixelAt(10, 10) == 0x01000000'u32
+    check rendered.pixelAt(0, 10) == testArgb(0x101112ff'u32)
+    check rendered.pixelAt(119, 10) == testArgb(0x101112ff'u32)
 
   test "recent windows chrome converts RGBA config colors to ARGB pixels":
     var config = baseConfig()
@@ -1201,6 +1218,24 @@ suite "Runtime state primitives":
     check occupiedLeaf != tc.NullFrameId
     check emptyLeaf != occupiedLeaf
     check emptyFrame.windowsForFrame(occupiedLeaf) == @[tc.WindowId(1)]
+    block:
+      var targetedEmpty = emptyFrame
+      let focusedWindowBeforePointer =
+        targetedEmpty.tagData(targetedEmpty.activeTag).get().focusedWindow
+      let (focusedByPointer, _) = targetedEmpty.update(
+        Msg(kind: MsgKind.WlFrameEmptyFocused, frameFocusFrameId: uint32(emptyLeaf))
+      )
+      targetedEmpty = focusedByPointer
+      check targetedEmpty.tagData(targetedEmpty.activeTag).get().focusedFrame ==
+        emptyLeaf
+      check targetedEmpty.tagData(targetedEmpty.activeTag).get().focusedWindow ==
+        focusedWindowBeforePointer
+      let (placedInEmpty, _) =
+        targetedEmpty.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 41))
+      targetedEmpty = placedInEmpty
+      check targetedEmpty.windowsForFrame(emptyLeaf) == @[tc.WindowId(2)]
+      check targetedEmpty.tagData(targetedEmpty.activeTag).get().focusedWindow ==
+        tc.WindowId(2)
     let (emptyFocusDown, _) = emptyFrame.update(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
     )

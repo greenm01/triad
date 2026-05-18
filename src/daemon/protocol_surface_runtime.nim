@@ -645,6 +645,7 @@ proc ensureFrameEmptySurface(daemon: var TriadDaemon, frameId: uint32): uint32 =
   var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskFrameEmpty)
   if surf.surface == nil:
     return 0
+  surf.frameId = frameId
   surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
   if surf.shellSurface == nil:
     daemon.destroyProtocolSurface(surf)
@@ -684,7 +685,7 @@ proc syncFrameTabBarSurfaces*(
     surf.decoration.setOffset(-ringInset, -surfaceH)
     surf.offsetX = -ringInset
     surf.offsetY = -surfaceH
-    surf.inputW = max(1'i32, bar.geom.w + ringInset * 2)
+    surf.inputW = max(1'i32, bar.geom.w)
     surf.inputH = surfaceH
     if surf.bufferCacheKey != key:
       let rendered = renderFrameTabBarBuffer(bar)
@@ -724,8 +725,9 @@ proc syncFrameEmptySurfaces*(
     activeFrames.incl(frame.frameId)
     var surf = daemon.surfaceTable[surfaceId]
     let key = frame.frameEmptyChromeCacheKey()
-    surf.inputW = 0
-    surf.inputH = 0
+    surf.frameId = frame.frameId
+    surf.inputW = max(1'i32, frame.geom.w)
+    surf.inputH = max(1'i32, frame.geom.h)
     if surf.bufferCacheKey != key:
       let rendered = renderFrameEmptyChromeBuffer(frame)
       let buffer = daemon.createArgbShmBuffer(rendered)

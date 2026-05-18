@@ -1059,6 +1059,8 @@ var wlSwipeListener* = pointerGestures.ZwpPointerGestureSwipeV1Listener(
   begin: onWlSwipeBegin, update: onWlSwipeUpdate, `end`: onWlSwipeEnd
 )
 
+proc dispatchFrameEmptyFocus(daemon: var TriadDaemon, surfaceId: uint32): bool
+
 proc onWlPointerEnter(
     data: pointer,
     pointer: ptr Pointer,
@@ -1072,6 +1074,7 @@ proc onWlPointerEnter(
     return
   daemon[].wlPointerSurfaceIds[pointer.id()] = surface.id()
   daemon[].wlPointerSurfaceXs[pointer.id()] = int32(surfaceX.fixedToFloat())
+  discard daemon[].dispatchFrameEmptyFocus(surface.id())
 
 proc onWlPointerLeave(
     data: pointer, pointer: ptr Pointer, serial: uint32, surface: ptr Surface
@@ -1115,6 +1118,19 @@ proc dispatchFrameTabClick(
       return true
   false
 
+proc dispatchFrameEmptyFocus(daemon: var TriadDaemon, surfaceId: uint32): bool =
+  let ownedId =
+    daemon.protocolSurfaceRuntime.surfaceToOwned.getOrDefault(surfaceId, 0'u32)
+  if ownedId == 0 or not daemon.protocolSurfaceRuntime.surfaces.hasKey(ownedId):
+    return false
+  let surf = daemon.protocolSurfaceRuntime.surfaces[ownedId]
+  if surf.kind != ProtocolSurfaceKind.PskFrameEmpty or surf.frameId == 0:
+    return false
+  daemon.enqueue(
+    Msg(kind: MsgKind.WlFrameEmptyFocused, frameFocusFrameId: surf.frameId)
+  )
+  true
+
 proc onWlPointerButton(
     data: pointer,
     pointer: ptr Pointer,
@@ -1136,7 +1152,8 @@ proc onWlPointerButton(
   if surfaceId == 0:
     return
   let surfaceX = daemon[].wlPointerSurfaceXs.getOrDefault(pointerId, 0'i32)
-  discard daemon[].dispatchFrameTabClick(surfaceId, surfaceX)
+  if not daemon[].dispatchFrameTabClick(surfaceId, surfaceX):
+    discard daemon[].dispatchFrameEmptyFocus(surfaceId)
 
 proc ignoreWlPointerAxis(
     data: pointer, pointer: ptr Pointer, time: uint32, axis: uint32, value: Fixed

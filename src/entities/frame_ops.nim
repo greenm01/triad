@@ -286,6 +286,16 @@ proc focusFrameTabAt*(model: var Model, frameId: FrameId, tabIndex: int): bool =
     model.tags.mEntity(tagId).focusedWindow = next
   activeChanged or focusChanged or frameChanged
 
+proc focusFrameOnly*(model: var Model, frameId: FrameId): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let frameOpt = model.frames.entity(frameId)
+  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf or
+      not model.frameUsesTag(frameId, tagId):
+    return false
+  model.setFocusedFrame(tagId, frameId)
+
 proc restoreTagFrames*(
     model: var Model, tagId: TagId, restored: RestoredTagData
 ): bool =

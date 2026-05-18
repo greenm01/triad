@@ -57,6 +57,7 @@ type
     WlPointerRelease
     WlShellSurfaceInteraction
     WlFrameTabClicked
+    WlFrameEmptyFocused
     WlModifiersChanged
 
     # User Commands (IPC/Keybinds)
@@ -297,6 +298,8 @@ type
     of MsgKind.WlFrameTabClicked:
       frameClickFrameId*: uint32
       frameClickTabIndex*: int
+    of MsgKind.WlFrameEmptyFocused:
+      frameFocusFrameId*: uint32
     of MsgKind.WlModifiersChanged:
       oldModifiers*: uint32
       newModifiers*: uint32
