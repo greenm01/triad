@@ -15,6 +15,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `focus-left`, `focus-right`, `focus-up`, `focus-down`: Moves focus
     spatially within the active tag. In overview, these keep normal layout
     semantics inside the focused workspace and switch workspaces at the edge.
+    In frame-tree layouts, left/right cycle tabs in the focused frame while
+    up/down navigate between frames.
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.

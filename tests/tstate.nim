@@ -958,9 +958,19 @@ suite "Runtime state primitives":
     singleFrame = singleNative
     let singleFrameInitialFocus =
       singleFrame.tagData(singleFrame.activeTag).get().focusedWindow
-    for direction in [
-      Direction.DirLeft, Direction.DirRight, Direction.DirUp, Direction.DirDown
-    ]:
+    let (singleFocusLeft, _) = singleFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
+    )
+    singleFrame = singleFocusLeft
+    check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow !=
+      singleFrameInitialFocus
+    let (singleFocusRight, _) = singleFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+    )
+    singleFrame = singleFocusRight
+    check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow ==
+      singleFrameInitialFocus
+    for direction in [Direction.DirUp, Direction.DirDown]:
       let (afterFocus, _) =
         singleFrame.update(Msg(kind: MsgKind.CmdFocusDirection, direction: direction))
       singleFrame = afterFocus
@@ -974,6 +984,67 @@ suite "Runtime state primitives":
     singleFrame = singleTabNext
     check singleFrame.tagData(singleFrame.activeTag).get().focusedWindow ==
       singleFrameInitialFocus
+
+    var notionFrame = initRuntimeStateFromConfig(
+      block:
+        var config = baseConfig()
+        config.janet.layouts =
+          @[
+            JanetLayoutConfig(
+              id: janetLayoutId("notion"),
+              fallback:
+                nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+            )
+          ]
+        config
+    ).model
+    let (notionOutput, _) = notionFrame.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    notionFrame = notionOutput
+    for externalId in [50'u32, 51'u32, 52'u32, 53'u32]:
+      let (withWindow, _) =
+        notionFrame.update(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
+      notionFrame = withWindow
+    let (notionSet, _) = notionFrame.update(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    notionFrame = notionSet
+    let notionInitialTag = notionFrame.tagData(notionFrame.activeTag).get()
+    let notionInitialFocus = notionInitialTag.focusedWindow
+    let notionInitialFrame = notionInitialTag.focusedFrame
+    check notionInitialTag.nativeLayoutId.nativeLayoutIdString() == "frame-tree"
+    check notionFrame.windowsForFrame(notionInitialFrame) ==
+      @[tc.WindowId(1), tc.WindowId(2), tc.WindowId(3), tc.WindowId(4)]
+    check notionFrame.frameData(notionInitialFrame).get().activeWindow ==
+      notionInitialFocus
+    let (notionFocusLeft, _) = notionFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
+    )
+    notionFrame = notionFocusLeft
+    check notionFrame.tagData(notionFrame.activeTag).get().focusedWindow !=
+      notionInitialFocus
+    let (notionFocusRight, _) = notionFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+    )
+    notionFrame = notionFocusRight
+    check notionFrame.tagData(notionFrame.activeTag).get().focusedWindow ==
+      notionInitialFocus
+    check notionFrame.frameData(notionInitialFrame).get().activeWindow ==
+      notionInitialFocus
+    for direction in [Direction.DirUp, Direction.DirDown]:
+      let (afterFocus, _) =
+        notionFrame.update(Msg(kind: MsgKind.CmdFocusDirection, direction: direction))
+      notionFrame = afterFocus
+      let tag = notionFrame.tagData(notionFrame.activeTag).get()
+      check tag.focusedWindow == notionInitialFocus
+      check tag.focusedFrame == notionInitialFrame
+      check notionFrame.frameData(notionInitialFrame).get().activeWindow ==
+        notionInitialFocus
+    let (notionTabPrev, _) = notionFrame.update(Msg(kind: MsgKind.CmdFrameTabPrev))
+    notionFrame = notionTabPrev
+    check notionFrame.tagData(notionFrame.activeTag).get().focusedWindow !=
+      notionInitialFocus
 
     var twoFrame = initRuntimeStateFromConfig(baseConfig()).model
     let (twoOutput, _) = twoFrame.update(
@@ -992,19 +1063,60 @@ suite "Runtime state primitives":
         twoFrame.update(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
       twoFrame = withWindow
       if externalId == 31'u32:
-        let (twoSplit, _) = twoFrame.update(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+        let (twoSplit, _) = twoFrame.update(Msg(kind: MsgKind.CmdFrameSplitVertical))
         twoFrame = twoSplit
     let rightFrameFocus = twoFrame.tagData(twoFrame.activeTag).get().focusedWindow
-    let (focusLeft, _) = twoFrame.update(
-      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
-    )
-    twoFrame = focusLeft
+    let (focusUp, _) =
+      twoFrame.update(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp))
+    twoFrame = focusUp
     check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == tc.WindowId(2)
-    let (focusRight, _) = twoFrame.update(
-      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
+    let (focusDown, _) = twoFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
     )
-    twoFrame = focusRight
+    twoFrame = focusDown
     check twoFrame.tagData(twoFrame.activeTag).get().focusedWindow == rightFrameFocus
+
+    var emptyFrame = initRuntimeStateFromConfig(baseConfig()).model
+    let (emptyOutput, _) = emptyFrame.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    emptyFrame = emptyOutput
+    let (emptyFirst, _) =
+      emptyFrame.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 40))
+    emptyFrame = emptyFirst
+    let (emptyNative, _) = emptyFrame.update(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    emptyFrame = emptyNative
+    let (emptySplit, _) = emptyFrame.update(Msg(kind: MsgKind.CmdFrameSplitVertical))
+    emptyFrame = emptySplit
+    let emptyTag = emptyFrame.tagData(emptyFrame.activeTag).get()
+    let emptyLeaf = emptyTag.focusedFrame
+    var occupiedLeaf = tc.NullFrameId
+    for frameId, frame in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
+      if frame.kind == FrameNodeKind.Leaf and
+          emptyFrame.windowsForFrame(frameId) == @[tc.WindowId(1)]:
+        occupiedLeaf = frameId
+    check emptyLeaf != tc.NullFrameId
+    check occupiedLeaf != tc.NullFrameId
+    check emptyLeaf != occupiedLeaf
+    let (emptyFocusUp, _) = emptyFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
+    )
+    emptyFrame = emptyFocusUp
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedWindow == tc.WindowId(1)
+    let (emptyFocusDown, _) = emptyFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
+    )
+    emptyFrame = emptyFocusDown
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == emptyLeaf
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedWindow == tc.WindowId(1)
+    let (emptyFocusUpAgain, _) = emptyFrame.update(
+      Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)
+    )
+    emptyFrame = emptyFocusUpAgain
+    check emptyFrame.tagData(emptyFrame.activeTag).get().focusedFrame == occupiedLeaf
 
     let snapshot = model.shellSnapshot()
     check snapshot.workspaces[0].layoutId == "frame-tree"
@@ -1099,10 +1211,11 @@ suite "Runtime state primitives":
       it.windowId == 11'u32 and it.geom == pv.Rect(x: 5, y: 6, w: 300, h: 24) and
         it.tabs.len == 2
     )
+    let customInitialFocus = model.tagData(model.activeTag).get().focusedWindow
     let (customFocusLeft, _) =
       model.update(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft))
     model = customFocusLeft
-    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
+    check model.tagData(model.activeTag).get().focusedWindow == customInitialFocus
 
     proc invalidEval(context: JanetLayoutContext): JanetLayoutEvalResult =
       JanetLayoutEvalResult(

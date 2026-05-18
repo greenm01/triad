@@ -383,7 +383,9 @@ Text IPC and bind commands:
   `recent-window-next`, `recent-window-prev`, `recent-window-confirm`,
   `recent-window-cancel`, `recent-window-first`, `recent-window-last`,
   `recent-window-scope`, `recent-window-cycle-scope`,
-  `recent-window-close-current`.
+  `recent-window-close-current`. In frame-tree layouts, `focus-left` and
+  `focus-right` cycle frame tabs while `focus-up` and `focus-down` navigate
+  between frames.
 - Window and session: `close-window`, `toggle-floating`,
   `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen`,
   `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize`,

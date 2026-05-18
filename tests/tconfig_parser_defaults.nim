@@ -832,6 +832,14 @@ cursor {
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowPrev
     check config.commandForBinding("Tab", Super) == "focus-last"
+    check config.commandForBinding("h", Super) == "focus-left"
+    check config.commandForBinding("Left", Super) == "focus-left"
+    check config.commandForBinding("j", Super) == "focus-down"
+    check config.commandForBinding("Down", Super) == "focus-down"
+    check config.commandForBinding("k", Super) == "focus-up"
+    check config.commandForBinding("Up", Super) == "focus-up"
+    check config.commandForBinding("l", Super) == "focus-right"
+    check config.commandForBinding("Right", Super) == "focus-right"
     check config.commandForBinding("Page_Up", Super) == "frame-tab-prev"
     check config.commandForBinding("Page_Down", Super) == "frame-tab-next"
     for key in ["c", "v", "x"]:

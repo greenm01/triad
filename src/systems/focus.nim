@@ -363,15 +363,12 @@ proc focusFrameByDirection(model: var Model, direction: Direction): bool =
   let tagId = model.activeTag
   if tagId == NullTagId:
     return false
-  var currentFrame = model.tagData(tagId).get().focusedFrame
-  let focused = model.focusedOnActiveTag()
-  let focusedFrame = model.frameForWindowOnTag(tagId, focused)
-  if focusedFrame != NullFrameId:
-    currentFrame = focusedFrame
+  var currentFrame = model.focusedFrameOrRoot(tagId)
   if currentFrame == NullFrameId:
-    currentFrame = model.focusedFrameOrRoot(tagId)
-  if currentFrame == NullFrameId:
-    return false
+    let focused = model.focusedOnActiveTag()
+    currentFrame = model.frameForWindowOnTag(tagId, focused)
+    if currentFrame == NullFrameId:
+      return false
 
   let rects = model.frameTreeFocusRects()
   var currentRect = typeof(RenderInstruction().geom)()
@@ -598,6 +595,9 @@ proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
     false
 
 proc focusByDirection*(model: var Model, direction: Direction): bool =
+  if model.activeTagUsesFrameTree() and
+      direction in {Direction.DirLeft, Direction.DirRight}:
+    return model.focusFrameTab(if direction == Direction.DirLeft: -1 else: 1)
   if model.focusByVisualDirection(direction):
     return true
   if model.activeTagUsesFrameTree():
