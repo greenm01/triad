@@ -864,6 +864,7 @@ suite "Runtime state primitives":
       JanetLayoutEvalResult(
         layoutId: context.layoutId,
         outcome: JanetLayoutOutcome.Applied,
+        outputTargetKind: JanetLayoutTargetKind.Frame,
         instructions:
           @[
             pv.RenderInstruction(
@@ -1008,6 +1009,7 @@ suite "Runtime state primitives":
       JanetLayoutEvalResult(
         layoutId: context.layoutId,
         outcome: JanetLayoutOutcome.Applied,
+        outputTargetKind: JanetLayoutTargetKind.Frame,
         instructions:
           @[
             pv.RenderInstruction(
@@ -1023,9 +1025,17 @@ suite "Runtime state primitives":
 
     var projection = model.layoutProjection(customEval)
     check projection.instructions.len == 2
-    check projection.instructions[0].geom == pv.Rect(x: 5, y: 6, w: 300, h: 400)
+    check projection.instructions.anyIt(
+      it.windowId == 11'u32 and it.geom == pv.Rect(x: 5, y: 30, w: 300, h: 376)
+    )
+    check projection.instructions.anyIt(
+      it.windowId == 12'u32 and it.geom == pv.Rect(x: 305, y: 30, w: 300, h: 376)
+    )
     check projection.frameTabBars.len == 2
-    check projection.frameTabBars.anyIt(it.windowId == 11'u32 and it.tabs.len == 2)
+    check projection.frameTabBars.anyIt(
+      it.windowId == 11'u32 and it.geom == pv.Rect(x: 5, y: 6, w: 300, h: 24) and
+        it.tabs.len == 2
+    )
 
     proc invalidEval(context: JanetLayoutContext): JanetLayoutEvalResult =
       JanetLayoutEvalResult(

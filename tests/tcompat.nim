@@ -1,5 +1,6 @@
 import std/[json, options, os, sequtils, strtabs, strutils, unittest]
 import ../src/core/app_identity
+import ../src/core/[layout_selection_codec, native_layout_codec]
 import ../src/core/msg
 import ../src/daemon/quickshell_runner
 import
@@ -481,6 +482,13 @@ suite "Shell compatibility contracts":
   test "Triad native reads and layout commands use shell snapshots":
     var snapshot = snapshotForShell()
     snapshot.overviewActive = true
+    snapshot.customLayouts =
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("notion"),
+          fallback: nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+        )
+      ]
 
     let stateReply =
       handleTriadRequest("""{"triad":{"version":1,"request":"state"}}""", snapshot)
@@ -508,6 +516,15 @@ suite "Shell compatibility contracts":
     check parseJson(setTGMix.reply)["ok"].getBool()
     check setTGMix.messages.len == 1
     check setTGMix.messages[0].newLayout == LayoutMode.TGMix
+
+    let layoutStateReply = handleTriadRequest(
+      """{"triad":{"version":1,"request":"layout-state"}}""", snapshot
+    )
+    let layoutState = parseJson(layoutStateReply.reply)["triad"]["state"]
+    check layoutState["layouts"].getElems().anyIt(
+      it["kind"].getStr() == "custom" and it["id"].getStr() == "notion" and
+        it["fallback_layout"].getStr() == "frame-tree"
+    )
 
   test "Triad command registry has unique resolvable action names":
     var seen: seq[string] = @[]

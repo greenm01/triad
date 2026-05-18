@@ -45,7 +45,7 @@ proc selectionFallback*(selection: LayoutSelection): LayoutMode =
   selection.builtin
 
 proc selectionFallbackId*(selection: LayoutSelection): string =
-  if selection.kind == LayoutSelectionKind.Custom and
+  if selection.kind in {LayoutSelectionKind.Custom, LayoutSelectionKind.Native} and
       selection.nativeId.nativeLayoutIdString().len > 0:
     selection.nativeId.nativeLayoutIdString()
   else:

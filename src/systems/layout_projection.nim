@@ -350,6 +350,21 @@ proc frameTreeRects(
         outRects,
       )
 
+proc frameTreeLayoutRects(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[tuple[frameId: FrameId, rect: rv.Rect]] =
+  let root = model.frameRootForTag(tagId)
+  if root == NullFrameId:
+    return @[]
+  let safeOuterGap = max(0'i32, outerGap)
+  let usable = rv.Rect(
+    x: screen.x + safeOuterGap,
+    y: screen.y + safeOuterGap,
+    w: max(1'i32, screen.w - 2 * safeOuterGap),
+    h: max(1'i32, screen.h - 2 * safeOuterGap),
+  )
+  model.frameTreeRects(root, usable, innerGap, result)
+
 proc applyFrameTreeRects(
     model: Model,
     tagId: TagId,
@@ -379,18 +394,7 @@ proc applyFrameTreeRects(
 proc layoutFrameTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
-  let root = model.frameRootForTag(tagId)
-  if root == NullFrameId:
-    return @[]
-  let safeOuterGap = max(0'i32, outerGap)
-  let usable = rv.Rect(
-    x: screen.x + safeOuterGap,
-    y: screen.y + safeOuterGap,
-    w: max(1'i32, screen.w - 2 * safeOuterGap),
-    h: max(1'i32, screen.h - 2 * safeOuterGap),
-  )
-  var rects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
-  model.frameTreeRects(root, usable, innerGap, rects)
+  let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
   for item in rects:
     let frameOpt = model.frameData(item.frameId)
     if frameOpt.isNone:
@@ -408,21 +412,11 @@ proc layoutFrameTree*(
       )
 
 proc frameTreeTabBars*(
-    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+    model: Model, tagId: TagId, rects: openArray[tuple[frameId: FrameId, rect: rv.Rect]]
 ): seq[rv.ProjectedFrameTabBar] =
-  let root = model.frameRootForTag(tagId)
   let tagOpt = model.tagData(tagId)
-  if root == NullFrameId or tagOpt.isNone:
+  if tagOpt.isNone:
     return @[]
-  let safeOuterGap = max(0'i32, outerGap)
-  let usable = rv.Rect(
-    x: screen.x + safeOuterGap,
-    y: screen.y + safeOuterGap,
-    w: max(1'i32, screen.w - 2 * safeOuterGap),
-    h: max(1'i32, screen.h - 2 * safeOuterGap),
-  )
-  var rects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
-  model.frameTreeRects(root, usable, innerGap, rects)
   for item in rects:
     let frameOpt = model.frameData(item.frameId)
     if frameOpt.isNone:
@@ -461,6 +455,21 @@ proc frameTreeTabBars*(
         tabs: tabs,
       )
     )
+
+proc frameTreeTabBars*(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.ProjectedFrameTabBar] =
+  let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
+  model.frameTreeTabBars(tagId, rects)
+
+proc frameTreeFrameRectsFromInstructions(
+    tag: rv.ProjectedTag, instructions: openArray[rv.RenderInstruction]
+): seq[tuple[frameId: FrameId, rect: rv.Rect]] =
+  for instr in instructions:
+    for frame in tag.frames:
+      if frame.kind == FrameNodeKind.Leaf and frame.activeWindow == instr.windowId:
+        result.add((FrameId(frame.id), instr.geom))
+        break
 
 proc applyLayoutViewportOffset(
     tag: rv.ProjectedTag, instructions: var seq[rv.RenderInstruction]
@@ -549,7 +558,11 @@ proc customLayoutInstructions(
     screen: rv.Rect,
     customLayoutId: JanetLayoutId,
     outerGap, innerGap: int32,
-): tuple[applied: bool, instructions: seq[rv.RenderInstruction]] =
+): tuple[
+  applied: bool,
+  outputTargetKind: JanetLayoutTargetKind,
+  instructions: seq[rv.RenderInstruction],
+] =
   if layoutEval == nil or customLayoutId.layoutIdString().len == 0:
     return
   let evalResult = layoutEval(
@@ -564,7 +577,7 @@ proc customLayoutInstructions(
   )
   if evalResult.outcome != JanetLayoutOutcome.Applied:
     return
-  (true, evalResult.instructions)
+  (true, evalResult.outputTargetKind, evalResult.instructions)
 
 proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
   if model.activeScratchpadWindow() != NullWindowId:
@@ -825,8 +838,15 @@ proc layoutProjection*(
     layoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
     currentOuterGap, currentInnerGap,
   )
+  var customFrameRects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
   if custom.applied:
     result.instructions = custom.instructions
+    if activeTagData.frameTreeActive() and
+        custom.outputTargetKind == JanetLayoutTargetKind.Frame:
+      customFrameRects =
+        tagForLayout.frameTreeFrameRectsFromInstructions(result.instructions)
+      for instr in result.instructions.mitems:
+        instr.geom = frameTreeClientRect(instr.geom)
   elif activeTagData.frameTreeActive():
     result.instructions =
       model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
@@ -842,7 +862,9 @@ proc layoutProjection*(
       if retargetViewport: model.centerFocusedColumn else: "never",
     )
     tagForLayout.applyLayoutViewportOffset(result.instructions)
-  if activeTagData.frameTreeActive():
+  if customFrameRects.len > 0:
+    result.frameTabBars = model.frameTreeTabBars(model.activeTag, customFrameRects)
+  elif activeTagData.frameTreeActive() and not custom.applied:
     result.frameTabBars =
       model.frameTreeTabBars(model.activeTag, screen, currentOuterGap, currentInnerGap)
   if tagForLayout.columns.len > 0 and not custom.applied and
