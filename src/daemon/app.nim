@@ -16,7 +16,7 @@ import
   live_restore_runtime, manage_requests, message_queue, output_management_runtime,
   process_runner, quickshell_runner, registry_runtime, reload_runtime, render_runtime,
   render_invalidation, state, switch_event_runtime
-from ../types/runtime_values import nil, PointerOpKind
+from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
     asyncdispatch, asyncnet, json, nativesockets, options, os, sequtils, strutils,
@@ -70,7 +70,14 @@ proc validateConfigFromArgs(args: seq[string]) =
   quit 0
 
 proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
-  daemon.runtimeState.applyRuntimeUpdate(msg)
+  proc evalCustomMovement(
+      layoutContext: JanetLayoutContext, direction: Direction
+  ): JanetLayoutMovementEvalResult =
+    daemon.janetRuntime.evalLayoutMovementDetailed(
+      daemon.runtimeState.readRuntimeSnapshot(), layoutContext, direction
+    )
+
+  daemon.runtimeState.applyRuntimeUpdate(msg, evalCustomMovement)
 
 proc syncRuntimeLayoutProjection(context: string, msg: Msg): LayoutProjection =
   proc evalCustomLayout(context: JanetLayoutContext): JanetLayoutEvalResult =

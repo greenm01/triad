@@ -116,6 +116,22 @@ The return value should be a sequence of placement instructions:
 Janet layout functions should not emit Triad commands. Event scripts can still
 use `triad/command`; layout functions are a separate pure projection ABI.
 
+Layouts may also register a narrow movement hook for layout-owned window
+movement policy:
+
+```janet
+(triad/def-layout-movement :my-layout
+  (fn [ctx direction]
+    {:op :move-order :delta 1}))
+```
+
+The hook receives the same projected context plus a direction keyword:
+`:left`, `:right`, `:up`, or `:down`. V1 movement hooks may return only
+`{:op :noop}` or `{:op :move-order :delta -1|1}`. `:move-order` swaps the
+focused tiled window with the previous or next window in the projected tiling
+order. Hooks cannot emit `triad/command`; doing so fails the hook and consumes
+the movement command without falling back to unrelated native movement.
+
 ## Validation And Fallback
 
 Triad must validate every custom layout result before applying it. Invalid

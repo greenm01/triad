@@ -1,6 +1,7 @@
 import std/[options, strutils]
 import ../core/[effects, msg, shell_profiles]
 import ../state/engine
+import ../types/janet_layouts
 from ../types/runtime_values import
   Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, RecentWindowDirection
 import
@@ -53,7 +54,9 @@ proc showLayoutSwitchToast(
 ): bool =
   model.openLayoutSwitchToast(layout, customLayout)
 
-proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
+proc applyCommand*(
+    model: var Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
+): UpdateStep =
   case msg.kind
   of MsgKind.CmdSetLayout:
     result.dirty = model.setLayoutForSlot(msg.layoutTargetTag, msg.newLayout)
@@ -223,17 +226,17 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
       if msg.moveWorkspaceFollowWindow:
         result.dirty = model.focusWindow(winId) or result.dirty
   of MsgKind.CmdMoveWindowLeft:
-    result.dirty = model.moveFocusedWindowLeft()
+    result.dirty = model.moveFocusedWindowLeft(movementEval)
   of MsgKind.CmdMoveWindowRight:
-    result.dirty = model.moveFocusedWindowRight()
+    result.dirty = model.moveFocusedWindowRight(movementEval)
   of MsgKind.CmdMoveWindowUp:
-    result.dirty = model.moveFocusedWindowUp()
+    result.dirty = model.moveFocusedWindowUp(movementEval)
   of MsgKind.CmdMoveWindowDown:
-    result.dirty = model.moveFocusedWindowDown()
+    result.dirty = model.moveFocusedWindowDown(movementEval)
   of MsgKind.CmdMoveWindowUpOrToWorkspaceUp:
-    result.dirty = model.moveFocusedWindowUpOrWorkspace()
+    result.dirty = model.moveFocusedWindowUpOrWorkspace(movementEval)
   of MsgKind.CmdMoveWindowDownOrToWorkspaceDown:
-    result.dirty = model.moveFocusedWindowDownOrWorkspace()
+    result.dirty = model.moveFocusedWindowDownOrWorkspace(movementEval)
   of MsgKind.CmdMoveColumnLeft:
     result.dirty = model.moveFocusedColumnLeft()
   of MsgKind.CmdMoveColumnRight:
@@ -243,9 +246,9 @@ proc applyCommand*(model: var Model, msg: Msg): UpdateStep =
   of MsgKind.CmdMoveColumnToLast:
     result.dirty = model.moveFocusedColumnToLast()
   of MsgKind.CmdSwapWindowUp:
-    result.dirty = model.moveFocusedWindowUp()
+    result.dirty = model.moveFocusedWindowUp(movementEval)
   of MsgKind.CmdSwapWindowDown:
-    result.dirty = model.moveFocusedWindowDown()
+    result.dirty = model.moveFocusedWindowDown(movementEval)
   of MsgKind.CmdConsumeWindow:
     result.dirty = model.consumeNextColumnWindow()
   of MsgKind.CmdExpelWindow:

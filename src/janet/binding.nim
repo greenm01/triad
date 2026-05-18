@@ -7,6 +7,8 @@
 {.compile: "binding.c".}
 
 const JanetActionCommand* = 1
+const JanetMovementNoop* = 1
+const JanetMovementMoveOrder* = 2
 
 type JanetHandle* = pointer
 type JanetScriptHandle* = pointer
@@ -32,12 +34,23 @@ proc triadJanetScriptHasLayout*(
   script: JanetScriptHandle, layoutName: cstring
 ): cint {.importc: "triad_janet_script_has_layout".}
 
+proc triadJanetScriptHasLayoutMovement*(
+  script: JanetScriptHandle, layoutName: cstring
+): cint {.importc: "triad_janet_script_has_layout_movement".}
+
 proc triadJanetScriptEvalLayout*(
   runtime: JanetHandle,
   script: JanetScriptHandle,
   layoutName, contextSource, path: cstring,
   fuelLimit: int32,
 ): cint {.importc: "triad_janet_script_eval_layout".}
+
+proc triadJanetScriptEvalLayoutMovement*(
+  runtime: JanetHandle,
+  script: JanetScriptHandle,
+  layoutName, contextSource, direction, path: cstring,
+  fuelLimit: int32,
+): cint {.importc: "triad_janet_script_eval_layout_movement".}
 
 proc triadJanetScriptFree*(
   script: JanetScriptHandle
@@ -94,3 +107,11 @@ proc triadJanetLayoutW*(
 proc triadJanetLayoutH*(
   runtime: JanetHandle, index: cint
 ): int32 {.importc: "triad_janet_layout_h".}
+
+proc triadJanetMovementOp*(
+  runtime: JanetHandle
+): cint {.importc: "triad_janet_movement_op".}
+
+proc triadJanetMovementDelta*(
+  runtime: JanetHandle
+): int32 {.importc: "triad_janet_movement_delta".}

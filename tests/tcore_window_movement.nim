@@ -1,6 +1,44 @@
 import tcore_support
 import ../src/core/[layout_selection_codec, native_layout_codec]
 import ../src/systems/runtime
+import ../src/types/janet_layouts
+
+proc activeTiledOrder(model: Model): seq[uint32] =
+  for columnId, _ in model.columnsOnTagWithId(model.activeTag):
+    for winId, _ in model.windowsOnColumnWithId(columnId):
+      let win = model.windowData(winId)
+      if win.isSome:
+        result.add(uint32(win.get().externalId))
+
+proc spiralMovement(
+    context: JanetLayoutContext, direction: Direction
+): JanetLayoutMovementEvalResult =
+  check context.layoutId.layoutIdString() == "spiral"
+  check context.tag.focusedWindow == 3'u32
+  case direction
+  of Direction.DirUp:
+    JanetLayoutMovementEvalResult(
+      layoutId: context.layoutId,
+      handled: true,
+      ok: true,
+      op: JanetLayoutMovementOp.MoveOrder,
+      delta: -1,
+    )
+  of Direction.DirDown:
+    JanetLayoutMovementEvalResult(
+      layoutId: context.layoutId,
+      handled: true,
+      ok: true,
+      op: JanetLayoutMovementOp.MoveOrder,
+      delta: 1,
+    )
+  of Direction.DirLeft, Direction.DirRight:
+    JanetLayoutMovementEvalResult(
+      layoutId: context.layoutId,
+      handled: true,
+      ok: true,
+      op: JanetLayoutMovementOp.Noop,
+    )
 
 suite "Core Runtime Logic: window movement":
   test "Viewport animation uses configured snap threshold":
@@ -148,6 +186,33 @@ suite "Core Runtime Logic: window movement":
     check projection.instructions.len == 3
     check projection.viewportTargets.len == 0
     check third.geom.y > first.geom.y
+
+  test "Custom layout movement hook can reorder tiled window order":
+    var model = cameraModel()
+    model.seedCameraWindows(4)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("spiral"))
+    )
+    model.focusExternal(3)
+
+    check model.activeTiledOrder() == @[1'u32, 2, 3, 4]
+
+    var effects: seq[Effect]
+    (model, effects) = model.update(Msg(kind: MsgKind.CmdMoveWindowUp), spiralMovement)
+    check effects.len > 0
+    check model.activeTiledOrder() == @[1'u32, 3, 2, 4]
+    check model.focusedWindowId() == 3
+
+    (model, effects) =
+      model.update(Msg(kind: MsgKind.CmdMoveWindowLeft), spiralMovement)
+    check effects.len == 0
+    check model.activeTiledOrder() == @[1'u32, 3, 2, 4]
+
+    (model, effects) =
+      model.update(Msg(kind: MsgKind.CmdMoveWindowDown), spiralMovement)
+    check effects.len > 0
+    check model.activeTiledOrder() == @[1'u32, 2, 3, 4]
+    check model.focusedWindowId() == 3
 
   test "Switching to native layout clears stale viewport offset":
     var model = cameraModel()

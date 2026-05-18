@@ -722,6 +722,116 @@ suite "embedded Janet runtime":
     check anticlockwise.instructions[1].geom == Rect(x: 500, y: 400, w: 500, h: 400)
     check anticlockwise.instructions[2].geom == Rect(x: 500, y: 0, w: 500, h: 400)
 
+  test "bundled spiral Janet movement uses qtile order semantics":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    let context = spiralLayoutContext(3)
+    let up =
+      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirUp)
+    let down =
+      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirDown)
+    let left =
+      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirLeft)
+    let right =
+      runtime.evalLayoutMovementDetailed(testSnapshot(), context, Direction.DirRight)
+
+    check up.handled
+    check up.ok
+    check up.path == bundledLayoutPath("spiral")
+    check up.op == JanetLayoutMovementOp.MoveOrder
+    check up.delta == -1
+    check down.handled
+    check down.ok
+    check down.op == JanetLayoutMovementOp.MoveOrder
+    check down.delta == 1
+    check left.handled
+    check left.ok
+    check left.op == JanetLayoutMovementOp.Noop
+    check right.handled
+    check right.ok
+    check right.op == JanetLayoutMovementOp.Noop
+
+  test "Janet layout movement hook is optional":
+    var runtime = initJanetRuntime(testConfig(getTempDir()))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalLayoutMovementDetailed(
+      testSnapshot(), testLayoutContext(), Direction.DirUp
+    )
+
+    check not evaluated.handled
+    check not evaluated.ok
+    check evaluated.op == JanetLayoutMovementOp.None
+
+  test "Janet layout movement rejects commands and invalid results":
+    let dir =
+      getTempDir() / ("triad-janet-layout-movement-bad-" & $getCurrentProcessId())
+    let layoutDir = dir / "layouts"
+    createDir(dir)
+    createDir(layoutDir)
+    writeFile(
+      layoutDir / "bad-command.janet",
+      """
+(triad/def-layout :bad-command
+  (fn [ctx]
+    []))
+(triad/def-layout-movement :bad-command
+  (fn [ctx direction]
+    (triad/command "layout-grid")
+    {:op :noop}))
+""",
+    )
+    writeFile(
+      layoutDir / "bad-delta.janet",
+      """
+(triad/def-layout :bad-delta
+  (fn [ctx]
+    []))
+(triad/def-layout-movement :bad-delta
+  (fn [ctx direction]
+    {:op :move-order :delta 2}))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(layoutDir / "bad-command.janet"):
+        removeFile(layoutDir / "bad-command.janet")
+      if fileExists(layoutDir / "bad-delta.janet"):
+        removeFile(layoutDir / "bad-delta.janet")
+      if dirExists(layoutDir):
+        removeDir(layoutDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    var commandContext = testLayoutContext()
+    commandContext.layoutId = janetLayoutId("bad-command")
+    let commandResult = runtime.evalLayoutMovementDetailed(
+      testSnapshot(), commandContext, Direction.DirUp
+    )
+    check commandResult.handled
+    check not commandResult.ok
+    check commandResult.error.contains("emitted Triad commands")
+
+    var deltaContext = testLayoutContext()
+    deltaContext.layoutId = janetLayoutId("bad-delta")
+    let deltaResult = runtime.evalLayoutMovementDetailed(
+      testSnapshot(), deltaContext, Direction.DirDown
+    )
+    check deltaResult.handled
+    check not deltaResult.ok
+    check deltaResult.error.len > 0
+
   test "declared Janet layouts load from layout dir by id":
     let dir = getTempDir() / ("triad-janet-layout-dir-" & $getCurrentProcessId())
     let automationDir = dir / "automation"

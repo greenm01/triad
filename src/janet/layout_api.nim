@@ -77,6 +77,13 @@ proc directionExpr(direction: Direction): string =
   of Direction.DirUp: ":up"
   of Direction.DirDown: ":down"
 
+proc directionName*(direction: Direction): string =
+  case direction
+  of Direction.DirLeft: "left"
+  of Direction.DirRight: "right"
+  of Direction.DirUp: "up"
+  of Direction.DirDown: "down"
+
 proc frameExpr(frame: rv.ProjectedFrame): string =
   var windows: seq[string] = @[]
   for winId in frame.windows:
@@ -208,6 +215,21 @@ proc extractedLayoutInstructions*(handle: JanetHandle): seq[JanetLayoutInstructi
         ),
       )
     )
+
+proc extractedLayoutMovement*(
+    handle: JanetHandle
+): tuple[ok: bool, op: JanetLayoutMovementOp, delta: int32] =
+  case int(triadJanetMovementOp(handle))
+  of JanetMovementNoop:
+    (true, JanetLayoutMovementOp.Noop, 0'i32)
+  of JanetMovementMoveOrder:
+    let delta = triadJanetMovementDelta(handle)
+    if delta in [-1'i32, 1'i32]:
+      (true, JanetLayoutMovementOp.MoveOrder, delta)
+    else:
+      (false, JanetLayoutMovementOp.None, 0'i32)
+  else:
+    (false, JanetLayoutMovementOp.None, 0'i32)
 
 proc tiledWindowIds(context: JanetLayoutContext): HashSet[rv.ProjectionWindowId] =
   for column in context.tag.columns:

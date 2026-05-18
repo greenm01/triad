@@ -350,7 +350,8 @@ KDL config nodes and fields:
   `triad/current-event`; they can subscribe with `triad/on` and emit every
   registered user command through `triad/command`. Declared Janet layouts can
   participate in `layout-cycle`, workspace defaults, `layout-custom`, native
-  `set-layout`, and `set-layout-for-workspace`. Native layouts can be selected
+  `set-layout`, and `set-layout-for-workspace`. Janet layouts may register a
+  narrow movement hook for `move-window-*` commands. Native layouts can be selected
   with `layout-native <name>`; `frame-tree` and `bsp-tree` are native layout ids.
   `frame-tree` supports `frame-split-horizontal`, `frame-split-vertical`, `frame-unsplit`,
   `frame-tab-next`, and `frame-tab-prev`. Frame splits move the active tab to

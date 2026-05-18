@@ -4,9 +4,11 @@ import ../core/layout_mode_codec
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../state/engine
+import ../types/janet_layouts
 from ../types/runtime_values import
   Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, LayoutSelection,
   LayoutSelectionKind, NativeLayoutId
+import layout_movement
 
 proc resetLayoutViewport(model: var Model, tagId: TagId): bool =
   result = model.setTagViewportTarget(tagId, 0.0'f32, 0.0'f32) or result
@@ -440,7 +442,12 @@ proc swapFocusedWindowToSlot*(model: var Model, targetSlot: uint32): bool =
     return true
   false
 
-proc moveFocusedWindowLeft*(model: var Model): bool =
+proc moveFocusedWindowLeft*(
+    model: var Model, movementEval: CustomLayoutMovementEval = nil
+): bool =
+  let custom = model.applyCustomLayoutMovement(Direction.DirLeft, movementEval)
+  if custom.handled:
+    return custom.dirty
   if model.activeTagUsesBspTree():
     return model.swapFocusedBspNeighbor(Direction.DirLeft)
   let pos = model.focusedPosition()
@@ -460,7 +467,12 @@ proc moveFocusedWindowLeft*(model: var Model): bool =
       pos.tagId, pos.winId, model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
     )
 
-proc moveFocusedWindowRight*(model: var Model): bool =
+proc moveFocusedWindowRight*(
+    model: var Model, movementEval: CustomLayoutMovementEval = nil
+): bool =
+  let custom = model.applyCustomLayoutMovement(Direction.DirRight, movementEval)
+  if custom.handled:
+    return custom.dirty
   if model.activeTagUsesBspTree():
     return model.swapFocusedBspNeighbor(Direction.DirRight)
   let pos = model.focusedPosition()
@@ -481,7 +493,12 @@ proc moveFocusedWindowRight*(model: var Model): bool =
       pos.tagId, pos.winId, model.moveWindowToColumn(pos.tagId, pos.winId, target, 0)
     )
 
-proc moveFocusedWindowUp*(model: var Model): bool =
+proc moveFocusedWindowUp*(
+    model: var Model, movementEval: CustomLayoutMovementEval = nil
+): bool =
+  let custom = model.applyCustomLayoutMovement(Direction.DirUp, movementEval)
+  if custom.handled:
+    return custom.dirty
   if model.activeTagUsesBspTree():
     return model.swapFocusedBspNeighbor(Direction.DirUp)
   let pos = model.focusedPosition()
@@ -493,7 +510,12 @@ proc moveFocusedWindowUp*(model: var Model): bool =
     model.moveWindowToColumn(pos.tagId, pos.winId, pos.columnId, pos.winIdx - 1),
   )
 
-proc moveFocusedWindowDown*(model: var Model): bool =
+proc moveFocusedWindowDown*(
+    model: var Model, movementEval: CustomLayoutMovementEval = nil
+): bool =
+  let custom = model.applyCustomLayoutMovement(Direction.DirDown, movementEval)
+  if custom.handled:
+    return custom.dirty
   if model.activeTagUsesBspTree():
     return model.swapFocusedBspNeighbor(Direction.DirDown)
   let pos = model.focusedPosition()
@@ -508,7 +530,12 @@ proc moveFocusedWindowDown*(model: var Model): bool =
     model.moveWindowToColumn(pos.tagId, pos.winId, pos.columnId, pos.winIdx + 1),
   )
 
-proc moveFocusedWindowUpOrWorkspace*(model: var Model): bool =
+proc moveFocusedWindowUpOrWorkspace*(
+    model: var Model, movementEval: CustomLayoutMovementEval = nil
+): bool =
+  let custom = model.applyCustomLayoutMovement(Direction.DirUp, movementEval)
+  if custom.handled:
+    return custom.dirty
   let pos = model.focusedPosition()
   if not pos.found:
     return false
@@ -517,7 +544,12 @@ proc moveFocusedWindowUpOrWorkspace*(model: var Model): bool =
   let target = model.nearestWorkspaceSlot(-1, false)
   target != 0 and model.moveFocusedWindowToSlotAndFocus(target)
 
-proc moveFocusedWindowDownOrWorkspace*(model: var Model): bool =
+proc moveFocusedWindowDownOrWorkspace*(
+    model: var Model, movementEval: CustomLayoutMovementEval = nil
+): bool =
+  let custom = model.applyCustomLayoutMovement(Direction.DirDown, movementEval)
+  if custom.handled:
+    return custom.dirty
   let pos = model.focusedPosition()
   if not pos.found:
     return false

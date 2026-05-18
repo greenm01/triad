@@ -334,6 +334,65 @@ proc evalLoadedLayout(
   )
   result.logLayoutEval()
 
+proc missingMovementResult(
+    context: JanetLayoutContext, started: float
+): JanetLayoutMovementEvalResult =
+  JanetLayoutMovementEvalResult(
+    layoutId: context.layoutId,
+    handled: false,
+    ok: false,
+    durationMs: int64((epochTime() - started) * 1000),
+  )
+
+proc failedMovementResult(
+    context: JanetLayoutContext, started: float, path: string, error: string
+): JanetLayoutMovementEvalResult =
+  JanetLayoutMovementEvalResult(
+    layoutId: context.layoutId,
+    path: path,
+    handled: true,
+    ok: false,
+    error: error,
+    durationMs: int64((epochTime() - started) * 1000),
+  )
+
+proc evalLoadedLayoutMovement(
+    runtime: var JanetRuntime,
+    context: JanetLayoutContext,
+    direction: Direction,
+    entry: ScriptCacheEntry,
+    started: float,
+): JanetLayoutMovementEvalResult =
+  let evaluated =
+    triadJanetScriptEvalLayoutMovement(
+      runtime.handle,
+      entry.script,
+      cstring(context.layoutId.layoutIdString()),
+      cstring(context.layoutContextSource()),
+      cstring(direction.directionName()),
+      cstring(entry.path),
+      runtime.config.fuelLimit,
+    ) == 1
+  if not evaluated:
+    let error = $triadJanetLastError(runtime.handle)
+    return context.failedMovementResult(
+      started, entry.path, if error.len > 0: error else: "Janet movement eval failed"
+    )
+  let movement = runtime.handle.extractedLayoutMovement()
+  if not movement.ok:
+    return context.failedMovementResult(
+      started, entry.path, "Janet layout movement returned invalid result"
+    )
+  JanetLayoutMovementEvalResult(
+    layoutId: context.layoutId,
+    path: entry.path,
+    handled: true,
+    ok: true,
+    durationMs: int64((epochTime() - started) * 1000),
+    op: movement.op,
+    delta: movement.delta,
+  )
+
 proc evalLayoutDetailed*(
     runtime: var JanetRuntime, snapshot: ShellSnapshot, context: JanetLayoutContext
 ): JanetLayoutEvalResult =
@@ -421,3 +480,49 @@ proc evalLayoutDetailed*(
       JanetLayoutOutcome.Missing, "janet layout is not registered", started
     )
   result.logLayoutEval()
+
+proc evalLayoutMovementDetailed*(
+    runtime: var JanetRuntime,
+    snapshot: ShellSnapshot,
+    context: JanetLayoutContext,
+    direction: Direction,
+): JanetLayoutMovementEvalResult =
+  let started = epochTime()
+  if runtime.handle == nil:
+    return context.missingMovementResult(started)
+
+  let layoutId = context.layoutId.layoutIdString()
+  if layoutId.isBundledLayoutId():
+    let bundled = runtime.loadBundledLayoutEntry(layoutId, snapshot)
+    if not bundled.entry.failed and
+        triadJanetScriptHasLayoutMovement(bundled.entry.script, cstring(layoutId)) == 1:
+      return
+        runtime.evalLoadedLayoutMovement(context, direction, bundled.entry, started)
+
+  if not runtime.config.enabled:
+    return context.missingMovementResult(started)
+
+  let directLayoutPath = runtime.layoutScriptPath(layoutId)
+  if directLayoutPath.len > 0 and fileExists(directLayoutPath):
+    let loaded = runtime.loadScriptEntry(directLayoutPath, snapshot)
+    let entry = loaded.entry
+    if entry.failed:
+      return context.failedMovementResult(
+        started,
+        entry.path,
+        if entry.error.len > 0: entry.error else: "Janet movement load failed",
+      )
+    if triadJanetScriptHasLayoutMovement(entry.script, cstring(layoutId)) == 1:
+      return runtime.evalLoadedLayoutMovement(context, direction, entry, started)
+    return context.missingMovementResult(started)
+
+  let paths = runtime.scriptPaths()
+  runtime.evictMissingScripts(paths)
+  for path in paths:
+    let loaded = runtime.loadScriptEntry(path, snapshot)
+    let entry = loaded.entry
+    if not entry.failed and
+        triadJanetScriptHasLayoutMovement(entry.script, cstring(layoutId)) == 1:
+      return runtime.evalLoadedLayoutMovement(context, direction, entry, started)
+
+  context.missingMovementResult(started)

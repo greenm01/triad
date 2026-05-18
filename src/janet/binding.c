@@ -10,7 +10,9 @@ enum {
   TRIAD_JANET_COMMAND = 1,
   TRIAD_JANET_LAYOUT_TARGET_WINDOW = 1,
   TRIAD_JANET_LAYOUT_TARGET_FRAME = 2,
-  TRIAD_JANET_LAYOUT_TARGET_BSP_NODE = 3
+  TRIAD_JANET_LAYOUT_TARGET_BSP_NODE = 3,
+  TRIAD_JANET_MOVEMENT_NOOP = 1,
+  TRIAD_JANET_MOVEMENT_MOVE_ORDER = 2
 };
 
 #define TRIAD_JANET_MAX_WAITERS 64
@@ -37,6 +39,8 @@ typedef struct {
   TriadJanetLayoutInstruction *layout_instructions;
   int layout_instruction_count;
   int layout_instruction_capacity;
+  int movement_op;
+  int32_t movement_delta;
   char *last_error;
 } TriadJanetRuntime;
 
@@ -65,6 +69,9 @@ typedef struct {
   TriadJanetLayout *layouts;
   int layout_count;
   int layout_capacity;
+  TriadJanetLayout *layout_movements;
+  int layout_movement_count;
+  int layout_movement_capacity;
   TriadJanetWaiter *waiters;
   int waiter_count;
   int waiter_capacity;
@@ -142,6 +149,8 @@ static void clear_runtime(TriadJanetRuntime *runtime) {
   }
   runtime->action_count = 0;
   runtime->layout_instruction_count = 0;
+  runtime->movement_op = 0;
+  runtime->movement_delta = 0;
   if (runtime->last_error != NULL) {
     free(runtime->last_error);
     runtime->last_error = NULL;
@@ -225,6 +234,19 @@ static char *copy_layout_name(Janet value) {
   }
 }
 
+static char *copy_optional_name(Janet value) {
+  switch (janet_type(value)) {
+    case JANET_STRING:
+      return copy_janet_string(janet_unwrap_string(value));
+    case JANET_SYMBOL:
+      return copy_janet_string(janet_unwrap_symbol(value));
+    case JANET_KEYWORD:
+      return copy_janet_string(janet_unwrap_keyword(value));
+    default:
+      return NULL;
+  }
+}
+
 static Janet c_def_layout(int32_t argc, Janet *argv) {
   janet_fixarity(argc, 2);
   if (current_script == NULL) {
@@ -270,6 +292,55 @@ static Janet c_def_layout(int32_t argc, Janet *argv) {
   current_script->layouts[current_script->layout_count].name = name;
   current_script->layouts[current_script->layout_count].function = function;
   current_script->layout_count++;
+  return janet_wrap_nil();
+}
+
+static Janet c_def_layout_movement(int32_t argc, Janet *argv) {
+  janet_fixarity(argc, 2);
+  if (current_script == NULL) {
+    janet_panic("triad/def-layout-movement is only available while loading a persistent script");
+  }
+  if (!janet_checktype(argv[1], JANET_FUNCTION)) {
+    janet_panic("triad/def-layout-movement expects a movement function");
+  }
+
+  char *name = copy_layout_name(argv[0]);
+  if (name == NULL || name[0] == '\0') {
+    if (name != NULL) free(name);
+    janet_panic("triad/def-layout-movement expects a non-empty layout name");
+  }
+  JanetFunction *function = janet_unwrap_function(argv[1]);
+
+  for (int i = 0; i < current_script->layout_movement_count; i++) {
+    if (strcmp(current_script->layout_movements[i].name, name) == 0) {
+      janet_gcunroot(janet_wrap_function(current_script->layout_movements[i].function));
+      current_script->layout_movements[i].function = function;
+      janet_gcroot(janet_wrap_function(function));
+      free(name);
+      return janet_wrap_nil();
+    }
+  }
+
+  if (current_script->layout_movement_count == current_script->layout_movement_capacity) {
+    int new_capacity =
+      current_script->layout_movement_capacity == 0
+        ? 4
+        : current_script->layout_movement_capacity * 2;
+    TriadJanetLayout *new_movements = (TriadJanetLayout *) realloc(
+      current_script->layout_movements,
+      sizeof(TriadJanetLayout) * (size_t) new_capacity);
+    if (new_movements == NULL) {
+      free(name);
+      janet_panic("failed to register layout movement");
+    }
+    current_script->layout_movements = new_movements;
+    current_script->layout_movement_capacity = new_capacity;
+  }
+
+  janet_gcroot(janet_wrap_function(function));
+  current_script->layout_movements[current_script->layout_movement_count].name = name;
+  current_script->layout_movements[current_script->layout_movement_count].function = function;
+  current_script->layout_movement_count++;
   return janet_wrap_nil();
 }
 
@@ -347,6 +418,7 @@ static Janet c_on(int32_t argc, Janet *argv) {
 static const JanetReg triad_cfuns[] = {
   {"triad/command", c_command, NULL},
   {"triad/def-layout", c_def_layout, NULL},
+  {"triad/def-layout-movement", c_def_layout_movement, NULL},
   {"triad/on", c_on, NULL},
   {"triad/wait-event", c_wait_event, NULL},
   {NULL, NULL, NULL}
@@ -603,11 +675,32 @@ static void clear_layouts(TriadJanetScript *script) {
   script->layout_count = 0;
 }
 
+static void clear_layout_movements(TriadJanetScript *script) {
+  if (script == NULL) return;
+  for (int i = 0; i < script->layout_movement_count; i++) {
+    if (script->layout_movements[i].name != NULL) free(script->layout_movements[i].name);
+    if (script->layout_movements[i].function != NULL) {
+      janet_gcunroot(janet_wrap_function(script->layout_movements[i].function));
+    }
+  }
+  script->layout_movement_count = 0;
+}
+
 static JanetFunction *find_layout(TriadJanetScript *script, const char *layout_name) {
   if (script == NULL || layout_name == NULL) return NULL;
   for (int i = 0; i < script->layout_count; i++) {
     if (strcmp(script->layouts[i].name, layout_name) == 0) {
       return script->layouts[i].function;
+    }
+  }
+  return NULL;
+}
+
+static JanetFunction *find_layout_movement(TriadJanetScript *script, const char *layout_name) {
+  if (script == NULL || layout_name == NULL) return NULL;
+  for (int i = 0; i < script->layout_movement_count; i++) {
+    if (strcmp(script->layout_movements[i].name, layout_name) == 0) {
+      return script->layout_movements[i].function;
     }
   }
   return NULL;
@@ -867,6 +960,37 @@ static int extract_layout_result(TriadJanetRuntime *runtime, Janet value) {
   return 1;
 }
 
+static int extract_layout_movement_result(TriadJanetRuntime *runtime, Janet value) {
+  Janet op = janet_get(value, janet_ckeywordv("op"));
+  char *op_name = copy_optional_name(op);
+  if (op_name == NULL) {
+    set_error(runtime, "Janet layout movement returned invalid op");
+    return 0;
+  }
+  if (strcmp(op_name, "noop") == 0) {
+    runtime->movement_op = TRIAD_JANET_MOVEMENT_NOOP;
+    runtime->movement_delta = 0;
+    free(op_name);
+    return 1;
+  }
+  if (strcmp(op_name, "move-order") == 0) {
+    int32_t delta = 0;
+    if (!janet_number_to_int32(janet_get(value, janet_ckeywordv("delta")), &delta) ||
+        (delta != -1 && delta != 1)) {
+      free(op_name);
+      set_error(runtime, "Janet layout movement returned invalid move-order delta");
+      return 0;
+    }
+    runtime->movement_op = TRIAD_JANET_MOVEMENT_MOVE_ORDER;
+    runtime->movement_delta = delta;
+    free(op_name);
+    return 1;
+  }
+  free(op_name);
+  set_error(runtime, "Janet layout movement returned unsupported op");
+  return 0;
+}
+
 void *triad_janet_new(void) {
   if (janet_init_count == 0) {
     janet_init();
@@ -998,6 +1122,11 @@ int triad_janet_script_has_layout(void *script_ptr, const char *layout_name) {
   return find_layout(script, layout_name) != NULL ? 1 : 0;
 }
 
+int triad_janet_script_has_layout_movement(void *script_ptr, const char *layout_name) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  return find_layout_movement(script, layout_name) != NULL ? 1 : 0;
+}
+
 int triad_janet_script_eval_layout(void *runtime_ptr, void *script_ptr, const char *layout_name, const char *context_source, const char *path, int32_t fuel_limit) {
   TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
   TriadJanetScript *script = (TriadJanetScript *) script_ptr;
@@ -1041,6 +1170,51 @@ int triad_janet_script_eval_layout(void *runtime_ptr, void *script_ptr, const ch
   return extract_layout_result(runtime, out);
 }
 
+int triad_janet_script_eval_layout_movement(void *runtime_ptr, void *script_ptr, const char *layout_name, const char *context_source, const char *direction, const char *path, int32_t fuel_limit) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (runtime == NULL || script == NULL || script->env == NULL) return 0;
+  clear_runtime(runtime);
+  harden_sandbox();
+
+  JanetFunction *movement = find_layout_movement(script, layout_name);
+  if (movement == NULL) {
+    set_error(runtime, "Janet layout movement is not registered");
+    return 0;
+  }
+
+  current_runtime = runtime;
+  current_script = script;
+  if (!eval_source(runtime, script->env, context_source, path)) {
+    current_runtime = NULL;
+    current_script = NULL;
+    return 0;
+  }
+  Janet argv[2];
+  argv[0] = resolve_env_symbol(script->env, "triad/current-layout-context");
+  argv[1] = janet_ckeywordv(direction);
+  Janet out;
+  JanetFiber *fiber = NULL;
+  JanetSignal signal = pcall_with_timer(
+    runtime,
+    movement,
+    2,
+    argv,
+    fuel_limit,
+    &out,
+    &fiber);
+  current_runtime = NULL;
+  current_script = NULL;
+  if (signal != JANET_SIGNAL_OK) {
+    return signal_failed(runtime, signal, out);
+  }
+  if (runtime->action_count > 0) {
+    set_error(runtime, "Janet layout movement emitted Triad commands");
+    return 0;
+  }
+  return extract_layout_movement_result(runtime, out);
+}
+
 void triad_janet_script_free(void *script_ptr) {
   TriadJanetScript *script = (TriadJanetScript *) script_ptr;
   if (script == NULL) return;
@@ -1050,6 +1224,8 @@ void triad_janet_script_free(void *script_ptr) {
   if (script->handler_lists != NULL) free(script->handler_lists);
   clear_layouts(script);
   if (script->layouts != NULL) free(script->layouts);
+  clear_layout_movements(script);
+  if (script->layout_movements != NULL) free(script->layout_movements);
   if (script->env != NULL) {
     janet_gcunroot(janet_wrap_table(script->env));
   }
@@ -1092,6 +1268,18 @@ int triad_janet_layout_instruction_count(void *runtime_ptr) {
   TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
   if (runtime == NULL) return 0;
   return runtime->layout_instruction_count;
+}
+
+int triad_janet_movement_op(void *runtime_ptr) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return 0;
+  return runtime->movement_op;
+}
+
+int32_t triad_janet_movement_delta(void *runtime_ptr) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return 0;
+  return runtime->movement_delta;
 }
 
 uint32_t triad_janet_layout_window_id(void *runtime_ptr, int index) {

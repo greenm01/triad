@@ -515,6 +515,9 @@ Bundled Janet layouts are embedded from repository `.janet` source files at
 compile time and evaluated lazily when selected. User custom layouts are loaded
 lazily from `layout-dir/<name>.janet`. The legacy `script-dir` key remains
 accepted as an alias for `automation-dir`.
+Janet layouts may also define a narrow movement hook for layout-specific
+`move-window-*` behavior. V1 hooks can no-op a direction or move the focused
+window forward/backward in the layout's tiled window order.
 
 **Example Janet Configuration:**
 ```kdl

@@ -1,7 +1,7 @@
 import ../config/[apply, parser]
 import ../core/[effects, msg, restore_state]
 import ../state/engine
-import ../types/[layout_projection, runtime_state, shell_snapshot]
+import ../types/[janet_layouts, layout_projection, runtime_state, shell_snapshot]
 import ../utils/behavior_log
 import layout_projection, update, window_lifecycle, workspaces
 
@@ -17,8 +17,10 @@ proc initRuntimeStateFromConfig*(
     discard model.setHotkeyOverlayOpen(true)
   TriadRuntimeState(model: model)
 
-proc applyRuntimeUpdate*(state: var TriadRuntimeState, msg: Msg): seq[Effect] =
-  let (next, effects) = state.model.update(msg)
+proc applyRuntimeUpdate*(
+    state: var TriadRuntimeState, msg: Msg, movementEval: CustomLayoutMovementEval = nil
+): seq[Effect] =
+  let (next, effects) = state.model.update(msg, movementEval)
   state.model = next
   effects
 

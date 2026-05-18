@@ -1,6 +1,7 @@
 import std/[json, options]
 import ../core/[effects, msg, shell_focus]
 import ../state/engine
+import ../types/janet_layouts
 import ../utils/behavior_log
 import update_commands, update_effects, update_events, update_maintenance, window_rules
 
@@ -209,7 +210,9 @@ proc writeRuntimeUpdateEvent(
     payload["layout_transition"] = before.layoutTransitionPayload(after)
   writeBehaviorEvent("runtime_update", payload)
 
-proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
+proc update*(
+    model: Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
+): (Model, seq[Effect]) =
   var next = model
   var effects: seq[Effect] = @[]
   if model.sessionLocked and msg.kind.isFocusChangingCommand():
@@ -224,7 +227,7 @@ proc update*(model: Model, msg: Msg): (Model, seq[Effect]) =
     of MsgKind.WlWindowCreated .. MsgKind.WlModifiersChanged:
       next.applyEvent(msg)
     of MsgKind.CmdSetLayout .. MsgKind.CmdScreenshot:
-      next.applyCommand(msg)
+      next.applyCommand(msg, movementEval)
   for effect in step.effects:
     effects.add(effect)
   var dirty = step.dirty

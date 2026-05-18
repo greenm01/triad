@@ -14,6 +14,11 @@ type
     targetId*: uint32
     geom*: Rect
 
+  JanetLayoutMovementOp* {.pure.} = enum
+    None
+    Noop
+    MoveOrder
+
   JanetLayoutContext* = object
     layoutId*: runtime_values.JanetLayoutId
     screen*: Rect
@@ -45,3 +50,17 @@ type
     outputTargetKind*: JanetLayoutTargetKind
     instructions*: seq[RenderInstruction]
     frameInstructions*: seq[JanetLayoutInstruction]
+
+  JanetLayoutMovementEvalResult* = object
+    layoutId*: runtime_values.JanetLayoutId
+    path*: string
+    handled*: bool
+    ok*: bool
+    error*: string
+    durationMs*: int64
+    op*: JanetLayoutMovementOp
+    delta*: int32
+
+  CustomLayoutMovementEval* = proc(
+    context: JanetLayoutContext, direction: Direction
+  ): JanetLayoutMovementEvalResult
