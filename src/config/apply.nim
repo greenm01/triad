@@ -12,9 +12,25 @@ import ../systems/outputs
 import ../systems/window_rules
 import ../systems/workspaces
 import ../types/runtime_values as rv
+from ../types/runtime_values import SpiralLayoutConfig
 
 proc coreLayoutMode(mode: LayoutMode): bool =
   mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
+
+proc normalizedSpiralMainPane(value: string): string =
+  if value in ["left", "top", "right", "bottom"]: value else: DefaultSpiralMainPane
+
+proc normalizedSpiralConfig(config: SpiralLayoutConfig): SpiralLayoutConfig =
+  result = config
+  if result.ratio <= 0.0'f32:
+    result.ratio = DefaultSpiralRatio
+  result.ratio = configClampF32(result.ratio, 0.05, 0.95)
+  if result.mainPaneRatio <= 0.0'f32 and not result.mainPaneRatioSet:
+    result.mainPaneRatio = DefaultSpiralMainPaneRatio
+  result.mainPaneRatio = configClampF32(result.mainPaneRatio, 0.05, 0.95)
+  result.mainPane = result.mainPane.normalizedSpiralMainPane()
+  if not result.clockwiseSet:
+    result.clockwise = DefaultSpiralClockwise
 
 proc runtimeLayoutSelection(selection: LayoutSelection): LayoutSelection =
   if selection.kind == LayoutSelectionKind.Builtin and
@@ -340,6 +356,7 @@ proc applyConfig*(model: var Model, config: Config) =
       model.quickshell.legacyShellsFromQuickshell()
   model.shells.normalizeShells()
   model.janet = config.janet
+  model.spiral = config.layout.spiral.normalizedSpiralConfig()
   if model.janet.automationDir.strip().len == 0:
     if model.janet.scriptDir.strip().len > 0:
       model.janet.automationDir = model.janet.scriptDir

@@ -52,6 +52,7 @@ type
     CidLayoutVerticalGrid
     CidLayoutVerticalDeck
     CidLayoutTGMix
+    CidLayoutSpiral
     CidSwitchLayout
     CidToggleOverview
     CidOpenOverview
@@ -308,6 +309,7 @@ const CommandSpecs* = [
     id: CommandId.CidLayoutVerticalDeck, name: "layout-vertical-deck", argShape: NoArgs
   ),
   CommandSpec(id: CommandId.CidLayoutTGMix, name: "layout-tgmix", argShape: NoArgs),
+  CommandSpec(id: CommandId.CidLayoutSpiral, name: "layout-spiral", argShape: NoArgs),
   CommandSpec(id: CommandId.CidSwitchLayout, name: "switch-layout", argShape: NoArgs),
   CommandSpec(
     id: CommandId.CidToggleOverview, name: "toggle-overview", argShape: NoArgs

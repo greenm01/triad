@@ -21,6 +21,7 @@ const NotionLayoutSource = staticRead("bundled_layouts/notion.janet")
 const BspCommonLayoutSource = staticRead("bundled_layouts/bsp-common.janet")
 const BspLayoutSource = staticRead("bundled_layouts/bsp.janet")
 const DwindleLayoutSource = staticRead("bundled_layouts/dwindle.janet")
+const SpiralLayoutSource = staticRead("bundled_layouts/spiral.janet")
 
 proc bundledLayoutPath*(id: string): string =
   BundledLayoutsPathPrefix & id & ">"
@@ -60,6 +61,8 @@ proc bundledLayoutSource*(id: string): Option[string] =
       bundledSource(BspCommonLayoutSource, BspLayoutSource)
     of "dwindle":
       bundledSource(BspCommonLayoutSource, DwindleLayoutSource)
+    of "spiral":
+      bundledSource(SpiralLayoutSource)
     else:
       ""
   if source.len == 0:

@@ -63,7 +63,7 @@ type LayoutSource* = enum
 | **tgmix** | Tag-mixed hybrid; windows from multiple tags shown under one layout | Mango | `lkAlgorithmic` | `lsBundledJanet` |
 | **dwindle** | Focused-window insertion into a persistent binary split tree; new leaves split the target container and produce spiral-like tiling | Mango, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
 | **master** | Single master with configurable stack count; similar to tile | Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
-| **spiral** | Fibonacci-ratio recursive splits; each new window takes half the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
+| **spiral** | qtile-style configurable recursive splits; each new window takes a ratio of the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` |
 | **notion** | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |
 | **frame-tree** | Persistent leaf frames hold tabs; split nodes divide space; empty frames survive | Notion, Ion, StumpWM | `lkFrame` | `lsNative` |
 | **bsp** | Janet geometry policy over Triad-owned binary partition tree; new windows split the focused leaf automatically | bspwm, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |

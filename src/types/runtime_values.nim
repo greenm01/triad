@@ -51,6 +51,14 @@ type
     UserJanet
     Native
 
+  SpiralLayoutConfig* = object
+    ratio*: float32
+    mainPaneRatioSet*: bool
+    mainPaneRatio*: float32
+    mainPane*: string
+    clockwiseSet*: bool
+    clockwise*: bool
+
   FrameNodeKind* {.pure.} = enum
     Leaf
     Split

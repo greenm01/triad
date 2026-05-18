@@ -20,6 +20,19 @@ proc clamp32(value, lo, hi: int32): int32 =
 proc clampF32(value, lo, hi: float32): float32 =
   min(hi, max(lo, value))
 
+proc defaultSpiralLayoutConfig(): SpiralLayoutConfig =
+  SpiralLayoutConfig(
+    ratio: DefaultSpiralRatio,
+    mainPaneRatioSet: false,
+    mainPaneRatio: DefaultSpiralMainPaneRatio,
+    mainPane: DefaultSpiralMainPane,
+    clockwiseSet: true,
+    clockwise: DefaultSpiralClockwise,
+  )
+
+proc parseSpiralMainPane(value: string): string =
+  if value in ["left", "top", "right", "bottom"]: value else: DefaultSpiralMainPane
+
 proc configClamp32*(value, lo, hi: int32): int32 =
   clamp32(value, lo, hi)
 
@@ -1017,6 +1030,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.layout.defaultWindowHeight = DefaultWindowHeight
   result.layout.defaultMasterCount = DefaultMasterCount
   result.layout.defaultMasterRatio = DefaultMasterRatio
+  result.layout.spiral = defaultSpiralLayoutConfig()
   result.layout.borderWidth = DefaultBorderWidth
   result.layout.focusedBorderColor = DefaultFocusedBorderColor
   result.layout.unfocusedBorderColor = DefaultUnfocusedBorderColor
@@ -1131,6 +1145,25 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 except CatchableError as e:
                   warn "Ignoring invalid master config field",
                     field = masterChild.name, error = e.msg
+            elif child.name == "spiral":
+              for spiralChild in child.children:
+                try:
+                  if spiralChild.name == "ratio" and spiralChild.args.len > 0:
+                    result.layout.spiral.ratio =
+                      clampF32(float32(spiralChild.args[0].kFloat()), 0.05, 0.95)
+                  elif spiralChild.name == "main-pane-ratio" and spiralChild.args.len > 0:
+                    result.layout.spiral.mainPaneRatioSet = true
+                    result.layout.spiral.mainPaneRatio =
+                      clampF32(float32(spiralChild.args[0].kFloat()), 0.05, 0.95)
+                  elif spiralChild.name == "main-pane" and spiralChild.args.len > 0:
+                    result.layout.spiral.mainPane =
+                      parseSpiralMainPane(spiralChild.args[0].kString())
+                  elif spiralChild.name == "clockwise" and spiralChild.args.len > 0:
+                    result.layout.spiral.clockwiseSet = true
+                    result.layout.spiral.clockwise = spiralChild.args[0].kBool()
+                except CatchableError as e:
+                  warn "Ignoring invalid spiral config field",
+                    field = spiralChild.name, error = e.msg
             elif child.name == "border":
               for borderChild in child.children:
                 try:

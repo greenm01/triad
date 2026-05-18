@@ -1,4 +1,5 @@
 import tcore_support
+from ../src/core/layout_selection_codec import janetLayoutId
 
 suite "Core Runtime Logic: navigation layout":
   test "Grid directional focus follows rendered rows":
@@ -10,6 +11,15 @@ suite "Core Runtime Logic: navigation layout":
 
     model.focusExternal(3)
     check model.focusDirection(Direction.DirDown) == 5
+
+  test "Bundled spiral directional focus uses visual geometry":
+    var model = directionalModel(LayoutMode.Scroller)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("spiral"))
+    )
+
+    model.focusExternal(1)
+    check model.focusDirection(Direction.DirDown) != 1
 
   test "Vertical grid directional focus follows rendered columns":
     var model = directionalModel(LayoutMode.VerticalGrid)

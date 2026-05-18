@@ -19,6 +19,10 @@ const
   DefaultWindowHeight* = 1.0'f32
   DefaultMasterCount* = 1
   DefaultMasterRatio* = 0.55'f32
+  DefaultSpiralRatio* = 0.618'f32
+  DefaultSpiralMainPaneRatio* = 0.618'f32
+  DefaultSpiralMainPane* = "left"
+  DefaultSpiralClockwise* = true
   DefaultAnimationSpeed* = 0.15'f32
   DefaultAnimationSnapThreshold* = 0.5'f32
   DefaultFrameRate* = 0'i32

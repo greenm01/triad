@@ -113,6 +113,7 @@ Control the geometry and behavior of your windows.
 | `default-window-width` | `Block` | Default width for new windows. |
 | `default-window-height`| `Block` | Default height for new windows. |
 | `master` | `Block` | Configure `count` and `split-ratio` (0.05..0.95). |
+| `spiral` | `Block` | Configure bundled Spiral: `ratio`, `main-pane-ratio`, `main-pane`, and `clockwise`. |
 | `border` | `Block` | Global `width` (0..64), `active-color`, and `inactive-color`. |
 | `frame-tabs` | `Block` | Native frame-tree tab and empty-frame colors: `active-color`, `active-unfocused-color`, `inactive-color`, `active-line-color`, `active-unfocused-line-color`, and `empty-background-color`. |
 | `smart-gaps` | `Bool` | Remove gaps when only one window is visible. |
@@ -147,6 +148,12 @@ layout {
   master {
     count 1
     split-ratio 0.6
+  }
+
+  spiral {
+    ratio 0.618
+    main-pane "left"
+    clockwise #true
   }
 }
 ```
@@ -499,7 +506,7 @@ Triad includes an embedded Janet runtime for advanced automation. Scripts in
 normal Triad commands through `triad/command`.
 Named Janet layouts are declared in the same block. A custom layout name is a
 bare id that must not collide with a core, native, or bundled Janet layout id
-such as `notion`, `bsp`, or `dwindle`. Each declaration has a safe fallback used
+such as `notion`, `bsp`, `dwindle`, or `spiral`. Each declaration has a safe fallback used
 for overview, compatibility projections, and any failed custom evaluation. The
 fallback may be `scroller`, `vertical-scroller`, or a native substrate layout
 such as `frame-tree` or `bsp-tree`. Algorithmic fallback ids such as `grid` or
@@ -516,7 +523,7 @@ janet {
   automation-dir "~/.config/triad/automation"
   layout-dir "~/.config/triad/layouts"
   fuel-limit 500000
-  layout "spiral" fallback="scroller"
+  layout "cascade" fallback="scroller"
   layout "janet-frame-tree" fallback="frame-tree"
   layout "janet-bsp" fallback="bsp-tree"
 }

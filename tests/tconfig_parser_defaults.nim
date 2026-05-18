@@ -20,6 +20,12 @@ layout {
     count 2
     split-ratio 0.6
   }
+  spiral {
+    ratio 0.7
+    main-pane-ratio 0.4
+    main-pane "top"
+    clockwise #false
+  }
   border {
     width 3
     active-color "#112233"
@@ -318,6 +324,12 @@ switch-events {
       @[1.0'f32, 0.25'f32, 0.5'f32, 0.5'f32]
     check config.layout.animationSnapThreshold == 2.5'f32
     check config.layout.frameRate == 144
+    check config.layout.spiral.ratio == 0.7'f32
+    check config.layout.spiral.mainPaneRatioSet
+    check config.layout.spiral.mainPaneRatio == 0.4'f32
+    check config.layout.spiral.mainPane == "top"
+    check config.layout.spiral.clockwiseSet
+    check not config.layout.spiral.clockwise
     check config.layout.layoutCycle ==
       @[LayoutMode.Scroller, LayoutMode.Scroller, LayoutMode.Scroller]
     check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
@@ -922,6 +934,9 @@ janet {
     let tgmix = parseTextCommand("layout-tgmix").get()
     check tgmix.kind == MsgKind.CmdSetCustomLayout
     check tgmix.customLayout.layoutIdString() == "tgmix"
+    let spiral = parseTextCommand("layout-spiral").get()
+    check spiral.kind == MsgKind.CmdSetCustomLayout
+    check spiral.customLayout.layoutIdString() == "spiral"
     let preset = parseTextCommand("switch-proportion-preset -1").get()
     check preset.kind == MsgKind.CmdSwitchProportionPreset
     check preset.proportionPresetDelta == -1
@@ -939,6 +954,14 @@ janet {
           defaultWindowHeight: 0.0,
           defaultMasterCount: 0,
           defaultMasterRatio: 2.0,
+          spiral: SpiralLayoutConfig(
+            ratio: 2.0,
+            mainPaneRatioSet: true,
+            mainPaneRatio: 0.0,
+            mainPane: "sideways",
+            clockwiseSet: false,
+            clockwise: false,
+          ),
           animationSpeed: 5.0,
           animationSnapThreshold: 100.0,
           frameRate: 1000,
@@ -962,6 +985,11 @@ janet {
     check model.defaultWindowHeight == 0.05'f32
     check model.defaultMasterCount == 1
     check model.defaultMasterRatio == 0.95'f32
+    check model.spiral.ratio == 0.95'f32
+    check model.spiral.mainPaneRatioSet
+    check model.spiral.mainPaneRatio == 0.05'f32
+    check model.spiral.mainPane == "left"
+    check model.spiral.clockwise
     check model.animationSpeed == 1.0'f32
     check model.animationSnapThreshold == 64.0'f32
     check model.frameRate == 240
@@ -984,7 +1012,7 @@ layout {
 }
 
 workspaces {
-  default-layout "spiral"
+  default-layout "cascade"
 }
 
 workspace-rules {
@@ -992,7 +1020,7 @@ workspace-rules {
 }
 
 janet {
-  layout "spiral" fallback="scroller"
+  layout "cascade" fallback="scroller"
   layout "wide-master" fallback="tile"
   layout "frame-policy" fallback="frame-tree"
 }
@@ -1001,7 +1029,7 @@ janet {
     )
 
     check config.janet.layouts.len == 3
-    check config.janet.layouts[0].id.layoutIdString() == "spiral"
+    check config.janet.layouts[0].id.layoutIdString() == "cascade"
     check config.janet.layouts[0].fallback.builtin == LayoutMode.Scroller
     check config.janet.layouts[1].id.layoutIdString() == "wide-master"
     check config.janet.layouts[1].fallback.builtin == LayoutMode.Scroller
@@ -1023,7 +1051,7 @@ janet {
     check config.layout.layoutSelections[3].customId.layoutIdString() == "grid"
     check config.workspaces.defaultLayout == LayoutMode.Scroller
     check config.workspaces.defaultLayoutSelection.kind == LayoutSelectionKind.Custom
-    check config.workspaces.defaultLayoutSelection.customId.layoutIdString() == "spiral"
+    check config.workspaces.defaultLayoutSelection.customId.layoutIdString() == "cascade"
     check config.tagRules[0].defaultLayout == LayoutMode.Scroller
     check config.tagRules[0].defaultLayoutSelection.kind == LayoutSelectionKind.Custom
     check config.tagRules[0].defaultLayoutSelection.customId.layoutIdString() ==
@@ -1034,19 +1062,20 @@ janet {
       parseKdl(
         """
 layout {
-  layout-cycle "notion" "dwindle"
+  layout-cycle "notion" "dwindle" "spiral"
 }
 
 janet {
   layout "notion" fallback="scroller"
   layout "dwindle" fallback="scroller"
+  layout "spiral" fallback="scroller"
 }
 """
       )
     )
 
     check config.janet.layouts.len == 0
-    check config.layout.layoutSelections.len == 2
+    check config.layout.layoutSelections.len == 3
     check config.layout.layoutSelections[0].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[0].customId.layoutIdString() == "notion"
     check config.layout.layoutSelections[0].nativeId.nativeLayoutIdString() ==
@@ -1054,3 +1083,6 @@ janet {
     check config.layout.layoutSelections[1].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[1].customId.layoutIdString() == "dwindle"
     check config.layout.layoutSelections[1].nativeId.nativeLayoutIdString() == "bsp-tree"
+    check config.layout.layoutSelections[2].kind == LayoutSelectionKind.Custom
+    check config.layout.layoutSelections[2].customId.layoutIdString() == "spiral"
+    check config.layout.layoutSelections[2].builtin == LayoutMode.Scroller

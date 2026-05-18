@@ -32,7 +32,7 @@ layout {
     animation-snap-threshold 0.5
     frame-rate "auto"
     smart-gaps #false
-    layout-cycle "scroller" "tile" "grid" "monocle" "vertical-scroller"
+    layout-cycle "scroller" "tile" "grid" "spiral" "monocle" "vertical-scroller"
 }
 
 scratchpad {

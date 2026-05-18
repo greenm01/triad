@@ -5,7 +5,7 @@ from ../types/runtime_values import LayoutKind, LayoutMode, LayoutSource
 
 const BundledAlgorithmicLayoutIds* = [
   "tile", "grid", "monocle", "deck", "center-tile", "right-tile", "vertical-tile",
-  "vertical-grid", "vertical-deck", "tgmix",
+  "vertical-grid", "vertical-deck", "tgmix", "spiral",
 ]
 
 const BundledFrameLayoutIds* = ["notion"]

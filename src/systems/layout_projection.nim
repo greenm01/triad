@@ -10,7 +10,7 @@ import ../types/layout_projection
 import ../types/model as model_types
 import ../types/projection_values as rv
 from ../types/runtime_values import
-  Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId
+  Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId, SpiralLayoutConfig
 import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
@@ -705,6 +705,7 @@ proc customLayoutInstructions(
   screen: rv.Rect,
   customLayoutId: JanetLayoutId,
   outerGap, innerGap: int32,
+  spiral: SpiralLayoutConfig,
 ): tuple[
   applied: bool,
   outputTargetKind: JanetLayoutTargetKind,
@@ -765,7 +766,7 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
 
       custom = customLayoutInstructions(
         evalLocalLayout, tagForLayout, windows, screen, activeTagData.customLayoutId,
-        currentOuterGap, currentInnerGap,
+        currentOuterGap, currentInnerGap, model.spiral,
       )
     if custom.applied:
       result = custom.instructions
@@ -792,6 +793,7 @@ proc customLayoutInstructions(
     screen: rv.Rect,
     customLayoutId: JanetLayoutId,
     outerGap, innerGap: int32,
+    spiral: SpiralLayoutConfig,
 ): tuple[
   applied: bool,
   outputTargetKind: JanetLayoutTargetKind,
@@ -808,6 +810,7 @@ proc customLayoutInstructions(
       innerGap: innerGap,
       tag: tag,
       windows: windows,
+      spiral: spiral,
     )
   )
   if evalResult.outcome != JanetLayoutOutcome.Applied:
@@ -1025,7 +1028,7 @@ proc overviewTagLayout(
     result.tag.applyOverviewMaximizedColumnSizing(windows)
   let custom = customLayoutInstructions(
     layoutEval, result.tag, windows, screen, tagData.customLayoutId, model.outerGaps,
-    model.innerGaps,
+    model.innerGaps, model.spiral,
   )
   if custom.applied:
     result.mode = rv.LayoutMode.Grid
@@ -1196,7 +1199,7 @@ proc layoutProjection*(
   let customOuterGap = if activeTagData.frameTreeActive(): 0'i32 else: currentOuterGap
   let custom = customLayoutInstructions(
     effectiveLayoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
-    customOuterGap, currentInnerGap,
+    customOuterGap, currentInnerGap, model.spiral,
   )
   var customFrameRects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
   if custom.applied:

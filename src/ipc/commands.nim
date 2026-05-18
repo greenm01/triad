@@ -396,6 +396,8 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     )
   of CommandId.CidLayoutTGMix:
     some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("tgmix")))
+  of CommandId.CidLayoutSpiral:
+    some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("spiral")))
   of CommandId.CidSwitchLayout:
     some(Msg(kind: MsgKind.CmdSwitchLayout))
   of CommandId.CidToggleOverview:

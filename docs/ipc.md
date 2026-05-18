@@ -78,6 +78,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `layout-vertical-deck`: Sets the active tag to a top master with deck-stack below.
 *   `layout-tgmix`: Sets the active tag to tile mode for up to three windows,
     then grid mode for larger sets.
+*   `layout-spiral`: Sets the active tag to bundled Spiral recursive-split mode.
 *   `set-layout-for-workspace <tag> <layout>`: Sets a stable tag id to a
     built-in layout id or declared custom layout name without changing focus.
 *   `layout-custom <name>`: Sets the active tag to a declared Janet layout.
@@ -302,7 +303,7 @@ Replies use a stable success envelope:
 Errors use:
 
 ```json
-{"ok":false,"error":"unknown layout: spiral"}
+{"ok":false,"error":"unknown layout: missing-layout"}
 ```
 
 Native Triad state is generated from Triad's internal shell snapshot. The Niri
@@ -484,7 +485,7 @@ use structured fields:
 - Screenshot actions accept `path`, `show_pointer`, `write_to_disk`, and
   `copy_to_clipboard`.
 
-The layout-specific action names such as `layout-grid` and `layout-tgmix`
+The layout-specific action names such as `layout-grid`, `layout-tgmix`, and `layout-spiral`
 remain available for command parity and affect the active tag. Prefer
 `request:"set-layout"` when a shell needs to target a specific tag or workspace
 without changing focus.

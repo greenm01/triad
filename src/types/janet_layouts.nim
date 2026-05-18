@@ -21,6 +21,7 @@ type
     innerGap*: int32
     tag*: ProjectedTag
     windows*: Table[ProjectionWindowId, ProjectedWindow]
+    spiral*: SpiralLayoutConfig
 
   JanetLayoutOutcome* {.pure.} = enum
     Disabled

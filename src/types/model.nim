@@ -6,7 +6,7 @@ from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
   KeyBindingConfig, LayoutMode, LayoutSelection, HotkeyOverlayConfig, FrameTabsConfig,
-  LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole,
+  LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole, SpiralLayoutConfig,
   OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
   ProtocolSurfacesConfig, QuickshellConfig, ShellsConfig, RecentWindowFilter,
   RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
@@ -521,6 +521,7 @@ type
     defaultWindowHeight*: float32
     defaultMasterCount*: int
     defaultMasterRatio*: float32
+    spiral*: SpiralLayoutConfig
     enableAnimations*: bool
     animationSpeed*: float32
     animationSnapThreshold*: float32

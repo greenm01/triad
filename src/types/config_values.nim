@@ -56,6 +56,7 @@ type
     animationSnapThreshold*: float32
     frameRate*: int32
     smartGaps*: bool
+    spiral*: SpiralLayoutConfig
     layoutCycle*: seq[LayoutMode]
     layoutSelections*: seq[LayoutSelection]
 

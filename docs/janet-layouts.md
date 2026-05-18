@@ -277,8 +277,8 @@ Implemented.
 ## Testing And Acceptance Criteria
 
 - Built-in layout tests pass unchanged.
-- Existing config, IPC, restore, overview, and layout-cycle behavior for the 12
-  built-ins is unchanged.
+- Existing config, IPC, restore, overview, and layout-cycle behavior for bundled
+  layouts is unchanged.
 - A valid custom Janet layout can place all tiled windows on the active tag.
 - Invalid custom output falls back without partially applying placement.
 - Missing scripts and fuel exhaustion produce behavior-log evidence.

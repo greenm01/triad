@@ -167,6 +167,37 @@ proc testLayoutContext(): JanetLayoutContext =
     windows: windows,
   )
 
+proc spiralLayoutContext(
+    count: int, ratio = 0.5'f32, mainPane = "left", clockwise = true
+): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  var ids: seq[ProjectionWindowId] = @[]
+  for i in 0 ..< count:
+    let id = ProjectionWindowId(10'u32 + uint32(i))
+    ids.add(id)
+    windows[id] = ProjectedWindow(id: id, title: "Window " & $uint32(id), appId: "test")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("spiral"),
+    screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+    outerGap: 0,
+    innerGap: 0,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 10,
+      columns: @[ProjectedColumn(windows: ids)],
+    ),
+    windows: windows,
+    spiral: SpiralLayoutConfig(
+      ratio: ratio,
+      mainPaneRatioSet: false,
+      mainPaneRatio: ratio,
+      mainPane: mainPane,
+      clockwiseSet: true,
+      clockwise: clockwise,
+    ),
+  )
+
 proc testFrameLayoutContext(): JanetLayoutContext =
   var windows = initTable[ProjectionWindowId, ProjectedWindow]()
   windows[10'u32] = ProjectedWindow(id: 10, title: "Terminal", appId: "kitty")
@@ -634,6 +665,62 @@ suite "embedded Janet runtime":
     check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 800)
     check runtime.scripts.hasKey(bundledLayoutPath("grid"))
     check not runtime.scripts.hasKey(bundledLayoutPath("tile"))
+
+  test "bundled spiral Janet layout computes clockwise recursive geometry":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), spiralLayoutContext(5))
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.path == bundledLayoutPath("spiral")
+    check evaluated.instructions.len == 5
+    check evaluated.instructions[0].windowId == 10'u32
+    check evaluated.instructions[0].geom == Rect(x: 0, y: 0, w: 500, h: 800)
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 400)
+    check evaluated.instructions[2].windowId == 12'u32
+    check evaluated.instructions[2].geom == Rect(x: 750, y: 400, w: 250, h: 400)
+    check evaluated.instructions[3].windowId == 13'u32
+    check evaluated.instructions[3].geom == Rect(x: 500, y: 600, w: 250, h: 200)
+    check evaluated.instructions[4].windowId == 14'u32
+    check evaluated.instructions[4].geom == Rect(x: 500, y: 400, w: 250, h: 200)
+
+  test "bundled spiral Janet layout honors main pane and direction options":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    let top = runtime.evalLayoutDetailed(
+      testSnapshot(), spiralLayoutContext(3, mainPane = "top")
+    )
+    check top.outcome == JanetLayoutOutcome.Applied
+    check top.instructions[0].geom == Rect(x: 0, y: 0, w: 1000, h: 400)
+    check top.instructions[1].geom == Rect(x: 500, y: 400, w: 500, h: 400)
+    check top.instructions[2].geom == Rect(x: 0, y: 400, w: 500, h: 400)
+
+    let anticlockwise = runtime.evalLayoutDetailed(
+      testSnapshot(), spiralLayoutContext(3, clockwise = false)
+    )
+    check anticlockwise.outcome == JanetLayoutOutcome.Applied
+    check anticlockwise.instructions[0].geom == Rect(x: 0, y: 0, w: 500, h: 800)
+    check anticlockwise.instructions[1].geom == Rect(x: 500, y: 400, w: 500, h: 400)
+    check anticlockwise.instructions[2].geom == Rect(x: 500, y: 0, w: 500, h: 400)
 
   test "declared Janet layouts load from layout dir by id":
     let dir = getTempDir() / ("triad-janet-layout-dir-" & $getCurrentProcessId())

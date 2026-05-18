@@ -1,8 +1,10 @@
 import std/[algorithm, json, sets, strutils, tables]
+import ../core/defaults
 import ../core/layout_selection_codec
 import ../types/janet_layouts
 import ../types/projection_values as rv
-from ../types/runtime_values import Direction, FrameNodeKind, FrameSplitOrientation
+from ../types/runtime_values import
+  Direction, FrameNodeKind, FrameSplitOrientation, SpiralLayoutConfig
 import ../utils/behavior_log
 import binding
 
@@ -28,6 +30,24 @@ proc escaped(value: string): string =
 
 proc boolValue(value: bool): string =
   if value: "true" else: "false"
+
+proc spiralConfigExpr(value: SpiralLayoutConfig): string =
+  let
+    ratio = if value.ratio > 0.0'f32: value.ratio else: DefaultSpiralRatio
+    mainPaneRatio =
+      if value.mainPaneRatio > 0.0'f32:
+        value.mainPaneRatio
+      else:
+        DefaultSpiralMainPaneRatio
+    mainPane =
+      if value.mainPane in ["left", "top", "right", "bottom"]:
+        value.mainPane
+      else:
+        DefaultSpiralMainPane
+    clockwise = if value.clockwiseSet: value.clockwise else: DefaultSpiralClockwise
+  "{:ratio " & $ratio & " :main-pane-ratio-set " & value.mainPaneRatioSet.boolValue() &
+    " :main-pane-ratio " & $mainPaneRatio & " :main-pane " & mainPane.escaped() &
+    " :clockwise " & clockwise.boolValue() & "}"
 
 proc rectExpr(rect: rv.Rect): string =
   "{:x " & $rect.x & " :y " & $rect.y & " :w " & $rect.w & " :h " & $rect.h & "}"
@@ -138,7 +158,8 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
    :substrate $17
    :frames [$15]
    :bsp-nodes [$16]
-   :windows [$18]})
+   :windows [$18]
+   :layout-options {:spiral $19}})
 """ %
   [
     context.layoutId.layoutIdString().escaped(),
@@ -164,6 +185,7 @@ proc layoutContextSource*(context: JanetLayoutContext): string =
     else:
       ":columns",
     windows.join(" "),
+    context.spiral.spiralConfigExpr(),
   ]
 
 proc extractedLayoutInstructions*(handle: JanetHandle): seq[JanetLayoutInstruction] =

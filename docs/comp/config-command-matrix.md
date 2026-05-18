@@ -120,6 +120,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Layouts | Scroller focus centering | `scroller_focus_center`, `scroller_prefer_center` | WM policy | `scroller-focus-center`, `scroller-prefer-center` | X | |
 | Layouts | Proportion presets | `scroller_proportion_preset`, `switch_proportion_preset` | WM policy | `scroller-proportion-presets`, `switch-proportion-preset` | X | Triad cycles focused horizontal or vertical scroller columns through configured clamped presets. |
 | Layouts | TGMix layout | `tgmix` | WM policy | `layout-tgmix`, `tgmix` layout id | X | Uses tile for up to three windows, grid after that. |
+| Layouts | Spiral layout | spiral | WM policy | `layout-spiral`, `spiral` layout id, `layout.spiral` | X | Bundled Janet qtile-style recursive split layout with configurable ratio, main pane, and direction. |
 | Layouts | Gaps | `incgaps`, `togglegaps`, `smartgaps` | WM policy | `adjust-gaps`, `toggle-gaps`, `smart-gaps`, `gaps` | X | Native `frame-tree` uses gaps between split frames and fills the output usable rect without an outer frame-tree margin. Native `bsp-tree` applies normal outer and inner gaps. |
 | Layouts | Border style | `toggle_render_border`, `no_render_border` | `river_window_v1.set_borders` | `border { width; active-color; inactive-color }` | X | Triad has border config, not a runtime toggle. |
 | Layouts | Frame-tree tab colors | | protocol decoration surfaces | `frame-tabs { active-color; active-unfocused-color; inactive-color; active-line-color; active-unfocused-line-color; empty-background-color }` | X | Native frame-tree tab chrome uses configurable colors with current hard-coded values as defaults; empty frames render configurable background plus native border chrome from the same frame geometry substrate. |
@@ -302,7 +303,8 @@ KDL config nodes and fields:
 - `include`: required and optional in-place config includes.
 - `layout`: `gaps`, `center-focused-column`, `default-column-width`,
   `default-window-width`, `default-window-height`, `master.count`,
-  `master.split-ratio`, `border.width`, `border.active-color`,
+  `master.split-ratio`, `spiral.ratio`, `spiral.main-pane-ratio`,
+  `spiral.main-pane`, `spiral.clockwise`, `border.width`, `border.active-color`,
   `border.inactive-color`, `frame-tabs.active-color`,
   `frame-tabs.active-unfocused-color`, `frame-tabs.inactive-color`,
   `frame-tabs.active-line-color`, `frame-tabs.active-unfocused-line-color`,
@@ -342,7 +344,7 @@ KDL config nodes and fields:
   `layout <name> fallback=<scroller|vertical-scroller|frame-tree|bsp-tree>`;
   legacy `script-dir` is accepted as an `automation-dir` alias. User layout
   names must not collide with bundled Janet layout ids such as `notion`, `bsp`,
-  and `dwindle`. Algorithmic fallback ids are compatibility aliases that
+  `dwindle`, and `spiral`. Algorithmic fallback ids are compatibility aliases that
   normalize to `scroller`.
   Scripts receive `triad/snapshot`, `triad/current-window`, and
   `triad/current-event`; they can subscribe with `triad/on` and emit every
@@ -416,6 +418,7 @@ Text IPC and bind commands:
   `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`,
   `layout-center-tile`, `layout-right-tile`, `layout-vertical-tile`,
   `layout-vertical-grid`, `layout-vertical-deck`, `layout-tgmix`,
+  `layout-spiral`,
   `switch-layout`,
   `master-count`, `adjust-master-count`, `master-ratio`,
   `adjust-master-ratio`, `maximize-column`, `resize-width`, `resize-height`,

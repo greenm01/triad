@@ -531,6 +531,7 @@ proc focusNavigationLayoutMode(model: Model): Option[LayoutMode] =
     let bundled = layoutModeForBundledId(customId)
     if bundled.isSome:
       return bundled
+    return none(LayoutMode)
   some(tag.layoutMode)
 
 proc orderedFallbackFocus(
