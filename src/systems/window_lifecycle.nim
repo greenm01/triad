@@ -232,7 +232,10 @@ proc placeRestoredWindow(
       model.restoreWindowFramePlacement(tagId, restoredTag, restoredExternalId, winId)
     discard
       model.restoreWindowBspPlacement(tagId, restoredTag, restoredExternalId, winId)
-    if restoredTag.focusedWindow == restoredExternalId:
+    let restoredFocused = model.restoredWindowId(restoredTag.focusedWindow)
+    if restoredFocused != NullWindowId:
+      discard model.setTagFocus(tagId, restoredFocused)
+    elif restoredTag.focusedWindow == restoredExternalId:
       discard model.setTagFocus(tagId, winId)
     else:
       let tagOpt = model.tag(tagId)
@@ -481,7 +484,8 @@ proc createWindowForExternal*(
   var restoredExternalId = externalId
   var restored = RestoredWindowData()
   discard model.clearSettledRestoreFocus()
-  let restoreFocusPending = model.restoreFocusedWindowPending()
+  let restoreFocusPending =
+    model.restoreFocusedWindowPending() or model.restoreWindowCount() > 0
   var targetSlot =
     if model.activeWorkspaceSlot() == 0:
       1'u32

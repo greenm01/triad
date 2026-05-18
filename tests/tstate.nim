@@ -1083,6 +1083,35 @@ suite "Runtime state primitives":
     check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
 
+  test "native BSP restore preserves tree when windows arrive out of order":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("bsp-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+
+    let restore = model.liveRestoreState().pendingRestoreState()
+
+    var restored = initRuntimeStateFromConfig(baseConfig()).model
+    restored.applyLiveRestore(restore)
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = restored.tagForSlot(1)
+    check restored.focusedWindowId() == 11
+    for externalId in [10'u32, 11'u32, 12'u32]:
+      let winId = restored.windowForExternal(tc.ExternalWindowId(externalId))
+      check winId != tc.NullWindowId
+      check restored.bspLeafWindowCount(tagId, winId) == 1
+      check restored.bspNodeForWindowOnTag(tagId, winId) != tc.NullBspNodeId
+
   test "BSP focus uses tree order and directional geometry":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

@@ -548,6 +548,24 @@ proc restoreWindowBspPlacement*(
       break
   if nodeId == NullBspNodeId or model.bspNodes.entity(nodeId).isNone:
     return false
+
+  let displaced = model.bspNodes.entity(nodeId).get().window
+  if displaced != NullWindowId and displaced != winId:
+    model.bspNodeByTagWindow.del((tagId, displaced))
+
+  var duplicateNodes: seq[BspNodeId] = @[]
+  for node in model.bspNodes.entities:
+    if node.tagId == tagId and node.kind == FrameNodeKind.Leaf and node.id != nodeId and
+        node.window == winId:
+      duplicateNodes.add(node.id)
+  for duplicateNode in duplicateNodes:
+    if model.bspNodes.entity(duplicateNode).isSome:
+      model.bspNodes.mEntity(duplicateNode).window = NullWindowId
+
+  let mappedNode = model.bspNodeByTagWindow.getOrDefault((tagId, winId), NullBspNodeId)
+  if mappedNode != NullBspNodeId and mappedNode != nodeId:
+    model.bspNodeByTagWindow.del((tagId, winId))
+
   model.bspNodes.mEntity(nodeId).window = winId
   model.bspNodeByTagWindow[(tagId, winId)] = nodeId
   true

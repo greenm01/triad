@@ -174,10 +174,11 @@ suite "Core Runtime Logic: restore identity":
       slot: 2,
       layoutMode: LayoutMode.Scroller,
       focusedWindow: ExternalWindowId(133),
-      columns: @[
-        RestoredColumnData(windows: @[ExternalWindowId(133)], widthProportion: 0.5),
-        RestoredColumnData(windows: @[ExternalWindowId(136)], widthProportion: 0.5),
-      ],
+      columns:
+        @[
+          RestoredColumnData(windows: @[ExternalWindowId(133)], widthProportion: 0.5),
+          RestoredColumnData(windows: @[ExternalWindowId(136)], widthProportion: 0.5),
+        ],
       targetViewportXOffset: 300.0,
       currentViewportXOffset: 120.0,
       masterCount: 1,
@@ -281,6 +282,58 @@ suite "Core Runtime Logic: restore identity":
 
     check model.focusHistory == @[WindowId(1), WindowId(2), WindowId(3)]
 
+  test "Live restore later active workspace windows do not steal restored focus":
+    var restore =
+      PendingRestoreState(activeSlot: 1, focusedWindow: ExternalWindowId(10))
+    restore.addRestoredWindow(
+      ExternalWindowId(10), 1, "kitty", "focused", identifier = "focused-id"
+    )
+    restore.addRestoredWindow(
+      ExternalWindowId(11), 1, "kitty", "later", identifier = "later-id"
+    )
+    restore.tags[1] = RestoredTagData(
+      slot: 1,
+      layoutMode: LayoutMode.Scroller,
+      focusedWindow: ExternalWindowId(10),
+      columns:
+        @[
+          RestoredColumnData(windows: @[ExternalWindowId(10)], widthProportion: 0.5),
+          RestoredColumnData(windows: @[ExternalWindowId(11)], widthProportion: 0.5),
+        ],
+      masterCount: 1,
+      masterSplitRatio: 0.5,
+    )
+    restore.focusHistory = @[ExternalWindowId(11), ExternalWindowId(10)]
+
+    var model = cameraModel()
+    model.applyLiveRestore(restore)
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 10,
+        appId: "kitty",
+        title: "focused",
+        createdIdentifier: "focused-id",
+      )
+    )
+
+    check model.focusedWindowId() == 10
+    check model.activeWorkspaceFocusId() == 10
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 11,
+        appId: "kitty",
+        title: "later",
+        createdIdentifier: "later-id",
+      )
+    )
+
+    check model.focusedWindowId() == 10
+    check model.activeWorkspaceFocusId() == 10
+    check model.focusHistory == @[WindowId(2), WindowId(1)]
+
   test "Non-scroller layouts render with workspace viewport offsets":
     for mode in [LayoutMode.Grid, LayoutMode.Deck]:
       var baseline = cameraModel()
@@ -342,24 +395,26 @@ suite "Core Runtime Logic: restore identity":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules: @[
-          WindowRule(
-            matches: @[
-              WindowRuleMatcher(
-                appIdSet: true,
-                appId: "^org\\.gimp\\.",
-                titleSet: true,
-                title: "Welcome",
-              )
-            ],
-            excludes: @[WindowRuleMatcher(titleSet: true, title: "Private")],
-            defaultWorkspace: 2,
-            openFloatingSet: true,
-            openFloating: true,
-            openFocusedSet: true,
-            openFocused: false,
-          )
-        ],
+        windowRules:
+          @[
+            WindowRule(
+              matches:
+                @[
+                  WindowRuleMatcher(
+                    appIdSet: true,
+                    appId: "^org\\.gimp\\.",
+                    titleSet: true,
+                    title: "Welcome",
+                  )
+                ],
+              excludes: @[WindowRuleMatcher(titleSet: true, title: "Private")],
+              defaultWorkspace: 2,
+              openFloatingSet: true,
+              openFloating: true,
+              openFocusedSet: true,
+              openFocused: false,
+            )
+          ],
       )
     ).model
     model.applyMsg(
