@@ -1,4 +1,5 @@
 import tcore_support
+import ../src/core/[layout_selection_codec, native_layout_codec]
 import ../src/systems/runtime
 
 suite "Core Runtime Logic: window movement":
@@ -101,6 +102,46 @@ suite "Core Runtime Logic: window movement":
     let geom = model.instructionGeom(1)
     check geom.x == baselineGeom.x
     check geom.y == baselineGeom.y
+
+  test "Switching to bundled Janet layout clears stale viewport offset":
+    var baseline = cameraModel()
+    baseline.seedCameraWindows(4)
+    baseline.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("right-tile"))
+    )
+    let baselineGeom = baseline.instructionGeom(1)
+
+    var model = cameraModel()
+    model.seedCameraWindows(4)
+    model.setViewport(
+      1, targetX = 636.0, currentX = 636.0, targetY = 25.0, currentY = 25.0
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("right-tile"))
+    )
+
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+    check model.viewport(1).currentViewportXOffset == 0.0'f32
+    check model.viewport(1).targetViewportYOffset == 0.0'f32
+    check model.viewport(1).currentViewportYOffset == 0.0'f32
+    let geom = model.instructionGeom(1)
+    check geom.x == baselineGeom.x
+    check geom.y == baselineGeom.y
+
+  test "Switching to native layout clears stale viewport offset":
+    var model = cameraModel()
+    model.seedCameraWindows(4)
+    model.setViewport(
+      1, targetX = 636.0, currentX = 636.0, targetY = 25.0, currentY = 25.0
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+
+    check model.viewport(1).targetViewportXOffset == 0.0'f32
+    check model.viewport(1).currentViewportXOffset == 0.0'f32
+    check model.viewport(1).targetViewportYOffset == 0.0'f32
+    check model.viewport(1).currentViewportYOffset == 0.0'f32
 
   test "New active-tag window focuses after live restore settles":
     var model = cameraModel()

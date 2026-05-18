@@ -6,13 +6,16 @@ import ../state/engine
 from ../types/runtime_values import
   JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind, NativeLayoutId
 
-proc resetNonScrollerViewport(model: var Model, tagId: TagId, mode: LayoutMode): bool =
-  if mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
-    return false
+proc resetLayoutViewport(model: var Model, tagId: TagId): bool =
   result = model.setTagViewportTarget(tagId, 0.0'f32, 0.0'f32) or result
   result = model.setTagViewportCurrent(tagId, 0.0'f32, 0.0'f32) or result
   result = model.clearTagViewportRetarget(tagId) or result
   result = model.clearTagViewportSnap(tagId) or result
+
+proc resetNonScrollerViewport(model: var Model, tagId: TagId, mode: LayoutMode): bool =
+  if mode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}:
+    return false
+  model.resetLayoutViewport(tagId)
 
 proc setCommandLayout(model: var Model, tagId: TagId, mode: LayoutMode): bool =
   result = model.setTagLayout(tagId, mode)
@@ -26,7 +29,7 @@ proc setCommandCustomLayout(
   if result:
     if fallback.kind == LayoutSelectionKind.Native:
       discard model.syncTagFramesFromPlacement(tagId)
-    result = model.resetNonScrollerViewport(tagId, fallback.builtin) or result
+    result = model.resetLayoutViewport(tagId) or result
 
 proc setCommandNativeLayout(
     model: var Model, tagId: TagId, id: NativeLayoutId, fallback: LayoutMode
@@ -34,7 +37,7 @@ proc setCommandNativeLayout(
   result = model.setTagNativeLayout(tagId, id, fallback)
   if result:
     discard model.syncTagFramesFromPlacement(tagId)
-    result = model.resetNonScrollerViewport(tagId, fallback) or result
+    result = model.resetLayoutViewport(tagId) or result
 
 proc focusedPosition(
     model: var Model
