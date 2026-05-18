@@ -209,6 +209,117 @@ proc testFrameLayoutContext(): JanetLayoutContext =
     windows: windows,
   )
 
+proc notionTwoPaneContext(): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  windows[10'u32] = ProjectedWindow(id: 10, title: "Terminal", appId: "kitty")
+  windows[11'u32] = ProjectedWindow(id: 11, title: "Browser", appId: "firefox")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("notion"),
+    screen: Rect(x: 0, y: 0, w: 1920, h: 1080),
+    outerGap: 0,
+    innerGap: 4,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 10,
+      columns: @[ProjectedColumn(windows: @[10'u32, 11'u32])],
+      frames:
+        @[
+          ProjectedFrame(
+            id: 1,
+            kind: FrameNodeKind.Split,
+            firstChild: 2,
+            secondChild: 3,
+            orientation: FrameSplitOrientation.Horizontal,
+            ratio: 0.5,
+          ),
+          ProjectedFrame(
+            id: 2,
+            kind: FrameNodeKind.Leaf,
+            parent: 1,
+            windows: @[10'u32],
+            activeWindow: 10,
+          ),
+          ProjectedFrame(
+            id: 3,
+            kind: FrameNodeKind.Leaf,
+            parent: 1,
+            windows: @[11'u32],
+            activeWindow: 11,
+          ),
+        ],
+    ),
+    windows: windows,
+  )
+
+proc notionNestedContext(): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  windows[10'u32] = ProjectedWindow(id: 10, title: "Editor", appId: "kitty")
+  windows[11'u32] = ProjectedWindow(id: 11, title: "Browser", appId: "firefox")
+  windows[12'u32] = ProjectedWindow(id: 12, title: "Logs", appId: "kitty")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("notion"),
+    screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+    outerGap: 0,
+    innerGap: 10,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 10,
+      columns: @[ProjectedColumn(windows: @[10'u32, 11'u32, 12'u32])],
+      frames:
+        @[
+          ProjectedFrame(
+            id: 1,
+            kind: FrameNodeKind.Split,
+            firstChild: 2,
+            secondChild: 3,
+            orientation: FrameSplitOrientation.Horizontal,
+            ratio: 0.6,
+          ),
+          ProjectedFrame(
+            id: 2,
+            kind: FrameNodeKind.Leaf,
+            parent: 1,
+            windows: @[10'u32],
+            activeWindow: 10,
+          ),
+          ProjectedFrame(
+            id: 3,
+            kind: FrameNodeKind.Split,
+            parent: 1,
+            firstChild: 4,
+            secondChild: 5,
+            orientation: FrameSplitOrientation.Vertical,
+            ratio: 0.25,
+          ),
+          ProjectedFrame(
+            id: 4,
+            kind: FrameNodeKind.Leaf,
+            parent: 3,
+            windows: @[11'u32],
+            activeWindow: 11,
+          ),
+          ProjectedFrame(
+            id: 5,
+            kind: FrameNodeKind.Leaf,
+            parent: 3,
+            windows: @[12'u32],
+            activeWindow: 12,
+          ),
+        ],
+    ),
+    windows: windows,
+  )
+
+proc hasInstruction(
+    instructions: openArray[RenderInstruction], windowId: ProjectionWindowId, geom: Rect
+): bool =
+  for instruction in instructions:
+    if instruction.windowId == windowId and instruction.geom == geom:
+      return true
+  false
+
 proc expectUiHookFocusTag(
     daemon: var TriadDaemon, before, after: JanetUiHookState, expectedTag: uint32
 ) =
@@ -482,6 +593,46 @@ suite "embedded Janet runtime":
     check evaluated.instructions.len == 1
     check evaluated.instructions[0].windowId == 11'u32
     check evaluated.instructions[0].geom == Rect(x: 10, y: 20, w: 300, h: 400)
+
+  test "notion Janet example computes horizontal frame split geometry":
+    var runtime = initJanetRuntime(testConfig("examples/janet/layouts"))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), notionTwoPaneContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.path.endsWith("notion.janet")
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.Frame
+    check evaluated.inputFrameCount == 2
+    check evaluated.instructionCount == 2
+    check evaluated.instructions.len == 2
+    check evaluated.instructions[0].windowId == 10'u32
+    check evaluated.instructions[0].geom == Rect(x: 0, y: 0, w: 958, h: 1080)
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 962, y: 0, w: 958, h: 1080)
+
+  test "notion Janet example computes nested frame split geometry":
+    var runtime = initJanetRuntime(testConfig("examples/janet/layouts"))
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), notionNestedContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.Frame
+    check evaluated.inputFrameCount == 3
+    check evaluated.instructionCount == 3
+    check evaluated.instructions.len == 3
+    check evaluated.instructions.hasInstruction(
+      10'u32, Rect(x: 0, y: 0, w: 594, h: 800)
+    )
+    check evaluated.instructions.hasInstruction(
+      11'u32, Rect(x: 604, y: 0, w: 396, h: 197)
+    )
+    check evaluated.instructions.hasInstruction(
+      12'u32, Rect(x: 604, y: 207, w: 396, h: 593)
+    )
 
   test "frame substrate window output validates active tabs only":
     let dir =
