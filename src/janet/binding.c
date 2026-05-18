@@ -9,7 +9,8 @@
 enum {
   TRIAD_JANET_COMMAND = 1,
   TRIAD_JANET_LAYOUT_TARGET_WINDOW = 1,
-  TRIAD_JANET_LAYOUT_TARGET_FRAME = 2
+  TRIAD_JANET_LAYOUT_TARGET_FRAME = 2,
+  TRIAD_JANET_LAYOUT_TARGET_BSP_NODE = 3
 };
 
 #define TRIAD_JANET_MAX_WAITERS 64
@@ -804,12 +805,25 @@ static int parse_layout_instruction(
   if (janet_checktype(frame_id, JANET_NIL)) {
     frame_id = get_instruction_field(value, "frame");
   }
-  if (!janet_checktype(window_id, JANET_NIL) &&
-      !janet_checktype(frame_id, JANET_NIL)) {
-    set_error(runtime, "Janet layout instruction cannot target both window and frame");
+  Janet bsp_node_id = get_instruction_field(value, "bsp-node-id");
+  if (janet_checktype(bsp_node_id, JANET_NIL)) {
+    bsp_node_id = get_instruction_field(value, "bsp-node");
+  }
+  int target_count = 0;
+  if (!janet_checktype(window_id, JANET_NIL)) target_count++;
+  if (!janet_checktype(frame_id, JANET_NIL)) target_count++;
+  if (!janet_checktype(bsp_node_id, JANET_NIL)) target_count++;
+  if (target_count > 1) {
+    set_error(runtime, "Janet layout instruction cannot target multiple ids");
     return 0;
   }
-  if (!janet_checktype(frame_id, JANET_NIL)) {
+  if (!janet_checktype(bsp_node_id, JANET_NIL)) {
+    instruction->target_kind = TRIAD_JANET_LAYOUT_TARGET_BSP_NODE;
+    if (!janet_number_to_uint32(bsp_node_id, &instruction->target_id)) {
+      set_error(runtime, "Janet layout returned invalid BSP node instruction target");
+      return 0;
+    }
+  } else if (!janet_checktype(frame_id, JANET_NIL)) {
     instruction->target_kind = TRIAD_JANET_LAYOUT_TARGET_FRAME;
     if (!janet_number_to_uint32(frame_id, &instruction->target_id)) {
       set_error(runtime, "Janet layout returned invalid frame instruction target");

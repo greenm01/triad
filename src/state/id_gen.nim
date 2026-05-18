@@ -20,6 +20,9 @@ proc generateColumnId*(counters: var IdCounters): ColumnId =
 proc generateFrameId*(counters: var IdCounters): FrameId =
   FrameId(nextRaw(counters.nextFrameId))
 
+proc generateBspNodeId*(counters: var IdCounters): BspNodeId =
+  BspNodeId(nextRaw(counters.nextBspNodeId))
+
 proc generateOutputId*(counters: var IdCounters): OutputId =
   OutputId(nextRaw(counters.nextOutputId))
 

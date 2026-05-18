@@ -61,6 +61,25 @@ proc shellFrames(model: Model, tagId: TagId): seq[ShellFrame] =
       )
     )
 
+proc shellBspNodes(model: Model, tagId: TagId): seq[ShellBspNode] =
+  let tagOpt = model.tagData(tagId)
+  for nodeId, node in model.bspNodesOnTagWithId(tagId):
+    result.add(
+      ShellBspNode(
+        id: uint32(nodeId),
+        kind: node.kind,
+        parent: uint32(node.parent),
+        firstChild: uint32(node.firstChild),
+        secondChild: uint32(node.secondChild),
+        orientation: node.orientation,
+        ratio: node.ratio,
+        window: model.externalWindowId(node.window),
+        focused:
+          tagOpt.isSome and node.window != NullWindowId and
+          node.window == tagOpt.get().focusedWindow,
+      )
+    )
+
 proc snapshotDefaultMasterCount(model: Model): int =
   if model.defaultMasterCount > 0:
     max(1, model.defaultMasterCount)
@@ -191,6 +210,11 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         frames:
           if tagId != NullTagId:
             model.shellFrames(tagId)
+          else:
+            @[],
+        bspNodes:
+          if tagId != NullTagId:
+            model.shellBspNodes(tagId)
           else:
             @[],
         masterCount: tag.masterCount,

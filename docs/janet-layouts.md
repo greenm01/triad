@@ -133,9 +133,10 @@ Reject and fall back when:
 - coordinates overflow practical `int32` geometry.
 
 The fallback should be a configured safe layout, defaulting to `Scroller`.
-Native fallbacks such as `frame-tree` may render native substrate state when the
-custom script fails. Behavior logs should record the custom layout id, failure
-reason, window count, instruction count, duration, and fallback layout.
+Native fallbacks such as `frame-tree` and `bsp-tree` may render native substrate
+state when the custom script fails. Behavior logs should record the custom
+layout id, failure reason, window count, instruction count, duration, and
+fallback layout.
 
 ## Native Frame/Tab Substrate
 
@@ -146,7 +147,7 @@ A native frame/tab substrate would help several layout families:
 
 - Notion/Ion-style static split trees;
 - tabbed columns, including Mango-like `default-column-display` follow-ups;
-- BSP and other manual split layouts;
+- BSP and other native split layouts;
 - IDE-style persistent panes with app targeting;
 - deck-per-frame layouts;
 - frame-aware Janet layouts that only provide geometry policy.
@@ -167,6 +168,12 @@ chrome for visible tabs plus empty frames. It follows the existing DOD split:
 - Janet can observe frame projection data and optionally calculate frame
   geometry, but cannot directly mutate frames.
 
+Triad's native `bsp-tree` layout provides the BSP substrate. Nim owns the
+partition tree and inserts a new tiled window by splitting the focused leaf
+50/50 on that leaf's longer axis. Janet layouts that use `fallback="bsp-tree"`
+receive immutable `:bsp-nodes` data and may return `:bsp-node-id` geometry. The
+bundled `bsp` layout is the default Janet policy over this native tree.
+
 ## notion-river Feasibility Notes
 
 `~/src/notion-river` is a useful reference because it separates the easy part
@@ -176,6 +183,8 @@ The easy part is the recursive split geometry: given a split tree, a screen
 rect, and a gap, calculate a rect for each leaf frame. That is scriptable and
 is shipped as the bundled `notion` Janet layout, with
 `examples/janet/layouts/notion.janet` kept as an editable reference.
+The bundled `bsp` layout follows the same pattern over BSP nodes, with
+`examples/janet/layouts/bsp.janet` kept as an editable reference.
 
 The hard part is that notion-river's layout is not only a geometry formula. Its
 core model includes:

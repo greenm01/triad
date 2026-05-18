@@ -1,4 +1,5 @@
 import active_workspace_ops
+import bsp_ops
 import column_ops
 import frame_ops
 import group_ops
@@ -13,6 +14,7 @@ import tag_ops
 import window_ops
 
 export active_workspace_ops
+export bsp_ops
 export column_ops
 export frame_ops
 export group_ops

@@ -9,6 +9,7 @@ const BundledAlgorithmicLayoutIds* = [
 ]
 
 const BundledFrameLayoutIds* = ["notion"]
+const BundledBspLayoutIds* = ["bsp"]
 
 proc layoutKindId*(kind: LayoutKind): string =
   case kind
@@ -37,8 +38,15 @@ proc isBundledFrameLayoutId*(id: string): bool =
       return true
   false
 
+proc isBundledBspLayoutId*(id: string): bool =
+  for candidate in BundledBspLayoutIds:
+    if id == candidate:
+      return true
+  false
+
 proc isBundledLayoutId*(id: string): bool =
-  id.isBundledAlgorithmicLayoutId() or id.isBundledFrameLayoutId()
+  id.isBundledAlgorithmicLayoutId() or id.isBundledFrameLayoutId() or
+    id.isBundledBspLayoutId()
 
 proc parseCoreLayoutModeId*(value: string): Option[LayoutMode] =
   case value
@@ -64,9 +72,14 @@ proc layoutKindForId*(id: string): LayoutKind =
     return LayoutKind.Algorithmic
   if id.isBundledFrameLayoutId():
     return LayoutKind.Frame
+  if id.isBundledBspLayoutId():
+    return LayoutKind.Bsp
   if parseCoreLayoutModeId(id).isSome:
     return LayoutKind.Scrolling
-  if parseNativeLayoutId(id).isSome:
+  let native = parseNativeLayoutId(id)
+  if native.isSome:
+    if id == BspTreeLayoutId:
+      return LayoutKind.Bsp
     return LayoutKind.Frame
   LayoutKind.Algorithmic
 

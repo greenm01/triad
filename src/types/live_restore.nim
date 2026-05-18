@@ -50,6 +50,16 @@ type
     windows*: seq[uint32]
     activeWindow*: uint32
 
+  RestoredBspNodeState* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    firstChild*: uint32
+    secondChild*: uint32
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    window*: uint32
+
   RestoredTagState* = object
     tagId*: uint32
     name*: string
@@ -58,6 +68,7 @@ type
     nativeLayoutId*: NativeLayoutId
     columns*: seq[RestoredColumnState]
     frames*: seq[RestoredFrameState]
+    bspNodes*: seq[RestoredBspNodeState]
     focusedWindow*: uint32
     focusedFrame*: uint32
     targetViewportXOffset*: float32

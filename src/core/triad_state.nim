@@ -139,6 +139,35 @@ proc triadFrameJson(frame: ShellFrame): JsonNode =
     "focused": frame.focused,
   }
 
+proc triadBspNodeJson(node: ShellBspNode): JsonNode =
+  %*{
+    "id": node.id,
+    "kind": node.kind.frameNodeKindId(),
+    "parent":
+      if node.parent == 0:
+        newJNull()
+      else:
+        %node.parent,
+    "first_child":
+      if node.firstChild == 0:
+        newJNull()
+      else:
+        %node.firstChild,
+    "second_child":
+      if node.secondChild == 0:
+        newJNull()
+      else:
+        %node.secondChild,
+    "orientation": node.orientation.frameSplitOrientationId(),
+    "ratio": node.ratio,
+    "window_id":
+      if node.window == 0:
+        newJNull()
+      else:
+        %node.window,
+    "focused": node.focused,
+  }
+
 proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
   let columns = newJArray()
   for col in workspace.columns:
@@ -146,6 +175,9 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
   let frames = newJArray()
   for frame in workspace.frames:
     frames.add(triadFrameJson(frame))
+  let bspNodes = newJArray()
+  for node in workspace.bspNodes:
+    bspNodes.add(triadBspNodeJson(node))
 
   %*{
     "tag_id": workspace.tagId,
@@ -164,6 +196,7 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
         %workspace.focusedWindow,
     "columns": columns,
     "frames": frames,
+    "bsp_nodes": bspNodes,
     "master_count": workspace.masterCount,
     "master_split_ratio": workspace.masterSplitRatio,
     "viewport": {

@@ -28,7 +28,10 @@ proc setCommandCustomLayout(
   result = model.setTagCustomLayout(tagId, id, fallback)
   if result:
     if fallback.kind == LayoutSelectionKind.Native:
-      discard model.syncTagFramesFromPlacement(tagId)
+      if fallback.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
+        discard model.syncTagFramesFromPlacement(tagId)
+      elif fallback.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
+        discard model.syncTagBspFromPlacement(tagId)
     result = model.resetLayoutViewport(tagId) or result
 
 proc setCommandNativeLayout(
@@ -36,7 +39,10 @@ proc setCommandNativeLayout(
 ): bool =
   result = model.setTagNativeLayout(tagId, id, fallback)
   if result:
-    discard model.syncTagFramesFromPlacement(tagId)
+    if id.nativeLayoutIdString() == FrameTreeLayoutId:
+      discard model.syncTagFramesFromPlacement(tagId)
+    elif id.nativeLayoutIdString() == BspTreeLayoutId:
+      discard model.syncTagBspFromPlacement(tagId)
     result = model.resetLayoutViewport(tagId) or result
 
 proc focusedPosition(

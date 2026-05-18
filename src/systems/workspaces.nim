@@ -1,6 +1,7 @@
 import std/[algorithm, options]
 import outputs
 import sticky_windows
+import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import LayoutSelectionKind
 
@@ -44,8 +45,21 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
         tagRule.rule.defaultLayoutSelection
       else:
         model.defaultWorkspaceLayoutSelection
-    if selection.kind == LayoutSelectionKind.Custom:
-      discard model.setTagCustomLayout(result, selection.customId, selection.builtin)
+    case selection.kind
+    of LayoutSelectionKind.Custom:
+      discard model.setTagCustomLayout(result, selection.customId, selection)
+      if selection.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
+        discard model.syncTagFramesFromPlacement(result)
+      elif selection.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
+        discard model.syncTagBspFromPlacement(result)
+    of LayoutSelectionKind.Native:
+      discard model.setTagNativeLayout(result, selection.nativeId, selection.builtin)
+      if selection.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
+        discard model.syncTagFramesFromPlacement(result)
+      elif selection.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
+        discard model.syncTagBspFromPlacement(result)
+    of LayoutSelectionKind.Builtin:
+      discard
   if tagRule.found and tagRule.rule.openOnOutput.len > 0:
     discard model.setTagHomeOutput(result, tagRule.rule.openOnOutput, pinned = true)
     let outputId = model.outputForTarget(tagRule.rule.openOnOutput)

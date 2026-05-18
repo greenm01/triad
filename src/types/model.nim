@@ -1,7 +1,7 @@
 import std/[re, sets, tables]
 from core import
-  ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId, FrameId,
-  GroupId, IdCounters, OutputId, Rect, TagId, TagMask, WindowId
+  BspNodeId, ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId,
+  FrameId, GroupId, IdCounters, OutputId, Rect, TagId, TagMask, WindowId
 from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
@@ -91,6 +91,17 @@ type
     orientation*: FrameSplitOrientation
     ratio*: float32
     activeWindow*: WindowId
+
+  BspNodeData* = object
+    id*: BspNodeId
+    tagId*: TagId
+    kind*: FrameNodeKind
+    parent*: BspNodeId
+    firstChild*: BspNodeId
+    secondChild*: BspNodeId
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    window*: WindowId
 
   OutputData* = object
     id*: OutputId
@@ -338,6 +349,16 @@ type
     windows*: seq[ExternalWindowId]
     activeWindow*: ExternalWindowId
 
+  RestoredBspNodeData* = object
+    id*: BspNodeId
+    kind*: FrameNodeKind
+    parent*: BspNodeId
+    firstChild*: BspNodeId
+    secondChild*: BspNodeId
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    window*: ExternalWindowId
+
   RestoredTagData* = object
     slot*: uint32
     name*: string
@@ -346,6 +367,7 @@ type
     nativeLayoutId*: NativeLayoutId
     columns*: seq[RestoredColumnData]
     frames*: seq[RestoredFrameData]
+    bspNodes*: seq[RestoredBspNodeData]
     focusedWindow*: ExternalWindowId
     focusedFrame*: FrameId
     targetViewportXOffset*: float32
@@ -396,6 +418,7 @@ type
     tags*: EntityManager[TagId, TagData]
     columns*: EntityManager[ColumnId, ColumnData]
     frames*: EntityManager[FrameId, FrameData]
+    bspNodes*: EntityManager[BspNodeId, BspNodeData]
     outputs*: EntityManager[OutputId, OutputData]
     groups*: EntityManager[GroupId, GroupData]
 
@@ -410,6 +433,8 @@ type
     frameRootsByTag*: Table[TagId, FrameId]
     windowsByFrame*: Table[FrameId, seq[WindowId]]
     frameByTagWindow*: Table[(TagId, WindowId), FrameId]
+    bspRootsByTag*: Table[TagId, BspNodeId]
+    bspNodeByTagWindow*: Table[(TagId, WindowId), BspNodeId]
     outputTags*: Table[OutputId, TagId]
     tagOutputs*: Table[TagId, OutputId]
     tagHomeOutputTargets*: Table[TagId, string]

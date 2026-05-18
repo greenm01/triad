@@ -18,6 +18,7 @@ const VerticalGridLayoutSource = staticRead("bundled_layouts/vertical-grid.janet
 const VerticalDeckLayoutSource = staticRead("bundled_layouts/vertical-deck.janet")
 const TgmixLayoutSource = staticRead("bundled_layouts/tgmix.janet")
 const NotionLayoutSource = staticRead("bundled_layouts/notion.janet")
+const BspLayoutSource = staticRead("bundled_layouts/bsp.janet")
 
 proc bundledLayoutPath*(id: string): string =
   BundledLayoutsPathPrefix & id & ">"
@@ -53,6 +54,8 @@ proc bundledLayoutSource*(id: string): Option[string] =
       bundledSource(TileLayoutSource, GridLayoutSource, TgmixLayoutSource)
     of "notion":
       bundledSource(NotionLayoutSource)
+    of "bsp":
+      bundledSource(BspLayoutSource)
     else:
       ""
   if source.len == 0:
@@ -73,5 +76,12 @@ proc bundledLayoutConfigs*(): seq[JanetLayoutConfig] =
         id: janetLayoutId(id),
         fallback:
           nativeSelection(nativeLayoutId(FrameTreeLayoutId), LayoutMode.Scroller),
+      )
+    )
+  for id in BundledBspLayoutIds:
+    result.add(
+      JanetLayoutConfig(
+        id: janetLayoutId(id),
+        fallback: nativeSelection(nativeLayoutId(BspTreeLayoutId), LayoutMode.Scroller),
       )
     )

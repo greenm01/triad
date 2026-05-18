@@ -26,6 +26,17 @@ type
     activeWindow*: uint32
     focused*: bool
 
+  ShellBspNode* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    firstChild*: uint32
+    secondChild*: uint32
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    window*: uint32
+    focused*: bool
+
   ShellWorkspace* = object
     tagId*: uint32
     workspaceIdx*: uint32
@@ -43,6 +54,7 @@ type
     outputName*: string
     columns*: seq[ShellColumn]
     frames*: seq[ShellFrame]
+    bspNodes*: seq[ShellBspNode]
     masterCount*: int
     masterSplitRatio*: float32
     targetViewportXOffset*: float32

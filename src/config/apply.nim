@@ -3,6 +3,7 @@ import chronicles
 import parser
 import defaults
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../janet/bundled_layouts
 import ../core/shell_profiles
 import ../state/engine
@@ -450,8 +451,16 @@ proc applyConfig*(model: var Model, config: Config) =
           discard model.setTagLayout(tagId, selection.builtin)
         of LayoutSelectionKind.Custom:
           discard model.setTagCustomLayout(tagId, selection.customId, selection)
+          if selection.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
+            discard model.syncTagFramesFromPlacement(tagId)
+          elif selection.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
+            discard model.syncTagBspFromPlacement(tagId)
         of LayoutSelectionKind.Native:
           discard model.setTagNativeLayout(tagId, selection.nativeId, selection.builtin)
+          if selection.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
+            discard model.syncTagFramesFromPlacement(tagId)
+          elif selection.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
+            discard model.syncTagBspFromPlacement(tagId)
       if tagRule.found:
         discard model.setTagName(tagId, tagRule.rule.name)
         if tagRule.rule.openOnOutput.len > 0:

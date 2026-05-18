@@ -742,6 +742,37 @@ suite "Core Runtime Logic: overview navigation":
     check notionWindows.anyIt(it.windowId == 4'u32)
     check notionWindows.anyIt(it.windowId == 6'u32)
 
+  test "Overview renders BSP layouts as full tree previews":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 4, appId: "app", title: "Four")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 5, appId: "app", title: "Five")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 6, appId: "app", title: "Six")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let bspWindows =
+      model.layoutProjection().instructions.overviewInstructionsFor([4'u32, 5, 6])
+
+    check bspWindows.len == 3
+    check bspWindows.allIt(it.geom.geomWithinPreview(preview))
+    check bspWindows.anyIt(it.windowId == 4'u32)
+    check bspWindows.anyIt(it.windowId == 5'u32)
+    check bspWindows.anyIt(it.windowId == 6'u32)
+
   test "Overview renders empty frame chrome in notion previews":
     var notion = configuredModel()
     notion.applyMsg(

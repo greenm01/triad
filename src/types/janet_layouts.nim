@@ -7,6 +7,7 @@ type
     None
     Window
     Frame
+    BspNode
 
   JanetLayoutInstruction* = object
     targetKind*: JanetLayoutTargetKind
@@ -38,6 +39,7 @@ type
     durationMs*: int64
     inputWindowCount*: int
     inputFrameCount*: int
+    inputBspNodeCount*: int
     instructionCount*: int
     outputTargetKind*: JanetLayoutTargetKind
     instructions*: seq[RenderInstruction]

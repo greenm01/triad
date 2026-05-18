@@ -30,12 +30,23 @@ iterator framesWithId*(model: Model): tuple[id: FrameId, frame: FrameData] =
   for frame in model.frames.entities:
     yield (frame.id, frame)
 
+iterator bspNodesWithId*(model: Model): tuple[id: BspNodeId, node: BspNodeData] =
+  for node in model.bspNodes.entities:
+    yield (node.id, node)
+
 iterator framesOnTagWithId*(
     model: Model, tagId: TagId
 ): tuple[id: FrameId, frame: FrameData] =
   for frame in model.frames.entities:
     if frame.tagId == tagId:
       yield (frame.id, frame)
+
+iterator bspNodesOnTagWithId*(
+    model: Model, tagId: TagId
+): tuple[id: BspNodeId, node: BspNodeData] =
+  for node in model.bspNodes.entities:
+    if node.tagId == tagId:
+      yield (node.id, node)
 
 iterator columnsOnTagWithId*(
     model: Model, tagId: TagId

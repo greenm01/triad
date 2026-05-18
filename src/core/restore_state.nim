@@ -223,6 +223,49 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
             state.tagByWindow[winId.get()] = tag.tagId
       tag.frames.add(frame)
 
+  if node.hasKey("bsp_nodes") and node["bsp_nodes"].kind == JArray:
+    for nodeJson in node["bsp_nodes"]:
+      if nodeJson.kind != JObject or not nodeJson.hasKey("id"):
+        continue
+      let nodeId = uint32FromJson(nodeJson["id"])
+      if nodeId.isNone:
+        continue
+      var bspNode = RestoredBspNodeState(
+        id: nodeId.get(),
+        kind:
+          if nodeJson.hasKey("kind"):
+            frameKindFromJson(nodeJson["kind"])
+          else:
+            FrameNodeKind.Leaf,
+        orientation:
+          if nodeJson.hasKey("orientation"):
+            frameOrientationFromJson(nodeJson["orientation"])
+          else:
+            FrameSplitOrientation.Horizontal,
+        ratio: 0.5'f32,
+      )
+      if nodeJson.hasKey("parent"):
+        let parent = uint32FromJson(nodeJson["parent"])
+        if parent.isSome:
+          bspNode.parent = parent.get()
+      if nodeJson.hasKey("first_child"):
+        let child = uint32FromJson(nodeJson["first_child"])
+        if child.isSome:
+          bspNode.firstChild = child.get()
+      if nodeJson.hasKey("second_child"):
+        let child = uint32FromJson(nodeJson["second_child"])
+        if child.isSome:
+          bspNode.secondChild = child.get()
+      if nodeJson.hasKey("ratio"):
+        bspNode.ratio =
+          clamp(float32FromJson(nodeJson["ratio"], 0.5'f32), 0.05'f32, 0.95'f32)
+      if nodeJson.hasKey("window"):
+        let winId = uint32FromJson(nodeJson["window"])
+        if winId.isSome:
+          bspNode.window = winId.get()
+          state.tagByWindow[winId.get()] = tag.tagId
+      tag.bspNodes.add(bspNode)
+
   state.tags[tag.tagId] = tag
 
 proc parseWindowState(state: var LiveRestoreState, node: JsonNode) =

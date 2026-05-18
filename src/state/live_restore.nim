@@ -101,6 +101,19 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
     for winId in frame.windows:
       restoredFrame.windows.add(ExternalWindowId(uint32(winId)))
     result.frames.add(restoredFrame)
+  for node in source.bspNodes:
+    result.bspNodes.add(
+      RestoredBspNodeData(
+        id: BspNodeId(node.id),
+        kind: node.kind,
+        parent: BspNodeId(node.parent),
+        firstChild: BspNodeId(node.firstChild),
+        secondChild: BspNodeId(node.secondChild),
+        orientation: node.orientation,
+        ratio: node.ratio,
+        window: ExternalWindowId(uint32(node.window)),
+      )
+    )
 
 proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
   result.activeSlot = source.activeTag
@@ -249,6 +262,27 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
           result.tagByWindow[external] = tag.slot
       restoredTag.frames.add(restoredFrame)
 
+    for nodeId, node in model.bspNodesOnTagWithId(tagId):
+      var restoredNode = lr.RestoredBspNodeState(
+        id: uint32(nodeId),
+        kind: node.kind,
+        parent: uint32(node.parent),
+        firstChild: uint32(node.firstChild),
+        secondChild: uint32(node.secondChild),
+        orientation: node.orientation,
+        ratio: node.ratio,
+        window: model.externalWindowId(node.window),
+      )
+      if node.kind == FrameNodeKind.Leaf and restoredNode.window != 0:
+        let winOpt = model.windowData(node.window)
+        if winOpt.isSome and winOpt.get().windowAdmitted() and
+            not winOpt.get().isFloating and not winOpt.get().isSticky and
+            not winOpt.get().isUnmanagedGlobal:
+          result.tagByWindow[restoredNode.window] = tag.slot
+        else:
+          restoredNode.window = 0
+      restoredTag.bspNodes.add(restoredNode)
+
     result.tags[tag.slot] = restoredTag
 
   for winId in model.sortedWindowIdsByExternal():
@@ -396,6 +430,21 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
       }
     )
 
+  let bspNodes = newJArray()
+  for node in tag.bspNodes:
+    bspNodes.add(
+      %*{
+        "id": node.id,
+        "kind": ord(node.kind),
+        "parent": node.parent,
+        "first_child": node.firstChild,
+        "second_child": node.secondChild,
+        "orientation": ord(node.orientation),
+        "ratio": node.ratio,
+        "window": node.window,
+      }
+    )
+
   %*{
     "id": tag.tagId,
     "name": tag.name,
@@ -411,6 +460,7 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
     "native_layout": tag.nativeLayoutId.nativeLayoutIdString(),
     "columns": columns,
     "frames": frames,
+    "bsp_nodes": bspNodes,
     "focused_window": tag.focusedWindow,
     "focused_frame": tag.focusedFrame,
     "target_viewport_x_offset": tag.targetViewportXOffset,

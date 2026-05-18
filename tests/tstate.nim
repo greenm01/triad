@@ -12,11 +12,11 @@ import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
 import ../src/daemon/recent_windows_overlay_render
 import ../src/state/engine except WindowId
-import ../src/state/[entity_manager, invariants, snapshot]
+import ../src/state/[entity_manager, invariants, live_restore, snapshot]
 import
   ../src/systems/[
     daemon_view, layout_projection, overview_geometry, recent_windows, runtime_facade,
-    update,
+    update, window_lifecycle,
   ]
 import ../src/types/janet_layouts
 import ../src/types/core as tc
@@ -945,6 +945,81 @@ suite "Runtime state primitives":
     check projection.instructions.len == 2
     check projection.instructions[0].geom == pv.Rect(x: 1, y: 2, w: 300, h: 400)
     check projection.instructions[1].geom == pv.Rect(x: 301, y: 2, w: 300, h: 400)
+
+  test "native BSP splits focused leaf and projects all leaf windows":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    var updated = model.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model = updated[0]
+    updated = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model = updated[0]
+    updated = model.update(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("bsp"))
+    )
+    model = updated[0]
+    updated = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model = updated[0]
+    updated = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model = updated[0]
+
+    let tagId = model.activeTag
+    let active = model.tagData(tagId).get()
+    check active.customLayoutId.layoutIdString() == "bsp"
+    check active.nativeLayoutId.nativeLayoutIdString() == "bsp-tree"
+    check model.bspRootForTag(tagId) != tc.NullBspNodeId
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(1)) != tc.NullBspNodeId
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(2)) != tc.NullBspNodeId
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(3)) != tc.NullBspNodeId
+    check model.tagData(tagId).get().focusedWindow == tc.WindowId(3)
+
+    let projection = model.layoutProjection()
+    check projection.instructions.len == 3
+    check projection.instructions.anyIt(it.windowId == 10'u32)
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.instructions.anyIt(it.windowId == 12'u32)
+
+    updated = model.update(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 12))
+    model = updated[0]
+    check model.bspNodeForWindowOnTag(tagId, tc.WindowId(3)) == tc.NullBspNodeId
+    let collapsed = model.layoutProjection()
+    check collapsed.instructions.len == 2
+    check collapsed.instructions.anyIt(it.windowId == 10'u32)
+    check collapsed.instructions.anyIt(it.windowId == 11'u32)
+
+  test "native BSP persists through live restore":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    var updated = model.update(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model = updated[0]
+    updated = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model = updated[0]
+    updated = model.update(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("bsp-tree"))
+    )
+    model = updated[0]
+    updated = model.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model = updated[0]
+
+    let restore = model.liveRestoreState()
+    check restore.tags[1].nativeLayoutId.nativeLayoutIdString() == "bsp-tree"
+    check restore.tags[1].bspNodes.len == 3
+
+    var restored = initRuntimeStateFromConfig(baseConfig()).model
+    restored.applyLiveRestore(restore.pendingRestoreState())
+    updated = restored.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    restored = updated[0]
+    updated = restored.update(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    restored = updated[0]
+
+    let snapshot = restored.shellSnapshot()
+    check snapshot.workspaces[0].layoutId == "bsp-tree"
+    check snapshot.workspaces[0].bspNodes.len == 3
+    let restoredProjection = restored.layoutProjection()
+    check restoredProjection.instructions.len == 2
+    check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
 
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model

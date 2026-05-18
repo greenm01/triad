@@ -3,6 +3,7 @@ from ../types/runtime_values import
   LayoutMode, LayoutSelection, LayoutSelectionKind, NativeLayoutConfig, NativeLayoutId
 
 const FrameTreeLayoutId* = "frame-tree"
+const BspTreeLayoutId* = "bsp-tree"
 
 proc nativeLayoutId*(value: string): NativeLayoutId =
   NativeLayoutId(value)
@@ -18,7 +19,11 @@ proc nativeLayouts*(): seq[NativeLayoutConfig] =
     NativeLayoutConfig(
       id: nativeLayoutId(FrameTreeLayoutId),
       fallback: builtinSelection(LayoutMode.Scroller),
-    )
+    ),
+    NativeLayoutConfig(
+      id: nativeLayoutId(BspTreeLayoutId),
+      fallback: builtinSelection(LayoutMode.Scroller),
+    ),
   ]
 
 proc parseNativeLayoutId*(value: string): Option[NativeLayoutConfig] =

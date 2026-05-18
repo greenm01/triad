@@ -5,6 +5,11 @@
 - Follow-ups: empty-frame chrome, drag/drop between frames,
   app-to-frame targeting, and existing `group-windows` command behavior.
 
+## BSP layout follow-ups
+
+- Add focused split resize controls for native `bsp-tree`.
+- Add focused window/node swap controls for native `bsp-tree`.
+
 ## Blocked / Watchlist
 
 - Janet follow-ups: user-facing custom layout selection, custom layout config,

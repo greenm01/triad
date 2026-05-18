@@ -66,7 +66,8 @@ type LayoutSource* = enum
 | **spiral** | Fibonacci-ratio recursive splits; each new window takes half the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
 | **notion** | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |
 | **frame-tree** | Persistent leaf frames hold tabs; split nodes divide space; empty frames survive | Notion, Ion, StumpWM | `lkFrame` | `lsNative` |
-| **BSP** | Persistent binary partition tree; each split node independently addressable and adjustable; Triad owns the tree | bspwm | `lkBsp` | future `lsNative` substrate with Janet policy hooks |
+| **bsp** | Janet geometry policy over Triad-owned binary partition tree; new windows split the focused leaf automatically | bspwm, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
+| **bsp-tree** | Persistent binary partition tree; each leaf owns one tiled window; Triad owns insertion, removal, restore, and fallback projection | bspwm | `lkBsp` | `lsNative` |
 | **split h/v** | User-directed binary split; builds a tree of containers each with their own layout mode | i3, Sway, Herbstluftwm | `lkFrame` or `lkBsp` | future native substrate |
 | **tabbed** | Windows stacked as tabs within a container; no spatial tiling | i3, Sway | `lkFrame` | `lsNative` substrate behavior |
 | **stacked** | Windows stacked vertically with visible titlebars; no spatial tiling | i3, Sway | `lkFrame` | future native substrate behavior |
@@ -80,7 +81,7 @@ Fallback should preserve the state substrate whenever possible:
 - `lkScrolling` falls back to `scroller`.
 - `lkFrame` policy failure preserves frame state and uses native frame
   projection.
-- `lkBsp` policy failure should preserve the BSP tree and use a native BSP
+- `lkBsp` policy failure preserves the BSP tree and uses native `bsp-tree`
   projection.
 
 Existing geometric built-in names such as `tile`, `grid`, `deck`, and

@@ -256,6 +256,39 @@ proc notionTwoPaneContext(): JanetLayoutContext =
     windows: windows,
   )
 
+proc bspTwoPaneContext(): JanetLayoutContext =
+  var windows = initTable[ProjectionWindowId, ProjectedWindow]()
+  windows[10'u32] = ProjectedWindow(id: 10, title: "Terminal", appId: "kitty")
+  windows[11'u32] = ProjectedWindow(id: 11, title: "Browser", appId: "firefox")
+  JanetLayoutContext(
+    layoutId: janetLayoutId("bsp"),
+    screen: Rect(x: 0, y: 0, w: 1000, h: 800),
+    outerGap: 10,
+    innerGap: 4,
+    tag: ProjectedTag(
+      tagId: 1,
+      name: "term",
+      focusedWindow: 11,
+      columns: @[ProjectedColumn(windows: @[10'u32, 11'u32])],
+      bspNodes:
+        @[
+          ProjectedBspNode(
+            id: 1,
+            kind: FrameNodeKind.Split,
+            firstChild: 2,
+            secondChild: 3,
+            orientation: FrameSplitOrientation.Horizontal,
+            ratio: 0.5,
+          ),
+          ProjectedBspNode(id: 2, kind: FrameNodeKind.Leaf, parent: 1, window: 10),
+          ProjectedBspNode(
+            id: 3, kind: FrameNodeKind.Leaf, parent: 1, window: 11, focused: true
+          ),
+        ],
+    ),
+    windows: windows,
+  )
+
 proc notionNestedContext(): JanetLayoutContext =
   var windows = initTable[ProjectionWindowId, ProjectedWindow]()
   windows[10'u32] = ProjectedWindow(id: 10, title: "Editor", appId: "kitty")
@@ -717,6 +750,31 @@ suite "embedded Janet runtime":
       12'u32, Rect(x: 604, y: 207, w: 396, h: 593)
     )
 
+  test "bundled bsp Janet layout computes native BSP geometry":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    let evaluated = runtime.evalLayoutDetailed(testSnapshot(), bspTwoPaneContext())
+
+    check evaluated.outcome == JanetLayoutOutcome.Applied
+    check evaluated.path == bundledLayoutPath("bsp")
+    check evaluated.outputTargetKind == JanetLayoutTargetKind.BspNode
+    check evaluated.inputBspNodeCount == 2
+    check evaluated.instructionCount == 2
+    check evaluated.instructions.len == 2
+    check evaluated.instructions[0].windowId == 10'u32
+    check evaluated.instructions[0].geom == Rect(x: 10, y: 10, w: 488, h: 780)
+    check evaluated.instructions[1].windowId == 11'u32
+    check evaluated.instructions[1].geom == Rect(x: 502, y: 10, w: 488, h: 780)
+
   test "frame substrate window output validates active tabs only":
     let dir =
       getTempDir() / ("triad-janet-layout-frame-window-" & $getCurrentProcessId())
@@ -888,6 +946,50 @@ suite "embedded Janet runtime":
     )
     check not validation.ok
     check validation.error.contains("unknown tiled window")
+
+  test "BSP instruction validation rejects invalid BSP outputs":
+    let context = bspTwoPaneContext()
+
+    var validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.BspNode,
+          targetId: 1,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("unknown leaf BSP node")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.BspNode,
+          targetId: 2,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        )
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("omitted BSP node")
+
+    validation = context.validateLayoutInstructions(
+      @[
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.BspNode,
+          targetId: 2,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        ),
+        JanetLayoutInstruction(
+          targetKind: JanetLayoutTargetKind.Window,
+          targetId: 11,
+          geom: Rect(x: 0, y: 0, w: 100, h: 100),
+        ),
+      ]
+    )
+    check not validation.ok
+    check validation.error.contains("mixed")
 
   test "custom Janet layout validation rejects incomplete geometry":
     let dir = getTempDir() / ("triad-janet-layout-invalid-" & $getCurrentProcessId())

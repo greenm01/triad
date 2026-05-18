@@ -71,6 +71,19 @@ type
     rectSet*: bool
     rect*: Rect
 
+  ProjectedBspNode* = object
+    id*: uint32
+    kind*: FrameNodeKind
+    parent*: uint32
+    firstChild*: uint32
+    secondChild*: uint32
+    orientation*: FrameSplitOrientation
+    ratio*: float32
+    window*: ProjectionWindowId
+    focused*: bool
+    rectSet*: bool
+    rect*: Rect
+
   ProjectedFrameTab* = object
     windowId*: ProjectionWindowId
     title*: string
@@ -101,6 +114,7 @@ type
     layoutMode*: LayoutMode
     columns*: seq[ProjectedColumn]
     frames*: seq[ProjectedFrame]
+    bspNodes*: seq[ProjectedBspNode]
     focusedWindow*: ProjectionWindowId
     targetViewportXOffset*: float32
     currentViewportXOffset*: float32

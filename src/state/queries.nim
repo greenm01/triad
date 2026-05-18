@@ -1,6 +1,7 @@
 import std/[algorithm, options, sets, tables]
 import entity_manager, id_gen, iterators
-from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
+from ../core/native_layout_codec import
+  BspTreeLayoutId, FrameTreeLayoutId, nativeLayoutIdString
 import ../types/[core, model]
 from ../types/runtime_values import FrameNodeKind, LayoutMode
 
@@ -42,6 +43,9 @@ proc columnData*(model: Model, columnId: ColumnId): Option[ColumnData] =
 
 proc frameData*(model: Model, frameId: FrameId): Option[FrameData] =
   model.frames.entity(frameId)
+
+proc bspNodeData*(model: Model, nodeId: BspNodeId): Option[BspNodeData] =
+  model.bspNodes.entity(nodeId)
 
 proc outputData*(model: Model, outputId: OutputId): Option[OutputData] =
   model.outputs.entity(outputId)
@@ -144,6 +148,12 @@ proc frameRootForTag*(model: Model, tagId: TagId): FrameId =
 proc frameForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): FrameId =
   model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId)
 
+proc bspRootForTag*(model: Model, tagId: TagId): BspNodeId =
+  model.bspRootsByTag.getOrDefault(tagId, NullBspNodeId)
+
+proc bspNodeForWindowOnTag*(model: Model, tagId: TagId, winId: WindowId): BspNodeId =
+  model.bspNodeByTagWindow.getOrDefault((tagId, winId), NullBspNodeId)
+
 proc tagUsesAggregateOverview*(tag: TagData): bool =
   string(tag.customLayoutId).len > 0 or string(tag.nativeLayoutId).len > 0 or
     tag.layoutMode notin {LayoutMode.Scroller, LayoutMode.VerticalScroller}
@@ -155,15 +165,38 @@ proc tagUsesAggregateOverview*(model: Model, tagId: TagId): bool =
 proc tagUsesFrameOverview*(tag: TagData): bool =
   tag.nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
 
+proc tagUsesBspOverview*(tag: TagData): bool =
+  tag.nativeLayoutId.nativeLayoutIdString() == BspTreeLayoutId
+
 proc tagUsesFrameOverview*(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   tagOpt.isSome and tagOpt.get().tagUsesFrameOverview()
+
+proc tagUsesBspOverview*(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and tagOpt.get().tagUsesBspOverview()
 
 proc overviewFrameWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
   for _, frame in model.framesOnTagWithId(tagId):
     if frame.kind != FrameNodeKind.Leaf or frame.activeWindow == NullWindowId:
       continue
     let winId = frame.activeWindow
+    let winOpt = model.windowData(winId)
+    if winOpt.isSome:
+      let win = winOpt.get()
+      if not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+          win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+        result.add(winId)
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+        win.windowAdmitted() and not model.windowHiddenByGroup(winId):
+      result.add(winId)
+
+proc overviewBspWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
+  for _, node in model.bspNodesOnTagWithId(tagId):
+    if node.kind != FrameNodeKind.Leaf or node.window == NullWindowId:
+      continue
+    let winId = node.window
     let winOpt = model.windowData(winId)
     if winOpt.isSome:
       let win = winOpt.get()
@@ -195,6 +228,10 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
     if model.tagUsesAggregateOverview(tagId):
       if model.tagUsesFrameOverview(tagId):
         for winId in model.overviewFrameWindowIds(tagId):
+          if result.find(winId) == -1:
+            result.add(winId)
+      elif model.tagUsesBspOverview(tagId):
+        for winId in model.overviewBspWindowIds(tagId):
           if result.find(winId) == -1:
             result.add(winId)
       else:

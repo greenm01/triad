@@ -249,6 +249,18 @@ proc destroyTag*(model: var Model, tagId: TagId): bool =
   for key in frameKeys:
     model.frameByTagWindow.del(key)
   model.frameRootsByTag.del(tagId)
+  var bspNodeIds: seq[BspNodeId] = @[]
+  for nodeId, _ in model.bspNodesOnTagWithId(tagId):
+    bspNodeIds.add(nodeId)
+  for nodeId in bspNodeIds:
+    discard model.bspNodes.delete(nodeId)
+  var bspKeys: seq[(TagId, WindowId)] = @[]
+  for key in model.bspNodeByTagWindow.keys:
+    if key[0] == tagId:
+      bspKeys.add(key)
+  for key in bspKeys:
+    model.bspNodeByTagWindow.del(key)
+  model.bspRootsByTag.del(tagId)
   model.tagBySlot.del(tag.slot)
   discard model.clearTagViewportRetarget(tagId)
   model.overviewViewportSnapshot.del(tagId)
