@@ -3,6 +3,7 @@ import kdl
 import ../src/config/keysyms
 import ../src/core/layout_selection_codec
 import ../src/core/native_layout_codec
+import ../src/systems/binding_profiles
 
 suite "KDL Configuration Parser: parser defaults":
   test "Parser reads layout, workspace, binding, and command settings":
@@ -987,6 +988,43 @@ bindings {
       "split-tree-split-vertical"
     check config.commandForBinding("h", Super + Alt, BindingMode.BindNormal, "notion") ==
       "frame-split-horizontal"
+
+  test "layout-scoped normal bindings shadow global always bindings":
+    let config = loadConfig(getCurrentDir() / "config.default.kdl")
+    var state = initRuntimeStateFromConfig(config)
+
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    var resolved = state.model.resolvedKeyBindings()
+    var matches = resolved.filterIt(
+      it.key == "h" and it.modifiers == Super + Alt and
+        it.mode in {BindingMode.BindAlways, BindingMode.BindNormal}
+    )
+    check matches.len == 1
+    check matches[0].command == "split-tree-split-horizontal"
+
+    discard state.applyRuntimeUpdate(Msg(kind: MsgKind.CmdOpenOverview))
+    resolved = state.model.resolvedKeyBindings()
+    matches = resolved.filterIt(
+      it.key == "h" and it.modifiers == Super + Alt and
+        it.mode in {BindingMode.BindAlways, BindingMode.BindNormal}
+    )
+    check matches.len == 2
+    check matches.anyIt(it.command == "move-column-left")
+    check matches.anyIt(it.command == "split-tree-split-horizontal")
+
+    discard state.applyRuntimeUpdate(Msg(kind: MsgKind.CmdCloseOverview))
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Scroller)
+    )
+    resolved = state.model.resolvedKeyBindings()
+    matches = resolved.filterIt(
+      it.key == "h" and it.modifiers == Super + Alt and
+        it.mode in {BindingMode.BindAlways, BindingMode.BindNormal}
+    )
+    check matches.len == 1
+    check matches[0].command == "move-column-left"
 
   test "config defaults clamp invalid runtime values":
     var model = Model()

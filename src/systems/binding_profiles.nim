@@ -25,7 +25,7 @@ proc activeLayoutBindingId*(model: Model): string =
     ""
 
 proc samePhysicalKeySlot*(a, b: KeyBindingConfig): bool =
-  if a.modifiers != b.modifiers or a.mode != b.mode:
+  if a.modifiers != b.modifiers:
     return false
 
   let aSym = keySymForBinding(a.key, a.modifiers)
@@ -34,6 +34,21 @@ proc samePhysicalKeySlot*(a, b: KeyBindingConfig): bool =
     aSym == bSym
   else:
     a.key.toLowerAscii() == b.key.toLowerAscii()
+
+proc bindingModeActiveInCurrentProfile(model: Model, mode: BindingMode): bool =
+  case mode
+  of BindingMode.BindAlways:
+    true
+  of BindingMode.BindNormal:
+    not model.overviewActive and not model.recentWindowsActive
+  of BindingMode.BindOverview:
+    model.overviewActive
+  of BindingMode.BindRecent:
+    model.recentWindowsActive
+
+proc bindingModesOverlapInCurrentProfile(model: Model, a, b: BindingMode): bool =
+  model.bindingModeActiveInCurrentProfile(a) and
+    model.bindingModeActiveInCurrentProfile(b)
 
 proc bindingMatchesActiveLayout*(model: Model, binding: KeyBindingConfig): bool =
   binding.layoutScope.len == 0 or binding.layoutScope == model.activeLayoutBindingId()
@@ -51,9 +66,13 @@ proc resolvedKeyBindings*(model: Model): seq[KeyBindingConfig] =
   for binding in model.keyBindings:
     if binding.layoutScope != activeLayoutId:
       continue
+    if not model.bindingModeActiveInCurrentProfile(binding.mode):
+      result.add(binding)
+      continue
     var i = 0
     while i < result.len:
-      if result[i].samePhysicalKeySlot(binding):
+      if result[i].samePhysicalKeySlot(binding) and
+          model.bindingModesOverlapInCurrentProfile(result[i].mode, binding.mode):
         result.delete(i)
       else:
         inc i
