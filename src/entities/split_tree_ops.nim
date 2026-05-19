@@ -292,6 +292,28 @@ proc insertSplitChildAfter(
     model.splitNodes.mEntity(child).weight = weight
   true
 
+proc insertSplitChildBefore(
+    model: var Model, parentId, anchorId, childId: SplitNodeId
+): bool =
+  let parentOpt = model.splitNodes.entity(parentId)
+  if parentOpt.isNone or parentOpt.get().kind != FrameNodeKind.Split:
+    return false
+  var children = parentOpt.get().children
+  var idx = children.find(anchorId)
+  if idx == -1:
+    idx = 0
+  children.insert(childId, idx)
+  let weight =
+    if children.len > 0:
+      1.0'f32 / float32(children.len)
+    else:
+      1.0'f32
+  model.splitNodes.mEntity(parentId).children = children
+  for child in children:
+    model.splitNodes.mEntity(child).parent = parentId
+    model.splitNodes.mEntity(child).weight = weight
+  true
+
 proc flattenSplitTreeFrom(model: var Model, tagId: TagId, startId: SplitNodeId): bool =
   var current = startId
   while current != NullSplitNodeId:
@@ -876,6 +898,79 @@ proc adjustFocusedSplitTreeSplit*(
       model.splitNodes.mEntity(current).weight = nextCurrent
       model.splitNodes.mEntity(sibling).weight = nextSibling
       return true
+    current = parentId
+  false
+
+proc moveWindowInSplitTree*(
+    model: var Model, tagId: TagId, winId: WindowId, direction: Direction
+): bool =
+  let leafId = model.splitNodeByTagWindow.getOrDefault((tagId, winId), NullSplitNodeId)
+  if leafId == NullSplitNodeId:
+    return false
+  let positive = direction.directionIsPositive()
+  var current = leafId
+  while current != NullSplitNodeId:
+    let currentOpt = model.splitNodes.entity(current)
+    if currentOpt.isNone:
+      return false
+    let parentId = currentOpt.get().parent
+    if parentId == NullSplitNodeId:
+      break
+    let parentOpt = model.splitNodes.entity(parentId)
+    if parentOpt.isNone:
+      return false
+    let parent = parentOpt.get()
+    if direction.directionMatchesSplitMode(parent.mode):
+      let idx = parent.children.find(current)
+      if idx == -1:
+        return false
+      let siblingIdx =
+        if positive:
+          idx + 1
+        else:
+          idx - 1
+      if siblingIdx >= 0 and siblingIdx < parent.children.len:
+        let siblingId = parent.children[siblingIdx]
+        if current == leafId:
+          # Leaf is a direct child of the matching parent — reorder within parent.
+          discard model.removeSplitChild(parentId, leafId)
+          if positive:
+            discard model.insertSplitChildAfter(parentId, siblingId, leafId)
+          else:
+            discard model.insertSplitChildBefore(parentId, siblingId, leafId)
+        else:
+          # Leaf is nested inside current sub-container. Detach leaf, flatten the
+          # old parent chain, then insert adjacent to the sibling in the ancestor.
+          let oldLeafParentId = model.splitNodes.entity(leafId).get().parent
+          discard model.removeSplitChild(oldLeafParentId, leafId)
+          discard model.flattenSplitTreeFrom(tagId, oldLeafParentId)
+          let siblingNodeOpt = model.splitNodes.entity(siblingId)
+          let newParentId =
+            if siblingNodeOpt.isSome:
+              siblingNodeOpt.get().parent
+            else:
+              NullSplitNodeId
+          if newParentId == NullSplitNodeId:
+            # Sibling became the new root after flatten; wrap it and insert.
+            let orientation =
+              if direction in {Direction.DirLeft, Direction.DirRight}:
+                FrameSplitOrientation.Horizontal
+              else:
+                FrameSplitOrientation.Vertical
+            let wrapper = model.wrapSplitLeaf(tagId, siblingId, orientation)
+            if wrapper == NullSplitNodeId:
+              return false
+            if positive:
+              discard model.insertSplitChildAfter(wrapper, siblingId, leafId)
+            else:
+              discard model.insertSplitChildBefore(wrapper, siblingId, leafId)
+            model.splitNodes.mEntity(leafId).parent = wrapper
+          else:
+            if positive:
+              discard model.insertSplitChildAfter(newParentId, siblingId, leafId)
+            else:
+              discard model.insertSplitChildBefore(newParentId, siblingId, leafId)
+        return true
     current = parentId
   false
 

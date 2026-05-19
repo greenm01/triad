@@ -56,7 +56,7 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 
 | i3 form | i3 algorithm (`tree.c:503`) | Triad behavior (`focus.nim:474`) | Status |
 |---|---|---|---|
-| `focus left/right/up/down` | **Parent-walk**: ascend tree until a split node's orientation matches direction; step to sibling on that side; descend back to focused/edgemost child of sibling subtree | **Geometric proximity**: collects all visible leaf rects via `activeSplitLeafRects`, picks nearest rect in direction using `bspNeighborCandidate` | ✗ P0 — diverges on nested splits and tabbed containers (see §Algorithm divergences) |
+| `focus left/right/up/down` | **Parent-walk**: ascend tree until a split node's orientation matches direction; step to sibling on that side; descend back to focused/edgemost child of sibling subtree | `splitTreeStructuralNeighbor` in `split_tree_ops.nim` implements the parent-walk; `lastFocusedWindowInSubtree` descends to most-recently-focused leaf; geometric fallback preserved | ✓ |
 | `focus next sibling` | Move to next sibling in parent's children list | Not implemented | ✗ P1 |
 | `focus prev sibling` | Move to prev sibling | Not implemented | ✗ P1 |
 | `focus parent` | `level_up` (`tree.c:386`): move focus to parent split container | Not implemented | ✗ P0 — common i3 workflow (promote window out of tabbed container) |
@@ -68,7 +68,7 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 
 | i3 form | i3 algorithm (`move.c:259`) | Triad behavior (`placement_ops.nim:316`) | Status |
 |---|---|---|---|
-| `move left/right/up/down` | **Structural re-parent**: ascend until matching-orientation ancestor; insert into sibling branch; if none, `ws_force_orientation` wraps workspace root; at workspace boundary calls `move_to_output_directed` | **Content swap**: `swapWindowsInSplitTree` exchanges window pointers in two leaf nodes; does not re-parent or restructure the tree | ✗ P0 — can't escape container, can't restructure (see §Algorithm divergences) |
+| `move left/right/up/down` | **Structural re-parent**: ascend until matching-orientation ancestor; insert into sibling branch; if none, `ws_force_orientation` wraps workspace root; at workspace boundary calls `move_to_output_directed` | `moveWindowInSplitTree` in `split_tree_ops.nim` implements the parent-walk re-parent; `flattenSplitTreeFrom` collapses single-child containers after detach; cross-tag fallback preserved | ✓ |
 | `move <dir> [Npx]` | Move with pixel distance hint (used for floating; tiling ignores distance) | Distance arg accepted by parser but tiling move is atomic | ≈ |
 | `move to workspace <name>` | Detach container, attach to named workspace | `move-window-to-tag` / `move-to-workspace` | ✓ different naming |
 | `move to output <name>` | Move to named output | `move-window-to-output` | ✓ |
@@ -119,26 +119,13 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 5. If the workspace root is reached with no match, cross to the adjacent output via
    `get_tree_next_workspace` (`tree.c:469`).
 
-**Triad (`focus.nim:474–507`):** Geometric proximity.
-1. Collect all visible leaf rects for the active tag via `activeSplitLeafRects`.
-2. Run `bspNeighborCandidate` (same function as the BSP layout uses) against each
-   candidate rect — picks the leaf whose rect is geometrically nearest in the given direction.
-3. Secondary sort by focus-history rank.
+**Triad (`focus.nim:splitTreeNeighborWindow`):** ✓ Fixed. `splitTreeStructuralNeighbor` (added to
+`split_tree_ops.nim`) implements the parent-walk: ascend ancestors, find matching-orientation
+split, step to adjacent sibling, descend via `lastFocusedWindowInSubtree` (focus-history-aware).
+`bspNeighborCandidate` is retained as geometric fallback when the walk returns `NullWindowId`.
 
-**Divergence consequences:**
-- *Nested splits*: `splith{A, splitv{B, C}}` — `focus right` from A should land on the
-  focused child of the `splitv` subtree. i3 always lands on the structurally correct sibling.
-  Triad picks the geometrically nearest rect, which changes depending on window sizes.
-- *Tabbed/stacking containers*: only one tab is visible at a time. i3's parent-walk treats all
-  siblings as candidates (you can land on a non-visible tab). Triad can only land on the visible
-  tab since invisible tabs have no rendered rect in `activeSplitLeafRects`.
-- *Empty containers*: i3 can focus a split container with no leaves. Triad has no empty-container
-  focus path.
-
-**Fix target (P0):** Replace `splitTreeNeighborWindow` body with the parent-walk algorithm.
-Retain `bspNeighborCandidate` as a final fallback when the walk yields no candidate (to preserve
-cross-tag/cross-output behavior). Reuse `focusedChildOfSplitNode` (`split_tree_ops.nim:108`) for
-the descend step.
+**Remaining limitation:** Empty containers (split node with no leaves) — i3 can focus these as
+focus level holders; triad's split-tree has no empty-container focus path.
 
 ---
 
@@ -152,25 +139,15 @@ the descend step.
    workspace root in a new split with the requested orientation, then insert.
 4. At workspace boundary: `move_to_output_directed` (`move.c:206`).
 
-**Triad:** Content swap.
-`swapWindowsInSplitTree` exchanges the `window` pointers stored in two leaf nodes. The tree
-structure is unchanged; only which window appears in which slot changes. This is an in-place
-slot swap, not a container move.
+**Triad (`update_commands.nim:CmdMoveWindowLeft/Right/Up/Down`):** ✓ Fixed.
+`moveWindowInSplitTree` (added to `split_tree_ops.nim`) implements the parent-walk re-parent:
+ascend ancestors, find matching-orientation split with sibling in target direction, detach leaf,
+`flattenSplitTreeFrom` collapses the vacated parent, insert adjacent to sibling.
+Cross-tag/cross-output fallback to `moveFocusedWindowByDirection` is preserved.
 
-**Divergence consequences:**
-- Moving a window out of a nested container is impossible — the swap picks the geometrically
-  nearest leaf, which may be inside the same container.
-- Moving when a container has only one visible leaf has no effect (nothing to swap with in the
-  target direction).
-- `ws_force_orientation` semantics (auto-wrapping workspace root on cross-orientation move) are
-  entirely absent.
-
-**Fix target (P0):** Add `moveWindowInSplitTree(model, tagId, winId, direction)` to
-`split_tree_ops.nim` mirroring i3's algorithm. Wire `CmdMoveWindow{Left,Right,Up,Down}` in
-`update_commands.nim:295–301` to call `moveWindowInSplitTree` first when
-`activeTagUsesSplitTree()`, falling through to the existing column/tag swap only when the
-split-tree returns no move (e.g. at workspace boundary). Keep `swapWindowsInSplitTree` for the
-cross-tag swap callers in `placement_ops.nim:316`.
+**Remaining limitation:** `ws_force_orientation` (auto-wrapping workspace root on
+cross-orientation boundary move) is not implemented; boundary moves fall through to the
+cross-tag path instead of restructuring the workspace root.
 
 ---
 
@@ -192,15 +169,13 @@ cross-tag swap callers in `placement_ops.nim:316`.
 
 ### P0 — Behavioral conformance
 
-1. **Structural directional focus** — replace `splitTreeNeighborWindow` body in
-   `src/systems/focus.nim:474` with parent-walk algorithm (see §Directional focus above).
-   Keep geometric fallback when walk reaches workspace root with no candidate.
-   Files: `src/systems/focus.nim`, `src/entities/split_tree_ops.nim` (expose helper).
+1. ~~**Structural directional focus**~~ ✓ — `splitTreeStructuralNeighbor` (parent-walk) +
+   `lastFocusedWindowInSubtree` (history-aware descent) added to `split_tree_ops.nim`;
+   wired as primary path in `focus.nim:splitTreeNeighborWindow` with geometric fallback.
 
-2. **Structural move** — add `moveWindowInSplitTree` to `src/entities/split_tree_ops.nim`.
-   Wire before column/tag-swap path in `src/systems/update_commands.nim:295–301`.
-   Include workspace-root wrap (`ws_force_orientation` equivalent) and boundary fallback.
-   Files: `src/entities/split_tree_ops.nim`, `src/systems/update_commands.nim`.
+2. ~~**Structural move**~~ ✓ — `moveWindowInSplitTree` added to `split_tree_ops.nim`;
+   wired before column/tag-swap path in `update_commands.nim:CmdMoveWindowLeft/Right/Up/Down`.
+   Single-child collapse via `flattenSplitTreeFrom`; cross-tag fallback preserved.
 
 3. **`focus parent` / `focus child` commands** — add `CidSplitTreeFocusParent` /
    `CidSplitTreeFocusChild` to `src/types/ipc_commands.nim:41` and

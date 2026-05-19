@@ -293,13 +293,33 @@ proc applyCommand*(
       if msg.moveWorkspaceFollowWindow:
         result.dirty = model.focusWindow(winId) or result.dirty
   of MsgKind.CmdMoveWindowLeft:
-    result.dirty = model.moveFocusedWindowLeft(movementEval)
+    let focusedLeft = model.focusedOnActiveTag()
+    result.dirty =
+      (
+        model.activeTagUsesSplitTree() and focusedLeft != NullWindowId and
+        model.moveWindowInSplitTree(model.activeTag, focusedLeft, Direction.DirLeft)
+      ) or model.moveFocusedWindowLeft(movementEval)
   of MsgKind.CmdMoveWindowRight:
-    result.dirty = model.moveFocusedWindowRight(movementEval)
+    let focusedRight = model.focusedOnActiveTag()
+    result.dirty =
+      (
+        model.activeTagUsesSplitTree() and focusedRight != NullWindowId and
+        model.moveWindowInSplitTree(model.activeTag, focusedRight, Direction.DirRight)
+      ) or model.moveFocusedWindowRight(movementEval)
   of MsgKind.CmdMoveWindowUp:
-    result.dirty = model.moveFocusedWindowUp(movementEval)
+    let focusedUp = model.focusedOnActiveTag()
+    result.dirty =
+      (
+        model.activeTagUsesSplitTree() and focusedUp != NullWindowId and
+        model.moveWindowInSplitTree(model.activeTag, focusedUp, Direction.DirUp)
+      ) or model.moveFocusedWindowUp(movementEval)
   of MsgKind.CmdMoveWindowDown:
-    result.dirty = model.moveFocusedWindowDown(movementEval)
+    let focusedDown = model.focusedOnActiveTag()
+    result.dirty =
+      (
+        model.activeTagUsesSplitTree() and focusedDown != NullWindowId and
+        model.moveWindowInSplitTree(model.activeTag, focusedDown, Direction.DirDown)
+      ) or model.moveFocusedWindowDown(movementEval)
   of MsgKind.CmdMoveWindowUpOrToWorkspaceUp:
     result.dirty = model.moveFocusedWindowUpOrWorkspace(movementEval)
   of MsgKind.CmdMoveWindowDownOrToWorkspaceDown:

@@ -1950,6 +1950,97 @@ suite "Runtime state primitives":
     let root = model.splitRootForTag(tagId)
     check root != tc.NullSplitNodeId
 
+  test "split-tree structural move reorders siblings in matching-orientation parent":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let winA = model.windowForExternal(ExternalWindowId(10))
+    let winB = model.windowForExternal(ExternalWindowId(11))
+    let winC = model.windowForExternal(ExternalWindowId(12))
+    let tagId = model.activeTag
+
+    # Initial order: splith{A, B, C}
+    check model.splitLeafWindowsInOrder(tagId) == @[winA, winB, winC]
+
+    # Move A right: splith{B, A, C}
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowRight))
+    check model.splitLeafWindowsInOrder(tagId) == @[winB, winA, winC]
+
+    # Move A right again: splith{B, C, A}
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowRight))
+    check model.splitLeafWindowsInOrder(tagId) == @[winB, winC, winA]
+
+    # Move A left: splith{B, A, C}
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowLeft))
+    check model.splitLeafWindowsInOrder(tagId) == @[winB, winA, winC]
+
+  test "split-tree structural move escapes nested container and flattens":
+    # Builds splith{A(10), splitv{B(11), C(12)}} and tests two moves:
+    # 1. Move A right: A is a direct sibling-level reorder; splitv is the right
+    #    sibling, so A moves after it → splith{splitv{B,C}, A} → order [B, C, A].
+    # 2. (Fresh tree) Move B left: B is inside splitv (idx 1 in splith). Left
+    #    sibling of splitv is A. B detaches, splitv collapses to C, B inserts
+    #    before A → splith{B, A, C} → order [B, A, C].
+    block:
+      var model = initRuntimeStateFromConfig(baseConfig()).model
+      model.applyMsg(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+      )
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+      model.applyMsg(
+        Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+      )
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+      model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+      let winA = model.windowForExternal(ExternalWindowId(10))
+      let winB = model.windowForExternal(ExternalWindowId(11))
+      let winC = model.windowForExternal(ExternalWindowId(12))
+      let tagId = model.activeTag
+
+      check model.splitLeafWindowsInOrder(tagId) == @[winA, winB, winC]
+
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+      model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowRight))
+      # A's sibling in splith is the splitv; A becomes the rightmost leaf.
+      check model.splitLeafWindowsInOrder(tagId) == @[winB, winC, winA]
+
+    block:
+      var model = initRuntimeStateFromConfig(baseConfig()).model
+      model.applyMsg(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+      )
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+      model.applyMsg(
+        Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+      )
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+      model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+      model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+      let winA = model.windowForExternal(ExternalWindowId(10))
+      let winB = model.windowForExternal(ExternalWindowId(11))
+      let winC = model.windowForExternal(ExternalWindowId(12))
+      let tagId = model.activeTag
+
+      # B is inside splitv which is at idx 1 in splith (right of A).
+      # Move B left: B escapes splitv, splitv{C} flattens to C, B inserts before A.
+      model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+      model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowLeft))
+      check model.splitLeafWindowsInOrder(tagId) == @[winB, winA, winC]
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(
