@@ -183,7 +183,7 @@ suite "KDL Configuration Parser: loading reload":
       it.key == "i" and it.modifiers == Super and it.command == "move-to-scratchpad"
     )
     check bindings.anyIt(
-      it.key == "z" and it.modifiers == Alt and it.command == "toggle-scratchpad"
+      it.key == "z" and it.modifiers == Super + Alt and it.command == "toggle-scratchpad"
     )
     check bindings.anyIt(
       it.key == "i" and it.modifiers == Super + Shift and

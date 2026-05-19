@@ -149,7 +149,7 @@ bindings {
     bind "Super+m" "maximize-column"
     bind "Super+Shift+b" "minimize"
     bind "Super+i" "move-to-scratchpad"
-    bind "Alt+z" "toggle-scratchpad"
+    bind "Super+Alt+z" "toggle-scratchpad"
     bind "Super+Shift+i" "restore-scratchpad"
     bind "Super+n" "switch-layout"
     bind "Super+e" "split-tree-layout-toggle-split"

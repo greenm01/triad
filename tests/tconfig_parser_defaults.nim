@@ -885,7 +885,7 @@ janet {
     check config.scratchpad.widthRatio == 0.8'f32
     check config.scratchpad.heightRatio == 0.9'f32
     check config.msgKindForBinding("i", Super) == MsgKind.CmdMoveToScratchpad
-    check config.msgKindForBinding("z", Alt) == MsgKind.CmdToggleScratchpad
+    check config.msgKindForBinding("z", Super + Alt) == MsgKind.CmdToggleScratchpad
     check config.msgKindForBinding("i", Super + Shift) == MsgKind.CmdRestoreScratchpad
     check config.msgKindForBinding("b", Super + Shift) == MsgKind.CmdMinimize
     check config.msgKindForBinding("f", Super + Shift) == MsgKind.CmdToggleFullscreen

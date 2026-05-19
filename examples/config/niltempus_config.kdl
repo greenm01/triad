@@ -294,7 +294,7 @@ bindings {
 
     // Scratchpad. Mirrors Mango: send, toggle, restore.
     bind "Super+i" "move-to-scratchpad"
-    bind "Alt+z" "toggle-scratchpad"
+    bind "Super+Alt+z" "toggle-scratchpad"
     bind "Super+Shift+i" "restore-scratchpad"
     bind "Super+Ctrl+e" "toggle-named-scratchpad terminal"
     bind "Super+Ctrl+Shift+e" "move-to-named-scratchpad terminal"
