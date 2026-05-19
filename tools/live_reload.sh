@@ -419,7 +419,7 @@ def normalize_columns(columns, id_map):
         })
     return result
 
-def normalize_tags(state, id_map):
+def normalize_tags(state, id_map, active_tag):
     result = {}
     for tag in state.get("tags", []):
         if not isinstance(tag, dict):
@@ -427,11 +427,10 @@ def normalize_tags(state, id_map):
         tag_id = tag.get("id")
         if not isinstance(tag_id, int):
             continue
-        result[tag_id] = {
+        normalized = {
             "name": tag.get("name", ""),
             "layout_mode": tag.get("layout_mode", 0),
             "columns": normalize_columns(tag.get("columns", []), id_map),
-            "focused_window": canonical_ref(tag.get("focused_window", 0), id_map),
             "target_viewport_x_offset": rounded(
                 tag.get("target_viewport_x_offset", 0.0)
             ),
@@ -447,6 +446,12 @@ def normalize_tags(state, id_map):
             "master_count": tag.get("master_count", 0),
             "master_split_ratio": rounded(tag.get("master_split_ratio", 0.0)),
         }
+        if tag_id == active_tag:
+            normalized["focused_window"] = canonical_ref(
+                tag.get("focused_window", 0),
+                id_map
+            )
+        result[tag_id] = normalized
     return result
 
 def normalize_windows(state, id_map):
@@ -491,10 +496,11 @@ def normalize_focus_history(state, id_map):
     return [canonical_ref(win_id, id_map) for win_id in state.get("focus_history", [])]
 
 def normalized(state, id_map):
+    active_tag = state.get("active_tag", 0)
     return {
-        "active_tag": state.get("active_tag", 0),
+        "active_tag": active_tag,
         "focused_window": canonical_ref(state.get("focused_window", 0), id_map),
-        "tags": normalize_tags(state, id_map),
+        "tags": normalize_tags(state, id_map, active_tag),
         "windows": normalize_windows(state, id_map),
         "output_tags": normalize_output_tags(state),
         "focus_history": normalize_focus_history(state, id_map),
@@ -643,6 +649,14 @@ snapshot_restore_state() {
     fail "native live restore snapshot timed out or failed; aborting reload to preserve state"
   fi
 }
+
+if [ "${1:-}" = "--compare-restore-snapshots" ]; then
+  if [ "$#" -ne 3 ]; then
+    fail "usage: tools/live_reload.sh --compare-restore-snapshots EXPECTED ACTUAL"
+  fi
+  compare_restore_snapshots "$2" "$3"
+  exit $?
+fi
 
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 bin_dir="${TRIAD_LIVE_BIN_DIR:-$HOME/.local/bin}"
