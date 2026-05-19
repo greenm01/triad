@@ -1,6 +1,6 @@
 import wayland/native/client
 import ../core/[defaults, effects, msg, restore_state, shell_profiles]
-import ../systems/[runtime, runtime_facade]
+import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
@@ -283,6 +283,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
     let previousExitSessionConfirm = daemon.runtimeState.model.exitSessionConfirmOpen
     let previousActiveModifiers = daemon.runtimeState.model.activeModifiers
+    let previousLayoutBindingId = daemon.runtimeState.model.activeLayoutBindingId()
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let dispatchJanetHooks =
@@ -344,6 +345,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         previousRecentWindows != daemon.runtimeState.model.recentWindowsActive or
         previousSessionLocked != daemon.runtimeState.model.sessionLocked or
         previousExitSessionConfirm != daemon.runtimeState.model.exitSessionConfirmOpen or
+        previousLayoutBindingId != daemon.runtimeState.model.activeLayoutBindingId() or
         recentModifiersChanged or
         previousShortcutsInhibited !=
         daemon.runtimeState.model.keyboardShortcutsInhibited():

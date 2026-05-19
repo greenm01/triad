@@ -678,7 +678,7 @@ proc mirroredArrowKey(key: string): string =
 
 proc sameKeySlot(a, b: KeyBindingConfig): bool =
   a.key.toLowerAscii() == b.key.toLowerAscii() and a.modifiers == b.modifiers and
-    a.mode == b.mode
+    a.mode == b.mode and a.layoutScope == b.layoutScope
 
 proc hasKeySlot(bindings: seq[KeyBindingConfig], candidate: KeyBindingConfig): bool =
   for binding in bindings:
@@ -691,7 +691,8 @@ proc hasPhysicalKeySlot(
 ): bool =
   for binding in bindings:
     if binding.key.toLowerAscii() == candidate.key.toLowerAscii() and
-        binding.modifiers == candidate.modifiers:
+        binding.modifiers == candidate.modifiers and
+        binding.layoutScope == candidate.layoutScope:
       return true
   false
 
@@ -795,8 +796,16 @@ proc addRecentWindowBindings(
     if not bindings.hasPhysicalKeySlot(binding):
       bindings.add(binding)
 
+proc canonicalLayoutScope(value: string): string =
+  let stripped = value.strip()
+  let native = parseNativeLayoutId(stripped)
+  if native.isSome:
+    native.get().id.nativeLayoutIdString()
+  else:
+    stripped
+
 proc keyBindingFromNode(
-    node: KdlNode, defaultMode = BindingMode.BindAlways
+    node: KdlNode, defaultMode = BindingMode.BindAlways, layoutScope = ""
 ): Option[KeyBindingConfig] =
   if node.args.len < 2:
     return none(KeyBindingConfig)
@@ -808,6 +817,7 @@ proc keyBindingFromNode(
     modifiers: spec.modifiers,
     command: node.args[1].kString(),
     mode: defaultMode,
+    layoutScope: layoutScope,
   )
   if node.props.hasKey("layout"):
     let layout = node.props["layout"].kInt()
@@ -1602,6 +1612,21 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
               let binding = child.keyBindingFromNode()
               if binding.isSome:
                 result.keyBindings.add(binding.get())
+            elif child.name == "layout" and child.args.len >= 1:
+              let layoutScope = canonicalLayoutScope(child.args[0].kString())
+              if layoutScope.len == 0:
+                continue
+              for scopedChild in child.children:
+                try:
+                  if scopedChild.name == "bind" and scopedChild.args.len >= 2:
+                    let binding = scopedChild.keyBindingFromNode(
+                      BindingMode.BindNormal, layoutScope
+                    )
+                    if binding.isSome:
+                      result.keyBindings.add(binding.get())
+                except CatchableError as e:
+                  warn "Ignoring invalid layout binding config field",
+                    layout = layoutScope, field = scopedChild.name, error = e.msg
             elif child.name == "pointer-bind" and child.args.len >= 2:
               let spec = parseKeySpec(child.args[0].kString())
               let button = buttonValue(spec.key)

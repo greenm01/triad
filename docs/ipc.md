@@ -135,6 +135,7 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `bsp-balance`: Rebalances the active BSP tree by leaf counts.
 *   `bsp-equalize`: Resets active BSP split ratios to `0.5`.
 *   `bsp-preselect-left`, `bsp-preselect-right`, `bsp-preselect-up`, `bsp-preselect-down`: Marks the focused BSP leaf as the insertion target for the next tiled window, choosing the side where the new window appears.
+*   `dwindle-split-left`, `dwindle-split-right`, `dwindle-split-up`, `dwindle-split-down`, `dwindle-split-horizontal`, `dwindle-split-vertical`: Dwindle-facing aliases for BSP preselection policy. Horizontal selects right insertion; vertical selects down insertion.
 *   `bsp-preselect-ratio <ratio>`: Sets the preselected split ratio. If no side is selected yet, Triad defaults to the right side.
 *   `bsp-preselect-cancel`: Clears the focused BSP leaf preselection.
 *   `maximize-column`: Toggles the focused column to full width while keeping gaps, borders, and client state unchanged.

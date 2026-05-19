@@ -11,8 +11,10 @@ import ../core/msg
 from ../types/core import Rect
 import ../ipc/commands
 import
-  ../systems/
-    [daemon_view, overview_geometry, overview_hot_corners, runtime, window_rules]
+  ../systems/[
+    binding_profiles, daemon_view, overview_geometry, overview_hot_corners, runtime,
+    window_rules,
+  ]
 import ../types/[model, runtime_values]
 import
   cursor_shake, frame_tab_bar_render, manage_requests, message_queue,
@@ -621,6 +623,8 @@ proc hasExplicitModalKeyBinding(
     includeAlways: bool,
 ): bool =
   for binding in model.keyBindings:
+    if not model.bindingMatchesActiveLayout(binding):
+      continue
     if binding.mode == targetMode or (includeAlways and binding.mode == BindAlways):
       if binding.sameModalKeySlot(candidate):
         return true
@@ -662,7 +666,7 @@ proc modalFallbackKeyBindings(
     var candidate = binding
     candidate.modifiers = targetModifiers
     model.addModalFallback(result, candidate, targetMode, includeAlwaysExplicit)
-  for binding in model.keyBindings:
+  for binding in model.resolvedKeyBindings():
     if binding.mode notin sourceModes:
       continue
     let command = commandForBinding(binding)
@@ -674,7 +678,7 @@ proc modalFallbackKeyBindings(
     model.addModalFallback(result, candidate, targetMode, includeAlwaysExplicit)
 
 proc hasOverviewKeyBinding*(model: Model, candidate: KeyBindingConfig): bool =
-  for binding in model.keyBindings:
+  for binding in model.resolvedKeyBindings():
     if binding.sameOverviewKeySlot(candidate):
       return true
   false
@@ -1651,7 +1655,7 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
       )
       continue
 
-    for binding in daemon.currentModel.keyBindings:
+    for binding in daemon.currentModel.resolvedKeyBindings():
       if not daemon.keyBindingActive(binding):
         continue
       let parsed = parseTextCommand(binding.command)

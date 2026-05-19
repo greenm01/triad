@@ -45,6 +45,12 @@ type
     CidBspPreselectRight
     CidBspPreselectUp
     CidBspPreselectDown
+    CidDwindleSplitLeft
+    CidDwindleSplitRight
+    CidDwindleSplitUp
+    CidDwindleSplitDown
+    CidDwindleSplitHorizontal
+    CidDwindleSplitVertical
     CidBspPreselectCancel
     CidBspPreselectRatio
     CidConfigReload
@@ -319,6 +325,28 @@ const CommandSpecs* = [
   ),
   CommandSpec(
     id: CommandId.CidBspPreselectDown, name: "bsp-preselect-down", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidDwindleSplitLeft, name: "dwindle-split-left", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidDwindleSplitRight, name: "dwindle-split-right", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidDwindleSplitUp, name: "dwindle-split-up", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidDwindleSplitDown, name: "dwindle-split-down", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidDwindleSplitHorizontal,
+    name: "dwindle-split-horizontal",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidDwindleSplitVertical,
+    name: "dwindle-split-vertical",
+    argShape: NoArgs,
   ),
   CommandSpec(
     id: CommandId.CidBspPreselectCancel, name: "bsp-preselect-cancel", argShape: NoArgs

@@ -433,6 +433,16 @@ layout {
 
     check parseTextCommand("bsp-preselect-ratio nope").isNone
 
+    let dwindleHorizontal = parseTextCommand("dwindle-split-horizontal")
+    check dwindleHorizontal.isSome
+    check dwindleHorizontal.get().kind == MsgKind.CmdBspPreselect
+    check dwindleHorizontal.get().bspPreselectDirection == Direction.DirRight
+
+    let dwindleVertical = parseTextCommand("dwindle-split-vertical")
+    check dwindleVertical.isSome
+    check dwindleVertical.get().kind == MsgKind.CmdBspPreselect
+    check dwindleVertical.get().bspPreselectDirection == Direction.DirDown
+
     let focusedToggle = parseTextCommand("toggle-fullscreen")
     check focusedToggle.isSome
     check focusedToggle.get().kind == MsgKind.CmdToggleFullscreen

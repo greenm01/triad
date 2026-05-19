@@ -303,13 +303,7 @@ bindings {
 
     // Layout selection.
     bind "Super+n" "switch-layout"
-    bind "Super+e" "split-tree-layout-toggle-split"
-    bind "Super+s" "split-tree-layout-stacking"
-    bind "Super+w" "split-tree-layout-tabbed"
     bind "Super+Shift+s" "layout-vertical-scroller"
-    bind "Alt+s" "frame-split-horizontal"
-    bind "Alt+v" "frame-split-vertical"
-    bind "Alt+x" "frame-unsplit"
     bind "Super+d" "layout-tile"
     bind "Super+g" "layout-grid"
     bind "Super+Shift+g" "layout-vertical-grid"
@@ -346,6 +340,27 @@ bindings {
     bind "Super+0" "toggle-gaps"
     bind "Super+Shift+-" "adjust-gaps -2"
     bind "Super+Shift+=" "adjust-gaps 2"
+
+    layout "i3" {
+        bind "Super+Alt+h" "split-tree-split-horizontal"
+        bind "Super+Alt+v" "split-tree-split-vertical"
+        bind "Super+e" "split-tree-layout-toggle-split"
+        bind "Super+s" "split-tree-layout-stacking"
+        bind "Super+w" "split-tree-layout-tabbed"
+    }
+
+    layout "notion" {
+        bind "Super+Alt+h" "frame-split-horizontal"
+        bind "Super+Alt+v" "frame-split-vertical"
+        bind "Super+Alt+x" "frame-unsplit"
+    }
+
+    layout "dwindle" {
+        bind "Super+Alt+h" "dwindle-split-left"
+        bind "Super+Alt+j" "dwindle-split-down"
+        bind "Super+Alt+k" "dwindle-split-up"
+        bind "Super+Alt+l" "dwindle-split-right"
+    }
 
     // Overview and shell handoff.
     bind "Super+o" "toggle-overview"

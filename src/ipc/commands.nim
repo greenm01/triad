@@ -361,6 +361,14 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirUp))
   of CommandId.CidBspPreselectDown:
     some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirDown))
+  of CommandId.CidDwindleSplitLeft:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirLeft))
+  of CommandId.CidDwindleSplitRight, CommandId.CidDwindleSplitHorizontal:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirRight))
+  of CommandId.CidDwindleSplitUp:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirUp))
+  of CommandId.CidDwindleSplitDown, CommandId.CidDwindleSplitVertical:
+    some(Msg(kind: MsgKind.CmdBspPreselect, bspPreselectDirection: Direction.DirDown))
   of CommandId.CidBspPreselectCancel:
     some(Msg(kind: MsgKind.CmdBspPreselectCancel))
   of CommandId.CidBspPreselectRatio:

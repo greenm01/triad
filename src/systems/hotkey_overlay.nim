@@ -1,6 +1,7 @@
 import std/[options, sequtils, strutils]
 import ../state/engine
 import ../types/runtime_values
+import binding_profiles
 
 type ImportantHotkey = object
   command: string
@@ -118,8 +119,10 @@ proc addRow(rows: var seq[HotkeyOverlayRow], row: HotkeyOverlayRow) =
     rows.add(row)
 
 proc hotkeyOverlayRows*(model: Model): seq[HotkeyOverlayRow] =
+  let bindings = model.resolvedKeyBindings()
+
   for item in ImportantHotkeys:
-    let binding = model.keyBindings.findBindingForCommand(item.command)
+    let binding = bindings.findBindingForCommand(item.command)
     if binding.isSome:
       var row = binding.get().rowForBinding()
       if binding.get().hotkeyOverlayTitleKind ==
@@ -129,11 +132,11 @@ proc hotkeyOverlayRows*(model: Model): seq[HotkeyOverlayRow] =
     elif not model.hotkeyOverlay.hideNotBound:
       result.addRow(HotkeyOverlayRow(key: "(not bound)", label: item.label))
 
-  for binding in model.keyBindings:
+  for binding in bindings:
     if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleCustom:
       result.addRow(binding.rowForBinding())
 
-  for binding in model.keyBindings:
+  for binding in bindings:
     if binding.command.commandBase() in ["spawn", "spawn-terminal"] and
         (binding.modifiers and 64'u32) != 0:
       result.addRow(binding.rowForBinding())

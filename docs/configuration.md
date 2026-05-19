@@ -125,8 +125,10 @@ Control the geometry and behavior of your windows.
 
 Native `i3` split-tree layouts support i3-style container modes through
 `split-tree-layout-toggle-split`, `split-tree-layout-stacking`, and
-`split-tree-layout-tabbed`. The default bindings use `Super+e`, `Super+s`, and
-`Super+w` for those commands.
+`split-tree-layout-tabbed`. The default bindings scope i3 commands to
+`layout "i3"`: `Super+Alt+h/v` split the focused container horizontally or
+vertically, and `Super+e`, `Super+s`, and `Super+w` select split, stacking, and
+tabbed modes only while i3 is active.
 
 **Example Layout Configuration:**
 ```kdl
@@ -397,12 +399,32 @@ Triad supports keyboard, pointer, wheel, and gesture bindings.
 *   `axis-bind`: Scroll wheel commands.
 *   `gesture-bind`: Touchpad swipe gestures.
 
+Keyboard bindings can also be scoped to a layout id. Scoped bindings default to
+normal mode and shadow global bindings with the same key only while that layout
+is active:
+
+```kdl
+bindings {
+  bind "Super+Alt+h" "move-column-left"
+
+  layout "i3" {
+    bind "Super+Alt+h" "split-tree-split-horizontal"
+    bind "Super+e" "split-tree-layout-toggle-split"
+  }
+
+  layout "notion" {
+    bind "Super+Alt+h" "frame-split-horizontal"
+  }
+}
+```
+
 **Options:**
 *   `mode`: Restrict a binding to a specific mode (e.g., `mode="overview"`).
 *   `on-release`: Run the command when the key is released.
 *   `while-locked`: Allow the command to run while the session is locked.
 *   `allow-inhibiting`: If `#false`, the binding can bypass client-side shortcut inhibition.
-*   `layout`: Force a specific XKB layout index for the binding.
+*   `layout`: Force a specific XKB layout index for the binding. This is
+    separate from `layout "id" { ... }` binding scopes.
 *   `hotkey-overlay-title`: Human-readable label for the hotkey guide.
 
 **Example Bindings:**

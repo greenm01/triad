@@ -19,10 +19,15 @@ const
   Super* = 64'u32
 
 proc commandForBinding*(
-    config: Config, key: string, modifiers: uint32, mode = BindingMode.BindAlways
+    config: Config,
+    key: string,
+    modifiers: uint32,
+    mode = BindingMode.BindAlways,
+    layoutScope = "",
 ): string =
   for binding in config.keyBindings:
-    if binding.key == key and binding.modifiers == modifiers and binding.mode == mode:
+    if binding.key == key and binding.modifiers == modifiers and binding.mode == mode and
+        binding.layoutScope == layoutScope:
       return binding.command
   ""
 

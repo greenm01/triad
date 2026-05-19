@@ -867,7 +867,7 @@ janet {
         let other = config.keyBindings[j]
         check not (
           binding.key == other.key and binding.modifiers == other.modifiers and
-          binding.mode == other.mode
+          binding.mode == other.mode and binding.layoutScope == other.layoutScope
         )
 
     check config.msgKindForBinding("h", Super + Ctrl) == MsgKind.CmdMoveWindowLeft
@@ -912,9 +912,20 @@ janet {
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowPrev
     check config.commandForBinding("Tab", Super) == "focus-last"
-    check config.commandForBinding("e", Super) == "split-tree-layout-toggle-split"
-    check config.commandForBinding("s", Super) == "split-tree-layout-stacking"
-    check config.commandForBinding("w", Super) == "split-tree-layout-tabbed"
+    check config.commandForBinding("e", Super, BindingMode.BindNormal, "i3") ==
+      "split-tree-layout-toggle-split"
+    check config.commandForBinding("s", Super, BindingMode.BindNormal, "i3") ==
+      "split-tree-layout-stacking"
+    check config.commandForBinding("w", Super, BindingMode.BindNormal, "i3") ==
+      "split-tree-layout-tabbed"
+    check config.commandForBinding("h", Super + Alt, BindingMode.BindNormal, "i3") ==
+      "split-tree-split-horizontal"
+    check config.commandForBinding("v", Super + Alt, BindingMode.BindNormal, "i3") ==
+      "split-tree-split-vertical"
+    check config.commandForBinding("h", Super + Alt, BindingMode.BindNormal, "notion") ==
+      "frame-split-horizontal"
+    check config.commandForBinding("h", Super + Alt, BindingMode.BindNormal, "dwindle") ==
+      "dwindle-split-left"
     check config.commandForBinding("h", Super) == "focus-left"
     check config.commandForBinding("Left", Super) == "focus-left"
     check config.commandForBinding("j", Super) == "focus-down"
@@ -940,6 +951,10 @@ janet {
       MsgKind.CmdSplitTreeLayoutStacking
     check parseTextCommand("split-tree-layout-tabbed").get().kind ==
       MsgKind.CmdSplitTreeLayoutTabbed
+    check parseTextCommand("dwindle-split-horizontal").get().kind ==
+      MsgKind.CmdBspPreselect
+    check parseTextCommand("dwindle-split-horizontal").get().bspPreselectDirection ==
+      Direction.DirRight
     let tgmix = parseTextCommand("layout-tgmix").get()
     check tgmix.kind == MsgKind.CmdSetCustomLayout
     check tgmix.customLayout.layoutIdString() == "tgmix"
@@ -949,6 +964,29 @@ janet {
     let preset = parseTextCommand("switch-proportion-preset -1").get()
     check preset.kind == MsgKind.CmdSwitchProportionPreset
     check preset.proportionPresetDelta == -1
+
+  test "layout-scoped bindings parse as normal-mode canonical layout overrides":
+    let config = loadConfigNodes(
+      parseKdl(
+        """
+bindings {
+  bind "Super+v" "spawn global"
+  layout "split-tree" {
+    bind "Super+v" "split-tree-split-vertical"
+  }
+  layout "notion" {
+    bind "Super+Alt+h" "frame-split-horizontal"
+  }
+}
+"""
+      )
+    )
+
+    check config.commandForBinding("v", Super) == "spawn global"
+    check config.commandForBinding("v", Super, BindingMode.BindNormal, "i3") ==
+      "split-tree-split-vertical"
+    check config.commandForBinding("h", Super + Alt, BindingMode.BindNormal, "notion") ==
+      "frame-split-horizontal"
 
   test "config defaults clamp invalid runtime values":
     var model = Model()

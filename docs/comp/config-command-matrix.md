@@ -332,7 +332,8 @@ KDL config nodes and fields:
   size fields, and `default-floating-position`.
 - `environment`, `spawn-at-startup`, `window-menu-command`.
 - `bindings`: `mirror-hjkl-arrows`, `bind`, `pointer-bind`, `axis-bind`,
-  `gesture-bind`, plus `layout`, `mode`, `allow-inhibiting`,
+  `gesture-bind`, layout-scoped `layout "<id>" { bind ... }` blocks, plus
+  `layout`, `mode`, `allow-inhibiting`,
   `on-release`, `while-locked`, `hotkey-overlay-title`, and gesture `fingers`
   properties.
 - `switch-events`: `lid-close`, `lid-open`, `tablet-mode-on`,
@@ -363,12 +364,18 @@ KDL config nodes and fields:
   configs bind frame tab cycling to `Super+Page_Up` and `Super+Page_Down`.
   Frame-tree geometry fills the output usable rect, uses layout gaps only
   between split frames, and retains empty frame rects for native chrome.
+  Layout-scoped bindings can expose frame commands only while a frame layout is
+  active; default configs use `layout "notion"` with `Super+Alt+h/v/x` for split
+  horizontal, split vertical, and unsplit.
   `i3` supports `split-tree-split-horizontal`,
   `split-tree-split-vertical`, `split-tree-split-toggle`,
   `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`,
   `split-tree-layout-toggle-split`, `split-tree-layout-stacking`, and
   `split-tree-layout-tabbed`; focus, `move-window-*`, and
   `resize-width`/`resize-height` operate on the native split container tree.
+  Default configs scope i3 keys to `layout "i3"` so `Super+Alt+h/v` split the
+  focused container and `Super+e/s/w` select split, stacking, and tabbed modes
+  without stealing those keys from other layouts.
 - `layout.frame-tabs`: `active-color`, `active-unfocused-color`,
   `inactive-color`, `active-line-color`, `active-unfocused-line-color`,
   `empty-background-color`.
@@ -436,7 +443,8 @@ Text IPC and bind commands:
   `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`,
   `split-tree-layout-toggle-split`, `split-tree-layout-stacking`,
   `split-tree-layout-tabbed`, `bsp-balance`, `bsp-equalize`,
-  `bsp-preselect-left/right/up/down`, `bsp-preselect-ratio`,
+  `bsp-preselect-left/right/up/down`, `dwindle-split-left/right/up/down`,
+  `dwindle-split-horizontal`, `dwindle-split-vertical`, `bsp-preselect-ratio`,
   `bsp-preselect-cancel`, `adjust-gaps`, `toggle-gaps`, `zoom`.
 - Tags, movement, and groups: `move-to-tag-left`, `move-to-tag-right`,
   `move-to-tag`, `move-to-workspace`, `move-workspace-to-output`,

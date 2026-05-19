@@ -561,6 +561,7 @@ type
     modifiers*: uint32
     command*: string
     mode*: BindingMode
+    layoutScope*: string
     hasLayoutOverride*: bool
     layoutOverride*: uint32
     onRelease*: bool
