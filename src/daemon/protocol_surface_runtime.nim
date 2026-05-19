@@ -724,10 +724,11 @@ proc syncFrameTabBarSurfaces*(
     let key = bar.frameTabBarCacheKey()
     let ringInset = max(0'i32, bar.ringWidth)
     let surfaceH = max(1'i32, bar.geom.h + ringInset)
+    let surfaceW = max(1'i32, bar.geom.w + ringInset * 2)
     surf.decoration.setOffset(-ringInset, -surfaceH)
     surf.offsetX = -ringInset
     surf.offsetY = -surfaceH
-    surf.inputW = max(1'i32, bar.geom.w)
+    surf.inputW = surfaceW
     surf.inputH = surfaceH
     if surf.bufferCacheKey != key:
       let rendered = renderFrameTabBarBuffer(bar)

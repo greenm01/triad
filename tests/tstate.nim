@@ -586,19 +586,21 @@ suite "Runtime state primitives":
         ],
     )
     let rendered = renderFrameTabBarBuffer(bar)
-    check rendered.width == 120
+    check rendered.width == 124
     check rendered.height == 26
     check rendered.pixels.anyIt(it != 0)
     check rendered.pixelAt(4, 4) == testArgb(0x07080980'u32)
     check rendered.pixelAt(64, 4) == testArgb(0x010203ff'u32)
     check rendered.pixelAt(64, 25) == testArgb(0x0a0b0cff'u32)
     check rendered.pixelAt(0, 10) == testArgb(0x101112ff'u32)
-    check rendered.pixelAt(119, 10) == testArgb(0x101112ff'u32)
+    check rendered.pixelAt(123, 10) == testArgb(0x101112ff'u32)
     check rendered.pixelAt(40, 0) == testArgb(0x101112ff'u32)
-    check bar.frameTabIndexAt(5) == 0
-    check bar.frameTabIndexAt(75) == 1
     check bar.frameTabIndexAt(1) == -1
-    check bar.frameTabIndexAt(119) == -1
+    check bar.frameTabIndexAt(2) == 0
+    check bar.frameTabIndexAt(61) == 0
+    check bar.frameTabIndexAt(62) == 1
+    check bar.frameTabIndexAt(121) == 1
+    check bar.frameTabIndexAt(122) == -1
 
   test "empty frame chrome renderer keeps an input-capable interior":
     let frame = pv.ProjectedFrameEmptyChrome(
@@ -1732,14 +1734,23 @@ suite "Runtime state primitives":
 
     let tagId = model.activeTag
     let first = model.windowForExternal(ExternalWindowId(10))
-    let second = model.windowForExternal(ExternalWindowId(11))
-    let root = model.splitRootForTag(tagId)
-    model.splitNodes.mEntity(root).mode = SplitTreeNodeMode.Tabbed
+    let second = model.windowForExternal(ExternalWindowId(13))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    var projection = model.layoutProjection()
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].tabs.len == 2
+    let activeGeom = projection.instructions.filterIt(it.windowId == 10'u32)[0].geom
+    check projection.frameTabBars[0].geom.x == activeGeom.x
+    check projection.frameTabBars[0].geom.w == activeGeom.w
+    check projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h ==
+      activeGeom.y
+
     model.applyMsg(Msg(kind: MsgKind.CmdFrameTabNext))
     check model.tagData(tagId).get().focusedWindow == second
-    check model.layoutProjection().instructions[0].windowId == 11'u32
+    projection = model.layoutProjection()
+    check projection.instructions[0].windowId == 13'u32
 
     model.applyMsg(Msg(kind: MsgKind.CmdFrameTabPrev))
     check model.tagData(tagId).get().focusedWindow == first

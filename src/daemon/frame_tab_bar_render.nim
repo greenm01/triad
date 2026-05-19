@@ -47,7 +47,7 @@ proc frameTabLabel(tab: ProjectedFrameTab): string =
 proc frameTabIndexAt*(bar: ProjectedFrameTabBar, x: int32): int =
   let
     ringInset = max(0'i32, bar.ringWidth)
-    contentW = max(1'i32, bar.geom.w - ringInset * 2)
+    contentW = max(1'i32, bar.geom.w)
     contentX = x - ringInset
   if bar.tabs.len == 0 or bar.geom.w <= 0 or contentX < 0 or contentX >= contentW:
     return -1
@@ -75,8 +75,8 @@ proc frameTabBarCacheKey*(bar: ProjectedFrameTabBar): string =
 proc renderFrameTabBarBuffer*(bar: ProjectedFrameTabBar): PixelBuffer =
   let
     ringInset = max(0'i32, bar.ringWidth)
-    width = max(1'i32, bar.geom.w)
-    contentW = max(1'i32, width - ringInset * 2)
+    contentW = max(1'i32, bar.geom.w)
+    width = max(1'i32, contentW + ringInset * 2)
     tabH = max(1'i32, bar.geom.h)
     height = max(1'i32, tabH + ringInset)
     count = max(1, bar.tabs.len)
