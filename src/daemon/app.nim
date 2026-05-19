@@ -492,6 +492,7 @@ proc main*() =
       failCli("socket request failed: " & e.msg)
     return
 
+  let liveReloadDevMode = consumeLiveReloadDevMode()
   configureDevMode(args)
   configureLogging()
 
@@ -501,6 +502,11 @@ proc main*() =
     waylandDisplay = getEnv("WAYLAND_DISPLAY", ""),
     devMode = devModeEnabled(),
     behaviorLog = behaviorLogEnabled()
+  if liveReloadDevMode:
+    info "Live reload dev mode marker consumed",
+      path = defaultLiveReloadDevModePath(),
+      devMode = devModeEnabled(),
+      behaviorLog = behaviorLogEnabled()
 
   daemon.pendingLiveRestorePath = defaultLiveRestorePath()
   let hadRestoreSnapshot = fileExists(daemon.pendingLiveRestorePath)

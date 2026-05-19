@@ -155,7 +155,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
     `--hide-pointer`, `--no-clipboard`, and `--clipboard-only`.
 *   `config-reload`: Reloads the KDL config without restarting Triad or the configured shell profile unless the shell config changed.
 *   `triad-reload`: Writes a live-restore snapshot and stops the active River
-    manager so the normal session restart path can start a replacement.
+    manager so the normal session restart path can start a replacement. It
+    preserves dev mode only when the active daemon is already in dev mode.
 *   `dump-live-restore-state`: Prints a versioned JSON snapshot used by live reload to preserve workspaces, focus history, sizing, and window state.
 *   `perf-status`: Prints frame-rate selection, idle wake timing, wait backend,
     whether a frame tick is currently active, and cumulative render/manage

@@ -479,6 +479,9 @@ CLI and environment:
 - `triad --dev-mode` and `TRIAD_DEV_MODE=1` enable developer-session defaults
   such as behavior JSONL logs. `TRIAD_BEHAVIOR_LOG=0` still forces those logs
   off, and `TRIAD_BEHAVIOR_LOG=1` enables them without the full dev mode.
+- `nimble liveReload` starts the replacement daemon in dev mode through a
+  one-shot runtime marker. Direct `triad-reload` preserves dev mode only when
+  the active daemon was already in dev mode.
 - `triad msg dev-mode [on|off|toggle|status]` changes or reports the live
   daemon diagnostics mode without restarting the session.
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,

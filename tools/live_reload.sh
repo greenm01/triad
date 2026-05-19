@@ -32,6 +32,14 @@ fail() {
   exit 1
 }
 
+enable_live_reload_dev_mode() {
+  marker="$runtime_dir/triad-live-dev-mode"
+  marker_dir="$(dirname -- "$marker")"
+  mkdir -p "$marker_dir"
+  printf '1\n' > "$marker"
+  log_info "enabled one-shot dev mode for replacement daemon via $marker"
+}
+
 atomic_install() {
   src="$1"
   dst="$2"
@@ -671,6 +679,7 @@ old_pid=""
 require_hardened_runtime
 validate_live_config
 snapshot_restore_state "$restore_path"
+enable_live_reload_dev_mode
 
 mkdir -p "$bin_dir"
 backup_live_binaries

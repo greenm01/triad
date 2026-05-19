@@ -60,6 +60,12 @@ snapshot cannot be captured, the reload aborts rather than falling back to the
 Niri-compatible state view, because that view cannot preserve camera offsets or
 full floating geometry.
 
+`nimble liveReload` also writes a one-shot runtime marker so the replacement
+daemon starts in dev mode and behavior JSONL logging is available immediately
+after the reload. A direct `triad-reload` command, including the default
+`Ctrl+Alt+r` binding, only preserves dev mode when the running daemon was
+already in dev mode.
+
 Compact behavior JSONL logs are off by default for normal sessions. Enable
 them for a focused investigation with `triad --dev-mode`, `TRIAD_DEV_MODE=1`,
 or `TRIAD_BEHAVIOR_LOG=1`. They are written outside the repository under

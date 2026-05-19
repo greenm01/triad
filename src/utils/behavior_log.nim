@@ -12,6 +12,7 @@ const
   DefaultKeepDays* = 7
   DevModeEnv* = "TRIAD_DEV_MODE"
   BehaviorLogEnv* = "TRIAD_BEHAVIOR_LOG"
+  LiveReloadDevModeMarker* = "triad-live-dev-mode"
   BehaviorLogPrefix = "triad-behavior-"
   BehaviorLogSuffix = ".jsonl"
 
@@ -44,6 +45,29 @@ proc configureDevMode*(args: openArray[string]) =
     putEnv(DevModeEnv, "1")
     if getEnv(BehaviorLogEnv, "").len == 0:
       putEnv(BehaviorLogEnv, "1")
+
+proc defaultLiveReloadDevModePath*(): string =
+  getEnv("XDG_RUNTIME_DIR", "/tmp") / LiveReloadDevModeMarker
+
+proc markLiveReloadDevMode*(path = defaultLiveReloadDevModePath()): bool =
+  if path.len == 0:
+    return false
+  try:
+    createDir(path.parentDir())
+    writeFile(path, "1\n")
+    true
+  except CatchableError:
+    false
+
+proc consumeLiveReloadDevMode*(path = defaultLiveReloadDevModePath()): bool =
+  if not fileExists(path):
+    return false
+  try:
+    removeFile(path)
+  except CatchableError:
+    discard
+  putEnv(DevModeEnv, "1")
+  true
 
 proc setRuntimeDevMode*(enabled: bool) =
   if enabled:

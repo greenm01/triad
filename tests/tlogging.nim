@@ -119,6 +119,28 @@ suite "Runtime logging":
     check devModeEnabled()
     check behaviorLogEnabled()
 
+  test "live reload dev mode marker is one-shot":
+    let path = getTempDir() / ("triad-live-dev-mode-" & $getCurrentProcessId())
+    let oldDevMode = getEnv("TRIAD_DEV_MODE", "")
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    defer:
+      restoreEnv("TRIAD_DEV_MODE", oldDevMode)
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      if fileExists(path):
+        removeFile(path)
+
+    putEnv("TRIAD_DEV_MODE", "")
+    putEnv("TRIAD_BEHAVIOR_LOG", "")
+    check markLiveReloadDevMode(path)
+    check fileExists(path)
+    check consumeLiveReloadDevMode(path)
+    configureDevMode(@[])
+    check devModeEnabled()
+    check behaviorLogEnabled()
+    check not fileExists(path)
+    putEnv("TRIAD_DEV_MODE", "")
+    check not consumeLiveReloadDevMode(path)
+
   test "runtime update behavior event records workspace transition":
     let dir = getTempDir() / ("triad-behavior-runtime-" & $getCurrentProcessId())
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")

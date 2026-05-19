@@ -179,6 +179,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       warn "Triad reload rejected; live restore snapshot could not be written",
         path = restore.path, error = restore.error
       return
+    if devModeEnabled() and not markLiveReloadDevMode():
+      warn "Triad reload could not preserve dev mode"
     daemon.quickshellState.spawnPending = false
     daemon.quickshellState.releaseTrackedQuickshell("triad reload")
     if daemon.riverManager != nil:
