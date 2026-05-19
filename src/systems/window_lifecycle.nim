@@ -13,6 +13,11 @@ proc supportsOpenColumnMaximize(model: Model, tagId: TagId): bool =
     tagOpt.get().nativeLayoutId.nativeLayoutIdString().len == 0 and
     tagOpt.get().layoutMode in {LayoutMode.Scroller, LayoutMode.VerticalScroller}
 
+proc tagUsesSplitTree(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and
+    tagOpt.get().nativeLayoutId.nativeLayoutIdString() == SplitTreeLayoutId
+
 proc applyOpenColumnMaximize(model: var Model, tagId: TagId, columnId: ColumnId): bool =
   if columnId == NullColumnId or not model.supportsOpenColumnMaximize(tagId):
     return false
@@ -880,7 +885,10 @@ proc settleWindowAdmissionForExternal*(
     if placementWinId == winId and affectedTags.find(tagId) == -1:
       affectedTags.add(tagId)
   for tagId in affectedTags:
-    result = model.syncTagNativeSubstrateFromPlacement(tagId) or result
+    if model.tagUsesSplitTree(tagId):
+      result = model.addWindowToSplitTree(tagId, winId) or result
+    else:
+      result = model.syncTagNativeSubstrateFromPlacement(tagId) or result
   if focusAfterAdmission and not model.sessionLocked:
     let tagId = model.tagForWindow(winId)
     if tagId != NullTagId and tagId == model.activeTag:

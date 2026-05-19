@@ -1577,6 +1577,42 @@ suite "Runtime state primitives":
     check thirdGeom.x < secondGeom.x
     check firstGeom.y < thirdGeom.y
 
+  test "native split-tree preserves split direction for deferred windows":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, deferAdmission: true)
+    )
+
+    let tagId = model.activeTag
+    let third = model.windowForExternal(ExternalWindowId(12))
+    check model.windowData(third).get().admissionState ==
+      WindowAdmissionState.PendingAdmission
+    check model.splitNodeForWindowOnTag(tagId, third) == tc.NullSplitNodeId
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: 12))
+
+    check model.windowData(third).get().admissionState == WindowAdmissionState.Admitted
+    check model.splitNodeForWindowOnTag(tagId, third) != tc.NullSplitNodeId
+    let projection = model.layoutProjection()
+    let firstGeom = projection.instructions.filterIt(it.windowId == 10'u32)[0].geom
+    let secondGeom = projection.instructions.filterIt(it.windowId == 11'u32)[0].geom
+    let thirdGeom = projection.instructions.filterIt(it.windowId == 12'u32)[0].geom
+    check projection.instructions.len == 3
+    check firstGeom.x == thirdGeom.x
+    check firstGeom.w == thirdGeom.w
+    check firstGeom.y < thirdGeom.y
+    check secondGeom.x > firstGeom.x
+
   test "split-tree movement mirrors directional focus and swaps windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(
