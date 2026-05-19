@@ -37,11 +37,18 @@ proc setCommandLayout(model: var Model, tagId: TagId, mode: LayoutMode): bool =
 proc setCommandCustomLayout(
     model: var Model, tagId: TagId, id: JanetLayoutId, fallback: LayoutSelection
 ): bool =
+  let previous = model.tagData(tagId)
+  let wasFrameTree =
+    previous.isSome and
+    previous.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
   result = model.setTagCustomLayout(tagId, id, fallback)
   if result:
     if fallback.kind == LayoutSelectionKind.Native:
       if fallback.nativeId.nativeLayoutIdString() == FrameTreeLayoutId:
-        discard model.syncTagFramesFromPlacement(tagId)
+        if id.layoutIdString() == "notion" and not wasFrameTree:
+          discard model.importTagWindowsAsTabbedFrame(tagId)
+        else:
+          discard model.syncTagFramesFromPlacement(tagId)
       elif fallback.nativeId.nativeLayoutIdString() == BspTreeLayoutId:
         discard model.syncTagBspFromPlacement(tagId)
       elif fallback.nativeId.nativeLayoutIdString() == SplitTreeLayoutId:
@@ -51,10 +58,15 @@ proc setCommandCustomLayout(
 proc setCommandNativeLayout(
     model: var Model, tagId: TagId, id: NativeLayoutId, fallback: LayoutMode
 ): bool =
+  let previous = model.tagData(tagId)
+  let wasFrameTree =
+    previous.isSome and
+    previous.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId
   result = model.setTagNativeLayout(tagId, id, fallback)
   if result:
     if id.nativeLayoutIdString() == FrameTreeLayoutId:
-      discard model.syncTagFramesFromPlacement(tagId)
+      discard
+        model.syncTagFramesFromPlacement(tagId, preferFocusedWindow = not wasFrameTree)
     elif id.nativeLayoutIdString() == BspTreeLayoutId:
       discard model.syncTagBspFromPlacement(tagId)
     elif id.nativeLayoutIdString() == SplitTreeLayoutId:

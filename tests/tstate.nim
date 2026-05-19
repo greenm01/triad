@@ -2438,7 +2438,7 @@ suite "Runtime state primitives":
     check projection.instructions.anyIt(it.windowId == 12'u32)
     check projection.instructions[0].geom.x < projection.instructions[1].geom.x
 
-  test "notion re-entry preserves frames and admits missing frame windows":
+  test "notion re-entry imports tiled windows as one tabbed frame":
     var config = baseConfig()
     config.janet.layouts =
       @[
@@ -2480,21 +2480,91 @@ suite "Runtime state primitives":
     check model.tagData(tagId).get().nativeLayoutId.nativeLayoutIdString() ==
       "frame-tree"
     var frameCountAfter = 0
-    var emptyLeafPreserved = false
+    var rootLeaf = tc.NullFrameId
     for frameId, frame in model.framesOnTagWithId(tagId):
       inc frameCountAfter
-      if frameId == emptyLeafBefore and frame.kind == FrameNodeKind.Leaf and
-          model.windowsForFrame(frameId).len == 0:
-        emptyLeafPreserved = true
-    check frameCountAfter == frameCountBefore
-    check emptyLeafPreserved
+      if frame.parent == tc.NullFrameId and frame.kind == FrameNodeKind.Leaf:
+        rootLeaf = frameId
+    check frameCountAfter == 1
+    check rootLeaf != tc.NullFrameId
+    check rootLeaf != emptyLeafBefore
+    check model.windowsForFrame(rootLeaf) == @[tc.WindowId(1), tc.WindowId(2)]
     let admittedFrame = model.frameForWindowOnTag(tagId, tc.WindowId(2))
-    check admittedFrame != tc.NullFrameId
-    check model.frameData(admittedFrame).get().kind == FrameNodeKind.Leaf
-    check model.windowsForFrame(admittedFrame).find(tc.WindowId(2)) != -1
+    check admittedFrame == rootLeaf
     let projection = model.layoutProjection()
-    check projection.instructions.anyIt(it.windowId == 11'u32)
-    check projection.frameEmptyChrome.anyIt(it.frameId == uint32(emptyLeafBefore))
+    check projection.instructions.len == 1
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].tabs.len == 2
+    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 10'u32)
+    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 11'u32)
+    check projection.frameEmptyChrome.len == 0
+
+  test "notion re-entry imports stale empty frame focus into tabbed frame":
+    var config = baseConfig()
+    config.janet.layouts =
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("notion"),
+          fallback: nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+        )
+      ]
+    var model = initRuntimeStateFromConfig(config).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitVertical))
+
+    let tagId = model.activeTag
+    var emptyLeaf = tc.NullFrameId
+    for frameId, frame in model.framesOnTagWithId(tagId):
+      if frame.kind == FrameNodeKind.Leaf and model.windowsForFrame(frameId).len == 0:
+        emptyLeaf = frameId
+    check emptyLeaf != tc.NullFrameId
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlFrameEmptyFocused, frameFocusFrameId: uint32(emptyLeaf))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    let firstWindowFrame = model.frameForWindowOnTag(tagId, tc.WindowId(1))
+    let secondWindowFrame = model.frameForWindowOnTag(tagId, tc.WindowId(2))
+    check firstWindowFrame != tc.NullFrameId
+    check secondWindowFrame != tc.NullFrameId
+    check firstWindowFrame != secondWindowFrame
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitVertical))
+    var staleEmptyLeaf = tc.NullFrameId
+    for frameId, frame in model.framesOnTagWithId(tagId):
+      if frame.kind == FrameNodeKind.Leaf and model.windowsForFrame(frameId).len == 0:
+        staleEmptyLeaf = frameId
+    check staleEmptyLeaf != tc.NullFrameId
+
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.tags.mEntity(tagId).focusedFrame = staleEmptyLeaf
+    model.tags.mEntity(tagId).focusedWindow = tc.WindowId(1)
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+
+    let repairedTag = model.tagData(tagId).get()
+    check repairedTag.customLayoutId.layoutIdString() == "notion"
+    check repairedTag.nativeLayoutId.nativeLayoutIdString() == "frame-tree"
+    check repairedTag.focusedWindow == tc.WindowId(1)
+    check repairedTag.focusedFrame != firstWindowFrame
+    check model.windowsForFrame(repairedTag.focusedFrame) ==
+      @[tc.WindowId(1), tc.WindowId(2)]
+
+    let projection = model.layoutProjection()
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 10'u32
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].tabs.len == 2
+    check projection.frameEmptyChrome.len == 0
 
   test "explicit active layout command opens layout switch toast":
     var config = baseConfig()

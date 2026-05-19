@@ -150,16 +150,90 @@ proc firstLeafFrame(model: Model, tagId: TagId): FrameId =
       return frameId
   NullFrameId
 
-proc syncTargetFrame(model: var Model, tagId: TagId): FrameId =
+proc firstOccupiedLeafFrame(model: Model, tagId: TagId): FrameId =
+  for frameId, frame in model.framesOnTagWithId(tagId):
+    if frame.kind == FrameNodeKind.Leaf and
+        model.windowsByFrame.getOrDefault(frameId, @[]).len > 0:
+      return frameId
+  NullFrameId
+
+proc focusedWindowFrame(model: Model, tagId: TagId): FrameId =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
     return NullFrameId
+  model.frameByTagWindow.getOrDefault((tagId, tagOpt.get().focusedWindow), NullFrameId)
+
+proc visibleTiledWindowsInPlacementOrder(model: Model, tagId: TagId): seq[WindowId] =
+  for columnId, _ in model.columnsOnTagWithId(tagId):
+    for winId, _ in model.windowsOnColumnWithId(columnId):
+      if result.find(winId) == -1 and model.frameWindowVisible(tagId, winId):
+        result.add(winId)
+
+proc clearTagFrames(model: var Model, tagId: TagId): bool =
+  var frameIds: seq[FrameId] = @[]
+  for frameId, _ in model.framesOnTagWithId(tagId):
+    frameIds.add(frameId)
+  for frameId in frameIds:
+    model.windowsByFrame.del(frameId)
+    result = model.frames.delete(frameId) or result
+
+  var keys: seq[(TagId, WindowId)] = @[]
+  for key in model.frameByTagWindow.keys:
+    if key[0] == tagId:
+      keys.add(key)
+  for key in keys:
+    model.frameByTagWindow.del(key)
+    result = true
+
+  if model.frameRootsByTag.hasKey(tagId):
+    model.frameRootsByTag.del(tagId)
+    result = true
+
+proc importTagWindowsAsTabbedFrame*(model: var Model, tagId: TagId): bool =
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+  let windows = model.visibleTiledWindowsInPlacementOrder(tagId)
+  if windows.len == 0:
+    return model.clearTagFrames(tagId)
+
+  result = model.clearTagFrames(tagId)
+  let frameId = model.addFrame(tagId)
+  if frameId == NullFrameId:
+    return result
+
+  model.frameRootsByTag[tagId] = frameId
+  model.windowsByFrame[frameId] = @[]
+  for winId in windows:
+    model.windowsByFrame[frameId].add(winId)
+    model.frameByTagWindow[(tagId, winId)] = frameId
+
+  var active = tagOpt.get().focusedWindow
+  if windows.find(active) == -1:
+    active = windows[^1]
+  model.frames.mEntity(frameId).activeWindow = active
+  model.tags.mEntity(tagId).focusedFrame = frameId
+  model.tags.mEntity(tagId).focusedWindow = active
+  result = true
+
+proc syncTargetFrame(
+    model: var Model, tagId: TagId, preferFocusedWindow = false
+): FrameId =
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return NullFrameId
+  let focusedWindowFrame = model.focusedWindowFrame(tagId)
+  if preferFocusedWindow and model.frameLeafValid(tagId, focusedWindowFrame):
+    discard model.setFocusedFrame(tagId, focusedWindowFrame)
+    return focusedWindowFrame
+  if preferFocusedWindow:
+    result = model.firstOccupiedLeafFrame(tagId)
+    if result != NullFrameId:
+      discard model.setFocusedFrame(tagId, result)
+      return
   let focused = tagOpt.get().focusedFrame
   if model.frameLeafValid(tagId, focused):
     return focused
-  let focusedWindowFrame = model.frameByTagWindow.getOrDefault(
-    (tagId, tagOpt.get().focusedWindow), NullFrameId
-  )
   if model.frameLeafValid(tagId, focusedWindowFrame):
     discard model.setFocusedFrame(tagId, focusedWindowFrame)
     return focusedWindowFrame
@@ -171,19 +245,25 @@ proc syncTargetFrame(model: var Model, tagId: TagId): FrameId =
   if not model.frameLeafValid(tagId, result):
     result = NullFrameId
 
-proc syncTagFramesFromPlacement*(model: var Model, tagId: TagId): bool =
+proc syncTagFramesFromPlacement*(
+    model: var Model, tagId: TagId, preferFocusedWindow = false
+): bool =
   if model.ensureFrameRoot(tagId) == NullFrameId:
     return false
   for frameId, frame in model.framesOnTagWithId(tagId):
     if frame.kind == FrameNodeKind.Leaf:
       result = model.repairFrameActiveWindow(frameId) or result
-  let target = model.syncTargetFrame(tagId)
+  let target = model.syncTargetFrame(tagId, preferFocusedWindow)
   if target == NullFrameId:
     return result
   for winId in model.windowsByTag.getOrDefault(tagId, @[]):
     if model.frameWindowVisible(tagId, winId) and
         model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId) == NullFrameId:
       result = model.addWindowToFrame(tagId, winId, target) or result
+  if preferFocusedWindow:
+    let focusedWindowFrame = model.focusedWindowFrame(tagId)
+    if model.frameLeafValid(tagId, focusedWindowFrame):
+      result = model.setFocusedFrame(tagId, focusedWindowFrame) or result
 
 proc removeWindowFromFrame*(model: var Model, tagId: TagId, winId: WindowId): bool =
   let frameId = model.frameByTagWindow.getOrDefault((tagId, winId), NullFrameId)
