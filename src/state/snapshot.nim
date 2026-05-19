@@ -97,6 +97,7 @@ proc shellSplitNodes(model: Model, tagId: TagId): seq[ShellSplitNode] =
         parent: uint32(node.parent),
         children: children,
         mode: node.mode,
+        lastSplitMode: node.lastSplitMode,
         weight: node.weight,
         window: model.externalWindowId(node.window),
         focused:

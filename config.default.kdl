@@ -318,7 +318,9 @@ bindings {
 
     // Layout selection.
     bind "Super+n" "switch-layout"
-    bind "Super+s" "layout-scroller"
+    bind "Super+e" "split-tree-layout-toggle-split"
+    bind "Super+s" "split-tree-layout-stacking"
+    bind "Super+w" "split-tree-layout-tabbed"
     bind "Super+Shift+s" "layout-vertical-scroller"
     bind "Super+d" "layout-tile"
     bind "Super+g" "layout-grid"

@@ -74,6 +74,8 @@ proc splitModeExpr(mode: SplitTreeNodeMode): string =
   case mode
   of SplitTreeNodeMode.SplitH: ":splith"
   of SplitTreeNodeMode.SplitV: ":splitv"
+  of SplitTreeNodeMode.Stacking: ":stacking"
+  of SplitTreeNodeMode.Tabbed: ":tabbed"
 
 proc directionExpr(direction: Direction): string =
   case direction
@@ -117,9 +119,9 @@ proc splitNodeExpr(node: rv.ProjectedSplitNode): string =
     children.add($child)
   "{:id " & $node.id & " :kind " & node.kind.frameKindExpr() & " :parent " & $node.parent &
     " :children [" & children.join(" ") & "] :mode " & node.mode.splitModeExpr() &
-    " :weight " & $node.weight & " :window " & $node.window & " :focused " &
-    node.focused.boolValue() & " :rect-set " & node.rectSet.boolValue() & " :rect " &
-    node.rect.rectExpr() & "}"
+    " :last-split-mode " & node.lastSplitMode.splitModeExpr() & " :weight " &
+    $node.weight & " :window " & $node.window & " :focused " & node.focused.boolValue() &
+    " :rect-set " & node.rectSet.boolValue() & " :rect " & node.rect.rectExpr() & "}"
 
 proc windowExpr(window: rv.ProjectedWindow): string =
   "{:id " & $window.id & " :pid " & $window.pid & " :title " & window.title.escaped() &

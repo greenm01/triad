@@ -10,7 +10,8 @@ import ../types/layout_projection
 import ../types/model as model_types
 import ../types/projection_values as rv
 from ../types/runtime_values import
-  Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId, SpiralLayoutConfig
+  Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId, SpiralLayoutConfig,
+  SplitTreeNodeMode
 import
   floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
   window_rules
@@ -293,6 +294,7 @@ proc projectedTag(
           parent: uint32(node.parent),
           children: children,
           mode: node.mode,
+          lastSplitMode: node.lastSplitMode,
           weight: node.weight,
           window: model.externalWindowId(node.window),
           focused:
@@ -624,7 +626,8 @@ proc applySplitTreeRects(
     screen: rv.Rect,
     outerGap, innerGap: int32,
 ) =
-  let rects = model.splitTreeLeafRects(tagId, screen, outerGap, innerGap)
+  let rects =
+    model.splitTreeLeafRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
   for item in rects:
     for node in tag.splitNodes.mitems:
       if node.id == uint32(item.nodeId):
@@ -688,7 +691,8 @@ proc layoutBspTree*(
 proc layoutSplitTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
-  let rects = model.splitTreeLeafRects(tagId, screen, outerGap, innerGap)
+  let rects =
+    model.splitTreeLeafRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
   for item in rects:
     let winId = item.window
     if winId == NullWindowId:
@@ -699,6 +703,97 @@ proc layoutSplitTree*(
       result.add(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: item.rect)
       )
+
+proc splitTreeActiveWindow(model: Model, nodeId: SplitNodeId): WindowId =
+  let nodeOpt = model.splitNodeData(nodeId)
+  if nodeOpt.isNone:
+    return NullWindowId
+  let node = nodeOpt.get()
+  if node.kind == FrameNodeKind.Leaf:
+    return node.window
+
+  let focused = model.effectiveTagFocusedWindow(node.tagId)
+  if focused != NullWindowId:
+    let focusedNode =
+      model.splitNodeByTagWindow.getOrDefault((node.tagId, focused), NullSplitNodeId)
+    var current = focusedNode
+    while current != NullSplitNodeId:
+      if current == nodeId:
+        return focused
+      let currentOpt = model.splitNodeData(current)
+      if currentOpt.isNone:
+        break
+      current = currentOpt.get().parent
+
+  for child in node.children:
+    result = model.splitTreeActiveWindow(child)
+    if result != NullWindowId:
+      return
+
+proc splitTreeVisibleTabs(
+    model: Model, node: SplitNodeData, activeChild: SplitNodeId
+): seq[rv.ProjectedFrameTab] =
+  for child in node.children:
+    let winId = model.splitTreeActiveWindow(child)
+    if winId == NullWindowId:
+      continue
+    let winOpt = model.windowData(winId)
+    if winOpt.isNone:
+      continue
+    let win = winOpt.get()
+    result.add(
+      rv.ProjectedFrameTab(
+        windowId: model.externalWindowId(winId),
+        title: win.title,
+        appId: win.appId,
+        active: child == activeChild,
+      )
+    )
+
+proc splitTreeTabBars*(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.ProjectedFrameTabBar] =
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return @[]
+  let nodeRects =
+    model.splitTreeNodeRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
+  for item in nodeRects:
+    let nodeOpt = model.splitNodeData(item.nodeId)
+    if nodeOpt.isNone:
+      continue
+    let node = nodeOpt.get()
+    if node.kind != FrameNodeKind.Split or
+        node.mode notin {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+      continue
+    let active = model.splitTreeActiveWindow(item.nodeId)
+    if active == NullWindowId:
+      continue
+    let tabHeight = frameTreeTabHeight(item.rect)
+    if tabHeight <= 0:
+      continue
+    var activeChild = NullSplitNodeId
+    for child in node.children:
+      if model.splitTreeActiveWindow(child) == active:
+        activeChild = child
+        break
+    let tabs = model.splitTreeVisibleTabs(node, activeChild)
+    if tabs.len == 0:
+      continue
+    let focused = active == tagOpt.get().focusedWindow
+    let border = model.effectiveWindowBorder(active, focused)
+    result.add(
+      rv.ProjectedFrameTabBar(
+        frameId: uint32(item.nodeId),
+        windowId: model.externalWindowId(active),
+        geom: rv.Rect(x: item.rect.x, y: item.rect.y, w: item.rect.w, h: tabHeight),
+        focused: focused,
+        frameTabs: model.frameTabs,
+        ringWidth: border.width,
+        ringColor: if focused: border.activeColor else: border.inactiveColor,
+        tabs: tabs,
+      )
+    )
 
 proc frameTreeFrameRectsFromInstructions(
     tag: rv.ProjectedTag, instructions: openArray[rv.RenderInstruction]
@@ -1315,8 +1410,12 @@ proc layoutProjection*(
   elif activeTagData.bspTreeActive():
     result.bspPreselections =
       model.bspPreselectionOverlays(tagForLayout, currentInnerGap)
+  elif activeTagData.splitTreeActive():
+    result.frameTabBars =
+      model.splitTreeTabBars(model.activeTag, screen, currentOuterGap, currentInnerGap)
   if tagForLayout.columns.len > 0 and not custom.applied and
-      not activeTagData.frameTreeActive() and not activeTagData.bspTreeActive():
+      not activeTagData.frameTreeActive() and not activeTagData.bspTreeActive() and
+      not activeTagData.splitTreeActive():
     result.viewportTargets.add(
       LayoutViewportTarget(
         tagSlot: projected.tag.tagId,

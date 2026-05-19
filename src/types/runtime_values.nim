@@ -71,6 +71,8 @@ type
   SplitTreeNodeMode* {.pure.} = enum
     SplitH
     SplitV
+    Stacking
+    Tabbed
 
   LayoutSelection* = object
     kind*: LayoutSelectionKind

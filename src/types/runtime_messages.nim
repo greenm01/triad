@@ -72,6 +72,11 @@ type
     CmdSplitTreeSplitHorizontal
     CmdSplitTreeSplitVertical
     CmdSplitTreeSplitToggle
+    CmdSplitTreeLayoutSplitHorizontal
+    CmdSplitTreeLayoutSplitVertical
+    CmdSplitTreeLayoutToggleSplit
+    CmdSplitTreeLayoutStacking
+    CmdSplitTreeLayoutTabbed
     CmdBspBalance
     CmdBspEqualize
     CmdBspPreselect

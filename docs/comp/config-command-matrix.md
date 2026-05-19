@@ -364,9 +364,11 @@ KDL config nodes and fields:
   Frame-tree geometry fills the output usable rect, uses layout gaps only
   between split frames, and retains empty frame rects for native chrome.
   `i3` supports `split-tree-split-horizontal`,
-  `split-tree-split-vertical`, and `split-tree-split-toggle`; focus,
-  `move-window-*`, and `resize-width`/`resize-height` operate on the native
-  split container tree.
+  `split-tree-split-vertical`, `split-tree-split-toggle`,
+  `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`,
+  `split-tree-layout-toggle-split`, `split-tree-layout-stacking`, and
+  `split-tree-layout-tabbed`; focus, `move-window-*`, and
+  `resize-width`/`resize-height` operate on the native split container tree.
 - `layout.frame-tabs`: `active-color`, `active-unfocused-color`,
   `inactive-color`, `active-line-color`, `active-unfocused-line-color`,
   `empty-background-color`.
@@ -430,7 +432,10 @@ Text IPC and bind commands:
   `master-count`, `adjust-master-count`, `master-ratio`,
   `adjust-master-ratio`, `maximize-column`, `resize-width`, `resize-height`,
   `set-column-width`, `split-tree-split-horizontal`,
-  `split-tree-split-vertical`, `split-tree-split-toggle`, `bsp-balance`, `bsp-equalize`,
+  `split-tree-split-vertical`, `split-tree-split-toggle`,
+  `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`,
+  `split-tree-layout-toggle-split`, `split-tree-layout-stacking`,
+  `split-tree-layout-tabbed`, `bsp-balance`, `bsp-equalize`,
   `bsp-preselect-left/right/up/down`, `bsp-preselect-ratio`,
   `bsp-preselect-cancel`, `adjust-gaps`, `toggle-gaps`, `zoom`.
 - Tags, movement, and groups: `move-to-tag-left`, `move-to-tag-right`,

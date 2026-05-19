@@ -93,6 +93,7 @@ type
     parent*: uint32
     children*: seq[uint32]
     mode*: SplitTreeNodeMode
+    lastSplitMode*: SplitTreeNodeMode
     weight*: float32
     window*: ProjectionWindowId
     focused*: bool

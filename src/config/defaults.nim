@@ -152,6 +152,9 @@ bindings {
     bind "Alt+z" "toggle-scratchpad"
     bind "Super+Shift+i" "restore-scratchpad"
     bind "Super+n" "switch-layout"
+    bind "Super+e" "split-tree-layout-toggle-split"
+    bind "Super+s" "split-tree-layout-stacking"
+    bind "Super+w" "split-tree-layout-tabbed"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false

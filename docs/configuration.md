@@ -123,6 +123,11 @@ Control the geometry and behavior of your windows.
 | `frame-rate` | `"auto" / Int` | Targeted FPS (24..240, default: "auto"). |
 | `layout-cycle` | `List` | Built-in layout ids and declared Janet layout names to rotate through. |
 
+Native `i3` split-tree layouts support i3-style container modes through
+`split-tree-layout-toggle-split`, `split-tree-layout-stacking`, and
+`split-tree-layout-tabbed`. The default bindings use `Super+e`, `Super+s`, and
+`Super+w` for those commands.
+
 **Example Layout Configuration:**
 ```kdl
 layout {

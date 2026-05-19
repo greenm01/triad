@@ -34,6 +34,11 @@ type
     CidSplitTreeSplitHorizontal
     CidSplitTreeSplitVertical
     CidSplitTreeSplitToggle
+    CidSplitTreeLayoutSplitHorizontal
+    CidSplitTreeLayoutSplitVertical
+    CidSplitTreeLayoutToggleSplit
+    CidSplitTreeLayoutStacking
+    CidSplitTreeLayoutTabbed
     CidBspBalance
     CidBspEqualize
     CidBspPreselectLeft
@@ -274,6 +279,31 @@ const CommandSpecs* = [
   CommandSpec(
     id: CommandId.CidSplitTreeSplitToggle,
     name: "split-tree-split-toggle",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutSplitHorizontal,
+    name: "split-tree-layout-split-horizontal",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutSplitVertical,
+    name: "split-tree-layout-split-vertical",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutToggleSplit,
+    name: "split-tree-layout-toggle-split",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutStacking,
+    name: "split-tree-layout-stacking",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutTabbed,
+    name: "split-tree-layout-tabbed",
     argShape: NoArgs,
   ),
   CommandSpec(id: CommandId.CidBspBalance, name: "bsp-balance", argShape: NoArgs),

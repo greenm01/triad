@@ -271,10 +271,11 @@ janet {
 When split-tree data is active, `ctx` includes top-level `:split-nodes`,
 mirrors the same data at `((ctx :tag) :split-nodes)`, and sets
 `:substrate :split-tree`. Leaf split nodes include `:window`, `:focused`,
-`:rect-set`, and `:rect`; container nodes include `:children`, `:mode`, and
-`:weight`. A layout may return `:split-node-id` geometry for leaf nodes. Triad
-maps each split leaf rectangle to that node's tiled window. Janet cannot mutate
-the split tree; split h/v, insertion, movement, resize, flattening, and restore
+`:rect-set`, and `:rect`; container nodes include `:children`, `:mode`,
+`:last-split-mode`, and `:weight`. A layout may return `:split-node-id`
+geometry for leaf nodes. Triad maps each split leaf rectangle to that node's
+tiled window. Janet cannot mutate the split tree; split h/v, i3
+stacking/tabbed modes, insertion, movement, resize, flattening, and restore
 remain native reducer behavior.
 
 ---

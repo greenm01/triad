@@ -912,6 +912,9 @@ janet {
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowPrev
     check config.commandForBinding("Tab", Super) == "focus-last"
+    check config.commandForBinding("e", Super) == "split-tree-layout-toggle-split"
+    check config.commandForBinding("s", Super) == "split-tree-layout-stacking"
+    check config.commandForBinding("w", Super) == "split-tree-layout-tabbed"
     check config.commandForBinding("h", Super) == "focus-left"
     check config.commandForBinding("Left", Super) == "focus-left"
     check config.commandForBinding("j", Super) == "focus-down"
@@ -931,6 +934,12 @@ janet {
     check config.layoutIdForBinding("v", Super + Ctrl) == "deck"
     check config.layoutIdForBinding("x", Super + Ctrl) == "monocle"
     check config.layoutIdForBinding("c", Super + Shift) == "right-tile"
+    check parseTextCommand("split-tree-layout-toggle-split").get().kind ==
+      MsgKind.CmdSplitTreeLayoutToggleSplit
+    check parseTextCommand("split-tree-layout-stacking").get().kind ==
+      MsgKind.CmdSplitTreeLayoutStacking
+    check parseTextCommand("split-tree-layout-tabbed").get().kind ==
+      MsgKind.CmdSplitTreeLayoutTabbed
     let tgmix = parseTextCommand("layout-tgmix").get()
     check tgmix.kind == MsgKind.CmdSetCustomLayout
     check tgmix.customLayout.layoutIdString() == "tgmix"

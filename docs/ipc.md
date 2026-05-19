@@ -97,6 +97,11 @@ To dispatch a command to the running Triad instance, use the following syntax:
     use `frame-unsplit` to remove the focused empty frame.
 *   `frame-unsplit`: Removes the focused empty frame and promotes its sibling.
 *   `frame-tab-next`, `frame-tab-prev`: Cycles tabs in the focused frame.
+*   `split-tree-layout-toggle-split`: In native `i3`, toggles the focused
+    split container between horizontal and vertical split layout, returning
+    from tabbed or stacking to the last split layout.
+*   `split-tree-layout-stacking`, `split-tree-layout-tabbed`: In native `i3`,
+    changes the focused split container to i3-style stacking or tabbed mode.
 
 #### Manipulation
 *   `move-to-tag <id>`: Moves the focused window to the specified tag and focuses that tag.

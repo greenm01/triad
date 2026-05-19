@@ -134,6 +134,25 @@ proc applyCommand*(
         else:
           false
       )
+  of MsgKind.CmdSplitTreeLayoutSplitHorizontal:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedSplitTreeLayoutMode(SplitTreeNodeMode.SplitH)
+  of MsgKind.CmdSplitTreeLayoutSplitVertical:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedSplitTreeLayoutMode(SplitTreeNodeMode.SplitV)
+  of MsgKind.CmdSplitTreeLayoutToggleSplit:
+    result.dirty =
+      not model.overviewActive and model.toggleFocusedSplitTreeSplitLayout()
+  of MsgKind.CmdSplitTreeLayoutStacking:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedSplitTreeLayoutMode(SplitTreeNodeMode.Stacking)
+  of MsgKind.CmdSplitTreeLayoutTabbed:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedSplitTreeLayoutMode(SplitTreeNodeMode.Tabbed)
   of MsgKind.CmdBspBalance:
     result.dirty = not model.overviewActive and model.balanceBspTree(model.activeTag)
   of MsgKind.CmdBspEqualize:

@@ -71,8 +71,8 @@ type LayoutSource* = enum
 | **bsp-tree** | Persistent binary partition tree; each leaf owns one tiled window; Triad owns insertion, preselection, directional focus, tree-order cycle, resize, balance/equalize, removal, restore, and fallback projection | bspwm | `lkBsp` | `lsNative` |
 | **split h/v** | User-directed split containers; `splith` divides children left-to-right and `splitv` divides children top-to-bottom | i3, Sway, Herbstluftwm | `lkSplitTree` | `lsNative` |
 | **i3** | Persistent i3/Sway-style container tree; Triad owns split commands, insertion, focus, movement, resize, flattening, removal, restore, and native fallback projection | i3, Sway | `lkSplitTree` | `lsNative` |
-| **tabbed** | Windows stacked as tabs within a split-tree container; no spatial tiling inside that container | i3, Sway | `lkSplitTree` | future native substrate behavior |
-| **stacked** | Windows stacked vertically with visible titlebars inside a split-tree container | i3, Sway | `lkSplitTree` | future native substrate behavior |
+| **tabbed** | Windows stacked as tabs within a split-tree container; no spatial tiling inside that container | i3, Sway | `lkSplitTree` | native `i3` mode |
+| **stacked** | Windows stacked vertically with visible titlebars inside a split-tree container | i3, Sway | `lkSplitTree` | native `i3` mode |
 | **float** | Windows placed at arbitrary positions with no tiling constraint | Openbox, cwm, all WMs as escape hatch | `lkFloat` | window state, not a layout cycle member |
 
 ## Fallback policy

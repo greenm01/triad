@@ -115,6 +115,7 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
       kind: node.kind,
       parent: SplitNodeId(node.parent),
       mode: node.mode,
+      lastSplitMode: node.lastSplitMode,
       weight: node.weight,
       window: ExternalWindowId(uint32(node.window)),
     )
@@ -274,6 +275,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
         kind: node.kind,
         parent: uint32(node.parent),
         mode: node.mode,
+        lastSplitMode: node.lastSplitMode,
         weight: node.weight,
         window: model.externalWindowId(node.window),
       )

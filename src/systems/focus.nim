@@ -361,7 +361,11 @@ proc activeSplitLeafRects(model: Model): seq[SplitLeafRect] =
     currentOuterGap = 0
     currentInnerGap = 0
   model.splitTreeLeafRects(
-    model.activeTag, model.primaryScreen(), currentOuterGap, currentInnerGap
+    model.activeTag,
+    model.primaryScreen(),
+    currentOuterGap,
+    currentInnerGap,
+    FrameTreeTabBarHeight,
   )
 
 proc frameTreeNeighborCandidate(

@@ -7,6 +7,13 @@ from ../types/runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, SplitTreeNodeMode
 
 type SplitLeafRect* = tuple[nodeId: SplitNodeId, window: WindowId, rect: Rect]
+type SplitNodeRect* = tuple[nodeId: SplitNodeId, rect: Rect]
+
+proc splitModeIsSplit(mode: SplitTreeNodeMode): bool =
+  mode in {SplitTreeNodeMode.SplitH, SplitTreeNodeMode.SplitV}
+
+proc normalizedLastSplitMode(mode: SplitTreeNodeMode): SplitTreeNodeMode =
+  if mode.splitModeIsSplit(): mode else: SplitTreeNodeMode.SplitH
 
 proc splitTreeUsesTag(model: Model, nodeId: SplitNodeId, tagId: TagId): bool =
   let nodeOpt = model.splitNodes.entity(nodeId)
@@ -22,8 +29,12 @@ proc modeForOrientation(orientation: FrameSplitOrientation): SplitTreeNodeMode =
 
 proc orientationForMode(mode: SplitTreeNodeMode): FrameSplitOrientation =
   case mode
-  of SplitTreeNodeMode.SplitH: FrameSplitOrientation.Horizontal
-  of SplitTreeNodeMode.SplitV: FrameSplitOrientation.Vertical
+  of SplitTreeNodeMode.SplitH:
+    FrameSplitOrientation.Horizontal
+  of SplitTreeNodeMode.SplitV:
+    FrameSplitOrientation.Vertical
+  of SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed:
+    FrameSplitOrientation.Horizontal
 
 proc addSplitNode(
     model: var Model,
@@ -42,6 +53,7 @@ proc addSplitNode(
       kind: kind,
       parent: parent,
       mode: SplitTreeNodeMode.SplitH,
+      lastSplitMode: SplitTreeNodeMode.SplitH,
       weight: 1.0'f32,
       window: winId,
     )
@@ -92,6 +104,32 @@ proc focusedSplitLeafOrRoot*(model: Model, tagId: TagId): SplitNodeId =
   if focusedNode != NullSplitNodeId and model.splitTreeUsesTag(focusedNode, tagId):
     return focusedNode
   model.firstSplitLeaf(model.splitRootsByTag.getOrDefault(tagId, NullSplitNodeId))
+
+proc focusedChildOfSplitNode(model: Model, nodeId: SplitNodeId): SplitNodeId =
+  let nodeOpt = model.splitNodes.entity(nodeId)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Split:
+    return NullSplitNodeId
+  let node = nodeOpt.get()
+  let tagOpt = model.tags.entity(node.tagId)
+  if tagOpt.isNone:
+    return NullSplitNodeId
+  let focused = tagOpt.get().focusedWindow
+  let focusedNode =
+    model.splitNodeByTagWindow.getOrDefault((node.tagId, focused), NullSplitNodeId)
+  if focusedNode != NullSplitNodeId:
+    var current = focusedNode
+    while current != NullSplitNodeId:
+      let currentOpt = model.splitNodes.entity(current)
+      if currentOpt.isNone:
+        break
+      let parent = currentOpt.get().parent
+      if parent == nodeId:
+        return current
+      current = parent
+  if node.children.len > 0:
+    node.children[0]
+  else:
+    NullSplitNodeId
 
 proc replaceSplitChild(
     model: var Model, parentId, oldChild, newChild: SplitNodeId
@@ -198,6 +236,7 @@ proc wrapSplitLeaf(
   if wrapper == NullSplitNodeId:
     return NullSplitNodeId
   model.splitNodes.mEntity(wrapper).mode = orientation.modeForOrientation()
+  model.splitNodes.mEntity(wrapper).lastSplitMode = orientation.modeForOrientation()
   model.splitNodes.mEntity(wrapper).children = @[leafId]
   model.splitNodes.mEntity(wrapper).weight = leafOpt.get().weight
   model.splitNodes.mEntity(leafId).parent = wrapper
@@ -207,6 +246,29 @@ proc wrapSplitLeaf(
   else:
     discard model.replaceSplitChild(oldParent, leafId, wrapper)
   wrapper
+
+proc focusedSplitContainerOrRoot(model: var Model, tagId: TagId): SplitNodeId =
+  let root = model.splitRootsByTag.getOrDefault(tagId, NullSplitNodeId)
+  if root == NullSplitNodeId:
+    let container = model.addSplitNode(tagId, kind = FrameNodeKind.Split)
+    if container != NullSplitNodeId:
+      model.splitRootsByTag[tagId] = container
+    return container
+
+  var target = model.focusedSplitLeafOrRoot(tagId)
+  if target == NullSplitNodeId:
+    target = root
+  let targetOpt = model.splitNodes.entity(target)
+  if targetOpt.isNone:
+    return NullSplitNodeId
+  if targetOpt.get().kind == FrameNodeKind.Split:
+    return target
+
+  let parent = targetOpt.get().parent
+  if parent != NullSplitNodeId:
+    return parent
+
+  model.wrapSplitLeaf(tagId, target, FrameSplitOrientation.Horizontal)
 
 proc splitFocusedSplitTree*(
     model: var Model, orientation: FrameSplitOrientation
@@ -224,6 +286,7 @@ proc splitFocusedSplitTree*(
     if container == NullSplitNodeId:
       return false
     model.splitNodes.mEntity(container).mode = orientation.modeForOrientation()
+    model.splitNodes.mEntity(container).lastSplitMode = orientation.modeForOrientation()
     model.splitRootsByTag[tagId] = container
     return true
 
@@ -235,6 +298,7 @@ proc splitFocusedSplitTree*(
     return false
   if targetOpt.get().kind == FrameNodeKind.Split:
     model.splitNodes.mEntity(target).mode = orientation.modeForOrientation()
+    model.splitNodes.mEntity(target).lastSplitMode = orientation.modeForOrientation()
     return true
 
   let parent = targetOpt.get().parent
@@ -243,9 +307,65 @@ proc splitFocusedSplitTree*(
     if parentOpt.isSome and parentOpt.get().kind == FrameNodeKind.Split and
         parentOpt.get().children.len == 1:
       model.splitNodes.mEntity(parent).mode = orientation.modeForOrientation()
+      model.splitNodes.mEntity(parent).lastSplitMode = orientation.modeForOrientation()
       return true
 
   model.wrapSplitLeaf(tagId, target, orientation) != NullSplitNodeId
+
+proc setFocusedSplitTreeLayoutMode*(model: var Model, mode: SplitTreeNodeMode): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let container = model.focusedSplitContainerOrRoot(tagId)
+  if container == NullSplitNodeId:
+    return false
+  let nodeOpt = model.splitNodes.entity(container)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Split:
+    return false
+  let current = nodeOpt.get().mode
+  let nextLast =
+    if mode.splitModeIsSplit():
+      mode
+    elif current.splitModeIsSplit():
+      current
+    else:
+      nodeOpt.get().lastSplitMode.normalizedLastSplitMode()
+  if current == mode and nodeOpt.get().lastSplitMode == nextLast:
+    return false
+  model.splitNodes.mEntity(container).mode = mode
+  model.splitNodes.mEntity(container).lastSplitMode = nextLast
+  true
+
+proc toggleFocusedSplitTreeSplitLayout*(model: var Model): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let container = model.focusedSplitContainerOrRoot(tagId)
+  if container == NullSplitNodeId:
+    return false
+  let nodeOpt = model.splitNodes.entity(container)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Split:
+    return false
+  let current = nodeOpt.get().mode
+  let next =
+    case current
+    of SplitTreeNodeMode.SplitH:
+      SplitTreeNodeMode.SplitV
+    of SplitTreeNodeMode.SplitV:
+      SplitTreeNodeMode.SplitH
+    of SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed:
+      nodeOpt.get().lastSplitMode.normalizedLastSplitMode()
+  if current == next:
+    return false
+  model.splitNodes.mEntity(container).mode = next
+  model.splitNodes.mEntity(container).lastSplitMode = next.normalizedLastSplitMode()
+  true
 
 proc addWindowToSplitTree*(model: var Model, tagId: TagId, winId: WindowId): bool =
   if model.tags.entity(tagId).isNone or not model.splitTreeWindowVisible(tagId, winId):
@@ -402,6 +522,7 @@ proc restoreTagSplitNodes*(
         parent: node.parent,
         children: node.children,
         mode: node.mode,
+        lastSplitMode: node.lastSplitMode.normalizedLastSplitMode(),
         weight: clamp(node.weight, 0.05'f32, 1.0'f32),
         window: NullWindowId,
       )
@@ -491,21 +612,33 @@ proc splitChildRect(
   else:
     Rect(x: area.x, y: area.y + offset, w: area.w, h: size)
 
-proc collectSplitLeafRects(
+proc collectSplitRects(
     model: Model,
     nodeId: SplitNodeId,
     area: Rect,
     gap: int32,
-    outRects: var seq[SplitLeafRect],
+    chromeHeight: int32,
+    outLeaves: var seq[SplitLeafRect],
+    outNodes: var seq[SplitNodeRect],
 ) =
   let nodeOpt = model.splitNodes.entity(nodeId)
   if nodeOpt.isNone:
     return
   let node = nodeOpt.get()
+  outNodes.add((nodeId, area))
   if node.kind == FrameNodeKind.Leaf:
-    outRects.add((nodeId, node.window, area))
+    outLeaves.add((nodeId, node.window, area))
     return
   if node.children.len == 0:
+    return
+  if not node.mode.splitModeIsSplit():
+    let tabHeight = min(max(0'i32, chromeHeight), max(0'i32, area.h - 1'i32))
+    let childArea = Rect(
+      x: area.x, y: area.y + tabHeight, w: area.w, h: max(1'i32, area.h - tabHeight)
+    )
+    let child = model.focusedChildOfSplitNode(nodeId)
+    if child != NullSplitNodeId:
+      model.collectSplitRects(child, childArea, gap, chromeHeight, outLeaves, outNodes)
     return
   var total = 0.0'f32
   for child in node.children:
@@ -524,12 +657,21 @@ proc collectSplitLeafRects(
         1.0'f32 / total
     )
   for idx, child in node.children:
-    model.collectSplitLeafRects(
-      child, node.splitChildRect(area, node.children, weights, idx, gap), gap, outRects
+    model.collectSplitRects(
+      child,
+      node.splitChildRect(area, node.children, weights, idx, gap),
+      gap,
+      chromeHeight,
+      outLeaves,
+      outNodes,
     )
 
 proc splitTreeLeafRects*(
-    model: Model, tagId: TagId, screen: Rect, outerGap, innerGap: int32
+    model: Model,
+    tagId: TagId,
+    screen: Rect,
+    outerGap, innerGap: int32,
+    chromeHeight = 0'i32,
 ): seq[SplitLeafRect] =
   let root = model.splitRootsByTag.getOrDefault(tagId, NullSplitNodeId)
   if root == NullSplitNodeId:
@@ -541,7 +683,32 @@ proc splitTreeLeafRects*(
     w: max(1'i32, screen.w - outer * 2),
     h: max(1'i32, screen.h - outer * 2),
   )
-  model.collectSplitLeafRects(root, usable, max(0'i32, innerGap), result)
+  var nodes: seq[SplitNodeRect] = @[]
+  model.collectSplitRects(
+    root, usable, max(0'i32, innerGap), chromeHeight, result, nodes
+  )
+
+proc splitTreeNodeRects*(
+    model: Model,
+    tagId: TagId,
+    screen: Rect,
+    outerGap, innerGap: int32,
+    chromeHeight = 0'i32,
+): seq[SplitNodeRect] =
+  let root = model.splitRootsByTag.getOrDefault(tagId, NullSplitNodeId)
+  if root == NullSplitNodeId:
+    return
+  let outer = max(0'i32, outerGap)
+  let usable = Rect(
+    x: screen.x + outer,
+    y: screen.y + outer,
+    w: max(1'i32, screen.w - outer * 2),
+    h: max(1'i32, screen.h - outer * 2),
+  )
+  var leaves: seq[SplitLeafRect] = @[]
+  model.collectSplitRects(
+    root, usable, max(0'i32, innerGap), chromeHeight, leaves, result
+  )
 
 proc collectSplitLeafWindows(
     model: Model, nodeId: SplitNodeId, outWindows: var seq[WindowId]
@@ -580,7 +747,7 @@ proc adjustFocusedSplitTreeSplit*(
     if parentOpt.isNone:
       return false
     let parent = parentOpt.get()
-    if parent.kind == FrameNodeKind.Split and
+    if parent.kind == FrameNodeKind.Split and parent.mode.splitModeIsSplit() and
         parent.mode.orientationForMode() == orientation and parent.children.len >= 2:
       let idx = parent.children.find(current)
       if idx == -1:

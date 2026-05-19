@@ -1603,6 +1603,47 @@ suite "Runtime state primitives":
     check model.tagData(model.activeTag).get().focusedWindow ==
       model.windowForExternal(ExternalWindowId(10))
 
+  test "native split-tree supports i3 stacking and tabbed container modes":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let root = model.splitRootForTag(tagId)
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+
+    check model.splitNodeData(root).get().mode == SplitTreeNodeMode.Tabbed
+    var projection = model.layoutProjection()
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 12'u32
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].tabs.len == 3
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    projection = model.layoutProjection()
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 10'u32
+    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 10'u32 and it.active)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutStacking))
+    check model.splitNodeData(root).get().mode == SplitTreeNodeMode.Stacking
+    projection = model.layoutProjection()
+    check projection.instructions.len == 1
+    check projection.instructions[0].windowId == 10'u32
+    check projection.frameTabBars.len == 1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutToggleSplit))
+    check model.splitNodeData(root).get().mode == SplitTreeNodeMode.SplitH
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutToggleSplit))
+    check model.splitNodeData(root).get().mode == SplitTreeNodeMode.SplitV
+
   test "split-tree floating removes and reinserts tiled leaves":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

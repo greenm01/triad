@@ -114,6 +114,7 @@ type
     parent*: SplitNodeId
     children*: seq[SplitNodeId]
     mode*: SplitTreeNodeMode
+    lastSplitMode*: SplitTreeNodeMode
     weight*: float32
     window*: WindowId
 
@@ -382,6 +383,7 @@ type
     parent*: SplitNodeId
     children*: seq[SplitNodeId]
     mode*: SplitTreeNodeMode
+    lastSplitMode*: SplitTreeNodeMode
     weight*: float32
     window*: ExternalWindowId
 
