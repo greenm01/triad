@@ -165,6 +165,14 @@ proc applyCommand*(
     result.dirty =
       not model.overviewActive and
       model.setFocusedSplitTreeLayoutMode(SplitTreeNodeMode.Tabbed)
+  of MsgKind.CmdSplitTreeFocusParent:
+    result.dirty =
+      not model.overviewActive and model.activeTagUsesSplitTree() and
+      model.focusSplitTreeParent()
+  of MsgKind.CmdSplitTreeFocusChild:
+    result.dirty =
+      not model.overviewActive and model.activeTagUsesSplitTree() and
+      model.focusSplitTreeChild()
   of MsgKind.CmdBspBalance:
     result.dirty = not model.overviewActive and model.balanceBspTree(model.activeTag)
   of MsgKind.CmdBspEqualize:

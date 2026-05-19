@@ -77,6 +77,8 @@ type
     CmdSplitTreeLayoutToggleSplit
     CmdSplitTreeLayoutStacking
     CmdSplitTreeLayoutTabbed
+    CmdSplitTreeFocusParent
+    CmdSplitTreeFocusChild
     CmdBspBalance
     CmdBspEqualize
     CmdBspPreselect

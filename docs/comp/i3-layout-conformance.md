@@ -59,8 +59,8 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 | `focus left/right/up/down` | **Parent-walk**: ascend tree until a split node's orientation matches direction; step to sibling on that side; descend back to focused/edgemost child of sibling subtree | `splitTreeStructuralNeighbor` in `split_tree_ops.nim` implements the parent-walk; `lastFocusedWindowInSubtree` descends to most-recently-focused leaf; geometric fallback preserved | ✓ |
 | `focus next sibling` | Move to next sibling in parent's children list | Not implemented | ✗ P1 |
 | `focus prev sibling` | Move to prev sibling | Not implemented | ✗ P1 |
-| `focus parent` | `level_up` (`tree.c:386`): move focus to parent split container | Not implemented | ✗ P0 — common i3 workflow (promote window out of tabbed container) |
-| `focus child` | `level_down` (`tree.c:409`): descend back into last-focused child | Not implemented | ✗ P0 |
+| `focus parent` | `level_up` (`tree.c:386`): move focus to parent split container | `split-tree-focus-parent` → `focusSplitTreeParent` elevates `focusedSplitNode`; structural directional focus then operates at that container level | ✓ |
+| `focus child` | `level_down` (`tree.c:409`): descend back into last-focused child | `split-tree-focus-child` → `focusSplitTreeChild` descends via `focusedChildOfSplitNode`; clears `focusedSplitNode` and focuses the leaf window when reaching leaf level | ✓ |
 | `focus tiling` / `focus floating` / `focus mode_toggle` | Toggle between tiling and floating focus | Not implemented in split-tree context | ✗ P3 (out of layout-engine scope) |
 | Tab cycling (next/prev tab in tabbed/stacking) | i3: `focus next` in tabbed context; also controlled by scrolling | `frame-tab-next`/`frame-tab-prev` → `focusSplitTreeTab(±1)` (`split_tree_ops.nim:196`, `update_commands.nim:108`) | ✓ |
 
@@ -177,11 +177,12 @@ cross-tag path instead of restructuring the workspace root.
    wired before column/tag-swap path in `update_commands.nim:CmdMoveWindowLeft/Right/Up/Down`.
    Single-child collapse via `flattenSplitTreeFrom`; cross-tag fallback preserved.
 
-3. **`focus parent` / `focus child` commands** — add `CidSplitTreeFocusParent` /
-   `CidSplitTreeFocusChild` to `src/types/ipc_commands.nim:41` and
-   `src/ipc/commands.nim:351`. Implement `focusSplitTreeParent` / `focusSplitTreeChild`
-   in `src/entities/split_tree_ops.nim` (walk ancestors / descend to last-focused child).
-   Document in `docs/configuration.md:126` and update `docs/comp/config-command-matrix.md`.
+3. ~~**`focus parent` / `focus child` commands**~~ ✓ — `CidSplitTreeFocusParent` /
+   `CidSplitTreeFocusChild` added to `ipc_commands.nim` and `runtime_messages.nim`.
+   `focusSplitTreeParent` / `focusSplitTreeChild` implemented in `split_tree_ops.nim`.
+   `focusedSplitNode: SplitNodeId` added to `TagData`; cleared by `setTagFocus` on any
+   explicit window focus. `splitTreeStructuralNeighbor` starts its walk from
+   `focusedSplitNode` when set.
 
 ### P1 — Command completeness
 

@@ -39,6 +39,8 @@ type
     CidSplitTreeLayoutToggleSplit
     CidSplitTreeLayoutStacking
     CidSplitTreeLayoutTabbed
+    CidSplitTreeFocusParent
+    CidSplitTreeFocusChild
     CidBspBalance
     CidBspEqualize
     CidBspPreselectLeft
@@ -310,6 +312,16 @@ const CommandSpecs* = [
   CommandSpec(
     id: CommandId.CidSplitTreeLayoutTabbed,
     name: "split-tree-layout-tabbed",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeFocusParent,
+    name: "split-tree-focus-parent",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeFocusChild,
+    name: "split-tree-focus-child",
     argShape: NoArgs,
   ),
   CommandSpec(id: CommandId.CidBspBalance, name: "bsp-balance", argShape: NoArgs),

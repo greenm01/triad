@@ -991,12 +991,67 @@ proc lastFocusedWindowInSubtree(
       check = checkOpt.get().parent
   model.splitTreeActiveWindowInSubtree(nodeId)
 
+proc focusSplitTreeParent*(model: var Model): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+  let current = tagOpt.get().focusedSplitNode
+  let startNode =
+    if current != NullSplitNodeId:
+      current
+    else:
+      model.focusedSplitLeafOrRoot(tagId)
+  if startNode == NullSplitNodeId:
+    return false
+  let nodeOpt = model.splitNodes.entity(startNode)
+  if nodeOpt.isNone:
+    return false
+  let parentId = nodeOpt.get().parent
+  if parentId == NullSplitNodeId:
+    return false
+  model.tags.mEntity(tagId).focusedSplitNode = parentId
+  true
+
+proc focusSplitTreeChild*(model: var Model): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+  let current = tagOpt.get().focusedSplitNode
+  if current == NullSplitNodeId:
+    return false
+  let child = model.focusedChildOfSplitNode(current)
+  if child == NullSplitNodeId:
+    return false
+  let childOpt = model.splitNodes.entity(child)
+  if childOpt.isNone:
+    return false
+  if childOpt.get().kind == FrameNodeKind.Leaf:
+    let winId = childOpt.get().window
+    if winId != NullWindowId:
+      model.tags.mEntity(tagId).focusedSplitNode = NullSplitNodeId
+      return model.setTagFocus(tagId, winId)
+    return false
+  model.tags.mEntity(tagId).focusedSplitNode = child
+  true
+
 proc splitTreeStructuralNeighbor*(model: Model, direction: Direction): WindowId =
   let tagId = model.activeTag
   if tagId == NullTagId or model.tags.entity(tagId).isNone:
     return NullWindowId
   let positive = direction.directionIsPositive()
-  var current = model.focusedSplitLeafOrRoot(tagId)
+  let containerFocus = model.tags.entity(tagId).get().focusedSplitNode
+  var current =
+    if containerFocus != NullSplitNodeId and
+        model.splitNodes.entity(containerFocus).isSome:
+      containerFocus
+    else:
+      model.focusedSplitLeafOrRoot(tagId)
   if current == NullSplitNodeId:
     return NullWindowId
   while current != NullSplitNodeId:

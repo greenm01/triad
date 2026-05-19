@@ -2041,6 +2041,96 @@ suite "Runtime state primitives":
       model.applyMsg(Msg(kind: MsgKind.CmdMoveWindowLeft))
       check model.splitLeafWindowsInOrder(tagId) == @[winB, winA, winC]
 
+  test "split-tree focus parent elevates container scope and child descends back":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    # Build splith{A(10), splitv{B(11), C(12)}}
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let winA = model.windowForExternal(ExternalWindowId(10))
+    let winB = model.windowForExternal(ExternalWindowId(11))
+    let winC = model.windowForExternal(ExternalWindowId(12))
+    let tagId = model.activeTag
+
+    # C is currently focused (most recently created/focused).
+    check model.tags.entity(tagId).get().focusedSplitNode == tc.NullSplitNodeId
+
+    # focus parent from C: focusedSplitNode should be the splitv container.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusParent))
+    let splitvId = model.tags.entity(tagId).get().focusedSplitNode
+    check splitvId != tc.NullSplitNodeId
+    check model.splitNodes.entity(splitvId).get().kind == FrameNodeKind.Split
+    # The window in focus is still C (focusedSplitNode is a layer above, not a window).
+    check model.tags.entity(tagId).get().focusedWindow == winC
+
+    # focus parent again: should move up to the splith root.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusParent))
+    let splithId = model.tags.entity(tagId).get().focusedSplitNode
+    check splithId != tc.NullSplitNodeId
+    check splithId != splitvId
+    # Verify it's the root (parent == NullSplitNodeId).
+    check model.splitNodes.entity(splithId).get().parent == tc.NullSplitNodeId
+
+    # focus parent at root: no further movement (already at top).
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusParent))
+    check model.tags.entity(tagId).get().focusedSplitNode == splithId
+
+    # focus child descends back into splitv.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusChild))
+    check model.tags.entity(tagId).get().focusedSplitNode == splitvId
+
+    # focus child from splitv: C is the focused leaf → focusedSplitNode clears, C focused.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusChild))
+    check model.tags.entity(tagId).get().focusedSplitNode == tc.NullSplitNodeId
+    check model.tags.entity(tagId).get().focusedWindow == winC
+
+    # Explicit window focus clears focusedSplitNode.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusParent))
+    check model.tags.entity(tagId).get().focusedSplitNode != tc.NullSplitNodeId
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    check model.tags.entity(tagId).get().focusedSplitNode == tc.NullSplitNodeId
+    check model.tags.entity(tagId).get().focusedWindow == winA
+
+  test "split-tree container focus shifts structural neighbor start level":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    # Build splith{A(10), splitv{B(11), C(12)}}
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let winA = model.windowForExternal(ExternalWindowId(10))
+    let winB = model.windowForExternal(ExternalWindowId(11))
+    let winC = model.windowForExternal(ExternalWindowId(12))
+
+    # C focused; without container focus, right from C finds no structural neighbor.
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 12))
+    check model.directionalTarget(Direction.DirRight).window == NullWindowId
+
+    # Elevate to splitv container level; right from splitv's position in splith finds A
+    # (splitv is at idx 1 → no right sibling) → still NullWindowId.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusParent))
+    check model.directionalTarget(Direction.DirRight).window == NullWindowId
+
+    # Left from splitv container level → sibling A at idx 0 → should land on A.
+    check model.directionalTarget(Direction.DirLeft).window == winA
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(
