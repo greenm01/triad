@@ -94,10 +94,19 @@ suite "Core Runtime Logic: shell snapshot ipc":
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspaceActivated")
     )
-    check not effects.anyIt(
+    let workspaceEvents = effects.filterIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspacesChanged")
     )
+    check workspaceEvents.len == 1
+    let workspaces =
+      parseJson(workspaceEvents[0].jsonPayload)["WorkspacesChanged"]["workspaces"]
+    let workspace1 = workspaces.getElems().filterIt(it["id"].getInt() == 1)[0]
+    let workspace2 = workspaces.getElems().filterIt(it["id"].getInt() == 2)[0]
+    check workspace1["is_active"].getBool()
+    check workspace1["is_focused"].getBool()
+    check not workspace2["is_active"].getBool()
+    check not workspace2["is_focused"].getBool()
     check not effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WindowsChanged")
