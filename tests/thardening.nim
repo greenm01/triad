@@ -582,10 +582,12 @@ workspaces {
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
     )
     daemon.bindingsConfigured = true
+    daemon.xkbBindings[99'u32] = Msg(kind: MsgKind.CmdCloseWindow)
 
     check daemon.applyConfigReload(configPath, "")
     check daemon.bindingsConfigured
     check daemon.bindingsReconfigurePending
+    check daemon.xkbBindings.hasKey(99'u32)
     check daemon.liveRestoreCommitPending
     check fileExists(restorePath)
     check not liveRestoreStateApplied(restorePath)
@@ -594,6 +596,20 @@ workspaces {
       removeFile(configPath)
     if fileExists(restorePath):
       removeFile(restorePath)
+
+  test "binding reconfigure request preserves active bindings until manage":
+    var daemon = initTriadDaemon()
+    daemon.bindingsConfigured = true
+    daemon.xkbBindings[77'u32] = Msg(kind: MsgKind.CmdCloseWindow)
+    daemon.xkbBindingModes[77'u32] = BindingMode.BindAlways
+
+    daemon.requestBindingReconfigure("test")
+
+    check daemon.bindingsConfigured
+    check daemon.bindingsReconfigurePending
+    check daemon.xkbBindings.hasKey(77'u32)
+    check daemon.xkbBindingModes.hasKey(77'u32)
+    check not daemon.hasQueuedMessages()
 
   test "config reload notifications use success and failure commands":
     let base = getTempDir() / "triad-config-notify-" & $getCurrentProcessId()

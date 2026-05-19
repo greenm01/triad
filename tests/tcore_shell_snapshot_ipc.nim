@@ -1,4 +1,5 @@
 import tcore_support
+import ../src/core/native_layout_codec
 
 suite "Core Runtime Logic: shell snapshot ipc":
   test "Shell snapshot exposes active workspace focus globally":
@@ -569,6 +570,9 @@ suite "Core Runtime Logic: shell snapshot ipc":
   "tags": [
     {"id": 2, "layout_mode": "Deck", "columns": [
       {"windows": [10], "width_proportion": 0.6, "scroller_single_proportion": 0.7, "is_full_width": true}
+    ], "split_nodes": [
+      {"id": 1, "kind": 1, "parent": 0, "children": [2, 3], "mode": "split-v", "last_split_mode": "split-v", "weight": 1.0, "window": 0},
+      {"id": 2, "kind": 0, "parent": 1, "children": [], "mode": 0, "last_split_mode": 0, "weight": 0.5, "window": 10}
     ]}
   ],
   "windows": [
@@ -583,12 +587,34 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check native.get().tags[2].layoutMode == LayoutMode.Deck
     check native.get().tags[2].columns[0].isFullWidth
     check native.get().tags[2].columns[0].scrollerSingleProportion == 0.7'f32
+    check native.get().tags[2].splitNodes.len == 2
+    check native.get().tags[2].splitNodes[0].mode == SplitTreeNodeMode.SplitV
+    check native.get().tags[2].splitNodes[0].children == @[2'u32, 3'u32]
     check native.get().windows[10].appId == "term"
     check native.get().windows[10].manualFloatingPosition
     check not native.get().windows[11].manualFloatingPosition
 
     let invalid = parseLiveRestoreJson("""{"workspaces":[{"id":1}]}""")
     check invalid.isNone
+
+  test "Live restore JSON preserves split-tree nodes":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let parsed = parseLiveRestoreJson(model.liveRestoreJson())
+    check parsed.isSome
+    check parsed.get().tags[1].splitNodes.len == 3
+    check parsed.get().tags[1].splitNodes.anyIt(it.mode == SplitTreeNodeMode.SplitV)
+
+    let layout = triadLayoutStateJson(model.shellSnapshot())
+    let workspace = layout["workspaces"][0]
+    check workspace["split_nodes"].len == 3
+    check workspace["split_nodes"].getElems().anyIt(it["mode"].getStr() == "split-v")
 
   test "Niri window event includes focused workspace state":
     var model = configuredModel()

@@ -104,6 +104,28 @@ proc frameOrientationFromJson(node: JsonNode): FrameSplitOrientation =
     discard
   FrameSplitOrientation.Horizontal
 
+proc splitTreeNodeModeFromJson(node: JsonNode): SplitTreeNodeMode =
+  try:
+    if node.kind == JInt:
+      let value = node.getInt()
+      if value >= ord(low(SplitTreeNodeMode)) and value <= ord(high(SplitTreeNodeMode)):
+        return SplitTreeNodeMode(value)
+    elif node.kind == JString:
+      case node.getStr().normalize()
+      of "splith", "split-h", "split_h", "horizontal":
+        return SplitTreeNodeMode.SplitH
+      of "splitv", "split-v", "split_v", "vertical":
+        return SplitTreeNodeMode.SplitV
+      of "stacking":
+        return SplitTreeNodeMode.Stacking
+      of "tabbed":
+        return SplitTreeNodeMode.Tabbed
+      else:
+        return parseEnum[SplitTreeNodeMode](node.getStr())
+  except CatchableError:
+    discard
+  SplitTreeNodeMode.SplitH
+
 proc directionFromJson(node: JsonNode): Direction =
   try:
     if node.kind == JInt:
@@ -297,6 +319,50 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
           bspNode.window = winId.get()
           state.tagByWindow[winId.get()] = tag.tagId
       tag.bspNodes.add(bspNode)
+
+  if node.hasKey("split_nodes") and node["split_nodes"].kind == JArray:
+    for nodeJson in node["split_nodes"]:
+      if nodeJson.kind != JObject or not nodeJson.hasKey("id"):
+        continue
+      let nodeId = uint32FromJson(nodeJson["id"])
+      if nodeId.isNone:
+        continue
+      var splitNode = RestoredSplitNodeState(
+        id: nodeId.get(),
+        kind:
+          if nodeJson.hasKey("kind"):
+            frameKindFromJson(nodeJson["kind"])
+          else:
+            FrameNodeKind.Leaf,
+        mode:
+          if nodeJson.hasKey("mode"):
+            splitTreeNodeModeFromJson(nodeJson["mode"])
+          else:
+            SplitTreeNodeMode.SplitH,
+        lastSplitMode:
+          if nodeJson.hasKey("last_split_mode"):
+            splitTreeNodeModeFromJson(nodeJson["last_split_mode"])
+          else:
+            SplitTreeNodeMode.SplitH,
+        weight: 1.0'f32,
+      )
+      if nodeJson.hasKey("parent"):
+        let parent = uint32FromJson(nodeJson["parent"])
+        if parent.isSome:
+          splitNode.parent = parent.get()
+      if nodeJson.hasKey("children") and nodeJson["children"].kind == JArray:
+        for childJson in nodeJson["children"]:
+          let child = uint32FromJson(childJson)
+          if child.isSome:
+            splitNode.children.add(child.get())
+      if nodeJson.hasKey("weight"):
+        splitNode.weight = max(0.01'f32, float32FromJson(nodeJson["weight"], 1.0'f32))
+      if nodeJson.hasKey("window"):
+        let winId = uint32FromJson(nodeJson["window"])
+        if winId.isSome:
+          splitNode.window = winId.get()
+          state.tagByWindow[winId.get()] = tag.tagId
+      tag.splitNodes.add(splitNode)
 
   state.tags[tag.tagId] = tag
 

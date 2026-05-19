@@ -369,6 +369,20 @@ proc enqueueXkbBindingCommand(daemon: var TriadDaemon, id: uint32) =
     let msg = daemon.xkbBindings[id]
     if daemon.enqueueHotkeyOverlayDismiss():
       return
+    if msg.kind in {MsgKind.CmdCloseWindow, MsgKind.CmdCloseWindowById}:
+      writeBehaviorEvent(
+        "close_window_command_queued",
+        %*{
+          "source": "xkb",
+          "binding_id": id,
+          "msg_kind": $msg.kind,
+          "target_window":
+            if msg.kind == MsgKind.CmdCloseWindowById:
+              %msg.closeWindowId
+            else:
+              newJNull(),
+        },
+      )
     daemon.enqueue(msg)
 
 proc handleXkbBindingPressed*(daemon: var TriadDaemon, id: uint32) =
@@ -1256,13 +1270,49 @@ proc enqueuePointerCommand(
   case msg.kind
   of MsgKind.CmdCloseWindow:
     if target != 0:
+      writeBehaviorEvent(
+        "close_window_command_queued",
+        %*{
+          "source": "pointer",
+          "seat_id": seatId,
+          "msg_kind": $MsgKind.CmdCloseWindowById,
+          "target_window": target,
+        },
+      )
       daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: target))
     elif not daemon.currentModel.overviewActive:
+      writeBehaviorEvent(
+        "close_window_command_queued",
+        %*{
+          "source": "pointer",
+          "seat_id": seatId,
+          "msg_kind": $msg.kind,
+          "target_window": newJNull(),
+        },
+      )
       daemon.enqueue(msg)
   of MsgKind.CmdCloseWindowById:
     if target != 0 and daemon.currentModel.overviewActive:
+      writeBehaviorEvent(
+        "close_window_command_queued",
+        %*{
+          "source": "pointer",
+          "seat_id": seatId,
+          "msg_kind": $MsgKind.CmdCloseWindowById,
+          "target_window": target,
+        },
+      )
       daemon.enqueue(Msg(kind: MsgKind.CmdCloseWindowById, closeWindowId: target))
     else:
+      writeBehaviorEvent(
+        "close_window_command_queued",
+        %*{
+          "source": "pointer",
+          "seat_id": seatId,
+          "msg_kind": $msg.kind,
+          "target_window": msg.closeWindowId,
+        },
+      )
       daemon.enqueue(msg)
   of MsgKind.CmdSelectWindow:
     if daemon.currentModel.overviewActive and target != 0:

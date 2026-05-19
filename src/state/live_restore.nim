@@ -463,6 +463,24 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
       }
     )
 
+  let splitNodes = newJArray()
+  for node in tag.splitNodes:
+    let children = newJArray()
+    for child in node.children:
+      children.add(%child)
+    splitNodes.add(
+      %*{
+        "id": node.id,
+        "kind": ord(node.kind),
+        "parent": node.parent,
+        "children": children,
+        "mode": ord(node.mode),
+        "last_split_mode": ord(node.lastSplitMode),
+        "weight": node.weight,
+        "window": node.window,
+      }
+    )
+
   %*{
     "id": tag.tagId,
     "name": tag.name,
@@ -479,6 +497,7 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
     "columns": columns,
     "frames": frames,
     "bsp_nodes": bspNodes,
+    "split_nodes": splitNodes,
     "focused_window": tag.focusedWindow,
     "focused_frame": tag.focusedFrame,
     "target_viewport_x_offset": tag.targetViewportXOffset,

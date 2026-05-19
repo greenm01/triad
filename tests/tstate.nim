@@ -1751,6 +1751,47 @@ suite "Runtime state primitives":
     check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
 
+  test "native split-tree persists through live restore JSON round trip":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    let parsed = parseLiveRestoreJson(model.liveRestoreJson())
+    check parsed.isSome
+    check parsed.get().tags[1].nativeLayoutId.nativeLayoutIdString() == "i3"
+    check parsed.get().tags[1].splitNodes.len == 5
+    check parsed.get().tags[1].splitNodes.anyIt(it.mode == SplitTreeNodeMode.SplitV)
+
+    var restored = initRuntimeStateFromConfig(baseConfig()).model
+    restored.applyLiveRestore(parsed.get().pendingRestoreState())
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    restored.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = restored.tagForSlot(1)
+    let snapshot = restored.shellSnapshot()
+    check restored.focusedWindowId() == 10
+    check snapshot.workspaces[0].layoutId == "i3"
+    check snapshot.workspaces[0].splitNodes.len == 5
+    for externalId in [10'u32, 11'u32, 12'u32]:
+      let winId = restored.windowForExternal(tc.ExternalWindowId(externalId))
+      check restored.splitNodeForWindowOnTag(tagId, winId) != tc.NullSplitNodeId
+    let restoredProjection = restored.layoutProjection()
+    check restoredProjection.instructions.len == 3
+    check restoredProjection.instructions.anyIt(it.windowId == 10'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
+    check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(

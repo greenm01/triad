@@ -1,4 +1,4 @@
-import std/[asyncdispatch, options, tables]
+import std/[asyncdispatch, json, options, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_xkb_bindings/client as riverXkb
@@ -7,6 +7,7 @@ import ../core/effects
 import ../ipc/socket
 import ../systems/daemon_view
 import ../types/projection_values
+import ../utils/behavior_log
 import
   idle_inhibit_runtime, live_restore_runtime, manage_requests, process_runner,
   protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner, state
@@ -42,6 +43,13 @@ proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
       for seat in daemon.seatPointers:
         seat.focusShellSurface(shellSurface)
   of EffectKind.EffCloseWindow:
+    writeBehaviorEvent(
+      "close_window_effect_executed",
+      %*{
+        "window_id": eff.closeId,
+        "known_window": daemon.windowPointers.hasKey(eff.closeId),
+      },
+    )
     if daemon.windowPointers.hasKey(eff.closeId):
       daemon.windowPointers[eff.closeId].close()
   of EffectKind.EffInformResizeStart:

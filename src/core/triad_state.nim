@@ -6,7 +6,7 @@ import native_layout_codec
 import ../types/shell_snapshot
 from ../types/runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind,
-  LayoutSource, WindowRuleIdleInhibitMode
+  LayoutSource, SplitTreeNodeMode, WindowRuleIdleInhibitMode
 
 export shell_snapshot
 
@@ -113,6 +113,13 @@ proc directionId(direction: Direction): string =
   of Direction.DirUp: "up"
   of Direction.DirDown: "down"
 
+proc splitTreeNodeModeId(mode: SplitTreeNodeMode): string =
+  case mode
+  of SplitTreeNodeMode.SplitH: "split-h"
+  of SplitTreeNodeMode.SplitV: "split-v"
+  of SplitTreeNodeMode.Stacking: "stacking"
+  of SplitTreeNodeMode.Tabbed: "tabbed"
+
 proc triadFrameJson(frame: ShellFrame): JsonNode =
   let windows = newJArray()
   for winId in frame.windows:
@@ -185,6 +192,30 @@ proc triadBspNodeJson(node: ShellBspNode): JsonNode =
         newJNull(),
   }
 
+proc triadSplitNodeJson(node: ShellSplitNode): JsonNode =
+  let children = newJArray()
+  for child in node.children:
+    children.add(%child)
+  %*{
+    "id": node.id,
+    "kind": node.kind.frameNodeKindId(),
+    "parent":
+      if node.parent == 0:
+        newJNull()
+      else:
+        %node.parent,
+    "children": children,
+    "mode": node.mode.splitTreeNodeModeId(),
+    "last_split_mode": node.lastSplitMode.splitTreeNodeModeId(),
+    "weight": node.weight,
+    "window_id":
+      if node.window == 0:
+        newJNull()
+      else:
+        %node.window,
+    "focused": node.focused,
+  }
+
 proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
   let columns = newJArray()
   for col in workspace.columns:
@@ -195,6 +226,9 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
   let bspNodes = newJArray()
   for node in workspace.bspNodes:
     bspNodes.add(triadBspNodeJson(node))
+  let splitNodes = newJArray()
+  for node in workspace.splitNodes:
+    splitNodes.add(triadSplitNodeJson(node))
 
   %*{
     "tag_id": workspace.tagId,
@@ -214,6 +248,7 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     "columns": columns,
     "frames": frames,
     "bsp_nodes": bspNodes,
+    "split_nodes": splitNodes,
     "master_count": workspace.masterCount,
     "master_split_ratio": workspace.masterSplitRatio,
     "viewport": {
