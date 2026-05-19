@@ -9,6 +9,7 @@ import
     triad_native,
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
+import ../src/utils/behavior_log
 
 proc installAppIdentityFixture() =
   let apps =
@@ -351,6 +352,10 @@ suite "Shell compatibility contracts":
     check focusWs.messages.len == 1
     check focusWs.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check focusWs.messages[0].workspaceIndex == 2
+    check focusWs.reply == """{"Ok":"Handled"}"""
+    check focusWs.requestKind == "action"
+    check focusWs.actionName == "FocusWorkspace"
+    check focusWs.workspaceIndex == 2
 
     let focusNext =
       handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", snapshot)
@@ -784,6 +789,65 @@ exit 0
     runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-old", "launch-new"]
+
+  test "Shell profile Niri compatibility logs shim readiness":
+    let tmp = getTempDir() / ("triad-shell-niri-log-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fakeShell = tmp / "fake-shell"
+    writeFile(fakeShell, "#!/bin/sh\nsleep 5\n")
+    setFilePermissions(fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let fakeTriadNiri = tmp / "triad_niri"
+    writeFile(fakeTriadNiri, "#!/bin/sh\nexit 0\n")
+    setFilePermissions(fakeTriadNiri, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    let oldPath = getEnv("PATH", "")
+    let oldRuntimeDir = getEnv("XDG_RUNTIME_DIR", "")
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", tmp / "behavior")
+    putEnv("PATH", tmp & $PathSep & oldPath)
+    putEnv("XDG_RUNTIME_DIR", tmp)
+    defer:
+      putEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      putEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      putEnv("PATH", oldPath)
+      putEnv("XDG_RUNTIME_DIR", oldRuntimeDir)
+
+    let model = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "noctalia",
+        profiles:
+          @[
+            ShellProfileConfig(name: "noctalia", launch: @[fakeShell], niriCompat: true)
+          ],
+      )
+    )
+    var runner = QuickshellRunner()
+    defer:
+      runner.stopTrackedQuickshell("test cleanup")
+
+    runner.switchShell(Model(), model, tmp / "niri.sock", "test spawn")
+
+    let lines = readFile(behaviorLogPath()).strip().splitLines()
+    let spawned =
+      lines.mapIt(parseJson(it)).filterIt(it["event"].getStr() == "shell_spawned")
+    check spawned.len == 1
+    check spawned[0]["profile"].getStr() == "noctalia"
+    check spawned[0]["niri_socket"].getStr() == tmp / "niri.sock"
+    check spawned[0]["shim_ready"].getBool()
+    check spawned[0]["overlay_ready"].getBool()
+    check spawned[0]["compat_bin"].getStr() == tmp / "triad-compat-bin"
+    check spawned[0]["niri_shim"].getStr() == tmp / "triad-compat-bin" / "niri"
 
   test "Shell watchdog falls back when active tracked shell exits":
     let tmp = getTempDir() / ("triad-shell-watchdog-exit-" & $getCurrentProcessId())

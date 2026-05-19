@@ -2,7 +2,7 @@ import std/[asyncdispatch, json, options, os, strutils, times, unittest]
 import chronicles
 import ../src/config/parser
 import ../src/core/msg
-import ../src/ipc/socket
+import ../src/ipc/[niri_compat, socket]
 import ../src/systems/[runtime_facade, update]
 import ../src/types/runtime_values
 import ../src/utils/[behavior_log, runtime_log]
@@ -406,6 +406,26 @@ suite "Runtime logging":
     let focusEvent = parseJson(lines[3])
     check focusEvent["niri_event"].getStr() == "WindowFocusChanged"
     check focusEvent["window_id"].getInt() == 20
+
+  test "niri request behavior payload records sanitized action details":
+    let payload = niriRequestLogPayload(
+      "/run/user/1000/triad-niri.sock",
+      NiriIpcResult(
+        handled: true,
+        requestKind: "action",
+        actionName: "FocusWorkspace",
+        workspaceIndex: 3,
+        reply: """{"Ok":"Handled"}""",
+        messages: @[Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3)],
+      ),
+    )
+
+    check payload["request_kind"].getStr() == "action"
+    check payload["action"].getStr() == "FocusWorkspace"
+    check payload["workspace_idx"].getInt() == 3
+    check payload["reply_kind"].getStr() == "Handled"
+    check payload["message_kinds"][0].getStr() == "CmdFocusWorkspaceIndex"
+    check not payload.hasKey("raw")
 
   test "behavior log rotates oversized day file and cleans old logs":
     let dir = getTempDir() / ("triad-behavior-rotate-" & $getCurrentProcessId())

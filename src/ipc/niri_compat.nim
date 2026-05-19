@@ -6,6 +6,13 @@ from ../types/runtime_values import Direction
 type NiriIpcResult* = object
   handled*: bool
   subscribe*: bool
+  requestKind*: string
+  requestName*: string
+  actionName*: string
+  error*: string
+  workspaceIndex*: uint32
+  workspaceId*: uint32
+  windowId*: uint32
   reply*: string
   initialEvents*: seq[string]
   messages*: seq[Msg]
@@ -56,6 +63,45 @@ proc stringSeqFromNode(node: JsonNode): seq[string] =
     if item.kind != JString:
       return @[]
     result.add(item.getStr())
+
+proc firstObjectKey(node: JsonNode): string =
+  if node.kind != JObject:
+    return ""
+  for key, _ in node.pairs:
+    return key
+  ""
+
+proc recordNiriActionDetails(ipc: var NiriIpcResult, action: JsonNode) =
+  ipc.actionName = action.firstObjectKey()
+  if ipc.actionName.len == 0 or action.kind != JObject:
+    return
+
+  let payload = action[ipc.actionName]
+  case ipc.actionName
+  of "FocusWorkspace":
+    if payload.kind == JObject and payload.hasKey("reference") and
+        payload["reference"].kind == JObject:
+      let refNode = payload["reference"]
+      if refNode.hasKey("Index"):
+        let index = uintFromNode(refNode["Index"])
+        if index.isSome:
+          ipc.workspaceIndex = index.get()
+      elif refNode.hasKey("Id"):
+        let tag = uintFromNode(refNode["Id"])
+        if tag.isSome:
+          ipc.workspaceId = tag.get()
+  of "FocusWindow", "CloseWindow":
+    if payload.kind == JObject and payload.hasKey("id") and payload["id"].kind != JNull:
+      let win = uintFromNode(payload["id"])
+      if win.isSome:
+        ipc.windowId = win.get()
+  of "MoveWorkspaceToIndex":
+    if payload.kind == JObject and payload.hasKey("index"):
+      let index = uintFromNode(payload["index"])
+      if index.isSome:
+        ipc.workspaceIndex = index.get()
+  else:
+    discard
 
 proc boolFromField(node: JsonNode, field: string, fallback = false): bool =
   if node.kind == JObject and node.hasKey(field):
@@ -386,12 +432,16 @@ proc handleNiriRequest*(line: string, snapshot: ShellSnapshot): NiriIpcResult =
     request = parseJson(stripped)
   except CatchableError as e:
     result.handled = true
-    result.reply = errReply("invalid JSON request: " & e.msg)
+    result.requestKind = "invalid-json"
+    result.error = "invalid JSON request: " & e.msg
+    result.reply = errReply(result.error)
     return
 
   result.handled = true
 
   if request.kind == JString:
+    result.requestKind = "query"
+    result.requestName = request.getStr()
     case request.getStr()
     of "Outputs":
       result.reply = okReply(%*{"Outputs": niriOutputsJson(snapshot)})
@@ -413,20 +463,28 @@ proc handleNiriRequest*(line: string, snapshot: ShellSnapshot): NiriIpcResult =
     of "Casts":
       result.reply = okReply(%*{"Casts": niriCastsJson()})
     of "EventStream":
+      result.requestKind = "event-stream"
       result.subscribe = true
       result.reply = handledReply()
       result.initialEvents = initialNiriEvents(snapshot)
     else:
-      result.reply = errReply("unsupported niri request: " & request.getStr())
+      result.requestKind = "unsupported"
+      result.error = "unsupported niri request: " & request.getStr()
+      result.reply = errReply(result.error)
     return
 
   if request.kind == JObject and request.hasKey("Action"):
+    result.requestKind = "action"
+    result.recordNiriActionDetails(request["Action"])
     let action = actionMessages(request["Action"], snapshot)
     result.messages = action.messages
     if action.handled:
-      result.reply = okReply(%*{"Handled": {}})
+      result.reply = handledReply()
     else:
-      result.reply = errReply("unsupported niri action")
+      result.error = "unsupported niri action"
+      result.reply = errReply(result.error)
     return
 
-  result.reply = errReply("unsupported niri request")
+  result.requestKind = "unsupported"
+  result.error = "unsupported niri request"
+  result.reply = errReply(result.error)

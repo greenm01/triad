@@ -129,6 +129,65 @@ proc devModeReply(): string =
 proc devModeError(message: string): string =
   $(%*{"ok": false, "type": "dev-mode", "error": message})
 
+proc msgKindNames(messages: openArray[Msg]): JsonNode =
+  result = newJArray()
+  for msg in messages:
+    result.add(%($msg.kind))
+
+proc niriReplyKind(reply: string): string =
+  if reply.len == 0:
+    return "none"
+  try:
+    let parsed = parseJson(reply)
+    if parsed.kind == JObject:
+      if parsed.hasKey("Err"):
+        return "Err"
+      if parsed.hasKey("Ok"):
+        let ok = parsed["Ok"]
+        if ok.kind == JString:
+          return ok.getStr()
+        if ok.kind == JObject:
+          for key, _ in ok.pairs:
+            return key
+          return "OkObject"
+        return "Ok"
+  except CatchableError:
+    return "unparseable"
+  "unknown"
+
+proc niriRequestLogPayload*(path: string, niri: NiriIpcResult): JsonNode =
+  result =
+    %*{
+      "path": path,
+      "request_kind": niri.requestKind,
+      "handled": niri.handled,
+      "subscribe": niri.subscribe,
+      "reply_kind": niri.reply.niriReplyKind(),
+      "message_count": niri.messages.len,
+      "message_kinds": msgKindNames(niri.messages),
+    }
+  if niri.requestName.len > 0:
+    result["request_name"] = %niri.requestName
+  if niri.actionName.len > 0:
+    result["action"] = %niri.actionName
+  if niri.workspaceIndex > 0:
+    result["workspace_idx"] = %niri.workspaceIndex
+  if niri.workspaceId > 0:
+    result["workspace_id"] = %niri.workspaceId
+  if niri.windowId > 0:
+    result["window_id"] = %niri.windowId
+  if niri.error.len > 0:
+    result["error"] = %niri.error
+
+proc niriDispatchLogPayload(path: string, niri: NiriIpcResult): JsonNode =
+  %*{
+    "path": path,
+    "request_kind": niri.requestKind,
+    "action": niri.actionName,
+    "message_count": niri.messages.len,
+    "message_kinds": msgKindNames(niri.messages),
+  }
+
 proc handleDevModeControl*(line: string): Option[string] =
   let parts = line.strip().splitWhitespace()
   if parts.len == 0 or parts[0] != "dev-mode":
@@ -249,6 +308,9 @@ proc startIpcServer*(
 
               let niri = handleNiriRequest(line, snapshot)
               if niri.handled:
+                writeBehaviorEvent(
+                  "niri_compat_request", niriRequestLogPayload(path, niri)
+                )
                 if niri.subscribe and not canSubscribe():
                   await client.send(
                     """{"Err":"too many event-stream subscribers"}""" & "\L"
@@ -258,6 +320,10 @@ proc startIpcServer*(
                   await client.send(niri.reply & "\L")
                 for msg in niri.messages:
                   onMsg(msg)
+                if niri.messages.len > 0:
+                  writeBehaviorEvent(
+                    "niri_compat_request_dispatched", niriDispatchLogPayload(path, niri)
+                  )
                 for event in niri.initialEvents:
                   await client.send(event & "\L")
                 if niri.subscribe:

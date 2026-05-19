@@ -194,6 +194,38 @@ proc writeQuickshellBehaviorEvent*(
 ) =
   writeBehaviorEvent(eventName, quickshellBehaviorPayload(config, reason, extra))
 
+proc shellCompatBehaviorPayload(
+    profile: ShellProfileConfig, niriSocketPath: string, compat: QuickshellCompatEnv
+): JsonNode =
+  result = %*{"launch": profile.launch, "niri_socket": niriSocketPath}
+  if not profile.niriCompat:
+    return
+
+  result["niri_socket"] = %compat.niriSocketPath
+  result["shim_ready"] = %compat.shimReady
+  result["overlay_ready"] = %compat.overlayReady
+  result["compat_bin"] = %compat.compatBinPath
+  result["niri_shim"] = %compat.niriShimPath
+  result["triad_niri"] = %compat.triadNiriPath
+  result["xdg_overlay"] = %compat.xdgOverlayPath
+  result["xdg_share"] = %compat.xdgSharePath
+  if compat.warning.len > 0:
+    result["compat_warning"] = %compat.warning
+
+proc shellSpawnEventPayload(
+    spawnInfo: JsonNode, childPid = 0, exitCode: Option[int] = none(int), error = ""
+): JsonNode =
+  result = newJObject()
+  if spawnInfo != nil and spawnInfo.kind == JObject:
+    for key, value in spawnInfo.pairs:
+      result[key] = value
+  if childPid > 0:
+    result["child_pid"] = %childPid
+  if exitCode.isSome:
+    result["exit_code"] = %exitCode.get()
+  if error.len > 0:
+    result["error"] = %error
+
 proc scheduleQuickshellRecovery*(
     runner: var QuickshellRunner,
     model: Model,
@@ -464,21 +496,25 @@ proc spawnShellProfile(
     )
     return
 
-  writeShellBehaviorEvent(
-    "shell_spawn_requested",
-    shells,
-    profile,
-    reason,
-    %*{"launch": profile.launch, "niri_socket": niriSocketPath},
-  )
-
+  var spawnInfo =
+    shellCompatBehaviorPayload(profile, niriSocketPath, QuickshellCompatEnv())
   try:
     let baseEnv = model.configuredProcessEnv()
+    var compat = QuickshellCompatEnv()
     let env =
       if profile.niriCompat:
-        prepareQuickshellCompatEnv(niriSocketPath, baseEnv = baseEnv).env
+        compat = prepareQuickshellCompatEnv(niriSocketPath, baseEnv = baseEnv)
+        spawnInfo = shellCompatBehaviorPayload(profile, niriSocketPath, compat)
+        if compat.warning.len > 0:
+          warn "Shell compatibility environment is incomplete",
+            profile = profile.name, warning = compat.warning
+          writeShellBehaviorEvent(
+            "shell_compat_warning", shells, profile, reason, spawnInfo
+          )
+        compat.env
       else:
         baseEnv
+    writeShellBehaviorEvent("shell_spawn_requested", shells, profile, reason, spawnInfo)
     let p = startProcess(
       profile.launch[0],
       args = profile.launch.commandArgs(),
@@ -495,7 +531,7 @@ proc spawnShellProfile(
         shells,
         profile,
         reason,
-        %*{"child_pid": childPid, "launch": profile.launch},
+        spawnInfo.shellSpawnEventPayload(childPid = childPid),
       )
       result = QuickshellSpawnStatus.Running
     elif earlyExitCode == 0:
@@ -505,7 +541,9 @@ proc spawnShellProfile(
         shells,
         profile,
         reason,
-        %*{"child_pid": childPid, "launch": profile.launch, "exit_code": earlyExitCode},
+        spawnInfo.shellSpawnEventPayload(
+          childPid = childPid, exitCode = some(earlyExitCode)
+        ),
       )
       result = QuickshellSpawnStatus.Handoff
     else:
@@ -515,7 +553,9 @@ proc spawnShellProfile(
         shells,
         profile,
         reason,
-        %*{"child_pid": childPid, "launch": profile.launch, "exit_code": earlyExitCode},
+        spawnInfo.shellSpawnEventPayload(
+          childPid = childPid, exitCode = some(earlyExitCode)
+        ),
       )
   except CatchableError as e:
     warn "Failed to spawn shell",
@@ -528,7 +568,7 @@ proc spawnShellProfile(
       shells,
       profile,
       reason,
-      %*{"launch": profile.launch, "error": e.msg},
+      spawnInfo.shellSpawnEventPayload(error = e.msg),
     )
 
 proc activeShellProfile(
