@@ -2,7 +2,8 @@ import std/[math, options]
 import ../core/native_layout_codec
 import ../state/engine
 import ../types/projection_values as rv
-from ../types/runtime_values import JanetLayoutId, LayoutMode, PointerOpKind
+from ../types/runtime_values import
+  JanetLayoutId, LayoutMode, NativeLayoutId, PointerOpKind
 import focus, layout_projection, overview_geometry, placement
 
 const
@@ -560,18 +561,23 @@ proc frameTickReasons*(model: Model): seq[string] =
     result.add("dialog-focus")
 
 proc openLayoutSwitchToast*(
-    model: var Model, layout: LayoutMode, customLayout = JanetLayoutId("")
+    model: var Model,
+    layout: LayoutMode,
+    customLayout = JanetLayoutId(""),
+    nativeLayout = NativeLayoutId(""),
 ): bool =
   if not model.layoutSwitchToast.enabled or model.layoutSwitchToast.timeoutMs <= 0:
     return false
   result =
     not model.layoutSwitchToastOpen or model.layoutSwitchToastElapsedMs != 0 or
     model.layoutSwitchToastLayout != layout or
-    string(model.layoutSwitchToastCustomLayout) != string(customLayout)
+    string(model.layoutSwitchToastCustomLayout) != string(customLayout) or
+    string(model.layoutSwitchToastNativeLayout) != string(nativeLayout)
   model.layoutSwitchToastOpen = true
   model.layoutSwitchToastElapsedMs = 0
   model.layoutSwitchToastLayout = layout
   model.layoutSwitchToastCustomLayout = customLayout
+  model.layoutSwitchToastNativeLayout = nativeLayout
 
 proc tickLayoutSwitchToast*(
     model: var Model, elapsedMs = DefaultFrameIntervalMs

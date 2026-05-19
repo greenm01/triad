@@ -503,6 +503,7 @@ type
     layoutSwitchToastElapsedMs*: int32
     layoutSwitchToastLayout*: LayoutMode
     layoutSwitchToastCustomLayout*: JanetLayoutId
+    layoutSwitchToastNativeLayout*: NativeLayoutId
     recentWindowsScope*: RecentWindowScope
     recentWindowsPreviousScope*: RecentWindowScope
     recentWindowsFilter*: RecentWindowFilter

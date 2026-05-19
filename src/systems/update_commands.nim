@@ -4,7 +4,7 @@ import ../state/engine
 import ../types/janet_layouts
 from ../types/runtime_values import
   Direction, FrameSplitOrientation, JanetLayoutId, LayoutMode, RecentWindowDirection,
-  SplitTreeNodeMode
+  NativeLayoutId, SplitTreeNodeMode
 import
   dialog_focus, focus, output_navigation, placement, recent_windows, runtime,
   scratchpad, update_effects, window_state, window_rules, workspaces
@@ -51,9 +51,19 @@ proc switchKeyboardLayout(
   (true, next)
 
 proc showLayoutSwitchToast(
-    model: var Model, layout: LayoutMode, customLayout = JanetLayoutId("")
+    model: var Model,
+    layout: LayoutMode,
+    customLayout = JanetLayoutId(""),
+    nativeLayout = NativeLayoutId(""),
 ): bool =
-  model.openLayoutSwitchToast(layout, customLayout)
+  model.openLayoutSwitchToast(layout, customLayout, nativeLayout)
+
+proc showActiveLayoutSwitchToast(model: var Model): bool =
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isNone:
+    return false
+  let tag = tagOpt.get()
+  model.showLayoutSwitchToast(tag.layoutMode, tag.customLayoutId, tag.nativeLayoutId)
 
 proc applyCommand*(
     model: var Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
@@ -79,7 +89,9 @@ proc applyCommand*(
       let native = model.nativeLayoutConfig(msg.nativeLayout)
       if native.isSome:
         result.dirty =
-          model.showLayoutSwitchToast(native.get().fallback.builtin) or result.dirty
+          model.showLayoutSwitchToast(
+            native.get().fallback.builtin, nativeLayout = native.get().id
+          ) or result.dirty
   of MsgKind.CmdFrameSplitHorizontal:
     result.dirty =
       not model.overviewActive and
@@ -139,12 +151,7 @@ proc applyCommand*(
   of MsgKind.CmdSwitchLayout:
     result.dirty = model.switchLayout()
     if result.dirty:
-      let tagOpt = model.tagData(model.activeTag)
-      if tagOpt.isSome:
-        result.dirty =
-          model.showLayoutSwitchToast(
-            tagOpt.get().layoutMode, tagOpt.get().customLayoutId
-          ) or result.dirty
+      result.dirty = model.showActiveLayoutSwitchToast() or result.dirty
   of MsgKind.CmdSetMasterCount:
     result.dirty = model.setMasterCount(msg.count)
   of MsgKind.CmdAdjustMasterCount:

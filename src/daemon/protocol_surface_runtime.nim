@@ -1,6 +1,7 @@
 import std/[os, sets, tables]
 import chronicles
 import ../core/layout_mode_codec
+import ../core/native_layout_codec
 import wayland/native/client
 import protocols/river/client as river
 import wayland/protocols/wayland/client as wlCore
@@ -486,9 +487,13 @@ proc syncLayoutSwitchToastSurface*(daemon: var TriadDaemon, screen: Rect) =
     return
 
   let customLayout = string(daemon.currentModel.layoutSwitchToastCustomLayout)
+  let nativeLayout =
+    daemon.currentModel.layoutSwitchToastNativeLayout.nativeLayoutIdString()
   let layoutLabel =
     if customLayout.len > 0:
       customLayout
+    elif nativeLayout.len > 0:
+      nativeLayout
     else:
       daemon.currentModel.layoutSwitchToastLayout.layoutModeId()
   let rendered = renderLayoutSwitchToastLabelBuffer(

@@ -885,6 +885,7 @@ suite "Runtime state primitives":
     check model.layoutSwitchToastOpen
     check model.layoutSwitchToastLayout == LayoutMode.Scroller
     check model.layoutSwitchToastCustomLayout.layoutIdString() == "deck"
+    check model.layoutSwitchToastNativeLayout.nativeLayoutIdString() == ""
     check model.layoutSwitchToastElapsedMs == 0
 
     let (ticked, _) = model.update(Msg(kind: MsgKind.CmdTick))
@@ -2437,6 +2438,64 @@ suite "Runtime state primitives":
     check projection.instructions.anyIt(it.windowId == 12'u32)
     check projection.instructions[0].geom.x < projection.instructions[1].geom.x
 
+  test "notion re-entry preserves frames and admits missing frame windows":
+    var config = baseConfig()
+    config.janet.layouts =
+      @[
+        JanetLayoutConfig(
+          id: janetLayoutId("notion"),
+          fallback: nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+        )
+      ]
+    var model = initRuntimeStateFromConfig(config).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitVertical))
+
+    let tagId = model.activeTag
+    var frameCountBefore = 0
+    var emptyLeafBefore = tc.NullFrameId
+    for frameId, frame in model.framesOnTagWithId(tagId):
+      inc frameCountBefore
+      if frame.kind == FrameNodeKind.Leaf and model.windowsForFrame(frameId).len == 0:
+        emptyLeafBefore = frameId
+    check frameCountBefore == 3
+    check emptyLeafBefore != tc.NullFrameId
+
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    check model.frameForWindowOnTag(tagId, tc.WindowId(2)) == tc.NullFrameId
+
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+    check model.tagData(tagId).get().customLayoutId.layoutIdString() == "notion"
+    check model.tagData(tagId).get().nativeLayoutId.nativeLayoutIdString() ==
+      "frame-tree"
+    var frameCountAfter = 0
+    var emptyLeafPreserved = false
+    for frameId, frame in model.framesOnTagWithId(tagId):
+      inc frameCountAfter
+      if frameId == emptyLeafBefore and frame.kind == FrameNodeKind.Leaf and
+          model.windowsForFrame(frameId).len == 0:
+        emptyLeafPreserved = true
+    check frameCountAfter == frameCountBefore
+    check emptyLeafPreserved
+    let admittedFrame = model.frameForWindowOnTag(tagId, tc.WindowId(2))
+    check admittedFrame != tc.NullFrameId
+    check model.frameData(admittedFrame).get().kind == FrameNodeKind.Leaf
+    check model.windowsForFrame(admittedFrame).find(tc.WindowId(2)) != -1
+    let projection = model.layoutProjection()
+    check projection.instructions.anyIt(it.windowId == 11'u32)
+    check projection.frameEmptyChrome.anyIt(it.frameId == uint32(emptyLeafBefore))
+
   test "explicit active layout command opens layout switch toast":
     var config = baseConfig()
     config.layoutSwitchToast.enabled = true
@@ -2450,6 +2509,7 @@ suite "Runtime state primitives":
     check model.layoutSwitchToastOpen
     check model.layoutSwitchToastLayout == LayoutMode.Grid
     check model.layoutSwitchToastCustomLayout.layoutIdString() == ""
+    check model.layoutSwitchToastNativeLayout.nativeLayoutIdString() == ""
 
   test "custom layout command opens toast with custom layout id":
     var config = baseConfig()
@@ -2473,6 +2533,42 @@ suite "Runtime state primitives":
     check model.layoutSwitchToastOpen
     check model.layoutSwitchToastLayout == LayoutMode.Scroller
     check model.layoutSwitchToastCustomLayout.layoutIdString() == "notion"
+    check model.layoutSwitchToastNativeLayout.nativeLayoutIdString() == ""
+
+  test "native layout command opens toast with native layout id":
+    var config = baseConfig()
+    config.layoutSwitchToast.enabled = true
+    config.layoutSwitchToast.timeoutMs = 900
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (setNative, _) = model.update(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model = setNative
+
+    check model.layoutSwitchToastOpen
+    check model.layoutSwitchToastLayout == LayoutMode.Scroller
+    check model.layoutSwitchToastCustomLayout.layoutIdString() == ""
+    check model.layoutSwitchToastNativeLayout.nativeLayoutIdString() == "i3"
+
+  test "layout cycle toast preserves native layout id":
+    var config = baseConfig()
+    config.layoutSwitchToast.enabled = true
+    config.layoutSwitchToast.timeoutMs = 900
+    config.layout.layoutSelections =
+      @[
+        builtinSelection(LayoutMode.Scroller),
+        nativeSelection(nativeLayoutId("i3"), LayoutMode.Scroller),
+      ]
+    var model = initRuntimeStateFromConfig(config).model
+
+    let (cycled, _) = model.update(Msg(kind: MsgKind.CmdSwitchLayout))
+    model = cycled
+
+    check model.layoutSwitchToastOpen
+    check model.layoutSwitchToastLayout == LayoutMode.Scroller
+    check model.layoutSwitchToastCustomLayout.layoutIdString() == ""
+    check model.layoutSwitchToastNativeLayout.nativeLayoutIdString() == "i3"
 
   test "layout switch toast ignores targeted layout command and disabled config":
     var config = baseConfig()

@@ -1,5 +1,6 @@
 import std/[json, options, sets, strutils]
 import ../core/layout_selection_codec
+import ../core/native_layout_codec
 import ../core/[msg, shell_focus]
 import ../janet/[runtime as janet_runtime, snapshot_api]
 import ../types/[janet_manifest, model, runtime_values, shell_snapshot]
@@ -21,6 +22,8 @@ type
     exitSessionConfirmOpen*: bool
     layoutSwitchToastOpen*: bool
     layoutSwitchToastLayout*: LayoutMode
+    layoutSwitchToastCustomLayout*: string
+    layoutSwitchToastNativeLayout*: string
 
 proc scriptOutcomeId(outcome: ScriptOutcome): string =
   case outcome
@@ -127,7 +130,17 @@ proc janetUiHookState*(model: Model): JanetUiHookState =
     exitSessionConfirmOpen: model.exitSessionConfirmOpen,
     layoutSwitchToastOpen: model.layoutSwitchToastOpen,
     layoutSwitchToastLayout: model.layoutSwitchToastLayout,
+    layoutSwitchToastCustomLayout: model.layoutSwitchToastCustomLayout.layoutIdString(),
+    layoutSwitchToastNativeLayout:
+      model.layoutSwitchToastNativeLayout.nativeLayoutIdString(),
   )
+
+proc layoutSwitchToastLabel(state: JanetUiHookState): string =
+  if state.layoutSwitchToastCustomLayout.len > 0:
+    return state.layoutSwitchToastCustomLayout
+  if state.layoutSwitchToastNativeLayout.len > 0:
+    return state.layoutSwitchToastNativeLayout
+  state.layoutSwitchToastLayout.behaviorLayoutId()
 
 proc scriptCommandPayload(msg: Msg): JsonNode =
   result = %*{"kind": $msg.kind}
@@ -473,7 +486,7 @@ proc uiHookEvents(before, after: JanetUiHookState): seq[JanetScriptEvent] =
         name,
         [
           ("active", $after.layoutSwitchToastOpen),
-          ("layout", after.layoutSwitchToastLayout.behaviorLayoutId().escaped()),
+          ("layout", after.layoutSwitchToastLabel().escaped()),
         ],
       ),
     )
