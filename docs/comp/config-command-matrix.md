@@ -378,6 +378,8 @@ KDL config nodes and fields:
   Default configs scope i3 keys to `layout "i3"` so `Super+Alt+h/v` split the
   focused container and `Super+e/s/w` select split, stacking, and tabbed modes
   without stealing those keys from other layouts.
+  See `docs/comp/i3-layout-conformance.md` for a full per-behavior conformance
+  audit against upstream i3 and a prioritized gap-remediation list.
 - `layout.frame-tabs`: `active-color`, `active-unfocused-color`,
   `inactive-color`, `active-line-color`, `active-unfocused-line-color`,
   `empty-background-color`.

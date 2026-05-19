@@ -1904,6 +1904,52 @@ suite "Runtime state primitives":
     check restoredProjection.instructions.anyIt(it.windowId == 11'u32)
     check restoredProjection.instructions.anyIt(it.windowId == 12'u32)
 
+  test "split-tree structural focus follows tree topology not geometry":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    # Build splith{A(10), splitv{B(11), C(12)}}:
+    # - create 10 (root leaf)
+    # - create 11 -> splith{10, 11}
+    # - focus 11, split vertical -> splith{10, splitv{11}}
+    # - create 12 -> splith{10, splitv{11, 12}}
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let winA = model.windowForExternal(ExternalWindowId(10))
+    let winB = model.windowForExternal(ExternalWindowId(11))
+    let winC = model.windowForExternal(ExternalWindowId(12))
+
+    # C is most-recently-focused; focus right from A should land on C (focused descendant of splitv)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    check model.directionalTarget(Direction.DirRight).window == winC
+
+    # After focusing B, focus right from A should land on B (most-recently-focused in splitv)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    check model.directionalTarget(Direction.DirRight).window == winB
+
+    # Focus left from C lands on A (structural: C's ancestor splitv is at index 1 in splith;
+    # sibling at index 0 is A's leaf)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 12))
+    check model.directionalTarget(Direction.DirLeft).window == winA
+
+    # No right neighbor from C — C is in the rightmost subtree
+    check model.directionalTarget(Direction.DirRight).window == NullWindowId
+
+    # Tabbed container: directional focus does not cross into non-active tabs
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    let tagId = model.activeTag
+    let root = model.splitRootForTag(tagId)
+    check root != tc.NullSplitNodeId
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(

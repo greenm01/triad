@@ -478,6 +478,10 @@ proc splitTreeNeighborWindow*(model: Model, direction: Direction): WindowId =
   if focused == NullWindowId:
     return NullWindowId
 
+  let structural = model.splitTreeStructuralNeighbor(direction)
+  if structural != NullWindowId:
+    return structural
+
   let leaves = model.activeSplitLeafRects()
   var current = Rect()
   var currentFound = false

@@ -12,6 +12,16 @@ type SplitNodeRect* = tuple[nodeId: SplitNodeId, rect: Rect]
 proc splitModeIsSplit(mode: SplitTreeNodeMode): bool =
   mode in {SplitTreeNodeMode.SplitH, SplitTreeNodeMode.SplitV}
 
+proc directionMatchesSplitMode(direction: Direction, mode: SplitTreeNodeMode): bool =
+  case direction
+  of Direction.DirLeft, Direction.DirRight:
+    mode == SplitTreeNodeMode.SplitH
+  of Direction.DirUp, Direction.DirDown:
+    mode == SplitTreeNodeMode.SplitV
+
+proc directionIsPositive(direction: Direction): bool =
+  direction in {Direction.DirRight, Direction.DirDown}
+
 proc normalizedLastSplitMode(mode: SplitTreeNodeMode): SplitTreeNodeMode =
   if mode.splitModeIsSplit(): mode else: SplitTreeNodeMode.SplitH
 
@@ -868,3 +878,53 @@ proc adjustFocusedSplitTreeSplit*(
       return true
     current = parentId
   false
+
+proc lastFocusedWindowInSubtree(
+    model: Model, tagId: TagId, nodeId: SplitNodeId
+): WindowId =
+  for histWinId in model.focusHistoryIdsReverse():
+    if not model.splitTreeWindowVisible(tagId, histWinId):
+      continue
+    var check =
+      model.splitNodeByTagWindow.getOrDefault((tagId, histWinId), NullSplitNodeId)
+    while check != NullSplitNodeId:
+      if check == nodeId:
+        return histWinId
+      let checkOpt = model.splitNodes.entity(check)
+      if checkOpt.isNone:
+        break
+      check = checkOpt.get().parent
+  model.splitTreeActiveWindowInSubtree(nodeId)
+
+proc splitTreeStructuralNeighbor*(model: Model, direction: Direction): WindowId =
+  let tagId = model.activeTag
+  if tagId == NullTagId or model.tags.entity(tagId).isNone:
+    return NullWindowId
+  let positive = direction.directionIsPositive()
+  var current = model.focusedSplitLeafOrRoot(tagId)
+  if current == NullSplitNodeId:
+    return NullWindowId
+  while current != NullSplitNodeId:
+    let currentOpt = model.splitNodes.entity(current)
+    if currentOpt.isNone:
+      return NullWindowId
+    let parentId = currentOpt.get().parent
+    if parentId == NullSplitNodeId:
+      return NullWindowId
+    let parentOpt = model.splitNodes.entity(parentId)
+    if parentOpt.isNone:
+      return NullWindowId
+    let parent = parentOpt.get()
+    if direction.directionMatchesSplitMode(parent.mode):
+      let idx = parent.children.find(current)
+      if idx == -1:
+        return NullWindowId
+      let siblingIdx =
+        if positive:
+          idx + 1
+        else:
+          idx - 1
+      if siblingIdx >= 0 and siblingIdx < parent.children.len:
+        return model.lastFocusedWindowInSubtree(tagId, parent.children[siblingIdx])
+    current = parentId
+  NullWindowId
