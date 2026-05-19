@@ -1680,6 +1680,71 @@ suite "Runtime state primitives":
     model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutToggleSplit))
     check model.splitNodeData(root).get().mode == SplitTreeNodeMode.SplitV
 
+  test "frame tab commands cycle native i3 tabbed containers":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let first = model.windowForExternal(ExternalWindowId(10))
+    let second = model.windowForExternal(ExternalWindowId(11))
+    let third = model.windowForExternal(ExternalWindowId(12))
+    let root = model.splitRootForTag(tagId)
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+
+    check model.splitNodeData(root).get().mode == SplitTreeNodeMode.Tabbed
+    check model.tagData(tagId).get().focusedWindow == third
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameTabNext))
+    check model.tagData(tagId).get().focusedWindow == first
+    check model.layoutProjection().instructions[0].windowId == 10'u32
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameTabPrev))
+    check model.tagData(tagId).get().focusedWindow == third
+    check model.layoutProjection().instructions[0].windowId == 12'u32
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutStacking))
+    check model.splitNodeData(root).get().mode == SplitTreeNodeMode.Stacking
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameTabPrev))
+    check model.tagData(tagId).get().focusedWindow == second
+
+  test "frame tab commands cycle nested native i3 tabbed children":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 13))
+
+    let tagId = model.activeTag
+    let first = model.windowForExternal(ExternalWindowId(10))
+    let second = model.windowForExternal(ExternalWindowId(11))
+    let root = model.splitRootForTag(tagId)
+    model.splitNodes.mEntity(root).mode = SplitTreeNodeMode.Tabbed
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameTabNext))
+    check model.tagData(tagId).get().focusedWindow == second
+    check model.layoutProjection().instructions[0].windowId == 11'u32
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameTabPrev))
+    check model.tagData(tagId).get().focusedWindow == first
+    check model.layoutProjection().instructions[0].windowId == 10'u32
+
   test "split-tree floating removes and reinserts tiled leaves":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

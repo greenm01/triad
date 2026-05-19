@@ -103,9 +103,21 @@ proc applyCommand*(
   of MsgKind.CmdFrameUnsplit:
     result.dirty = not model.overviewActive and model.unsplitFocusedFrame()
   of MsgKind.CmdFrameTabNext:
-    result.dirty = not model.overviewActive and model.focusFrameTab(1)
+    result.dirty =
+      not model.overviewActive and (
+        if model.activeTagUsesSplitTree():
+          model.focusSplitTreeTab(1)
+        else:
+          model.focusFrameTab(1)
+      )
   of MsgKind.CmdFrameTabPrev:
-    result.dirty = not model.overviewActive and model.focusFrameTab(-1)
+    result.dirty =
+      not model.overviewActive and (
+        if model.activeTagUsesSplitTree():
+          model.focusSplitTreeTab(-1)
+        else:
+          model.focusFrameTab(-1)
+      )
   of MsgKind.CmdSplitTreeSplitHorizontal:
     result.dirty =
       not model.overviewActive and

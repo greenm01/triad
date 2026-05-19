@@ -704,37 +704,11 @@ proc layoutSplitTree*(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: item.rect)
       )
 
-proc splitTreeActiveWindow(model: Model, nodeId: SplitNodeId): WindowId =
-  let nodeOpt = model.splitNodeData(nodeId)
-  if nodeOpt.isNone:
-    return NullWindowId
-  let node = nodeOpt.get()
-  if node.kind == FrameNodeKind.Leaf:
-    return node.window
-
-  let focused = model.effectiveTagFocusedWindow(node.tagId)
-  if focused != NullWindowId:
-    let focusedNode =
-      model.splitNodeByTagWindow.getOrDefault((node.tagId, focused), NullSplitNodeId)
-    var current = focusedNode
-    while current != NullSplitNodeId:
-      if current == nodeId:
-        return focused
-      let currentOpt = model.splitNodeData(current)
-      if currentOpt.isNone:
-        break
-      current = currentOpt.get().parent
-
-  for child in node.children:
-    result = model.splitTreeActiveWindow(child)
-    if result != NullWindowId:
-      return
-
 proc splitTreeVisibleTabs(
     model: Model, node: SplitNodeData, activeChild: SplitNodeId
 ): seq[rv.ProjectedFrameTab] =
   for child in node.children:
-    let winId = model.splitTreeActiveWindow(child)
+    let winId = model.splitTreeActiveWindowInSubtree(child)
     if winId == NullWindowId:
       continue
     let winOpt = model.windowData(winId)
@@ -766,7 +740,7 @@ proc splitTreeTabBars*(
     if node.kind != FrameNodeKind.Split or
         node.mode notin {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
       continue
-    let active = model.splitTreeActiveWindow(item.nodeId)
+    let active = model.splitTreeActiveWindowInSubtree(item.nodeId)
     if active == NullWindowId:
       continue
     let tabHeight = frameTreeTabHeight(item.rect)
@@ -774,7 +748,7 @@ proc splitTreeTabBars*(
       continue
     var activeChild = NullSplitNodeId
     for child in node.children:
-      if model.splitTreeActiveWindow(child) == active:
+      if model.splitTreeActiveWindowInSubtree(child) == active:
         activeChild = child
         break
     let tabs = model.splitTreeVisibleTabs(node, activeChild)

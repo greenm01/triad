@@ -131,6 +131,104 @@ proc focusedChildOfSplitNode(model: Model, nodeId: SplitNodeId): SplitNodeId =
   else:
     NullSplitNodeId
 
+proc splitTreeActiveWindowInSubtree*(model: Model, nodeId: SplitNodeId): WindowId =
+  let nodeOpt = model.splitNodes.entity(nodeId)
+  if nodeOpt.isNone:
+    return NullWindowId
+  let node = nodeOpt.get()
+  if node.kind == FrameNodeKind.Leaf:
+    if model.splitTreeWindowVisible(node.tagId, node.window):
+      return node.window
+    return NullWindowId
+
+  let tagOpt = model.tags.entity(node.tagId)
+  if tagOpt.isSome:
+    let focused = tagOpt.get().focusedWindow
+    if focused != NullWindowId and model.splitTreeWindowVisible(node.tagId, focused):
+      let focusedNode =
+        model.splitNodeByTagWindow.getOrDefault((node.tagId, focused), NullSplitNodeId)
+      var current = focusedNode
+      while current != NullSplitNodeId:
+        if current == nodeId:
+          return focused
+        let currentOpt = model.splitNodes.entity(current)
+        if currentOpt.isNone:
+          break
+        current = currentOpt.get().parent
+
+  for child in node.children:
+    result = model.splitTreeActiveWindowInSubtree(child)
+    if result != NullWindowId:
+      return
+
+proc splitTreeTabContainerForFocus(model: Model, tagId: TagId): SplitNodeId =
+  var current = model.focusedSplitLeafOrRoot(tagId)
+  while current != NullSplitNodeId:
+    let nodeOpt = model.splitNodes.entity(current)
+    if nodeOpt.isNone:
+      return NullSplitNodeId
+    let node = nodeOpt.get()
+    if node.kind == FrameNodeKind.Split and
+        node.mode in {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+      return current
+    current = node.parent
+  NullSplitNodeId
+
+proc splitTreeChildForWindow(
+    model: Model, containerId: SplitNodeId, winId: WindowId
+): SplitNodeId =
+  let nodeOpt = model.splitNodes.entity(containerId)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Split:
+    return NullSplitNodeId
+  let tagId = nodeOpt.get().tagId
+  let focusedNode =
+    model.splitNodeByTagWindow.getOrDefault((tagId, winId), NullSplitNodeId)
+  var current = focusedNode
+  while current != NullSplitNodeId:
+    let currentOpt = model.splitNodes.entity(current)
+    if currentOpt.isNone:
+      return NullSplitNodeId
+    if currentOpt.get().parent == containerId:
+      return current
+    current = currentOpt.get().parent
+  NullSplitNodeId
+
+proc focusSplitTreeTab*(model: var Model, delta: int): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId or delta == 0:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let container = model.splitTreeTabContainerForFocus(tagId)
+  if container == NullSplitNodeId:
+    return false
+  let nodeOpt = model.splitNodes.entity(container)
+  if nodeOpt.isNone:
+    return false
+
+  let node = nodeOpt.get()
+  var children: seq[SplitNodeId] = @[]
+  for child in node.children:
+    if model.splitTreeActiveWindowInSubtree(child) != NullWindowId:
+      children.add(child)
+  if children.len <= 1:
+    return false
+
+  let focused = tagOpt.get().focusedWindow
+  var currentChild = model.splitTreeChildForWindow(container, focused)
+  if currentChild == NullSplitNodeId or children.find(currentChild) == -1:
+    currentChild = children[0]
+  var idx = children.find(currentChild)
+  if idx == -1:
+    idx = 0
+  idx = (idx + delta + children.len) mod children.len
+
+  let next = model.splitTreeActiveWindowInSubtree(children[idx])
+  if next == NullWindowId or next == focused:
+    return false
+  model.setTagFocus(tagId, next)
+
 proc replaceSplitChild(
     model: var Model, parentId, oldChild, newChild: SplitNodeId
 ): bool =

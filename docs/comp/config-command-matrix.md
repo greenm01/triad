@@ -373,6 +373,8 @@ KDL config nodes and fields:
   `split-tree-layout-toggle-split`, `split-tree-layout-stacking`, and
   `split-tree-layout-tabbed`; focus, `move-window-*`, and
   `resize-width`/`resize-height` operate on the native split container tree.
+  Existing `frame-tab-next` and `frame-tab-prev` bindings cycle the focused
+  i3 tabbed or stacking container.
   Default configs scope i3 keys to `layout "i3"` so `Super+Alt+h/v` split the
   focused container and `Super+e/s/w` select split, stacking, and tabbed modes
   without stealing those keys from other layouts.
@@ -419,7 +421,8 @@ Text IPC and bind commands:
   `recent-window-scope`, `recent-window-cycle-scope`,
   `recent-window-close-current`. In frame-tree layouts, directional focus
   commands navigate between frames; explicit `frame-tab-next` and
-  `frame-tab-prev` commands cycle tabs.
+  `frame-tab-prev` commands cycle frame tabs and native i3 tabbed or stacking
+  containers.
 - Window and session: `close-window`, `toggle-floating`,
   `fullscreen-window`, `toggle-fullscreen`, `exit-fullscreen`,
   `maximize-window-to-edges`, `toggle-maximized`, `toggle-maximize`,

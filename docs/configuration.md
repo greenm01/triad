@@ -128,7 +128,9 @@ Native `i3` split-tree layouts support i3-style container modes through
 `split-tree-layout-tabbed`. The default bindings scope i3 commands to
 `layout "i3"`: `Super+Alt+h/v` split the focused container horizontally or
 vertically, and `Super+e`, `Super+s`, and `Super+w` select split, stacking, and
-tabbed modes only while i3 is active.
+tabbed modes only while i3 is active. The global `Super+Page_Up/Page_Down`
+bindings cycle tabs in the focused tabbed or stacking container while i3 is
+active.
 
 **Example Layout Configuration:**
 ```kdl
