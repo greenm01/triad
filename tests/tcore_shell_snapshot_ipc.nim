@@ -78,7 +78,7 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check snapshot.outputs.len == 1
     check snapshot.outputs[0].refreshRate == 144000
 
-  test "Workspace focus broadcasts activation and window snapshot":
+  test "Workspace focus broadcasts activation without full workspace snapshot":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
@@ -90,23 +90,18 @@ suite "Core Runtime Logic: shell snapshot ipc":
 
     let effects =
       model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
-    check effects.anyIt(
+    let activationEvents = effects.filterIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspaceActivated")
     )
-    let workspaceEvents = effects.filterIt(
+    check activationEvents.len == 1
+    let activation = parseJson(activationEvents[0].jsonPayload)["WorkspaceActivated"]
+    check activation["id"].getInt() == 1
+    check activation["focused"].getBool()
+    check not effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspacesChanged")
     )
-    check workspaceEvents.len == 1
-    let workspaces =
-      parseJson(workspaceEvents[0].jsonPayload)["WorkspacesChanged"]["workspaces"]
-    let workspace1 = workspaces.getElems().filterIt(it["id"].getInt() == 1)[0]
-    let workspace2 = workspaces.getElems().filterIt(it["id"].getInt() == 2)[0]
-    check workspace1["is_active"].getBool()
-    check workspace1["is_focused"].getBool()
-    check not workspace2["is_active"].getBool()
-    check not workspace2["is_focused"].getBool()
     check not effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WindowsChanged")

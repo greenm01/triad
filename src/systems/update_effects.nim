@@ -267,8 +267,7 @@ proc workspaceSnapshotChanged*(before, after: ShellSnapshot): bool =
     let previous = beforeWorkspace.get()
     if previous.workspaceIdx != workspace.workspaceIdx or previous.name != workspace.name or
         previous.outputName != workspace.outputName or
-        previous.occupied != workspace.occupied or
-        previous.isActive != workspace.isActive:
+        previous.occupied != workspace.occupied:
       return true
 
   false
