@@ -1169,6 +1169,38 @@ VmSwap:        0 kB
     check status["janet"]["handle_active"].getBool() == false
     check status["janet"].hasKey("janet_gc_heap_bytes")
     check status["ipc"].hasKey("total_subscribers")
+    check status["memory_pressure"]["pending"].getBool() == false
+
+  test "window close burst schedules quiet memory compaction":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+    let startMs = 10_000'i64
+
+    daemon.noteWindowDestroyedForMemoryPressure(startMs)
+    daemon.noteWindowDestroyedForMemoryPressure(startMs + 100)
+    daemon.noteWindowDestroyedForMemoryPressure(startMs + 200)
+    check daemon.memoryPressureDueMs == 0
+
+    daemon.noteWindowDestroyedForMemoryPressure(startMs + 300)
+    check daemon.memoryPressureDueMs == startMs + 300 + 750
+    check daemon.memoryPressureCloseCount == 4
+
+    daemon.noteWindowDestroyedForMemoryPressure(startMs + 600)
+    check daemon.memoryPressureDueMs == startMs + 600 + 750
+    check daemon.memoryPressureCloseCount == 5
+
+    daemon.maybeRunMemoryPressureCompaction(startMs + 600 + 749)
+    check daemon.memoryPressureDueMs == startMs + 600 + 750
+
+    daemon.enqueue(Msg(kind: MsgKind.CmdFocusNext))
+    daemon.maybeRunMemoryPressureCompaction(startMs + 600 + 750)
+    check daemon.memoryPressureDueMs == startMs + 600 + 1500
+    discard daemon.popQueuedMessage()
+
+    daemon.maybeRunMemoryPressureCompaction(startMs + 600 + 1500)
+    check daemon.memoryPressureDueMs == 0
+    check daemon.memoryPressureCloseCount == 0
+    check daemon.closeBurstDestroyedCount == 0
 
   test "native live restore parser rejects invalid or old payloads":
     check parseLiveRestoreJson("").isNone

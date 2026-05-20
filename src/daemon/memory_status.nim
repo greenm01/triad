@@ -1,7 +1,7 @@
 import std/[deques, json, os, tables, times]
 import protocol_surfaces, quickshell_runner, state
 import ../janet/runtime as janet_runtime
-import ../state/engine
+import ../state/[compaction, engine]
 import ../utils/[behavior_log, process_memory]
 import ../ipc/socket
 
@@ -9,6 +9,7 @@ const
   MemorySampleIntervalMs = 60_000'i64
   CloseBurstIntervalMs = 5_000'i64
   CloseBurstThreshold = 4
+  MemoryPressureQuietMs = 750'i64
   MemoryTrimCooldownMs = 30_000'i64
   MemoryTrimFreeThreshold = 16 * 1024 * 1024
 
@@ -168,6 +169,23 @@ proc ipcJson(): JsonNode =
     "total_subscribers": subscribers.len + triadSubscribers.len,
   }
 
+proc memoryPressureJson(daemon: TriadDaemon, nowMs: int64): JsonNode =
+  %*{
+    "pending": daemon.memoryPressureDueMs > 0,
+    "due_in_ms":
+      if daemon.memoryPressureDueMs > 0:
+        max(0'i64, daemon.memoryPressureDueMs - nowMs)
+      else:
+        0'i64,
+    "close_burst_count": daemon.closeBurstDestroyedCount,
+    "scheduled_close_count": daemon.memoryPressureCloseCount,
+    "cooldown_remaining_ms":
+      if daemon.lastMemoryTrimMs > 0:
+        max(0'i64, MemoryTrimCooldownMs - (nowMs - daemon.lastMemoryTrimMs))
+      else:
+        0'i64,
+  }
+
 proc memoryStatusPayload*(daemon: TriadDaemon): JsonNode =
   let nowMs = int64(epochTime() * 1000.0)
   %*{
@@ -201,6 +219,7 @@ proc memoryStatusPayload*(daemon: TriadDaemon): JsonNode =
     "janet": daemon.janetRuntime.diagnosticCounts().janetJson(),
     "shell": daemon.quickshellState.quickshellJson(),
     "ipc": ipcJson(),
+    "memory_pressure": daemon.memoryPressureJson(nowMs),
   }
 
 proc memoryStatusJson*(daemon: TriadDaemon): string =
@@ -226,6 +245,9 @@ proc writeMemoryTrimEvent(
     beforeProcess: ProcessMemoryStatus,
     beforeOccupied, beforeFree, beforeTotal: int,
     mallocTrimResult: int,
+    compactedModel, compactedDaemon: bool,
+    closeCount: int,
+    scheduledDueMs: int64,
 ) =
   if not behaviorLogEnabled():
     return
@@ -243,21 +265,111 @@ proc writeMemoryTrimEvent(
       },
       "after_nim": nimMemoryJson(),
       "malloc_trim_result": mallocTrimResult,
+      "compacted_model": compactedModel,
+      "compacted_daemon": compactedDaemon,
+      "close_burst_count": closeCount,
+      "scheduled_due_ms": scheduledDueMs,
     },
   )
 
-proc trimMemoryAfterPressure*(daemon: var TriadDaemon, reason: string) =
+proc compactProtocolSurfaces(runtime: var ProtocolSurfaceRuntime) =
+  runtime.surfaces.compactTable()
+  runtime.windowDecorationAbove.compactTable()
+  runtime.windowDecorationBelow.compactTable()
+  runtime.frameEmptySurfaces.compactTable()
+  runtime.bspPreselectionSurfaces.compactTable()
+  runtime.surfaceToOwned.compactTable()
+
+proc compactDaemonMemory(daemon: var TriadDaemon) =
+  daemon.lastFullscreenRequests.compactTable()
+  daemon.lastMaximizedRequests.compactTable()
+  daemon.pendingMaximizedAcks.compactTable()
+  daemon.windowReadyEmitted.compactHashSet()
+  daemon.windowPointers.compactTable()
+  daemon.windowNodes.compactTable()
+  daemon.outputPointers.compactTable()
+  daemon.layerOutputPointers.compactTable()
+  daemon.layerOutputOwners.compactTable()
+  daemon.seatPointers = daemon.seatPointers.compactSeq()
+  daemon.layerSeatPointers = daemon.layerSeatPointers.compactSeq()
+  daemon.xkbBindings.compactTable()
+  daemon.xkbBindingPointers = daemon.xkbBindingPointers.compactSeq()
+  daemon.xkbSeatPointers.compactTable()
+  daemon.xkbSeatAteUnbound.compactTable()
+  daemon.xkbBindingPressed.compactTable()
+  daemon.xkbBindingOnRelease.compactTable()
+  daemon.xkbBindingReleaseArmed.compactTable()
+  daemon.xkbBindingWhileLocked.compactTable()
+  daemon.xkbBindingModes.compactTable()
+  daemon.xkbBindingModifiers.compactTable()
+  daemon.xkbStopRepeatCount.compactTable()
+  daemon.pointerBindings.compactTable()
+  daemon.pointerBindingKinds.compactTable()
+  daemon.pointerBindingSeats.compactTable()
+  daemon.pointerBindingButtons.compactTable()
+  daemon.pointerBindingPointers = daemon.pointerBindingPointers.compactSeq()
+  daemon.pointerBindingPressed.compactTable()
+  daemon.shellSurfacePointers.compactTable()
+  daemon.protocolSurfaceRuntime.compactProtocolSurfaces()
+  daemon.outputWlNames.compactTable()
+  daemon.outputGlobalOwners.compactTable()
+  daemon.outputGlobalNames.compactTable()
+  daemon.outputGlobalIdentities.compactTable()
+  daemon.outputGlobalDescriptions.compactTable()
+  daemon.outputGlobalRefreshRates.compactTable()
+  daemon.wlOutputPointers.compactTable()
+  daemon.wlOutputListenerData.compactTable()
+  daemon.seatWlNames.compactTable()
+  daemon.wlSeatPointers.compactTable()
+  daemon.wlSeatListenerData.compactTable()
+  daemon.wlPointerPointers.compactTable()
+  daemon.wlPointerGlobalNames.compactTable()
+  daemon.wlPointerRiverSeats.compactTable()
+  daemon.wlPointerWheelFrames.compactTable()
+  daemon.wlPointerWheelRemainders.compactTable()
+  daemon.wlPointerSurfaceIds.compactTable()
+  daemon.wlPointerSurfaceXs.compactTable()
+  daemon.wlSwipePointers.compactTable()
+  daemon.wlSwipePointerIds.compactTable()
+  daemon.wlSwipeStates.compactTable()
+  daemon.cursorShapeDevices.compactTable()
+  daemon.cursorHiddenPointers.compactTable()
+  daemon.cursorLastMotionMsByPointer.compactTable()
+  daemon.pointerWindowBySeat.compactTable()
+  daemon.pointerPositionBySeat.compactTable()
+  daemon.pointerHotCornerInsideBySeat.compactTable()
+  daemon.cursorShakeBySeat.compactTable()
+  daemon.inputDevices.compactTable()
+  daemon.libinputDevices.compactTable()
+  daemon.xkbConfigKeyboards.compactTable()
+  daemon.libinputResultDescriptions.compactTable()
+  daemon.switchEventDevices = daemon.switchEventDevices.compactSeq()
+  daemon.windowUnreliablePids.compactTable()
+  daemon.pendingWindows.compactTable()
+  daemon.fireAndForgetProcesses = daemon.fireAndForgetProcesses.compactSeq()
+  daemon.configWatchPaths = daemon.configWatchPaths.compactSeq()
+
+proc trimMemoryAfterPressure*(
+    daemon: var TriadDaemon,
+    reason: string,
+    closeCount = 0,
+    scheduledDueMs = 0'i64,
+    compactManagedState = true,
+) =
   let nowMs = int64(epochTime() * 1000.0)
   if daemon.lastMemoryTrimMs > 0 and
-      nowMs - daemon.lastMemoryTrimMs < MemoryTrimCooldownMs:
-    return
-  if not shouldTrimNimHeap():
+      nowMs - daemon.lastMemoryTrimMs < MemoryTrimCooldownMs and not compactManagedState:
     return
 
   let beforeProcess = currentProcessMemoryStatus()
   let beforeOccupied = getOccupiedMem()
   let beforeFree = getFreeMem()
   let beforeTotal = getTotalMem()
+  if compactManagedState:
+    daemon.runtimeState.model.compactModelMemory()
+    daemon.compactDaemonMemory()
+  if not compactManagedState and not shouldTrimNimHeap():
+    return
   GC_fullCollect()
   let trimResult =
     when defined(linux):
@@ -266,11 +378,13 @@ proc trimMemoryAfterPressure*(daemon: var TriadDaemon, reason: string) =
       -1
   daemon.lastMemoryTrimMs = nowMs
   writeMemoryTrimEvent(
-    reason, beforeProcess, beforeOccupied, beforeFree, beforeTotal, trimResult
+    reason, beforeProcess, beforeOccupied, beforeFree, beforeTotal, trimResult,
+    compactManagedState, compactManagedState, closeCount, scheduledDueMs,
   )
 
-proc noteWindowDestroyedForMemoryPressure*(daemon: var TriadDaemon) =
-  let nowMs = int64(epochTime() * 1000.0)
+proc noteWindowDestroyedForMemoryPressure*(
+    daemon: var TriadDaemon, nowMs = int64(epochTime() * 1000.0)
+) =
   if daemon.closeBurstStartMs == 0 or
       nowMs - daemon.closeBurstStartMs > CloseBurstIntervalMs:
     daemon.closeBurstStartMs = nowMs
@@ -279,9 +393,27 @@ proc noteWindowDestroyedForMemoryPressure*(daemon: var TriadDaemon) =
 
   inc daemon.closeBurstDestroyedCount
   if daemon.closeBurstDestroyedCount >= CloseBurstThreshold:
-    daemon.closeBurstStartMs = nowMs
-    daemon.closeBurstDestroyedCount = 0
-    daemon.trimMemoryAfterPressure("window_close_burst")
+    daemon.memoryPressureDueMs = nowMs + MemoryPressureQuietMs
+    daemon.memoryPressureCloseCount = daemon.closeBurstDestroyedCount
+
+proc maybeRunMemoryPressureCompaction*(
+    daemon: var TriadDaemon, nowMs = int64(epochTime() * 1000.0)
+) =
+  if daemon.memoryPressureDueMs == 0 or nowMs < daemon.memoryPressureDueMs:
+    return
+  if len(daemon.msgQueue) > 0:
+    daemon.memoryPressureDueMs = nowMs + MemoryPressureQuietMs
+    return
+
+  let closeCount = daemon.memoryPressureCloseCount
+  let scheduledDueMs = daemon.memoryPressureDueMs
+  daemon.memoryPressureDueMs = 0
+  daemon.memoryPressureCloseCount = 0
+  daemon.closeBurstStartMs = 0
+  daemon.closeBurstDestroyedCount = 0
+  daemon.trimMemoryAfterPressure(
+    "window_close_burst", closeCount, scheduledDueMs, compactManagedState = true
+  )
 
 proc maybeWriteMemorySample*(daemon: var TriadDaemon, nowMs: int64) =
   if not behaviorLogEnabled():

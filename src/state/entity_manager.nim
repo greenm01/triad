@@ -49,3 +49,14 @@ proc hasDenseIndex*[ID, T](manager: EntityManager[ID, T]): bool =
     if manager.index[entity.id] != idx:
       return false
   true
+
+proc compactEntityManager*[ID, T](manager: var EntityManager[ID, T]) =
+  var compactedData = newSeqOfCap[T](manager.data.len)
+  for entity in manager.data:
+    compactedData.add(entity)
+  manager.data = compactedData
+
+  var compactedIndex = initTable[ID, int](manager.data.len)
+  for idx, entity in manager.data:
+    compactedIndex[entity.id] = idx
+  manager.index = compactedIndex

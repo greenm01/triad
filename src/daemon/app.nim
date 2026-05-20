@@ -744,6 +744,7 @@ proc main*() =
     let nowMs = unixMs()
     daemon.enqueueFrameTickIfDue(nowMs)
     daemon.maybeWriteMemorySample(nowMs)
+    daemon.maybeRunMemoryPressureCompaction(nowMs)
     let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
 
     # Poll async IPC without sleeping before Wayland events are serviced.

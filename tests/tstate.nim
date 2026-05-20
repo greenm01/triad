@@ -12,7 +12,7 @@ import ../src/daemon/overlay_text_render
 import ../src/daemon/overview_overlay_render
 import ../src/daemon/recent_windows_overlay_render
 import ../src/state/engine except WindowId
-import ../src/state/[entity_manager, invariants, live_restore, snapshot]
+import ../src/state/[compaction, entity_manager, invariants, live_restore, snapshot]
 import
   ../src/systems/[
     daemon_view, focus, layout_projection, overview_geometry, recent_windows,
@@ -236,6 +236,34 @@ suite "Runtime state primitives":
       check inPlace.liveRestoreJson() == next.liveRestoreJson()
       check inPlace.modelDiagnosticCounts() == next.modelDiagnosticCounts()
       pure = next
+
+  test "model memory compaction preserves runtime state":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    for externalId in 10'u32 .. 22'u32:
+      (model, _) = model.update(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: externalId,
+          appId: "kitty",
+          title: "window " & $externalId,
+        )
+      )
+    for externalId in 16'u32 .. 22'u32:
+      (model, _) =
+        model.update(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: externalId))
+
+    let beforeRestore = model.liveRestoreJson()
+    let beforeCounts = model.modelDiagnosticCounts()
+    model.compactModelMemory()
+
+    check model.liveRestoreJson() == beforeRestore
+    check model.modelDiagnosticCounts() == beforeCounts
+    check model.windows.hasDenseIndex()
+    check model.tags.hasDenseIndex()
+    check model.columns.hasDenseIndex()
+    check model.frames.hasDenseIndex()
+    check model.bspNodes.hasDenseIndex()
+    check model.splitNodes.hasDenseIndex()
 
   test "runtime event poll reports descriptor readiness":
     var pipeFds: array[2, cint]

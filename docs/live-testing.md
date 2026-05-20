@@ -76,8 +76,9 @@ logs even when dev mode is enabled. Override `TRIAD_BEHAVIOR_LOG_DIR`,
 or tune the log files. Runtime update logs keep compact summaries and tracked
 windows instead of full before/after window lists. Repeated identical layout
 projection logs are suppressed and reported on the next emitted projection with
-`suppressed_count`. A `memory_trim` event is emitted when Triad trims allocator
-memory after a destructive close burst.
+`suppressed_count`. After a destructive close burst, Triad schedules a short
+quiet-time managed-state compaction and emits a `memory_trim` event with before
+and after process/Nim heap counters.
 
 For an already-running session, use `triad msg dev-mode on`,
 `triad msg dev-mode off`, `triad msg dev-mode toggle`, or
