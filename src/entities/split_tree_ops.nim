@@ -497,6 +497,49 @@ proc toggleFocusedSplitTreeSplitLayout*(model: var Model): bool =
   model.splitNodes.mEntity(container).lastSplitMode = next.normalizedLastSplitMode()
   true
 
+proc cycleFocusedSplitTreeLayoutAll*(model: var Model): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let container = model.focusedSplitContainerOrRoot(tagId)
+  if container == NullSplitNodeId:
+    return false
+  let nodeOpt = model.splitNodes.entity(container)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Split:
+    return false
+  let next =
+    case nodeOpt.get().mode
+    of SplitTreeNodeMode.SplitH: SplitTreeNodeMode.SplitV
+    of SplitTreeNodeMode.SplitV: SplitTreeNodeMode.Stacking
+    of SplitTreeNodeMode.Stacking: SplitTreeNodeMode.Tabbed
+    of SplitTreeNodeMode.Tabbed: SplitTreeNodeMode.SplitH
+  model.setFocusedSplitTreeLayoutMode(next)
+
+proc cycleFocusedSplitTreeLayoutList*(
+    model: var Model, modes: seq[SplitTreeNodeMode]
+): bool =
+  if modes.len < 2:
+    return false
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let container = model.focusedSplitContainerOrRoot(tagId)
+  if container == NullSplitNodeId:
+    return false
+  let nodeOpt = model.splitNodes.entity(container)
+  if nodeOpt.isNone or nodeOpt.get().kind != FrameNodeKind.Split:
+    return false
+  let current = nodeOpt.get().mode
+  let idx = modes.find(current)
+  let next = modes[(idx + 1) mod modes.len]
+  model.setFocusedSplitTreeLayoutMode(next)
+
 proc addWindowToSplitTree*(model: var Model, tagId: TagId, winId: WindowId): bool =
   if model.tags.entity(tagId).isNone or not model.splitTreeWindowVisible(tagId, winId):
     return false

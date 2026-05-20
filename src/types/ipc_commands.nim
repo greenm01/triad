@@ -41,6 +41,9 @@ type
     CidSplitTreeLayoutTabbed
     CidSplitTreeFocusParent
     CidSplitTreeFocusChild
+    CidSplitTreeLayoutCycleAll
+    CidSplitTreeLayoutDefault
+    CidSplitTreeLayoutCycleList
     CidBspBalance
     CidBspEqualize
     CidBspPreselectLeft
@@ -177,6 +180,7 @@ type
     SpawnArgv
     WarpPointer
     Screenshot
+    SplitTreeModeList
 
   CommandSpec* = object
     id*: CommandId
@@ -323,6 +327,21 @@ const CommandSpecs* = [
     id: CommandId.CidSplitTreeFocusChild,
     name: "split-tree-focus-child",
     argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutCycleAll,
+    name: "split-tree-layout-cycle-all",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutDefault,
+    name: "split-tree-layout-default",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeLayoutCycleList,
+    name: "split-tree-layout-cycle",
+    argShape: SplitTreeModeList,
   ),
   CommandSpec(id: CommandId.CidBspBalance, name: "bsp-balance", argShape: NoArgs),
   CommandSpec(id: CommandId.CidBspEqualize, name: "bsp-equalize", argShape: NoArgs),

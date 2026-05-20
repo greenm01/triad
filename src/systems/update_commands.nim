@@ -173,6 +173,15 @@ proc applyCommand*(
     result.dirty =
       not model.overviewActive and model.activeTagUsesSplitTree() and
       model.focusSplitTreeChild()
+  of MsgKind.CmdSplitTreeLayoutCycleAll:
+    result.dirty = not model.overviewActive and model.cycleFocusedSplitTreeLayoutAll()
+  of MsgKind.CmdSplitTreeLayoutDefault:
+    result.dirty =
+      not model.overviewActive and
+      model.setFocusedSplitTreeLayoutMode(SplitTreeNodeMode.SplitH)
+  of MsgKind.CmdSplitTreeLayoutCycleList:
+    result.dirty =
+      not model.overviewActive and model.cycleFocusedSplitTreeLayoutList(msg.cycleModes)
   of MsgKind.CmdBspBalance:
     result.dirty = not model.overviewActive and model.balanceBspTree(model.activeTag)
   of MsgKind.CmdBspEqualize:

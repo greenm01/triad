@@ -46,11 +46,11 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 | `layout splitv` | Sets to `L_SPLITV` | `split-tree-layout-split-vertical` → `setFocusedSplitTreeLayoutMode(SplitV)` | Same | ✓ |
 | `layout stacking` | Sets to `L_STACKED`, saves split in `last_split_layout` | `split-tree-layout-stacking` → `setFocusedSplitTreeLayoutMode(Stacking)` | Saves prior split mode in `lastSplitMode` | ✓ |
 | `layout tabbed` | Sets to `L_TABBED`, saves split | `split-tree-layout-tabbed` → `setFocusedSplitTreeLayoutMode(Tabbed)` | Same | ✓ |
-| `layout default` | Sets to `L_DEFAULT` (= splith, `commands.c`) | Not implemented | — | ✗ P1-trivial: dispatch to `setFocusedSplitTreeLayoutMode(SplitH)` |
+| `layout default` | Sets to `L_DEFAULT` (= splith, `commands.c`) | `split-tree-layout-default` → `setFocusedSplitTreeLayoutMode(SplitH)` | ✓ |
 | `layout toggle split` | Flips H↔V; if currently stacked/tabbed restores `last_split_layout` (`con.c:2154`) | `split-tree-layout-toggle-split` → `toggleFocusedSplitTreeSplitLayout()` (`split_tree_ops.nim:440`) | Flips SplitH↔SplitV; from Stacking/Tabbed restores `lastSplitMode` | ✓ |
-| `layout toggle` (bare) | Cycles stacked→tabbed→last_split (`con.c:2173`) | Not implemented | — | ✗ P1: needs new command or extend `CidSplitTreeLayoutToggleSplit` |
-| `layout toggle all` | Cycles splith→splitv→stacked→tabbed→splith (`con.c:2173`) | Not implemented | — | ✗ P1 |
-| `layout toggle <a> <b> ...` | Cycles explicit list (`con.c:2129`) | Not implemented | — | ✗ P1 |
+| `layout toggle` (bare) | Cycles stacked→tabbed→last_split (`con.c:2173`) | `split-tree-layout-toggle-split` cycles SplitH↔SplitV; Stacking/Tabbed returns to last split | ≈ partial — doesn't include Stacking/Tabbed in the bare toggle cycle |
+| `layout toggle all` | Cycles splith→splitv→stacked→tabbed→splith (`con.c:2173`) | `split-tree-layout-cycle-all` → `cycleFocusedSplitTreeLayoutAll` | ✓ |
+| `layout toggle <a> <b> ...` | Cycles explicit list (`con.c:2129`) | `split-tree-layout-cycle <modes…>` → `cycleFocusedSplitTreeLayoutList` | ✓ |
 
 ### `focus` (directional)
 
@@ -193,8 +193,10 @@ cross-tag path instead of restructuring the workspace root.
 5. **`layout toggle <list>` cycle** — add `CidSplitTreeLayoutCycle` with a mode list argument.
    Parser extension in `src/ipc/commands.nim`.
 
-6. **`layout default` alias** — trivial: add `CidSplitTreeLayoutDefault` dispatching to
-   `setFocusedSplitTreeLayoutMode(SplitH)` in `src/systems/update_commands.nim`.
+6. ~~**`layout default` alias**~~ ✓ — `CidSplitTreeLayoutDefault` → `setFocusedSplitTreeLayoutMode(SplitH)`.
+   Also added `CidSplitTreeLayoutCycleAll` (`cycleFocusedSplitTreeLayoutAll`) and
+   `CidSplitTreeLayoutCycleList` (`cycleFocusedSplitTreeLayoutList`) for `layout toggle all`
+   and `layout toggle <list>` respectively.
 
 7. **`focus next/prev sibling`** — add `CidSplitTreeFocusNextSibling` / `CidSplitTreeFocusPrevSibling`
    stepping through `parent.children` around the focused leaf.

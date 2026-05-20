@@ -98,6 +98,19 @@ proc parseRecentScope(value: string): Option[RecentWindowScope] =
   else:
     none(RecentWindowScope)
 
+proc parseSplitTreeNodeMode(s: string): Option[SplitTreeNodeMode] =
+  case s.toLowerAscii()
+  of "splith", "split-h":
+    some(SplitTreeNodeMode.SplitH)
+  of "splitv", "split-v":
+    some(SplitTreeNodeMode.SplitV)
+  of "stacking":
+    some(SplitTreeNodeMode.Stacking)
+  of "tabbed":
+    some(SplitTreeNodeMode.Tabbed)
+  else:
+    none(SplitTreeNodeMode)
+
 proc parseRecentFilter(value: string): Option[RecentWindowFilter] =
   case value.toLowerAscii()
   of "all":
@@ -353,6 +366,21 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdSplitTreeFocusParent))
   of CommandId.CidSplitTreeFocusChild:
     some(Msg(kind: MsgKind.CmdSplitTreeFocusChild))
+  of CommandId.CidSplitTreeLayoutCycleAll:
+    some(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+  of CommandId.CidSplitTreeLayoutDefault:
+    some(Msg(kind: MsgKind.CmdSplitTreeLayoutDefault))
+  of CommandId.CidSplitTreeLayoutCycleList:
+    if parts.len < 2:
+      none(Msg)
+    else:
+      var modes: seq[SplitTreeNodeMode]
+      for i in 1 ..< parts.len:
+        let m = parseSplitTreeNodeMode(parts[i])
+        if m.isNone:
+          return none(Msg)
+        modes.add(m.get())
+      some(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleList, cycleModes: modes))
   of CommandId.CidBspBalance:
     some(Msg(kind: MsgKind.CmdBspBalance))
   of CommandId.CidBspEqualize:

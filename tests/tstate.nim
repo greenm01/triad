@@ -2131,6 +2131,68 @@ suite "Runtime state primitives":
     # Left from splitv container level → sibling A at idx 0 → should land on A.
     check model.directionalTarget(Direction.DirLeft).window == winA
 
+  test "split-tree layout cycle-all steps through all four modes":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = model.activeTag
+    let root = model.splitRootForTag(tagId)
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.SplitH
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.SplitV
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Stacking
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Tabbed
+
+    # Wraps back to SplitH.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.SplitH
+
+    # layout default always returns to SplitH regardless of current mode.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleAll))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Stacking
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutDefault))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.SplitH
+
+  test "split-tree layout cycle-list cycles through supplied mode subset":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+
+    let tagId = model.activeTag
+    let root = model.splitRootForTag(tagId)
+    let modes = @[SplitTreeNodeMode.Tabbed, SplitTreeNodeMode.Stacking]
+
+    # Start at SplitH (not in list) → advance from idx -1+1=0 → Tabbed.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleList, cycleModes: modes))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Tabbed
+
+    # Tabbed → Stacking.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleList, cycleModes: modes))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Stacking
+
+    # Stacking → wraps back to Tabbed.
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleList, cycleModes: modes))
+    check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Tabbed
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(

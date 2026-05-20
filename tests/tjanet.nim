@@ -119,6 +119,9 @@ proc sampleCommandParts(spec: CommandSpec): seq[string] =
     result.add("sh")
     result.add("-lc")
     result.add("echo")
+  of CommandArgShape.SplitTreeModeList:
+    result.add("splith")
+    result.add("stacking")
   of CommandArgShape.WarpPointer:
     result.add("12")
     result.add("34")

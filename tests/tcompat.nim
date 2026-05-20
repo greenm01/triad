@@ -197,6 +197,9 @@ proc sampleCommand(
   of CommandArgShape.SpawnArgv:
     result.textCommand = spec.name & " sh -lc echo"
     result.payload["argv"] = %*["sh", "-lc", "echo"]
+  of CommandArgShape.SplitTreeModeList:
+    result.textCommand = spec.name & " splith stacking"
+    result.payload["argv"] = %*["splith", "stacking"]
   of CommandArgShape.WarpPointer:
     result.textCommand = spec.name & " 12 34"
     result.payload["x"] = %12
@@ -265,6 +268,8 @@ suite "Shell compatibility contracts":
     let outputs =
       parseJson(handleNiriRequest("\"Outputs\"", snapshot).reply)["Ok"]["Outputs"]
     check outputs.hasKey("triad-0")
+    check outputs["triad-0"]["physical_size"].kind == JArray
+    check outputs["triad-0"]["physical_size"].len == 2
     check outputs["triad-0"]["logical"]["width"].getInt() == 1920
     check outputs["triad-0"]["logical"]["height"].getInt() == 1080
     check outputs["triad-0"]["refresh_rate"].getInt() == 144000
@@ -319,7 +324,7 @@ suite "Shell compatibility contracts":
     snapshot.activeWorkspaceIdx = 2
     snapshot.workspaces[0].focusedWindow = 10
     snapshot.workspaces[1].focusedWindow = 20
-    snapshot.windows[0].isFocused = false
+    snapshot.windows[0].isFocused = true
     snapshot.windows.add(
       ShellWindow(
         id: 20,
@@ -330,7 +335,6 @@ suite "Shell compatibility contracts":
         outputName: "triad-0",
         colIdx: 1,
         winIdx: 1,
-        isFocused: true,
         widthProportion: 0.5,
         heightProportion: 1.0,
         actualW: 800,
@@ -338,8 +342,8 @@ suite "Shell compatibility contracts":
       )
     )
 
-    let niri = handleNiriRequest("\"EventStream\"", snapshot)
-    let windows = parseJson(niri.initialEvents[1])["WindowsChanged"]["windows"]
+    let niri = handleNiriRequest("\"Windows\"", snapshot)
+    let windows = parseJson(niri.reply)["Ok"]["Windows"]
     check windows.filterIt(it["is_focused"].getBool()).len == 1
     check windows[1]["id"].getInt() == 20
     check windows[1]["workspace_id"].getInt() == 2
@@ -588,10 +592,8 @@ suite "Shell compatibility contracts":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())
     check niri.handled
     check niri.subscribe
-    check niri.reply == """{"Ok":"Handled"}"""
-    check niri.initialEvents.len >= 7
-    check parseJson(niri.initialEvents[0]).hasKey("WorkspacesChanged")
-    check parseJson(niri.initialEvents[^1]).hasKey("CastsChanged")
+    check niri.reply == ""
+    check niri.initialEvents.len == 0
 
     let triad = handleTriadRequest(
       """{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}""",

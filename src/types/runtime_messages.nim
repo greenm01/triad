@@ -79,6 +79,9 @@ type
     CmdSplitTreeLayoutTabbed
     CmdSplitTreeFocusParent
     CmdSplitTreeFocusChild
+    CmdSplitTreeLayoutCycleAll
+    CmdSplitTreeLayoutDefault
+    CmdSplitTreeLayoutCycleList
     CmdBspBalance
     CmdBspEqualize
     CmdBspPreselect
@@ -333,6 +336,8 @@ type
       nativeLayoutTargetTag*: uint32
     of MsgKind.CmdFocusDirection:
       direction*: Direction
+    of MsgKind.CmdSplitTreeLayoutCycleList:
+      cycleModes*: seq[SplitTreeNodeMode]
     of MsgKind.CmdBspPreselect:
       bspPreselectDirection*: Direction
     of MsgKind.CmdBspPreselectRatio:

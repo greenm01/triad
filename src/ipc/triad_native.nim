@@ -319,6 +319,13 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       some(parts)
     else:
       none(seq[string])
+  of CommandArgShape.SplitTreeModeList:
+    let argv = argvFromField(payload, "argv")
+    if argv.isSome:
+      parts.add(argv.get())
+      some(parts)
+    else:
+      none(seq[string])
   of CommandArgShape.Screenshot:
     let path = stringFromField(payload, "path")
     if path.len > 0:
