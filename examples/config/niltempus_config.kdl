@@ -2,6 +2,7 @@
 // Use as ~/.config/triad/config.kdl for host or VM sessions.
 
 layout {
+    layout-cycle "scroller" "split-tree" "notion" "spiral" "dwindle" "center-tile"
     gaps 8
     center-focused-column "on-overflow"
     default-column-width { proportion 0.5; }
@@ -10,6 +11,11 @@ layout {
     master {
         count 1
         split-ratio 0.55
+    }
+    spiral {
+        ratio 0.618
+        main-pane "left"
+        clockwise #true
     }
     border {
         width 4
@@ -25,7 +31,6 @@ layout {
     animation-speed 0.15
     frame-rate "auto"
     smart-gaps #false
-    layout-cycle "scroller" "notion" "bsp" "dwindle" "tile" "grid" "spiral" "monocle" "vertical-scroller" "deck" "center-tile" "right-tile" "vertical-tile" "vertical-grid" "vertical-deck" "tgmix"
 }
 
 scratchpad {
@@ -115,7 +120,7 @@ janet {
     automation-dir "~/.config/triad/automation"
     layout-dir "~/.config/triad/layouts"
     fuel-limit 500000
-    layout "janet-grid" fallback="scroller"
+    layout "janet-grid" fallback="grid"
     layout "janet-frame-tree" fallback="frame-tree"
 }
 
