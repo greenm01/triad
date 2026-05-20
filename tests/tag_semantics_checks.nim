@@ -50,18 +50,34 @@ proc okPayload(reply: string, key: string): JsonNode =
   let parsed = parseJson(reply)
   parsed["Ok"][key]
 
+proc niriWorkspaceVisible(workspace: ShellWorkspace): bool =
+  workspace.isActive or workspace.occupied or workspace.focusedWindow != 0'u32
+
 proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
   let workspacesReply = niri_compat.handleNiriRequest("\"Workspaces\"", snapshot)
   require(context, workspacesReply.handled, "Niri workspaces not handled")
   let workspaces = okPayload(workspacesReply.reply, "Workspaces")
   require(
     context,
-    workspaces.len == snapshot.workspaces.len,
-    "Niri workspace count differs from snapshot",
+    workspaces.len <= snapshot.workspaces.len,
+    "Niri workspace projection cannot exceed shell snapshot",
   )
 
   var activeCount = 0
   for workspace in workspaces:
+    let tagId = uint32(workspace["id"].getInt())
+    let shellWorkspace = snapshot.workspaceByTag(tagId)
+    require(context, shellWorkspace.found, "Niri workspace has no shell workspace")
+    require(
+      context,
+      shellWorkspace.workspace.niriWorkspaceVisible(),
+      "Niri workspace projection exposed empty inactive workspace",
+    )
+    require(
+      context,
+      uint32(workspace["idx"].getInt()) == shellWorkspace.workspace.workspaceIdx,
+      "Niri workspace index differs from shell snapshot",
+    )
     if workspace["is_active"].getBool():
       inc activeCount
       require(

@@ -252,12 +252,14 @@ suite "Shell compatibility contracts":
     let snapshot = snapshotForShell()
     let workspaces =
       parseJson(handleNiriRequest("\"Workspaces\"", snapshot).reply)["Ok"]["Workspaces"]
-    check workspaces.len == 3
+    check workspaces.len == 1
     check workspaces[0]["id"].getInt() == 1
     check workspaces[0]["idx"].getInt() == 1
     check workspaces[0]["name"].getStr() == "main"
     check workspaces[0]["output"].getStr() == "triad-0"
     check workspaces[0]["active_window_id"].getInt() == 10
+    check not workspaces.getElems().anyIt(it["id"].getInt() == 2)
+    check not workspaces.getElems().anyIt(it["id"].getInt() == 3)
 
     let windows =
       parseJson(handleNiriRequest("\"Windows\"", snapshot).reply)["Ok"]["Windows"]
@@ -367,8 +369,12 @@ suite "Shell compatibility contracts":
     let focusNext =
       handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", snapshot)
     check focusNext.messages.len == 1
-    check focusNext.messages[0].kind == MsgKind.CmdFocusTag
-    check focusNext.messages[0].focusTag == 2
+    check focusNext.messages[0].kind == MsgKind.CmdFocusTagRight
+
+    let focusPrevious =
+      handleNiriRequest("""{"Action":{"FocusWorkspaceUp":{}}}""", snapshot)
+    check focusPrevious.messages.len == 1
+    check focusPrevious.messages[0].kind == MsgKind.CmdFocusTagLeft
 
     var overviewSnapshot = snapshot
     overviewSnapshot.overviewActive = true

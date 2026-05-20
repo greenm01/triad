@@ -78,9 +78,14 @@ proc niriWindowJson*(snapshot: ShellSnapshot, win: ShellWindow): JsonNode =
   if win.appId.len > 0 and compatId != win.appId:
     result["raw_app_id"] = %win.appId
 
+proc niriWorkspaceVisible(workspace: ShellWorkspace): bool =
+  workspace.isActive or workspace.occupied or workspace.focusedWindow != 0'u32
+
 proc niriWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for workspace in snapshot.workspaces:
+    if not workspace.niriWorkspaceVisible():
+      continue
     result.add(
       %*{
         "id": workspace.tagId,

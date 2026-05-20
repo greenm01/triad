@@ -1,4 +1,4 @@
-import std/[options, sets, tables]
+import std/[algorithm, options, sets, tables]
 import active_workspace_ops, history_ops
 import ../core/layout_descriptor_codec
 import ../core/native_layout_codec
@@ -280,3 +280,62 @@ proc destroyTag*(model: var Model, tagId: TagId): bool =
   discard model.removeWorkspaceHistoryRef(tagId)
   discard model.clearActiveWorkspaceIfTag(tagId)
   model.tags.delete(tagId)
+
+proc compactDynamicWorkspaceSlots*(model: var Model, defaultCount: uint32): bool =
+  var dynamicSlots: seq[uint32] = @[]
+  for slot in model.tagSlots():
+    if slot > defaultCount:
+      dynamicSlots.add(slot)
+  dynamicSlots.sort()
+
+  for i, oldSlot in dynamicSlots:
+    let newSlot = defaultCount + uint32(i) + 1
+    if oldSlot == newSlot:
+      continue
+    let tagId = model.tagBySlot.getOrDefault(oldSlot, NullTagId)
+    if tagId == NullTagId:
+      continue
+    let oldBit = model.tags.mEntity(tagId).bit
+    let newBit = tagBit(newSlot)
+    model.tagBySlot.del(oldSlot)
+    model.tagBySlot[newSlot] = tagId
+    model.tags.mEntity(tagId).slot = newSlot
+    model.tags.mEntity(tagId).bit = newBit
+    for winId in model.windowsByTag.getOrDefault(tagId, @[]):
+      var mask = model.windowTags.getOrDefault(winId, EmptyTagMask)
+      mask.excl(oldBit)
+      mask.incl(newBit)
+      model.windowTags[winId] = mask
+    var scratchpadIds: seq[WindowId] = @[]
+    for winId, mask in model.scratchpadRestoreTags.pairs:
+      if mask.contains(oldBit):
+        scratchpadIds.add(winId)
+    for winId in scratchpadIds:
+      var mask = model.scratchpadRestoreTags[winId]
+      mask.excl(oldBit)
+      mask.incl(newBit)
+      model.scratchpadRestoreTags[winId] = mask
+    if model.activeSlot == oldSlot:
+      model.activeSlot = newSlot
+    for j in 0 ..< model.visibleSlots.len:
+      if model.visibleSlots[j] == oldSlot:
+        model.visibleSlots[j] = newSlot
+    if model.restoreTags.hasKey(oldSlot):
+      model.restoreTags[newSlot] = model.restoreTags[oldSlot]
+      model.restoreTags.del(oldSlot)
+    var outputExtIds: seq[ExternalOutputId] = @[]
+    for outputExt, slot in model.restoreOutputTags.pairs:
+      if slot == oldSlot:
+        outputExtIds.add(outputExt)
+    for outputExt in outputExtIds:
+      model.restoreOutputTags[outputExt] = newSlot
+    for j in 0 ..< model.restoreWorkspaceHistory.len:
+      if model.restoreWorkspaceHistory[j] == oldSlot:
+        model.restoreWorkspaceHistory[j] = newSlot
+    var windowExtIds: seq[ExternalWindowId] = @[]
+    for externalId, slot in model.restoreTagByWindow.pairs:
+      if slot == oldSlot:
+        windowExtIds.add(externalId)
+    for externalId in windowExtIds:
+      model.restoreTagByWindow[externalId] = newSlot
+    result = true

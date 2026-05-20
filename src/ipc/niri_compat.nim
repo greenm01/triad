@@ -118,23 +118,6 @@ proc pointerMode(showPointer: bool): ScreenshotPointerMode =
   else:
     ScreenshotPointerMode.PointerHide
 
-proc nextTag(snapshot: ShellSnapshot, direction: int): Option[uint32] =
-  var ids: seq[uint32] = @[]
-  for workspace in snapshot.workspaces:
-    ids.add(workspace.tagId)
-  if ids.len == 0:
-    return none(uint32)
-
-  let active = snapshot.activeTag
-  var idx = ids.find(active)
-  if idx == -1:
-    idx = 0
-  if direction < 0:
-    return some(ids[max(0, idx - 1)])
-  if idx < ids.len - 1:
-    return some(ids[idx + 1])
-  some(ids[^1])
-
 proc focusedWindow(snapshot: ShellSnapshot): uint32 =
   if snapshot.activeScratchpadWindow != 0'u32:
     return snapshot.activeScratchpadWindow
@@ -216,17 +199,9 @@ proc actionMessages(
           if tag.isSome:
             return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: tag.get())])
   elif action.hasKey("FocusWorkspaceDown"):
-    if snapshot.overviewActive:
-      return (true, @[Msg(kind: MsgKind.CmdFocusTagRight)])
-    let tag = nextTag(snapshot, 1)
-    if tag.isSome:
-      return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: tag.get())])
+    return (true, @[Msg(kind: MsgKind.CmdFocusTagRight)])
   elif action.hasKey("FocusWorkspaceUp"):
-    if snapshot.overviewActive:
-      return (true, @[Msg(kind: MsgKind.CmdFocusTagLeft)])
-    let tag = nextTag(snapshot, -1)
-    if tag.isSome:
-      return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: tag.get())])
+    return (true, @[Msg(kind: MsgKind.CmdFocusTagLeft)])
   elif action.hasKey("ToggleOverview"):
     return (true, @[Msg(kind: MsgKind.CmdToggleOverview)])
   elif action.hasKey("OpenOverview"):

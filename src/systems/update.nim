@@ -144,9 +144,9 @@ proc isLayoutCommand(kind: MsgKind): bool =
 proc needsFullSnapshotAlways(kind: MsgKind): bool =
   case kind
   of MsgKind.WlPointerDelta, MsgKind.WlRecentWindowPointerMotion,
-      MsgKind.WlOverviewPointerScrollRequested, MsgKind.WlOverviewWheel,
-      MsgKind.WlPointerMoveRequested, MsgKind.WlPointerResizeRequested,
-      MsgKind.WlOverviewPointerDragRequested, MsgKind.CmdTick:
+      MsgKind.WlOverviewPointerScrollRequested, MsgKind.WlPointerMoveRequested,
+      MsgKind.WlPointerResizeRequested, MsgKind.WlOverviewPointerDragRequested,
+      MsgKind.CmdTick:
     false
   else:
     true

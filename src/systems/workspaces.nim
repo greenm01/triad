@@ -295,4 +295,5 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
     if model.destroyTag(tagId):
       result = true
   if result:
+    discard model.compactDynamicWorkspaceSlots(defaultCount)
     model.refreshVisibleWorkspaceSlots()

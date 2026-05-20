@@ -1,5 +1,6 @@
 import tcore_support
 import ../src/core/native_layout_codec
+import ../src/ipc/niri_compat
 
 suite "Core Runtime Logic: shell snapshot ipc":
   test "Shell snapshot exposes active workspace focus globally":
@@ -140,6 +141,33 @@ suite "Core Runtime Logic: shell snapshot ipc":
         it.jsonPayload.contains("WorkspacesChanged")
     )
     model.requireTagShellSemantics("empty dynamic pruned scenario")
+
+  test "Niri workspace down action opens dynamic workspace":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+
+    let action = handleNiriRequest(
+      """{"Action":{"FocusWorkspaceDown":null}}""", model.shellSnapshot()
+    )
+    check action.handled
+    check action.messages.len == 1
+    check action.messages[0].kind == MsgKind.CmdFocusTagRight
+
+    let effects = model.updateModel(action.messages[0])
+    let snapshot = model.shellSnapshot()
+    check snapshot.activeTag == 4
+    check snapshot.workspaces.anyIt(it.tagId == 4 and it.isActive)
+    let workspaceEvents = effects.filterIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+    check workspaceEvents.len == 1
+    let workspaces =
+      parseJson(workspaceEvents[0].jsonPayload)["WorkspacesChanged"]["workspaces"]
+    check workspaces.getElems().anyIt(
+      it["id"].getInt() == 4 and it["is_active"].getBool()
+    )
+    model.requireTagShellSemantics("niri dynamic workspace action scenario")
 
   test "Scratchpad restore returns window to previous workspace":
     var model = configuredModel()
@@ -454,6 +482,58 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check not snapshot.workspaces.anyIt(it.tagId == 4)
     check not effects.hasFocusEffect(1)
     model.requireTagShellSemantics("dynamic close collapse scenario")
+
+  test "Occupied dynamic workspace rolls into pruned empty slot":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "Slot4")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Slot5")
+    )
+    # Active = slot 5, window 1 on slot 4, window 2 on slot 5
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 4))
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 1))
+
+    let snapshot = model.shellSnapshot()
+    # Slot 4 pruned; slot 5 compacts to slot 4
+    check snapshot.activeTag == 3
+    let occupied = snapshot.workspaces.filterIt(it.occupied)
+    check occupied.len == 1
+    check occupied[0].tagId == 4
+    check not snapshot.workspaces.anyIt(it.tagId >= 6)
+    model.requireTagShellSemantics("dynamic slot roll single scenario")
+
+  test "Middle dynamic workspace prune rolls subsequent slot down":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "Slot4")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "term", title: "Slot5")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "term", title: "Slot6")
+    )
+    # Active = slot 6, windows on 4, 5, 6; close window on slot 5 (middle gap)
+    discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
+
+    let snapshot = model.shellSnapshot()
+    # Slot 5 pruned; slot 6 compacts to slot 5; active follows
+    check snapshot.activeTag == 5
+    let occupied = snapshot.workspaces.filterIt(it.occupied)
+    check occupied.len == 2
+    check occupied.anyIt(it.tagId == 4)
+    check occupied.anyIt(it.tagId == 5)
+    check not snapshot.workspaces.anyIt(it.tagId >= 7)
+    model.requireTagShellSemantics("dynamic slot roll gap scenario")
 
   test "Overview order deduplicates multi-tag windows":
     var model = configuredModel()
