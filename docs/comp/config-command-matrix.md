@@ -489,8 +489,10 @@ CLI and environment:
   such as behavior JSONL logs. `TRIAD_BEHAVIOR_LOG=0` still forces those logs
   off, and `TRIAD_BEHAVIOR_LOG=1` enables them without the full dev mode.
 - `nimble liveReload` starts the replacement daemon in dev mode through a
-  one-shot runtime marker. Direct `triad-reload` preserves dev mode only when
-  the active daemon was already in dev mode.
+  one-shot runtime marker. It also self-installs a stale or missing
+  `triad-manager-loop` and aborts until the River/Triad session has restarted
+  on that updated loop. Direct `triad-reload` preserves dev mode only when the
+  active daemon was already in dev mode.
 - `triad msg dev-mode [on|off|toggle|status]` changes or reports the live
   daemon diagnostics mode without restarting the session.
 - `triad msg state` and `triad msg layout-state` print native Triad JSON
