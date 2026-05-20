@@ -380,6 +380,8 @@ KDL config nodes and fields:
   without stealing those keys from other layouts.
   See `docs/comp/i3-layout-conformance.md` for a full per-behavior conformance
   audit against upstream i3 and a prioritized gap-remediation list.
+  See `docs/comp/notion-layout-conformance.md` for a conformance audit of
+  `frame-tree`/`notion` against notion-river and the original notion WM.
 - `layout.frame-tabs`: `active-color`, `active-unfocused-color`,
   `inactive-color`, `active-line-color`, `active-unfocused-line-color`,
   `empty-background-color`.
