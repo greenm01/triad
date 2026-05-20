@@ -390,6 +390,27 @@ proc adjustFocusedFrameSplit*(
     current = parentId
   false
 
+proc toggleFocusedFrameSplitOrientation*(model: var Model, tagId: TagId): bool =
+  let leaf = model.focusedFrameOrRoot(tagId)
+  if leaf == NullFrameId:
+    return false
+  let leafOpt = model.frames.entity(leaf)
+  if leafOpt.isNone:
+    return false
+  let parentId = leafOpt.get().parent
+  if parentId == NullFrameId:
+    return false
+  let parentOpt = model.frames.entity(parentId)
+  if parentOpt.isNone or parentOpt.get().kind != FrameNodeKind.Split:
+    return false
+  let current = parentOpt.get().orientation
+  model.frames.mEntity(parentId).orientation =
+    if current == FrameSplitOrientation.Horizontal:
+      FrameSplitOrientation.Vertical
+    else:
+      FrameSplitOrientation.Horizontal
+  true
+
 proc focusFrameTab*(model: var Model, delta: int): bool =
   let tagId = model.activeTag
   if tagId == NullTagId or delta == 0:

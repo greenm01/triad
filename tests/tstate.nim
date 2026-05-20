@@ -2414,6 +2414,41 @@ suite "Runtime state primitives":
     projection = model.layoutProjection()
     check projection.frameTabBars.anyIt(it.tabs.len == 2)
 
+  test "frame-split-toggle flips parent split orientation":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let tagId = model.activeTag
+    let rootId = model.frameRootForTag(tagId)
+    check model.frameData(rootId).get().orientation == FrameSplitOrientation.Horizontal
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitToggle))
+    check model.frameData(rootId).get().orientation == FrameSplitOrientation.Vertical
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitToggle))
+    check model.frameData(rootId).get().orientation == FrameSplitOrientation.Horizontal
+
+    # Single leaf frame (no parent split): toggle is a no-op, root stays a leaf.
+    var modelSingle = initRuntimeStateFromConfig(baseConfig()).model
+    modelSingle.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    modelSingle.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    modelSingle.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    let singleRoot = modelSingle.frameRootForTag(modelSingle.activeTag)
+    check modelSingle.frameData(singleRoot).get().kind == FrameNodeKind.Leaf
+    modelSingle.applyMsg(Msg(kind: MsgKind.CmdFrameSplitToggle))
+    check modelSingle.frameData(singleRoot).get().kind == FrameNodeKind.Leaf
+
   test "frame-tree resize adjusts split ratio and clamps at boundaries":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

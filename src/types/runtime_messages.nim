@@ -73,6 +73,7 @@ type
     CmdFrameResizeRight
     CmdFrameResizeUp
     CmdFrameResizeDown
+    CmdFrameSplitToggle
     CmdSplitTreeSplitHorizontal
     CmdSplitTreeSplitVertical
     CmdSplitTreeSplitToggle

@@ -35,6 +35,7 @@ type
     CidFrameResizeRight
     CidFrameResizeUp
     CidFrameResizeDown
+    CidFrameSplitToggle
     CidSplitTreeSplitHorizontal
     CidSplitTreeSplitVertical
     CidSplitTreeSplitToggle
@@ -304,6 +305,9 @@ const CommandSpecs* = [
     id: CommandId.CidFrameResizeDown,
     name: "frame-resize-down",
     argShape: OptionalFloatDelta,
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameSplitToggle, name: "frame-split-toggle", argShape: NoArgs
   ),
   CommandSpec(
     id: CommandId.CidSplitTreeSplitHorizontal,

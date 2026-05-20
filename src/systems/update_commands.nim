@@ -142,6 +142,10 @@ proc applyCommand*(
       model.adjustFocusedFrameSplit(
         model.activeTag, FrameSplitOrientation.Vertical, msg.frameResizeDelta
       )
+  of MsgKind.CmdFrameSplitToggle:
+    result.dirty =
+      not model.overviewActive and
+      model.toggleFocusedFrameSplitOrientation(model.activeTag)
   of MsgKind.CmdSplitTreeSplitHorizontal:
     result.dirty =
       not model.overviewActive and

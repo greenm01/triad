@@ -42,7 +42,7 @@ triad's design goals.
 | `SplitHorizontal` — split focused frame left–right | `frame-split-horizontal` → `splitFocusedFrame(Horizontal)` | ✓ | Active window stays in original; new empty sibling created |
 | `SplitVertical` — split focused frame top–bottom | `frame-split-vertical` → `splitFocusedFrame(Vertical)` | ✓ | |
 | `Unsplit` — remove focused empty frame, promote sibling | `frame-unsplit` → `unsplitFocusedFrame()` | ✓ | Succeeds only when the frame is empty |
-| `ToggleSplit` — toggle split orientation H↔V on focused frame's parent | Not implemented | ✗ P2 | Notion-river: `toggle_orientation(frame_id)` flips parent split node orientation |
+| `ToggleSplit` — toggle split orientation H↔V on focused frame's parent | `frame-split-toggle` → `toggleFocusedFrameSplitOrientation` | ✓ |
 
 ### Tab navigation
 
@@ -150,7 +150,8 @@ triad's design goals.
 
 ### P2 — Nice to have
 
-4. **`frame-split-toggle`** — toggle the focused frame's parent split orientation H↔V.
+4. ~~**`frame-split-toggle`**~~ ✓ — `CidFrameSplitToggle` → `toggleFocusedFrameSplitOrientation`
+   in `frame_ops.nim`; reads focused leaf's parent split orientation and flips it.
    Mirrors `ToggleSplit` from notion-river (`toggle_orientation(frame_id)` on the parent split
    node). Cheap to add: new `CidFrameSplitToggle` that reads the parent's orientation and calls
    `splitFocusedFrame` with the opposite. No new data model needed.
