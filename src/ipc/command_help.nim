@@ -1,0 +1,280 @@
+import std/[json, options, strutils]
+import command_registry
+
+type SpecialMsgCommand* = object
+  name*: string
+  usage*: string
+  description*: string
+
+const SpecialMsgCommands* = [
+  SpecialMsgCommand(
+    name: "help",
+    usage: "triad msg help [command]",
+    description: "Print msg help, or detailed help for one command.",
+  ),
+  SpecialMsgCommand(
+    name: "commands",
+    usage: "triad msg commands [--json]",
+    description: "List supported text commands and special msg requests.",
+  ),
+  SpecialMsgCommand(
+    name: "validate",
+    usage: "triad msg validate <command...>",
+    description: "Parse a msg command or request locally without dispatching it.",
+  ),
+  SpecialMsgCommand(
+    name: "request",
+    usage: "triad msg request <json>",
+    description: "Send one raw line-delimited IPC request and print the reply.",
+  ),
+  SpecialMsgCommand(
+    name: "state",
+    usage: "triad msg state",
+    description: "Print native Triad shell state JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "layout-state",
+    usage: "triad msg layout-state",
+    description: "Print native Triad layout state JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "switch-layout",
+    usage: "triad msg switch-layout",
+    description:
+      "Advance the active tag through the configured layout cycle and print ack.",
+  ),
+  SpecialMsgCommand(
+    name: "event-stream",
+    usage: "triad msg event-stream [--native [layout,state]]",
+    description:
+      "Subscribe to Niri-compatible events, or native Triad events with --native.",
+  ),
+  SpecialMsgCommand(
+    name: "dev-mode",
+    usage: "triad msg dev-mode [on|off|toggle|status]",
+    description: "Show or change live daemon diagnostics mode.",
+  ),
+  SpecialMsgCommand(
+    name: "perf-status",
+    usage: "triad msg perf-status",
+    description: "Print live daemon performance counters JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "dump-live-restore-state",
+    usage: "triad msg dump-live-restore-state",
+    description: "Print the live-restore handoff snapshot JSON.",
+  ),
+]
+
+proc argShapeId*(shape: CommandArgShape): string =
+  case shape
+  of CommandArgShape.NoArgs: "none"
+  of CommandArgShape.OptionalWindowId: "optional-window-id"
+  of CommandArgShape.RequiredWindowId: "required-window-id"
+  of CommandArgShape.WindowTagFollow: "window-tag-follow"
+  of CommandArgShape.WindowWorkspaceFollow: "window-workspace-follow"
+  of CommandArgShape.WindowBool: "window-bool"
+  of CommandArgShape.TagLayout: "tag-layout"
+  of CommandArgShape.RequiredTag: "required-tag"
+  of CommandArgShape.RequiredWorkspaceIdx: "required-workspace-idx"
+  of CommandArgShape.RequiredName: "required-name"
+  of CommandArgShape.RequiredOutput: "required-output"
+  of CommandArgShape.RequiredFloatDelta: "required-float-delta"
+  of CommandArgShape.RequiredFloatValue: "required-float-value"
+  of CommandArgShape.RequiredIntCount: "required-int-count"
+  of CommandArgShape.RequiredIntDelta: "required-int-delta"
+  of CommandArgShape.OptionalIntDelta: "optional-int-delta"
+  of CommandArgShape.MoveDelta: "move-delta"
+  of CommandArgShape.ResizeDelta: "resize-delta"
+  of CommandArgShape.RecentAdvance: "recent-advance"
+  of CommandArgShape.RecentScope: "recent-scope"
+  of CommandArgShape.SpawnArgv: "spawn-argv"
+  of CommandArgShape.WarpPointer: "warp-pointer"
+  of CommandArgShape.Screenshot: "screenshot"
+  of CommandArgShape.SplitTreeModeList: "split-tree-mode-list"
+
+proc argShapeUsage*(shape: CommandArgShape): string =
+  case shape
+  of CommandArgShape.NoArgs:
+    ""
+  of CommandArgShape.OptionalWindowId:
+    "[window-id]"
+  of CommandArgShape.RequiredWindowId:
+    "<window-id>"
+  of CommandArgShape.WindowTagFollow:
+    "<window-id> <tag> [follow]"
+  of CommandArgShape.WindowWorkspaceFollow:
+    "<window-id> <workspace-idx> [follow]"
+  of CommandArgShape.WindowBool:
+    "<window-id> true|false"
+  of CommandArgShape.TagLayout:
+    "<tag> <layout>"
+  of CommandArgShape.RequiredTag:
+    "<tag>"
+  of CommandArgShape.RequiredWorkspaceIdx:
+    "<workspace-idx>"
+  of CommandArgShape.RequiredName:
+    "<name>"
+  of CommandArgShape.RequiredOutput:
+    "<output>"
+  of CommandArgShape.RequiredFloatDelta:
+    "<delta>"
+  of CommandArgShape.RequiredFloatValue:
+    "<value>"
+  of CommandArgShape.RequiredIntCount:
+    "<count>"
+  of CommandArgShape.RequiredIntDelta:
+    "<delta>"
+  of CommandArgShape.OptionalIntDelta:
+    "[delta]"
+  of CommandArgShape.MoveDelta:
+    "<dx> <dy>"
+  of CommandArgShape.ResizeDelta:
+    "<dw> <dh>"
+  of CommandArgShape.RecentAdvance:
+    "[--scope all|workspace|output] [--filter all|app-id]"
+  of CommandArgShape.RecentScope:
+    "all|workspace|output"
+  of CommandArgShape.SpawnArgv:
+    "<argv...>"
+  of CommandArgShape.WarpPointer:
+    "<x> <y>"
+  of CommandArgShape.Screenshot:
+    "[--path <path>] [--show-pointer|--hide-pointer] [--no-clipboard|--clipboard-only]"
+  of CommandArgShape.SplitTreeModeList:
+    "<split-h|split-v|stacking|tabbed>..."
+
+proc aliasesSeq*(spec: CommandSpec): seq[string] =
+  if spec.aliases.len == 0:
+    return @[]
+  spec.aliases.split('|')
+
+proc commandUsage*(spec: CommandSpec): string =
+  let args = spec.argShape.argShapeUsage()
+  if args.len == 0:
+    spec.name
+  else:
+    spec.name & " " & args
+
+proc specialCommand*(name: string): Option[SpecialMsgCommand] =
+  for command in SpecialMsgCommands:
+    if command.name == name:
+      return some(command)
+  none(SpecialMsgCommand)
+
+proc commandSpecJson*(spec: CommandSpec): JsonNode =
+  result =
+    %*{
+      "name": spec.name,
+      "usage": spec.commandUsage(),
+      "arg_shape": spec.argShape.argShapeId(),
+    }
+  let aliases = newJArray()
+  for alias in spec.aliasesSeq():
+    aliases.add(%alias)
+  result["aliases"] = aliases
+
+proc commandCatalogJson*(): JsonNode =
+  result = %*{"version": 1}
+  let commands = newJArray()
+  for spec in CommandSpecs:
+    commands.add(spec.commandSpecJson())
+  result["commands"] = commands
+  let special = newJArray()
+  for command in SpecialMsgCommands:
+    special.add(
+      %*{
+        "name": command.name, "usage": command.usage, "description": command.description
+      }
+    )
+  result["special_requests"] = special
+
+proc renderCommandList*(): string =
+  result = "Triad msg commands:\n"
+  for spec in CommandSpecs:
+    result.add("  ")
+    result.add(spec.commandUsage())
+    let aliases = spec.aliasesSeq()
+    if aliases.len > 0:
+      result.add("  (aliases: " & aliases.join(", ") & ")")
+    result.add("\n")
+  result.add("\nSpecial requests:\n")
+  for command in SpecialMsgCommands:
+    result.add("  ")
+    result.add(command.usage)
+    result.add("\n")
+
+proc renderMsgHelp*(name = ""): string =
+  if name.len > 0:
+    let spec = resolveCommandSpec(name)
+    if spec.isSome:
+      result = "Usage: triad msg " & spec.get().commandUsage() & "\n"
+      let aliases = spec.get().aliasesSeq()
+      if aliases.len > 0:
+        result.add("Aliases: " & aliases.join(", ") & "\n")
+      result.add("Argument shape: " & spec.get().argShape.argShapeId() & "\n")
+      return
+    let special = specialCommand(name)
+    if special.isSome:
+      result = "Usage: " & special.get().usage & "\n"
+      result.add(special.get().description & "\n")
+      return
+    return "Unknown triad msg command: " & name & "\n"
+
+  result =
+    """
+Usage:
+  triad msg <command> [arguments]
+  triad msg help [command]
+  triad msg commands [--json]
+  triad msg validate <command...>
+  triad msg request <json>
+
+Useful request commands:
+  triad msg state
+  triad msg layout-state
+  triad msg perf-status
+  triad msg dev-mode [on|off|toggle|status]
+  triad msg event-stream [--native [layout,state]]
+
+"""
+  result.add(renderCommandList())
+
+proc renderTriadHelp*(): string =
+  """
+Usage:
+  triad [--config <path>] [--dev-mode]
+  triad validate-config [--config <path>]
+  triad msg <command> [arguments]
+
+Commands:
+  validate-config    Validate config without starting the daemon.
+  msg                Send commands or requests to the running daemon.
+
+Try:
+  triad msg --help
+  triad msg commands
+  triad msg help focus-workspace
+"""
+
+proc triadRequestPayload*(request: string): string =
+  $(%*{"triad": {"version": 1, "request": request}})
+
+proc triadMsgRequestPayload*(cmd: string): Option[string] =
+  case cmd
+  of "state":
+    some(triadRequestPayload("state"))
+  of "layout-state":
+    some(triadRequestPayload("layout-state"))
+  of "switch-layout":
+    some(triadRequestPayload("switch-layout"))
+  else:
+    none(string)
+
+proc nativeEventStreamPayload*(events: seq[string]): string =
+  let eventList =
+    if events.len == 0:
+      @["layout", "state"]
+    else:
+      events
+  $(%*{"triad": {"version": 1, "request": "event-stream", "events": eventList}})

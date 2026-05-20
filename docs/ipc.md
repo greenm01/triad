@@ -9,6 +9,18 @@ Triad employs a Unix Domain Socket for two-way communication with external clien
 To dispatch a command to the running Triad instance, use the following syntax:
 `triad msg <command> [arguments]`
 
+For local help and validation without dispatching to the daemon:
+
+*   `triad --help`: Prints top-level CLI usage without starting Wayland.
+*   `triad msg --help`, `triad msg help [command]`: Prints command usage.
+*   `triad msg commands [--json]`: Lists all registry-backed text commands
+    and special request commands. `--json` prints the same catalog shape used
+    by native IPC.
+*   `triad msg validate <command...>`: Parses a msg command or request locally
+    and exits without sending it.
+*   `triad msg request <json>`: Sends one raw line-delimited IPC request and
+    prints the reply.
+
 #### Navigation
 *   `focus-next`: Shifts keyboard focus to the next window in the sequence.
 *   `focus-prev`: Shifts keyboard focus to the previous window.
@@ -82,6 +94,9 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `set-layout-for-workspace <tag> <layout>`: Sets a stable tag id to a
     built-in layout id or declared custom layout name without changing focus.
 *   `layout-custom <name>`: Sets the active tag to a declared Janet layout.
+*   `layout-native <name>`: Sets the active tag to a native substrate layout
+    such as `frame-tree`, `bsp-tree`, or `i3`.
+*   `state`: Prints the native JSON shell-state reply for the running session.
 *   `layout-state`: Prints the native JSON layout-state reply for the running
     session.
 *   `switch-layout`: Advances the active tag through the configured `layout-cycle`.
@@ -99,11 +114,25 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `frame-tab-next`, `frame-tab-prev`: Cycles tabs in the focused frame. In
     native `i3`, the same commands cycle the focused tabbed or stacking split
     container.
+*   `split-tree-split-horizontal`, `split-tree-split-vertical`: In native
+    `i3`, set the insertion split direction for the focused leaf.
+*   `split-tree-split-toggle`: In native `i3`, toggles the insertion split
+    direction for the focused leaf.
+*   `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`:
+    In native `i3`, changes the focused split container to an explicit split
+    orientation.
 *   `split-tree-layout-toggle-split`: In native `i3`, toggles the focused
     split container between horizontal and vertical split layout, returning
     from tabbed or stacking to the last split layout.
 *   `split-tree-layout-stacking`, `split-tree-layout-tabbed`: In native `i3`,
     changes the focused split container to i3-style stacking or tabbed mode.
+*   `split-tree-focus-parent`, `split-tree-focus-child`: In native `i3`,
+    changes focus between the current container scope and child scope.
+*   `split-tree-layout-cycle-all`, `split-tree-layout-default`,
+    `split-tree-layout-cycle <modes...>`: In native `i3`, cycle the focused
+    container mode. Modes are `split-h`, `split-v`, `stacking`, and `tabbed`.
+*   `split-tree-focus-next-sibling`, `split-tree-focus-prev-sibling`: In native
+    `i3`, focus sibling containers with wraparound.
 
 #### Manipulation
 *   `move-to-tag <id>`: Moves the focused window to the specified tag and focuses that tag.
@@ -114,9 +143,12 @@ To dispatch a command to the running Triad instance, use the following syntax:
     compositor window ID to a compact workspace index. `follow` defaults to
     `false`.
 *   `move-to-tag-left`, `move-to-tag-right`: Moves the focused window to the adjacent visible workspace and focuses it, creating the next dynamic workspace when appropriate.
+*   `swap-to-tag <id>`: Swaps the active workspace with the specified stable
+    tag id.
 *   `move-to-scratchpad`: Moves the focused window to the scratchpad.
 *   `move-to-named-scratchpad <name>`: Moves the focused window to a named scratchpad.
 *   `close-window`: Politely requests that the focused window close.
+*   `minimize`, `minimize-window`: Sets the focused window minimized.
 *   `group-windows`: Groups the focused window with its next rendered neighbor.
     Scroller layouts first move the neighbor into the focused column; frame-tree
     layouts move it into the focused frame. BSP layouts ignore this command.
@@ -146,6 +178,8 @@ To dispatch a command to the running Triad instance, use the following syntax:
 *   `adjust-gaps <delta>`: Increases or decreases the global gap size (e.g., `5` or `-5`).
 *   `toggle-gaps`: Instantly eliminates all gaps or restores them to their former glory.
 *   `warp-pointer <x> <y>`: Requests a River pointer warp on every active seat.
+*   `spawn <argv...>`: Runs an arbitrary configured-process command.
+*   `spawn-terminal`: Starts the configured terminal command.
 *   `eat-next-key`: Requests River XKB handling to eat the next unbound key.
 *   `cancel-eat-next-key`: Cancels the pending River XKB key-eat request.
 *   `toggle-keyboard-shortcuts-inhibit`: Toggles whether the focused window inhibits Triad keyboard shortcuts.
@@ -427,6 +461,42 @@ Canonical layout ids are:
 `vertical-deck`, `tgmix`.
 
 Custom layout ids are the declared Janet layout names.
+
+### Command Catalog
+
+Request:
+
+```json
+{"triad":{"version":1,"request":"commands"}}
+```
+
+The reply contains every registry-backed text command plus special `triad msg`
+request commands. This is intended for shell integrations, completion
+generators, and development tooling:
+
+```json
+{
+  "ok": true,
+  "triad": {
+    "version": 1,
+    "type": "commands",
+    "catalog": {
+      "version": 1,
+      "commands": [
+        {
+          "name": "focus-workspace",
+          "usage": "focus-workspace <workspace-idx>",
+          "arg_shape": "required-workspace-idx",
+          "aliases": []
+        }
+      ],
+      "special_requests": [
+        {"name": "state", "usage": "triad msg state"}
+      ]
+    }
+  }
+}
+```
 
 ### Layout Actions
 

@@ -5,8 +5,8 @@ import ../src/core/msg
 import ../src/daemon/quickshell_runner
 import
   ../src/ipc/[
-    command_registry, commands, niri_cli, niri_compat, quickshell_compat, shell_overlay,
-    triad_native,
+    command_help, command_registry, commands, niri_cli, niri_compat, quickshell_compat,
+    shell_overlay, triad_native,
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 import ../src/utils/behavior_log
@@ -548,6 +548,16 @@ suite "Shell compatibility contracts":
         it["fallback_layout"].getStr() == "frame-tree"
     )
 
+    let commandsReply = handleTriadRequest(
+      """{"triad":{"version":1,"request":"commands"}}""", snapshotForShell()
+    )
+    check parseJson(commandsReply.reply)["ok"].getBool()
+    let catalog = parseJson(commandsReply.reply)["triad"]["catalog"]
+    check catalog["commands"].getElems().anyIt(it["name"].getStr() == "focus-next")
+    check catalog["special_requests"].getElems().anyIt(
+      it["name"].getStr() == "layout-state"
+    )
+
   test "Triad command registry has unique resolvable action names":
     var seen: seq[string] = @[]
     for name in allCommandNames():
@@ -565,6 +575,44 @@ suite "Shell compatibility contracts":
           let resolved = resolveCommandSpec(alias)
           check resolved.isSome
           check resolved.get().id == spec.id
+
+  test "Triad msg help and catalog are generated from command registry":
+    let help = renderMsgHelp()
+    check help.contains("triad msg validate <command...>")
+    check help.contains("focus-next")
+    check help.contains("triad msg state")
+
+    let topHelp = renderTriadHelp()
+    check topHelp.contains("validate-config")
+    check topHelp.contains("triad msg --help")
+
+    let focusHelp = renderMsgHelp("focus-workspace")
+    check focusHelp.contains("Usage: triad msg focus-workspace <workspace-idx>")
+    check focusHelp.contains("required-workspace-idx")
+
+    let aliasHelp = renderMsgHelp("toggle-fullscreen")
+    check aliasHelp.contains("fullscreen-window [window-id]")
+    check aliasHelp.contains("toggle-fullscreen")
+
+    let catalog = commandCatalogJson()
+    check catalog["commands"].len == CommandSpecs.len
+    check catalog["commands"].getElems().anyIt(
+      it["name"].getStr() == "focus-next" and it["arg_shape"].getStr() == "none"
+    )
+    check catalog["special_requests"].getElems().anyIt(
+      it["name"].getStr() == "state" and it["usage"].getStr() == "triad msg state"
+    )
+
+    check triadMsgRequestPayload("state").isSome
+    let stream = parseJson(nativeEventStreamPayload(@["layout"]))
+    check stream["triad"]["request"].getStr() == "event-stream"
+    check stream["triad"]["events"][0].getStr() == "layout"
+
+    let docs =
+      readFile("docs/ipc.md") & "\n" & readFile("docs/comp/config-command-matrix.md")
+    let commandList = renderCommandList()
+    for spec in CommandSpecs:
+      check commandList.contains(spec.name) or docs.contains(spec.name)
 
   test "Triad native actions mirror text IPC commands":
     for spec in CommandSpecs:

@@ -470,6 +470,7 @@ Text IPC and bind commands:
 Native JSON IPC requests:
 
 - `state`
+- `commands` (`triad msg commands --json` prints the same catalog locally)
 - `layout-state` (`triad msg layout-state` prints this reply)
 - `set-layout`
 - `switch-layout` (`triad msg switch-layout` prints the ack)
@@ -489,6 +490,10 @@ CLI and environment:
   the active daemon was already in dev mode.
 - `triad msg dev-mode [on|off|toggle|status]` changes or reports the live
   daemon diagnostics mode without restarting the session.
+- `triad msg state` and `triad msg layout-state` print native Triad JSON
+  snapshots for development and shell integrations.
+- `triad msg request <json>` sends one raw native or compatibility IPC request
+  and prints the reply.
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,
   render-start skips, layout-projection runs, and render/manage counters for
   live CPU investigations.

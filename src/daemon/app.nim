@@ -7,7 +7,7 @@ import ../types/layout_projection
 import ../types/projection_values
 import ../config/[parser, reload_policy]
 from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
-import ../ipc/socket
+import ../ipc/[command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
@@ -31,15 +31,6 @@ const IdleWakeIntervalMs = 50
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
-
-proc triadMsgRequestPayload(cmd: string): Option[string] =
-  case cmd
-  of "layout-state":
-    some($(%*{"triad": {"version": TriadIpcVersion, "request": "layout-state"}}))
-  of "switch-layout":
-    some($(%*{"triad": {"version": TriadIpcVersion, "request": "switch-layout"}}))
-  else:
-    none(string)
 
 proc configPathFromArgs(args: seq[string]): string =
   result = getEnv("TRIAD_CONFIG", "")
@@ -444,6 +435,10 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 
 proc main*() =
   let args = commandLineParams()
+  if args.len > 0 and args[0] in ["--help", "-h", "help"]:
+    stdout.writeLine(renderTriadHelp())
+    return
+
   if args.len > 0 and args[0] in ["validate-config", "check-config"]:
     let validateArgs =
       if args.len > 1:
@@ -456,12 +451,76 @@ proc main*() =
     if args.len < 2:
       failCli("missing msg command")
     let cmdPart = args[1]
+    if cmdPart in ["--help", "-h", "help"]:
+      let topic =
+        if args.len > 2:
+          args[2]
+        else:
+          ""
+      stdout.writeLine(renderMsgHelp(topic))
+      return
+
+    if cmdPart == "commands":
+      if args.len > 3 or (args.len == 3 and args[2] != "--json"):
+        failCli("usage: triad msg commands [--json]")
+      if args.len == 3:
+        stdout.writeLine($commandCatalogJson())
+      else:
+        stdout.writeLine(renderCommandList())
+      return
+
+    if cmdPart == "validate":
+      if args.len < 3:
+        failCli("usage: triad msg validate <command...>")
+      var validateCmd = ""
+      for i in 2 ..< args.len:
+        if i > 2:
+          validateCmd.add(" ")
+        validateCmd.add(args[i])
+      if parseTextCommand(validateCmd).isNone and
+          triadMsgRequestPayload(validateCmd).isNone and
+          validateCmd notin ["dump-live-restore-state", "perf-status"] and
+          validateCmd != "dev-mode" and not validateCmd.startsWith("dev-mode "):
+        failCli("invalid msg command: " & validateCmd)
+      stdout.writeLine("triad: msg command valid: " & validateCmd)
+      return
+
+    if cmdPart == "request":
+      if args.len < 3:
+        failCli("usage: triad msg request <json>")
+      var request = ""
+      for i in 2 ..< args.len:
+        if i > 2:
+          request.add(" ")
+        request.add(args[i])
+      try:
+        let reply = waitFor sendIpcRequest(triadSocketPath(), request)
+        stdout.writeLine(reply)
+      except CatchableError as e:
+        failCli("socket request failed: " & e.msg)
+      return
+
     if cmdPart == "event-stream":
+      var native = false
+      var nativeEvents: seq[string]
+      if args.len > 2:
+        if args[2] != "--native":
+          failCli("usage: triad msg event-stream [--native [layout,state]]")
+        native = true
+        if args.len > 4:
+          failCli("usage: triad msg event-stream [--native [layout,state]]")
+        if args.len == 4:
+          nativeEvents = args[3].split(',')
       # Subscription client
       let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
       try:
         waitFor client.connectUnix(triadSocketPath())
-        waitFor client.send("event-stream\L")
+        let payload =
+          if native:
+            nativeEventStreamPayload(nativeEvents)
+          else:
+            "event-stream"
+        waitFor client.send(payload & "\L")
         while not client.isClosed:
           let line = waitFor client.recvLine()
           if line != "":
@@ -487,6 +546,8 @@ proc main*() =
         let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
         stdout.writeLine(reply)
       else:
+        if parseTextCommand(cmd).isNone:
+          failCli("invalid msg command: " & cmd)
         waitFor sendIpcMsg(triadSocketPath(), cmd)
     except CatchableError as e:
       failCli("socket request failed: " & e.msg)

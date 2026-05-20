@@ -4,6 +4,7 @@ import ../core/native_layout_codec
 import ../core/layout_selection_codec
 import ../core/[msg, triad_state]
 import command_registry
+import command_help
 import commands
 import ../types/shell_snapshot
 from ../types/runtime_values import LayoutMode, LayoutSelection
@@ -426,6 +427,12 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
         "version": TriadIpcVersion,
         "type": "layout-state",
         "state": triadLayoutStateJson(snapshot),
+      }
+    )
+  of "commands":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion, "type": "commands", "catalog": commandCatalogJson()
       }
     )
   of "set-layout":
