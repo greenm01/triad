@@ -742,7 +742,7 @@ suite "Runtime state primitives":
     check rendered.pixelAt(activePreview.x, activePreview.y) ==
       testArgb(config.layout.focusedBorderColor)
 
-  test "overview overlay badges hidden deck stack windows":
+  test "overview overlay does not badge deck windows in finder overview":
     var config = baseConfig()
     config.layout.defaultMasterCount = 2
     config.layout.defaultMasterRatio = 0.55
@@ -764,11 +764,11 @@ suite "Runtime state primitives":
     let badge = model.overviewHiddenCountBadge(screen, slots, slots.find(1'u32))
     let rendered = model.renderOverviewOverlayBuffer(screen)
 
-    check badge.count == 1
-    check badge.rect.w > 0
-    check rendered.pixels.anyIt(it == OverviewHiddenBadgeFill)
+    check badge.count == 0
+    check badge.rect.w == 0
+    check not rendered.pixels.anyIt(it == OverviewHiddenBadgeFill)
 
-  test "overview overlay badges hidden monocle windows":
+  test "overview overlay does not badge monocle windows in finder overview":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     for msg in [
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700),
@@ -785,8 +785,8 @@ suite "Runtime state primitives":
     let slots = model.previewSlots()
     let badge = model.overviewHiddenCountBadge(screen, slots, slots.find(1'u32))
 
-    check badge.count == 2
-    check badge.rect.w > 0
+    check badge.count == 0
+    check badge.rect.w == 0
 
   test "overview overlay renders horizontal scroller overflow indicators":
     var model = initRuntimeStateFromConfig(baseConfig()).model
@@ -2973,8 +2973,8 @@ suite "Runtime state primitives":
         emptyOverview.update(Msg(kind: MsgKind.CmdOpenOverview))
       emptyOverview = emptyOverviewOpen
       check emptyOverview.overviewActive
-      check emptyOverview.selectedOverviewWindow() == tc.NullWindowId
-      check not emptyOverview.windowRenderFocused(40'u32)
+      check emptyOverview.selectedOverviewWindow() == tc.WindowId(1)
+      check emptyOverview.windowRenderFocused(40'u32)
     var emptyFrameCountBeforeEmptySplit = 0
     for _, _ in emptyFrame.framesOnTagWithId(emptyFrame.activeTag):
       inc emptyFrameCountBeforeEmptySplit

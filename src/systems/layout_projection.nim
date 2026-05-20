@@ -30,6 +30,7 @@ type
     instructions: seq[rv.RenderInstruction]
     frameTabBars: seq[rv.ProjectedFrameTabBar]
     frameEmptyChrome: seq[rv.ProjectedFrameEmptyChrome]
+    bspPreselections: seq[rv.ProjectedBspPreselection]
     viewportTarget: bool
     aggregate: bool
     representativeOnly: bool
@@ -124,8 +125,13 @@ proc addFloatingInstructions(
     tagId: core_types.TagId,
     screen: rv.Rect,
     instructions: var seq[rv.RenderInstruction],
+    focusRoot: core_types.WindowId = NullWindowId,
 ) =
-  let activeRoot = model.popupRoot(model.activeFocus())
+  let activeRoot =
+    if focusRoot != NullWindowId:
+      model.popupRoot(focusRoot)
+    else:
+      model.popupRoot(model.activeFocus())
   var floating: seq[tuple[id: core_types.WindowId, win: model_types.WindowData]] = @[]
   for winId, win in model.windowsOnTagWithId(tagId):
     if win.windowAdmitted() and win.isFloating and not win.isUnmanagedGlobal and
@@ -715,57 +721,6 @@ proc layoutSplitTree*(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: item.rect)
       )
 
-proc splitTreeOverviewLeafRect(
-    model: Model,
-    leafNodeId: SplitNodeId,
-    winId: WindowId,
-    leafRect: rv.Rect,
-    nodeRects: Table[SplitNodeId, rv.Rect],
-): rv.Rect =
-  result = leafRect
-  let leafOpt = model.splitNodeData(leafNodeId)
-  if leafOpt.isNone:
-    return
-  let parentId = leafOpt.get().parent
-  if parentId == NullSplitNodeId:
-    return
-  let parentOpt = model.splitNodeData(parentId)
-  if parentOpt.isNone:
-    return
-  let parent = parentOpt.get()
-  if parent.mode notin {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
-    return
-  if parent.children.find(leafNodeId) == -1:
-    return
-  if model.splitTreeActiveWindowInSubtree(parentId) != winId:
-    return
-  result = nodeRects.getOrDefault(parentId, leafRect)
-
-proc layoutSplitTreeOverview(
-    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
-): seq[rv.RenderInstruction] =
-  let leaves =
-    model.splitTreeLeafRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
-  let nodes =
-    model.splitTreeNodeRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
-  var nodeRects = initTable[SplitNodeId, rv.Rect]()
-  for item in nodes:
-    nodeRects[item.nodeId] = item.rect
-  for item in leaves:
-    let winId = item.window
-    if winId == NullWindowId:
-      continue
-    let winOpt = model.windowData(winId)
-    if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
-        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
-      result.add(
-        rv.RenderInstruction(
-          windowId: model.externalWindowId(winId),
-          geom:
-            model.splitTreeOverviewLeafRect(item.nodeId, winId, item.rect, nodeRects),
-        )
-      )
-
 proc splitTreeVisibleTabs(
     model: Model, node: SplitNodeData, activeChild: SplitNodeId
 ): seq[rv.ProjectedFrameTab] =
@@ -1009,13 +964,6 @@ proc customLayoutInstructions(
     evalResult.frameInstructions,
   )
 
-proc activeFocusIsOverlay(model: Model, focused: core_types.WindowId): bool =
-  if model.activeScratchpadWindow() != NullWindowId:
-    return true
-  let focusedOpt = model.windowData(focused)
-  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and
-    (focusedOpt.get().isFloating or focusedOpt.get().isOverlay)
-
 proc preserveBackingPresentation(
     model: Model,
     instructions: var seq[rv.RenderInstruction],
@@ -1166,6 +1114,169 @@ proc applyFrameInstructionClientRects(
     let border = model.effectiveWindowBorder(logicalId, focused)
     instr.geom = frameTreeClientRect(instr.geom, border.width)
 
+proc focusIsOverlayForProjection(
+    model: Model, focused: core_types.WindowId, includeScratchpad: bool
+): bool =
+  if includeScratchpad and model.activeScratchpadWindow() != NullWindowId:
+    return true
+  let focusedOpt = model.windowData(focused)
+  focusedOpt.isSome and focusedOpt.get().windowAdmitted() and
+    (focusedOpt.get().isFloating or focusedOpt.get().isOverlay)
+
+proc projectNormalTag(
+    model: Model,
+    tagId: TagId,
+    projectedTag: rv.ProjectedTag,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    screen: rv.Rect,
+    layoutEval: CustomLayoutEval,
+    focusForLayout: core_types.WindowId,
+    includeScratchpad = false,
+    includeUnmanagedGlobals = false,
+): LayoutProjection =
+  let tagDataOpt = model.tagData(tagId)
+  if tagDataOpt.isNone:
+    return
+
+  var currentOuterGap = model.outerGaps
+  var currentInnerGap = model.innerGaps
+  var tiledWindowCount = 0
+  for col in projectedTag.columns:
+    tiledWindowCount += col.windows.len
+
+  if model.smartGaps and tiledWindowCount <= 1:
+    currentOuterGap = 0
+    currentInnerGap = 0
+
+  let retargetViewport = model.viewportRetargetRequested(tagId)
+  var tagForLayout = projectedTag
+  model.applyPopupLayoutFocus(tagForLayout, focusForLayout)
+  let tagData = tagDataOpt.get()
+  if tagData.frameTreeActive():
+    model.applyFrameTreeRects(
+      tagId, tagForLayout, screen, currentOuterGap, currentInnerGap
+    )
+  elif tagData.bspTreeActive():
+    model.applyBspTreeRects(
+      tagId, tagForLayout, screen, currentOuterGap, currentInnerGap
+    )
+  elif tagData.splitTreeActive():
+    model.applySplitTreeRects(
+      tagId, tagForLayout, screen, currentOuterGap, currentInnerGap
+    )
+
+  let customOuterGap = if tagData.frameTreeActive(): 0'i32 else: currentOuterGap
+  let custom = customLayoutInstructions(
+    layoutEval, tagForLayout, windows, screen, tagData.customLayoutId, customOuterGap,
+    currentInnerGap, model.spiral,
+  )
+  var customFrameRects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
+  if custom.applied:
+    result.instructions = custom.instructions
+    if tagData.frameTreeActive() and
+        custom.outputTargetKind == JanetLayoutTargetKind.Frame:
+      customFrameRects =
+        if custom.frameInstructions.len > 0:
+          frameTreeFrameRectsFromInstructions(custom.frameInstructions)
+        else:
+          tagForLayout.frameTreeFrameRectsFromInstructions(result.instructions)
+      model.applyFrameInstructionClientRects(tagId, result.instructions)
+  elif tagData.frameTreeActive():
+    result.instructions =
+      model.layoutFrameTree(tagId, screen, currentOuterGap, currentInnerGap)
+  elif tagData.bspTreeActive():
+    result.instructions =
+      model.layoutBspTree(tagId, screen, currentOuterGap, currentInnerGap)
+  elif tagData.splitTreeActive():
+    result.instructions =
+      model.layoutSplitTree(tagId, screen, currentOuterGap, currentInnerGap)
+  else:
+    result.instructions = layoutForTag(
+      tagForLayout,
+      windows,
+      screen,
+      currentOuterGap,
+      currentInnerGap,
+      retargetViewport and model.scrollerFocusCenter,
+      retargetViewport and model.scrollerPreferCenter,
+      if retargetViewport: model.centerFocusedColumn else: "never",
+    )
+    tagForLayout.applyLayoutViewportOffset(result.instructions)
+
+  if customFrameRects.len > 0:
+    result.frameTabBars = model.frameTreeTabBars(tagId, customFrameRects)
+    result.frameEmptyChrome = model.frameTreeEmptyChrome(tagId, customFrameRects)
+  elif tagData.frameTreeActive() and not custom.applied:
+    result.frameTabBars =
+      model.frameTreeTabBars(tagId, screen, currentOuterGap, currentInnerGap)
+    result.frameEmptyChrome =
+      model.frameTreeEmptyChrome(tagId, screen, currentOuterGap, currentInnerGap)
+  elif tagData.bspTreeActive():
+    result.bspPreselections =
+      model.bspPreselectionOverlays(tagForLayout, currentInnerGap)
+  elif tagData.splitTreeActive():
+    result.frameTabBars =
+      model.splitTreeTabBars(tagId, screen, currentOuterGap, currentInnerGap)
+
+  if tagForLayout.columns.len > 0 and not custom.applied and
+      not tagData.frameTreeActive() and not tagData.bspTreeActive() and
+      not tagData.splitTreeActive():
+    result.viewportTargets.add(
+      LayoutViewportTarget(
+        tagSlot: projectedTag.tagId,
+        targetX: tagForLayout.targetViewportXOffset,
+        targetY: tagForLayout.targetViewportYOffset,
+      )
+    )
+
+  let focusedOpt = model.windowData(focusForLayout)
+  let overlayActive =
+    model.focusIsOverlayForProjection(focusForLayout, includeScratchpad)
+  if overlayActive:
+    let root = model.popupRoot(focusForLayout)
+    model.preserveBackingPresentation(
+      result.instructions, screen, if root != focusForLayout: root else: NullWindowId
+    )
+  elif focusedOpt.isSome:
+    let win = focusedOpt.get()
+    let maxSupported = tagData.tagDataUsesCoreScroller()
+    let effectivelyMaximized =
+      win.isMaximized and maxSupported and
+      not model.columnFullWidthForWindowOnTag(tagId, focusForLayout)
+    if win.isFullscreen or effectivelyMaximized:
+      result.instructions =
+        @[
+          rv.RenderInstruction(
+            windowId: model.externalWindowId(focusForLayout), geom: screen
+          )
+        ]
+      result.frameTabBars.setLen(0)
+      result.bspPreselections.setLen(0)
+
+  model.addFloatingInstructions(tagId, screen, result.instructions, focusForLayout)
+  if includeUnmanagedGlobals:
+    model.addUnmanagedGlobalInstructions(screen, result.instructions)
+
+  let winId =
+    if includeScratchpad:
+      model.activeScratchpadWindow()
+    else:
+      NullWindowId
+  if winId != NullWindowId and model.windowData(winId).isSome:
+    let sw = int32(float32(screen.w) * model.effectiveScratchpadWidthRatio())
+    let sh = int32(float32(screen.h) * model.effectiveScratchpadHeightRatio())
+    result.instructions.add(
+      rv.RenderInstruction(
+        windowId: model.externalWindowId(winId),
+        geom: rv.Rect(
+          x: screen.x + (screen.w - sw) div 2,
+          y: screen.y + (screen.h - sh) div 2,
+          w: sw,
+          h: sh,
+        ),
+      )
+    )
+
 proc overviewTagLayout(
     model: Model,
     tagId: TagId,
@@ -1190,6 +1301,7 @@ proc overviewTagLayout(
       model.frameTreeLayoutRects(tagId, screen, model.outerGaps, model.innerGaps)
     result.instructions =
       model.layoutFrameTree(tagId, screen, model.outerGaps, model.innerGaps)
+    result.frameTabBars = model.frameTreeTabBars(tagId, rects)
     result.frameEmptyChrome = model.frameTreeEmptyChrome(tagId, rects)
     return
 
@@ -1204,7 +1316,7 @@ proc overviewTagLayout(
     result.mode = rv.LayoutMode.Grid
     result.aggregate = true
     result.instructions =
-      model.layoutSplitTreeOverview(tagId, screen, model.outerGaps, model.innerGaps)
+      model.layoutSplitTree(tagId, screen, model.outerGaps, model.innerGaps)
     result.frameTabBars =
       model.splitTreeTabBars(tagId, screen, model.outerGaps, model.innerGaps)
     return
@@ -1231,6 +1343,16 @@ proc overviewTagLayout(
   if custom.applied:
     result.mode = rv.LayoutMode.Grid
     result.instructions = custom.instructions
+    if tagData.frameTreeActive() and
+        custom.outputTargetKind == JanetLayoutTargetKind.Frame:
+      let customFrameRects =
+        if custom.frameInstructions.len > 0:
+          frameTreeFrameRectsFromInstructions(custom.frameInstructions)
+        else:
+          result.tag.frameTreeFrameRectsFromInstructions(result.instructions)
+      result.frameTabBars = model.frameTreeTabBars(tagId, customFrameRects)
+      result.frameEmptyChrome = model.frameTreeEmptyChrome(tagId, customFrameRects)
+      model.applyFrameInstructionClientRects(tagId, result.instructions)
     return
 
   result.mode = result.tag.layoutMode
@@ -1247,6 +1369,61 @@ proc overviewTagLayout(
   result.tag.applyLayoutViewportOffset(result.instructions)
   result.viewportTarget =
     result.tag.columns.len > 0 and result.mode.layoutUsesNativeViewport()
+
+proc overviewFinderTag(
+    model: Model, tagId: TagId, projectedTag: rv.ProjectedTag
+): rv.ProjectedTag =
+  result = rv.ProjectedTag(
+    tagId: projectedTag.tagId,
+    name: projectedTag.name,
+    layoutMode: rv.LayoutMode.Scroller,
+    masterCount: projectedTag.masterCount,
+    masterSplitRatio: projectedTag.masterSplitRatio,
+  )
+
+  let findable = model.overviewFindableWindowIds(tagId)
+  let effectiveFocus = model.effectiveTagFocusedWindow(tagId)
+  let preferredFocus =
+    if findable.find(model.overviewSelectedWindow) != -1:
+      model.overviewSelectedWindow
+    elif findable.find(effectiveFocus) != -1:
+      effectiveFocus
+    elif findable.len > 0:
+      findable[0]
+    else:
+      NullWindowId
+  result.focusedWindow = model.externalWindowId(preferredFocus)
+
+  for winId in findable:
+    let winOpt = model.windowData(winId)
+    if winOpt.isNone:
+      continue
+    let win = winOpt.get()
+    result.columns.add(
+      rv.ProjectedColumn(
+        windows: @[model.externalWindowId(winId)],
+        widthProportion:
+          if win.widthProportion > 0.0'f32:
+            win.widthProportion
+          else:
+            model.defaultColumnWidth(),
+        scrollerSingleProportion: 0.0'f32,
+        isFullWidth: false,
+      )
+    )
+
+proc overviewFinderTagLayout(
+    model: Model,
+    tagId: TagId,
+    projectedTag: rv.ProjectedTag,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    screen: rv.Rect,
+): OverviewTagLayout =
+  result.tag = model.overviewFinderTag(tagId, projectedTag)
+  result.mode = rv.LayoutMode.Scroller
+  result.instructions = layoutForTag(
+    result.tag, windows, screen, model.outerGaps, model.innerGaps, false, false, "never"
+  )
 
 proc layoutWorkspaceStripOverview(
     model: Model,
@@ -1267,9 +1444,18 @@ proc layoutWorkspaceStripOverview(
     var projected = model.projectedTag(tagId)
     if not projected.found:
       continue
-    let layout = model.overviewTagLayout(
-      tagId, projected.tag, windows, workspaceScreen, layoutEval
-    )
+    let preview = model.workspacePreviewRect(screen, slots, idx)
+    let tagDataOpt = model.tagData(tagId)
+    if tagDataOpt.isNone:
+      continue
+    let tagData = tagDataOpt.get()
+    let layout =
+      if tagData.tagDataUsesCoreScroller():
+        model.overviewTagLayout(
+          tagId, projected.tag, windows, workspaceScreen, layoutEval
+        )
+      else:
+        model.overviewFinderTagLayout(tagId, projected.tag, windows, workspaceScreen)
     var instructions = layout.instructions
     if layout.viewportTarget:
       result.viewportTargets.add(
@@ -1290,11 +1476,10 @@ proc layoutWorkspaceStripOverview(
         false, "never",
       )
 
-    let preview = model.workspacePreviewRect(screen, slots, idx)
     let transform = overviewTransform(
       layout.mode, layout.tag, instructions, workspaceScreen, screen, preview, zoom
     )
-    if not layout.representativeOnly:
+    if tagData.tagDataUsesCoreScroller() and not layout.representativeOnly:
       model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     for instr in instructions:
       result.instructions.add(
@@ -1305,41 +1490,10 @@ proc layoutWorkspaceStripOverview(
           clip: transform.clip,
         )
       )
-    for bar in layout.frameTabBars:
-      result.frameTabBars.add(
-        rv.ProjectedFrameTabBar(
-          frameId: bar.frameId,
-          windowId: bar.windowId,
-          geom: scaledOverviewRect(transform.source, transform.dest, bar.geom, zoom),
-          focused: bar.focused,
-          frameTabs: bar.frameTabs,
-          ringWidth: bar.ringWidth,
-          ringColor: bar.ringColor,
-          tabs: bar.tabs,
-        )
-      )
-    for frame in layout.frameEmptyChrome:
-      result.frameEmptyChrome.add(
-        rv.ProjectedFrameEmptyChrome(
-          frameId: frame.frameId,
-          geom: scaledOverviewRect(transform.source, transform.dest, frame.geom, zoom),
-          focused: frame.focused,
-          ringWidth: frame.ringWidth,
-          ringColor: frame.ringColor,
-          backgroundColor: frame.backgroundColor,
-        )
-      )
   model.applyOverviewDrag(result.instructions)
 
 proc needsLocalLayoutEval(model: Model): bool =
   if model.overviewActive:
-    for slot in model.previewSlots():
-      let tagId = model.tagForSlot(slot)
-      if tagId == NullTagId:
-        continue
-      let tagOpt = model.tagData(tagId)
-      if tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len > 0:
-        return true
     return false
 
   if model.activeTag == NullTagId:
@@ -1385,135 +1539,16 @@ proc layoutProjection*(
   if not projected.found:
     return
 
-  var currentOuterGap = model.outerGaps
-  var currentInnerGap = model.innerGaps
-  var tiledWindowCount = 0
-  for col in projected.tag.columns:
-    tiledWindowCount += col.windows.len
-
-  if model.smartGaps and tiledWindowCount <= 1:
-    currentOuterGap = 0
-    currentInnerGap = 0
-
-  let retargetViewport = model.viewportRetargetRequested(model.activeTag)
-  var tagForLayout = projected.tag
-  model.applyPopupLayoutFocus(tagForLayout, model.activeFocus())
-  let activeTagData = model.tagData(model.activeTag).get()
-  if activeTagData.frameTreeActive():
-    model.applyFrameTreeRects(
-      model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
-    )
-  elif activeTagData.bspTreeActive():
-    model.applyBspTreeRects(
-      model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
-    )
-  elif activeTagData.splitTreeActive():
-    model.applySplitTreeRects(
-      model.activeTag, tagForLayout, screen, currentOuterGap, currentInnerGap
-    )
-  let customOuterGap = if activeTagData.frameTreeActive(): 0'i32 else: currentOuterGap
-  let custom = customLayoutInstructions(
-    effectiveLayoutEval, tagForLayout, windows, screen, activeTagData.customLayoutId,
-    customOuterGap, currentInnerGap, model.spiral,
+  result = model.projectNormalTag(
+    model.activeTag,
+    projected.tag,
+    windows,
+    screen,
+    effectiveLayoutEval,
+    model.activeFocus(),
+    includeScratchpad = true,
+    includeUnmanagedGlobals = true,
   )
-  var customFrameRects: seq[tuple[frameId: FrameId, rect: rv.Rect]] = @[]
-  if custom.applied:
-    result.instructions = custom.instructions
-    if activeTagData.frameTreeActive() and
-        custom.outputTargetKind == JanetLayoutTargetKind.Frame:
-      customFrameRects =
-        if custom.frameInstructions.len > 0:
-          frameTreeFrameRectsFromInstructions(custom.frameInstructions)
-        else:
-          tagForLayout.frameTreeFrameRectsFromInstructions(result.instructions)
-      model.applyFrameInstructionClientRects(model.activeTag, result.instructions)
-  elif activeTagData.frameTreeActive():
-    result.instructions =
-      model.layoutFrameTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
-  elif activeTagData.bspTreeActive():
-    result.instructions =
-      model.layoutBspTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
-  elif activeTagData.splitTreeActive():
-    result.instructions =
-      model.layoutSplitTree(model.activeTag, screen, currentOuterGap, currentInnerGap)
-  else:
-    result.instructions = layoutForTag(
-      tagForLayout,
-      windows,
-      screen,
-      currentOuterGap,
-      currentInnerGap,
-      retargetViewport and model.scrollerFocusCenter,
-      retargetViewport and model.scrollerPreferCenter,
-      if retargetViewport: model.centerFocusedColumn else: "never",
-    )
-    tagForLayout.applyLayoutViewportOffset(result.instructions)
-  if customFrameRects.len > 0:
-    result.frameTabBars = model.frameTreeTabBars(model.activeTag, customFrameRects)
-    result.frameEmptyChrome =
-      model.frameTreeEmptyChrome(model.activeTag, customFrameRects)
-  elif activeTagData.frameTreeActive() and not custom.applied:
-    result.frameTabBars =
-      model.frameTreeTabBars(model.activeTag, screen, currentOuterGap, currentInnerGap)
-    result.frameEmptyChrome = model.frameTreeEmptyChrome(
-      model.activeTag, screen, currentOuterGap, currentInnerGap
-    )
-  elif activeTagData.bspTreeActive():
-    result.bspPreselections =
-      model.bspPreselectionOverlays(tagForLayout, currentInnerGap)
-  elif activeTagData.splitTreeActive():
-    result.frameTabBars =
-      model.splitTreeTabBars(model.activeTag, screen, currentOuterGap, currentInnerGap)
-  if tagForLayout.columns.len > 0 and not custom.applied and
-      not activeTagData.frameTreeActive() and not activeTagData.bspTreeActive() and
-      not activeTagData.splitTreeActive():
-    result.viewportTargets.add(
-      LayoutViewportTarget(
-        tagSlot: projected.tag.tagId,
-        targetX: tagForLayout.targetViewportXOffset,
-        targetY: tagForLayout.targetViewportYOffset,
-      )
-    )
-
-  let focused = model.activeFocus()
-  let focusedOpt = model.windowData(focused)
-  let overlayActive = model.activeFocusIsOverlay(focused)
-  if overlayActive:
-    let root = model.popupRoot(focused)
-    model.preserveBackingPresentation(
-      result.instructions, screen, if root != focused: root else: NullWindowId
-    )
-  elif focusedOpt.isSome:
-    let win = focusedOpt.get()
-    let maxSupported = activeTagData.tagDataUsesCoreScroller()
-    let effectivelyMaximized =
-      win.isMaximized and maxSupported and
-      not model.columnFullWidthForWindowOnTag(model.activeTag, focused)
-    if win.isFullscreen or effectivelyMaximized:
-      result.instructions =
-        @[rv.RenderInstruction(windowId: model.externalWindowId(focused), geom: screen)]
-      result.frameTabBars.setLen(0)
-      result.bspPreselections.setLen(0)
-
-  model.addFloatingInstructions(model.activeTag, screen, result.instructions)
-  model.addUnmanagedGlobalInstructions(screen, result.instructions)
-
-  let winId = model.activeScratchpadWindow()
-  if winId != NullWindowId:
-    if model.windowData(winId).isSome:
-      let sw = int32(float32(screen.w) * model.effectiveScratchpadWidthRatio())
-      let sh = int32(float32(screen.h) * model.effectiveScratchpadHeightRatio())
-      result.instructions.add(
-        rv.RenderInstruction(
-          windowId: model.externalWindowId(winId),
-          geom: rv.Rect(
-            x: screen.x + (screen.w - sw) div 2,
-            y: screen.y + (screen.h - sh) div 2,
-            w: sw,
-            h: sh,
-          ),
-        )
-      )
 
 proc applyLayoutProjection*(model: var Model, projection: LayoutProjection) =
   for target in projection.viewportTargets:

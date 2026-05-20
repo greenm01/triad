@@ -265,6 +265,14 @@ proc overviewTreeWindowVisible(model: Model, winId: WindowId): bool =
   not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
     win.windowAdmitted() and not model.windowHiddenByGroup(winId)
 
+proc overviewFindableWindow*(model: Model, win: WindowData): bool =
+  win.windowAdmitted() and not win.isUnmanagedGlobal and not win.isMinimized
+
+proc overviewFindableWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
+  for winId, win in model.windowsOnTagWithId(tagId):
+    if model.overviewFindableWindow(win):
+      result.add(winId)
+
 proc splitTreeOverviewWindowInSubtree(
     model: Model, tagId: TagId, nodeId: SplitNodeId, target: WindowId
 ): WindowId =
@@ -367,27 +375,8 @@ proc overviewWindowIds*(model: Model): seq[WindowId] =
     let tagId = model.tagForSlot(slot)
     if tagId == NullTagId:
       continue
-    if model.tagUsesAggregateOverview(tagId):
-      if model.tagUsesFrameOverview(tagId):
-        for winId in model.overviewFrameWindowIds(tagId):
-          if result.find(winId) == -1:
-            result.add(winId)
-      elif model.tagUsesBspOverview(tagId):
-        for winId in model.overviewBspWindowIds(tagId):
-          if result.find(winId) == -1:
-            result.add(winId)
-      elif model.tagUsesSplitTreeOverview(tagId):
-        for winId in model.overviewSplitTreeWindowIds(tagId):
-          if result.find(winId) == -1:
-            result.add(winId)
-      else:
-        let representative = model.overviewRepresentativeWindow(tagId)
-        if representative != NullWindowId and result.find(representative) == -1:
-          result.add(representative)
-      continue
-    for winId, win in model.windowsOnTagWithId(tagId):
-      if not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted() and
-          result.find(winId) == -1:
+    for winId in model.overviewFindableWindowIds(tagId):
+      if result.find(winId) == -1:
         result.add(winId)
 
 proc initialOverviewWindow*(model: Model): WindowId =
@@ -408,18 +397,9 @@ proc initialOverviewWindow*(model: Model): WindowId =
   windows[0]
 
 proc overviewWindowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
-  let tagOpt = model.tagData(tagId)
-  if tagOpt.isSome and tagOpt.get().tagUsesAggregateOverview():
-    if tagOpt.get().tagUsesFrameOverview():
-      return model.overviewFrameWindowIds(tagId).find(winId) != -1
-    if tagOpt.get().tagUsesBspOverview():
-      return model.overviewBspWindowIds(tagId).find(winId) != -1
-    if tagOpt.get().tagUsesSplitTreeOverview():
-      return model.overviewSplitTreeWindowIds(tagId).find(winId) != -1
-    return winId != NullWindowId and winId == model.overviewRepresentativeWindow(tagId)
   for candidate, win in model.windowsOnTagWithId(tagId):
     if candidate == winId:
-      return not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted()
+      return model.overviewFindableWindow(win)
   false
 
 proc activeOverviewWindow(model: Model): WindowId =
@@ -427,47 +407,13 @@ proc activeOverviewWindow(model: Model): WindowId =
   if tagOpt.isNone:
     return NullWindowId
 
-  if tagOpt.get().tagUsesFrameOverview():
-    let frameOpt = model.frameData(tagOpt.get().focusedFrame)
-    if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf:
-      return NullWindowId
-    let focusedFrameWindow = frameOpt.get().activeWindow
-    if model.overviewWindowOnTag(model.activeTag, focusedFrameWindow):
-      return focusedFrameWindow
-    return NullWindowId
-
-  if tagOpt.get().tagUsesBspOverview():
-    let focused = tagOpt.get().focusedWindow
-    if model.overviewWindowOnTag(model.activeTag, focused):
-      return focused
-    let windows = model.overviewBspWindowIds(model.activeTag)
-    return
-      if windows.len > 0:
-        windows[0]
-      else:
-        NullWindowId
-
-  if tagOpt.get().tagUsesSplitTreeOverview():
-    let focused = tagOpt.get().focusedWindow
-    if model.overviewWindowOnTag(model.activeTag, focused):
-      return focused
-    let windows = model.overviewSplitTreeWindowIds(model.activeTag)
-    return
-      if windows.len > 0:
-        windows[0]
-      else:
-        NullWindowId
-
-  if tagOpt.get().tagUsesAggregateOverview() and not tagOpt.get().tagUsesFrameOverview():
-    return model.overviewRepresentativeWindow(model.activeTag)
-
   let focused = tagOpt.get().focusedWindow
   if model.overviewWindowOnTag(model.activeTag, focused):
     return focused
 
-  for winId, _ in model.windowsOnTagWithId(model.activeTag):
-    if model.overviewWindowOnTag(model.activeTag, winId):
-      return winId
+  let windows = model.overviewFindableWindowIds(model.activeTag)
+  if windows.len > 0:
+    return windows[0]
   NullWindowId
 
 proc selectedOverviewWindow*(model: Model): WindowId =

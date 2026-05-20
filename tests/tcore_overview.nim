@@ -37,6 +37,9 @@ proc aspectRatio(geom: Rect): float32 =
 proc aspectRatioClose(geom: Rect, expected: float32, tolerance = 0.02'f32): bool =
   abs(geom.aspectRatio() - expected) <= tolerance
 
+proc horizontalOverviewLane(screen, preview: Rect): Rect =
+  Rect(x: screen.x, y: preview.y, w: screen.w, h: preview.h)
+
 proc markColumnsFullWidth(model: var Model, slot: uint32) =
   let tagId = model.tagForSlot(slot)
   for columnId, _ in model.columnsOnTagWithId(tagId):
@@ -511,10 +514,10 @@ suite "Core Runtime Logic: overview navigation":
     let slots = model.previewSlots()
     let projection = model.layoutProjection()
     let scrollerPreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
-    let scrollerLane =
-      Rect(x: screen.x, y: scrollerPreview.y, w: screen.w, h: scrollerPreview.h)
+    let scrollerLane = horizontalOverviewLane(screen, scrollerPreview)
     let verticalPreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
     let gridPreview = model.workspacePreviewRect(screen, slots, slots.find(3'u32))
+    let gridLane = horizontalOverviewLane(screen, gridPreview)
 
     discard projection.instructions.checkOverviewGroup(
       [1'u32, 2'u32, 3'u32],
@@ -529,9 +532,12 @@ suite "Core Runtime Logic: overview navigation":
       requireRawInsideClip = false,
     )
     let gridGroup = projection.instructions.checkOverviewGroup(
-      [7'u32], gridPreview, [scrollerLane, verticalPreview]
+      [7'u32, 8, 9],
+      gridLane,
+      [scrollerLane, verticalPreview],
+      requireRawInsideClip = false,
     )
-    check gridGroup.len == 1
+    check gridGroup.len == 3
 
   test "Overview clips overflowing workspace preview contents":
     var model = configuredModel()
@@ -592,14 +598,19 @@ suite "Core Runtime Logic: overview navigation":
     let slots = model.previewSlots()
     let projection = model.layoutProjection()
     let activePreview = model.workspacePreviewRect(screen, slots, 0)
+    let activeLane = horizontalOverviewLane(screen, activePreview)
 
     check model.overviewStyle() == OverviewStyle.WorkspaceStrip
     check model.overviewUsesWorkspacePreviews()
-    check projection.instructions.len == 1
-    check projection.instructions[0].windowId == 1'u32
-    check projection.instructions[0].geom == activePreview
+    let workspaceOne = projection.instructions.overviewInstructionsFor([1'u32, 2])
+    check workspaceOne.len == 2
+    check workspaceOne.allIt(it.clipSet)
+    check workspaceOne.allIt(it.clip == activeLane)
+    check workspaceOne.allIt(
+      it.geom.intersection(activeLane).geomWithinPreview(activeLane)
+    )
 
-  test "Overview aggregates bundled Janet layout by workspace":
+  test "Overview renders bundled Janet layout as finder strip":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -622,15 +633,16 @@ suite "Core Runtime Logic: overview navigation":
     let screen = model.primaryScreen()
     let slots = model.previewSlots()
     let preview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
+    let lane = horizontalOverviewLane(screen, preview)
     let projection = model.layoutProjection()
     let workspaceTwo = projection.instructions.overviewInstructionsFor([1'u32, 2, 3])
 
-    check workspaceTwo.len == 1
-    check workspaceTwo[0].windowId == 1'u32
-    check workspaceTwo[0].clip == preview
-    check workspaceTwo[0].geom == preview
+    check workspaceTwo.len == 3
+    check workspaceTwo.allIt(it.clipSet)
+    check workspaceTwo.allIt(it.clip == lane)
+    check workspaceTwo.allIt(it.geom.intersection(lane).geomWithinPreview(lane))
 
-  test "Overview aggregates user Janet layout without evaluator":
+  test "Overview renders user Janet layout as finder strip without evaluator":
     let config = Config(
       janet: JanetConfig(
         layouts:
@@ -677,15 +689,17 @@ suite "Core Runtime Logic: overview navigation":
     let screen = model.primaryScreen()
     let slots = model.previewSlots()
     let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let lane = horizontalOverviewLane(screen, preview)
     let projection = model.layoutProjection(customEval)
     let workspaceOne = projection.instructions.overviewInstructionsFor([1'u32, 2])
 
     check not evaluated
-    check workspaceOne.len == 1
-    check workspaceOne[0].windowId == 1'u32
-    check workspaceOne[0].geom == preview
+    check workspaceOne.len == 2
+    check workspaceOne.allIt(it.clipSet)
+    check workspaceOne.allIt(it.clip == lane)
+    check workspaceOne.allIt(it.geom.intersection(lane).geomWithinPreview(lane))
 
-  test "Overview renders frame layouts as full frame previews":
+  test "Overview renders frame layouts as finder strips":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -709,8 +723,9 @@ suite "Core Runtime Logic: overview navigation":
     let frameWindows =
       model.layoutProjection().instructions.overviewInstructionsFor([1'u32, 2, 3])
 
-    check frameWindows.len == 2
+    check frameWindows.len == 3
     check frameWindows.anyIt(it.windowId == 1'u32)
+    check frameWindows.anyIt(it.windowId == 2'u32)
     check frameWindows.anyIt(it.windowId == 3'u32)
 
     discard model.updateModel(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 3))
@@ -738,11 +753,12 @@ suite "Core Runtime Logic: overview navigation":
 
     let notionWindows =
       notion.layoutProjection().instructions.overviewInstructionsFor([4'u32, 5, 6])
-    check notionWindows.len == 2
+    check notionWindows.len == 3
     check notionWindows.anyIt(it.windowId == 4'u32)
+    check notionWindows.anyIt(it.windowId == 5'u32)
     check notionWindows.anyIt(it.windowId == 6'u32)
 
-  test "Overview renders BSP layouts as full tree previews":
+  test "Overview renders BSP layouts as finder strips":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -764,16 +780,17 @@ suite "Core Runtime Logic: overview navigation":
     let screen = model.primaryScreen()
     let slots = model.previewSlots()
     let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let lane = horizontalOverviewLane(screen, preview)
     let bspWindows =
       model.layoutProjection().instructions.overviewInstructionsFor([4'u32, 5, 6])
 
     check bspWindows.len == 3
-    check bspWindows.allIt(it.geom.geomWithinPreview(preview))
+    check bspWindows.allIt(it.geom.intersection(lane).geomWithinPreview(lane))
     check bspWindows.anyIt(it.windowId == 4'u32)
     check bspWindows.anyIt(it.windowId == 5'u32)
     check bspWindows.anyIt(it.windowId == 6'u32)
 
-  test "Overview renders i3 split layouts as full tree previews":
+  test "Overview renders i3 split layouts as finder strips":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -797,18 +814,19 @@ suite "Core Runtime Logic: overview navigation":
     let screen = model.primaryScreen()
     let slots = model.previewSlots()
     let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let lane = horizontalOverviewLane(screen, preview)
     let splitWindows =
       model.layoutProjection().instructions.overviewInstructionsFor([10'u32, 11, 12])
 
     check splitWindows.len == 3
     check splitWindows.allIt(it.clipSet)
-    check splitWindows.allIt(it.clip == preview)
-    check splitWindows.allIt(it.geom.geomWithinPreview(preview))
+    check splitWindows.allIt(it.clip == lane)
+    check splitWindows.allIt(it.geom.intersection(lane).geomWithinPreview(lane))
     check splitWindows.anyIt(it.windowId == 10'u32)
     check splitWindows.anyIt(it.windowId == 11'u32)
     check splitWindows.anyIt(it.windowId == 12'u32)
 
-  test "Overview renders i3 tabbed layouts with scaled tab chrome":
+  test "Overview renders i3 tabbed layouts as finder strips without tab chrome":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -832,6 +850,7 @@ suite "Core Runtime Logic: overview navigation":
     let screen = model.primaryScreen()
     let slots = model.previewSlots()
     let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let lane = horizontalOverviewLane(screen, preview)
     let projection = model.layoutProjection()
     let tabbedWindows =
       projection.instructions.overviewInstructionsFor([10'u32, 11, 12])
@@ -839,21 +858,15 @@ suite "Core Runtime Logic: overview navigation":
     check model.selectedOverviewWindow() == model.windowForExternal(
       ExternalWindowId(10)
     )
-    check tabbedWindows.len == 1
-    check tabbedWindows[0].windowId == 10'u32
-    check tabbedWindows[0].geom.geomWithinPreview(preview)
-    check projection.frameTabBars.len == 1
-    check projection.frameTabBars[0].windowId == 10'u32
-    check projection.frameTabBars[0].geom.x == tabbedWindows[0].geom.x
-    check projection.frameTabBars[0].geom.y == tabbedWindows[0].geom.y
-    check projection.frameTabBars[0].geom.w == tabbedWindows[0].geom.w
-    check projection.frameTabBars[0].geom.geomWithinPreview(preview)
-    check projection.frameTabBars[0].tabs.len == 3
-    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 10'u32 and it.active)
-    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 11'u32 and not it.active)
-    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 12'u32 and not it.active)
+    check tabbedWindows.len == 3
+    check tabbedWindows.allIt(it.clipSet)
+    check tabbedWindows.allIt(it.clip == lane)
+    check tabbedWindows.anyIt(it.windowId == 10'u32)
+    check tabbedWindows.anyIt(it.windowId == 11'u32)
+    check tabbedWindows.anyIt(it.windowId == 12'u32)
+    check projection.frameTabBars.len == 0
 
-  test "Overview renders i3 tabbed columns at sibling height":
+  test "Overview exposes every i3 tabbed column window":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -881,24 +894,14 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     let projection = model.layoutProjection()
-    let siblingLeft = projection.instructions.overviewInstructionGeom(10'u32)
-    let tabbed = projection.instructions.overviewInstructionGeom(11'u32)
-    let siblingRight = projection.instructions.overviewInstructionGeom(12'u32)
+    let overviewWindows =
+      projection.instructions.overviewInstructionsFor([10'u32, 11, 12, 13])
 
-    check positiveArea(siblingLeft)
-    check positiveArea(tabbed)
-    check positiveArea(siblingRight)
-    check tabbed.y == siblingLeft.y
-    check tabbed.h == siblingLeft.h
-    check tabbed.y == siblingRight.y
-    check tabbed.h == siblingRight.h
-    check projection.frameTabBars.len == 1
-    check projection.frameTabBars[0].windowId == 11'u32
-    check projection.frameTabBars[0].geom.x == tabbed.x
-    check projection.frameTabBars[0].geom.y == tabbed.y
-    check projection.frameTabBars[0].geom.w == tabbed.w
+    check overviewWindows.len == 4
+    check overviewWindows.allIt(positiveArea(it.geom))
+    check projection.frameTabBars.len == 0
 
-  test "Overview renders empty frame chrome in notion previews":
+  test "Overview renders notion previews as finder strips without frame chrome":
     var notion = configuredModel()
     notion.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -917,14 +920,15 @@ suite "Core Runtime Logic: overview navigation":
     let screen = notion.primaryScreen()
     let slots = notion.previewSlots()
     let preview = notion.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let lane = horizontalOverviewLane(screen, preview)
     let projection = notion.layoutProjection()
     let notionWindows = projection.instructions.overviewInstructionsFor([4'u32])
 
     check notionWindows.len == 1
-    check notionWindows[0].geom.geomWithinPreview(preview)
-    check projection.frameEmptyChrome.len == 1
-    check projection.frameEmptyChrome[0].geom.geomWithinPreview(preview)
-    check not projection.frameEmptyChrome[0].focused
+    check notionWindows[0].clip == lane
+    check notionWindows[0].geom.intersection(lane).geomWithinPreview(lane)
+    check projection.frameTabBars.len == 0
+    check projection.frameEmptyChrome.len == 0
 
   test "Overview overlay resolves bundled Janet badges and custom indicators":
     var bundled = configuredModel()
@@ -950,7 +954,7 @@ suite "Core Runtime Logic: overview navigation":
     let badge = bundled.overviewHiddenCountBadge(
       bundledScreen, bundledSlots, bundledSlots.find(1'u32)
     )
-    check badge.count > 0
+    check badge.count == 0
 
     let config = Config(
       janet: JanetConfig(
@@ -990,10 +994,10 @@ suite "Core Runtime Logic: overview navigation":
     let customSlots = custom.previewSlots()
     let indicator =
       custom.overviewScrollIndicator(customScreen, customSlots, customSlots.find(1'u32))
-    check not indicator.before
+    check indicator.before
     check not indicator.after
 
-  test "Overview aggregate layout uses floating representative when no tiled window":
+  test "Overview finder includes floating windows":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -1019,7 +1023,7 @@ suite "Core Runtime Logic: overview navigation":
     check workspaceOne.len == 1
     check workspaceOne[0].windowId == 1'u32
 
-  test "Unified overview aggregate layout disables internal navigation":
+  test "Unified overview aggregate layout uses finder navigation":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("grid"))
@@ -1037,19 +1041,17 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 2))
 
     let activeTag = model.activeTag
-    let beforeFocus = model.focusedWindowId()
-
     check model.overviewActive
-    check model.selectedOverviewWindow() == WindowId(1)
+    check model.selectedOverviewWindow() == WindowId(2)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight))
     check model.activeTag == activeTag
-    check model.focusedWindowId() == beforeFocus
-    check model.selectedOverviewWindow() == WindowId(1)
+    check model.focusedWindowId() == 3
+    check model.selectedOverviewWindow() == WindowId(3)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusNext))
-    check model.focusedWindowId() == beforeFocus
-    check model.selectedOverviewWindow() == WindowId(1)
+    check model.focusedWindowId() == 4
+    check model.selectedOverviewWindow() == WindowId(4)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
     check model.activeTag == model.tagForSlot(2)

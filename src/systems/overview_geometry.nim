@@ -93,6 +93,19 @@ proc overviewTiledWindowCount(model: Model, tagId: TagId): int =
 proc overviewVisibleColumnProportions(
     model: Model, tagId: TagId
 ): seq[tuple[widthProportion, scrollerSingleProportion: float32, fullWidth: bool]] =
+  if model.overviewActive:
+    for winId in model.overviewFindableWindowIds(tagId):
+      let winOpt = model.windowData(winId)
+      if winOpt.isSome:
+        result.add(
+          (
+            widthProportion: winOpt.get().widthProportion,
+            scrollerSingleProportion: 0.0'f32,
+            fullWidth: false,
+          )
+        )
+    return
+
   for columnId, column in model.columnsOnTagWithId(tagId):
     var visibleWindows = 0
     for winId, win in model.windowsOnColumnWithId(columnId):
@@ -126,6 +139,8 @@ proc overviewSelectedLayoutMode(tag: TagData): Option[rv.LayoutMode] =
 proc overviewHiddenCountBadge*(
     model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
 ): OverviewHiddenCountBadge =
+  if model.overviewActive:
+    return
   if idx < 0 or idx >= slots.len:
     return
   let slot = slots[idx]
@@ -198,10 +213,19 @@ proc overviewScrollIndicator*(
     return
 
   let tag = tagOpt.get()
-  let modeOpt = overviewSelectedLayoutMode(tag)
-  if modeOpt.isNone:
-    return
-  let mode = modeOpt.get()
+  let mode =
+    if model.overviewActive:
+      if tag.customLayoutId.layoutIdString().len == 0 and
+          tag.nativeLayoutId.nativeLayoutIdString().len == 0 and
+          tag.layoutMode in {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}:
+        tag.layoutMode
+      else:
+        rv.LayoutMode.Scroller
+    else:
+      let modeOpt = overviewSelectedLayoutMode(tag)
+      if modeOpt.isNone:
+        return
+      modeOpt.get()
   if mode notin {rv.LayoutMode.Scroller, rv.LayoutMode.VerticalScroller}:
     return
 
