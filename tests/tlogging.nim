@@ -407,6 +407,17 @@ suite "Runtime logging":
     check focusEvent["niri_event"].getStr() == "WindowFocusChanged"
     check focusEvent["window_id"].getInt() == 20
 
+  test "niri broadcast send filter allows incremental live window events":
+    check shouldSendNiriBroadcast(
+      $(%*{"WindowOpenedOrChanged": {"window": {"id": 20, "title": "loading"}}})
+    )
+    check shouldSendNiriBroadcast($(%*{"WindowFocusChanged": {"id": 20}}))
+    check shouldSendNiriBroadcast(
+      $(%*{"WorkspaceActiveWindowChanged": {"workspace_id": 2, "active_window_id": 20}})
+    )
+    check not shouldSendNiriBroadcast($(%*{"WindowsChanged": {"windows": []}}))
+    check not shouldSendNiriBroadcast($(%*{"WindowLayoutsChanged": {"changes": []}}))
+
   test "niri request behavior payload records sanitized action details":
     let payload = niriRequestLogPayload(
       "/run/user/1000/triad-niri.sock",

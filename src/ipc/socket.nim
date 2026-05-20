@@ -560,15 +560,14 @@ proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
     result = %*{"subscriber_count": subscriberCount}
     result["parse_error"] = %e.msg
 
-proc shouldSendNiriBroadcast(payload: string): bool =
+proc shouldSendNiriBroadcast*(payload: string): bool =
   try:
     let root = parseJson(payload)
     if root.kind != JObject:
       return true
     for eventName, _ in root.pairs:
       case eventName
-      of "WindowsChanged", "WindowOpenedOrChanged", "WindowLayoutsChanged",
-          "WindowFocusChanged", "WorkspaceActiveWindowChanged":
+      of "WindowsChanged", "WindowLayoutsChanged":
         return false
       else:
         return true
