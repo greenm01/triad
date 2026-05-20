@@ -47,7 +47,7 @@ proc commandExistsInEnv(command: string, env: StringTableRef): bool =
       return true
   false
 
-proc spawnStartupCommands*(model: Model) =
+proc spawnStartupCommands*(model: Model): seq[Process] =
   let env = model.configuredProcessEnv()
   for cmd in model.startupCommands:
     if cmd.len > 0:
@@ -56,10 +56,11 @@ proc spawnStartupCommands*(model: Model) =
           cmd[0], args = cmd.commandArgs(), env = env, options = InheritedProcessOptions
         )
         info "Spawned startup command", cmd = cmd[0], pid = p.processID
+        result.add(p)
       except CatchableError as e:
         warn "Failed to spawn startup command", cmd = cmd[0], error = e.msg
 
-proc spawnScreenLock*(model: Model, command: seq[string]) =
+proc spawnScreenLock*(model: Model, command: seq[string]): Process =
   if command.len == 0:
     warn "Screen lock command is not configured"
     return
@@ -72,12 +73,13 @@ proc spawnScreenLock*(model: Model, command: seq[string]) =
       options = InheritedProcessOptions,
     )
     info "Spawned screen lock", cmd = command[0], pid = p.processID
+    result = p
   except CatchableError as e:
     warn "Failed to spawn screen lock", cmd = command[0], error = e.msg
 
 proc spawnWindowMenu*(
     model: Model, command: seq[string], windowId: uint32, x, y: int32
-) =
+): Process =
   if command.len == 0:
     warn "Window menu command is not configured"
     return
@@ -91,13 +93,14 @@ proc spawnWindowMenu*(
     )
     info "Spawned window menu",
       cmd = command[0], pid = p.processID, windowId = windowId, x = x, y = y
+    result = p
   except CatchableError as e:
     warn "Failed to spawn window menu",
       cmd = command[0], windowId = windowId, error = e.msg
 
 proc spawnConfigNotification*(
     model: Model, event: ConfigNotificationEvent, command: seq[string]
-) =
+): Process =
   if command.len == 0:
     return
 
@@ -110,11 +113,12 @@ proc spawnConfigNotification*(
     )
     info "Spawned config notification",
       event = $event, cmd = command[0], pid = p.processID
+    result = p
   except CatchableError as e:
     warn "Failed to spawn config notification",
       event = $event, cmd = command[0], error = e.msg
 
-proc spawnTerminal*(model: Model) =
+proc spawnTerminal*(model: Model): Process =
   let env = model.configuredProcessEnv()
   for command in terminalCandidates(model.terminal.command):
     if command.len == 0 or not commandExistsInEnv(command[0], env):
@@ -127,13 +131,13 @@ proc spawnTerminal*(model: Model) =
         options = InheritedProcessOptions,
       )
       info "Spawned terminal", terminal = command[0], pid = p.processID
-      return
+      return p
     except CatchableError as e:
       trace "Terminal candidate failed", terminal = command[0], error = e.msg
 
   warn "No terminal command could be spawned"
 
-proc spawnCommand*(model: Model, command: seq[string]) =
+proc spawnCommand*(model: Model, command: seq[string]): Process =
   if command.len == 0:
     warn "Spawn command is empty"
     return
@@ -146,5 +150,6 @@ proc spawnCommand*(model: Model, command: seq[string]) =
       options = InheritedProcessOptions,
     )
     info "Spawned command", cmd = command[0], pid = p.processID
+    result = p
   except CatchableError as e:
     warn "Failed to spawn command", cmd = command[0], error = e.msg

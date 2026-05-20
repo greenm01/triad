@@ -1,4 +1,4 @@
-import std/[deques, options, sets, tables]
+import std/[deques, options, osproc, sets, tables]
 import fsnotify
 from posix import TPollfd
 import wayland/native/client
@@ -314,6 +314,7 @@ type
     switchEventDevices*: seq[SwitchEventDeviceRuntime]
     windowUnreliablePids*: Table[uint32, int32]
     pendingWindows*: Table[uint32, ProjectedWindow]
+    fireAndForgetProcesses*: seq[Process]
 
     configPath*: string
     configWatchPaths*: seq[string]
@@ -345,6 +346,7 @@ proc initTriadDaemon*(): TriadDaemon =
   result.renderDirty = true
   result.renderDirtyReason = "startup"
   result.pendingLiveRestore = none(LiveRestoreState)
+  result.fireAndForgetProcesses = @[]
 
 proc daemonData*(daemon: var TriadDaemon): pointer =
   cast[pointer](addr daemon)

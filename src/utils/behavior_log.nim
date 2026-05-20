@@ -10,11 +10,20 @@ import ../types/runtime_values
 const
   DefaultMaxBytes* = 5 * 1024 * 1024
   DefaultKeepDays* = 7
+  LogMaintenanceIntervalMs = 60_000'i64
+  LogRotationCheckIntervalMs = 1_000'i64
   DevModeEnv* = "TRIAD_DEV_MODE"
   BehaviorLogEnv* = "TRIAD_BEHAVIOR_LOG"
   LiveReloadDevModeMarker* = "triad-live-dev-mode"
   BehaviorLogPrefix = "triad-behavior-"
   BehaviorLogSuffix = ".jsonl"
+
+var
+  lastCleanupMs = 0'i64
+  lastCleanupDir = ""
+  lastRotationCheckMs = 0'i64
+  lastRotationPath = ""
+  bytesSinceRotationCheck = 0
 
 proc envFlagEnabled*(value: string): bool =
   case value.normalize()
@@ -134,11 +143,14 @@ proc rotateOversizeLog(path: string, maxBytes: int) =
   except CatchableError:
     discard
 
-proc appendJsonLine(path: string, node: JsonNode) =
+proc currentUnixMs(): int64 =
+  int64(epochTime() * 1000.0)
+
+proc appendJsonLine(path: string, line: string) =
   var file: File
   if file.open(path, fmAppend):
     try:
-      file.writeLine($node)
+      file.writeLine(line)
     finally:
       file.close()
 
@@ -155,15 +167,32 @@ proc writeBehaviorEvent*(eventName: string, payload: JsonNode = nil) =
   let dir = defaultBehaviorLogDir()
   try:
     createDir(dir)
-    cleanupBehaviorLogs(dir, behaviorLogKeepDays())
+    let nowMs = currentUnixMs()
+    if dir != lastCleanupDir or nowMs - lastCleanupMs >= LogMaintenanceIntervalMs:
+      cleanupBehaviorLogs(dir, behaviorLogKeepDays())
+      lastCleanupDir = dir
+      lastCleanupMs = nowMs
     let path = behaviorLogPath()
-    rotateOversizeLog(path, behaviorLogMaxBytes())
 
     let event = behaviorEventRoot(eventName)
     if payload != nil and payload.kind == JObject:
       for key, value in payload.pairs:
         event[key] = value
-    appendJsonLine(path, event)
+
+    let line = $event
+    let maxBytes = behaviorLogMaxBytes()
+    if path != lastRotationPath:
+      bytesSinceRotationCheck = 0
+      lastRotationPath = path
+      lastRotationCheckMs = 0
+    bytesSinceRotationCheck += line.len + 1
+    if bytesSinceRotationCheck >= maxBytes or
+        nowMs - lastRotationCheckMs >= LogRotationCheckIntervalMs:
+      rotateOversizeLog(path, maxBytes)
+      lastRotationCheckMs = nowMs
+      bytesSinceRotationCheck = 0
+
+    appendJsonLine(path, line)
   except CatchableError:
     discard
 

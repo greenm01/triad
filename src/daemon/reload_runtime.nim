@@ -8,8 +8,9 @@ import ../types/[model, shell_snapshot]
 from ../types/runtime_values import ConfigNotificationEvent
 import ../utils/behavior_log
 import
-  bindings_runtime, idle_inhibit_runtime, live_restore_runtime, process_runner,
-  output_management_runtime, quickshell_runner, render_invalidation, state
+  bindings_runtime, child_process_runtime, idle_inhibit_runtime, live_restore_runtime,
+  process_runner, output_management_runtime, quickshell_runner, render_invalidation,
+  state
 
 type StartupConfigLoadResult* = object
   config*: Config
@@ -62,7 +63,7 @@ proc spawnPendingStartupCommands*(
     return
   daemon.startupCommandsPending = false
   info "Spawning startup commands", reason = reason
-  spawnStartupCommands(model)
+  daemon.trackChildProcesses(spawnStartupCommands(model))
 
 proc broadcastNiriSnapshot*(snapshot: ShellSnapshot) =
   for event in initialNiriEvents(snapshot):
@@ -144,7 +145,7 @@ proc dispatchConfigNotification(
   if daemon.configNotificationHook != nil:
     daemon.configNotificationHook(addr daemon, event, command)
   else:
-    spawnConfigNotification(model, event, command)
+    daemon.trackChildProcess(spawnConfigNotification(model, event, command), command[0])
 
 proc applyConfigReload*(
     daemon: var TriadDaemon, configPath, niriSocketPath: string

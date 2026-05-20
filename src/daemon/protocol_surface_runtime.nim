@@ -17,6 +17,13 @@ import
   protocol_surfaces, recent_windows_overlay_render, state, wayland_helpers
 from std/posix import nil
 
+when defined(linux):
+  const MemfdCloseOnExec = 0x0001.cuint
+
+  proc memfd_create(
+    name: cstring, flags: cuint
+  ): cint {.importc, header: "<sys/mman.h>".}
+
 template currentModel(daemon: TriadDaemon): untyped =
   daemon.runtimeState.model
 
@@ -94,10 +101,45 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
   let rgba = premulColor(color)
   daemon.singlePixelManager.createU32RgbaBuffer(rgba.r, rgba.g, rgba.b, rgba.a)
 
-proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
-  if daemon.shm == nil:
+proc writeAll(fd: cint, data: string): bool =
+  var offset = 0
+  while offset < data.len:
+    let written = posix.write(fd, unsafeAddr data[offset], data.len - offset)
+    if written <= 0:
+      return false
+    offset += written
+  true
+
+proc createArgbBufferFromFd(
+    daemon: var TriadDaemon, fd: cint, buf: PixelBuffer
+): ptr Buffer =
+  let size = buf.width * buf.height * 4
+  let pool = daemon.shm.createPool(fd, size)
+  if pool == nil:
     return nil
-  inc daemon.shmBufferCounter
+  result = pool.createBuffer(
+    0, buf.width, buf.height, buf.width * 4, uint32(ShmFormat.format_argb8888)
+  )
+  pool.destroy()
+
+proc createArgbMemfdBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
+  when defined(linux):
+    let size = buf.width * buf.height * 4
+    let fd = memfd_create("triad-argb-overlay", MemfdCloseOnExec)
+    if fd < 0:
+      return nil
+    try:
+      if posix.ftruncate(fd, posix.Off(size)) != 0:
+        return nil
+      if not writeAll(fd, argbBytes(buf.pixels)):
+        return nil
+      daemon.createArgbBufferFromFd(fd, buf)
+    finally:
+      discard posix.close(fd)
+  else:
+    nil
+
+proc createArgbTempFileBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
   let path =
     getTempDir() /
     ("triad-argb-overlay-" & $getCurrentProcessId() & "-" & $daemon.shmBufferCounter)
@@ -107,14 +149,7 @@ proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer 
     if fd < 0:
       return nil
     try:
-      let size = buf.width * buf.height * 4
-      let pool = daemon.shm.createPool(fd, size)
-      if pool == nil:
-        return nil
-      result = pool.createBuffer(
-        0, buf.width, buf.height, buf.width * 4, uint32(ShmFormat.format_argb8888)
-      )
-      pool.destroy()
+      result = daemon.createArgbBufferFromFd(fd, buf)
     finally:
       discard posix.close(fd)
   except CatchableError as e:
@@ -125,6 +160,14 @@ proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer 
         removeFile(path)
     except CatchableError:
       discard
+
+proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
+  if daemon.shm == nil:
+    return nil
+  inc daemon.shmBufferCounter
+  result = daemon.createArgbMemfdBuffer(buf)
+  if result == nil:
+    result = daemon.createArgbTempFileBuffer(buf)
 
 proc createProtocolWlSurface(
     daemon: var TriadDaemon, kind: ProtocolSurfaceKind

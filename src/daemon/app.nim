@@ -12,10 +12,10 @@ import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
 import
-  bindings_runtime, effects_runtime, input_runtime, janet_script_runtime,
-  live_restore_runtime, manage_requests, message_queue, output_management_runtime,
-  process_runner, quickshell_runner, registry_runtime, reload_runtime, render_runtime,
-  render_invalidation, state, switch_event_runtime
+  bindings_runtime, child_process_runtime, effects_runtime, input_runtime,
+  janet_script_runtime, live_restore_runtime, manage_requests, message_queue,
+  output_management_runtime, process_runner, quickshell_runner, registry_runtime,
+  reload_runtime, render_runtime, render_invalidation, state, switch_event_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -260,7 +260,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           )
 
     if msg.kind == MsgKind.CmdSpawnTerminal:
-      spawnTerminal(daemon.runtimeState.model)
+      daemon.trackChildProcess(spawnTerminal(daemon.runtimeState.model))
       continue
 
     if msg.kind == MsgKind.CmdConfigReload:
@@ -659,6 +659,7 @@ proc main*() =
     # Poll watcher (non-blocking)
     daemon.watcher.poll(0)
     daemon.pollSwitchEventDevices()
+    discard daemon.reapChildProcesses()
 
     let nowMs = unixMs()
     daemon.enqueueFrameTickIfDue(nowMs)

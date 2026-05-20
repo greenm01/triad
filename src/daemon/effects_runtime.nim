@@ -9,8 +9,9 @@ import ../systems/daemon_view
 import ../types/projection_values
 import ../utils/behavior_log
 import
-  idle_inhibit_runtime, live_restore_runtime, manage_requests, process_runner,
-  protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner, state
+  child_process_runtime, idle_inhibit_runtime, live_restore_runtime, manage_requests,
+  process_runner, protocol_surface_runtime, quickshell_runner, render_runtime,
+  screenshot_runner, state
 
 proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
   case eff.kind
@@ -150,14 +151,18 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffBroadcastTriadJson:
     asyncCheck broadcastTriadJson(eff.jsonPayload, eff.triadEventName)
   of EffectKind.EffSpawnScreenLock:
-    spawnScreenLock(daemon.runtimeState.model, eff.screenLockCommand)
+    daemon.trackChildProcess(
+      spawnScreenLock(daemon.runtimeState.model, eff.screenLockCommand)
+    )
   of EffectKind.EffSpawnWindowMenu:
-    spawnWindowMenu(
-      daemon.runtimeState.model, eff.windowMenuCommand, eff.windowMenuId,
-      eff.windowMenuX, eff.windowMenuY,
+    daemon.trackChildProcess(
+      spawnWindowMenu(
+        daemon.runtimeState.model, eff.windowMenuCommand, eff.windowMenuId,
+        eff.windowMenuX, eff.windowMenuY,
+      )
     )
   of EffectKind.EffSpawn:
-    spawnCommand(daemon.runtimeState.model, eff.spawnCommand)
+    daemon.trackChildProcess(spawnCommand(daemon.runtimeState.model, eff.spawnCommand))
   of EffectKind.EffPointerWarp:
     for seat in daemon.seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)

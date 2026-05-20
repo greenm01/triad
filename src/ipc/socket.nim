@@ -1,4 +1,4 @@
-import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, strutils]
+import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, times]
 import std/posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import chronicles
 import ../core/msg
@@ -18,12 +18,17 @@ type
 const
   MaxIpcLineBytes* = 256 * 1024
   MaxIpcSubscribers* = 64
+  MaxPendingIpcClients* = 64
+  IpcRequestTimeoutMs* = 5000
+  IpcSubscriberSendTimeoutMs* = 250
 
 var subscribers*: seq[AsyncSocket] = @[]
 var triadSubscribers*: seq[TriadSubscriber] = @[]
+var pendingIpcClients = 0
 var lastNiriBroadcastPayload = ""
 var lastNiriWorkspaceBroadcastKey = ""
 var lastNiriCompactBroadcastKey = ""
+var lastTriadBroadcastKey = ""
 
 proc runtimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
@@ -76,11 +81,18 @@ proc prepareUnixSocketPath(path: string): Future[bool] {.async.} =
     false
 
 proc recvLineLimited(
-    client: AsyncSocket, maxBytes = MaxIpcLineBytes
+    client: AsyncSocket, maxBytes = MaxIpcLineBytes, timeoutMs = IpcRequestTimeoutMs
 ): Future[string] {.async.} =
   var line = ""
+  let deadline = epochTime() + float(timeoutMs) / 1000.0
   while line.len <= maxBytes:
-    let chunk = await client.recv(1)
+    let remainingMs = int((deadline - epochTime()) * 1000.0)
+    if remainingMs <= 0:
+      raise newException(IOError, "IPC request line timed out")
+    let recvFuture = client.recv(1)
+    if not await recvFuture.withTimeout(remainingMs):
+      raise newException(IOError, "IPC request line timed out")
+    let chunk = recvFuture.read()
     if chunk.len == 0:
       return ""
     if chunk[0] == '\n':
@@ -115,6 +127,18 @@ proc pruneTriadSubscribers() =
 proc canSubscribeTriad(): bool =
   pruneTriadSubscribers()
   triadSubscribers.len < MaxIpcSubscribers
+
+proc sendWithTimeout(
+    client: AsyncSocket, payload: string, timeoutMs = IpcSubscriberSendTimeoutMs
+): Future[bool] {.async.} =
+  let sendFuture = client.send(payload)
+  if not await sendFuture.withTimeout(timeoutMs):
+    return false
+  try:
+    sendFuture.read()
+    true
+  except CatchableError:
+    false
 
 proc devModeReply(): string =
   $(
@@ -250,117 +274,128 @@ proc startIpcServer*(
       continue
 
     let acceptedClient = client
+    if pendingIpcClients >= MaxPendingIpcClients:
+      warn "Rejecting IPC client; pending client cap reached",
+        path = path, cap = MaxPendingIpcClients
+      client.close()
+      continue
+
+    inc pendingIpcClients
     asyncCheck (
       proc() {.async.} =
         let client = acceptedClient
         var keepOpen = false
         try:
-          while client != nil and not client.isClosed:
-            let line = await recvLineLimited(client)
-            if line == "":
-              break
-
-            let devModeControl = handleDevModeControl(line)
-            if devModeControl.isSome:
-              await client.send(devModeControl.get() & "\L")
-              break
-
-            if getSnapshot != nil:
-              if line.strip() == "dump-live-restore-state":
-                if getLiveRestoreJson != nil:
-                  await client.send(getLiveRestoreJson() & "\L")
-                else:
-                  await client.send("""{"error":"live restore unavailable"}""" & "\L")
+          try:
+            while client != nil and not client.isClosed:
+              let line = await recvLineLimited(client)
+              if line == "":
                 break
 
-              if line.strip() == "perf-status":
-                if getPerfStatusJson != nil:
-                  await client.send(getPerfStatusJson() & "\L")
-                else:
-                  await client.send("""{"error":"perf status unavailable"}""" & "\L")
+              let devModeControl = handleDevModeControl(line)
+              if devModeControl.isSome:
+                await client.send(devModeControl.get() & "\L")
                 break
 
-              let snapshot = getSnapshot()
-              let triad = handleTriadRequest(line, snapshot)
-              if triad.handled:
-                if (triad.subscribeLayout or triad.subscribeState) and
-                    not canSubscribeTriad():
-                  await client.send(
-                    """{"ok":false,"error":"too many event-stream subscribers"}""" & "\L"
-                  )
+              if getSnapshot != nil:
+                if line.strip() == "dump-live-restore-state":
+                  if getLiveRestoreJson != nil:
+                    await client.send(getLiveRestoreJson() & "\L")
+                  else:
+                    await client.send("""{"error":"live restore unavailable"}""" & "\L")
                   break
-                if triad.reply.len > 0:
-                  await client.send(triad.reply & "\L")
-                for msg in triad.messages:
-                  onMsg(msg)
-                for event in triad.initialEvents:
-                  await client.send(event & "\L")
-                if triad.subscribeLayout or triad.subscribeState:
-                  triadSubscribers.add(
-                    TriadSubscriber(
-                      client: client,
-                      layout: triad.subscribeLayout,
-                      state: triad.subscribeState,
+
+                if line.strip() == "perf-status":
+                  if getPerfStatusJson != nil:
+                    await client.send(getPerfStatusJson() & "\L")
+                  else:
+                    await client.send("""{"error":"perf status unavailable"}""" & "\L")
+                  break
+
+                let snapshot = getSnapshot()
+                let triad = handleTriadRequest(line, snapshot)
+                if triad.handled:
+                  if (triad.subscribeLayout or triad.subscribeState) and
+                      not canSubscribeTriad():
+                    await client.send(
+                      """{"ok":false,"error":"too many event-stream subscribers"}""" &
+                        "\L"
                     )
-                  )
-                  keepOpen = true
-                break
-
-              let niri = handleNiriRequest(line, snapshot)
-              if niri.handled:
-                writeBehaviorEvent(
-                  "niri_compat_request", niriRequestLogPayload(path, niri)
-                )
-                if niri.subscribe and not canSubscribe():
-                  await client.send(
-                    """{"Err":"too many event-stream subscribers"}""" & "\L"
-                  )
+                    break
+                  if triad.reply.len > 0:
+                    await client.send(triad.reply & "\L")
+                  for msg in triad.messages:
+                    onMsg(msg)
+                  for event in triad.initialEvents:
+                    await client.send(event & "\L")
+                  if triad.subscribeLayout or triad.subscribeState:
+                    triadSubscribers.add(
+                      TriadSubscriber(
+                        client: client,
+                        layout: triad.subscribeLayout,
+                        state: triad.subscribeState,
+                      )
+                    )
+                    keepOpen = true
                   break
-                if niri.reply.len > 0:
-                  await client.send(niri.reply & "\L")
-                for msg in niri.messages:
-                  onMsg(msg)
-                if niri.messages.len > 0:
-                  writeBehaviorEvent(
-                    "niri_compat_request_dispatched", niriDispatchLogPayload(path, niri)
-                  )
-                for event in niri.initialEvents:
-                  await client.send(event & "\L")
-                if niri.subscribe:
-                  subscribers.add(client)
-                  writeBehaviorEvent(
-                    "niri_compat_event_stream_subscribed",
-                    %*{"path": path, "subscriber_count": subscribers.len},
-                  )
-                  keepOpen = true
-                break
 
-            if line.strip() == "event-stream":
-              if not canSubscribe():
-                warn "Rejecting event-stream subscriber; subscriber cap reached",
-                  cap = MaxIpcSubscribers
-                break
-              subscribers.add(client)
-              writeBehaviorEvent(
-                "niri_compat_event_stream_subscribed",
-                %*{
-                  "path": path,
-                  "subscriber_count": subscribers.len,
-                  "legacy_request": true,
-                },
-              )
-              keepOpen = true
-              break
-            let parsed = parseTextCommand(line)
-            if parsed.isSome:
-              onMsg(parsed.get())
-            else:
-              warn "Unknown or invalid IPC command", command = line
-        except CatchableError as e:
-          warn "IPC client error", path = path, error = e.msg
+                let niri = handleNiriRequest(line, snapshot)
+                if niri.handled:
+                  writeBehaviorEvent(
+                    "niri_compat_request", niriRequestLogPayload(path, niri)
+                  )
+                  if niri.subscribe and not canSubscribe():
+                    await client.send(
+                      """{"Err":"too many event-stream subscribers"}""" & "\L"
+                    )
+                    break
+                  if niri.reply.len > 0:
+                    await client.send(niri.reply & "\L")
+                  for msg in niri.messages:
+                    onMsg(msg)
+                  if niri.messages.len > 0:
+                    writeBehaviorEvent(
+                      "niri_compat_request_dispatched",
+                      niriDispatchLogPayload(path, niri),
+                    )
+                  for event in niri.initialEvents:
+                    await client.send(event & "\L")
+                  if niri.subscribe:
+                    subscribers.add(client)
+                    writeBehaviorEvent(
+                      "niri_compat_event_stream_subscribed",
+                      %*{"path": path, "subscriber_count": subscribers.len},
+                    )
+                    keepOpen = true
+                  break
 
-        if client != nil and not keepOpen and not client.isClosed:
-          client.close()
+              if line.strip() == "event-stream":
+                if not canSubscribe():
+                  warn "Rejecting event-stream subscriber; subscriber cap reached",
+                    cap = MaxIpcSubscribers
+                  break
+                subscribers.add(client)
+                writeBehaviorEvent(
+                  "niri_compat_event_stream_subscribed",
+                  %*{
+                    "path": path,
+                    "subscriber_count": subscribers.len,
+                    "legacy_request": true,
+                  },
+                )
+                keepOpen = true
+                break
+              let parsed = parseTextCommand(line)
+              if parsed.isSome:
+                onMsg(parsed.get())
+              else:
+                warn "Unknown or invalid IPC command", command = line
+          except CatchableError as e:
+            warn "IPC client error", path = path, error = e.msg
+        finally:
+          dec pendingIpcClients
+          if client != nil and not keepOpen and not client.isClosed:
+            client.close()
     )()
 
 proc sendIpcMsg*(path: string, msg: string) {.async.} =
@@ -525,8 +560,15 @@ proc broadcastJson*(payload: string) {.async.} =
       subscribers.delete(i)
     else:
       try:
-        await client.send(payload & "\L")
-        inc i
+        if await sendWithTimeout(client, payload & "\L"):
+          inc i
+          continue
+        warn "Dropping slow IPC subscriber"
+        writeBehaviorEvent(
+          "niri_compat_event_stream_disconnected", %*{"reason": "send timed out"}
+        )
+        client.close()
+        subscribers.delete(i)
       except CatchableError as e:
         warn "Dropping failed IPC subscriber", error = e.msg
         writeBehaviorEvent(
@@ -537,6 +579,11 @@ proc broadcastJson*(payload: string) {.async.} =
         subscribers.delete(i)
 
 proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
+  let broadcastKey = eventName & "\0" & payload
+  if broadcastKey == lastTriadBroadcastKey:
+    return
+  lastTriadBroadcastKey = broadcastKey
+
   var i = 0
   while i < triadSubscribers.len:
     let subscriber = triadSubscribers[i]
@@ -548,8 +595,12 @@ proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
       inc i
     else:
       try:
-        await client.send(payload & "\L")
-        inc i
+        if await sendWithTimeout(client, payload & "\L"):
+          inc i
+        else:
+          warn "Dropping slow Triad IPC subscriber"
+          client.close()
+          triadSubscribers.delete(i)
       except CatchableError as e:
         warn "Dropping failed Triad IPC subscriber", error = e.msg
         client.close()

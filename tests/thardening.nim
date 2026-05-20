@@ -3,9 +3,9 @@ import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
-    bindings_runtime, cursor_shake, effects_runtime, input_device_classification,
-    message_queue, process_runner, reload_runtime, render_invalidation,
-    switch_event_runtime,
+    bindings_runtime, child_process_runtime, cursor_shake, effects_runtime,
+    input_device_classification, message_queue, process_runner, reload_runtime,
+    render_invalidation, switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
@@ -130,6 +130,23 @@ suite "Crash hardening":
     check not env.hasKey("DROP")
     check base["DROP"] == "remove"
     check base["OVERRIDE"] == "old"
+
+  test "fire-and-forget child processes are tracked and reaped":
+    var daemon = initTriadDaemon()
+    let child = spawnCommand(Model(), @["sh", "-c", "exit 7"])
+
+    daemon.trackChildProcess(child, "test-child")
+    check daemon.fireAndForgetProcesses.len == 1
+
+    var reaped = 0
+    for _ in 0 ..< 20:
+      reaped += daemon.reapChildProcesses()
+      if reaped > 0:
+        break
+      sleep(25)
+
+    check reaped == 1
+    check daemon.fireAndForgetProcesses.len == 0
 
   test "axis bindings dispatch matching wheel detents":
     var daemon = initTriadDaemon()
