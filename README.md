@@ -25,6 +25,15 @@ The layout model is not tied to one tiling family. Built-in and Janet layouts
 can express algorithmic tiling, scrollable strips, BSP/tree policies, frame/tab
 systems, and floating placement from the same session data.
 
+### Features at a Glance
+
+* **Crash resilience:** Layout errors do not affect your compositor session.
+* **Waybar and Quickshell ready:** Niri-shaped JSON works with popular shell ecosystems.
+* **Dynamic workspaces:** Spawns workspaces when needed and prunes them when empty.
+* **Smooth motion:** Uses configurable frame pacing and exponential easing for window movement.
+* **Scratchpad:** Manages utility windows as centered overlays.
+* **Stable identity:** Keeps tag and window IDs stable for long-running scripts.
+
 ### Tags, Rules, and IPC
 
 Triad is built on **tags**, **rules**, and **IPC**.
@@ -68,15 +77,6 @@ Triad natively supports both Waybar and Quickshell.
 Triad has a native JSON stream, and it also projects state as Niri-shaped JSON.
 You can use existing Waybar configurations or Quickshell themes, such as
 **Noctalia-shell** or **DankMaterialShell**, without modification.
-
-### Features at a Glance
-
-* **Crash resilience:** Layout errors do not affect your compositor session.
-* **Waybar and Quickshell ready:** Niri-shaped JSON works with popular shell ecosystems.
-* **Dynamic workspaces:** Spawns workspaces when needed and prunes them when empty.
-* **Smooth motion:** Uses configurable frame pacing and exponential easing for window movement.
-* **Scratchpad:** Manages utility windows as centered overlays.
-* **Stable identity:** Keeps tag and window IDs stable for long-running scripts.
 
 ### Installation
 
