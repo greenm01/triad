@@ -3,6 +3,7 @@
 ## Visible Frame Tabs For frame-tree plan
 
 - Remaining follow-ups: drag/drop between frames and app-to-frame targeting.
+- Match color config settings for frame tabs and i3 tabs.
 
 ## BSP layout follow-ups
 
