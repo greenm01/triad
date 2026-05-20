@@ -213,6 +213,30 @@ suite "Runtime state primitives":
     check source.contains("\"skipped_render_starts\"")
     check source.contains("\"render_layout_projections\"")
 
+  test "in-place runtime update matches pure wrapper for lifecycle commands":
+    let config = baseConfig()
+    var pure = initRuntimeStateFromConfig(config).model
+    var inPlace = initRuntimeStateFromConfig(config).model
+    let messages =
+      @[
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "kitty", title: "one"),
+        Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 10, updatedAppId: "foot"),
+        Msg(kind: MsgKind.WlWindowTitle, titleWindowId: 10, updatedTitle: "two"),
+        Msg(kind: MsgKind.CmdSwitchLayout),
+        Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2),
+        Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 10),
+      ]
+
+    for msg in messages:
+      let (next, pureEffects) = pure.update(msg)
+      let inPlaceEffects = inPlace.updateInPlace(msg)
+      check inPlaceEffects.len == pureEffects.len
+      for i in 0 ..< min(inPlaceEffects.len, pureEffects.len):
+        check inPlaceEffects[i].kind == pureEffects[i].kind
+      check inPlace.liveRestoreJson() == next.liveRestoreJson()
+      check inPlace.modelDiagnosticCounts() == next.modelDiagnosticCounts()
+      pure = next
+
   test "runtime event poll reports descriptor readiness":
     var pipeFds: array[2, cint]
     check pipe(pipeFds) == 0

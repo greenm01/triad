@@ -25,6 +25,8 @@ type
     layoutSwitchToastCustomLayout*: string
     layoutSwitchToastNativeLayout*: string
 
+var suppressedNoopTitleHookLogs = 0
+
 proc scriptOutcomeId(outcome: ScriptOutcome): string =
   case outcome
   of ScriptOutcome.Disabled: "disabled"
@@ -196,6 +198,22 @@ proc scriptEvalPayload(evalResult: ScriptEvalResult): JsonNode =
     result["error"] = %evalResult.error
   if evalResult.currentWindow.isSome:
     result["current_window_id"] = %evalResult.currentWindow.get().id
+
+proc shouldSuppressScriptEvalLog(evalResult: ScriptEvalResult): bool =
+  evalResult.event == "window-title-changed" and
+    evalResult.outcome == ScriptOutcome.Evaluated and evalResult.messages.len == 0 and
+    evalResult.error.len == 0
+
+proc writeScriptEvalEvent(evalResult: ScriptEvalResult) =
+  if evalResult.shouldSuppressScriptEvalLog():
+    inc suppressedNoopTitleHookLogs
+    return
+
+  let payload = evalResult.scriptEvalPayload()
+  if suppressedNoopTitleHookLogs > 0:
+    payload["suppressed_noop_title_count"] = %suppressedNoopTitleHookLogs
+    suppressedNoopTitleHookLogs = 0
+  writeBehaviorEvent("janet_script_eval", payload)
 
 proc shouldDispatchJanetScripts*(kind: MsgKind): bool =
   kind in {
@@ -501,7 +519,7 @@ proc collectScriptMessages(
       ev.name, ev.source, snapshot, ev.currentWindow
     )
     for evalResult in evalResults:
-      writeBehaviorEvent("janet_script_eval", evalResult.scriptEvalPayload())
+      evalResult.writeScriptEvalEvent()
       for scriptMsg in evalResult.messages:
         result.add(QueuedMsg(msg: scriptMsg, origin: QueuedMsgOrigin.JanetHook))
 

@@ -166,7 +166,8 @@ suite "Runtime logging":
     check event["after"]["active_tag"].getInt() == 2
     check event["after"]["layout_mode"].getStr() == "scroller"
     check event["after"].hasKey("workspace_distribution")
-    check event["window_states"]["after"].kind == JArray
+    check not event.hasKey("window_states")
+    check event["tracked_windows"]["after"].kind == JArray
 
   test "runtime update behavior event records window birth and app id":
     let dir = getTempDir() / ("triad-behavior-window-birth-" & $getCurrentProcessId())
@@ -285,6 +286,45 @@ suite "Runtime logging":
     check event["instructions"][0]["geom"]["w"].getInt() > 0
     check event["instructions"][0]["geom"]["h"].getInt() > 0
     check event["viewport_targets"].kind == JArray
+
+  test "layout projection behavior event suppresses identical repeats":
+    let dir =
+      getTempDir() / ("triad-behavior-projection-dedupe-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    var state = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 0), workspaces: WorkspaceConfig(defaultCount: 1)
+      )
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "app", title: "One")
+    )
+
+    discard state.applyRuntimeLayoutProjection("render layout", "WlRenderStart")
+    discard state.applyRuntimeLayoutProjection("render layout", "WlRenderStart")
+    discard state.applyRuntimeLayoutProjection("manage layout", "WlManageStart")
+
+    var projectionEvents: seq[JsonNode] = @[]
+    for line in readFile(behaviorLogPath()).strip().splitLines():
+      let event = parseJson(line)
+      if event["event"].getStr() == "layout_projection":
+        projectionEvents.add(event)
+
+    check projectionEvents.len == 2
+    check not projectionEvents[0].hasKey("suppressed_count")
+    check projectionEvents[1]["suppressed_count"].getInt() == 1
 
   test "runtime update behavior event records window state effects":
     let dir = getTempDir() / ("triad-behavior-effects-" & $getCurrentProcessId())

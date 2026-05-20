@@ -333,6 +333,9 @@ type
     pendingLiveRestore*: Option[LiveRestoreState]
     liveRestoreCommitPending*: bool
     lastMemorySampleMs*: int64
+    closeBurstStartMs*: int64
+    closeBurstDestroyedCount*: int
+    lastMemoryTrimMs*: int64
 
 proc initTriadDaemon*(): TriadDaemon =
   result.startUnixMs = int64(epochTime() * 1000.0)

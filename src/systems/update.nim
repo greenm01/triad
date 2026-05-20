@@ -24,14 +24,16 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdRestoreScratchpad,
   }
 
-proc updateSnapshotSummary(snapshot: ShellSnapshot, model: Model): JsonNode =
+proc updateSnapshotSummary(
+    snapshot: ShellSnapshot, sessionLocked, layerFocusExclusive: bool
+): JsonNode =
   %*{
     "active_tag": snapshot.activeTag,
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
     "layout_mode": snapshot.activeWorkspaceLayoutId(),
     "focused_window": uint32(snapshot.focusedWindowId()),
-    "session_locked": model.sessionLocked,
-    "layer_focus_exclusive": model.layerFocusExclusive,
+    "session_locked": sessionLocked,
+    "layer_focus_exclusive": layerFocusExclusive,
     "workspaces": snapshot.workspaces.len,
     "windows": snapshot.windows.len,
     "workspace_distribution": snapshot.compactWorkspaceDistribution(),
@@ -174,7 +176,8 @@ proc layoutTransitionPayload(before, after: ShellSnapshot): JsonNode =
 
 proc writeRuntimeUpdateEvent(
     msg: Msg,
-    beforeModel, afterModel: Model,
+    beforeSessionLocked, beforeLayerFocusExclusive: bool,
+    afterSessionLocked, afterLayerFocusExclusive: bool,
     before, after: ShellSnapshot,
     dirty, collapsed, pruned: bool,
     effects: seq[Effect],
@@ -193,12 +196,9 @@ proc writeRuntimeUpdateEvent(
       "pruned": pruned,
       "effect_count": effects.len,
       "effects": effects.compactRuntimeEffects(),
-      "before": before.updateSnapshotSummary(beforeModel),
-      "after": after.updateSnapshotSummary(afterModel),
-      "window_states": {
-        "before": before.compactSnapshotWindows(),
-        "after": after.compactSnapshotWindows(),
-      },
+      "before":
+        before.updateSnapshotSummary(beforeSessionLocked, beforeLayerFocusExclusive),
+      "after": after.updateSnapshotSummary(afterSessionLocked, afterLayerFocusExclusive),
       "tracked_windows": {
         "before": before.compactTrackedWindows(trackedIds),
         "after": after.compactTrackedWindows(trackedIds),
@@ -208,51 +208,55 @@ proc writeRuntimeUpdateEvent(
     payload["layout_transition"] = before.layoutTransitionPayload(after)
   writeBehaviorEvent("runtime_update", payload)
 
-proc update*(
-    model: Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
-): (Model, seq[Effect]) =
-  var next = model
+proc updateInPlace*(
+    model: var Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
+): seq[Effect] =
   var effects: seq[Effect] = @[]
   if model.sessionLocked and msg.kind.isFocusChangingCommand():
-    return (next, effects)
+    return effects
 
   let beforeFocus = model.modelFocusedWindowId()
   let beforeTag = model.activeSlot
   let beforeOverview = model.overviewActive
+  let beforeSessionLocked = model.sessionLocked
+  let beforeLayerFocusExclusive = model.layerFocusExclusive
+  let needsSnapshotBeforeMutation =
+    msg.kind.needsFullSnapshotAlways() or msg.kind == MsgKind.CmdTick or
+    (behaviorLogEnabled() and msg.kind.shouldLogRuntimeUpdate())
+  let before =
+    if needsSnapshotBeforeMutation:
+      shellSnapshot(model)
+    else:
+      ShellSnapshot()
 
   let step =
     case msg.kind
     of MsgKind.WlWindowCreated .. MsgKind.WlModifiersChanged:
-      next.applyEvent(msg)
+      model.applyEvent(msg)
     of MsgKind.CmdSetLayout .. MsgKind.CmdScreenshot:
-      next.applyCommand(msg, movementEval)
+      model.applyCommand(msg, movementEval)
   for effect in step.effects:
     effects.add(effect)
   var dirty = step.dirty
 
-  let maintenance = next.applyUpdateMaintenance(msg.kind)
+  let maintenance = model.applyUpdateMaintenance(msg.kind)
   if maintenance.collapsed or maintenance.pruned:
     dirty = true
-  if dirty and next.windowRuleStateMatchersEnabled():
-    dirty = next.refreshWindowRuleDerivedState() or dirty
+  if dirty and model.windowRuleStateMatchersEnabled():
+    dirty = model.refreshWindowRuleDerivedState() or dirty
 
-  let afterFocus = next.modelFocusedWindowId()
-  let afterTag = next.activeSlot
-  let afterOverview = next.overviewActive
+  let afterFocus = model.modelFocusedWindowId()
+  let afterTag = model.activeSlot
+  let afterOverview = model.overviewActive
 
   let needSnapshot =
-    msg.kind.needsFullSnapshotAlways() or beforeFocus != afterFocus or
-    beforeTag != afterTag or beforeOverview != afterOverview or maintenance.collapsed or
-    maintenance.pruned or (behaviorLogEnabled() and msg.kind.shouldLogRuntimeUpdate())
+    needsSnapshotBeforeMutation or beforeFocus != afterFocus or beforeTag != afterTag or
+    beforeOverview != afterOverview or maintenance.collapsed or maintenance.pruned or
+    (behaviorLogEnabled() and msg.kind.shouldLogRuntimeUpdate())
 
-  let before =
-    if needSnapshot:
-      shellSnapshot(model)
-    else:
-      ShellSnapshot()
   let after =
     if needSnapshot:
-      shellSnapshot(next)
+      shellSnapshot(model)
     else:
       ShellSnapshot()
 
@@ -260,8 +264,16 @@ proc update*(
     msg, before, after, dirty, maintenance.collapsed, maintenance.pruned
   )
   writeRuntimeUpdateEvent(
-    msg, model, next, before, after, dirty, maintenance.collapsed, maintenance.pruned,
-    effects,
+    msg, beforeSessionLocked, beforeLayerFocusExclusive, model.sessionLocked,
+    model.layerFocusExclusive, before, after, dirty, maintenance.collapsed,
+    maintenance.pruned, effects,
   )
 
+  effects
+
+proc update*(
+    model: Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
+): (Model, seq[Effect]) =
+  var next = model
+  let effects = next.updateInPlace(msg, movementEval)
   (next, effects)

@@ -5,7 +5,15 @@ import ../state/engine
 import ../utils/[behavior_log, process_memory]
 import ../ipc/socket
 
-const MemorySampleIntervalMs = 60_000'i64
+const
+  MemorySampleIntervalMs = 60_000'i64
+  CloseBurstIntervalMs = 5_000'i64
+  CloseBurstThreshold = 4
+  MemoryTrimCooldownMs = 30_000'i64
+  MemoryTrimFreeThreshold = 16 * 1024 * 1024
+
+when defined(linux):
+  proc mallocTrim(pad: csize_t): cint {.importc: "malloc_trim", header: "<malloc.h>".}
 
 proc intOrNull(value: int): JsonNode =
   if value < 0:
@@ -207,6 +215,73 @@ proc writeMemorySample*(daemon: TriadDaemon, reason: string) =
   let payload = daemon.memoryStatusPayload()
   payload["reason"] = %reason
   writeBehaviorEvent("memory_sample", payload)
+
+proc shouldTrimNimHeap(): bool =
+  let freeBytes = getFreeMem()
+  let totalBytes = getTotalMem()
+  freeBytes >= MemoryTrimFreeThreshold and freeBytes * 2 >= totalBytes
+
+proc writeMemoryTrimEvent(
+    reason: string,
+    beforeProcess: ProcessMemoryStatus,
+    beforeOccupied, beforeFree, beforeTotal: int,
+    mallocTrimResult: int,
+) =
+  if not behaviorLogEnabled():
+    return
+  let afterProcess = currentProcessMemoryStatus()
+  writeBehaviorEvent(
+    "memory_trim",
+    %*{
+      "reason": reason,
+      "before_process": beforeProcess.processMemoryJson(),
+      "after_process": afterProcess.processMemoryJson(),
+      "before_nim": {
+        "occupied_bytes": beforeOccupied,
+        "free_bytes": beforeFree,
+        "total_bytes": beforeTotal,
+      },
+      "after_nim": nimMemoryJson(),
+      "malloc_trim_result": mallocTrimResult,
+    },
+  )
+
+proc trimMemoryAfterPressure*(daemon: var TriadDaemon, reason: string) =
+  let nowMs = int64(epochTime() * 1000.0)
+  if daemon.lastMemoryTrimMs > 0 and
+      nowMs - daemon.lastMemoryTrimMs < MemoryTrimCooldownMs:
+    return
+  if not shouldTrimNimHeap():
+    return
+
+  let beforeProcess = currentProcessMemoryStatus()
+  let beforeOccupied = getOccupiedMem()
+  let beforeFree = getFreeMem()
+  let beforeTotal = getTotalMem()
+  GC_fullCollect()
+  let trimResult =
+    when defined(linux):
+      int(mallocTrim(0))
+    else:
+      -1
+  daemon.lastMemoryTrimMs = nowMs
+  writeMemoryTrimEvent(
+    reason, beforeProcess, beforeOccupied, beforeFree, beforeTotal, trimResult
+  )
+
+proc noteWindowDestroyedForMemoryPressure*(daemon: var TriadDaemon) =
+  let nowMs = int64(epochTime() * 1000.0)
+  if daemon.closeBurstStartMs == 0 or
+      nowMs - daemon.closeBurstStartMs > CloseBurstIntervalMs:
+    daemon.closeBurstStartMs = nowMs
+    daemon.closeBurstDestroyedCount = 1
+    return
+
+  inc daemon.closeBurstDestroyedCount
+  if daemon.closeBurstDestroyedCount >= CloseBurstThreshold:
+    daemon.closeBurstStartMs = nowMs
+    daemon.closeBurstDestroyedCount = 0
+    daemon.trimMemoryAfterPressure("window_close_burst")
 
 proc maybeWriteMemorySample*(daemon: var TriadDaemon, nowMs: int64) =
   if not behaviorLogEnabled():

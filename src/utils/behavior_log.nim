@@ -24,6 +24,9 @@ var
   lastRotationCheckMs = 0'i64
   lastRotationPath = ""
   bytesSinceRotationCheck = 0
+  lastLayoutProjectionLogPath = ""
+  lastLayoutProjectionSignature = ""
+  suppressedLayoutProjectionCount = 0
 
 proc envFlagEnabled*(value: string): bool =
   case value.normalize()
@@ -319,6 +322,67 @@ proc layoutProjectionBehaviorPayload*(
     result["context"] = %context
   if msgKind.len > 0:
     result["msg_kind"] = %msgKind
+
+proc layoutProjectionSignature(
+    snapshot: ShellSnapshot, projection: LayoutProjection, context, msgKind: string
+): string =
+  result =
+    context & "|" & msgKind & "|" & $snapshot.activeTag & "|" &
+    $snapshot.activeWorkspaceIdx & "|" & snapshot.activeWorkspaceLayoutId() & "|" &
+    $snapshot.overviewActive & "|" & $uint32(snapshot.snapshotFocusedWindowId()) & "|" &
+    $projection.instructions.len & "|"
+  for instr in projection.instructions:
+    result.add($uint32(instr.windowId))
+    result.add(":")
+    result.add($instr.geom.x)
+    result.add(",")
+    result.add($instr.geom.y)
+    result.add(",")
+    result.add($instr.geom.w)
+    result.add(",")
+    result.add($instr.geom.h)
+    if instr.clipSet:
+      result.add("[")
+      result.add($instr.clip.x)
+      result.add(",")
+      result.add($instr.clip.y)
+      result.add(",")
+      result.add($instr.clip.w)
+      result.add(",")
+      result.add($instr.clip.h)
+      result.add("]")
+    result.add(";")
+  result.add("|")
+  for target in projection.viewportTargets:
+    result.add($target.tagSlot)
+    result.add(":")
+    result.add($target.targetX)
+    result.add(",")
+    result.add($target.targetY)
+    result.add(";")
+
+proc writeLayoutProjectionBehaviorEvent*(
+    snapshot: ShellSnapshot, projection: LayoutProjection, context = "", msgKind = ""
+) =
+  if not behaviorLogEnabled():
+    return
+  let path = behaviorLogPath()
+  if path != lastLayoutProjectionLogPath:
+    lastLayoutProjectionLogPath = path
+    lastLayoutProjectionSignature = ""
+    suppressedLayoutProjectionCount = 0
+
+  let signature = snapshot.layoutProjectionSignature(projection, context, msgKind)
+  if signature == lastLayoutProjectionSignature:
+    inc suppressedLayoutProjectionCount
+    return
+
+  let payload = snapshot.layoutProjectionBehaviorPayload(projection, context, msgKind)
+  if suppressedLayoutProjectionCount > 0:
+    payload["suppressed_count"] = %suppressedLayoutProjectionCount
+    suppressedLayoutProjectionCount = 0
+  lastLayoutProjectionSignature = signature
+  writeBehaviorEvent("layout_projection", payload)
 
 proc compactFocusHistory(state: LiveRestoreState): JsonNode =
   result = newJArray()

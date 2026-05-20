@@ -273,7 +273,11 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.tickCursorShake()
       daemon.tickCursorVisibility()
 
-    let previousModelForShell = daemon.runtimeState.model
+    let previousModelForShell =
+      if msg.kind in {MsgKind.CmdSwitchShell, MsgKind.CmdCycleShell}:
+        some(daemon.runtimeState.model)
+      else:
+        none(Model)
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
@@ -303,11 +307,12 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         effects.anyIt(it.kind == EffectKind.EffManageDirty):
       inc daemon.perfCounters.dirtyFrameTicks
     if msg.kind in {MsgKind.CmdSwitchShell, MsgKind.CmdCycleShell} and
+        previousModelForShell.isSome and
         not sameShellsConfig(
-          previousModelForShell.shells, daemon.runtimeState.model.shells
+          previousModelForShell.get().shells, daemon.runtimeState.model.shells
         ):
       daemon.quickshellState.switchShell(
-        previousModelForShell,
+        previousModelForShell.get(),
         daemon.runtimeState.model,
         niriSocketPath,
         "command " & $msg.kind,
@@ -315,6 +320,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     if msg.kind == MsgKind.WlWindowDestroyed:
       daemon.lastFullscreenRequests.del(msg.destroyedId)
       daemon.lastMaximizedRequests.del(msg.destroyedId)
+      daemon.noteWindowDestroyedForMemoryPressure()
     if beforeJanetHookSnapshot.isSome:
       afterJanetHookSnapshot = some(daemon.readModelSnapshot())
       nextQueuedMessages.add(

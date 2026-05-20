@@ -73,7 +73,11 @@ or `TRIAD_BEHAVIOR_LOG=1`. They are written outside the repository under
 day at 5 MiB, and keep seven days. `TRIAD_BEHAVIOR_LOG=0` disables behavior
 logs even when dev mode is enabled. Override `TRIAD_BEHAVIOR_LOG_DIR`,
 `TRIAD_BEHAVIOR_LOG_MAX_BYTES`, and `TRIAD_BEHAVIOR_LOG_KEEP_DAYS` to redirect
-or tune the log files.
+or tune the log files. Runtime update logs keep compact summaries and tracked
+windows instead of full before/after window lists. Repeated identical layout
+projection logs are suppressed and reported on the next emitted projection with
+`suppressed_count`. A `memory_trim` event is emitted when Triad trims allocator
+memory after a destructive close burst.
 
 For an already-running session, use `triad msg dev-mode on`,
 `triad msg dev-mode off`, `triad msg dev-mode toggle`, or

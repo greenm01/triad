@@ -20,9 +20,7 @@ proc initRuntimeStateFromConfig*(
 proc applyRuntimeUpdate*(
     state: var TriadRuntimeState, msg: Msg, movementEval: CustomLayoutMovementEval = nil
 ): seq[Effect] =
-  let (next, effects) = state.model.update(msg, movementEval)
-  state.model = next
-  effects
+  state.model.updateInPlace(msg, movementEval)
 
 proc applyRuntimeLayoutProjection*(
     state: var TriadRuntimeState,
@@ -33,10 +31,7 @@ proc applyRuntimeLayoutProjection*(
   result = state.model.layoutProjection(layoutEval)
   if behaviorLogEnabled():
     let snapshot = state.model.shellSnapshot()
-    writeBehaviorEvent(
-      "layout_projection",
-      snapshot.layoutProjectionBehaviorPayload(result, context, msgKind),
-    )
+    snapshot.writeLayoutProjectionBehaviorEvent(result, context, msgKind)
   state.model.applyLayoutProjection(result)
 
 proc applyRuntimeConfig*(state: var TriadRuntimeState, config: Config): bool =
