@@ -147,6 +147,10 @@ proc windowReadyEvent(window: ShellWindow): string =
   "{:kind :window-ready :window-id " & $window.id & " :window " &
     window.janetWindowExpr() & "}"
 
+proc windowClosedEvent(window: ShellWindow): string =
+  "{:kind :window-closed :window-id " & $window.id & " :window " &
+    window.janetWindowExpr() & "}"
+
 proc baseUiHookState(): JanetUiHookState =
   JanetUiHookState(
     recentWindowsScope: RecentWindowScope.All,
@@ -2052,7 +2056,7 @@ suite "embedded Janet runtime":
     )
 
     check firstPalette.ok
-    check firstPalette.messages.len == 3
+    check firstPalette.messages.len == 4
     check firstPalette.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check firstPalette.messages[0].moveTargetTag == 3
     check firstPalette.messages[0].moveFollowWindow
@@ -2062,6 +2066,8 @@ suite "embedded Janet runtime":
     check firstPalette.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check firstPalette.messages[2].floatingWindowId == 12
     check firstPalette.messages[2].windowFloating
+    check firstPalette.messages[3].kind == MsgKind.CmdFocusWindowById
+    check firstPalette.messages[3].focusWindowId == 12
 
     var currentOccupiesTargetSnapshot = snapshot
     currentOccupiesTargetSnapshot.workspaces[2].occupied = true
@@ -2084,13 +2090,16 @@ suite "embedded Janet runtime":
     )
 
     check currentOccupiesTarget.ok
-    check currentOccupiesTarget.messages.len == 3
+    check currentOccupiesTarget.messages.len == 4
     check currentOccupiesTarget.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check currentOccupiesTarget.messages[0].moveTargetTag == 3
     check currentOccupiesTarget.messages[1].kind == MsgKind.CmdSetLayout
     check currentOccupiesTarget.messages[1].layoutTargetTag == 3
-    check currentOccupiesTarget.messages[2].kind == MsgKind.CmdToggleFullscreenById
-    check currentOccupiesTarget.messages[2].fullscreenWindowId == 18
+    check currentOccupiesTarget.messages[2].kind == MsgKind.CmdSetWindowMaximizedById
+    check currentOccupiesTarget.messages[2].maximizedWindowId == 18
+    check currentOccupiesTarget.messages[2].windowMaximized
+    check currentOccupiesTarget.messages[3].kind == MsgKind.CmdFocusWindowById
+    check currentOccupiesTarget.messages[3].focusWindowId == 12
 
     let mainWindow = runtime.evalSource(
       snapshot,
@@ -2102,14 +2111,17 @@ suite "embedded Janet runtime":
     )
 
     check mainWindow.ok
-    check mainWindow.messages.len == 3
+    check mainWindow.messages.len == 4
     check mainWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check mainWindow.messages[0].moveTargetTag == 3
     check mainWindow.messages[0].moveFollowWindow
     check mainWindow.messages[1].kind == MsgKind.CmdSetLayout
     check mainWindow.messages[1].layoutTargetTag == 3
-    check mainWindow.messages[2].kind == MsgKind.CmdToggleFullscreenById
-    check mainWindow.messages[2].fullscreenWindowId == 13
+    check mainWindow.messages[2].kind == MsgKind.CmdSetWindowMaximizedById
+    check mainWindow.messages[2].maximizedWindowId == 13
+    check mainWindow.messages[2].windowMaximized
+    check mainWindow.messages[3].kind == MsgKind.CmdFocusWindowById
+    check mainWindow.messages[3].focusWindowId == 12
 
     let laterPalette = runtime.evalSource(
       snapshot,
@@ -2121,7 +2133,7 @@ suite "embedded Janet runtime":
     )
 
     check laterPalette.ok
-    check laterPalette.messages.len == 3
+    check laterPalette.messages.len == 4
     check laterPalette.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check laterPalette.messages[0].moveTargetTag == 3
     check not laterPalette.messages[0].moveFollowWindow
@@ -2130,6 +2142,8 @@ suite "embedded Janet runtime":
     check laterPalette.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check laterPalette.messages[2].floatingWindowId == 14
     check laterPalette.messages[2].windowFloating
+    check laterPalette.messages[3].kind == MsgKind.CmdFocusWindowById
+    check laterPalette.messages[3].focusWindowId == 14
 
     var existingGimpSnapshot = snapshot
     existingGimpSnapshot.workspaces.add(
@@ -2161,9 +2175,42 @@ suite "embedded Janet runtime":
     )
 
     check welcomeWindow.ok
-    check welcomeWindow.messages.len == 3
+    check welcomeWindow.messages.len == 4
     check welcomeWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check welcomeWindow.messages[0].moveTargetTag == 4
+    check welcomeWindow.messages[3].kind == MsgKind.CmdFocusWindowById
+    check welcomeWindow.messages[3].focusWindowId == 20
+
+    var welcomeThenMainSnapshot = existingGimpSnapshot
+    welcomeThenMainSnapshot.windows.add(
+      ShellWindow(
+        id: 20,
+        title: "Welcome to GIMP",
+        appId: "gimp-3.2",
+        tagId: some(4'u32),
+        workspaceIdx: 4,
+      )
+    )
+    let mainAfterWelcome = runtime.evalSource(
+      welcomeThenMainSnapshot,
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent = windowReadyEvent(
+        ShellWindow(id: 21, title: "GNU Image Manipulation Program", appId: "gimp")
+      ),
+    )
+
+    check mainAfterWelcome.ok
+    check mainAfterWelcome.messages.len == 4
+    check mainAfterWelcome.messages[0].kind == MsgKind.CmdMoveWindowToTag
+    check mainAfterWelcome.messages[0].moveTargetTag == 4
+    check mainAfterWelcome.messages[1].kind == MsgKind.CmdSetLayout
+    check mainAfterWelcome.messages[1].layoutTargetTag == 4
+    check mainAfterWelcome.messages[2].kind == MsgKind.CmdSetWindowMaximizedById
+    check mainAfterWelcome.messages[2].maximizedWindowId == 21
+    check mainAfterWelcome.messages[2].windowMaximized
+    check mainAfterWelcome.messages[3].kind == MsgKind.CmdFocusWindowById
+    check mainAfterWelcome.messages[3].focusWindowId == 20
 
     let dialogWindow = runtime.evalSource(
       snapshot,
@@ -2174,13 +2221,15 @@ suite "embedded Janet runtime":
     )
 
     check dialogWindow.ok
-    check dialogWindow.messages.len == 3
+    check dialogWindow.messages.len == 4
     check dialogWindow.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check dialogWindow.messages[0].moveTargetTag == 3
     check dialogWindow.messages[0].moveFollowWindow
     check dialogWindow.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check dialogWindow.messages[2].floatingWindowId == 15
     check dialogWindow.messages[2].windowFloating
+    check dialogWindow.messages[3].kind == MsgKind.CmdFocusWindowById
+    check dialogWindow.messages[3].focusWindowId == 15
 
     let parentedDialog = runtime.evalSource(
       snapshot,
@@ -2192,13 +2241,73 @@ suite "embedded Janet runtime":
     )
 
     check parentedDialog.ok
-    check parentedDialog.messages.len == 3
+    check parentedDialog.messages.len == 4
     check parentedDialog.messages[0].kind == MsgKind.CmdMoveWindowToTag
     check parentedDialog.messages[0].moveTargetTag == 3
     check parentedDialog.messages[0].moveFollowWindow
     check parentedDialog.messages[2].kind == MsgKind.CmdSetWindowFloatingById
     check parentedDialog.messages[2].floatingWindowId == 16
     check parentedDialog.messages[2].windowFloating
+    check parentedDialog.messages[3].kind == MsgKind.CmdFocusWindowById
+    check parentedDialog.messages[3].focusWindowId == 16
+
+    var lastChildClosedSnapshot = snapshot
+    lastChildClosedSnapshot.windows =
+      @[
+        ShellWindow(id: 10, title: "Terminal", appId: "kitty", tagId: some(1'u32)),
+        ShellWindow(
+          id: 21,
+          title: "GNU Image Manipulation Program",
+          appId: "gimp",
+          tagId: some(3'u32),
+          workspaceIdx: 3,
+        ),
+      ]
+    let lastChildClosed = runtime.evalSource(
+      lastChildClosedSnapshot,
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent = windowClosedEvent(
+        ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")
+      ),
+    )
+
+    check lastChildClosed.ok
+    check lastChildClosed.messages.len == 1
+    check lastChildClosed.messages[0].kind == MsgKind.CmdFocusWindowById
+    check lastChildClosed.messages[0].focusWindowId == 21
+
+    var siblingChildClosedSnapshot = lastChildClosedSnapshot
+    siblingChildClosedSnapshot.windows.add(
+      ShellWindow(
+        id: 22, title: "Preferences", appId: "gimp", tagId: some(3'u32), workspaceIdx: 3
+      )
+    )
+    let siblingChildClosed = runtime.evalSource(
+      siblingChildClosedSnapshot,
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent = windowClosedEvent(
+        ShellWindow(id: 20, title: "Welcome to GIMP", appId: "gimp-3.2")
+      ),
+    )
+
+    check siblingChildClosed.ok
+    check siblingChildClosed.messages.len == 1
+    check siblingChildClosed.messages[0].kind == MsgKind.CmdFocusWindowById
+    check siblingChildClosed.messages[0].focusWindowId == 22
+
+    let mainClosed = runtime.evalSource(
+      siblingChildClosedSnapshot,
+      script,
+      "examples/janet/gimp.janet",
+      currentEvent = windowClosedEvent(
+        ShellWindow(id: 21, title: "GNU Image Manipulation Program", appId: "gimp")
+      ),
+    )
+
+    check mainClosed.ok
+    check mainClosed.messages.len == 0
 
     let ignored = runtime.evalSource(
       snapshot,
