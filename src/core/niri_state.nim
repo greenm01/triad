@@ -1,5 +1,6 @@
 import std/[json, options]
 import app_identity
+import shell_focus
 import ../types/shell_snapshot
 
 proc niriLayout*(win: ShellWindow, snapshot: ShellSnapshot): JsonNode =
@@ -36,6 +37,7 @@ proc niriLayout*(win: ShellWindow, snapshot: ShellSnapshot): JsonNode =
 
 proc niriWindowJson*(snapshot: ShellSnapshot, win: ShellWindow): JsonNode =
   let compatId = compatAppId(win.appId)
+  let focusedWindow = snapshot.focusedWindowId()
   result =
     %*{
       "id": win.id,
@@ -59,7 +61,7 @@ proc niriWindowJson*(snapshot: ShellSnapshot, win: ShellWindow): JsonNode =
           %win.tagId.get()
         else:
           newJNull(),
-      "is_focused": win.isFocused,
+      "is_focused": win.id == focusedWindow,
       "is_floating": win.isFloating,
       "is_maximized": win.isMaximized,
       "is_minimized": win.isMinimized,
@@ -116,7 +118,7 @@ proc niriOutputJson(output: ShellOutput): JsonNode =
     "make": "Triad",
     "model": "River",
     "serial": newJNull(),
-    "physical_size": {"width": 0, "height": 0},
+    "physical_size": [0, 0],
     "physical_width": 0,
     "physical_height": 0,
     "modes":

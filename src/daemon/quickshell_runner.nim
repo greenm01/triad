@@ -7,6 +7,7 @@ import ../types/model
 from ../types/runtime_values import
   QuickshellConfig, ShellProfileConfig, ShellWatchdogConfig, ShellsConfig
 import ../utils/behavior_log
+import ../utils/process_options
 
 type
   QuickshellRecoveryDelay* = array[3, int64]
@@ -335,7 +336,7 @@ proc stopConfiguredQuickshell*(model: Model, reason: string) =
       model.quickshell.command,
       args = args,
       env = model.configuredProcessEnv(),
-      options = {poUsePath},
+      options = InheritedProcessOptions,
     )
     let code = p.pollProcessExitCode(1000)
     if code == -1:
@@ -435,7 +436,7 @@ proc stopShellProfile(
           profile.stop[0],
           args = profile.stop.commandArgs(),
           env = model.configuredProcessEnv(),
-          options = {poUsePath},
+          options = InheritedProcessOptions,
         )
         let code = p.pollProcessExitCode(1000)
         if code == -1:
@@ -519,7 +520,7 @@ proc spawnShellProfile(
       profile.launch[0],
       args = profile.launch.commandArgs(),
       env = env,
-      options = {poUsePath},
+      options = InheritedProcessOptions,
     )
     let childPid = p.processID
     let earlyExitCode = p.pollProcessExitCode(250)
@@ -722,7 +723,10 @@ proc spawnQuickshell*(
           %*{"warning": compat.warning},
         )
       let p = startProcess(
-        model.quickshell.command, args = args, env = compat.env, options = {poUsePath}
+        model.quickshell.command,
+        args = args,
+        env = compat.env,
+        options = InheritedProcessOptions,
       )
       let childPid = p.processID
       let earlyExitCode = p.pollProcessExitCode(250)

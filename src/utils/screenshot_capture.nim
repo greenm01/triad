@@ -2,6 +2,7 @@ import std/[asyncdispatch, os, osproc, strtabs, strutils, times]
 import ../core/[defaults, msg]
 from ../types/core import Rect
 import ../types/runtime_values
+import process_options
 
 proc shellQuote*(value: string): string =
   "'" & value.replace("'", "'\\''") & "'"
@@ -97,7 +98,7 @@ proc runShellCommandAsync*(
   var finished = false
   try:
     process = startProcess(
-      "sh", args = @["-c", command], env = env, options = {poUsePath, poParentStreams}
+      "sh", args = @["-c", command], env = env, options = InheritedProcessOptions
     )
     while true:
       let code = process.peekExitCode()

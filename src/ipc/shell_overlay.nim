@@ -1,5 +1,6 @@
 import std/[os, osproc, strutils, tables]
 import ../core/[app_identity, xdg]
+import ../utils/process_options
 
 type ShellOverlayResult* = object
   rootPath*: string
@@ -74,7 +75,7 @@ proc renderSvgToPng(sourcePath, destPath: string): bool =
   let process = startProcess(
     rsvg,
     args = @["-w", "48", "-h", "48", "-o", destPath, sourcePath],
-    options = {poUsePath},
+    options = InheritedProcessOptions,
   )
   let code = process.waitForExit()
   process.close()

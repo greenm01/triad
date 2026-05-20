@@ -2,6 +2,7 @@ import std/[os, osproc, strtabs, strutils, times]
 import chronicles
 import ../types/model
 from ../types/runtime_values import ConfigNotificationEvent
+import ../utils/process_options
 import ../utils/terminal
 
 proc commandArgs(command: seq[string]): seq[string] =
@@ -52,7 +53,7 @@ proc spawnStartupCommands*(model: Model) =
     if cmd.len > 0:
       try:
         let p = startProcess(
-          cmd[0], args = cmd.commandArgs(), env = env, options = {poUsePath}
+          cmd[0], args = cmd.commandArgs(), env = env, options = InheritedProcessOptions
         )
         info "Spawned startup command", cmd = cmd[0], pid = p.processID
       except CatchableError as e:
@@ -68,7 +69,7 @@ proc spawnScreenLock*(model: Model, command: seq[string]) =
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = {poUsePath},
+      options = InheritedProcessOptions,
     )
     info "Spawned screen lock", cmd = command[0], pid = p.processID
   except CatchableError as e:
@@ -86,7 +87,7 @@ proc spawnWindowMenu*(
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = {poUsePath},
+      options = InheritedProcessOptions,
     )
     info "Spawned window menu",
       cmd = command[0], pid = p.processID, windowId = windowId, x = x, y = y
@@ -105,7 +106,7 @@ proc spawnConfigNotification*(
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = {poUsePath},
+      options = InheritedProcessOptions,
     )
     info "Spawned config notification",
       event = $event, cmd = command[0], pid = p.processID
@@ -120,7 +121,10 @@ proc spawnTerminal*(model: Model) =
       continue
     try:
       let p = startProcess(
-        command[0], args = command.commandArgs(), env = env, options = {poUsePath}
+        command[0],
+        args = command.commandArgs(),
+        env = env,
+        options = InheritedProcessOptions,
       )
       info "Spawned terminal", terminal = command[0], pid = p.processID
       return
@@ -139,7 +143,7 @@ proc spawnCommand*(model: Model, command: seq[string]) =
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = {poUsePath},
+      options = InheritedProcessOptions,
     )
     info "Spawned command", cmd = command[0], pid = p.processID
   except CatchableError as e:

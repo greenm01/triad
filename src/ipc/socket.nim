@@ -489,6 +489,22 @@ proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
     result = %*{"subscriber_count": subscriberCount}
     result["parse_error"] = %e.msg
 
+proc shouldSendNiriBroadcast(payload: string): bool =
+  try:
+    let root = parseJson(payload)
+    if root.kind != JObject:
+      return true
+    for eventName, _ in root.pairs:
+      case eventName
+      of "WindowsChanged", "WindowOpenedOrChanged", "WindowLayoutsChanged",
+          "WindowFocusChanged", "WorkspaceActiveWindowChanged":
+        return false
+      else:
+        return true
+  except CatchableError:
+    discard
+  true
+
 proc broadcastJson*(payload: string) {.async.} =
   if payload == lastNiriBroadcastPayload:
     return
@@ -497,6 +513,8 @@ proc broadcastJson*(payload: string) {.async.} =
   let logPayload = niriBroadcastLogPayload(payload, subscribers.len)
   if logPayload != nil:
     writeBehaviorEvent("niri_compat_broadcast", logPayload)
+  if not payload.shouldSendNiriBroadcast():
+    return
   var i = 0
   while i < subscribers.len:
     let client = subscribers[i]
