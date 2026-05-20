@@ -137,8 +137,14 @@ proc setActiveOutput*(model: var Model, outputId: OutputId): bool =
 proc setTagOutput*(model: var Model, tagId: TagId, outputId: OutputId): bool =
   if model.tags.entity(tagId).isNone or model.outputs.entity(outputId).isNone:
     return false
+  var staleOutputs: seq[OutputId] = @[]
+  for mappedOutputId, mappedTagId in model.outputTags.pairs:
+    if mappedOutputId != outputId and mappedTagId == tagId:
+      staleOutputs.add(mappedOutputId)
+  for mappedOutputId in staleOutputs:
+    model.outputTags.del(mappedOutputId)
   if model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
-    return false
+    return staleOutputs.len > 0
   model.tagOutputs[tagId] = outputId
   true
 

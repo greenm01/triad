@@ -1,4 +1,4 @@
-import std/[algorithm, options]
+import std/[algorithm, options, tables]
 import outputs
 import sticky_windows
 import ../core/native_layout_codec
@@ -84,6 +84,7 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
     let tagOpt = model.tagData(tagId)
     if slot > defaultCount and (
       slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
+      model.tagVisibleOnOutput(tagId) or
       (tagOpt.isSome and model.hasDurableTagState(tagOpt.get()))
     ):
       result.add(slot)
@@ -194,6 +195,76 @@ proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
   if result > MaxTagBits:
     result = 0
 
+proc tagVisibleOnAnyOutput(model: Model, tagId: TagId): bool =
+  if tagId == NullTagId:
+    return false
+  for _, visibleTagId in model.outputTagsWithId():
+    if visibleTagId == tagId:
+      return true
+  false
+
+proc validOutputVisibleTag(model: Model, outputId: OutputId): bool =
+  let tagId = model.outputActiveTag(outputId)
+  tagId != NullTagId and model.tagData(tagId).isSome
+
+proc candidateTagForOutputSlot(
+    model: var Model, slot: uint32, targetOutput: OutputId
+): TagId =
+  if slot == 0:
+    return NullTagId
+  let existingTagId = model.tagForSlot(slot)
+  result = model.ensureWorkspaceSlot(slot)
+  if result == NullTagId:
+    return
+  let homeOutput = model.tagOutputs.getOrDefault(result, NullOutputId)
+  if existingTagId != NullTagId and homeOutput != NullOutputId and
+      homeOutput != targetOutput and model.outputData(homeOutput).isSome:
+    return NullTagId
+  if model.tagVisibleOnAnyOutput(result):
+    return NullTagId
+  if result == model.activeTag and targetOutput != model.activeOutput:
+    return NullTagId
+
+proc availableTagForOutput*(model: var Model, outputId: OutputId): TagId =
+  if outputId == NullOutputId or model.outputData(outputId).isNone:
+    return NullTagId
+
+  let output = model.outputData(outputId).get()
+  let stableTarget = model.outputStableTarget(outputId, output)
+  let rememberedSlot = model.outputLastActiveSlots.getOrDefault(stableTarget, 0'u32)
+  result = model.candidateTagForOutputSlot(rememberedSlot, outputId)
+  if result != NullTagId:
+    return
+
+  for slot in model.sortedSlots():
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    if model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
+      result = model.candidateTagForOutputSlot(slot, outputId)
+      if result != NullTagId:
+        return
+
+  for slot in model.visibleWorkspaceSlots():
+    result = model.candidateTagForOutputSlot(slot, outputId)
+    if result != NullTagId:
+      return
+
+  for slot in 1'u32 .. model.defaultWorkspaceCount():
+    result = model.candidateTagForOutputSlot(slot, outputId)
+    if result != NullTagId:
+      return
+
+  result = model.candidateTagForOutputSlot(model.nextDynamicWorkspaceSlot(), outputId)
+
+proc ensureOutputWorkspaceCoverage*(model: var Model): bool =
+  for outputId in model.sortedOutputsByGeometry():
+    if model.validOutputVisibleTag(outputId):
+      continue
+    let tagId = model.availableTagForOutput(outputId)
+    if tagId != NullTagId:
+      result = model.setOutputTag(outputId, tagId) or result
+
 proc tagHasFocusableWindow*(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
     if not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted():
@@ -284,7 +355,7 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
   for slot in slots:
     let tagId = model.tagForSlot(slot)
     if tagId == NullTagId or slot <= defaultCount or slot == activeSlot or
-        slot == trailing:
+        slot == trailing or model.tagVisibleOnOutput(tagId):
       continue
     let tagOpt = model.tagData(tagId)
     if model.restoreTag(slot).isSome or

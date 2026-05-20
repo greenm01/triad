@@ -9,6 +9,12 @@ proc syncPrimaryOutputTag*(model: var Model): bool =
     return false
   if model.outputs.entity(outputId).isNone or model.tags.entity(model.activeTag).isNone:
     return false
+  var staleOutputs: seq[OutputId] = @[]
+  for mappedOutputId, mappedTagId in model.outputTags.pairs:
+    if mappedOutputId != outputId and mappedTagId == model.activeTag:
+      staleOutputs.add(mappedOutputId)
+  for mappedOutputId in staleOutputs:
+    model.outputTags.del(mappedOutputId)
   model.outputTags[outputId] = model.activeTag
   model.tagOutputs[model.activeTag] = outputId
   true

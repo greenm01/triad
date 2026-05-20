@@ -135,10 +135,7 @@ proc syncRestoreOutputTags(model: var Model) =
     let outputId = model.outputForExternal(outputExt)
     let tagId = model.tagForSlot(slot)
     if outputId != NullOutputId and tagId != NullTagId:
-      if outputId == model.primaryOutput and model.activeTag != NullTagId:
-        discard model.syncPrimaryOutputTag()
-      else:
-        discard model.setOutputTag(outputId, tagId)
+      discard model.setOutputTag(outputId, tagId)
 
 proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
   if slot == 0:

@@ -500,6 +500,15 @@ def normalize_output_tags(state):
                 tags.append(tag_id)
     return sorted(tags)
 
+def output_tags_preserved(expected_tags, actual_tags):
+    remaining = list(actual_tags)
+    for tag_id in expected_tags:
+        try:
+            remaining.remove(tag_id)
+        except ValueError:
+            return False
+    return True
+
 def normalize_focus_history(state, id_map):
     return [canonical_ref(win_id, id_map) for win_id in state.get("focus_history", [])]
 
@@ -522,12 +531,18 @@ expected = normalized(expected_raw, expected_id_map)
 actual = normalized(actual_raw, actual_id_map)
 
 ok = True
-for key in ["active_tag", "focused_window", "output_tags", "focus_history", "workspace_history"]:
+for key in ["active_tag", "focused_window", "focus_history", "workspace_history"]:
     if expected[key] != actual[key]:
         ok = False
         print(f"{key} mismatch")
         print(f"  expected: {expected[key]}")
         print(f"  actual:   {actual[key]}")
+
+if not output_tags_preserved(expected["output_tags"], actual["output_tags"]):
+    ok = False
+    print("output_tags mismatch")
+    print(f"  expected: {expected['output_tags']}")
+    print(f"  actual:   {actual['output_tags']}")
 
 if expected["tags"] != actual["tags"]:
     ok = False

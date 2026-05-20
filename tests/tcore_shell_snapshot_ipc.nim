@@ -1,5 +1,6 @@
 import tcore_support
 import ../src/core/native_layout_codec
+import ../src/core/niri_state
 import ../src/ipc/niri_compat
 
 suite "Core Runtime Logic: shell snapshot ipc":
@@ -147,6 +148,36 @@ suite "Core Runtime Logic: shell snapshot ipc":
         it.jsonPayload.contains("WindowsChanged")
     )
     model.requireTagShellSemantics("workspace focus broadcast scenario")
+
+  test "Niri workspace JSON separates output-visible from globally focused":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"))
+
+    let workspaces = niriWorkspacesJson(model.shellSnapshot())
+    let visible = workspaces.getElems().filterIt(it["is_active"].getBool())
+    let focused = workspaces.getElems().filterIt(it["is_focused"].getBool())
+
+    check visible.len == 2
+    check focused.len == 1
+    check focused[0]["idx"].getInt() == 2
+    check visible.anyIt(it["output"].getStr() == "DP-1")
+    check visible.anyIt(it["output"].getStr() == "DP-2")
 
   test "Empty dynamic workspaces prune after focus leaves":
     var model = configuredModel()

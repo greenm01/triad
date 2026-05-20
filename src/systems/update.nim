@@ -240,7 +240,7 @@ proc updateInPlace*(
   var dirty = step.dirty
 
   let maintenance = model.applyUpdateMaintenance(msg.kind)
-  if maintenance.collapsed or maintenance.pruned:
+  if maintenance.collapsed or maintenance.pruned or maintenance.outputCovered:
     dirty = true
   if dirty and model.windowRuleStateMatchersEnabled():
     dirty = model.refreshWindowRuleDerivedState() or dirty
@@ -252,6 +252,7 @@ proc updateInPlace*(
   let needSnapshot =
     needsSnapshotBeforeMutation or beforeFocus != afterFocus or beforeTag != afterTag or
     beforeOverview != afterOverview or maintenance.collapsed or maintenance.pruned or
+    maintenance.outputCovered or
     (behaviorLogEnabled() and msg.kind.shouldLogRuntimeUpdate())
 
   let after =

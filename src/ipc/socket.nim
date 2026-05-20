@@ -512,12 +512,16 @@ proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
             let active =
               workspace.hasKey("is_active") and workspace["is_active"].kind == JBool and
               workspace["is_active"].getBool()
+            let focused =
+              workspace.hasKey("is_focused") and workspace["is_focused"].kind == JBool and
+              workspace["is_focused"].getBool()
             let occupied =
               workspace.hasKey("occupied") and workspace["occupied"].kind == JBool and
               workspace["occupied"].getBool()
-            signatureParts.add($id & ":" & $idx & ":" & $active & ":" & $occupied)
-            if workspace.kind == JObject and workspace.hasKey("is_active") and
-                workspace["is_active"].kind == JBool and workspace["is_active"].getBool():
+            signatureParts.add(
+              $id & ":" & $idx & ":" & $active & ":" & $focused & ":" & $occupied
+            )
+            if focused:
               if workspace.hasKey("id"):
                 result["active_tag"] = workspace["id"]
               if workspace.hasKey("idx"):

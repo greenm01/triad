@@ -186,6 +186,166 @@ suite "Core Runtime Logic: output sticky scratchpad":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "left"))
     check model.activeOutput == model.outputForExternal(ExternalOutputId(1))
 
+  test "Moving workspace to middle output leaves side outputs visible":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 1, outputX: 4480, outputY: 180
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 2560, height: 1440)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1920, outputY: 0
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputPosition, positionOutputId: 3, outputX: 0, outputY: 180)
+    )
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"))
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+    check model.outputActiveTag(middle) == model.tagForSlot(2)
+    check model.outputActiveTag(left) != NullTagId
+    check model.outputActiveTag(right) != NullTagId
+    check model.outputActiveTag(left) != model.outputActiveTag(middle)
+    check model.outputActiveTag(right) != model.outputActiveTag(middle)
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces.anyIt(it.outputName == "DP-3" and it.isOutputVisible)
+    check snapshot.workspaces.anyIt(
+      it.outputName == "DP-2" and it.isOutputVisible and it.isActive
+    )
+    check snapshot.workspaces.anyIt(it.outputName == "DP-1" and it.isOutputVisible)
+
+  test "Output-visible dynamic workspaces survive pruning":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 1))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let third = model.outputForExternal(ExternalOutputId(3))
+    let secondTag = model.outputActiveTag(second)
+    let thirdTag = model.outputActiveTag(third)
+    check secondTag != NullTagId
+    check thirdTag != NullTagId
+    check model.tagData(secondTag).isSome
+    check model.tagData(thirdTag).isSome
+
+    discard model.pruneDynamicWorkspaces()
+
+    check model.outputActiveTag(second) == secondTag
+    check model.outputActiveTag(third) == thirdTag
+    check model.tagData(secondTag).isSome
+    check model.tagData(thirdTag).isSome
+
+  test "Active workspace output sync clears stale visible duplicates":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"))
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let tagId = model.tagForSlot(2)
+    check model.outputActiveTag(second) == tagId
+
+    discard model.setActiveOutput(first)
+    discard model.syncPrimaryOutputTag()
+
+    check model.outputActiveTag(first) == tagId
+    check model.outputActiveTag(second) != tagId
+
+  test "Live restore preserves primary output visible workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 4))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 4))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-1"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"))
+
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+    var restoredModel = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 4))
+    ).model
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1")
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2")
+    )
+    restoredModel.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    restoredModel.applyLiveRestore(restore.pendingRestoreState())
+
+    let primary = restoredModel.outputForExternal(ExternalOutputId(1))
+    let second = restoredModel.outputForExternal(ExternalOutputId(2))
+    check restoredModel.outputActiveTag(primary) == restoredModel.tagForSlot(4)
+    check restoredModel.outputActiveTag(second) == restoredModel.tagForSlot(2)
+    check restoredModel.activeWorkspaceSlot() == 2
+
   test "Moved workspace restores to reconnected output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

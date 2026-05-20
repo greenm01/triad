@@ -741,12 +741,14 @@ proc tagVisibleOnOutput*(model: Model, tagId: TagId): bool =
   false
 
 proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
-  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
-  if mappedOutput != NullOutputId and model.outputData(mappedOutput).isSome:
-    return mappedOutput
   for outputId, outputTag in model.outputTagsWithId():
     if outputTag == tagId:
       return outputId
+  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  if mappedOutput != NullOutputId and model.outputData(mappedOutput).isSome:
+    return mappedOutput
+  if model.outputCount() > 1:
+    return NullOutputId
   result =
     if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
       model.activeOutput
