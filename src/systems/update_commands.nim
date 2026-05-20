@@ -154,6 +154,23 @@ proc applyCommand*(
     result.dirty =
       not model.overviewActive and model.activeTagUsesFrameTree() and
       model.focusFrameChild()
+  of MsgKind.CmdFrameBindApp:
+    let tagId = model.activeTag
+    let focusedWin = model.focusedOnActiveTag()
+    if not model.overviewActive and model.activeTagUsesFrameTree() and tagId != NullTagId and
+        focusedWin != NullWindowId:
+      let winOpt = model.windowData(focusedWin)
+      let frameId = model.tagData(tagId).get().focusedFrame
+      if winOpt.isSome and frameId != NullFrameId:
+        result.dirty = model.bindAppToFrame(tagId, winOpt.get().appId, frameId)
+  of MsgKind.CmdFrameUnbindApp:
+    let tagId = model.activeTag
+    let focusedWin = model.focusedOnActiveTag()
+    if not model.overviewActive and model.activeTagUsesFrameTree() and tagId != NullTagId and
+        focusedWin != NullWindowId:
+      let winOpt = model.windowData(focusedWin)
+      if winOpt.isSome:
+        result.dirty = model.unbindAppFromFrame(tagId, winOpt.get().appId)
   of MsgKind.CmdSplitTreeSplitHorizontal:
     result.dirty =
       not model.overviewActive and

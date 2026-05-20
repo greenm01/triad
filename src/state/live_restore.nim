@@ -70,6 +70,8 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
     masterCount: source.masterCount,
     masterSplitRatio: source.masterSplitRatio,
   )
+  for appId, frameId in source.frameAppBindings:
+    result.frameAppBindings[appId] = FrameId(frameId)
   for col in source.columns:
     var restoredCol = RestoredColumnData(
       widthProportion: col.widthProportion,
@@ -195,6 +197,11 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
       currentViewportYOffset: tag.currentViewportYOffset,
       masterCount: tag.masterCount,
       masterSplitRatio: tag.masterSplitRatio,
+      frameAppBindings: block:
+        var bindings: Table[string, uint32]
+        for appId, frameId in tag.frameAppBindings:
+          bindings[appId] = uint32(frameId)
+        bindings,
     )
 
     for colId in model.columnsForTag(tagId):
@@ -506,6 +513,11 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
     "current_viewport_y_offset": tag.currentViewportYOffset,
     "master_count": tag.masterCount,
     "master_split_ratio": tag.masterSplitRatio,
+    "frame_app_bindings": block:
+      let obj = newJObject()
+      for appId, frameId in tag.frameAppBindings:
+        obj[appId] = %frameId
+      obj,
   }
 
 proc liveRestoreStateJson(state: LiveRestoreState): string =

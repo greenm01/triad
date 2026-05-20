@@ -76,6 +76,8 @@ type
     CmdFrameSplitToggle
     CmdFrameFocusParent
     CmdFrameFocusChild
+    CmdFrameBindApp
+    CmdFrameUnbindApp
     CmdSplitTreeSplitHorizontal
     CmdSplitTreeSplitVertical
     CmdSplitTreeSplitToggle

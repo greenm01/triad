@@ -75,6 +75,7 @@ type
     masterSplitRatio*: float32
     focusedSplitNode*: SplitNodeId
     focusedParentFrame*: FrameId
+    frameAppBindings*: Table[string, FrameId]
 
   ColumnData* = object
     id*: ColumnId
@@ -407,6 +408,7 @@ type
     currentViewportYOffset*: float32
     masterCount*: int
     masterSplitRatio*: float32
+    frameAppBindings*: Table[string, FrameId]
 
   PointerOpData* = object
     kind*: PointerOpKind

@@ -2414,6 +2414,45 @@ suite "Runtime state primitives":
     projection = model.layoutProjection()
     check projection.frameTabBars.anyIt(it.tabs.len == 2)
 
+  test "frame-bind-app places new windows in bound frame":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 10, updatedAppId: "alacritty")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    # Split to get two frames: left (focused, initially empty) and right.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let tagId = model.activeTag
+    # After split, focused is the new (second) frame. Record its id.
+    let boundFrame = model.tagData(tagId).get().focusedFrame
+
+    # Bind "alacritty" to the focused (second) frame.
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    let secondFrame =
+      model.frameForWindowOnTag(tagId, model.windowForExternal(ExternalWindowId(10)))
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameBindApp))
+
+    check model.tagData(tagId).get().frameAppBindings.hasKey("alacritty")
+
+    # New alacritty window should land in the bound frame.
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 11, updatedAppId: "alacritty")
+    )
+    let winNew = model.windowForExternal(ExternalWindowId(11))
+    check model.frameForWindowOnTag(tagId, winNew) == secondFrame
+
+    # Unbind: next window goes to default (focused) frame instead.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameUnbindApp))
+    check not model.tagData(tagId).get().frameAppBindings.hasKey("alacritty")
+
   test "frame-focus-parent elevates container scope and child descends back":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

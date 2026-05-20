@@ -92,6 +92,7 @@ type
     currentViewportYOffset*: float32
     masterCount*: int
     masterSplitRatio*: float32
+    frameAppBindings*: Table[string, uint32]
 
   LiveRestoreState* = object
     activeTag*: uint32

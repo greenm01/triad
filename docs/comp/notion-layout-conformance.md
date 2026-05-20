@@ -91,9 +91,9 @@ triad's design goals.
 
 | Notion / notion-river | Triad | Status | Notes |
 |---|---|---|---|
-| `BindApp` — bind focused window's app-id to current frame | Not implemented | ✗ P1 | New windows with matching app-id auto-place in the bound frame |
-| `ToggleBindApp` — add/remove additional frames for same app-id | Not implemented | ✗ P1 | Allows multiple frames to share one app-id binding |
-| Wildcard app-id matching (`steam_app_*`) | Not implemented for frame-tree | ✗ P1 | Notion-river: prefix wildcard matching in `AppBindings::find_locations` |
+| `BindApp` — bind focused window's app-id to current frame | `frame-bind-app` → `bindAppToFrame`; stores `appId → FrameId` in `TagData.frameAppBindings`; `addWindowToFrame` checks binding before defaulting to focused frame | ✓ |
+| `ToggleBindApp` — add/remove additional frames for same app-id | `frame-unbind-app` → `unbindAppFromFrame`; rebind with `frame-bind-app` to change | ≈ toggle via bind+unbind, not a single toggle command |
+| Wildcard app-id matching (`steam_app_*`) | Not implemented — exact app-id only | ✗ P2 | Notion-river: prefix wildcard matching; triad uses exact string keys |
 | `window-rule` admission-time placement | Triad has `window-rule` targeting tags/columns | ≈ | Covers the "send app X to workspace Y" use case but not frame-specific targeting |
 
 ### Persistence and restore
@@ -138,11 +138,10 @@ triad's design goals.
 
 ### P1 — Missing useful features
 
-2. **App bindings** — add a frame-specific app-id binding system.
-   When `bind-frame-app` is invoked, associate the focused window's app-id with the current frame
-   (store in tag-level state). On new window admission in frame-tree mode, check the binding table
-   and target the bound frame if present. Supports the core notion-river use case of dedicated
-   browser/terminal/editor frames that auto-fill.
+2. ~~**App bindings**~~ ✓ — `frame-bind-app` / `frame-unbind-app` added. `TagData.frameAppBindings:
+   Table[string, FrameId]` stores per-tag bindings, persisted in live-restore JSON as
+   `frame_app_bindings`. `addWindowToFrame` checks bindings before falling back to focused frame.
+   Stale frame IDs dropped silently on restore. Wildcard matching not implemented (exact app-id only).
 
 3. ~~**`default_split_ratio` config option**~~ ✓ — `initial-split-ratio` KDL option parsed under
    `layout { ... }`, stored as `model.defaultFrameSplitRatio`, applied in `splitFocusedFrame`

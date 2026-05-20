@@ -111,6 +111,28 @@ proc focusedFrameOrRoot*(model: var Model, tagId: TagId): FrameId =
   result = model.ensureFrameRoot(tagId)
   discard model.setFocusedFrame(tagId, result)
 
+proc frameForAppBinding*(model: Model, tagId: TagId, appId: string): FrameId =
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or appId.len == 0:
+    return NullFrameId
+  tagOpt.get().frameAppBindings.getOrDefault(appId, NullFrameId)
+
+proc bindAppToFrame*(
+    model: var Model, tagId: TagId, appId: string, frameId: FrameId
+): bool =
+  if model.tags.entity(tagId).isNone or appId.len == 0 or frameId == NullFrameId:
+    return false
+  model.tags.mEntity(tagId).frameAppBindings[appId] = frameId
+  true
+
+proc unbindAppFromFrame*(model: var Model, tagId: TagId, appId: string): bool =
+  if model.tags.entity(tagId).isNone or appId.len == 0:
+    return false
+  let had = model.tags.entity(tagId).get().frameAppBindings.hasKey(appId)
+  if had:
+    model.tags.mEntity(tagId).frameAppBindings.del(appId)
+  had
+
 proc addWindowToFrame*(
     model: var Model, tagId: TagId, winId: WindowId, frameId = NullFrameId
 ): bool =
@@ -120,7 +142,19 @@ proc addWindowToFrame*(
     if frameId != NullFrameId:
       frameId
     else:
-      model.focusedFrameOrRoot(tagId)
+      let winOpt = model.windows.entity(winId)
+      let appId =
+        if winOpt.isSome:
+          winOpt.get().appId
+        else:
+          ""
+      let bound = model.frameForAppBinding(tagId, appId)
+      if bound != NullFrameId and model.frameUsesTag(bound, tagId) and
+          model.frames.entity(bound).isSome and
+          model.frames.entity(bound).get().kind == FrameNodeKind.Leaf:
+        bound
+      else:
+        model.focusedFrameOrRoot(tagId)
   if target == NullFrameId or not model.frameUsesTag(target, tagId):
     return false
   if model.frames.entity(target).get().kind != FrameNodeKind.Leaf:
@@ -633,6 +667,10 @@ proc restoreTagFrames*(
     model.tags.mEntity(tagId).focusedFrame = restoredFocus
   elif firstLeaf != NullFrameId:
     model.tags.mEntity(tagId).focusedFrame = firstLeaf
+  for appId, frameId in restored.frameAppBindings:
+    if frameId != NullFrameId and model.frames.entity(frameId).isSome and
+        model.frameUsesTag(frameId, tagId):
+      model.tags.mEntity(tagId).frameAppBindings[appId] = frameId
   result = true
 
 proc restoreWindowFramePlacement*(

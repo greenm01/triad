@@ -197,6 +197,11 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
   if node.hasKey("master_split_ratio"):
     tag.masterSplitRatio =
       float32FromJson(node["master_split_ratio"], DefaultMasterRatio)
+  if node.hasKey("frame_app_bindings") and node["frame_app_bindings"].kind == JObject:
+    for appId, frameNode in node["frame_app_bindings"]:
+      let frameId = uint32FromJson(frameNode)
+      if frameId.isSome and appId.len > 0:
+        tag.frameAppBindings[appId] = frameId.get()
 
   if node.hasKey("columns") and node["columns"].kind == JArray:
     for colNode in node["columns"]:
