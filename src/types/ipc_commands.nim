@@ -36,6 +36,8 @@ type
     CidFrameResizeUp
     CidFrameResizeDown
     CidFrameSplitToggle
+    CidFrameFocusParent
+    CidFrameFocusChild
     CidSplitTreeSplitHorizontal
     CidSplitTreeSplitVertical
     CidSplitTreeSplitToggle
@@ -308,6 +310,12 @@ const CommandSpecs* = [
   ),
   CommandSpec(
     id: CommandId.CidFrameSplitToggle, name: "frame-split-toggle", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameFocusParent, name: "frame-focus-parent", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameFocusChild, name: "frame-focus-child", argShape: NoArgs
   ),
   CommandSpec(
     id: CommandId.CidSplitTreeSplitHorizontal,

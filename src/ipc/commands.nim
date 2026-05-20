@@ -368,6 +368,10 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         some(Msg(kind: MsgKind.CmdFrameResizeDown, frameResizeDelta: d))
   of CommandId.CidFrameSplitToggle:
     some(Msg(kind: MsgKind.CmdFrameSplitToggle))
+  of CommandId.CidFrameFocusParent:
+    some(Msg(kind: MsgKind.CmdFrameFocusParent))
+  of CommandId.CidFrameFocusChild:
+    some(Msg(kind: MsgKind.CmdFrameFocusChild))
   of CommandId.CidSplitTreeSplitHorizontal:
     some(Msg(kind: MsgKind.CmdSplitTreeSplitHorizontal))
   of CommandId.CidSplitTreeSplitVertical:

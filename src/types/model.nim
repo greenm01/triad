@@ -74,6 +74,7 @@ type
     masterCount*: int
     masterSplitRatio*: float32
     focusedSplitNode*: SplitNodeId
+    focusedParentFrame*: FrameId
 
   ColumnData* = object
     id*: ColumnId

@@ -2414,6 +2414,45 @@ suite "Runtime state primitives":
     projection = model.layoutProjection()
     check projection.frameTabBars.anyIt(it.tabs.len == 2)
 
+  test "frame-focus-parent elevates container scope and child descends back":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    # After switching to frame-tree both windows are in the root leaf frame.
+    # Split to build: root-split{left-leaf(win11), right-leaf(win10-active)}
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let tagId = model.activeTag
+    let rootSplitId = model.frameRootForTag(tagId)
+    check model.frameData(rootSplitId).get().kind == FrameNodeKind.Split
+
+    # focusedParentFrame is null by default.
+    check model.tagData(tagId).get().focusedParentFrame == tc.NullFrameId
+
+    # frame-focus-parent from a leaf: focusedParentFrame becomes the root split.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameFocusParent))
+    check model.tagData(tagId).get().focusedParentFrame == rootSplitId
+
+    # frame-focus-parent at root: no further movement.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameFocusParent))
+    check model.tagData(tagId).get().focusedParentFrame == rootSplitId
+
+    # frame-focus-child descends back to the focused leaf and clears container focus.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameFocusChild))
+    check model.tagData(tagId).get().focusedParentFrame == tc.NullFrameId
+
+    # Explicit window focus clears focusedParentFrame.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameFocusParent))
+    check model.tagData(tagId).get().focusedParentFrame == rootSplitId
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    check model.tagData(tagId).get().focusedParentFrame == tc.NullFrameId
+
   test "frame-split-toggle flips parent split orientation":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(

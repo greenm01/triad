@@ -516,6 +516,10 @@ proc frameNeighborTarget*(model: var Model, direction: Direction): DirectionalTa
   let tagId = model.activeTag
   if tagId == NullTagId:
     return DirectionalTarget(kind: DirectionalTargetKind.None)
+  let tagOpt = model.tagData(tagId)
+  if tagOpt.isNone:
+    return DirectionalTarget(kind: DirectionalTargetKind.None)
+  let parentFocus = tagOpt.get().focusedParentFrame
   var currentFrame = model.focusedFrameOrRoot(tagId)
   if currentFrame == NullFrameId:
     let focused = model.focusedOnActiveTag()
@@ -524,20 +528,43 @@ proc frameNeighborTarget*(model: var Model, direction: Direction): DirectionalTa
       return DirectionalTarget(kind: DirectionalTargetKind.None)
 
   let rects = model.frameTreeFocusRects()
+
+  # When container focus is active, compute a bounding rect covering all leaf
+  # frames in the parent subtree and exclude those leaves from candidates.
   var currentRect = typeof(RenderInstruction().geom)()
   var currentFound = false
-  for item in rects:
-    if item.frameId == currentFrame:
-      currentRect = item.rect
-      currentFound = true
-      break
+  if parentFocus != NullFrameId and model.frameData(parentFocus).isSome:
+    var minX = high(int32)
+    var minY = high(int32)
+    var maxX = low(int32)
+    var maxY = low(int32)
+    for item in rects:
+      if model.frameBelongsToSubtree(item.frameId, parentFocus):
+        minX = min(minX, item.rect.x)
+        minY = min(minY, item.rect.y)
+        maxX = max(maxX, item.rect.x + item.rect.w)
+        maxY = max(maxY, item.rect.y + item.rect.h)
+        currentFound = true
+    if currentFound:
+      currentRect = typeof(RenderInstruction().geom)(
+        x: minX, y: minY, w: maxX - minX, h: maxY - minY
+      )
+  else:
+    for item in rects:
+      if item.frameId == currentFrame:
+        currentRect = item.rect
+        currentFound = true
+        break
   if not currentFound:
     return DirectionalTarget(kind: DirectionalTargetKind.None)
 
   var bestFrame = NullFrameId
   var bestDistance = high(int64)
   for item in rects:
-    if item.frameId == currentFrame:
+    if parentFocus != NullFrameId and model.frameData(parentFocus).isSome:
+      if model.frameBelongsToSubtree(item.frameId, parentFocus):
+        continue
+    elif item.frameId == currentFrame:
       continue
     let candidate = frameTreeNeighborCandidate(currentRect, item.rect, direction)
     if candidate.found and candidate.distance < bestDistance:

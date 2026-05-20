@@ -54,6 +54,7 @@ proc setTagFocus*(model: var Model, tagId: TagId, winId: WindowId): bool =
   model.tags.mEntity(tagId).focusedWindow = winId
   if winId != NullWindowId:
     model.tags.mEntity(tagId).focusedSplitNode = NullSplitNodeId
+    model.tags.mEntity(tagId).focusedParentFrame = NullFrameId
     let winOpt = model.windows.entity(winId)
     let key = (tagId, winId)
     let frameId = model.frameByTagWindow.getOrDefault(key, NullFrameId)

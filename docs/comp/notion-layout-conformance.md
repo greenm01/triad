@@ -58,7 +58,7 @@ triad's design goals.
 | Notion / notion-river | Triad command | Status | Notes |
 |---|---|---|---|
 | `FocusDirection(left/right/up/down)` — move focus to adjacent frame | `focus-left/right/up/down` dispatches via `directionalTarget()` → frame target | ✓ | `moveFocusedWindowByDirection` handles both frame and window targets |
-| `FocusParent` — shift focus to parent split level | Not implemented for frame-tree | ✗ P2 | Added for split-tree (Phase 3) but not wired for frame-tree layout |
+| `FocusParent` — shift focus to parent split level | `frame-focus-parent` / `frame-focus-child` → `focusFrameParent` / `focusFrameChild`; directional focus uses bounding rect of the parent's subtree and excludes its leaves from candidates | ✓ |
 
 ### Window movement
 
@@ -156,11 +156,9 @@ triad's design goals.
    node). Cheap to add: new `CidFrameSplitToggle` that reads the parent's orientation and calls
    `splitFocusedFrame` with the opposite. No new data model needed.
 
-5. **`focus parent` for frame-tree** — shift focus to the parent split level of the current frame,
-   consistent with `split-tree-focus-parent` added in Phase 3. Requires storing a
-   `focusedFrame: FrameId` at the container (not window) level on the tag during parent-walk mode
-   and resetting it on explicit window focus. Mostly a UX nicety for navigating deeply nested
-   layouts.
+5. ~~**`focus parent` for frame-tree**~~ ✓ — `CidFrameFocusParent` / `CidFrameFocusChild` added.
+   `focusedParentFrame: FrameId` on `TagData` (cleared by `setTagFocus`). `frameNeighborTarget`
+   uses the bounding rect of the parent's leaf descendants and excludes them from candidates.
 
 6. **Tab reordering within frame** — move the active tab to an earlier or later position in the
    frame's window list. `windowsByFrame[frameId]` is a `seq[WindowId]`; reordering is a simple

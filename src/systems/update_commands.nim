@@ -146,6 +146,14 @@ proc applyCommand*(
     result.dirty =
       not model.overviewActive and
       model.toggleFocusedFrameSplitOrientation(model.activeTag)
+  of MsgKind.CmdFrameFocusParent:
+    result.dirty =
+      not model.overviewActive and model.activeTagUsesFrameTree() and
+      model.focusFrameParent()
+  of MsgKind.CmdFrameFocusChild:
+    result.dirty =
+      not model.overviewActive and model.activeTagUsesFrameTree() and
+      model.focusFrameChild()
   of MsgKind.CmdSplitTreeSplitHorizontal:
     result.dirty =
       not model.overviewActive and

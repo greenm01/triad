@@ -74,6 +74,8 @@ type
     CmdFrameResizeUp
     CmdFrameResizeDown
     CmdFrameSplitToggle
+    CmdFrameFocusParent
+    CmdFrameFocusChild
     CmdSplitTreeSplitHorizontal
     CmdSplitTreeSplitVertical
     CmdSplitTreeSplitToggle

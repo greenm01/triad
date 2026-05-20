@@ -1,4 +1,5 @@
 import std/[options, tables]
+import tag_ops
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
 from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
@@ -409,6 +410,98 @@ proc toggleFocusedFrameSplitOrientation*(model: var Model, tagId: TagId): bool =
       FrameSplitOrientation.Vertical
     else:
       FrameSplitOrientation.Horizontal
+  true
+
+proc frameBelongsToSubtree*(model: Model, frameId, rootId: FrameId): bool =
+  var current = frameId
+  while current != NullFrameId:
+    if current == rootId:
+      return true
+    let opt = model.frames.entity(current)
+    if opt.isNone:
+      break
+    current = opt.get().parent
+  false
+
+proc firstLeafInSubtree(model: Model, frameId: FrameId): FrameId =
+  let opt = model.frames.entity(frameId)
+  if opt.isNone:
+    return NullFrameId
+  let f = opt.get()
+  if f.kind == FrameNodeKind.Leaf:
+    return frameId
+  let first = model.firstLeafInSubtree(f.firstChild)
+  if first != NullFrameId:
+    return first
+  model.firstLeafInSubtree(f.secondChild)
+
+proc focusFrameParent*(model: var Model): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+  let current = tagOpt.get().focusedParentFrame
+  let startFrame =
+    if current != NullFrameId and model.frames.entity(current).isSome:
+      current
+    else:
+      model.focusedFrameOrRoot(tagId)
+  if startFrame == NullFrameId:
+    return false
+  let startOpt = model.frames.entity(startFrame)
+  if startOpt.isNone:
+    return false
+  let parentId = startOpt.get().parent
+  if parentId == NullFrameId:
+    return false
+  model.tags.mEntity(tagId).focusedParentFrame = parentId
+  true
+
+proc focusFrameChild*(model: var Model): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone:
+    return false
+  let current = tagOpt.get().focusedParentFrame
+  if current == NullFrameId:
+    return false
+  let currentOpt = model.frames.entity(current)
+  if currentOpt.isNone:
+    return false
+  let f = currentOpt.get()
+  if f.kind == FrameNodeKind.Leaf:
+    model.tags.mEntity(tagId).focusedParentFrame = NullFrameId
+    let winId = f.activeWindow
+    if winId != NullWindowId:
+      return model.setTagFocus(tagId, winId)
+    return false
+  # Find the child that contains the current focused frame.
+  let focusedLeaf = tagOpt.get().focusedFrame
+  let child =
+    if focusedLeaf != NullFrameId and
+        model.frameBelongsToSubtree(focusedLeaf, f.firstChild):
+      f.firstChild
+    elif focusedLeaf != NullFrameId and
+      model.frameBelongsToSubtree(focusedLeaf, f.secondChild):
+      f.secondChild
+    else:
+      f.firstChild
+  if child == NullFrameId:
+    return false
+  let childOpt = model.frames.entity(child)
+  if childOpt.isNone:
+    return false
+  if childOpt.get().kind == FrameNodeKind.Leaf:
+    model.tags.mEntity(tagId).focusedParentFrame = NullFrameId
+    let winId = childOpt.get().activeWindow
+    if winId != NullWindowId:
+      return model.setTagFocus(tagId, winId)
+    return false
+  model.tags.mEntity(tagId).focusedParentFrame = child
   true
 
 proc focusFrameTab*(model: var Model, delta: int): bool =
