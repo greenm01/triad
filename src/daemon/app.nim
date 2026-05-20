@@ -14,8 +14,9 @@ import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_run
 import
   bindings_runtime, child_process_runtime, effects_runtime, input_runtime,
   janet_script_runtime, live_restore_runtime, manage_requests, message_queue,
-  output_management_runtime, process_runner, quickshell_runner, registry_runtime,
-  reload_runtime, render_runtime, render_invalidation, state, switch_event_runtime
+  memory_status, output_management_runtime, process_runner, quickshell_runner,
+  registry_runtime, reload_runtime, render_runtime, render_invalidation, state,
+  switch_event_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -233,6 +234,10 @@ proc perfStatusJson(daemon: TriadDaemon): string =
     }
   )
 
+proc specialMsgCommand(cmd: string): bool =
+  cmd in ["dump-live-restore-state", "perf-status", "mem-status"] or cmd == "dev-mode" or
+    cmd.startsWith("dev-mode ")
+
 proc startStartupWindowRulesExpiry() {.async.} =
   await sleepAsync(60_000)
   {.cast(gcsafe).}:
@@ -362,6 +367,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           outputs = daemon.outputPointers.len,
           windows = daemon.windowPointers.len,
           seats = daemon.seatPointers.len
+        daemon.writeMemorySample("initial_manage_complete")
       daemon.spawnPendingStartupCommands(daemon.runtimeState.model, "initial manage")
       if daemon.postManageBroadcastPending:
         let reason = daemon.postManageBroadcastReason
@@ -479,8 +485,7 @@ proc main*() =
         validateCmd.add(args[i])
       if parseTextCommand(validateCmd).isNone and
           triadMsgRequestPayload(validateCmd).isNone and
-          validateCmd notin ["dump-live-restore-state", "perf-status"] and
-          validateCmd != "dev-mode" and not validateCmd.startsWith("dev-mode "):
+          not validateCmd.specialMsgCommand():
         failCli("invalid msg command: " & validateCmd)
       stdout.writeLine("triad: msg command valid: " & validateCmd)
       return
@@ -541,8 +546,7 @@ proc main*() =
       if requestPayload.isSome:
         let reply = waitFor sendIpcRequest(triadSocketPath(), requestPayload.get())
         stdout.writeLine(reply)
-      elif cmd == "dump-live-restore-state" or cmd == "perf-status" or cmd == "dev-mode" or
-          cmd.startsWith("dev-mode "):
+      elif cmd.specialMsgCommand():
         let reply = waitFor sendIpcRequest(triadSocketPath(), cmd)
         stdout.writeLine(reply)
       else:
@@ -608,6 +612,7 @@ proc main*() =
   let initialConfig = initialLoaded.config
   daemon.runtimeState = initRuntimeStateFromConfig(initialConfig)
   daemon.janetRuntime = initJanetRuntime(daemon.runtimeState.model.janet)
+  daemon.writeMemorySample("startup")
   daemon.installInputRuntimeHooks()
   daemon.configureXkbKeymap("initial config")
   daemon.applyAllInputConfig("initial config")
@@ -683,6 +688,10 @@ proc main*() =
     {.cast(gcsafe).}:
       daemon.perfStatusJson()
 
+  proc snapshotMemStatusJson(): string {.gcsafe.} =
+    {.cast(gcsafe).}:
+      daemon.memoryStatusJson()
+
   proc dispatchBindingJson(request: BindingDispatchRequest): string {.gcsafe.} =
     {.cast(gcsafe).}:
       daemon.dispatchBindingRequest(request).bindingDispatchReply()
@@ -699,7 +708,7 @@ proc main*() =
     writeBehaviorEvent("triad_ipc_server_starting", %*{"path": triadSocket})
     asyncCheck startIpcServer(
       triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson,
-      snapshotPerfStatusJson, dispatchBindingJson,
+      snapshotPerfStatusJson, snapshotMemStatusJson, dispatchBindingJson,
     )
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
@@ -707,7 +716,7 @@ proc main*() =
       writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
         niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson,
-        snapshotPerfStatusJson, dispatchBindingJson,
+        snapshotPerfStatusJson, snapshotMemStatusJson, dispatchBindingJson,
       )
 
   asyncCheck startStartupWindowRulesExpiry()
@@ -728,6 +737,7 @@ proc main*() =
 
     let nowMs = unixMs()
     daemon.enqueueFrameTickIfDue(nowMs)
+    daemon.maybeWriteMemorySample(nowMs)
     let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
 
     # Poll async IPC without sleeping before Wayland events are serviced.

@@ -1,4 +1,4 @@
-import std/[deques, options, osproc, sets, tables]
+import std/[deques, options, osproc, sets, tables, times]
 import fsnotify
 from posix import TPollfd
 import wayland/native/client
@@ -182,6 +182,7 @@ type
 
   TriadDaemon* = object
     display*: ptr Display
+    startUnixMs*: int64
     registry*: ptr Registry
     riverManager*: ptr RiverWindowManagerV1
     riverInputManager*: pointer
@@ -331,8 +332,10 @@ type
     pendingLiveRestorePath*: string
     pendingLiveRestore*: Option[LiveRestoreState]
     liveRestoreCommitPending*: bool
+    lastMemorySampleMs*: int64
 
 proc initTriadDaemon*(): TriadDaemon =
+  result.startUnixMs = int64(epochTime() * 1000.0)
   result.riverPhase = RiverPhase.RiverIdle
   result.msgQueue = initDeque[QueuedMsg]()
   result.windowReadyEmitted = initHashSet[uint32]()

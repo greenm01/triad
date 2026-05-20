@@ -66,6 +66,11 @@ const SpecialMsgCommands* = [
     description: "Print live daemon performance counters JSON.",
   ),
   SpecialMsgCommand(
+    name: "mem-status",
+    usage: "triad msg mem-status",
+    description: "Print live daemon memory diagnostics JSON.",
+  ),
+  SpecialMsgCommand(
     name: "dump-live-restore-state",
     usage: "triad msg dump-live-restore-state",
     description: "Print the live-restore handoff snapshot JSON.",
@@ -244,6 +249,7 @@ Useful request commands:
   triad msg state
   triad msg layout-state
   triad msg perf-status
+  triad msg mem-status
   triad msg dev-mode [on|off|toggle|status]
   triad msg event-stream [--native [layout,state]]
 

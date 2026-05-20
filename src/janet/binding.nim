@@ -56,6 +56,62 @@ proc triadJanetScriptFree*(
   script: JanetScriptHandle
 ) {.importc: "triad_janet_script_free".}
 
+proc triadJanetRuntimeActionCapacity*(
+  runtime: JanetHandle
+): cint {.importc: "triad_janet_runtime_action_capacity".}
+
+proc triadJanetRuntimeLayoutInstructionCapacity*(
+  runtime: JanetHandle
+): cint {.importc: "triad_janet_runtime_layout_instruction_capacity".}
+
+proc triadJanetRuntimeEstimatedCBytes*(
+  runtime: JanetHandle
+): cint {.importc: "triad_janet_runtime_estimated_c_bytes".}
+
+proc triadJanetScriptHandlerListCount*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_handler_list_count".}
+
+proc triadJanetScriptHandlerListCapacity*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_handler_list_capacity".}
+
+proc triadJanetScriptHandlerCount*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_handler_count".}
+
+proc triadJanetScriptHandlerCapacity*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_handler_capacity".}
+
+proc triadJanetScriptLayoutCount*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_layout_count".}
+
+proc triadJanetScriptLayoutCapacity*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_layout_capacity".}
+
+proc triadJanetScriptLayoutMovementCount*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_layout_movement_count".}
+
+proc triadJanetScriptLayoutMovementCapacity*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_layout_movement_capacity".}
+
+proc triadJanetScriptWaiterCount*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_waiter_count".}
+
+proc triadJanetScriptWaiterCapacity*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_waiter_capacity".}
+
+proc triadJanetScriptEstimatedCBytes*(
+  script: JanetScriptHandle
+): cint {.importc: "triad_janet_script_estimated_c_bytes".}
+
 proc triadJanetLastError*(
   runtime: JanetHandle
 ): cstring {.importc: "triad_janet_last_error".}

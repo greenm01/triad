@@ -16,6 +16,30 @@ type
 
   ScriptEntryResult = tuple[entry: ScriptCacheEntry, reloaded: bool]
 
+  JanetRuntimeDiagnosticCounts* = object
+    enabled*: bool
+    handleActive*: bool
+    configuredLayouts*: int
+    cachedScripts*: int
+    cachedFailedScripts*: int
+    cachedSourceBytes*: int
+    runtimeActionCount*: int
+    runtimeActionCapacity*: int
+    runtimeLayoutInstructionCount*: int
+    runtimeLayoutInstructionCapacity*: int
+    runtimeEstimatedCBytes*: int
+    scriptHandlerLists*: int
+    scriptHandlerListCapacity*: int
+    scriptHandlers*: int
+    scriptHandlerCapacity*: int
+    scriptLayouts*: int
+    scriptLayoutCapacity*: int
+    scriptLayoutMovements*: int
+    scriptLayoutMovementCapacity*: int
+    scriptWaiters*: int
+    scriptWaiterCapacity*: int
+    scriptEstimatedCBytes*: int
+
   JanetRuntime* = object
     handle*: JanetHandle
     config*: JanetConfig
@@ -48,6 +72,41 @@ proc configure*(runtime: var JanetRuntime, config: JanetConfig) =
   runtime.clearScripts()
   if runtime.handle == nil:
     runtime.handle = triadJanetNew()
+
+proc diagnosticCounts*(runtime: JanetRuntime): JanetRuntimeDiagnosticCounts =
+  result.enabled = runtime.config.enabled
+  result.handleActive = runtime.handle != nil
+  result.configuredLayouts = runtime.config.layouts.len
+  result.cachedScripts = runtime.scripts.len
+  if runtime.handle != nil:
+    result.runtimeActionCount = int(triadJanetActionCount(runtime.handle))
+    result.runtimeActionCapacity = int(triadJanetRuntimeActionCapacity(runtime.handle))
+    result.runtimeLayoutInstructionCount =
+      int(triadJanetLayoutInstructionCount(runtime.handle))
+    result.runtimeLayoutInstructionCapacity =
+      int(triadJanetRuntimeLayoutInstructionCapacity(runtime.handle))
+    result.runtimeEstimatedCBytes =
+      int(triadJanetRuntimeEstimatedCBytes(runtime.handle))
+  for _, entry in runtime.scripts.pairs:
+    if entry.failed:
+      inc result.cachedFailedScripts
+    result.cachedSourceBytes += entry.source.len
+    if entry.script == nil:
+      continue
+    result.scriptHandlerLists += int(triadJanetScriptHandlerListCount(entry.script))
+    result.scriptHandlerListCapacity +=
+      int(triadJanetScriptHandlerListCapacity(entry.script))
+    result.scriptHandlers += int(triadJanetScriptHandlerCount(entry.script))
+    result.scriptHandlerCapacity += int(triadJanetScriptHandlerCapacity(entry.script))
+    result.scriptLayouts += int(triadJanetScriptLayoutCount(entry.script))
+    result.scriptLayoutCapacity += int(triadJanetScriptLayoutCapacity(entry.script))
+    result.scriptLayoutMovements +=
+      int(triadJanetScriptLayoutMovementCount(entry.script))
+    result.scriptLayoutMovementCapacity +=
+      int(triadJanetScriptLayoutMovementCapacity(entry.script))
+    result.scriptWaiters += int(triadJanetScriptWaiterCount(entry.script))
+    result.scriptWaiterCapacity += int(triadJanetScriptWaiterCapacity(entry.script))
+    result.scriptEstimatedCBytes += int(triadJanetScriptEstimatedCBytes(entry.script))
 
 proc evalSource*(
     runtime: var JanetRuntime,

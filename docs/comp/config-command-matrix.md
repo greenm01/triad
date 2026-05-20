@@ -503,3 +503,7 @@ CLI and environment:
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,
   render-start skips, layout-projection runs, and render/manage counters for
   live CPU investigations.
+- `triad msg mem-status` reports process memory, Nim heap counters, model and
+  daemon object counts, protocol-surface buffer estimates, Janet script/cache
+  counters, shell state, and IPC subscriber counts for live memory
+  investigations.

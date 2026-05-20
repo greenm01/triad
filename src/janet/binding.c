@@ -1244,6 +1244,137 @@ void triad_janet_script_free(void *script_ptr) {
   free(script);
 }
 
+int triad_janet_runtime_action_capacity(void *runtime_ptr) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return 0;
+  return runtime->action_capacity;
+}
+
+int triad_janet_runtime_layout_instruction_capacity(void *runtime_ptr) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return 0;
+  return runtime->layout_instruction_capacity;
+}
+
+int triad_janet_runtime_estimated_c_bytes(void *runtime_ptr) {
+  TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
+  if (runtime == NULL) return 0;
+  size_t total = sizeof(TriadJanetRuntime);
+  total += sizeof(TriadJanetAction) * (size_t) runtime->action_capacity;
+  for (int i = 0; i < runtime->action_count; i++) {
+    TriadJanetAction *action = &runtime->actions[i];
+    total += sizeof(char *) * (size_t) action->argc;
+    for (int arg = 0; arg < action->argc; arg++) {
+      if (action->argv != NULL && action->argv[arg] != NULL) {
+        total += strlen(action->argv[arg]) + 1;
+      }
+    }
+  }
+  total += sizeof(TriadJanetLayoutInstruction) *
+    (size_t) runtime->layout_instruction_capacity;
+  if (runtime->last_error != NULL) total += strlen(runtime->last_error) + 1;
+  if (total > (size_t) INT32_MAX) return INT32_MAX;
+  return (int) total;
+}
+
+int triad_janet_script_handler_list_count(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->handler_list_count;
+}
+
+int triad_janet_script_handler_list_capacity(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->handler_list_capacity;
+}
+
+int triad_janet_script_handler_count(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  int total = 0;
+  for (int i = 0; i < script->handler_list_count; i++) {
+    total += script->handler_lists[i].handler_count;
+  }
+  return total;
+}
+
+int triad_janet_script_handler_capacity(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  int total = 0;
+  for (int i = 0; i < script->handler_list_count; i++) {
+    total += script->handler_lists[i].handler_capacity;
+  }
+  return total;
+}
+
+int triad_janet_script_layout_count(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->layout_count;
+}
+
+int triad_janet_script_layout_capacity(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->layout_capacity;
+}
+
+int triad_janet_script_layout_movement_count(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->layout_movement_count;
+}
+
+int triad_janet_script_layout_movement_capacity(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->layout_movement_capacity;
+}
+
+int triad_janet_script_waiter_count(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->waiter_count;
+}
+
+int triad_janet_script_waiter_capacity(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  return script->waiter_capacity;
+}
+
+int triad_janet_script_estimated_c_bytes(void *script_ptr) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL) return 0;
+  size_t total = sizeof(TriadJanetScript);
+  total += sizeof(TriadJanetHandlerList) * (size_t) script->handler_list_capacity;
+  for (int i = 0; i < script->handler_list_count; i++) {
+    TriadJanetHandlerList *list = &script->handler_lists[i];
+    total += sizeof(JanetFunction *) * (size_t) list->handler_capacity;
+    if (list->event_name != NULL) total += strlen(list->event_name) + 1;
+  }
+  total += sizeof(TriadJanetLayout) * (size_t) script->layout_capacity;
+  for (int i = 0; i < script->layout_count; i++) {
+    if (script->layouts[i].name != NULL) total += strlen(script->layouts[i].name) + 1;
+  }
+  total += sizeof(TriadJanetLayout) * (size_t) script->layout_movement_capacity;
+  for (int i = 0; i < script->layout_movement_count; i++) {
+    if (script->layout_movements[i].name != NULL) {
+      total += strlen(script->layout_movements[i].name) + 1;
+    }
+  }
+  total += sizeof(TriadJanetWaiter) * (size_t) script->waiter_capacity;
+  for (int i = 0; i < script->waiter_count; i++) {
+    if (script->waiters[i].event_name != NULL) {
+      total += strlen(script->waiters[i].event_name) + 1;
+    }
+  }
+  if (total > (size_t) INT32_MAX) return INT32_MAX;
+  return (int) total;
+}
+
 const char *triad_janet_last_error(void *runtime_ptr) {
   TriadJanetRuntime *runtime = (TriadJanetRuntime *) runtime_ptr;
   if (runtime == NULL || runtime->last_error == NULL) return "";

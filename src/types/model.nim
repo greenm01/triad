@@ -445,6 +445,46 @@ type
     swallowedBy*: Table[ExternalWindowId, ExternalWindowId]
     swallowing*: Table[ExternalWindowId, ExternalWindowId]
 
+  ModelDiagnosticCounts* = object
+    windows*: int
+    tags*: int
+    columns*: int
+    frames*: int
+    bspNodes*: int
+    splitNodes*: int
+    outputs*: int
+    groups*: int
+    windowTags*: int
+    externalWindowIds*: int
+    externalOutputIds*: int
+    tagBySlot*: int
+    columnsByTag*: int
+    columnsByTagItems*: int
+    windowsByTag*: int
+    windowsByTagItems*: int
+    windowsByColumn*: int
+    windowsByColumnItems*: int
+    placementByTagWindow*: int
+    frameRootsByTag*: int
+    windowsByFrame*: int
+    windowsByFrameItems*: int
+    frameByTagWindow*: int
+    bspRootsByTag*: int
+    bspNodeByTagWindow*: int
+    splitRootsByTag*: int
+    splitNodeByTagWindow*: int
+    outputTags*: int
+    tagOutputs*: int
+    tagHomeOutputTargets*: int
+    tagHomeOutputPinned*: int
+    outputLastActiveSlots*: int
+    groupByWindow*: int
+    scratchpadWindows*: int
+    namedScratchpads*: int
+    scratchpadRestoreTags*: int
+    swallowedBy*: int
+    swallowing*: int
+
   Model* = object
     counters*: IdCounters
     windows*: EntityManager[WindowId, WindowData]

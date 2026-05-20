@@ -4,8 +4,8 @@ import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, child_process_runtime, cursor_shake, effects_runtime,
-    input_device_classification, message_queue, process_runner, reload_runtime,
-    render_invalidation, switch_event_runtime,
+    input_device_classification, memory_status, message_queue, process_runner,
+    reload_runtime, render_invalidation, switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
@@ -15,7 +15,7 @@ import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
-import ../src/utils/session_env
+import ../src/utils/[process_memory, session_env]
 
 var observedConfigNotificationEvent: ConfigNotificationEvent
 var observedConfigNotificationCommand: seq[string]
@@ -1129,6 +1129,46 @@ config-notification {
 
     let extra = parseJson(socket.handleDevModeControl("dev-mode on now").get())
     check not extra["ok"].getBool()
+
+  test "process memory parser reads proc status counters":
+    let status = parseProcessMemoryStatus(
+      """
+Name: triad
+VmPeak:    56264 kB
+VmSize:    56264 kB
+VmRSS:    54388 kB
+RssAnon:    40100 kB
+RssFile:    14288 kB
+VmData:    38500 kB
+VmSwap:        0 kB
+"""
+    )
+    check status.available
+    check status.vmPeakKiB == 56264
+    check status.vmSizeKiB == 56264
+    check status.vmRssKiB == 54388
+    check status.rssAnonKiB == 40100
+    check status.rssFileKiB == 14288
+    check status.vmDataKiB == 38500
+    check status.vmSwapKiB == 0
+    check status.rssShmemKiB == -1
+
+  test "daemon memory status includes model, ipc, and Janet diagnostics":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(Config())
+
+    let status = parseJson(daemon.memoryStatusJson())
+    check status["ok"].getBool()
+    check status["type"].getStr() == "mem-status"
+    check status["pid"].getInt() > 0
+    check status.hasKey("process")
+    check status.hasKey("nim")
+    check status["model_counts"]["tags"].getInt() >= 0
+    check status["daemon_counts"]["msg_queue"].getInt() == 0
+    check status["protocol_surfaces"]["surfaces"].getInt() == 0
+    check status["janet"]["handle_active"].getBool() == false
+    check status["janet"].hasKey("janet_gc_heap_bytes")
+    check status["ipc"].hasKey("total_subscribers")
 
   test "native live restore parser rejects invalid or old payloads":
     check parseLiveRestoreJson("").isNone

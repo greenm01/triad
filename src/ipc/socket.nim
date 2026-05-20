@@ -242,6 +242,7 @@ proc startIpcServer*(
     getSnapshot: proc(): ShellSnapshot {.gcsafe.} = nil,
     getLiveRestoreJson: proc(): string {.gcsafe.} = nil,
     getPerfStatusJson: proc(): string {.gcsafe.} = nil,
+    getMemStatusJson: proc(): string {.gcsafe.} = nil,
     dispatchBinding: proc(request: BindingDispatchRequest): string {.gcsafe.} = nil,
 ) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
@@ -311,6 +312,15 @@ proc startIpcServer*(
                     await client.send(getPerfStatusJson() & "\L")
                   else:
                     await client.send("""{"error":"perf status unavailable"}""" & "\L")
+                  break
+
+                if line.strip() == "mem-status":
+                  if getMemStatusJson != nil:
+                    await client.send(getMemStatusJson() & "\L")
+                  else:
+                    await client.send(
+                      """{"error":"memory status unavailable"}""" & "\L"
+                    )
                   break
 
                 let snapshot = getSnapshot()

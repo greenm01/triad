@@ -593,6 +593,7 @@ suite "Shell compatibility contracts":
     check help.contains("focus-next")
     check help.contains("triad msg state")
     check help.contains("triad msg dispatch-binding")
+    check help.contains("triad msg mem-status")
 
     let topHelp = renderTriadHelp()
     check topHelp.contains("validate-config")
@@ -613,6 +614,10 @@ suite "Shell compatibility contracts":
     )
     check catalog["special_requests"].getElems().anyIt(
       it["name"].getStr() == "state" and it["usage"].getStr() == "triad msg state"
+    )
+    check catalog["special_requests"].getElems().anyIt(
+      it["name"].getStr() == "mem-status" and
+        it["usage"].getStr() == "triad msg mem-status"
     )
 
     check triadMsgRequestPayload("state").isSome

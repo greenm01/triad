@@ -76,6 +76,10 @@ For local help and validation without dispatching to the daemon:
 *   `perf-status`: Prints daemon frame pacing, idle wake timing, wait backend,
     render-start skip counters, layout-projection counters, and render request
     counters as JSON for live CPU investigations.
+*   `mem-status`: Prints live daemon memory diagnostics as JSON, including
+    process RSS/VSZ from `/proc/self/status`, Nim heap counters, model and
+    daemon object counts, protocol-surface buffer estimates, Janet script/cache
+    counters, shell process state, and IPC subscriber counts.
 *   `show-hotkey-overlay`, `hide-hotkey-overlay`, `toggle-hotkey-overlay`:
     Opens, closes, or toggles Triad's native keyboard helper popup.
 
@@ -200,6 +204,10 @@ For local help and validation without dispatching to the daemon:
 *   `perf-status`: Prints frame-rate selection, idle wake timing, wait backend,
     whether a frame tick is currently active, and cumulative render/manage
     counters including skipped clean render starts.
+*   `mem-status`: Prints memory diagnostics for leak investigations. RSS
+    includes native libraries and Janet allocations; Nim heap counters only
+    cover Nim-managed memory, so use the Janet and protocol-surface subsections
+    to narrow non-Nim growth.
 *   `stop-manager`: Sends `river_window_manager_v1.stop`.
 *   `exit-session`: Opens a confirmation dialog, then sends `river_window_manager_v1.exit_session` after Enter only when `allow-exit-session #true` is configured.
     Niri-compatible `Quit` maps to this command, and `Quit` with

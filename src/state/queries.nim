@@ -439,6 +439,50 @@ proc windowCountForTag*(model: Model, tagId: TagId): int =
   else:
     0
 
+proc modelDiagnosticCounts*(model: Model): ModelDiagnosticCounts =
+  result.windows = model.windows.len
+  result.tags = model.tags.len
+  result.columns = model.columns.len
+  result.frames = model.frames.len
+  result.bspNodes = model.bspNodes.len
+  result.splitNodes = model.splitNodes.len
+  result.outputs = model.outputs.len
+  result.groups = model.groups.len
+  result.windowTags = model.windowTags.len
+  result.externalWindowIds = model.externalWindowIds.len
+  result.externalOutputIds = model.externalOutputIds.len
+  result.tagBySlot = model.tagBySlot.len
+  result.columnsByTag = model.columnsByTag.len
+  for _, columns in model.columnsByTag.pairs:
+    result.columnsByTagItems += columns.len
+  result.windowsByTag = model.windowsByTag.len
+  for _, windows in model.windowsByTag.pairs:
+    result.windowsByTagItems += windows.len
+  result.windowsByColumn = model.windowsByColumn.len
+  for _, windows in model.windowsByColumn.pairs:
+    result.windowsByColumnItems += windows.len
+  result.placementByTagWindow = model.placementByTagWindow.len
+  result.frameRootsByTag = model.frameRootsByTag.len
+  result.windowsByFrame = model.windowsByFrame.len
+  for _, windows in model.windowsByFrame.pairs:
+    result.windowsByFrameItems += windows.len
+  result.frameByTagWindow = model.frameByTagWindow.len
+  result.bspRootsByTag = model.bspRootsByTag.len
+  result.bspNodeByTagWindow = model.bspNodeByTagWindow.len
+  result.splitRootsByTag = model.splitRootsByTag.len
+  result.splitNodeByTagWindow = model.splitNodeByTagWindow.len
+  result.outputTags = model.outputTags.len
+  result.tagOutputs = model.tagOutputs.len
+  result.tagHomeOutputTargets = model.tagHomeOutputTargets.len
+  result.tagHomeOutputPinned = model.tagHomeOutputPinned.len
+  result.outputLastActiveSlots = model.outputLastActiveSlots.len
+  result.groupByWindow = model.groupByWindow.len
+  result.scratchpadWindows = model.scratchpadWindows.len
+  result.namedScratchpads = model.namedScratchpads.len
+  result.scratchpadRestoreTags = model.scratchpadRestoreTags.len
+  result.swallowedBy = model.swallowedBy.len
+  result.swallowing = model.swallowing.len
+
 proc columnAt*(model: Model, tagId: TagId, idx: int): ColumnId =
   if idx < 0 or not model.columnsByTag.hasKey(tagId) or
       idx >= model.columnsByTag[tagId].len:
