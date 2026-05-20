@@ -2,11 +2,28 @@
 
 # GIMP: main = lowest empty + scroller + maximized; others = float
 
+(defn window-on-workspace? [window workspace]
+  (or (= (window :workspace-idx) (workspace :workspace-idx))
+      (= (window :tag-id) (workspace :tag-id))))
+
+(defn workspace-empty-for-window? [workspace current-id]
+  (var occupied false)
+  (each window (triad/snapshot :windows)
+    (when (and (not= (window :id) current-id)
+               (window-on-workspace? window workspace))
+      (set occupied true)))
+  (not occupied))
+
 (defn next-empty-workspace [current-id]
-  (let [workspace (triad/first-empty-workspace current-id)]
-    (if workspace
-      (workspace :workspace-idx)
-      (+ default-workspace-count 1))))
+  (var target 0)
+  (each workspace (triad/snapshot :workspaces)
+    (let [idx (workspace :workspace-idx)]
+      (when (and (workspace-empty-for-window? workspace current-id)
+                 (or (= target 0) (< idx target)))
+        (set target idx))))
+  (if (= target 0)
+    (+ default-workspace-count 1)
+    target))
 
 (def gimp-app-ids
   ["gimp"
@@ -91,6 +108,12 @@
       (set target (window :workspace-idx))))
   target)
 
+(defn target-workspace [window]
+  (let [existing (existing-gimp-workspace (window :id))]
+    (if (= existing 0)
+      (next-empty-workspace (window :id))
+      existing)))
+
 (defn existing-child-window-id [current-id]
   (var target 0)
   (each window (triad/snapshot :windows)
@@ -108,12 +131,6 @@
                (> (window :id) target))
       (set target (window :id))))
   target)
-
-(defn target-workspace [window]
-  (let [existing (existing-gimp-workspace (window :id))]
-    (if (= existing 0)
-      (next-empty-workspace (window :id))
-      existing)))
 
 (defn should-follow? [kind window]
   (or (= kind :main)
