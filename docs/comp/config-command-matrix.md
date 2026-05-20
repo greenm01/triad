@@ -495,6 +495,9 @@ CLI and environment:
   snapshots for development and shell integrations.
 - `triad msg request <json>` sends one raw native or compatibility IPC request
   and prints the reply.
+- `triad_niri msg --json event-stream` prints the long-lived Niri-compatible
+  event stream, including the initial workspace snapshot used by plug-and-play
+  bars.
 - `triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]`
   dispatches configured bindings without raw input injection.
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,

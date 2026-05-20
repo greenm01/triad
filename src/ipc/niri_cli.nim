@@ -9,6 +9,7 @@ type
   NiriCliRequest* = object
     kind*: NiriCliKind
     jsonOutput*: bool
+    stream*: bool
     socketPayload*: string
     unwrapKey*: string
     error*: string
@@ -271,6 +272,17 @@ proc buildNiriCliRequest*(args: seq[string]): NiriCliRequest =
     return NiriCliRequest(
       kind: NiriCliKind.NckInvalid, error: "Triad does not support Niri output mutation"
     )
+
+  case msgArgs[0].normalize()
+  of "eventstream", "event-stream":
+    return NiriCliRequest(
+      kind: NiriCliKind.NckRequest,
+      jsonOutput: jsonOutput,
+      stream: true,
+      socketPayload: "\"EventStream\"",
+    )
+  else:
+    discard
 
   let req = requestName(msgArgs[0])
   if req.isNone:

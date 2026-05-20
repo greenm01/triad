@@ -21,6 +21,24 @@ when isMainModule:
     fail(request.error)
   of NiriCliKind.NckRequest:
     let path = socketPath()
+    if request.stream:
+      try:
+        var firstLine = true
+        waitFor streamIpcRequest(
+          path,
+          request.socketPayload,
+          proc(line: string) =
+            if firstLine:
+              firstLine = false
+              if line == """{"Ok":"Handled"}""":
+                return
+            stdout.writeLine(line)
+            stdout.flushFile(),
+        )
+      except CatchableError as e:
+        fail("socket request failed: " & e.msg)
+      quit 0
+
     var reply = ""
     try:
       reply = waitFor sendIpcRequest(path, request.socketPayload)

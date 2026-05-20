@@ -656,8 +656,11 @@ suite "Shell compatibility contracts":
     let niri = handleNiriRequest("\"EventStream\"", snapshotForShell())
     check niri.handled
     check niri.subscribe
-    check niri.reply == ""
-    check niri.initialEvents.len == 0
+    check niri.reply == """{"Ok":"Handled"}"""
+    check niri.initialEvents.len > 0
+    let niriWorkspaces = parseJson(niri.initialEvents[0])
+    check niriWorkspaces.hasKey("WorkspacesChanged")
+    check niriWorkspaces["WorkspacesChanged"]["workspaces"].len > 0
 
     let triad = handleTriadRequest(
       """{"triad":{"version":1,"request":"event-stream","events":["layout","state"]}}""",
@@ -714,6 +717,11 @@ suite "Shell compatibility contracts":
     check casts.kind == NiriCliKind.NckRequest
     let castsForwarded = handleNiriRequest(casts.socketPayload, snapshotForShell())
     check parseJson(castsForwarded.reply)["Ok"]["Casts"].len == 0
+
+    let eventStream = buildNiriCliRequest(@["msg", "--json", "event-stream"])
+    check eventStream.kind == NiriCliKind.NckRequest
+    check eventStream.stream
+    check eventStream.socketPayload == "\"EventStream\""
 
     let outputMutation =
       buildNiriCliRequest(@["msg", "output", "DP-1", "scale", "1.25"])

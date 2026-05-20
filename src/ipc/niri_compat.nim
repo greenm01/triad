@@ -465,6 +465,8 @@ proc handleNiriRequest*(line: string, snapshot: ShellSnapshot): NiriIpcResult =
     of "EventStream":
       result.requestKind = "event-stream"
       result.subscribe = true
+      result.reply = handledReply()
+      result.initialEvents = initialNiriEvents(snapshot)
     else:
       result.requestKind = "unsupported"
       result.error = "unsupported niri request: " & request.getStr()

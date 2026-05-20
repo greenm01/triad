@@ -447,6 +447,22 @@ proc sendIpcRequest*(
     raise
   client.close()
 
+proc streamIpcRequest*(
+    path: string, msg: string, onLine: proc(line: string)
+) {.async.} =
+  let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+  try:
+    await client.connectUnix(path)
+    await client.send(msg & "\L")
+    while true:
+      let line = await client.recvLine()
+      if line.len == 0:
+        break
+      onLine(line)
+  finally:
+    if not client.isClosed:
+      client.close()
+
 proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
   try:
     let root = parseJson(payload)

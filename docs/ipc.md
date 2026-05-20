@@ -281,6 +281,9 @@ Triad can broadcast a continuous stream of state changes in a Niri-compatible JS
 To subscribe to the event stream, execute:
 `triad msg event-stream`
 
+For the Niri-compatible shim used by plug-and-play bars and debugging:
+`triad_niri msg --json event-stream`
+
 ### JSON Schema
 
 Triad emits line-delimited JSON objects. Each object contains a single key representing the event type.
