@@ -718,11 +718,10 @@ suite "Runtime state primitives":
         )
       )
 
-  test "overview overlay frames empty workspace previews":
+  test "overview overlay omits inactive empty workspace previews":
     var config = baseConfig()
     config.layout.borderWidth = 4
     config.layout.focusedBorderColor = 0x112233ff'u32
-    config.layout.unfocusedBorderColor = 0x445566ff'u32
     var model = initRuntimeStateFromConfig(config).model
     for msg in [
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 800, height: 600),
@@ -735,20 +734,16 @@ suite "Runtime state primitives":
     let screen = model.primaryScreen()
     let slots = model.previewSlots()
     let occupiedPreview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
-    let emptyPreview = model.workspacePreviewRect(screen, slots, slots.find(2'u32))
     let rendered = model.renderOverviewOverlayBuffer(screen)
 
+    check slots == @[1'u32]
+    check slots.find(2'u32) == -1
     check rendered.pixelAt(occupiedPreview.x, occupiedPreview.y) == 0
     check rendered.pixelAt(occupiedPreview.x + 10, occupiedPreview.y + 10) == 0
-    check rendered.pixelAt(emptyPreview.x + 10, emptyPreview.y + 10) ==
-      OverviewEmptyWorkspaceFill
-    check rendered.pixelAt(emptyPreview.x, emptyPreview.y) ==
-      testArgb(config.layout.unfocusedBorderColor)
 
-  test "overview overlay frames trailing dynamic empty workspace":
+  test "overview overlay omits trailing dynamic empty workspace":
     var config = baseConfig()
     config.layout.borderWidth = 4
-    config.layout.unfocusedBorderColor = 0x667788ff'u32
     var model = initRuntimeStateFromConfig(config).model
     for msg in [
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 800, height: 600),
@@ -760,16 +755,10 @@ suite "Runtime state primitives":
       let (next, _) = model.update(msg)
       model = next
 
-    let screen = model.primaryScreen()
     let slots = model.previewSlots()
-    let trailingPreview = model.workspacePreviewRect(screen, slots, slots.find(4'u32))
-    let rendered = model.renderOverviewOverlayBuffer(screen)
 
-    check slots.find(4'u32) != -1
-    check rendered.pixelAt(trailingPreview.x + 10, trailingPreview.y + 10) ==
-      OverviewEmptyWorkspaceFill
-    check rendered.pixelAt(trailingPreview.x, trailingPreview.y) ==
-      testArgb(config.layout.unfocusedBorderColor)
+    check slots == @[1'u32, 3'u32]
+    check slots.find(4'u32) == -1
 
   test "overview overlay uses focused color for active empty workspace":
     var config = baseConfig()

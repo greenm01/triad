@@ -1054,8 +1054,8 @@ suite "Core Runtime Logic: overview navigation":
     check model.selectedOverviewWindow() == WindowId(4)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
-    check model.activeTag == model.tagForSlot(2)
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.activeTag == activeTag
+    check model.selectedOverviewWindow() == WindowId(4)
 
   test "Overview blocks frame commands while active":
     var model = configuredModel()
@@ -1203,6 +1203,11 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
     )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     let upEffects = model.updateModel(
@@ -1221,32 +1226,31 @@ suite "Core Runtime Logic: overview navigation":
 
     check model.overviewActive
     check model.activeTag == model.tagForSlot(3)
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.selectedOverviewWindow() == WindowId(3)
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
-  test "Unified overview empty workspace ignores horizontal arrows":
+  test "Unified overview skips empty workspace previews":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
     )
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
 
-    let activeTag = model.activeTag
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.previewSlots() == @[1'u32]
+    check model.selectedOverviewWindow() == WindowId(1)
 
     let leftEffects = model.updateModel(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirLeft)
     )
-    check model.activeTag == activeTag
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
     check not leftEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
     let rightEffects = model.updateModel(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirRight)
     )
-    check model.activeTag == activeTag
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
     check not rightEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
     let upEffects = model.updateModel(
@@ -1254,15 +1258,14 @@ suite "Core Runtime Logic: overview navigation":
     )
     check model.activeTag == model.tagForSlot(1)
     check model.selectedOverviewWindow() == WindowId(1)
-    check upEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check not upEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
     let downEffects = model.updateModel(
       Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)
     )
-    check model.activeTag == model.tagForSlot(3)
-    check model.selectedOverviewWindow() == NullWindowId
-    check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check model.activeTag == model.tagForSlot(1)
+    check model.selectedOverviewWindow() == WindowId(1)
+    check not downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview keeps workspace focus commands live":
     var model = configuredModel()
@@ -1274,6 +1277,10 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
     )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
@@ -1282,14 +1289,14 @@ suite "Core Runtime Logic: overview navigation":
 
     check model.overviewActive
     check model.activeTag == model.tagForSlot(2)
-    check model.selectedOverviewWindow() == WindowId(2)
+    check model.selectedOverviewWindow() == model.windowForExternal(ExternalWindowId(2))
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
     let downEffects =
       model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
     check model.activeTag == model.tagForSlot(3)
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.selectedOverviewWindow() == WindowId(3)
     check downEffects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview workspace crossing updates shell workspaces":
@@ -1300,6 +1307,10 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 3, appId: "app", title: "Three")
     )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
@@ -1317,6 +1328,7 @@ suite "Core Runtime Logic: overview navigation":
 
     let navEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
     check model.activeTag == model.tagForSlot(3)
+    check model.selectedOverviewWindow() == WindowId(3)
     check navEffects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WorkspaceActivated")
@@ -1324,9 +1336,13 @@ suite "Core Runtime Logic: overview navigation":
 
   test "Unified overview aggregate up key moves workspace before internal grid":
     var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdSetLayout, newLayout: LayoutMode.Grid))
-    for id in 1'u32 .. 4'u32:
+    for id in 3'u32 .. 6'u32:
       model.applyMsg(
         Msg(
           kind: MsgKind.WlWindowCreated,
@@ -1342,7 +1358,7 @@ suite "Core Runtime Logic: overview navigation":
 
     check model.overviewActive
     check model.activeTag == model.tagForSlot(2)
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.selectedOverviewWindow() == model.windowForExternal(ExternalWindowId(2))
     check effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
   test "Unified overview workspace navigation visits visible previews and wraps":
@@ -1358,24 +1374,24 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
-    check model.activeTag == model.tagForSlot(2)
-    check model.activeWorkspaceFocusId() == 0
-
-    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
     check model.activeTag == model.tagForSlot(3)
     check model.activeWorkspaceFocusId() == 3
 
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    check model.activeTag == model.tagForSlot(1)
+    check model.activeWorkspaceFocusId() == 1
+
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceDown))
-    check model.activeTag == model.tagForSlot(4)
-    check model.activeWorkspaceFocusId() == 0
+    check model.activeTag == model.tagForSlot(3)
+    check model.activeWorkspaceFocusId() == 3
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
     check model.activeTag == model.tagForSlot(1)
     check model.selectedOverviewWindow() == WindowId(1)
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp))
-    check model.activeTag == model.tagForSlot(4)
-    check model.activeWorkspaceFocusId() == 0
+    check model.activeTag == model.tagForSlot(3)
+    check model.activeWorkspaceFocusId() == 3
 
   test "Unified overview keeps workspace navigation live":
     var model = configuredModel()
@@ -1421,7 +1437,7 @@ suite "Core Runtime Logic: overview navigation":
     check model.overviewStyle() == OverviewStyle.WorkspaceStrip
     check model.overviewUsesWorkspacePreviews()
 
-  test "Selecting empty overview workspace enters it without window fallback":
+  test "Overview selection skips empty workspace without window fallback":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
@@ -1435,15 +1451,15 @@ suite "Core Runtime Logic: overview navigation":
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
     check model.overviewActive
-    check model.activeTag == model.tagForSlot(2)
-    check model.selectedOverviewWindow() == NullWindowId
+    check model.activeTag == model.tagForSlot(3)
+    check model.selectedOverviewWindow() == model.windowForExternal(ExternalWindowId(3))
 
     let effects = model.updateModel(Msg(kind: MsgKind.CmdSelectWindow))
     check not model.overviewActive
-    check model.activeTag == model.tagForSlot(2)
-    check model.focusedWindowId() == 0
-    check model.activeWorkspaceFocusId() == 0
-    check not effects.anyIt(it.kind == EffectKind.EffFocusWindow)
+    check model.activeTag == model.tagForSlot(3)
+    check model.focusedWindowId() == 3
+    check model.activeWorkspaceFocusId() == 3
+    check effects.anyIt(it.kind == EffectKind.EffFocusWindow and it.focusId == 3)
 
   test "Selecting overview window commits focus":
     var model = configuredModel()

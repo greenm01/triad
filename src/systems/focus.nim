@@ -7,6 +7,7 @@ import ../state/engine
 from ../types/projection_values import RenderInstruction
 from ../types/runtime_values import Direction, LayoutMode
 import layout_projection
+import overview_geometry
 import popup_tree
 
 type FocusCandidate = object
@@ -871,8 +872,29 @@ proc focusWindowOrWorkspace*(model: var Model, direction: int): bool =
   target != 0 and model.focusWorkspaceSlot(target)
 
 proc focusOverviewWorkspaceStep*(model: var Model, direction: int): bool =
-  let target = model.overviewWorkspaceStepSlot(direction)
-  target != 0 and model.focusWorkspaceSlot(target)
+  if direction == 0:
+    return false
+
+  let slots = model.previewSlots()
+  if slots.len == 0:
+    return false
+
+  let active = model.activeWorkspaceSlot()
+  var startIdx = slots.find(active)
+  if startIdx == -1:
+    startIdx =
+      if direction > 0:
+        slots.len - 1
+      else:
+        0
+  let step = if direction > 0: 1 else: -1
+
+  for offset in 1 .. slots.len:
+    let idx = (startIdx + step * offset + slots.len * 2) mod slots.len
+    let slot = slots[idx]
+    if slot != active:
+      return model.focusWorkspaceSlot(slot)
+  false
 
 proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
   case direction

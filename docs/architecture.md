@@ -69,7 +69,7 @@ Layouts are decoupled from the core Wayland event loop. They are simply mathemat
 ### 4. Configuration (KDL)
 Triad uses KDL for robust, hot-reloadable configuration.
 *   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
-*   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, one trailing empty creation workspace is advertised after the last occupied workspace, and stale empty workspaces are pruned.
+*   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, one trailing empty creation workspace remains internally available after the last occupied workspace, and stale empty workspaces are pruned. Shell compatibility views and overview previews hide inactive empty workspaces.
 *   **Workspace Rule Templates:** Provides lazy name/layout templates for workspace slots when internal tags are created (e.g., `workspace 1 default-layout="scroller"`).
 *   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific workspace assignments.
 

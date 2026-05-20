@@ -132,7 +132,7 @@ proc entryWindow(l: DeckLayout, fromDir: Direction): WindowId =
 
 Both call `crossToAdjacent` directly. PgUp/PgDn are a **speed layer** for workspace preview traversal, while horizontal arrow boundaries remain inert.
 
-Keyboard traversal visits every visible workspace preview. That includes empty default workspaces, active dynamic empty workspaces, and the trailing dynamic creation preview because each preview is an actionable overview destination.
+Keyboard traversal visits the active workspace preview and occupied workspace previews. Inactive empty default workspaces and trailing dynamic creation workspaces are hidden from overview, so traversal skips them.
 
 ---
 

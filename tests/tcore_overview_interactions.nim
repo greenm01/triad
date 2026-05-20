@@ -253,7 +253,7 @@ suite "Core Runtime Logic: overview interactions":
     check model.activeTag == model.tagForSlot(2)
     check model.focusedWindowId() == 2
 
-  test "Clicking blank trailing dynamic overview workspace enters it":
+  test "Overview hides trailing dynamic empty workspace":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -269,22 +269,10 @@ suite "Core Runtime Logic: overview interactions":
     model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
     let slots = model.previewSlots()
-    let target =
-      model.workspacePreviewRect(model.primaryScreen(), slots, slots.find(4'u32))
-    model.applyMsg(
-      Msg(
-        kind: MsgKind.WlOverviewPointerDragRequested,
-        overviewDragWinId: 0,
-        overviewDragX: target.x + 1,
-        overviewDragY: target.y + 1,
-      )
-    )
-    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
-
-    check not model.overviewActive
-    check model.activeTag == model.tagForSlot(4)
-    check model.focusedWindowId() == 0
-    check model.activeWorkspaceFocusId() == 0
+    check slots == @[1'u32, 3'u32]
+    check slots.find(4'u32) == -1
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
 
   test "Overview select retargets same-workspace camera":
     var model = cameraModel()
