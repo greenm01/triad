@@ -389,6 +389,16 @@ proc frameTreeClientRect(rect: rv.Rect, borderWidth: int32): rv.Rect =
     h: max(1'i32, rect.h - border * 2 - tabHeight),
   )
 
+proc frameTreeTabContentRect(rect: rv.Rect, borderWidth: int32): rv.Rect =
+  let tabHeight = frameTreeTabHeight(rect)
+  let border = max(0'i32, borderWidth)
+  rv.Rect(
+    x: rect.x + border,
+    y: rect.y + border,
+    w: max(1'i32, rect.w - border * 2),
+    h: tabHeight,
+  )
+
 proc frameTreeRects(
     model: Model,
     frameId: FrameId,
@@ -554,7 +564,7 @@ proc frameTreeTabBars*(
       rv.ProjectedFrameTabBar(
         frameId: uint32(item.frameId),
         windowId: model.externalWindowId(active),
-        geom: rv.Rect(x: item.rect.x, y: item.rect.y, w: item.rect.w, h: tabHeight),
+        geom: frameTreeTabContentRect(item.rect, border.width),
         focused: item.frameId == tagOpt.get().focusedFrame,
         frameTabs: model.frameTabs,
         ringWidth: border.width,

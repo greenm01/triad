@@ -2260,8 +2260,13 @@ suite "Runtime state primitives":
     check projection.frameTabBars[0].ringWidth == model.borderWidth
     check projection.frameTabBars[0].ringColor == model.focusedBorderColor
     check projection.frameTabBars[0].tabs.len == 2
-    check projection.instructions[0].geom.y ==
-      projection.frameTabBars[0].geom.y + projection.frameTabBars[0].geom.h
+    let activeGeom = projection.instructions[0].geom
+    let activeBar = projection.frameTabBars[0]
+    check activeGeom.x == activeBar.geom.x
+    check activeGeom.w == activeBar.geom.w
+    check activeGeom.y == activeBar.geom.y + activeBar.geom.h
+    check renderFrameTabBarBuffer(activeBar).width ==
+      activeGeom.w + activeBar.ringWidth * 2
 
   test "frame-tree floating detaches from frame chrome and reinserts on unfloat":
     var model = initRuntimeStateFromConfig(baseConfig()).model
@@ -2495,14 +2500,22 @@ suite "Runtime state primitives":
         parityModel.activeTag, pv.Rect(x: 0, y: 0, w: 1920, h: 1080), 99, 4
       )
       check parityEmpty.len == 0
-      check parityBars.anyIt(it.geom == pv.Rect(x: 0, y: 0, w: 958, h: 24))
-      check parityBars.anyIt(it.geom == pv.Rect(x: 962, y: 0, w: 958, h: 24))
+      check parityBars.anyIt(it.geom == pv.Rect(x: 2, y: 2, w: 954, h: 24))
+      check parityBars.anyIt(it.geom == pv.Rect(x: 964, y: 2, w: 954, h: 24))
       check parityInstructions.anyIt(
         it.windowId == 60'u32 and it.geom == pv.Rect(x: 2, y: 26, w: 954, h: 1052)
       )
       check parityInstructions.anyIt(
         it.windowId == 61'u32 and it.geom == pv.Rect(x: 964, y: 26, w: 954, h: 1052)
       )
+      for bar in parityBars:
+        let matching = parityInstructions.filterIt(it.windowId == bar.windowId)
+        check matching.len == 1
+        check matching[0].geom.x == bar.geom.x
+        check matching[0].geom.w == bar.geom.w
+        check matching[0].geom.y == bar.geom.y + bar.geom.h
+        check renderFrameTabBarBuffer(bar).width ==
+          matching[0].geom.w + bar.ringWidth * 2
 
     block:
       var moveModel = initRuntimeStateFromConfig(baseConfig()).model
@@ -2633,6 +2646,43 @@ suite "Runtime state primitives":
     notionFrame = notionTabPrev
     check notionFrame.tagData(notionFrame.activeTag).get().focusedWindow !=
       notionInitialFocus
+
+    block:
+      var notionSplit = initRuntimeStateFromConfig(
+        block:
+          var config = baseConfig()
+          config.layout.borderWidth = 2
+          config.janet.layouts =
+            @[
+              JanetLayoutConfig(
+                id: janetLayoutId("notion"),
+                fallback:
+                  nativeSelection(nativeLayoutId("frame-tree"), LayoutMode.Scroller),
+              )
+            ]
+          config
+      ).model
+      notionSplit.applyMsg(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+      )
+      for externalId in [70'u32, 71'u32, 72'u32]:
+        notionSplit.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: externalId))
+      notionSplit.applyMsg(
+        Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+      )
+      notionSplit.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+      let notionProjection = notionSplit.layoutProjection()
+      check notionProjection.instructions.len == 2
+      check notionProjection.frameTabBars.len == 2
+      for bar in notionProjection.frameTabBars:
+        let matching =
+          notionProjection.instructions.filterIt(it.windowId == bar.windowId)
+        check matching.len == 1
+        check matching[0].geom.x == bar.geom.x
+        check matching[0].geom.w == bar.geom.w
+        check matching[0].geom.y == bar.geom.y + bar.geom.h
+        check renderFrameTabBarBuffer(bar).width ==
+          matching[0].geom.w + bar.ringWidth * 2
 
     var twoFrame = initRuntimeStateFromConfig(baseConfig()).model
     let (twoOutput, _) = twoFrame.update(
