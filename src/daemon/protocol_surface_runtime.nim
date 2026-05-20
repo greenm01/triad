@@ -14,7 +14,7 @@ import ../types/runtime_values
 import
   bsp_preselection_render, exit_session_dialog_render, frame_tab_bar_render,
   hotkey_overlay_render, layout_switch_toast_render, overview_overlay_render,
-  protocol_surfaces, recent_windows_overlay_render, state, wayland_helpers
+  pixel_buffer, protocol_surfaces, recent_windows_overlay_render, state, wayland_helpers
 from std/posix import nil
 
 when defined(linux):
@@ -111,15 +111,14 @@ proc writeAll(fd: cint, data: string): bool =
   true
 
 proc createArgbBufferFromFd(
-    daemon: var TriadDaemon, fd: cint, buf: PixelBuffer
+    daemon: var TriadDaemon, fd: cint, width, height: int32
 ): ptr Buffer =
-  let size = buf.width * buf.height * 4
+  let size = width * height * 4
   let pool = daemon.shm.createPool(fd, size)
   if pool == nil:
     return nil
-  result = pool.createBuffer(
-    0, buf.width, buf.height, buf.width * 4, uint32(ShmFormat.format_argb8888)
-  )
+  result =
+    pool.createBuffer(0, width, height, width * 4, uint32(ShmFormat.format_argb8888))
   pool.destroy()
 
 proc createArgbMemfdBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer =
@@ -133,7 +132,7 @@ proc createArgbMemfdBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffe
         return nil
       if not writeAll(fd, argbBytes(buf.pixels)):
         return nil
-      daemon.createArgbBufferFromFd(fd, buf)
+      daemon.createArgbBufferFromFd(fd, buf.width, buf.height)
     finally:
       discard posix.close(fd)
   else:
@@ -149,7 +148,7 @@ proc createArgbTempFileBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Bu
     if fd < 0:
       return nil
     try:
-      result = daemon.createArgbBufferFromFd(fd, buf)
+      result = daemon.createArgbBufferFromFd(fd, buf.width, buf.height)
     finally:
       discard posix.close(fd)
   except CatchableError as e:
@@ -168,6 +167,46 @@ proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer 
   result = daemon.createArgbMemfdBuffer(buf)
   if result == nil:
     result = daemon.createArgbTempFileBuffer(buf)
+
+proc createMappedOverviewOverlayBuffer(
+    daemon: var TriadDaemon, screen: Rect
+): ptr Buffer =
+  if daemon.shm == nil:
+    return nil
+  when defined(linux):
+    let
+      width = max(1'i32, screen.w)
+      height = max(1'i32, screen.h)
+      size = int(width * height * 4)
+    inc daemon.shmBufferCounter
+    let fd = memfd_create("triad-overview-overlay", MemfdCloseOnExec)
+    if fd < 0:
+      return nil
+    try:
+      if posix.ftruncate(fd, posix.Off(size)) != 0:
+        return nil
+      let mapped = posix.mmap(
+        nil,
+        size,
+        posix.PROT_READ or posix.PROT_WRITE,
+        posix.MAP_SHARED,
+        fd,
+        posix.Off(0),
+      )
+      if mapped == posix.MAP_FAILED:
+        return nil
+      try:
+        zeroMem(mapped, size)
+        var pixels =
+          initPixelBufferView(width, height, cast[ptr UncheckedArray[uint32]](mapped))
+        daemon.currentModel.drawOverviewOverlayBuffer(screen, pixels)
+        result = daemon.createArgbBufferFromFd(fd, width, height)
+      finally:
+        discard posix.munmap(mapped, size)
+    finally:
+      discard posix.close(fd)
+  else:
+    daemon.createArgbShmBuffer(daemon.currentModel.renderOverviewOverlayBuffer(screen))
 
 proc createProtocolWlSurface(
     daemon: var TriadDaemon, kind: ProtocolSurfaceKind
@@ -407,9 +446,7 @@ proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
       surf.bufferCacheKey != overlayKey:
     let buffer =
       if wantsShield:
-        daemon.createArgbShmBuffer(
-          daemon.currentModel.renderOverviewOverlayBuffer(screen)
-        )
+        daemon.createMappedOverviewOverlayBuffer(screen)
       else:
         daemon.createProtocolBuffer(ProtocolSurfaceKind.PskShell)
     if buffer != nil:

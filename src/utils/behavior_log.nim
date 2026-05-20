@@ -1,4 +1,4 @@
-import std/[algorithm, json, options, os, strutils, tables, times]
+import std/[algorithm, hashes, json, options, os, strutils, tables, times]
 import ../core/layout_mode_codec
 import ../core/restore_state
 from ../types/core import Rect
@@ -14,6 +14,7 @@ const
   LogRotationCheckIntervalMs = 1_000'i64
   DevModeEnv* = "TRIAD_DEV_MODE"
   BehaviorLogEnv* = "TRIAD_BEHAVIOR_LOG"
+  FullProjectionLogEnv* = "TRIAD_BEHAVIOR_LOG_FULL_PROJECTIONS"
   LiveReloadDevModeMarker* = "triad-live-dev-mode"
   BehaviorLogPrefix = "triad-behavior-"
   BehaviorLogSuffix = ".jsonl"
@@ -25,7 +26,8 @@ var
   lastRotationPath = ""
   bytesSinceRotationCheck = 0
   lastLayoutProjectionLogPath = ""
-  lastLayoutProjectionSignature = ""
+  lastLayoutProjectionSignature = 0.Hash
+  lastLayoutProjectionSignatureSet = false
   suppressedLayoutProjectionCount = 0
 
 proc envFlagEnabled*(value: string): bool =
@@ -42,6 +44,9 @@ proc parsePositiveInt(value: string, fallback: int): int =
 
 proc behaviorLogEnabled*(): bool =
   getEnv(BehaviorLogEnv, "").envFlagEnabled()
+
+proc fullProjectionLogEnabled*(): bool =
+  getEnv(FullProjectionLogEnv, "").envFlagEnabled()
 
 proc devModeEnabled*(): bool =
   getEnv(DevModeEnv, "").envFlagEnabled()
@@ -306,60 +311,54 @@ proc snapshotBehaviorPayload*(snapshot: ShellSnapshot): JsonNode =
 proc layoutProjectionBehaviorPayload*(
     snapshot: ShellSnapshot, projection: LayoutProjection, context = "", msgKind = ""
 ): JsonNode =
-  result =
-    %*{
-      "active_tag": snapshot.activeTag,
-      "active_workspace_idx": snapshot.activeWorkspaceIdx,
-      "layout_mode": snapshot.activeWorkspaceLayoutId(),
-      "focused_window": uint32(snapshot.snapshotFocusedWindowId()),
-      "overview_active": snapshot.overviewActive,
-      "active_scratchpad_window": uint32(snapshot.activeScratchpadWindow),
-      "instruction_count": projection.instructions.len,
-      "instructions": projection.instructions.compactRenderInstructions(),
-      "viewport_targets": projection.viewportTargets.compactViewportTargets(),
-    }
+  result = newJObject()
+  result["active_tag"] = %snapshot.activeTag
+  result["active_workspace_idx"] = %snapshot.activeWorkspaceIdx
+  result["layout_mode"] = %snapshot.activeWorkspaceLayoutId()
+  result["focused_window"] = %uint32(snapshot.snapshotFocusedWindowId())
+  result["overview_active"] = %snapshot.overviewActive
+  result["active_scratchpad_window"] = %uint32(snapshot.activeScratchpadWindow)
+  result["instruction_count"] = %projection.instructions.len
+  if snapshot.overviewActive and not fullProjectionLogEnabled():
+    result["instructions_suppressed"] = %true
+  else:
+    result["instructions"] = projection.instructions.compactRenderInstructions()
+  result["viewport_targets"] = projection.viewportTargets.compactViewportTargets()
   if context.len > 0:
     result["context"] = %context
   if msgKind.len > 0:
     result["msg_kind"] = %msgKind
 
+proc mixProjectionHash(hashValue: var Hash, value: Hash) {.inline.} =
+  hashValue = hashValue !& value
+
 proc layoutProjectionSignature(
-    snapshot: ShellSnapshot, projection: LayoutProjection, context, msgKind: string
-): string =
-  result =
-    context & "|" & msgKind & "|" & $snapshot.activeTag & "|" &
-    $snapshot.activeWorkspaceIdx & "|" & snapshot.activeWorkspaceLayoutId() & "|" &
-    $snapshot.overviewActive & "|" & $uint32(snapshot.snapshotFocusedWindowId()) & "|" &
-    $projection.instructions.len & "|"
+    snapshot: ShellSnapshot, projection: LayoutProjection
+): Hash =
+  result.mixProjectionHash(hash(snapshot.activeTag))
+  result.mixProjectionHash(hash(snapshot.activeWorkspaceIdx))
+  result.mixProjectionHash(hash(snapshot.activeWorkspaceLayoutId()))
+  result.mixProjectionHash(hash(snapshot.overviewActive))
+  result.mixProjectionHash(hash(uint32(snapshot.snapshotFocusedWindowId())))
+  result.mixProjectionHash(hash(projection.instructions.len))
   for instr in projection.instructions:
-    result.add($uint32(instr.windowId))
-    result.add(":")
-    result.add($instr.geom.x)
-    result.add(",")
-    result.add($instr.geom.y)
-    result.add(",")
-    result.add($instr.geom.w)
-    result.add(",")
-    result.add($instr.geom.h)
+    result.mixProjectionHash(hash(uint32(instr.windowId)))
+    result.mixProjectionHash(hash(instr.geom.x))
+    result.mixProjectionHash(hash(instr.geom.y))
+    result.mixProjectionHash(hash(instr.geom.w))
+    result.mixProjectionHash(hash(instr.geom.h))
+    result.mixProjectionHash(hash(instr.clipSet))
     if instr.clipSet:
-      result.add("[")
-      result.add($instr.clip.x)
-      result.add(",")
-      result.add($instr.clip.y)
-      result.add(",")
-      result.add($instr.clip.w)
-      result.add(",")
-      result.add($instr.clip.h)
-      result.add("]")
-    result.add(";")
-  result.add("|")
+      result.mixProjectionHash(hash(instr.clip.x))
+      result.mixProjectionHash(hash(instr.clip.y))
+      result.mixProjectionHash(hash(instr.clip.w))
+      result.mixProjectionHash(hash(instr.clip.h))
+  result.mixProjectionHash(hash(projection.viewportTargets.len))
   for target in projection.viewportTargets:
-    result.add($target.tagSlot)
-    result.add(":")
-    result.add($target.targetX)
-    result.add(",")
-    result.add($target.targetY)
-    result.add(";")
+    result.mixProjectionHash(hash(target.tagSlot))
+    result.mixProjectionHash(hash(target.targetX))
+    result.mixProjectionHash(hash(target.targetY))
+  result = !$result
 
 proc writeLayoutProjectionBehaviorEvent*(
     snapshot: ShellSnapshot, projection: LayoutProjection, context = "", msgKind = ""
@@ -369,11 +368,12 @@ proc writeLayoutProjectionBehaviorEvent*(
   let path = behaviorLogPath()
   if path != lastLayoutProjectionLogPath:
     lastLayoutProjectionLogPath = path
-    lastLayoutProjectionSignature = ""
+    lastLayoutProjectionSignature = 0.Hash
+    lastLayoutProjectionSignatureSet = false
     suppressedLayoutProjectionCount = 0
 
-  let signature = snapshot.layoutProjectionSignature(projection, context, msgKind)
-  if signature == lastLayoutProjectionSignature:
+  let signature = snapshot.layoutProjectionSignature(projection)
+  if lastLayoutProjectionSignatureSet and signature == lastLayoutProjectionSignature:
     inc suppressedLayoutProjectionCount
     return
 
@@ -382,6 +382,7 @@ proc writeLayoutProjectionBehaviorEvent*(
     payload["suppressed_count"] = %suppressedLayoutProjectionCount
     suppressedLayoutProjectionCount = 0
   lastLayoutProjectionSignature = signature
+  lastLayoutProjectionSignatureSet = true
   writeBehaviorEvent("layout_projection", payload)
 
 proc compactFocusHistory(state: LiveRestoreState): JsonNode =

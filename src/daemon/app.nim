@@ -321,6 +321,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.lastFullscreenRequests.del(msg.destroyedId)
       daemon.lastMaximizedRequests.del(msg.destroyedId)
       daemon.noteWindowDestroyedForMemoryPressure()
+    if previousOverview and not daemon.runtimeState.model.overviewActive:
+      daemon.scheduleMemoryPressureCompaction("overview_closed")
     if beforeJanetHookSnapshot.isSome:
       afterJanetHookSnapshot = some(daemon.readModelSnapshot())
       nextQueuedMessages.add(

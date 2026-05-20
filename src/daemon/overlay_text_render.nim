@@ -131,9 +131,16 @@ proc blitTextImage(buf: var PixelBuffer, x, y: int32, image: Image) =
       let src = image[px, py]
       if src.a == 0:
         continue
-      let idx = int(dstY * buf.width + dstX)
-      buf.pixels[idx] = blendPremulSourceOverArgb(
-        buf.pixels[idx], uint32(src.r), uint32(src.g), uint32(src.b), uint32(src.a)
+      buf.putPixel(
+        dstX,
+        dstY,
+        blendPremulSourceOverArgb(
+          buf.pixelAt(dstX, dstY),
+          uint32(src.r),
+          uint32(src.g),
+          uint32(src.b),
+          uint32(src.a),
+        ),
       )
 
 proc drawText*(

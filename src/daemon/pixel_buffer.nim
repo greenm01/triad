@@ -2,6 +2,7 @@ type PixelBuffer* = object
   width*: int32
   height*: int32
   pixels*: seq[uint32]
+  pixelsPtr*: ptr UncheckedArray[uint32]
 
 proc rgbaColorToArgb*(value: uint32): uint32 =
   let r = (value shr 24) and 0xff
@@ -14,13 +15,26 @@ proc initPixelBuffer*(width, height: int32, color: uint32): PixelBuffer =
   result.width = max(1'i32, width)
   result.height = max(1'i32, height)
   result.pixels = newSeq[uint32](int(result.width * result.height))
+  result.pixelsPtr = cast[ptr UncheckedArray[uint32]](addr result.pixels[0])
   for i in 0 ..< result.pixels.len:
-    result.pixels[i] = color
+    result.pixelsPtr[i] = color
+
+proc initPixelBufferView*(
+    width, height: int32, pixels: ptr UncheckedArray[uint32]
+): PixelBuffer =
+  result.width = max(1'i32, width)
+  result.height = max(1'i32, height)
+  result.pixelsPtr = pixels
+
+proc pixelAt*(buf: PixelBuffer, x, y: int32): uint32 =
+  if x < 0 or y < 0 or x >= buf.width or y >= buf.height or buf.pixelsPtr == nil:
+    return 0
+  buf.pixelsPtr[int(y * buf.width + x)]
 
 proc putPixel*(buf: var PixelBuffer, x, y: int32, color: uint32) =
-  if x < 0 or y < 0 or x >= buf.width or y >= buf.height:
+  if x < 0 or y < 0 or x >= buf.width or y >= buf.height or buf.pixelsPtr == nil:
     return
-  buf.pixels[int(y * buf.width + x)] = color
+  buf.pixelsPtr[int(y * buf.width + x)] = color
 
 proc fillRect*(buf: var PixelBuffer, x, y, w, h: int32, color: uint32) =
   if w <= 0 or h <= 0:

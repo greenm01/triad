@@ -128,8 +128,7 @@ proc drawScrollIndicator(
         ScrollIndicatorColor,
       )
 
-proc renderOverviewOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
-  result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
+proc drawOverviewOverlayBuffer*(model: Model, screen: rv.Rect, buf: var PixelBuffer) =
   if not model.overviewActive:
     return
 
@@ -146,19 +145,19 @@ proc renderOverviewOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
         rgbaColorToArgb(model.focusedBorderColor)
       else:
         rgbaColorToArgb(model.unfocusedBorderColor)
-    result.fillRect(
+    buf.fillRect(
       rect.x - screen.x, rect.y - screen.y, rect.w, rect.h, EmptyWorkspaceFill
     )
-    result.strokeRect(
+    buf.strokeRect(
       rect.x - screen.x, rect.y - screen.y, rect.w, rect.h, thickness, color
     )
 
   if model.overviewScrollerIndicators:
     for idx, _ in slots:
-      result.drawScrollIndicator(
-        screen, model.overviewScrollIndicator(screen, slots, idx)
-      )
+      buf.drawScrollIndicator(screen, model.overviewScrollIndicator(screen, slots, idx))
   for idx, _ in slots:
-    result.drawHiddenCountBadge(
-      screen, model.overviewHiddenCountBadge(screen, slots, idx)
-    )
+    buf.drawHiddenCountBadge(screen, model.overviewHiddenCountBadge(screen, slots, idx))
+
+proc renderOverviewOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
+  result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
+  model.drawOverviewOverlayBuffer(screen, result)

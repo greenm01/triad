@@ -287,6 +287,53 @@ suite "Runtime logging":
     check event["instructions"][0]["geom"]["h"].getInt() > 0
     check event["viewport_targets"].kind == JArray
 
+  test "overview projection behavior event suppresses instruction payload":
+    let dir =
+      getTempDir() / ("triad-behavior-overview-projection-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    let oldFull = getEnv("TRIAD_BEHAVIOR_LOG_FULL_PROJECTIONS", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_FULL_PROJECTIONS", oldFull)
+      if dirExists(dir):
+        removeDir(dir)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+    putEnv("TRIAD_BEHAVIOR_LOG_FULL_PROJECTIONS", "")
+    var state = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(gaps: 0), workspaces: WorkspaceConfig(defaultCount: 2)
+      )
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "app", title: "One")
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, appId: "app", title: "Two")
+    )
+    discard state.applyRuntimeUpdate(Msg(kind: MsgKind.CmdOpenOverview))
+    discard state.applyRuntimeLayoutProjection("overview render", "CmdOpenOverview")
+
+    var projectionEvents: seq[JsonNode] = @[]
+    for line in readFile(behaviorLogPath()).strip().splitLines():
+      let event = parseJson(line)
+      if event["event"].getStr() == "layout_projection":
+        projectionEvents.add(event)
+
+    check projectionEvents.len == 1
+    let event = projectionEvents[0]
+    check event["overview_active"].getBool()
+    check event["instruction_count"].getInt() > 0
+    check event["instructions_suppressed"].getBool()
+    check not event.hasKey("instructions")
+    check event["viewport_targets"].kind == JArray
+
   test "layout projection behavior event suppresses identical repeats":
     let dir =
       getTempDir() / ("triad-behavior-projection-dedupe-" & $getCurrentProcessId())
@@ -315,6 +362,10 @@ suite "Runtime logging":
     discard state.applyRuntimeLayoutProjection("render layout", "WlRenderStart")
     discard state.applyRuntimeLayoutProjection("render layout", "WlRenderStart")
     discard state.applyRuntimeLayoutProjection("manage layout", "WlManageStart")
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, appId: "app", title: "Two")
+    )
+    discard state.applyRuntimeLayoutProjection("manage layout", "WlManageStart")
 
     var projectionEvents: seq[JsonNode] = @[]
     for line in readFile(behaviorLogPath()).strip().splitLines():
@@ -324,7 +375,7 @@ suite "Runtime logging":
 
     check projectionEvents.len == 2
     check not projectionEvents[0].hasKey("suppressed_count")
-    check projectionEvents[1]["suppressed_count"].getInt() == 1
+    check projectionEvents[1]["suppressed_count"].getInt() == 2
 
   test "runtime update behavior event records window state effects":
     let dir = getTempDir() / ("triad-behavior-effects-" & $getCurrentProcessId())

@@ -179,6 +179,7 @@ proc memoryPressureJson(daemon: TriadDaemon, nowMs: int64): JsonNode =
         0'i64,
     "close_burst_count": daemon.closeBurstDestroyedCount,
     "scheduled_close_count": daemon.memoryPressureCloseCount,
+    "reason": daemon.memoryPressureReason,
     "cooldown_remaining_ms":
       if daemon.lastMemoryTrimMs > 0:
         max(0'i64, MemoryTrimCooldownMs - (nowMs - daemon.lastMemoryTrimMs))
@@ -395,6 +396,17 @@ proc noteWindowDestroyedForMemoryPressure*(
   if daemon.closeBurstDestroyedCount >= CloseBurstThreshold:
     daemon.memoryPressureDueMs = nowMs + MemoryPressureQuietMs
     daemon.memoryPressureCloseCount = daemon.closeBurstDestroyedCount
+    daemon.memoryPressureReason = "window_close_burst"
+
+proc scheduleMemoryPressureCompaction*(
+    daemon: var TriadDaemon,
+    reason: string,
+    nowMs = int64(epochTime() * 1000.0),
+    closeCount = 0,
+) =
+  daemon.memoryPressureDueMs = nowMs + MemoryPressureQuietMs
+  daemon.memoryPressureCloseCount = closeCount
+  daemon.memoryPressureReason = reason
 
 proc maybeRunMemoryPressureCompaction*(
     daemon: var TriadDaemon, nowMs = int64(epochTime() * 1000.0)
@@ -407,12 +419,18 @@ proc maybeRunMemoryPressureCompaction*(
 
   let closeCount = daemon.memoryPressureCloseCount
   let scheduledDueMs = daemon.memoryPressureDueMs
+  let reason =
+    if daemon.memoryPressureReason.len > 0:
+      daemon.memoryPressureReason
+    else:
+      "memory_pressure"
   daemon.memoryPressureDueMs = 0
   daemon.memoryPressureCloseCount = 0
+  daemon.memoryPressureReason = ""
   daemon.closeBurstStartMs = 0
   daemon.closeBurstDestroyedCount = 0
   daemon.trimMemoryAfterPressure(
-    "window_close_burst", closeCount, scheduledDueMs, compactManagedState = true
+    reason, closeCount, scheduledDueMs, compactManagedState = true
   )
 
 proc maybeWriteMemorySample*(daemon: var TriadDaemon, nowMs: int64) =

@@ -337,6 +337,7 @@ type
     closeBurstDestroyedCount*: int
     memoryPressureDueMs*: int64
     memoryPressureCloseCount*: int
+    memoryPressureReason*: string
     lastMemoryTrimMs*: int64
 
 proc initTriadDaemon*(): TriadDaemon =
