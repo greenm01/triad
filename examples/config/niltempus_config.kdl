@@ -349,15 +349,33 @@ bindings {
     layout "i3" {
         bind "Super+Alt+h" "split-tree-split-horizontal"
         bind "Super+Alt+v" "split-tree-split-vertical"
+        bind "Super+Alt+space" "split-tree-split-toggle"
         bind "Super+e" "split-tree-layout-toggle-split"
         bind "Super+s" "split-tree-layout-stacking"
         bind "Super+w" "split-tree-layout-tabbed"
+        bind "Super+Shift+w" "split-tree-layout-cycle-all"
+        bind "Super+Shift+e" "split-tree-layout-default"
+        bind "Super+a" "split-tree-focus-parent"
+        bind "Super+Shift+a" "split-tree-focus-child"
+        bind "Super+Alt+Page_Up" "split-tree-focus-prev-sibling"
+        bind "Super+Alt+Page_Down" "split-tree-focus-next-sibling"
+        bind "Super+Alt+-" "resize-height -0.1"
+        bind "Super+Alt+=" "resize-height 0.1"
     }
 
     layout "notion" {
         bind "Super+Alt+h" "frame-split-horizontal"
         bind "Super+Alt+v" "frame-split-vertical"
+        bind "Super+Alt+space" "frame-split-toggle"
         bind "Super+Alt+x" "frame-unsplit"
+        bind "Super+Alt+Shift+h" "frame-resize-left"
+        bind "Super+Alt+Shift+j" "frame-resize-down"
+        bind "Super+Alt+Shift+k" "frame-resize-up"
+        bind "Super+Alt+Shift+l" "frame-resize-right"
+        bind "Super+Alt+Page_Up" "frame-tab-prev"
+        bind "Super+Alt+Page_Down" "frame-tab-next"
+        bind "Super+Alt+u" "frame-focus-parent"
+        bind "Super+Alt+i" "frame-focus-child"
     }
 
     layout "dwindle" {

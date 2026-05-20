@@ -13,6 +13,39 @@ can live in Janet.
 | **Frame-based / Static** | Persistent named containers (frames) exist independently of their contents. The user builds the frame layout in advance; windows are placed into frames which can hold multiple windows as tabs. Frames persist even when empty. | The user builds structure in advance; windows fill it | Notion, Ion, StumpWM | Yes — core feature; frames are inherently tab containers |
 | **Scrollable / Strip** | Windows are arranged on a continuously scrollable horizontal strip rather than confined to the screen boundary. Navigation is spatial scrolling rather than workspace switching. No layout algorithm; windows are placed sequentially. | Sequential insertion; user scrolls to navigate | Niri, PaperWM, Cardboard | No — windows are discrete strip nodes |
 
+## Layout index
+
+| Layout | Triad | Algorithm | WM examples | Kind | Intended source |
+|---|---|---|---|---|---|
+| **scroller** | Yes | Infinite horizontal strip; windows scroll left/right; no fixed screen boundary | Mango, Niri, PaperWM | `lkScrolling` | `lsCore` |
+| **vertical-scroller** | Yes | Scroller oriented vertically | Mango | `lkScrolling` | `lsCore` |
+| **tile** (master-stack) | Yes | One master window takes a fixed portion; remaining windows stack on the other side | Mango, dwm, dwl, awesome, qtile, spectrwm | `lkAlgorithmic` | `lsBundledJanet` |
+| **vertical-tile** | Yes | Master on top, stack fills the bottom; portrait orientation of tile | Mango | `lkAlgorithmic` | `lsBundledJanet` |
+| **right-tile** | Yes | Master on right, stack on left; mirrored tile | Mango | `lkAlgorithmic` | `lsBundledJanet` |
+| **center-tile** | Yes | Master centered; stack windows flank left and right | Mango | `lkAlgorithmic` | `lsBundledJanet` |
+| **monocle** | Yes | Single window fills the screen; others hidden behind; cycle to navigate | Mango, dwm, xmonad, awesome | `lkAlgorithmic` | `lsBundledJanet` |
+| **grid** | Yes | Windows arranged in equal-area grid cells; adapts to window count | Mango, awesome, qtile | `lkAlgorithmic` | `lsBundledJanet` |
+| **vertical-grid** | Yes | Grid oriented vertically | Mango | `lkAlgorithmic` | `lsBundledJanet` |
+| **deck** | Yes | Master window visible; remaining windows stacked behind it as layers | Mango, dwm (patch) | `lkAlgorithmic` | `lsBundledJanet` |
+| **vertical-deck** | Yes | Deck oriented vertically | Mango | `lkAlgorithmic` | `lsBundledJanet` |
+| **tgmix** | Yes | Tag-mixed hybrid; windows from multiple tags shown under one layout | Mango | `lkAlgorithmic` | `lsBundledJanet` |
+| **dwindle** | Yes | Focused-window insertion into a persistent binary split tree; new leaves split the target container and produce spiral-like tiling | Mango, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
+| **master** | Yes | Single master with configurable stack count; similar to tile | Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
+| **spiral** | Yes | qtile-style configurable recursive splits; each new window takes a ratio of the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` |
+| **notion** | Yes | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |
+| **frame-tree** | Yes | Persistent leaf frames hold tabs; split nodes divide space; empty frames survive | Notion, Ion, StumpWM | `lkFrame` | `lsNative` |
+| **bsp** | Yes | Janet geometry policy over Triad-owned binary partition tree; new windows split the focused leaf automatically | bspwm, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
+| **bsp-tree** | Yes | Persistent binary partition tree; each leaf owns one tiled window; Triad owns insertion, preselection, directional focus, tree-order cycle, resize, balance/equalize, removal, restore, and fallback projection | bspwm | `lkBsp` | `lsNative` |
+| **split h/v** | Yes | User-directed split containers; `splith` divides children left-to-right and `splitv` divides children top-to-bottom | i3, Sway, Herbstluftwm | `lkSplitTree` | `lsNative` |
+| **i3** | Yes | Persistent i3/Sway-style container tree; Triad owns split commands, insertion, focus, movement, resize, flattening, removal, restore, and native fallback projection | i3, Sway | `lkSplitTree` | `lsNative` |
+| **tabbed** | Yes | Windows stacked as tabs within a split-tree container; no spatial tiling inside that container | i3, Sway | `lkSplitTree` | native `i3` mode |
+| **stacked** | Yes | Windows stacked vertically with visible titlebars inside a split-tree container | i3, Sway | `lkSplitTree` | native `i3` mode |
+| **float** | Yes | Windows placed at arbitrary positions with no tiling constraint | Openbox, cwm, all WMs as escape hatch | `lkFloat` | window state, not a layout cycle member |
+
+`Triad` means functional coverage, not necessarily an exact layout id. For
+example, `master` is covered by `tile`, `tabbed` and `stacked` are i3 modes,
+and `float` is window state rather than a layout-cycle member.
+
 ## Triad layout model
 
 Triad treats "layout" as a selected descriptor, not as a closed enum of every
@@ -45,35 +78,6 @@ type LayoutSource* = enum
   lsUserJanet     ## user-defined formula layouts
   lsNative        ## persistent native substrates such as frame-tree
 ```
-
-## Layout index
-
-| Layout | Algorithm | WM examples | Kind | Intended source |
-|---|---|---|---|---|
-| **scroller** | Infinite horizontal strip; windows scroll left/right; no fixed screen boundary | Mango, Niri, PaperWM | `lkScrolling` | `lsCore` |
-| **vertical-scroller** | Scroller oriented vertically | Mango | `lkScrolling` | `lsCore` |
-| **tile** (master-stack) | One master window takes a fixed portion; remaining windows stack on the other side | Mango, dwm, dwl, awesome, qtile, spectrwm | `lkAlgorithmic` | `lsBundledJanet` |
-| **vertical-tile** | Master on top, stack fills the bottom; portrait orientation of tile | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **right-tile** | Master on right, stack on left; mirrored tile | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **center-tile** | Master centered; stack windows flank left and right | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **monocle** | Single window fills the screen; others hidden behind; cycle to navigate | Mango, dwm, xmonad, awesome | `lkAlgorithmic` | `lsBundledJanet` |
-| **grid** | Windows arranged in equal-area grid cells; adapts to window count | Mango, awesome, qtile | `lkAlgorithmic` | `lsBundledJanet` |
-| **vertical-grid** | Grid oriented vertically | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **deck** | Master window visible; remaining windows stacked behind it as layers | Mango, dwm (patch) | `lkAlgorithmic` | `lsBundledJanet` |
-| **vertical-deck** | Deck oriented vertically | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **tgmix** | Tag-mixed hybrid; windows from multiple tags shown under one layout | Mango | `lkAlgorithmic` | `lsBundledJanet` |
-| **dwindle** | Focused-window insertion into a persistent binary split tree; new leaves split the target container and produce spiral-like tiling | Mango, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
-| **master** | Single master with configurable stack count; similar to tile | Hyprland | `lkAlgorithmic` | `lsBundledJanet` or `lsUserJanet` |
-| **spiral** | qtile-style configurable recursive splits; each new window takes a ratio of the remaining space | xmonad, qtile | `lkAlgorithmic` | `lsBundledJanet` |
-| **notion** | Janet geometry policy over Triad-owned persistent frames and tabs | Notion | `lkFrame` | `lsBundledJanet` with native `frame-tree` fallback |
-| **frame-tree** | Persistent leaf frames hold tabs; split nodes divide space; empty frames survive | Notion, Ion, StumpWM | `lkFrame` | `lsNative` |
-| **bsp** | Janet geometry policy over Triad-owned binary partition tree; new windows split the focused leaf automatically | bspwm, Hyprland | `lkBsp` | `lsBundledJanet` with native `bsp-tree` fallback |
-| **bsp-tree** | Persistent binary partition tree; each leaf owns one tiled window; Triad owns insertion, preselection, directional focus, tree-order cycle, resize, balance/equalize, removal, restore, and fallback projection | bspwm | `lkBsp` | `lsNative` |
-| **split h/v** | User-directed split containers; `splith` divides children left-to-right and `splitv` divides children top-to-bottom | i3, Sway, Herbstluftwm | `lkSplitTree` | `lsNative` |
-| **i3** | Persistent i3/Sway-style container tree; Triad owns split commands, insertion, focus, movement, resize, flattening, removal, restore, and native fallback projection | i3, Sway | `lkSplitTree` | `lsNative` |
-| **tabbed** | Windows stacked as tabs within a split-tree container; no spatial tiling inside that container | i3, Sway | `lkSplitTree` | native `i3` mode |
-| **stacked** | Windows stacked vertically with visible titlebars inside a split-tree container | i3, Sway | `lkSplitTree` | native `i3` mode |
-| **float** | Windows placed at arbitrary positions with no tiling constraint | Openbox, cwm, all WMs as escape hatch | `lkFloat` | window state, not a layout cycle member |
 
 ## Fallback policy
 
