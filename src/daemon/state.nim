@@ -306,6 +306,7 @@ type
     pointerWindowBySeat*: Table[uint32, uint32]
     pointerPositionBySeat*: Table[uint32, Rect]
     pointerHotCornerInsideBySeat*: Table[uint32, bool]
+    pointerHotCornerOpenedBySeat*: Table[uint32, bool]
     cursorShakeBySeat*: Table[uint32, CursorShakeState]
     inputDevices*: Table[uint32, InputDeviceRuntime]
     libinputDevices*: Table[uint32, LibinputDeviceRuntime]

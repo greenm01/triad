@@ -339,6 +339,7 @@ proc compactDaemonMemory(daemon: var TriadDaemon) =
   daemon.pointerWindowBySeat.compactTable()
   daemon.pointerPositionBySeat.compactTable()
   daemon.pointerHotCornerInsideBySeat.compactTable()
+  daemon.pointerHotCornerOpenedBySeat.compactTable()
   daemon.cursorShakeBySeat.compactTable()
   daemon.inputDevices.compactTable()
   daemon.libinputDevices.compactTable()

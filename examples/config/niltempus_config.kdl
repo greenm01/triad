@@ -43,6 +43,7 @@ overview {
     inner-gap-multiplier 2.0
     scroller-indicators #false
     hot-corners {
+        size 32
         bottom-left
     }
 }

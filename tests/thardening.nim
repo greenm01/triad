@@ -474,6 +474,42 @@ suite "Crash hardening":
 
     check not daemon.updateOverviewHotCornerState(1, 0, 0)
 
+  test "daemon overview hot corner blocked enter can still open before leave":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        overview:
+          OverviewConfig(hotCorners: OverviewHotCornersConfig(size: 10, topLeft: true))
+      )
+    )
+    daemon.runtimeState.model.screenWidth = 100
+    daemon.runtimeState.model.screenHeight = 100
+    daemon.runtimeState.model.layerFocusExclusive = true
+
+    check not daemon.updateOverviewHotCornerState(1, 0, 0)
+    daemon.runtimeState.model.layerFocusExclusive = false
+    check daemon.updateOverviewHotCornerState(1, 5, 5)
+    check not daemon.updateOverviewHotCornerState(1, 6, 6)
+
+  test "daemon overview hot corner successful open requires leave before reopen":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        overview:
+          OverviewConfig(hotCorners: OverviewHotCornersConfig(size: 10, topLeft: true))
+      )
+    )
+    daemon.runtimeState.model.screenWidth = 100
+    daemon.runtimeState.model.screenHeight = 100
+
+    check daemon.updateOverviewHotCornerState(1, 0, 0)
+    daemon.runtimeState.model.overviewActive = true
+    check not daemon.updateOverviewHotCornerState(1, 5, 5)
+    daemon.runtimeState.model.overviewActive = false
+    check not daemon.updateOverviewHotCornerState(1, 5, 5)
+    check not daemon.updateOverviewHotCornerState(1, 50, 50)
+    check daemon.updateOverviewHotCornerState(1, 0, 0)
+
   test "cursor shake ignores normal movement":
     var state = CursorShakeState()
     let config = CursorConfig(theme: "default", size: 24, shakeToFind: true)

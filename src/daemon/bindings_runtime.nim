@@ -643,22 +643,73 @@ proc activeSwitchEvent(
       return some(event)
   none(SwitchEventConfig)
 
-proc overviewHotCornerCanOpen(daemon: TriadDaemon): bool =
-  not daemon.currentModel.overviewActive and not daemon.currentModel.sessionLocked and
-    not daemon.currentModel.layerFocusExclusive and
-    not daemon.currentModel.keyboardShortcutsInhibited() and
-    daemon.currentModel.pointerOp.kind == PointerOpKind.OpNone
+proc overviewHotCornerBlockReason(daemon: TriadDaemon): string =
+  if daemon.currentModel.overviewActive:
+    return "overview_active"
+  if daemon.currentModel.sessionLocked:
+    return "session_locked"
+  if daemon.currentModel.layerFocusExclusive:
+    return "layer_focus_exclusive"
+  if daemon.currentModel.keyboardShortcutsInhibited():
+    return "keyboard_shortcuts_inhibited"
+  if daemon.currentModel.pointerOp.kind != PointerOpKind.OpNone:
+    return "pointer_op_" & $daemon.currentModel.pointerOp.kind
+  ""
+
+proc writeOverviewHotCornerBehaviorEvent(
+    daemon: TriadDaemon, eventName: string, seatId: uint32, x, y: int32, reason = ""
+) =
+  var payload =
+    %*{
+      "seat_id": seatId,
+      "x": x,
+      "y": y,
+      "size": daemon.currentModel.effectiveOverviewHotCornerSize(),
+      "overview_active": daemon.currentModel.overviewActive,
+      "session_locked": daemon.currentModel.sessionLocked,
+      "layer_focus_exclusive": daemon.currentModel.layerFocusExclusive,
+      "keyboard_shortcuts_inhibited": daemon.currentModel.keyboardShortcutsInhibited(),
+      "pointer_op": $daemon.currentModel.pointerOp.kind,
+    }
+  if reason.len > 0:
+    payload["reason"] = %reason
+  writeBehaviorEvent(eventName, payload)
 
 proc updateOverviewHotCornerState*(
     daemon: var TriadDaemon, seatId: uint32, x, y: int32
 ): bool =
   let inside = daemon.currentModel.overviewHotCornerAt(x, y)
   let wasInside = daemon.pointerHotCornerInsideBySeat.getOrDefault(seatId, false)
-  if inside:
-    daemon.pointerHotCornerInsideBySeat[seatId] = true
-  else:
+  if not inside:
+    if wasInside:
+      daemon.writeOverviewHotCornerBehaviorEvent(
+        "overview_hot_corner_leave", seatId, x, y
+      )
     daemon.pointerHotCornerInsideBySeat.del(seatId)
-  inside and not wasInside and daemon.overviewHotCornerCanOpen()
+    daemon.pointerHotCornerOpenedBySeat.del(seatId)
+    return false
+
+  if not wasInside:
+    daemon.pointerHotCornerInsideBySeat[seatId] = true
+    daemon.pointerHotCornerOpenedBySeat[seatId] = false
+    daemon.writeOverviewHotCornerBehaviorEvent(
+      "overview_hot_corner_enter", seatId, x, y
+    )
+
+  if daemon.pointerHotCornerOpenedBySeat.getOrDefault(seatId, false):
+    return false
+
+  let blockReason = daemon.overviewHotCornerBlockReason()
+  if blockReason.len > 0:
+    if not wasInside:
+      daemon.writeOverviewHotCornerBehaviorEvent(
+        "overview_hot_corner_blocked", seatId, x, y, blockReason
+      )
+    return false
+
+  daemon.pointerHotCornerOpenedBySeat[seatId] = true
+  daemon.writeOverviewHotCornerBehaviorEvent("overview_hot_corner_open", seatId, x, y)
+  true
 
 proc hasOverviewLeftClickBinding(daemon: TriadDaemon): bool =
   for binding in daemon.currentModel.pointerBindings:
@@ -865,6 +916,7 @@ proc onSeatRemoved(data: pointer, seat: ptr RiverSeatV1) =
   daemon.pointerWindowBySeat.del(seatId)
   daemon.pointerPositionBySeat.del(seatId)
   daemon.pointerHotCornerInsideBySeat.del(seatId)
+  daemon.pointerHotCornerOpenedBySeat.del(seatId)
   daemon.cursorShakeBySeat.del(seatId)
   if daemon.xkbSeatPointers.hasKey(seatId):
     daemon.xkbSeatPointers[seatId].destroy()
