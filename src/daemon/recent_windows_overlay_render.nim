@@ -61,11 +61,18 @@ proc fillSelectedChrome(
     x + padding + preview.geom.w, y + padding, padding, preview.geom.h, color
   )
 
-proc renderRecentWindowsBackdropBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
-  result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Backdrop)
+proc drawRecentWindowsBackdropBuffer*(
+    model: Model, screen: rv.Rect, buf: var PixelBuffer
+) =
+  buf.fillRect(0, 0, max(1'i32, screen.w), max(1'i32, screen.h), Backdrop)
 
-proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
+proc renderRecentWindowsBackdropBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
   result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
+  model.drawRecentWindowsBackdropBuffer(screen, result)
+
+proc drawRecentWindowsChromeBuffer*(
+    model: Model, screen: rv.Rect, buf: var PixelBuffer
+) =
   if not model.recentWindowsVisible():
     return
 
@@ -78,8 +85,8 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
   let padding = max(0'i32, model.recentWindows.highlight.padding)
   for preview in previews:
     if preview.selected:
-      result.fillSelectedChrome(preview, screen, padding, selectedFillColor)
-      result.strokeRect(
+      buf.fillSelectedChrome(preview, screen, padding, selectedFillColor)
+      buf.strokeRect(
         preview.geom.x - screen.x - padding,
         preview.geom.y - screen.y - padding,
         preview.geom.w + padding * 2,
@@ -91,7 +98,7 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
     let title = preview.title.ellipsizeText(preview.geom.w, style)
     let titleW = title.textWidth(style)
     let titleX = preview.geom.x - screen.x + max(0'i32, (preview.geom.w - titleW) div 2)
-    result.drawText(
+    buf.drawText(
       titleX,
       preview.geom.y - screen.y + preview.geom.h + TitleGap,
       max(preview.geom.w, 1'i32),
@@ -104,15 +111,19 @@ proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffe
   let panelH = PanelStyle.textHeight() + PanelPadding * 2
   let panelX = max(0'i32, (screen.w - panelW) div 2)
   let panelY = PanelPadding * 2
-  result.fillRect(panelX, panelY, panelW, panelH, PanelBg)
-  result.strokeRect(panelX, panelY, panelW, panelH, 2, PanelBorder)
-  result.drawText(
+  buf.fillRect(panelX, panelY, panelW, panelH, PanelBg)
+  buf.strokeRect(panelX, panelY, panelW, panelH, 2, PanelBorder)
+  buf.drawText(
     panelX + PanelPadding,
     panelY + PanelPadding,
     panelW - PanelPadding * 2,
     panel,
     PanelStyle,
   )
+
+proc renderRecentWindowsChromeBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
+  result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
+  model.drawRecentWindowsChromeBuffer(screen, result)
 
 proc renderRecentWindowsOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
   model.renderRecentWindowsChromeBuffer(screen)

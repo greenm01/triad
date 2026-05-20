@@ -168,8 +168,27 @@ proc createArgbShmBuffer(daemon: var TriadDaemon, buf: PixelBuffer): ptr Buffer 
   if result == nil:
     result = daemon.createArgbTempFileBuffer(buf)
 
-proc createMappedOverviewOverlayBuffer(
-    daemon: var TriadDaemon, screen: Rect
+type ScreenOverlayBufferKind {.pure.} = enum
+  SobOverview
+  SobRecentBackdrop
+  SobRecentChrome
+
+proc drawScreenOverlayBuffer(
+    daemon: TriadDaemon,
+    kind: ScreenOverlayBufferKind,
+    screen: Rect,
+    buf: var PixelBuffer,
+) =
+  case kind
+  of SobOverview:
+    daemon.currentModel.drawOverviewOverlayBuffer(screen, buf)
+  of SobRecentBackdrop:
+    daemon.currentModel.drawRecentWindowsBackdropBuffer(screen, buf)
+  of SobRecentChrome:
+    daemon.currentModel.drawRecentWindowsChromeBuffer(screen, buf)
+
+proc createMappedScreenOverlayBuffer(
+    daemon: var TriadDaemon, screen: Rect, name: cstring, kind: ScreenOverlayBufferKind
 ): ptr Buffer =
   if daemon.shm == nil:
     return nil
@@ -179,7 +198,7 @@ proc createMappedOverviewOverlayBuffer(
       height = max(1'i32, screen.h)
       size = int(width * height * 4)
     inc daemon.shmBufferCounter
-    let fd = memfd_create("triad-overview-overlay", MemfdCloseOnExec)
+    let fd = memfd_create(name, MemfdCloseOnExec)
     if fd < 0:
       return nil
     try:
@@ -199,14 +218,41 @@ proc createMappedOverviewOverlayBuffer(
         zeroMem(mapped, size)
         var pixels =
           initPixelBufferView(width, height, cast[ptr UncheckedArray[uint32]](mapped))
-        daemon.currentModel.drawOverviewOverlayBuffer(screen, pixels)
+        daemon.drawScreenOverlayBuffer(kind, screen, pixels)
         result = daemon.createArgbBufferFromFd(fd, width, height)
       finally:
         discard posix.munmap(mapped, size)
     finally:
       discard posix.close(fd)
   else:
-    daemon.createArgbShmBuffer(daemon.currentModel.renderOverviewOverlayBuffer(screen))
+    let rendered =
+      case kind
+      of SobOverview:
+        daemon.currentModel.renderOverviewOverlayBuffer(screen)
+      of SobRecentBackdrop:
+        daemon.currentModel.renderRecentWindowsBackdropBuffer(screen)
+      of SobRecentChrome:
+        daemon.currentModel.renderRecentWindowsChromeBuffer(screen)
+    daemon.createArgbShmBuffer(rendered)
+
+proc createMappedOverviewOverlayBuffer(
+    daemon: var TriadDaemon, screen: Rect
+): ptr Buffer =
+  daemon.createMappedScreenOverlayBuffer(screen, "triad-overview-overlay", SobOverview)
+
+proc createMappedRecentWindowsBackdropBuffer(
+    daemon: var TriadDaemon, screen: Rect
+): ptr Buffer =
+  daemon.createMappedScreenOverlayBuffer(
+    screen, "triad-recent-windows-backdrop", SobRecentBackdrop
+  )
+
+proc createMappedRecentWindowsChromeBuffer(
+    daemon: var TriadDaemon, screen: Rect
+): ptr Buffer =
+  daemon.createMappedScreenOverlayBuffer(
+    screen, "triad-recent-windows-chrome", SobRecentChrome
+  )
 
 proc createProtocolWlSurface(
     daemon: var TriadDaemon, kind: ProtocolSurfaceKind
@@ -634,12 +680,11 @@ proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
       not daemon.surfaceTable.hasKey(daemon.recentWindowsChromeSurfaceId):
     return
 
-  let backdrop = renderRecentWindowsBackdropBuffer(daemon.currentModel, screen)
   var backdropSurf = daemon.surfaceTable[daemon.recentWindowsSurfaceId]
-  let backdropBuffer = daemon.createArgbShmBuffer(backdrop)
+  let backdropBuffer = daemon.createMappedRecentWindowsBackdropBuffer(screen)
   if backdropBuffer != nil:
     backdropSurf.setProtocolSurfaceBuffer(
-      backdropBuffer, backdrop.width, backdrop.height
+      backdropBuffer, max(1'i32, screen.w), max(1'i32, screen.h)
     )
   else:
     warn "Recent-windows backdrop buffer unavailable"
@@ -651,11 +696,12 @@ proc syncRecentWindowsSurface*(daemon: var TriadDaemon, screen: Rect) =
     backdropSurf.node.setPosition(screen.x, screen.y)
   daemon.surfaceTable[daemon.recentWindowsSurfaceId] = backdropSurf
 
-  let chrome = renderRecentWindowsChromeBuffer(daemon.currentModel, screen)
   var chromeSurf = daemon.surfaceTable[daemon.recentWindowsChromeSurfaceId]
-  let chromeBuffer = daemon.createArgbShmBuffer(chrome)
+  let chromeBuffer = daemon.createMappedRecentWindowsChromeBuffer(screen)
   if chromeBuffer != nil:
-    chromeSurf.setProtocolSurfaceBuffer(chromeBuffer, chrome.width, chrome.height)
+    chromeSurf.setProtocolSurfaceBuffer(
+      chromeBuffer, max(1'i32, screen.w), max(1'i32, screen.h)
+    )
   else:
     warn "Recent-windows chrome buffer unavailable"
     return
