@@ -117,3 +117,28 @@ If you are certain an entity exists and need to mutate it in place without extra
 proc mEntity*[ID, T](manager: var EntityManager[ID, T]; id: ID): var T =
   manager.data[manager.index[id]]
 ```
+
+---
+
+## 4. Full-Screen Overlay Buffers
+
+Triad must not render full-screen overlays through Nim heap-backed
+`PixelBuffer` values in production paths. A screen-sized ARGB buffer can raise
+the Nim allocator high-water mark by tens of MiB, especially when the buffer is
+then copied into a string before creating a Wayland shm buffer.
+
+Use mapped shm rendering for any full-screen protocol surface:
+
+*   Render directly into a memfd-backed `PixelBuffer` view created with
+    `initPixelBufferView`.
+*   Create the Wayland buffer from the same fd after drawing.
+*   Keep heap-backed `render...Buffer` helpers only for tests, small bounded UI,
+    or non-Linux fallback paths.
+
+This rule applies to screen-sized overlays such as overview and recent-windows
+backdrops/chrome. Regular workspaces do not need this path because Triad does
+not render client window contents into a workspace-sized buffer; it computes
+placements and lets the compositor manage client buffers. Small or bounded
+surfaces such as frame tabs, empty-frame chrome, hotkey overlays, layout toasts,
+and dialogs may continue using normal `PixelBuffer` rendering unless their size
+becomes screen-scale.
