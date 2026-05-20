@@ -4,7 +4,7 @@ import chronicles
 import ../core/msg
 import ../types/shell_snapshot
 import ../utils/behavior_log
-import commands, niri_compat, triad_native
+import binding_dispatch, commands, niri_compat, triad_native
 
 type
   IpcServer* = object
@@ -242,6 +242,7 @@ proc startIpcServer*(
     getSnapshot: proc(): ShellSnapshot {.gcsafe.} = nil,
     getLiveRestoreJson: proc(): string {.gcsafe.} = nil,
     getPerfStatusJson: proc(): string {.gcsafe.} = nil,
+    dispatchBinding: proc(request: BindingDispatchRequest): string {.gcsafe.} = nil,
 ) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
@@ -322,6 +323,16 @@ proc startIpcServer*(
                         "\L"
                     )
                     break
+                  if triad.bindingDispatch.isSome:
+                    if dispatchBinding == nil:
+                      await client.send(
+                        bindingDispatchError("binding dispatch unavailable") & "\L"
+                      )
+                    else:
+                      await client.send(
+                        dispatchBinding(triad.bindingDispatch.get()) & "\L"
+                      )
+                    break
                   if triad.reply.len > 0:
                     await client.send(triad.reply & "\L")
                   for msg in triad.messages:
@@ -384,6 +395,15 @@ proc startIpcServer*(
                   },
                 )
                 keepOpen = true
+                break
+              let dispatch = parseBindingDispatchText(line)
+              if dispatch.isSome:
+                if dispatchBinding == nil:
+                  await client.send(
+                    bindingDispatchError("binding dispatch unavailable") & "\L"
+                  )
+                else:
+                  await client.send(dispatchBinding(dispatch.get()) & "\L")
                 break
               let parsed = parseTextCommand(line)
               if parsed.isSome:

@@ -351,11 +351,11 @@ proc modifierValue(name: string): uint32 =
   else:
     0'u32
 
-proc parseModifiers(value: string): uint32 =
+proc parseModifiers*(value: string): uint32 =
   for part in value.split("+"):
     result = result or modifierValue(part.strip())
 
-proc buttonValue(name: string): uint32 =
+proc buttonValue*(name: string): uint32 =
   case name
   of "left", "Left", "BTN_LEFT", "btn-left", "btn_left":
     0x110'u32
@@ -446,7 +446,7 @@ proc normalizeKeySpec(
     result.key = shifted
     result.modifiers = modifiers and not ShiftModifier
 
-proc parseKeySpec(value: string): tuple[key: string, modifiers: uint32] =
+proc parseKeySpec*(value: string): tuple[key: string, modifiers: uint32] =
   let parts = value.split("+")
   if parts.len == 0:
     return ("", 0'u32)
@@ -637,7 +637,7 @@ proc parsePointerOp(value: string): PointerOpKind =
   of "resize", "Resize": PointerOpKind.OpResize
   else: PointerOpKind.OpNone
 
-proc axisDirectionValue(name: string): AxisBindingDirection =
+proc axisDirectionValue*(name: string): AxisBindingDirection =
   case name.toLowerAscii()
   of "wheel-up": AxisBindingDirection.AxisUp
   of "wheel-down": AxisBindingDirection.AxisDown
@@ -645,7 +645,7 @@ proc axisDirectionValue(name: string): AxisBindingDirection =
   of "wheel-right": AxisBindingDirection.AxisRight
   else: AxisBindingDirection.AxisNone
 
-proc gestureDirectionValue(name: string): GestureBindingDirection =
+proc gestureDirectionValue*(name: string): GestureBindingDirection =
   case name.toLowerAscii()
   of "swipe-left": GestureBindingDirection.GestureSwipeLeft
   of "swipe-right": GestureBindingDirection.GestureSwipeRight

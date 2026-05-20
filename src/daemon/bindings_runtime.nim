@@ -8,6 +8,7 @@ import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../config/[keysyms, parser]
 import ../core/msg
+import ../ipc/binding_dispatch
 from ../types/core import Rect
 import ../ipc/commands
 import
@@ -498,6 +499,141 @@ proc activeGestureBinding(
         binding.modifiers == modifiers and daemon.gestureBindingActive(binding):
       return some(binding)
   none(GestureBindingConfig)
+
+proc bindingDispatchFailure(
+    request: BindingDispatchRequest, message: string
+): BindingDispatchResult =
+  BindingDispatchResult(ok: false, error: message, request: request)
+
+proc bindingDispatchSuccess(
+    request: BindingDispatchRequest, command: string, dispatched: int32
+): BindingDispatchResult =
+  BindingDispatchResult(
+    ok: true, request: request, command: command, dispatched: dispatched
+  )
+
+proc dispatchKeyBinding*(
+    daemon: var TriadDaemon, request: BindingDispatchRequest
+): BindingDispatchResult =
+  let spec = parseKeySpec(request.binding)
+  if spec.key.len == 0 or keySymForBinding(spec.key, spec.modifiers) == 0:
+    return request.bindingDispatchFailure("invalid key binding: " & request.binding)
+
+  let candidate = KeyBindingConfig(key: spec.key, modifiers: spec.modifiers)
+  for binding in daemon.currentModel.resolvedKeyBindings():
+    if not binding.samePhysicalKeySlot(candidate):
+      continue
+    if not daemon.keyBindingActive(binding):
+      return
+        request.bindingDispatchFailure("key binding is not active: " & request.binding)
+    let msg = parseTextCommand(binding.command)
+    if msg.isNone:
+      return request.bindingDispatchFailure(
+        "invalid configured command for key binding: " & request.binding
+      )
+    if daemon.enqueueHotkeyOverlayDismiss():
+      return request.bindingDispatchSuccess("hide-hotkey-overlay", 1)
+    daemon.enqueue(msg.get())
+    return request.bindingDispatchSuccess(binding.command, 1)
+
+  request.bindingDispatchFailure("key binding not found: " & request.binding)
+
+proc dispatchPointerBinding*(
+    daemon: var TriadDaemon, request: BindingDispatchRequest
+): BindingDispatchResult =
+  let spec = parseKeySpec(request.binding)
+  let button = buttonValue(spec.key)
+  if button == 0:
+    return request.bindingDispatchFailure("invalid pointer binding: " & request.binding)
+
+  for binding in daemon.currentModel.pointerBindings:
+    if binding.button != button or binding.modifiers != spec.modifiers:
+      continue
+    if not daemon.pointerBindingActive(binding):
+      return request.bindingDispatchFailure(
+        "pointer binding is not active: " & request.binding
+      )
+    if binding.op != PointerOpKind.OpNone:
+      return request.bindingDispatchFailure(
+        "interactive pointer bindings cannot be dispatched over IPC"
+      )
+    let msg = parseTextCommand(binding.command)
+    if msg.isNone:
+      return request.bindingDispatchFailure(
+        "invalid configured command for pointer binding: " & request.binding
+      )
+    daemon.enqueuePointerCommand(0'u32, nil, msg.get())
+    return request.bindingDispatchSuccess(binding.command, 1)
+
+  request.bindingDispatchFailure("pointer binding not found: " & request.binding)
+
+proc dispatchAxisBinding*(
+    daemon: var TriadDaemon, request: BindingDispatchRequest
+): BindingDispatchResult =
+  if request.ticks <= 0 or request.ticks > 100:
+    return request.bindingDispatchFailure("axis ticks must be in 1..100")
+  let spec = parseKeySpec(request.binding)
+  let direction = axisDirectionValue(spec.key)
+  if direction == AxisBindingDirection.AxisNone:
+    return request.bindingDispatchFailure("invalid axis binding: " & request.binding)
+
+  for binding in daemon.currentModel.axisBindings:
+    if binding.direction != direction or binding.modifiers != spec.modifiers:
+      continue
+    if not daemon.axisBindingActive(binding):
+      return
+        request.bindingDispatchFailure("axis binding is not active: " & request.binding)
+    let msg = parseTextCommand(binding.command)
+    if msg.isNone:
+      return request.bindingDispatchFailure(
+        "invalid configured command for axis binding: " & request.binding
+      )
+    for _ in 0 ..< request.ticks:
+      daemon.enqueuePointerCommand(0'u32, nil, msg.get())
+    return request.bindingDispatchSuccess(binding.command, request.ticks)
+
+  request.bindingDispatchFailure("axis binding not found: " & request.binding)
+
+proc dispatchGestureBinding*(
+    daemon: var TriadDaemon, request: BindingDispatchRequest
+): BindingDispatchResult =
+  if request.fingers == 0:
+    return request.bindingDispatchFailure("gesture fingers must be greater than zero")
+  let spec = parseKeySpec(request.binding)
+  let direction = gestureDirectionValue(spec.key)
+  if direction == GestureBindingDirection.GestureNone:
+    return request.bindingDispatchFailure("invalid gesture binding: " & request.binding)
+
+  for binding in daemon.currentModel.gestureBindings:
+    if binding.direction != direction or binding.fingers != request.fingers or
+        binding.modifiers != spec.modifiers:
+      continue
+    if not daemon.gestureBindingActive(binding):
+      return request.bindingDispatchFailure(
+        "gesture binding is not active: " & request.binding
+      )
+    let msg = parseTextCommand(binding.command)
+    if msg.isNone:
+      return request.bindingDispatchFailure(
+        "invalid configured command for gesture binding: " & request.binding
+      )
+    daemon.enqueuePointerCommand(0'u32, nil, msg.get())
+    return request.bindingDispatchSuccess(binding.command, 1)
+
+  request.bindingDispatchFailure("gesture binding not found: " & request.binding)
+
+proc dispatchBindingRequest*(
+    daemon: var TriadDaemon, request: BindingDispatchRequest
+): BindingDispatchResult =
+  case request.kind
+  of BindingDispatchKind.BindKey:
+    daemon.dispatchKeyBinding(request)
+  of BindingDispatchKind.BindPointer:
+    daemon.dispatchPointerBinding(request)
+  of BindingDispatchKind.BindAxis:
+    daemon.dispatchAxisBinding(request)
+  of BindingDispatchKind.BindGesture:
+    daemon.dispatchGestureBinding(request)
 
 proc activeSwitchEvent(
     daemon: TriadDaemon, kind: SwitchEventKind

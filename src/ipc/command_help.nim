@@ -1,4 +1,5 @@
 import std/[json, options, strutils]
+import binding_dispatch
 import command_registry
 
 type SpecialMsgCommand* = object
@@ -26,6 +27,11 @@ const SpecialMsgCommands* = [
     name: "request",
     usage: "triad msg request <json>",
     description: "Send one raw line-delimited IPC request and print the reply.",
+  ),
+  SpecialMsgCommand(
+    name: "dispatch-binding",
+    usage: "triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]",
+    description: "Dispatch a configured Triad binding without injecting raw input.",
   ),
   SpecialMsgCommand(
     name: "state",
@@ -229,6 +235,7 @@ Usage:
   triad msg commands [--json]
   triad msg validate <command...>
   triad msg request <json>
+  triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]
 
 Useful request commands:
   triad msg state
@@ -261,6 +268,9 @@ proc triadRequestPayload*(request: string): string =
   $(%*{"triad": {"version": 1, "request": request}})
 
 proc triadMsgRequestPayload*(cmd: string): Option[string] =
+  let dispatch = parseBindingDispatchText(cmd)
+  if dispatch.isSome:
+    return some(bindingDispatchPayload(dispatch.get()))
   case cmd
   of "state":
     some(triadRequestPayload("state"))

@@ -9,7 +9,7 @@ import
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
-import ../src/ipc/[commands, niri_compat, socket]
+import ../src/ipc/[binding_dispatch, commands, niri_compat, socket]
 import ../src/layouts/scroller
 import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
@@ -222,6 +222,107 @@ suite "Crash hardening":
       1'u32, GestureBindingDirection.GestureSwipeUp, 4
     )
     check daemon.popQueuedMessage().kind == MsgKind.CmdToggleOverview
+
+  test "IPC binding dispatch triggers configured active bindings":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(
+        hotkeyOverlay: HotkeyOverlayConfig(skipAtStartup: true),
+        keyBindings:
+          @[
+            KeyBindingConfig(key: "h", modifiers: 64'u32, command: "focus-left"),
+            KeyBindingConfig(
+              key: "k",
+              modifiers: 64'u32,
+              command: "focus-up",
+              mode: BindingMode.BindOverview,
+            ),
+          ],
+        pointerBindings:
+          @[
+            PointerBindingConfig(
+              button: 0x112'u32, modifiers: 64'u32, command: "focus-right"
+            ),
+            PointerBindingConfig(
+              button: 0x110'u32,
+              modifiers: 64'u32,
+              op: PointerOpKind.OpMove,
+              command: "move",
+            ),
+          ],
+        axisBindings:
+          @[
+            AxisBindingConfig(
+              direction: AxisBindingDirection.AxisUp,
+              modifiers: 64'u32,
+              command: "focus-left",
+            )
+          ],
+        gestureBindings:
+          @[
+            GestureBindingConfig(
+              direction: GestureBindingDirection.GestureSwipeLeft,
+              fingers: 3,
+              modifiers: 64'u32,
+              command: "focus-left",
+            )
+          ],
+      )
+    )
+
+    let keyResult = daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindKey, binding: "Super+h", ticks: 1
+      )
+    )
+    check keyResult.ok
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+
+    check not daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindKey, binding: "Super+k", ticks: 1
+      )
+    ).ok
+    daemon.runtimeState.model.overviewActive = true
+    check daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindKey, binding: "Super+k", ticks: 1
+      )
+    ).ok
+    check daemon.popQueuedMessage().direction == Direction.DirUp
+    daemon.runtimeState.model.overviewActive = false
+
+    check daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindPointer, binding: "Super+middle", ticks: 1
+      )
+    ).ok
+    check daemon.popQueuedMessage().direction == Direction.DirRight
+    check not daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindPointer, binding: "Super+left", ticks: 1
+      )
+    ).ok
+
+    let axisResult = daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindAxis, binding: "Super+wheel-up", ticks: 2
+      )
+    )
+    check axisResult.ok
+    check axisResult.dispatched == 2
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
+
+    check daemon.dispatchBindingRequest(
+      BindingDispatchRequest(
+        kind: BindingDispatchKind.BindGesture,
+        binding: "Super+swipe-left",
+        ticks: 1,
+        fingers: 3,
+      )
+    ).ok
+    check daemon.popQueuedMessage().direction == Direction.DirLeft
 
   test "touchpad swipe direction uses threshold and major axis":
     check gestureDirectionForSwipe(-15.0, 0.0, cancelled = false) ==

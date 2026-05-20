@@ -5,8 +5,8 @@ import ../src/core/msg
 import ../src/daemon/quickshell_runner
 import
   ../src/ipc/[
-    command_help, command_registry, commands, niri_cli, niri_compat, quickshell_compat,
-    shell_overlay, triad_native,
+    binding_dispatch, command_help, command_registry, commands, niri_cli, niri_compat,
+    quickshell_compat, shell_overlay, triad_native,
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 import ../src/utils/behavior_log
@@ -558,6 +558,14 @@ suite "Shell compatibility contracts":
       it["name"].getStr() == "layout-state"
     )
 
+    let dispatchReply = handleTriadRequest(
+      """{"triad":{"version":1,"request":"dispatch-binding","kind":"key","binding":"Super+h"}}""",
+      snapshotForShell(),
+    )
+    check dispatchReply.bindingDispatch.isSome
+    check dispatchReply.bindingDispatch.get().kind == BindingDispatchKind.BindKey
+    check dispatchReply.bindingDispatch.get().binding == "Super+h"
+
   test "Triad command registry has unique resolvable action names":
     var seen: seq[string] = @[]
     for name in allCommandNames():
@@ -581,6 +589,7 @@ suite "Shell compatibility contracts":
     check help.contains("triad msg validate <command...>")
     check help.contains("focus-next")
     check help.contains("triad msg state")
+    check help.contains("triad msg dispatch-binding")
 
     let topHelp = renderTriadHelp()
     check topHelp.contains("validate-config")
@@ -604,6 +613,13 @@ suite "Shell compatibility contracts":
     )
 
     check triadMsgRequestPayload("state").isSome
+    let dispatchPayload =
+      triadMsgRequestPayload("dispatch-binding axis Super+wheel-up 2")
+    check dispatchPayload.isSome
+    check parseJson(dispatchPayload.get())["triad"]["request"].getStr() ==
+      "dispatch-binding"
+    check parseBindingDispatchText("dispatch-binding gesture Super+swipe-left 3")
+    .get().fingers == 3'u32
     let stream = parseJson(nativeEventStreamPayload(@["layout"]))
     check stream["triad"]["request"].getStr() == "event-stream"
     check stream["triad"]["events"][0].getStr() == "layout"

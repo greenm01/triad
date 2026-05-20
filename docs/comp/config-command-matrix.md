@@ -475,6 +475,7 @@ Native JSON IPC requests:
 - `set-layout`
 - `switch-layout` (`triad msg switch-layout` prints the ack)
 - `event-stream`
+- `dispatch-binding`
 
 CLI and environment:
 
@@ -494,6 +495,8 @@ CLI and environment:
   snapshots for development and shell integrations.
 - `triad msg request <json>` sends one raw native or compatibility IPC request
   and prints the reply.
+- `triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]`
+  dispatches configured bindings without raw input injection.
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,
   render-start skips, layout-projection runs, and render/manage counters for
   live CPU investigations.

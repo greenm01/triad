@@ -5,6 +5,7 @@ import ../core/layout_selection_codec
 import ../core/[msg, triad_state]
 import command_registry
 import command_help
+import binding_dispatch
 import commands
 import ../types/shell_snapshot
 from ../types/runtime_values import LayoutMode, LayoutSelection
@@ -16,6 +17,7 @@ type TriadIpcResult* = object
   reply*: string
   initialEvents*: seq[string]
   messages*: seq[Msg]
+  bindingDispatch*: Option[BindingDispatchRequest]
 
 proc okReply(payload: JsonNode): string =
   $(%*{"ok": true, "triad": payload})
@@ -485,6 +487,12 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
       result.initialEvents.add(triadLayoutStateChangedEvent(snapshot))
     if result.subscribeState:
       result.initialEvents.add(triadStateChangedEvent(snapshot))
+  of "dispatch-binding":
+    let dispatch = bindingDispatchRequestFromPayload(payload)
+    if dispatch.isNone:
+      result.reply = errReply("invalid dispatch-binding request")
+      return
+    result.bindingDispatch = dispatch
   of "action":
     let action = stringFromField(payload, "action")
     if action.len == 0:

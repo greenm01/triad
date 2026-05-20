@@ -7,7 +7,7 @@ import ../types/layout_projection
 import ../types/projection_values
 import ../config/[parser, reload_policy]
 from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
-import ../ipc/[command_help, commands, socket]
+import ../ipc/[binding_dispatch, command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
@@ -683,6 +683,10 @@ proc main*() =
     {.cast(gcsafe).}:
       daemon.perfStatusJson()
 
+  proc dispatchBindingJson(request: BindingDispatchRequest): string {.gcsafe.} =
+    {.cast(gcsafe).}:
+      daemon.dispatchBindingRequest(request).bindingDispatchReply()
+
   let triadSocket = triadSocketPath()
   let niriSocketPath = chooseNiriCompatSocketPath(triadSocket)
   var ipcStarted = false
@@ -695,7 +699,7 @@ proc main*() =
     writeBehaviorEvent("triad_ipc_server_starting", %*{"path": triadSocket})
     asyncCheck startIpcServer(
       triadSocket, queueMsg, snapshotModel, snapshotLiveRestoreJson,
-      snapshotPerfStatusJson,
+      snapshotPerfStatusJson, dispatchBindingJson,
     )
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
@@ -703,7 +707,7 @@ proc main*() =
       writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
         niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson,
-        snapshotPerfStatusJson,
+        snapshotPerfStatusJson, dispatchBindingJson,
       )
 
   asyncCheck startStartupWindowRulesExpiry()

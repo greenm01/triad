@@ -20,6 +20,9 @@ For local help and validation without dispatching to the daemon:
     and exits without sending it.
 *   `triad msg request <json>`: Sends one raw line-delimited IPC request and
     prints the reply.
+*   `triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]`:
+    Dispatches a configured Triad binding without injecting raw keyboard or
+    pointer input into clients.
 
 #### Navigation
 *   `focus-next`: Shifts keyboard focus to the next window in the sequence.
@@ -228,6 +231,23 @@ columns when no configured `axis-bind` consumes that wheel direction. The drag
 overrides overview right-click close while overview is open. `gesture-bind`
 uses live touchpad swipe events when the compositor advertises
 `zwp_pointer_gestures_v1`.
+
+#### Binding Dispatch
+`dispatch-binding` triggers Triad's configured binding behavior from IPC while
+preserving the same mode, layout-scope, lock, and shortcut-inhibition checks as
+live input bindings:
+
+```sh
+triad msg dispatch-binding key Super+Page_Down
+triad msg dispatch-binding pointer Super+middle
+triad msg dispatch-binding axis Super+wheel-up 2
+triad msg dispatch-binding gesture Super+swipe-left 3
+```
+
+Pointer dispatch only runs configured pointer command bindings. Interactive
+pointer operations such as `move` and `resize` are rejected because they require
+a real pointer press lifecycle. This command is not raw input injection: it does
+not type text, press keys, click buttons, or send motion events to applications.
 
 #### Master-Stack Refinements
 *   `master-count <n>`: Sets the exact number of windows allowed in the master area.
@@ -563,6 +583,14 @@ use structured fields:
 - `x` and `y` for `warp-pointer`.
 - Screenshot actions accept `path`, `show_pointer`, `write_to_disk`, and
   `copy_to_clipboard`.
+
+Native binding dispatch uses the same configured binding path:
+
+```json
+{"triad":{"version":1,"request":"dispatch-binding","kind":"key","binding":"Super+Page_Down"}}
+{"triad":{"version":1,"request":"dispatch-binding","kind":"axis","binding":"Super+wheel-up","ticks":2}}
+{"triad":{"version":1,"request":"dispatch-binding","kind":"gesture","binding":"Super+swipe-left","fingers":3}}
+```
 
 The layout-specific action names such as `layout-grid`, `layout-tgmix`, and `layout-spiral`
 remain available for command parity and affect the active tag. Prefer
