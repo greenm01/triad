@@ -410,6 +410,8 @@ The reply contains the full native shell-facing state:
       "version": 1,
       "overview": {"is_open": false},
       "layout": {},
+      "keyboard_layouts": ["us", "de"],
+      "current_keyboard_layout_idx": 0,
       "outputs": [
         {"id": 42, "name": "Virtual-1", "is_primary": true, "refresh_rate": 144000}
       ],
@@ -464,10 +466,13 @@ workspace:
           "tag_id": 1,
           "workspace_idx": 1,
           "name": "term",
+          "output": "Virtual-1",
           "layout": "scroller",
           "layout_kind": "builtin",
           "fallback_layout": "scroller",
           "is_active": true,
+          "is_output_visible": true,
+          "occupied": true,
           "focused_window_id": 10,
           "columns": [{"idx": 1, "width_proportion": 0.5, "windows": [10]}],
           "master_count": 1,

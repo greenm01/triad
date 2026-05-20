@@ -234,12 +234,15 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     "tag_id": workspace.tagId,
     "workspace_idx": workspace.workspaceIdx,
     "name": nullableString(workspace.name),
+    "output": nullableString(workspace.outputName),
     "layout": workspace.layoutId,
     "layout_kind": workspace.layoutKind,
     "runtime_kind": workspace.runtimeLayoutKind,
     "layout_source": workspace.layoutSource,
     "fallback_layout": workspace.fallbackLayout,
     "is_active": workspace.isActive,
+    "is_output_visible": workspace.isOutputVisible,
+    "occupied": workspace.occupied,
     "focused_window_id":
       if workspace.focusedWindow == 0:
         newJNull()
@@ -385,6 +388,8 @@ proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
           %snapshot.overviewSelectedWindow,
     },
     "layout": triadLayoutStateJson(snapshot),
+    "keyboard_layouts": snapshot.keyboardLayoutNames,
+    "current_keyboard_layout_idx": snapshot.keyboardLayoutIndex,
     "outputs": outputs,
     "windows": windows,
   }

@@ -79,6 +79,36 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check snapshot.outputs.len == 1
     check snapshot.outputs[0].refreshRate == 144000
 
+  test "Native Triad layout state exposes shell workspace fields":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term"))
+
+    let snapshot = model.shellSnapshot()
+    let layout = triadLayoutStateJson(snapshot)
+    let workspace = layout["workspaces"][0]
+
+    check workspace["output"].getStr() == snapshot.workspaces[0].outputName
+    check workspace["is_output_visible"].getBool() ==
+      snapshot.workspaces[0].isOutputVisible
+    check workspace["occupied"].getBool() == snapshot.workspaces[0].occupied
+
+  test "Native Triad state exposes keyboard layout fields":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        input: InputConfig(
+          keyboard:
+            InputKeyboardConfig(xkb: InputXkbConfig(layoutSet: true, layout: "us,de"))
+        )
+      )
+    ).model
+
+    let state = triadStateJson(model.shellSnapshot())
+
+    check state["keyboard_layouts"].len == 2
+    check state["keyboard_layouts"][0].getStr() == "us"
+    check state["keyboard_layouts"][1].getStr() == "de"
+    check state["current_keyboard_layout_idx"].getInt() == 0
+
   test "Workspace focus broadcasts activation with workspace snapshot":
     var model = configuredModel()
     model.applyMsg(
