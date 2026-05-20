@@ -28,6 +28,7 @@ type
     tag: rv.ProjectedTag
     mode: rv.LayoutMode
     instructions: seq[rv.RenderInstruction]
+    frameTabBars: seq[rv.ProjectedFrameTabBar]
     frameEmptyChrome: seq[rv.ProjectedFrameEmptyChrome]
     viewportTarget: bool
     aggregate: bool
@@ -714,6 +715,57 @@ proc layoutSplitTree*(
         rv.RenderInstruction(windowId: model.externalWindowId(winId), geom: item.rect)
       )
 
+proc splitTreeOverviewLeafRect(
+    model: Model,
+    leafNodeId: SplitNodeId,
+    winId: WindowId,
+    leafRect: rv.Rect,
+    nodeRects: Table[SplitNodeId, rv.Rect],
+): rv.Rect =
+  result = leafRect
+  let leafOpt = model.splitNodeData(leafNodeId)
+  if leafOpt.isNone:
+    return
+  let parentId = leafOpt.get().parent
+  if parentId == NullSplitNodeId:
+    return
+  let parentOpt = model.splitNodeData(parentId)
+  if parentOpt.isNone:
+    return
+  let parent = parentOpt.get()
+  if parent.mode notin {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+    return
+  if parent.children.find(leafNodeId) == -1:
+    return
+  if model.splitTreeActiveWindowInSubtree(parentId) != winId:
+    return
+  result = nodeRects.getOrDefault(parentId, leafRect)
+
+proc layoutSplitTreeOverview(
+    model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
+): seq[rv.RenderInstruction] =
+  let leaves =
+    model.splitTreeLeafRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
+  let nodes =
+    model.splitTreeNodeRects(tagId, screen, outerGap, innerGap, FrameTreeTabBarHeight)
+  var nodeRects = initTable[SplitNodeId, rv.Rect]()
+  for item in nodes:
+    nodeRects[item.nodeId] = item.rect
+  for item in leaves:
+    let winId = item.window
+    if winId == NullWindowId:
+      continue
+    let winOpt = model.windowData(winId)
+    if winOpt.isSome and winOpt.get().windowAdmitted() and not winOpt.get().isFloating and
+        not winOpt.get().isMinimized and not winOpt.get().isUnmanagedGlobal:
+      result.add(
+        rv.RenderInstruction(
+          windowId: model.externalWindowId(winId),
+          geom:
+            model.splitTreeOverviewLeafRect(item.nodeId, winId, item.rect, nodeRects),
+        )
+      )
+
 proc splitTreeVisibleTabs(
     model: Model, node: SplitNodeData, activeChild: SplitNodeId
 ): seq[rv.ProjectedFrameTab] =
@@ -1152,7 +1204,9 @@ proc overviewTagLayout(
     result.mode = rv.LayoutMode.Grid
     result.aggregate = true
     result.instructions =
-      model.layoutSplitTree(tagId, screen, model.outerGaps, model.innerGaps)
+      model.layoutSplitTreeOverview(tagId, screen, model.outerGaps, model.innerGaps)
+    result.frameTabBars =
+      model.splitTreeTabBars(tagId, screen, model.outerGaps, model.innerGaps)
     return
 
   if tagData.tagUsesAggregateOverview():
@@ -1249,6 +1303,19 @@ proc layoutWorkspaceStripOverview(
           geom: scaledOverviewRect(transform.source, transform.dest, instr.geom, zoom),
           clipSet: true,
           clip: transform.clip,
+        )
+      )
+    for bar in layout.frameTabBars:
+      result.frameTabBars.add(
+        rv.ProjectedFrameTabBar(
+          frameId: bar.frameId,
+          windowId: bar.windowId,
+          geom: scaledOverviewRect(transform.source, transform.dest, bar.geom, zoom),
+          focused: bar.focused,
+          frameTabs: bar.frameTabs,
+          ringWidth: bar.ringWidth,
+          ringColor: bar.ringColor,
+          tabs: bar.tabs,
         )
       )
     for frame in layout.frameEmptyChrome:

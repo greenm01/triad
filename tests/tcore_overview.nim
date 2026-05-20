@@ -773,6 +773,131 @@ suite "Core Runtime Logic: overview navigation":
     check bspWindows.anyIt(it.windowId == 5'u32)
     check bspWindows.anyIt(it.windowId == 6'u32)
 
+  test "Overview renders i3 split layouts as full tree previews":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let splitWindows =
+      model.layoutProjection().instructions.overviewInstructionsFor([10'u32, 11, 12])
+
+    check splitWindows.len == 3
+    check splitWindows.allIt(it.clipSet)
+    check splitWindows.allIt(it.clip == preview)
+    check splitWindows.allIt(it.geom.geomWithinPreview(preview))
+    check splitWindows.anyIt(it.windowId == 10'u32)
+    check splitWindows.anyIt(it.windowId == 11'u32)
+    check splitWindows.anyIt(it.windowId == 12'u32)
+
+  test "Overview renders i3 tabbed layouts with scaled tab chrome":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "app", title: "Two")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let screen = model.primaryScreen()
+    let slots = model.previewSlots()
+    let preview = model.workspacePreviewRect(screen, slots, slots.find(1'u32))
+    let projection = model.layoutProjection()
+    let tabbedWindows =
+      projection.instructions.overviewInstructionsFor([10'u32, 11, 12])
+
+    check model.selectedOverviewWindow() == model.windowForExternal(
+      ExternalWindowId(10)
+    )
+    check tabbedWindows.len == 1
+    check tabbedWindows[0].windowId == 10'u32
+    check tabbedWindows[0].geom.geomWithinPreview(preview)
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].windowId == 10'u32
+    check projection.frameTabBars[0].geom.x == tabbedWindows[0].geom.x
+    check projection.frameTabBars[0].geom.y == tabbedWindows[0].geom.y
+    check projection.frameTabBars[0].geom.w == tabbedWindows[0].geom.w
+    check projection.frameTabBars[0].geom.geomWithinPreview(preview)
+    check projection.frameTabBars[0].tabs.len == 3
+    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 10'u32 and it.active)
+    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 11'u32 and not it.active)
+    check projection.frameTabBars[0].tabs.anyIt(it.windowId == 12'u32 and not it.active)
+
+  test "Overview renders i3 tabbed columns at sibling height":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "app", title: "Two")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 12, appId: "app", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 13, appId: "app", title: "Four")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    let projection = model.layoutProjection()
+    let siblingLeft = projection.instructions.overviewInstructionGeom(10'u32)
+    let tabbed = projection.instructions.overviewInstructionGeom(11'u32)
+    let siblingRight = projection.instructions.overviewInstructionGeom(12'u32)
+
+    check positiveArea(siblingLeft)
+    check positiveArea(tabbed)
+    check positiveArea(siblingRight)
+    check tabbed.y == siblingLeft.y
+    check tabbed.h == siblingLeft.h
+    check tabbed.y == siblingRight.y
+    check tabbed.h == siblingRight.h
+    check projection.frameTabBars.len == 1
+    check projection.frameTabBars[0].windowId == 11'u32
+    check projection.frameTabBars[0].geom.x == tabbed.x
+    check projection.frameTabBars[0].geom.y == tabbed.y
+    check projection.frameTabBars[0].geom.w == tabbed.w
+
   test "Overview renders empty frame chrome in notion previews":
     var notion = configuredModel()
     notion.applyMsg(

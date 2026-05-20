@@ -768,9 +768,21 @@ proc syncFrameTabBarSurfaces*(
     let ringInset = max(0'i32, bar.ringWidth)
     let surfaceH = max(1'i32, bar.geom.h + ringInset)
     let surfaceW = max(1'i32, bar.geom.w + ringInset * 2)
-    surf.decoration.setOffset(-ringInset, -surfaceH)
-    surf.offsetX = -ringInset
-    surf.offsetY = -surfaceH
+    let windowGeom =
+      if daemon.desiredPlacements.hasKey(bar.windowId):
+        daemon.desiredPlacements[bar.windowId]
+      else:
+        Rect(
+          x: bar.geom.x,
+          y: bar.geom.y + bar.geom.h,
+          w: bar.geom.w,
+          h: max(1'i32, bar.geom.h),
+        )
+    let offsetX = bar.geom.x - windowGeom.x - ringInset
+    let offsetY = bar.geom.y - windowGeom.y - ringInset
+    surf.decoration.setOffset(offsetX, offsetY)
+    surf.offsetX = offsetX
+    surf.offsetY = offsetY
     surf.inputW = surfaceW
     surf.inputH = surfaceH
     if surf.bufferCacheKey != key:

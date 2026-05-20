@@ -4,7 +4,7 @@ import ../core/defaults
 from ../core/native_layout_codec import
   BspTreeLayoutId, FrameTreeLayoutId, SplitTreeLayoutId, nativeLayoutIdString
 import ../types/[core, model]
-from ../types/runtime_values import FrameNodeKind, LayoutMode
+from ../types/runtime_values import FrameNodeKind, LayoutMode, SplitTreeNodeMode
 
 proc tagForSlot*(model: Model, slot: uint32): TagId =
   model.tagBySlot.getOrDefault(slot, NullTagId)
@@ -255,17 +255,96 @@ proc overviewBspWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
         win.windowAdmitted() and not model.windowHiddenByGroup(winId):
       result.add(winId)
 
+proc overviewTreeWindowVisible(model: Model, winId: WindowId): bool =
+  if winId == NullWindowId:
+    return false
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
+    win.windowAdmitted() and not model.windowHiddenByGroup(winId)
+
+proc splitTreeOverviewWindowInSubtree(
+    model: Model, tagId: TagId, nodeId: SplitNodeId, target: WindowId
+): WindowId =
+  let nodeOpt = model.splitNodes.entity(nodeId)
+  if nodeOpt.isNone or nodeOpt.get().tagId != tagId:
+    return NullWindowId
+  let node = nodeOpt.get()
+  if node.kind == FrameNodeKind.Leaf:
+    if node.window == target and model.overviewTreeWindowVisible(node.window):
+      return node.window
+    return NullWindowId
+  for child in node.children:
+    result = model.splitTreeOverviewWindowInSubtree(tagId, child, target)
+    if result != NullWindowId:
+      return
+
+proc splitTreeOverviewFirstWindow(
+  model: Model, tagId: TagId, nodeId: SplitNodeId
+): WindowId
+
+proc splitTreeOverviewActiveChild(
+    model: Model, tagId: TagId, node: SplitNodeData
+): SplitNodeId =
+  let tagOpt = model.tagData(tagId)
+  let focused =
+    if tagOpt.isSome:
+      tagOpt.get().focusedWindow
+    else:
+      NullWindowId
+  if focused != NullWindowId:
+    for child in node.children:
+      if model.splitTreeOverviewWindowInSubtree(tagId, child, focused) != NullWindowId:
+        return child
+  for child in node.children:
+    if model.splitTreeOverviewFirstWindow(tagId, child) != NullWindowId:
+      return child
+  NullSplitNodeId
+
+proc splitTreeOverviewFirstWindow(
+    model: Model, tagId: TagId, nodeId: SplitNodeId
+): WindowId =
+  let nodeOpt = model.splitNodes.entity(nodeId)
+  if nodeOpt.isNone or nodeOpt.get().tagId != tagId:
+    return NullWindowId
+  let node = nodeOpt.get()
+  if node.kind == FrameNodeKind.Leaf:
+    if model.overviewTreeWindowVisible(node.window):
+      return node.window
+    return NullWindowId
+  if node.mode in {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+    let activeChild = model.splitTreeOverviewActiveChild(tagId, node)
+    if activeChild != NullSplitNodeId:
+      return model.splitTreeOverviewFirstWindow(tagId, activeChild)
+    return NullWindowId
+  for child in node.children:
+    result = model.splitTreeOverviewFirstWindow(tagId, child)
+    if result != NullWindowId:
+      return
+
+proc collectSplitTreeOverviewWindows(
+    model: Model, tagId: TagId, nodeId: SplitNodeId, outWindows: var seq[WindowId]
+) =
+  let nodeOpt = model.splitNodes.entity(nodeId)
+  if nodeOpt.isNone or nodeOpt.get().tagId != tagId:
+    return
+  let node = nodeOpt.get()
+  if node.kind == FrameNodeKind.Leaf:
+    if model.overviewTreeWindowVisible(node.window):
+      outWindows.add(node.window)
+    return
+  if node.mode in {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+    let activeChild = model.splitTreeOverviewActiveChild(tagId, node)
+    if activeChild != NullSplitNodeId:
+      model.collectSplitTreeOverviewWindows(tagId, activeChild, outWindows)
+    return
+  for child in node.children:
+    model.collectSplitTreeOverviewWindows(tagId, child, outWindows)
+
 proc overviewSplitTreeWindowIds*(model: Model, tagId: TagId): seq[WindowId] =
-  for _, node in model.splitNodesOnTagWithId(tagId):
-    if node.kind != FrameNodeKind.Leaf or node.window == NullWindowId:
-      continue
-    let winId = node.window
-    let winOpt = model.windowData(winId)
-    if winOpt.isSome:
-      let win = winOpt.get()
-      if not win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
-          win.windowAdmitted() and not model.windowHiddenByGroup(winId):
-        result.add(winId)
+  model.collectSplitTreeOverviewWindows(tagId, model.splitRootForTag(tagId), result)
   for winId, win in model.windowsOnTagWithId(tagId):
     if win.isFloating and not win.isUnmanagedGlobal and not win.isMinimized and
         win.windowAdmitted() and not model.windowHiddenByGroup(winId):
@@ -333,6 +412,10 @@ proc overviewWindowOnTag(model: Model, tagId: TagId, winId: WindowId): bool =
   if tagOpt.isSome and tagOpt.get().tagUsesAggregateOverview():
     if tagOpt.get().tagUsesFrameOverview():
       return model.overviewFrameWindowIds(tagId).find(winId) != -1
+    if tagOpt.get().tagUsesBspOverview():
+      return model.overviewBspWindowIds(tagId).find(winId) != -1
+    if tagOpt.get().tagUsesSplitTreeOverview():
+      return model.overviewSplitTreeWindowIds(tagId).find(winId) != -1
     return winId != NullWindowId and winId == model.overviewRepresentativeWindow(tagId)
   for candidate, win in model.windowsOnTagWithId(tagId):
     if candidate == winId:
@@ -352,6 +435,28 @@ proc activeOverviewWindow(model: Model): WindowId =
     if model.overviewWindowOnTag(model.activeTag, focusedFrameWindow):
       return focusedFrameWindow
     return NullWindowId
+
+  if tagOpt.get().tagUsesBspOverview():
+    let focused = tagOpt.get().focusedWindow
+    if model.overviewWindowOnTag(model.activeTag, focused):
+      return focused
+    let windows = model.overviewBspWindowIds(model.activeTag)
+    return
+      if windows.len > 0:
+        windows[0]
+      else:
+        NullWindowId
+
+  if tagOpt.get().tagUsesSplitTreeOverview():
+    let focused = tagOpt.get().focusedWindow
+    if model.overviewWindowOnTag(model.activeTag, focused):
+      return focused
+    let windows = model.overviewSplitTreeWindowIds(model.activeTag)
+    return
+      if windows.len > 0:
+        windows[0]
+      else:
+        NullWindowId
 
   if tagOpt.get().tagUsesAggregateOverview() and not tagOpt.get().tagUsesFrameOverview():
     return model.overviewRepresentativeWindow(model.activeTag)
