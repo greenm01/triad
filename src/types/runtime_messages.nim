@@ -69,6 +69,10 @@ type
     CmdFrameUnsplit
     CmdFrameTabNext
     CmdFrameTabPrev
+    CmdFrameResizeLeft
+    CmdFrameResizeRight
+    CmdFrameResizeUp
+    CmdFrameResizeDown
     CmdSplitTreeSplitHorizontal
     CmdSplitTreeSplitVertical
     CmdSplitTreeSplitToggle
@@ -340,6 +344,9 @@ type
       direction*: Direction
     of MsgKind.CmdSplitTreeLayoutCycleList:
       cycleModes*: seq[SplitTreeNodeMode]
+    of MsgKind.CmdFrameResizeLeft, MsgKind.CmdFrameResizeRight,
+        MsgKind.CmdFrameResizeUp, MsgKind.CmdFrameResizeDown:
+      frameResizeDelta*: float32
     of MsgKind.CmdBspPreselect:
       bspPreselectDirection*: Direction
     of MsgKind.CmdBspPreselectRatio:

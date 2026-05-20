@@ -313,7 +313,7 @@ proc splitFocusedFrame*(model: var Model, orientation: FrameSplitOrientation): b
     model.frameByTagWindow[(tagId, active)] = second
     model.frames.mEntity(second).activeWindow = active
   model.frames.mEntity(split).orientation = orientation
-  model.frames.mEntity(split).ratio = 0.5'f32
+  model.frames.mEntity(split).ratio = model.defaultFrameSplitRatio
   model.frames.mEntity(split).firstChild = target
   model.frames.mEntity(split).secondChild = second
   discard model.repairFrameActiveWindow(target)
@@ -360,6 +360,35 @@ proc unsplitFocusedFrame*(model: var Model): bool =
   discard model.frames.delete(parentId)
   discard model.setFocusedFrame(tagId, sibling)
   true
+
+proc adjustFocusedFrameSplit*(
+    model: var Model, tagId: TagId, orientation: FrameSplitOrientation, delta: float32
+): bool =
+  let leaf = model.focusedFrameOrRoot(tagId)
+  if leaf == NullFrameId:
+    return false
+  var current = leaf
+  while current != NullFrameId:
+    let currentOpt = model.frames.entity(current)
+    if currentOpt.isNone:
+      return false
+    let parentId = currentOpt.get().parent
+    if parentId == NullFrameId:
+      return false
+    let parentOpt = model.frames.entity(parentId)
+    if parentOpt.isNone:
+      return false
+    let parent = parentOpt.get()
+    if parent.kind == FrameNodeKind.Split and parent.orientation == orientation:
+      let isFirst = parent.firstChild == current
+      let newRatio =
+        clamp(parent.ratio + (if isFirst: delta else: -delta), 0.05'f32, 0.95'f32)
+      if newRatio == parent.ratio:
+        return false
+      model.frames.mEntity(parentId).ratio = newRatio
+      return true
+    current = parentId
+  false
 
 proc focusFrameTab*(model: var Model, delta: int): bool =
   let tagId = model.activeTag

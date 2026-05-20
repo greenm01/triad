@@ -44,6 +44,7 @@ type
     defaultWindowHeight*: float32
     defaultMasterCount*: int
     defaultMasterRatio*: float32
+    defaultFrameSplitRatio*: float32
     borderWidth*: int32
     focusedBorderColor*: uint32
     unfocusedBorderColor*: uint32

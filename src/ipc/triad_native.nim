@@ -322,6 +322,11 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       some(parts)
     else:
       none(seq[string])
+  of CommandArgShape.OptionalFloatDelta:
+    let delta = numberStringFromField(payload, "delta")
+    if delta.isSome:
+      parts.add(delta.get())
+    some(parts)
   of CommandArgShape.SplitTreeModeList:
     let argv = argvFromField(payload, "argv")
     if argv.isSome:

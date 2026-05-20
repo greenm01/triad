@@ -19,6 +19,7 @@ const
   DefaultWindowHeight* = 1.0'f32
   DefaultMasterCount* = 1
   DefaultMasterRatio* = 0.55'f32
+  DefaultFrameSplitRatio* = 0.5'f32
   DefaultSpiralRatio* = 0.618'f32
   DefaultSpiralMainPaneRatio* = 0.618'f32
   DefaultSpiralMainPane* = "left"

@@ -118,6 +118,30 @@ proc applyCommand*(
         else:
           model.focusFrameTab(-1)
       )
+  of MsgKind.CmdFrameResizeLeft:
+    result.dirty =
+      not model.overviewActive and
+      model.adjustFocusedFrameSplit(
+        model.activeTag, FrameSplitOrientation.Horizontal, -msg.frameResizeDelta
+      )
+  of MsgKind.CmdFrameResizeRight:
+    result.dirty =
+      not model.overviewActive and
+      model.adjustFocusedFrameSplit(
+        model.activeTag, FrameSplitOrientation.Horizontal, msg.frameResizeDelta
+      )
+  of MsgKind.CmdFrameResizeUp:
+    result.dirty =
+      not model.overviewActive and
+      model.adjustFocusedFrameSplit(
+        model.activeTag, FrameSplitOrientation.Vertical, -msg.frameResizeDelta
+      )
+  of MsgKind.CmdFrameResizeDown:
+    result.dirty =
+      not model.overviewActive and
+      model.adjustFocusedFrameSplit(
+        model.activeTag, FrameSplitOrientation.Vertical, msg.frameResizeDelta
+      )
   of MsgKind.CmdSplitTreeSplitHorizontal:
     result.dirty =
       not model.overviewActive and

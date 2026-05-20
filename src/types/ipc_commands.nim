@@ -31,6 +31,10 @@ type
     CidFrameUnsplit
     CidFrameTabNext
     CidFrameTabPrev
+    CidFrameResizeLeft
+    CidFrameResizeRight
+    CidFrameResizeUp
+    CidFrameResizeDown
     CidSplitTreeSplitHorizontal
     CidSplitTreeSplitVertical
     CidSplitTreeSplitToggle
@@ -183,6 +187,7 @@ type
     WarpPointer
     Screenshot
     SplitTreeModeList
+    OptionalFloatDelta
 
   CommandSpec* = object
     id*: CommandId
@@ -280,6 +285,26 @@ const CommandSpecs* = [
   CommandSpec(id: CommandId.CidFrameUnsplit, name: "frame-unsplit", argShape: NoArgs),
   CommandSpec(id: CommandId.CidFrameTabNext, name: "frame-tab-next", argShape: NoArgs),
   CommandSpec(id: CommandId.CidFrameTabPrev, name: "frame-tab-prev", argShape: NoArgs),
+  CommandSpec(
+    id: CommandId.CidFrameResizeLeft,
+    name: "frame-resize-left",
+    argShape: OptionalFloatDelta,
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameResizeRight,
+    name: "frame-resize-right",
+    argShape: OptionalFloatDelta,
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameResizeUp,
+    name: "frame-resize-up",
+    argShape: OptionalFloatDelta,
+  ),
+  CommandSpec(
+    id: CommandId.CidFrameResizeDown,
+    name: "frame-resize-down",
+    argShape: OptionalFloatDelta,
+  ),
   CommandSpec(
     id: CommandId.CidSplitTreeSplitHorizontal,
     name: "split-tree-split-horizontal",

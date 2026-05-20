@@ -98,6 +98,7 @@ proc argShapeId*(shape: CommandArgShape): string =
   of CommandArgShape.WarpPointer: "warp-pointer"
   of CommandArgShape.Screenshot: "screenshot"
   of CommandArgShape.SplitTreeModeList: "split-tree-mode-list"
+  of CommandArgShape.OptionalFloatDelta: "optional-float-delta"
 
 proc argShapeUsage*(shape: CommandArgShape): string =
   case shape
@@ -149,6 +150,8 @@ proc argShapeUsage*(shape: CommandArgShape): string =
     "[--path <path>] [--show-pointer|--hide-pointer] [--no-clipboard|--clipboard-only]"
   of CommandArgShape.SplitTreeModeList:
     "<split-h|split-v|stacking|tabbed>..."
+  of CommandArgShape.OptionalFloatDelta:
+    "[delta]"
 
 proc aliasesSeq*(spec: CommandSpec): seq[string] =
   if spec.aliases.len == 0:

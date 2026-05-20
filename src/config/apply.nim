@@ -310,6 +310,8 @@ proc applyConfig*(model: var Model, config: Config) =
   model.defaultMasterCount = max(1, config.layout.defaultMasterCount)
   model.defaultMasterRatio =
     configClampF32(config.layout.defaultMasterRatio, 0.05, 0.95)
+  model.defaultFrameSplitRatio =
+    configClampF32(config.layout.defaultFrameSplitRatio, 0.05, 0.95)
   model.enableAnimations = config.layout.enableAnimations
   model.animationSpeed = configClampF32(config.layout.animationSpeed, 0.0, 1.0)
   model.animationSnapThreshold =

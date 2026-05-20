@@ -548,6 +548,7 @@ type
     defaultWindowHeight*: float32
     defaultMasterCount*: int
     defaultMasterRatio*: float32
+    defaultFrameSplitRatio*: float32
     spiral*: SpiralLayoutConfig
     enableAnimations*: bool
     animationSpeed*: float32

@@ -1040,6 +1040,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.layout.defaultWindowHeight = DefaultWindowHeight
   result.layout.defaultMasterCount = DefaultMasterCount
   result.layout.defaultMasterRatio = DefaultMasterRatio
+  result.layout.defaultFrameSplitRatio = DefaultFrameSplitRatio
   result.layout.spiral = defaultSpiralLayoutConfig()
   result.layout.borderWidth = DefaultBorderWidth
   result.layout.focusedBorderColor = DefaultFocusedBorderColor
@@ -1191,6 +1192,9 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 except CatchableError as e:
                   warn "Ignoring invalid border config field",
                     field = borderChild.name, error = e.msg
+            elif child.name == "initial-split-ratio" and child.args.len > 0:
+              result.layout.defaultFrameSplitRatio =
+                clampF32(float32(child.args[0].kFloat()), 0.05, 0.95)
             elif child.name == "frame-tabs":
               for tabChild in child.children:
                 try:

@@ -200,6 +200,9 @@ proc sampleCommand(
   of CommandArgShape.SplitTreeModeList:
     result.textCommand = spec.name & " splith stacking"
     result.payload["argv"] = %*["splith", "stacking"]
+  of CommandArgShape.OptionalFloatDelta:
+    result.textCommand = spec.name & " 0.05"
+    result.payload["delta"] = %0.05
   of CommandArgShape.WarpPointer:
     result.textCommand = spec.name & " 12 34"
     result.payload["x"] = %12

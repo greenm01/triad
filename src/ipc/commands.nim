@@ -346,6 +346,26 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdFrameTabNext))
   of CommandId.CidFrameTabPrev:
     some(Msg(kind: MsgKind.CmdFrameTabPrev))
+  of CommandId.CidFrameResizeLeft, CommandId.CidFrameResizeRight,
+      CommandId.CidFrameResizeUp, CommandId.CidFrameResizeDown:
+    let delta =
+      if parts.len >= 2:
+        parseFloat32Arg(parts[1])
+      else:
+        some(0.05'f32)
+    if delta.isNone or delta.get() <= 0.0:
+      none(Msg)
+    else:
+      let d = delta.get()
+      case spec.get().id
+      of CommandId.CidFrameResizeLeft:
+        some(Msg(kind: MsgKind.CmdFrameResizeLeft, frameResizeDelta: d))
+      of CommandId.CidFrameResizeRight:
+        some(Msg(kind: MsgKind.CmdFrameResizeRight, frameResizeDelta: d))
+      of CommandId.CidFrameResizeUp:
+        some(Msg(kind: MsgKind.CmdFrameResizeUp, frameResizeDelta: d))
+      else:
+        some(Msg(kind: MsgKind.CmdFrameResizeDown, frameResizeDelta: d))
   of CommandId.CidSplitTreeSplitHorizontal:
     some(Msg(kind: MsgKind.CmdSplitTreeSplitHorizontal))
   of CommandId.CidSplitTreeSplitVertical:

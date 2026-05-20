@@ -122,6 +122,8 @@ proc sampleCommandParts(spec: CommandSpec): seq[string] =
   of CommandArgShape.SplitTreeModeList:
     result.add("splith")
     result.add("stacking")
+  of CommandArgShape.OptionalFloatDelta:
+    result.add("0.05")
   of CommandArgShape.WarpPointer:
     result.add("12")
     result.add("34")

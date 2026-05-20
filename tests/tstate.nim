@@ -47,6 +47,7 @@ proc baseConfig(): Config =
       defaultWindowHeight: 0.7,
       defaultMasterCount: 2,
       defaultMasterRatio: 0.55,
+      defaultFrameSplitRatio: DefaultFrameSplitRatio,
       layoutCycle: @[LayoutMode.Scroller, LayoutMode.Deck, LayoutMode.Grid],
     ),
     workspaces: WorkspaceConfig(defaultCount: 3),
@@ -2412,6 +2413,50 @@ suite "Runtime state primitives":
     check model.groupForWindow(second) == tc.NullGroupId
     projection = model.layoutProjection()
     check projection.frameTabBars.anyIt(it.tabs.len == 2)
+
+  test "frame-tree resize adjusts split ratio and clamps at boundaries":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let tagId = model.activeTag
+    let rootId = model.frameRootForTag(tagId)
+    check model.frameData(rootId).get().ratio == 0.5'f32
+
+    # Resize right grows the first child's share.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameResizeRight, frameResizeDelta: 0.1'f32))
+    check model.frameData(rootId).get().ratio == 0.6'f32
+
+    # Resize left shrinks it back.
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameResizeLeft, frameResizeDelta: 0.1'f32))
+    check model.frameData(rootId).get().ratio == 0.5'f32
+
+    # Boundary: drive all the way right; ratio clamps at 0.95.
+    for _ in 0 ..< 20:
+      model.applyMsg(Msg(kind: MsgKind.CmdFrameResizeRight, frameResizeDelta: 0.05'f32))
+    check model.frameData(rootId).get().ratio == 0.95'f32
+
+  test "frame-tree initial-split-ratio config is respected on split":
+    var cfg = baseConfig()
+    cfg.layout.defaultFrameSplitRatio = 0.65'f32
+    var model = initRuntimeStateFromConfig(cfg).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFrameSplitHorizontal))
+
+    let rootId = model.frameRootForTag(model.activeTag)
+    check abs(model.frameData(rootId).get().ratio - 0.65'f32) < 0.001'f32
 
   test "native frame-tree split keeps focused window in original frame":
     var model = initRuntimeStateFromConfig(baseConfig()).model
