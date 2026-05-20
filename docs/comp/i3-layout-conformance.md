@@ -57,8 +57,8 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 | i3 form | i3 algorithm (`tree.c:503`) | Triad behavior (`focus.nim:474`) | Status |
 |---|---|---|---|
 | `focus left/right/up/down` | **Parent-walk**: ascend tree until a split node's orientation matches direction; step to sibling on that side; descend back to focused/edgemost child of sibling subtree | `splitTreeStructuralNeighbor` in `split_tree_ops.nim` implements the parent-walk; `lastFocusedWindowInSubtree` descends to most-recently-focused leaf; geometric fallback preserved | ✓ |
-| `focus next sibling` | Move to next sibling in parent's children list | Not implemented | ✗ P1 |
-| `focus prev sibling` | Move to prev sibling | Not implemented | ✗ P1 |
+| `focus next sibling` | Move to next sibling in parent's children list | `split-tree-focus-next-sibling` → `focusSplitTreeSibling(1)` | ✓ |
+| `focus prev sibling` | Move to prev sibling | `split-tree-focus-prev-sibling` → `focusSplitTreeSibling(-1)` | ✓ |
 | `focus parent` | `level_up` (`tree.c:386`): move focus to parent split container | `split-tree-focus-parent` → `focusSplitTreeParent` elevates `focusedSplitNode`; structural directional focus then operates at that container level | ✓ |
 | `focus child` | `level_down` (`tree.c:409`): descend back into last-focused child | `split-tree-focus-child` → `focusSplitTreeChild` descends via `focusedChildOfSplitNode`; clears `focusedSplitNode` and focuses the leaf window when reaching leaf level | ✓ |
 | `focus tiling` / `focus floating` / `focus mode_toggle` | Toggle between tiling and floating focus | Not implemented in split-tree context | ✗ P3 (out of layout-engine scope) |
@@ -198,8 +198,8 @@ cross-tag path instead of restructuring the workspace root.
    `CidSplitTreeLayoutCycleList` (`cycleFocusedSplitTreeLayoutList`) for `layout toggle all`
    and `layout toggle <list>` respectively.
 
-7. **`focus next/prev sibling`** — add `CidSplitTreeFocusNextSibling` / `CidSplitTreeFocusPrevSibling`
-   stepping through `parent.children` around the focused leaf.
+7. ~~**`focus next/prev sibling`**~~ ✓ — `CidSplitTreeFocusNextSibling` / `CidSplitTreeFocusPrevSibling`
+   → `focusSplitTreeSibling(±1)` steps through `parent.children` of the focused leaf with wrapping.
 
 ### P2 — Config surface
 

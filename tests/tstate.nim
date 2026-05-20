@@ -2193,6 +2193,42 @@ suite "Runtime state primitives":
     model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleList, cycleModes: modes))
     check model.splitNodes.entity(root).get().mode == SplitTreeNodeMode.Tabbed
 
+  test "split-tree focus next/prev sibling steps through parent children with wrap":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let winA = model.windowForExternal(ExternalWindowId(10))
+    let winB = model.windowForExternal(ExternalWindowId(11))
+    let winC = model.windowForExternal(ExternalWindowId(12))
+    let tagId = model.activeTag
+
+    # Focus middle window B; next sibling → C, prev sibling → A.
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusNextSibling))
+    check model.tags.entity(tagId).get().focusedWindow == winC
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusPrevSibling))
+    check model.tags.entity(tagId).get().focusedWindow == winA
+
+    # Wrap: next from C (rightmost) → A (leftmost).
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusNextSibling))
+    check model.tags.entity(tagId).get().focusedWindow == winA
+
+    # Wrap: prev from A (leftmost) → C (rightmost).
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeFocusPrevSibling))
+    check model.tags.entity(tagId).get().focusedWindow == winC
+
   test "native frame-tree stores tabs and projects active frame windows":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     let (withOutput, _) = model.update(

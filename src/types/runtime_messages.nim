@@ -82,6 +82,8 @@ type
     CmdSplitTreeLayoutCycleAll
     CmdSplitTreeLayoutDefault
     CmdSplitTreeLayoutCycleList
+    CmdSplitTreeFocusNextSibling
+    CmdSplitTreeFocusPrevSibling
     CmdBspBalance
     CmdBspEqualize
     CmdBspPreselect

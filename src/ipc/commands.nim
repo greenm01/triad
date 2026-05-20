@@ -381,6 +381,10 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
           return none(Msg)
         modes.add(m.get())
       some(Msg(kind: MsgKind.CmdSplitTreeLayoutCycleList, cycleModes: modes))
+  of CommandId.CidSplitTreeFocusNextSibling:
+    some(Msg(kind: MsgKind.CmdSplitTreeFocusNextSibling))
+  of CommandId.CidSplitTreeFocusPrevSibling:
+    some(Msg(kind: MsgKind.CmdSplitTreeFocusPrevSibling))
   of CommandId.CidBspBalance:
     some(Msg(kind: MsgKind.CmdBspBalance))
   of CommandId.CidBspEqualize:

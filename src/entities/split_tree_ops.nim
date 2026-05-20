@@ -239,6 +239,37 @@ proc focusSplitTreeTab*(model: var Model, delta: int): bool =
     return false
   model.setTagFocus(tagId, next)
 
+proc focusSplitTreeSibling*(model: var Model, delta: int): bool =
+  let tagId = model.activeTag
+  if tagId == NullTagId or delta == 0:
+    return false
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let leaf = model.focusedSplitLeafOrRoot(tagId)
+  if leaf == NullSplitNodeId:
+    return false
+  let leafOpt = model.splitNodes.entity(leaf)
+  if leafOpt.isNone:
+    return false
+  let parentId = leafOpt.get().parent
+  if parentId == NullSplitNodeId:
+    return false
+  let parentOpt = model.splitNodes.entity(parentId)
+  if parentOpt.isNone:
+    return false
+  let children = parentOpt.get().children
+  if children.len <= 1:
+    return false
+  var idx = children.find(leaf)
+  if idx == -1:
+    idx = 0
+  idx = (idx + delta + children.len) mod children.len
+  let next = model.splitTreeActiveWindowInSubtree(children[idx])
+  if next == NullWindowId or next == tagOpt.get().focusedWindow:
+    return false
+  model.setTagFocus(tagId, next)
+
 proc replaceSplitChild(
     model: var Model, parentId, oldChild, newChild: SplitNodeId
 ): bool =

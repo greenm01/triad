@@ -44,6 +44,8 @@ type
     CidSplitTreeLayoutCycleAll
     CidSplitTreeLayoutDefault
     CidSplitTreeLayoutCycleList
+    CidSplitTreeFocusNextSibling
+    CidSplitTreeFocusPrevSibling
     CidBspBalance
     CidBspEqualize
     CidBspPreselectLeft
@@ -342,6 +344,16 @@ const CommandSpecs* = [
     id: CommandId.CidSplitTreeLayoutCycleList,
     name: "split-tree-layout-cycle",
     argShape: SplitTreeModeList,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeFocusNextSibling,
+    name: "split-tree-focus-next-sibling",
+    argShape: NoArgs,
+  ),
+  CommandSpec(
+    id: CommandId.CidSplitTreeFocusPrevSibling,
+    name: "split-tree-focus-prev-sibling",
+    argShape: NoArgs,
   ),
   CommandSpec(id: CommandId.CidBspBalance, name: "bsp-balance", argShape: NoArgs),
   CommandSpec(id: CommandId.CidBspEqualize, name: "bsp-equalize", argShape: NoArgs),
