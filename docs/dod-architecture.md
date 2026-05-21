@@ -207,6 +207,15 @@ Rules:
 - Removing a tag bit removes that tag's placement for the window.
 - Destroying a window removes all of its tag membership and placement rows.
 
+## Outputs and Workspaces
+
+Triad treats each monitor as a distinct output with its own visible workspace. While output positions use global coordinates (per Wayland output-management), workspace placement and window layout are output-aware.
+
+- **Output State:** Each `OutputData` record tracks its active workspace and reserved area.
+- **Workspace Mapping:** Each workspace (tag) remembers its assigned output. If an output disappears, the workspace remains occupied but falls back to a connected output until the target output returns.
+- **Hotplug Logic:** When an output is removed, Triad updates the live output list and reassigns affected workspaces. Reconnecting an output re-applies configuration and moves remembered workspaces back.
+- **Pinning:** `placementByTagWindow` and output-pinning rules ensure workspaces prefer their configured outputs. Focusing a pinned workspace shifts focus to that output rather than moving the workspace.
+
 ## Snapshots and IPC
 
 Shell integrations must serialize snapshots, not internal storage.

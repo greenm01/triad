@@ -68,28 +68,32 @@ Layouts are decoupled from the core Wayland event loop. They are simply mathemat
 
 ### 4. Configuration (KDL)
 Triad uses KDL for robust, hot-reloadable configuration.
+
+*   **Validation Logic:** Configuration validation checks strict output-rule shapes. Unknown or unsupported `output` fields, invalid transforms, malformed modes, non-positive workspace IDs, and out-of-range scales are rejected before startup or reload.
 *   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
+    *   **Gaps:** In native `frame-tree` layouts, gaps represent the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. Native `bsp-tree` and `i3` use traditional outer and inner gaps.
 *   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, one trailing empty creation workspace remains internally available after the last occupied workspace, and stale empty workspaces are pruned. Shell compatibility views and overview previews hide inactive empty workspaces.
 *   **Workspace Rule Templates:** Provides lazy name/layout templates for workspace slots when internal tags are created (e.g., `workspace 1 default-layout="scroller"`).
 *   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific workspace assignments.
+
+*   **Janet Layouts:** User-defined Janet layouts can be declared with a native fallback (e.g., `scroller`, `frame-tree`, `bsp-tree`, `i3`).
+    *   **Frame-tree Fallback:** When a layout uses `fallback="frame-tree"`, it can return frame geometry via `:frame-id`. Triad maps these to the active visible tab and preserves empty frame rects for native chrome.
+    *   **BSP-tree Fallback:** Layouts using `fallback="bsp-tree"` can return geometry via `:bsp-node-id`. Triad maps these to tiled windows and exposes preselection state (`:preselect-direction`, `:preselect-ratio`).
+    *   **Split-tree (i3) Fallback:** Layouts using `fallback="i3"` receive immutable `:split-nodes` and return geometry via `:split-node-id`. Mutation (insertion, resize, etc.) remains a native state operation.
 
 Config names follow the policy in `docs/configuration.md`: Niri-style KDL
 clarity is the naming baseline, while Mango remains a feature reference for
 layouts, tags, scratchpads, and pointer workflows.
 
 ### 5. Shell IPC and Quickshell Integration
-Triad is designed to act as the backend window manager for a full desktop environment powered by Quickshell or other shell deployers.
+Triad separates Triad-native IPC from shell projection IPC to support both native and legacy shell ecosystems.
 
-The architecture separates Triad-native IPC from shell projection IPC:
-
-*   **Canonical Shell Snapshot:** Triad derives shell-facing state from one internal snapshot of the `Model`. This snapshot contains Triad concepts directly: stable tag IDs, compact workspace indices, windows, outputs, focus, overview state, and per-tag layout modes.
-*   **Native Triad IPC (`$TRIAD_SOCKET`):** This is the long-term protocol for deployers and shells that want to integrate with Triad directly. It exposes versioned JSON requests and events such as full shell state, layout state, layout changes, and native state updates.
-*   **Niri Projection IPC (`$NIRI_SOCKET`):** This is a projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics and does not receive Triad-only fields.
+*   **Canonical Shell Snapshot:** Triad derives all shell-facing state from a single internal model snapshot. This snapshot contains stable tag IDs, compact workspace indices, windows, outputs, focus history, and layout modes.
+*   **Native Triad IPC (`$TRIAD_SOCKET`):** The primary, long-term protocol for shells (e.g., Quickshell) that integrate with Triad directly. It exposes versioned JSON requests and events including the full shell state and per-tag layout details.
+*   **Niri Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics to support existing Niri-aware shells (Noctalia, DankMaterialShell) without modification.
 *   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
-This lets Quickshell modules choose either Niri-shaped projection events or
-Triad's richer tagged model. See `docs/the_triad.md` for the high-level
-rationale behind Tags + Rules + IPC.
+IPC window and output IDs are numeric external compositor IDs, stable for the lifetime of the compositor object but distinct from Triad's internal logical IDs.
 
 ### Niri Projection IPC
 Triad implements a Niri-shaped JSON IPC stream for shells that consume that

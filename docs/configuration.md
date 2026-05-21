@@ -1,70 +1,66 @@
 # Configuring Triad
 
-Triad uses the KDL configuration format, which is both readable and expressive. You can find your configuration at `$XDG_CONFIG_HOME/triad/config.kdl` (or `~/.config/triad/config.kdl` if the environment variable is unset). If you haven't created one yet, Triad will provide a sensible default when it first starts.
+Triad uses the KDL configuration format. Edit your configuration at `$XDG_CONFIG_HOME/triad/config.kdl` (defaulting to `~/.config/triad/config.kdl`). Triad provides a default configuration on first start.
 
-See `examples/config/` for practical examples.
+Practical examples are in `examples/config/`.
 
-## The Basics
+## Basics
 
 ### Command Line Overrides
-If you need to test a specific configuration or keep multiple setups, use the `--config` (or `-c`) flag:
+Use the `--config` (or `-c`) flag to test a specific configuration:
 
 ```sh
 triad --config /path/to/my-config.kdl
 ```
 
 ### Validation
-Before applying changes, you can ensure your configuration is syntactically sound without launching the daemon:
+Check your configuration syntax without launching the daemon:
 
 ```sh
 triad validate-config
 ```
 
-Validation also checks strict output-rule shapes. Unknown or unsupported
-`output` fields, invalid transforms, malformed modes, non-positive workspace
-IDs, and out-of-range scales are rejected before startup or reload.
-
 ### Hot Reloading
-Triad is alive. It watches your configuration files and reloads them instantly whenever you save. This includes any files you've pulled in via the `include` directive.
+Triad watches your configuration and reloads instantly when you save, including any files added via the `include` directive.
 
 ### Modular Configuration
-Keep your configuration tidy by splitting it into multiple files:
+Split your configuration into multiple files:
 
 ```kdl
 include "bindings.kdl"
 include optional=#true "~/.config/triad/local.kdl"
 ```
 
-Paths are relative to the file containing the `include`. Use `~/` to refer to your home directory.
+Paths are relative to the including file. Use `~/` for your home directory.
 
 ---
 
 ## Naming Philosophy
 
-Triad’s configuration should read like a set of clear instructions, not a technical manual. We follow a few simple rules to keep things human:
+Triad configuration uses clear, descriptive names:
 
-*   **Be Descriptive:** Use `center-focused-column` instead of `cfc`.
-*   **Be Verbose:** Prefer `split-ratio` over `mfact`.
-*   **Be Positive:** Use `open-floating` instead of `isfloating`.
-*   **Use Actions:** Use verbs for commands, like `maximize-column` or `move-window-left`.
-*   **Consistency:** Everything is lowercase kebab-case.
+*   **Descriptive:** `center-focused-column` instead of `cfc`.
+*   **Verbose:** `split-ratio` instead of `mfact`.
+*   **Positive:** `open-floating` instead of `isfloating`.
+*   **Action-oriented:** Verbs for commands (e.g., `maximize-column`, `move-window-left`).
+*   **Lowercase kebab-case:** Used throughout.
 
 ---
 
 ## Environment & Startup
 
 ### Environment Variables
-Use the `environment` block to set variables for any process Triad starts (terminals, launchers, etc.).
+Set variables for processes Triad starts using the `environment` block.
 
 | Variable Name | Value | Description |
 | :--- | :--- | :--- |
-| `NAME` | `"Value"` | Sets a literal string value. |
-| `NAME` | `#null` | Removes the variable from the environment. |
+| `NAME` | `"Value"` | Sets a string value. |
+| `NAME` | `#null` | Removes the variable. |
 
-*Note: Triad does not expand variables like `$HOME` or `~` here; use literal paths.*
+*Note: Use literal paths; Triad does not expand variables like `$HOME`.*
 
 ### Startup Commands
-You can run commands automatically when Triad starts using `spawn-at-startup`.
+Run commands automatically at startup using `spawn-at-startup`.
 
 ```kdl
 spawn-at-startup "waybar"
@@ -72,13 +68,12 @@ spawn-at-startup "nm-applet" "--indicator"
 ```
 
 ### Shell & Bar Profiles
-Manage your shell, status bar, or desktop overlays using `shells`. This allows you to switch between different desktop environments (profiles) on the fly.
+Manage shells, status bars, and desktop overlays using `shells`.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `active` | `String` | The name of the profile to start by default. |
-| `cycle` | `List` | Profiles to rotate through when using `cycle-shell`. |
-| `watchdog` | `Block` | Settings for monitoring shell health. |
+| `active` | `String` | The default profile to start. |
+| `cycle` | `List` | Profiles to rotate through via `cycle-shell`. |
 
 **Example Profile Configuration:**
 ```kdl
@@ -104,37 +99,29 @@ shells {
 ## Layout & Workspaces
 
 ### The Layout Block
-Control the geometry and behavior of your windows.
+Control window geometry and behavior.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `gaps` | `Pixels` | Gaps around windows (0..512). In native `frame-tree` layouts this is the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. Native `bsp-tree` and `i3` use normal outer and inner gaps. |
+| `gaps` | `Pixels` | Gaps around windows (0..512). |
 | `center-focused-column`| `"never"`, `"always"`, `"on-overflow"` | How to position the active scroller column. |
-| `scroller-focus-center`| `Bool` | Keeps the focus at the screen center while scrolling. |
+| `scroller-focus-center`| `Bool` | Keeps focus at screen center while scrolling. |
 | `scroller-prefer-center`| `Bool` | Attempts to center columns even when not focused. |
 | `scroller-proportion-presets` | `Float...` | Presets for `switch-proportion-preset` (0.05..1.0). |
 | `default-column-width` | `Block` | Default width for new columns. |
 | `default-window-width` | `Block` | Default width for new windows. |
 | `default-window-height`| `Block` | Default height for new windows. |
 | `master` | `Block` | Configure `count` and `split-ratio` (0.05..0.95). |
-| `spiral` | `Block` | Configure bundled Spiral: `ratio`, `main-pane-ratio`, `main-pane`, and `clockwise`. |
+| `spiral` | `Block` | Configure `ratio`, `main-pane-ratio`, `main-pane`, and `clockwise`. |
 | `border` | `Block` | Global `width` (0..64), `active-color`, and `inactive-color`. |
-| `frame-tabs` | `Block` | Native frame-tree tab and empty-frame colors: `active-color`, `active-unfocused-color`, `inactive-color`, `active-line-color`, `active-unfocused-line-color`, and `empty-background-color`. |
+| `frame-tabs` | `Block` | Colors for frame-tree tabs and empty frames. |
 | `smart-gaps` | `Bool` | Remove gaps when only one window is visible. |
-| `enable-animations` | `Bool` | Toggles viewport animations. |
+| `enable-animations` | `Bool` | Toggle viewport animations. |
 | `animation-speed` | `0.0..1.0` | Speed of camera movement (0.0 is instant). |
-| `animation-snap-threshold` | `0.01..64.0` | Pixel distance to snap camera to target. |
 | `frame-rate` | `"auto" / Int` | Targeted FPS (24..240, default: "auto"). |
-| `layout-cycle` | `List` | Built-in layout ids and declared Janet layout names to rotate through. |
+| `layout-cycle` | `List` | Built-in or Janet layout IDs to rotate through. |
 
-Native `i3` split-tree layouts support i3-style container modes through
-`split-tree-layout-toggle-split`, `split-tree-layout-stacking`, and
-`split-tree-layout-tabbed`. The default bindings scope i3 commands to
-`layout "i3"`: `Super+Alt+h/v` split the focused container horizontally or
-vertically, and `Super+e`, `Super+s`, and `Super+w` select split, stacking, and
-tabbed modes only while i3 is active. The global `Super+Page_Up/Page_Down`
-bindings cycle tabs in the focused tabbed or stacking container while i3 is
-active.
+Native `i3` layouts support i3-style container modes. The default bindings scope i3 commands to `layout "i3"`. Use `Super+Alt+h/v` to split, and `Super+e/s/w` to select split, stacking, or tabbed modes.
 
 **Example Layout Configuration:**
 ```kdl
@@ -151,35 +138,19 @@ layout {
 
   frame-tabs {
     active-color "#3f7fd5"
-    active-unfocused-color "#303846"
     inactive-color "#161a22ee"
     active-line-color "#ffffff"
-    active-unfocused-line-color "#62a8ff"
-    empty-background-color "#00000001"
-  }
-  
-  master {
-    count 1
-    split-ratio 0.6
-  }
-
-  spiral {
-    ratio 0.618
-    main-pane "left"
-    clockwise #true
   }
 }
 ```
-Colors accept `#RRGGBB` or `#RRGGBBAA`; use the alpha byte in
-`empty-background-color` for translucent empty frame placeholders.
 
 ### Workspaces
-Workspaces are your virtual rooms. You can name them, pin them to specific monitors, and set their default layouts.
+Workspaces are virtual rooms. You can name them, pin them to monitors, and set default layouts.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `default-count` | `Int` | The minimum number of workspaces to keep open. |
-| `default-layout` | `String` | Built-in layout id or declared Janet layout name. |
+| `default-count` | `Int` | Minimum number of workspaces to keep open. |
+| `default-layout` | `String` | Default layout ID or Janet layout name. |
 
 **Example Workspace Rules:**
 ```kdl
@@ -221,100 +192,55 @@ output {
 }
 ```
 
-Existing top-level `output "name" { ... }` rules remain supported.
-
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `focus-at-startup` | `Flag` | Focus this output on Triad launch. If workspace 1 is not explicitly pinned elsewhere, startup places workspace 1 on this output before filling other monitors. |
-| `workspaces` | `Int...` | Pin these workspace IDs to this output. Pinned workspaces stay on this output when focused unless the output is unavailable or the user explicitly moves the workspace. |
-| `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Set resolution and refresh rate, or choose from advertised modes. |
-| `scale` | `Float`, `"auto"` | Output scaling factor (0.01..64.0). `"auto"` keeps the compositor's current scale. |
-| `position` | `X Y`, `"XxY"`, `"auto-*"` | Global coordinate position or automatic arrangement. |
+| `focus-at-startup` | `Flag` | Focus this output on launch. |
+| `workspaces` | `Int...` | Pin workspace IDs to this output. |
+| `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Set resolution and refresh rate. |
+| `scale` | `Float`, `"auto"` | Output scaling factor (0.01..64.0). |
+| `position` | `X Y`, `"XxY"`, `"auto-*"` | Global coordinate position. |
 | `transform` | `String`, `0..7` | Rotation (e.g., `"90"`, `"flipped"`, `"normal"`). |
-| `adaptive-sync` | `Bool` | Toggle VRR/Adaptive Sync. |
-| `vrr` | `0..3` | Hyprland-compatible alias for `adaptive-sync`; nonzero enables VRR. |
-| `enabled` / `disabled` | `Bool` | Enable or disable an output through wlroots output-management. |
-| `reserved_area` | `Int`, `Int Int Int Int`, or properties | Add top/right/bottom/left usable-area insets on top of live bar reservations. |
-
-Unsupported Hyprland monitor fields such as mirroring, bit depth, color
-management, ICC, and HDR/luminance metadata are rejected by strict validation.
-River does not expose those controls to Triad today; they are documented as
-future features instead of accepted as no-ops.
+| `vrr` | `0..3` | Enable VRR/Adaptive Sync (nonzero enables). |
+| `reserved_area` | `Int`, `Int Int Int Int`, or properties | Add usable-area insets. |
 
 ---
 
 ## Window Rules
 
-Window rules are the heart of Triad's automation. They allow you to define exactly how windows behave based on their identity or state.
+Window rules define how windows behave based on their identity or state.
 
 ### Matching & Exclusion
 Every rule begins with a `match` or `exclude` block. 
 
 | Matcher | Type | Description |
 | :--- | :--- | :--- |
-| `app-id` | `Regex` | Match based on application ID. |
-| `title` | `Regex` | Match based on window title. |
-| `is-focused` | `Bool` | Match if the window is currently focused. |
-| `is-active` | `Bool` | Match if the window is the active one in its workspace. |
-| `is-active-in-column` | `Bool` | Match if it's the active window in its column. |
-| `is-floating` | `Bool` | Match based on floating state. |
-| `at-startup` | `Bool` | Match if the window opens during Triad's initial startup. |
+| `app-id` | `Regex` | Match application ID. |
+| `title` | `Regex` | Match window title. |
+| `is-focused` | `Bool` | Match if focused. |
+| `is-floating` | `Bool` | Match if floating. |
 
 ### Behavior & Placement
 
 | Property | Values | Description |
 | :--- | :--- | :--- |
 | `open-floating` | `Bool` | Force window to open floating. |
-| `open-focused` | `Bool` | Whether to grant focus immediately on open. |
-| `open-fullscreen` | `Bool` | Force window into fullscreen mode. |
+| `open-focused` | `Bool` | Grant focus immediately on open. |
+| `open-fullscreen` | `Bool` | Force fullscreen mode. |
 | `open-maximized` | `Bool` | Open as a full-width column in scroller layouts. |
-| `open-maximized-to-edges` | `Bool` | Open in the edge-maximized state. |
-| `maximize-policy` | `"edge"`, `"column"`, `"ignore"` | Sets behavior when the maximize command is issued. |
-| `default-workspace` | `Int" | Send the window to a specific workspace. |
-| `default-workspaces` | `Int...` | Assign window to multiple workspaces. |
-| `open-on-output` | `String` | Pin the window to a specific monitor name. |
-| `open-named-scratchpad`| `String` | Open hidden in a specific scratchpad pool. |
-| `open-on-all-workspaces` | `Bool` | Make the window sticky across all workspaces. |
-| `open-overlay` | `Bool` | Keep window above normal windows without floating. |
-| `open-unmanaged-global`| `Bool` | Open as a global, layout-independent float. |
-| `parented-role` | `"dialog"`, `"tool"`, `"plain"` | How child windows interact with parents. |
-| `dialog-viewport-jump` | `Bool` | Allow dialogs to snap the viewport immediately. |
+| `maximize-policy` | `"edge"`, `"column"`, `"ignore"` | Set behavior for the maximize command. |
+| `default-workspace` | `Int` | Send window to a specific workspace. |
+| `open-on-output` | `String` | Pin window to a specific monitor. |
+| `open-on-all-workspaces` | `Bool` | Make window sticky across all workspaces. |
+| `idle-inhibit` | `"none"`, `"focused"`, `"visible"` | Prevent screen idle/sleep. |
+| `presentation-mode` | `"default"`, `"vsync"`, `"async"` | Output presentation policy. |
 
 ### Sizing & Geometry
 
 | Property | Values | Description |
 | :--- | :--- | :--- |
-| `min-width` / `max-width` | `Pixels` | Effective size boundaries (0..65535). |
-| `min-height` / `max-height`| `Pixels` | Effective size boundaries (0..65535). |
-| `default-column-width` | `Block` | Initial width proportion for new columns. |
+| `min-width` / `max-width` | `Pixels` | Size boundaries. |
 | `scroller-proportion` | `0.05..1.0` | Initial width/height in scroller layouts. |
-| `scroller-single-proportion` | `0.05..1.0` | Size when the window is the only one in the scroller. |
-| `default-window-width` | `Block` | Initial stored width proportion. |
-| `default-window-height`| `Block` | Initial stored height proportion. |
-| `respect-size-hints` | `Bool` | Whether to honor the application's requested size. |
-| `center-floating` | `Bool` | Center the window on the active screen if floating. |
-| `default-floating-position` | `Block` | Set `x`, `y`, and `relative-to` (anchor). |
-| `floating` | `Block` | Set custom `x-ratio`, `y-ratio`, `width`, `height`, etc. |
-
-### Advanced State & Integration
-
-| Property | Values | Description |
-| :--- | :--- | :--- |
-| `terminal` | `Bool` | Mark as a terminal host for swallowing. |
-| `allow-swallow` | `Bool` | Whether child windows can be swallowed by this host. |
-| `keyboard-shortcuts-inhibit` | `Bool` | Whether to inhibit global shortcuts while focused. |
-| `idle-inhibit` | `"none"`, `"focused"`, `"visible"` | Prevent screen idle/sleep. |
-| `presentation-mode` | `"default"`, `"vsync"`, `"async"` | Output presentation policy. |
-| `tiled-state` | `Bool` | Override the client-visible tiled hint. |
-| `forced-layout` | `String` | Force a specific layout for the workspace. |
-
-### Appearance & Rendering
-
-| Property | Values | Description |
-| :--- | :--- | :--- |
-| `border` | `Block` | Custom `width`, `active-color`, and `inactive-color`. |
-| `focus-ring` | `Block` | Custom `width` and `active-color` for focused windows. |
-| `clip-to-geometry` | `Bool` | Force visual clipping to the window's layout box. |
+| `center-floating` | `Bool` | Center the window if floating. |
 
 **Example Window Rules:**
 ```kdl
@@ -326,23 +252,9 @@ window-rule {
 }
 
 window-rule {
-  match app-id="^firefox$"
-  exclude title="^Picture-in-Picture$"
-  default-column-width { proportion 0.6; }
-}
-
-window-rule {
-  match title="^Picture-in-Picture$"
-  open-floating #true
-  open-on-all-workspaces #true
-  default-floating-position x=32 y=32 relative-to="bottom-right"
-}
-
-window-rule {
   match app-id="^steam_app_"
   open-fullscreen #true
   idle-inhibit "visible"
-  presentation-mode "async"
 }
 ```
 
@@ -351,28 +263,16 @@ window-rule {
 ## Interaction & Input
 
 ### Input Devices
-Configure your peripherals with precision. Blocks are available for `keyboard`, `mouse`, `touchpad`, `trackpoint`, and `trackball`.
+Configure peripherals like keyboards, mice, and touchpads.
 
 | Setting | Values | Description |
 | :--- | :--- | :--- |
-| `off` | `Bool` | Disable the device entirely. |
-| `repeat-rate` | `Hz` | Keys repeated per second (0..1000). |
-| `repeat-delay` | `ms` | Delay before key repeat starts (0..20000). |
+| `off` | `Bool` | Disable the device. |
+| `repeat-rate` | `Hz` | Keys repeated per second. |
+| `repeat-delay` | `ms` | Delay before key repeat starts. |
 | `natural-scroll` | `Bool` | Reverse scroll direction. |
-| `accel-profile` | `"none"`, `"flat"`, `"adaptive"` | Pointer acceleration behavior. |
-| `accel-speed` | `-1.0..1.0` | Pointer speed adjustment. |
-| `scroll-method` | `"none"`, `"two-finger"`, `"edge"`, `"on-button-down"` | How to trigger scrolling. |
-| `scroll-button` | `Int" | Button code for `on-button-down` scrolling. |
-| `scroll-button-lock` | `Bool" | Lock scroll mode after button press. |
-| `scroll-factor` | `0.0..100.0` | Sensitivity of scrolling. |
-| `left-handed` | `Bool` | Swap left and right buttons. |
-| `middle-emulation` | `Bool` | Simulate middle click by pressing both buttons. |
 | `tap` | `Bool` | (Touchpad) Enable tap-to-click. |
-| `tap-button-map` | `"lrm"`, `"lmr"` | Map taps to mouse buttons. |
-| `drag` / `drag-lock` | `Bool` | (Touchpad) Tap-to-drag behavior. |
-| `dwt` / `dwtp` | `Bool` | Disable while typing (p for palm detection). |
-| `click-method` | `"button-areas"`, `"clickfinger"` | How clicks are registered. |
-| `disabled-on-external-mouse` | `Bool` | Disable touchpad when a mouse is plugged in. |
+| `dwt` | `Bool` | Disable while typing. |
 
 **Example Input Configuration:**
 ```kdl
@@ -389,44 +289,31 @@ input {
   touchpad {
     tap #true
     natural-scroll #true
-    dwt #true
-  }
-
-  mouse {
-    accel-profile "flat"
-    accel-speed 0.0
   }
 }
 ```
 
 ### Cursor
-Customize the pointer behavior.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `theme` | `String` | The cursor theme name. |
-| `size` | `Pixels` | Base cursor size (1..512). |
-| `shake-to-find` | `Bool` | Briefly enlarge the cursor when shaken. |
-| `hide-when-typing` | `Bool` | Hide cursor when a key is pressed. |
-| `hide-after-inactive-ms`| `ms` | Hide cursor after stillness. |
+| `theme` | `String` | Cursor theme name. |
+| `size` | `Pixels` | Base cursor size. |
+| `shake-to-find` | `Bool` | Enlarge cursor when shaken. |
 
 ---
 
 ## Bindings & Events
 
 ### Bindings
-Triad supports keyboard, pointer, wheel, and gesture bindings. The default
-keyboard map binds `Super+Shift+n` to `new-workspace`, which creates an empty
-dynamic workspace on the currently focused monitor and focuses it.
+Triad supports keyboard, pointer, wheel, and gesture bindings.
 
-*   `bind`: Keyboard commands (e.g., `"Super+Return"`).
-*   `pointer-bind`: Mouse button commands.
-*   `axis-bind`: Scroll wheel commands.
-*   `gesture-bind`: Touchpad swipe gestures.
+*   `bind`: Keyboard commands.
+*   `pointer-bind`: Mouse buttons.
+*   `axis-bind`: Scroll wheel.
+*   `gesture-bind`: Touchpad gestures.
 
-Keyboard bindings can also be scoped to a layout id. Scoped bindings default to
-normal mode and shadow global bindings with the same key only while that layout
-is active:
+Bindings can be scoped to a layout:
 
 ```kdl
 bindings {
@@ -434,23 +321,9 @@ bindings {
 
   layout "i3" {
     bind "Super+Alt+h" "split-tree-split-horizontal"
-    bind "Super+e" "split-tree-layout-toggle-split"
-  }
-
-  layout "notion" {
-    bind "Super+Alt+h" "frame-split-horizontal"
   }
 }
 ```
-
-**Options:**
-*   `mode`: Restrict a binding to a specific mode (e.g., `mode="overview"`).
-*   `on-release`: Run the command when the key is released.
-*   `while-locked`: Allow the command to run while the session is locked.
-*   `allow-inhibiting`: If `#false`, the binding can bypass client-side shortcut inhibition.
-*   `layout`: Force a specific XKB layout index for the binding. This is
-    separate from `layout "id" { ... }` binding scopes.
-*   `hotkey-overlay-title`: Human-readable label for the hotkey guide.
 
 **Example Bindings:**
 ```kdl
@@ -461,118 +334,41 @@ bindings {
   
   pointer-bind "Super+btn-left" "move"
   pointer-bind "Super+btn-right" "resize"
-  
-  axis-bind "Super+wheel-up" "focus-left"
-  axis-bind "Super+wheel-down" "focus-right"
-  
-  gesture-bind "Super+swipe-left" "focus-left" fingers=3
-  gesture-bind "Super+swipe-right" "focus-right" fingers=3
 }
 ```
-
-### Switch Events
-Handle hardware changes like closing your laptop lid.
-
-| Event | Description |
-| :--- | :--- |
-| `lid-close` / `lid-open` | Laptop lid actions. |
-| `tablet-mode-on` / `off` | Tablet mode transitions. |
 
 ---
 
 ## Native Features
 
 ### Recent Windows (Switcher)
-A built-in Most Recently Used (MRU) switcher with native previews.
+A Most Recently Used (MRU) switcher with native previews.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `enabled` | `Bool` | Toggle the MRU switcher feature. |
-| `debounce-ms` | `ms` | Time to wait before a window is recorded. |
-| `open-delay-ms` | `ms` | Delay before the preview overlay appears. |
-| `highlight` | `Block` | Configure `active-color`, `urgent-color`, etc. |
-| `previews` | `Block` | Set `max-height` and `max-scale` for snapshots. |
-
-**Example Switcher Configuration:**
-```kdl
-recent-windows {
-  debounce-ms 500
-  open-delay-ms 100
-  highlight {
-    active-color "#999999"
-    padding 20
-  }
-}
-```
+| `enabled` | `Bool` | Toggle the MRU switcher. |
+| `debounce-ms" | `ms` | Time before a window is recorded. |
 
 ### Hotkey Overlay
-A visual guide to your current keybindings.
-
-| Setting | Format | Description |
-| :--- | :--- | :--- |
-| `skip-at-startup` | `Bool` | Don't show the guide on Triad launch. |
-| `hide-not-bound" | `Bool` | Hide rows that don't have a configured key. |
-| `position` | `"top"`, `"center"`, `"bottom"` | Overlay placement on screen. |
-| `columns` | `1..4` | Number of columns in the guide. |
+A visual guide to current keybindings.
 
 ### Scratchpads
-Persistent, hidden window pools for background applications.
-
-| Setting | Format | Description |
-| :--- | :--- | :--- |
-| `width-ratio` | `0.1..1.0` | Default width of the scratchpad window. |
-| `height-ratio`| `0.1..1.0` | Default height of the scratchpad window. |
+Persistent, hidden window pools.
 
 ### Overview
-A birds-eye view of all your workspaces.
-
-| Setting | Format | Description |
-| :--- | :--- | :--- |
-| `outer-gap` | `Pixels` | Gaps around the overview frame. |
-| `inner-gap-multiplier`| `Float` | Multiplier for gaps between previews. |
-| `zoom` | `Float" | Scaling factor for previews. |
-| `tab-mode` | `Bool` | Enable modifier-hold cycling. |
-| `hot-corners` | `Block` | Configure trigger `size` and active corners. |
+A birds-eye view of all workspaces.
 
 ---
 
-## Integration & Compatibility
+## Integration
 
 ### Shell Compatibility
-Triad can provide a compatibility layer for existing Wayland shells that expect a specific JSON IPC contract.
+Triad provides a compatibility layer for shells expecting Niri-style IPC.
 
-| Feature | Description |
-| :--- | :--- |
-| `niri-compat` | When enabled in a `profile`, Triad sets `$NIRI_SOCKET` and provides a compatible IPC facade. |
-| `triad_niri` | A CLI tool that maps standard message commands to Triad's native equivalents. |
-
-**How it works:**
-When a shell profile is started with `niri-compat #true`, Triad creates a private runtime environment:
-- `$NIRI_SOCKET` points at Triad's compatibility socket.
-- `XDG_CURRENT_DESKTOP=triad` is set so shells select the correct backend.
-- `PATH` is updated to prioritize Triad's compatibility tools.
+When a shell profile uses `niri-compat #true`, Triad sets `$NIRI_SOCKET` and provides a compatible IPC facade.
 
 ### Janet Scripting
-Triad includes an embedded Janet runtime for advanced automation. Scripts in
-`automation-dir` can subscribe to runtime events with `triad/on` and emit
-normal Triad commands through `triad/command`.
-Named Janet layouts are declared in the same block. A custom layout name is a
-bare id that must not collide with a core, native, or bundled Janet layout id
-such as `notion`, `bsp`, `dwindle`, or `spiral`. Each declaration has a safe fallback used
-for overview, compatibility projections, and any failed custom evaluation. The
-fallback may be `scroller`, `vertical-scroller`, or a native substrate layout
-such as `frame-tree`, `bsp-tree`, or `i3`. Algorithmic fallback ids
-such as `grid` or `tile` are accepted for compatibility but normalize to
-`scroller`.
-Bundled Janet layouts are embedded from repository `.janet` source files at
-compile time and evaluated lazily when selected. User custom layouts are loaded
-lazily from `layout-dir/<name>.janet`. The legacy `script-dir` key remains
-accepted as an alias for `automation-dir`.
-User Janet layouts may also define a narrow movement hook for layout-specific
-`move-window-*` behavior. Core and bundled layouts mirror directional focus and
-swap with the selected target. V1 hooks are an advanced override: they can no-op
-a direction or move the focused window forward/backward in the layout's tiled
-window order.
+Triad embeds Janet for advanced automation. Scripts in `automation-dir` can subscribe to events and emit commands.
 
 **Example Janet Configuration:**
 ```kdl
@@ -580,60 +376,16 @@ janet {
   enabled #true
   automation-dir "~/.config/triad/automation"
   layout-dir "~/.config/triad/layouts"
-  fuel-limit 500000
   layout "cascade" fallback="scroller"
-  layout "janet-frame-tree" fallback="frame-tree"
-  layout "janet-bsp" fallback="bsp-tree"
-  layout "janet-split-tree" fallback="i3"
 }
 ```
 
-Declared Janet layout names can be used in `layout-cycle`,
-`workspaces default-layout`, and `workspace-rules default-layout=...`.
-When a layout uses `fallback="frame-tree"`, it may return frame geometry with
-`:frame-id` instead of direct `:window-id` geometry. Triad maps each frame rect
-to that frame's active visible tab, preserves empty frame rects for native
-chrome, and lets the native frame tree fill the output usable rect without
-adding the normal outer layout gap.
-
-When a layout uses `fallback="bsp-tree"`, it may return BSP leaf geometry with
-`:bsp-node-id`. Triad maps each BSP leaf rect to that node's tiled window, and
-falls back to the native BSP projection if the Janet policy fails. BSP node
-data also exposes `:preselect-direction` and `:preselect-ratio` so Janet
-layouts can visualize or account for manual insertion targets. Bundled BSP
-policies include `bsp` and `dwindle`; both use Triad-owned tree state.
-
-When a layout uses `fallback="i3"`, it may return split leaf geometry
-with `:split-node-id`. Triad maps each split leaf rect to that node's tiled
-window and falls back to native `i3` projection if the Janet policy
-fails. Janet receives immutable `:split-nodes`; split commands, insertion,
-movement, resize, removal, flattening, and restore remain native state
-mutations.
-
 ### Config Notifications
-Run custom commands to notify yourself of configuration reload results.
+Run commands to notify you of configuration reload results.
 
-**Example Notification Configuration:**
 ```kdl
 config-notification {
   reload-succeeded "notify-send" "Triad" "Config reloaded"
   reload-failed "notify-send" "Triad" "Syntax error in config"
 }
 ```
-
-### Protocol Surfaces
-Advanced control over Wayland protocol-driven surfaces.
-
-| Setting | Format | Description |
-| :--- | :--- | :--- |
-| `enabled" | `Bool` | Toggle protocol surface management. |
-| `visible-debug" | `Bool` | Draw debug boxes around protocol surfaces. |
-
----
-
-## Global Flags
-
-| Flag | Format | Description |
-| :--- | :--- | :--- |
-| `presentation-mode`| `"default"`, `"vsync"`, `"async"` | Global output presentation policy. |
-| `allow-exit-session`| `Bool` | Whether to allow the `exit-session` command. |
