@@ -218,8 +218,15 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
     if daemon.riverManager != nil and daemon.runtimeState.model.allowExitSession:
       daemon.riverManager.exitSession()
   of EffectKind.EffFocusShellUi:
-    daemon.ensureOwnedShellSurface()
-    let surfaceId = daemon.protocolSurfaceRuntime.ownedShellSurfaceId
+    if daemon.runtimeState.model.overviewActive:
+      daemon.syncOverviewSurfaces()
+    else:
+      daemon.ensureOwnedShellSurface()
+    let surfaceId =
+      if daemon.runtimeState.model.overviewActive:
+        daemon.overviewFocusShellSurfaceId()
+      else:
+        daemon.protocolSurfaceRuntime.ownedShellSurfaceId
     if surfaceId != 0:
       daemon.queueManageEffect(
         Effect(kind: EffectKind.EffFocusShellSurface, focusShellSurfaceId: surfaceId)

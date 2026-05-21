@@ -340,6 +340,7 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     for output in daemon.outputPointers.values:
       output.setPresentationMode(mode)
   let screen = daemon.currentModel.activeWorkspaceScreen()
+  daemon.syncOverviewSurfaces()
   let ids = daemon.orderedDesiredIds()
   let orderKey = daemon.renderOrderKey(ids)
   let orderChanged = daemon.lastRenderOrder != orderKey
@@ -441,7 +442,9 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     if shell.node != nil:
       shell.node.setPosition(screen.x, screen.y)
       if orderChanged:
-        if daemon.currentModel.overviewActive:
+        let overviewShellActive =
+          daemon.currentModel.overviewActive and daemon.overviewSurfaceByOutput.len > 0
+        if daemon.currentModel.overviewActive and not overviewShellActive:
           shell.node.placeTop()
         elif daemon.currentModel.recentWindowsVisible():
           shell.node.placeBottom()
@@ -453,7 +456,6 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
             shell.node.placeBelow(firstNode)
     daemon.surfaceTable[daemon.ownedShellSurfaceId] = shell
 
-  daemon.syncOverviewSurfaces()
   for outputId, surfaceId in daemon.overviewSurfaceByOutput.pairs:
     if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
       continue

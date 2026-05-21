@@ -288,6 +288,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousExitSessionConfirm = daemon.runtimeState.model.exitSessionConfirmOpen
     let previousActiveModifiers = daemon.runtimeState.model.activeModifiers
     let previousLayoutBindingId = daemon.runtimeState.model.activeLayoutBindingId()
+    let previousPointerOpActive =
+      daemon.runtimeState.model.pointerOp.kind != PointerOpKind.OpNone
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let dispatchJanetHooks =
@@ -305,6 +307,12 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       else:
         none(JanetUiHookState)
     let effects = syncRuntimeUpdate("message", msg)
+    if msg.kind != MsgKind.WlPointerRelease and previousPointerOpActive and
+        daemon.runtimeState.model.pointerOp.kind == PointerOpKind.OpNone and
+        daemon.lastPointerOpSeat != nil:
+      daemon.executeEffect(
+        Effect(kind: EffectKind.EffOpEnd, endSeat: daemon.lastPointerOpSeat)
+      )
     var nextQueuedMessages: seq[QueuedMsg] = @[]
     var afterJanetHookSnapshot = none(ShellSnapshot)
     if msg.kind == MsgKind.CmdTick and

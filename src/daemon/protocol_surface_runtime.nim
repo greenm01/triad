@@ -456,6 +456,39 @@ proc ensureOverviewSurface*(daemon: var TriadDaemon, outputId: OutputId) =
   debug "Created overview shell surface",
     outputId = uint32(outputId), shellSurfaceId = surfaceId
 
+proc destroyOverviewSurfaces*(daemon: var TriadDaemon) =
+  var outputIds: seq[OutputId]
+  for outputId in daemon.overviewSurfaceByOutput.keys:
+    outputIds.add(outputId)
+  for outputId in outputIds:
+    let surfaceId = daemon.overviewSurfaceByOutput[outputId]
+    daemon.overviewSurfaceByOutput.del(outputId)
+    if daemon.surfaceTable.hasKey(surfaceId):
+      var surf = daemon.surfaceTable[surfaceId]
+      daemon.surfaceTable.del(surfaceId)
+      daemon.destroyProtocolSurface(surf)
+
+proc overviewFocusShellSurfaceId*(daemon: TriadDaemon): uint32 =
+  proc usable(surfaceId: uint32): bool =
+    surfaceId != 0 and daemon.surfaceTable.hasKey(surfaceId) and
+      daemon.shellSurfacePointers.hasKey(surfaceId)
+
+  if daemon.currentModel.activeOutput != NullOutputId:
+    let surfaceId = daemon.overviewSurfaceByOutput.getOrDefault(
+      daemon.currentModel.activeOutput, 0'u32
+    )
+    if surfaceId.usable():
+      return surfaceId
+
+  for outputId in daemon.currentModel.sortedOutputIdsByExternal():
+    let surfaceId = daemon.overviewSurfaceByOutput.getOrDefault(outputId, 0'u32)
+    if surfaceId.usable():
+      return surfaceId
+
+  if daemon.ownedShellSurfaceId.usable():
+    return daemon.ownedShellSurfaceId
+  0'u32
+
 proc ensureRecentWindowsSurface*(daemon: var TriadDaemon) =
   if not daemon.currentModel.protocolSurfaces.enabled:
     return
@@ -601,6 +634,11 @@ proc syncOverviewSurface*(daemon: var TriadDaemon, outputId: OutputId, screen: R
   daemon.surfaceTable[surfaceId] = surf
 
 proc syncOverviewSurfaces*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.protocolSurfaces.enabled or
+      not daemon.currentModel.overviewActive:
+    daemon.destroyOverviewSurfaces()
+    return
+
   var liveOutputs: seq[OutputId]
   for outputId in daemon.currentModel.sortedOutputIdsByExternal():
     liveOutputs.add(outputId)

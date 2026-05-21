@@ -2071,9 +2071,12 @@ proc applyManageState*(daemon: var TriadDaemon) =
       )
     if daemon.currentModel.layerFocusExclusive or daemon.currentModel.sessionLocked:
       seat.clearFocus()
-    elif daemon.currentModel.overviewActive and daemon.ownedShellSurfaceId != 0 and
-        daemon.shellSurfacePointers.hasKey(daemon.ownedShellSurfaceId):
-      seat.focusShellSurface(daemon.shellSurfacePointers[daemon.ownedShellSurfaceId])
+    elif daemon.currentModel.overviewActive:
+      let surfaceId = daemon.overviewFocusShellSurfaceId()
+      if surfaceId != 0 and daemon.shellSurfacePointers.hasKey(surfaceId):
+        seat.focusShellSurface(daemon.shellSurfacePointers[surfaceId])
+      else:
+        seat.clearFocus()
     elif focused != 0 and daemon.windowPointers.hasKey(focused):
       seat.focusWindow(daemon.windowPointers[focused])
     else:

@@ -1,5 +1,29 @@
 import tcore_support
 
+proc twoOutputOverviewModel(): Model =
+  result = configuredModel()
+  result.applyMsg(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+  )
+  result.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+  result.applyMsg(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+  )
+  result.applyMsg(
+    Msg(kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0)
+  )
+  result.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+  result.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+  )
+  result.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+  result.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"))
+  result.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+  )
+  result.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+  result.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
 suite "Core Runtime Logic: overview interactions":
   test "Dragging unified overview preview moves window without closing":
     var model = configuredModel()
@@ -200,6 +224,72 @@ suite "Core Runtime Logic: overview interactions":
     check not model.overviewActive
     check model.activeTag == model.tagForSlot(2)
     check model.activeWorkspaceFocusId() == 1
+    check model.pointerOp.kind == PointerOpKind.OpNone
+
+  test "Blank click on secondary output activates that output workspace":
+    var model = twoOutputOverviewModel()
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let slots = model.previewSlotsForOutput(second)
+    let idx = slots.find(2'u32)
+    let target = model.workspacePreviewRectForOutput(
+      model.outputScreen(second), slots, idx, second
+    )
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 0,
+        overviewDragX: target.x + 1,
+        overviewDragY: target.y + 1,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check not model.overviewActive
+    check model.activeOutput == second
+    check model.activeTag == model.tagForSlot(2)
+    check model.focusedWindowId() == 2
+
+  test "Window click on secondary output focuses that window":
+    var model = twoOutputOverviewModel()
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let start = model.instructionGeom(2).rectCenter()
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 2,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check not model.overviewActive
+    check model.activeOutput == second
+    check model.focusedWindowId() == 2
+
+  test "Dragging overview window on secondary output releases pointer op":
+    var model = twoOutputOverviewModel()
+    let start = model.instructionGeom(2).rectCenter()
+    let target = (x: start.x + 32'i32, y: start.y)
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 2,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlPointerDelta, dx: target.x - start.x, dy: target.y - start.y)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check model.overviewActive
+    check model.pointerOp.kind == PointerOpKind.OpNone
+    check model.firstWindowPosition(WindowId(2)).tagId == model.tagForSlot(2)
 
   test "Clicking overview window commits focus":
     var model = configuredModel()
