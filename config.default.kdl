@@ -288,6 +288,11 @@ bindings {
     bind "Super+Ctrl+u" "move-to-tag-right"
     bind "Super+Ctrl+i" "move-to-tag-left"
 
+    bind "Super+Shift+h" "move-workspace-to-output left"
+    bind "Super+Shift+j" "move-workspace-to-output down"
+    bind "Super+Shift+k" "move-workspace-to-output up"
+    bind "Super+Shift+l" "move-workspace-to-output right"
+
     bind "Super+Shift+1" "swap-to-tag 1"
     bind "Super+Shift+2" "swap-to-tag 2"
     bind "Super+Shift+3" "swap-to-tag 3"
@@ -308,9 +313,9 @@ bindings {
     bind "Super+Shift+b" "minimize"
 
     // Scratchpad. Mirrors Mango: send, toggle, restore.
-    bind "Super+i" "move-to-scratchpad"
-    bind "Super+Alt+z" "toggle-scratchpad"
-    bind "Super+Shift+i" "restore-scratchpad"
+    bind "Super+s" "move-to-scratchpad"
+    bind "Super+Alt+s" "toggle-scratchpad"
+    bind "Super+Shift+s" "restore-scratchpad"
     bind "Super+Ctrl+e" "toggle-named-scratchpad terminal"
     bind "Super+Ctrl+Shift+e" "move-to-named-scratchpad terminal"
     bind "Super+a" "toggle-named-scratchpad audio"
@@ -318,7 +323,6 @@ bindings {
 
     // Layout selection.
     bind "Super+n" "switch-layout"
-    bind "Super+Shift+s" "layout-vertical-scroller"
     bind "Super+d" "layout-tile"
     bind "Super+g" "layout-grid"
     bind "Super+Shift+g" "layout-vertical-grid"
@@ -362,6 +366,7 @@ bindings {
         bind "Super+Alt+v" "split-tree-split-vertical"
         bind "Super+e" "split-tree-layout-toggle-split"
         bind "Super+s" "split-tree-layout-stacking"
+        bind "Super+Ctrl+s" "move-to-scratchpad"
         bind "Super+w" "split-tree-layout-tabbed"
     }
 

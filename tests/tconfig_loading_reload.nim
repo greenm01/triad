@@ -187,13 +187,13 @@ suite "KDL Configuration Parser: loading reload":
     let bindings = defaultKeyBindings()
 
     check bindings.anyIt(
-      it.key == "i" and it.modifiers == Super and it.command == "move-to-scratchpad"
+      it.key == "s" and it.modifiers == Super and it.command == "move-to-scratchpad"
     )
     check bindings.anyIt(
-      it.key == "z" and it.modifiers == Super + Alt and it.command == "toggle-scratchpad"
+      it.key == "s" and it.modifiers == Super + Alt and it.command == "toggle-scratchpad"
     )
     check bindings.anyIt(
-      it.key == "i" and it.modifiers == Super + Shift and
+      it.key == "s" and it.modifiers == Super + Shift and
         it.command == "restore-scratchpad"
     )
     check bindings.anyIt(

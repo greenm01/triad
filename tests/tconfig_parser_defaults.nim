@@ -885,9 +885,21 @@ janet {
     check config.msgKindForBinding("Right", Super + Alt) == MsgKind.CmdMoveColumnRight
     check config.scratchpad.widthRatio == 0.8'f32
     check config.scratchpad.heightRatio == 0.9'f32
-    check config.msgKindForBinding("i", Super) == MsgKind.CmdMoveToScratchpad
-    check config.msgKindForBinding("z", Super + Alt) == MsgKind.CmdToggleScratchpad
-    check config.msgKindForBinding("i", Super + Shift) == MsgKind.CmdRestoreScratchpad
+    check config.msgKindForBinding("s", Super) == MsgKind.CmdMoveToScratchpad
+    check config.msgKindForBinding("s", Super + Alt) == MsgKind.CmdToggleScratchpad
+    check config.msgKindForBinding("s", Super + Shift) == MsgKind.CmdRestoreScratchpad
+    check config.commandForBinding("h", Super + Shift) == "move-workspace-to-output left"
+    check config.commandForBinding("Left", Super + Shift) ==
+      "move-workspace-to-output left"
+    check config.commandForBinding("j", Super + Shift) == "move-workspace-to-output down"
+    check config.commandForBinding("Down", Super + Shift) ==
+      "move-workspace-to-output down"
+    check config.commandForBinding("k", Super + Shift) == "move-workspace-to-output up"
+    check config.commandForBinding("Up", Super + Shift) == "move-workspace-to-output up"
+    check config.commandForBinding("l", Super + Shift) ==
+      "move-workspace-to-output right"
+    check config.commandForBinding("Right", Super + Shift) ==
+      "move-workspace-to-output right"
     check config.msgKindForBinding("b", Super + Shift) == MsgKind.CmdMinimize
     check config.msgKindForBinding("f", Super + Shift) == MsgKind.CmdToggleFullscreen
     check keySymForBinding("f", Super + Shift) == uint32(ord('f'))
@@ -917,6 +929,8 @@ janet {
       "split-tree-layout-toggle-split"
     check config.commandForBinding("s", Super, BindingMode.BindNormal, "i3") ==
       "split-tree-layout-stacking"
+    check config.commandForBinding("s", Super + Ctrl, BindingMode.BindNormal, "i3") ==
+      "move-to-scratchpad"
     check config.commandForBinding("w", Super, BindingMode.BindNormal, "i3") ==
       "split-tree-layout-tabbed"
     check config.commandForBinding("h", Super + Alt, BindingMode.BindNormal, "i3") ==

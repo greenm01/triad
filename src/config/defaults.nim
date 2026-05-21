@@ -157,14 +157,17 @@ bindings {
     bind "Super+Shift+f" "fullscreen-window"
     bind "Super+m" "maximize-column"
     bind "Super+Shift+b" "minimize"
-    bind "Super+i" "move-to-scratchpad"
-    bind "Super+Alt+z" "toggle-scratchpad"
-    bind "Super+Shift+i" "restore-scratchpad"
+    bind "Super+s" "move-to-scratchpad"
+    bind "Super+Alt+s" "toggle-scratchpad"
+    bind "Super+Shift+s" "restore-scratchpad"
     bind "Super+n" "switch-layout"
     bind "Super+Shift+n" "new-workspace"
-    bind "Super+e" "split-tree-layout-toggle-split"
-    bind "Super+s" "split-tree-layout-stacking"
-    bind "Super+w" "split-tree-layout-tabbed"
+    layout "i3" {
+        bind "Super+e" "split-tree-layout-toggle-split"
+        bind "Super+s" "split-tree-layout-stacking"
+        bind "Super+Ctrl+s" "move-to-scratchpad"
+        bind "Super+w" "split-tree-layout-tabbed"
+    }
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Ctrl+Alt+Escape" "focus-last" allow-inhibiting=#false
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
