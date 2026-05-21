@@ -208,7 +208,7 @@ proc validOutputVisibleTag(model: Model, outputId: OutputId): bool =
   tagId != NullTagId and model.tagData(tagId).isSome
 
 proc candidateTagForOutputSlot(
-    model: var Model, slot: uint32, targetOutput: OutputId
+    model: var Model, slot: uint32, targetOutput: OutputId, excludeTag = NullTagId
 ): TagId =
   if slot == 0:
     return NullTagId
@@ -216,6 +216,8 @@ proc candidateTagForOutputSlot(
   result = model.ensureWorkspaceSlot(slot)
   if result == NullTagId:
     return
+  if result == excludeTag:
+    return NullTagId
   let homeOutput = model.tagOutputs.getOrDefault(result, NullOutputId)
   if existingTagId != NullTagId and homeOutput != NullOutputId and
       homeOutput != targetOutput and model.outputData(homeOutput).isSome:
@@ -225,14 +227,16 @@ proc candidateTagForOutputSlot(
   if result == model.activeTag and targetOutput != model.activeOutput:
     return NullTagId
 
-proc availableTagForOutput*(model: var Model, outputId: OutputId): TagId =
+proc availableTagForOutput*(
+    model: var Model, outputId: OutputId, excludeTag = NullTagId
+): TagId =
   if outputId == NullOutputId or model.outputData(outputId).isNone:
     return NullTagId
 
   let output = model.outputData(outputId).get()
   let stableTarget = model.outputStableTarget(outputId, output)
   let rememberedSlot = model.outputLastActiveSlots.getOrDefault(stableTarget, 0'u32)
-  result = model.candidateTagForOutputSlot(rememberedSlot, outputId)
+  result = model.candidateTagForOutputSlot(rememberedSlot, outputId, excludeTag)
   if result != NullTagId:
     return
 
@@ -241,21 +245,23 @@ proc availableTagForOutput*(model: var Model, outputId: OutputId): TagId =
     if tagId == NullTagId:
       continue
     if model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
-      result = model.candidateTagForOutputSlot(slot, outputId)
+      result = model.candidateTagForOutputSlot(slot, outputId, excludeTag)
       if result != NullTagId:
         return
 
   for slot in model.visibleWorkspaceSlots():
-    result = model.candidateTagForOutputSlot(slot, outputId)
+    result = model.candidateTagForOutputSlot(slot, outputId, excludeTag)
     if result != NullTagId:
       return
 
   for slot in 1'u32 .. model.defaultWorkspaceCount():
-    result = model.candidateTagForOutputSlot(slot, outputId)
+    result = model.candidateTagForOutputSlot(slot, outputId, excludeTag)
     if result != NullTagId:
       return
 
-  result = model.candidateTagForOutputSlot(model.nextDynamicWorkspaceSlot(), outputId)
+  result = model.candidateTagForOutputSlot(
+    model.nextDynamicWorkspaceSlot(), outputId, excludeTag
+  )
 
 proc ensureOutputWorkspaceCoverage*(model: var Model): bool =
   for outputId in model.sortedOutputsByGeometry():
@@ -347,6 +353,33 @@ proc lowerWorkspaceFallback*(model: Model, fromSlot: uint32): uint32 =
     return min(model.defaultWorkspaceCount(), max(1'u32, below))
   1'u32
 
+proc outputsShowingTag(model: Model, tagId: TagId): seq[OutputId] =
+  for outputId, outputTag in model.outputTagsWithId():
+    if outputTag == tagId:
+      result.add(outputId)
+
+proc replaceVisibleDynamicWorkspace(model: var Model, tagId: TagId): bool =
+  let outputs = model.outputsShowingTag(tagId)
+  if outputs.len == 0:
+    return true
+
+  var replacements: seq[tuple[outputId: OutputId, tagId: TagId]]
+  for outputId in outputs:
+    let replacement = model.availableTagForOutput(outputId, excludeTag = tagId)
+    if replacement == NullTagId:
+      return false
+    replacements.add((outputId: outputId, tagId: replacement))
+
+  for replacement in replacements:
+    result = model.setOutputTag(replacement.outputId, replacement.tagId) or result
+  result = true
+
+proc workspaceWasFocused(model: Model, tagId: TagId): bool =
+  for historyTag in model.workspaceHistoryIds():
+    if historyTag == tagId:
+      return true
+  false
+
 proc pruneDynamicWorkspaces*(model: var Model): bool =
   let defaultCount = model.defaultWorkspaceCount()
   let activeSlot = model.activeWorkspaceSlot()
@@ -355,7 +388,7 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
   for slot in slots:
     let tagId = model.tagForSlot(slot)
     if tagId == NullTagId or slot <= defaultCount or slot == activeSlot or
-        slot == trailing or model.tagVisibleOnOutput(tagId):
+        slot == trailing:
       continue
     let tagOpt = model.tagData(tagId)
     if model.restoreTag(slot).isSome or
@@ -363,6 +396,11 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
       continue
     if model.tagHasNonStickyLiveWindows(tagId):
       continue
+    if model.tagVisibleOnOutput(tagId):
+      if not model.workspaceWasFocused(tagId):
+        continue
+      if not model.replaceVisibleDynamicWorkspace(tagId):
+        continue
     if model.destroyTag(tagId):
       result = true
   if result:

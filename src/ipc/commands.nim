@@ -710,6 +710,8 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
         none(Msg)
     else:
       none(Msg)
+  of CommandId.CidNewWorkspace:
+    some(Msg(kind: MsgKind.CmdNewWorkspace))
   of CommandId.CidFocusTag:
     if parts.len >= 2:
       let tag = parseUInt32Arg(parts[1])

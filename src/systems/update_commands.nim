@@ -333,6 +333,8 @@ proc applyCommand*(
     result.dirty = model.focusWorkspaceSlot(msg.focusTag)
   of MsgKind.CmdFocusWorkspaceIndex:
     result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
+  of MsgKind.CmdNewWorkspace:
+    result.dirty = model.focusNewWorkspaceOnActiveOutput()
   of MsgKind.CmdReorderWorkspaceIndex:
     result.dirty =
       model.reorderWorkspaceIndex(msg.reorderWorkspaceIndex, msg.reorderTargetIndex)

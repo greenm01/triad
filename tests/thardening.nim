@@ -1178,6 +1178,7 @@ config-notification {
     check parseTextCommand("focus-workspace nope").isNone
     check parseTextCommand("focus-workspace 2").get().kind ==
       MsgKind.CmdFocusWorkspaceIndex
+    check parseTextCommand("new-workspace").get().kind == MsgKind.CmdNewWorkspace
 
   test "dev mode control IPC validates arguments":
     let bad = parseJson(socket.handleDevModeControl("dev-mode maybe").get())

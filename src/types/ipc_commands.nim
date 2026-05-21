@@ -138,6 +138,7 @@ type
     CidMoveWorkspaceToOutput
     CidMoveToOutput
     CidFocusWorkspace
+    CidNewWorkspace
     CidFocusTag
     CidSwapToTag
     CidMasterCount
@@ -633,6 +634,7 @@ const CommandSpecs* = [
     name: "focus-workspace",
     argShape: RequiredWorkspaceIdx,
   ),
+  CommandSpec(id: CommandId.CidNewWorkspace, name: "new-workspace", argShape: NoArgs),
   CommandSpec(id: CommandId.CidFocusTag, name: "focus-tag", argShape: RequiredTag),
   CommandSpec(id: CommandId.CidSwapToTag, name: "swap-to-tag", argShape: RequiredTag),
   CommandSpec(

@@ -33,6 +33,7 @@ For local help and validation without dispatching to the daemon:
     In frame-tree layouts, all four directions navigate between frames.
 *   `focus-last`: Returns focus to the previous focused window when it is still available.
 *   `focus-workspace <index>`: Focuses the compact Niri-style workspace index currently shown by shell UI.
+*   `new-workspace`: Creates and focuses the next dynamic workspace on the currently active output.
 *   `focus-tag <id>`: Focuses a stable Triad tag id directly.
 *   `focus-window <id>`: Focuses a specific compositor window ID.
 *   `focus-tag-left`, `focus-tag-right`: Moves to the adjacent visible
@@ -575,6 +576,12 @@ and config bindings:
 {"triad":{"version":1,"request":"action","action":"focus-workspace","workspace_idx":2}}
 {"triad":{"version":1,"request":"action","action":"set-column-width","value":0.75}}
 {"triad":{"version":1,"request":"action","action":"spawn","argv":["foot","--working-directory","/tmp"]}}
+```
+
+Text IPC and config bindings can also dispatch `new-workspace` directly:
+
+```sh
+triad msg new-workspace
 ```
 
 Actions without arguments only need the `action` name. Argument-bearing actions

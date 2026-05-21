@@ -394,7 +394,9 @@ Customize the pointer behavior.
 ## Bindings & Events
 
 ### Bindings
-Triad supports keyboard, pointer, wheel, and gesture bindings.
+Triad supports keyboard, pointer, wheel, and gesture bindings. The default
+keyboard map binds `Super+Shift+n` to `new-workspace`, which creates an empty
+dynamic workspace on the currently focused monitor and focuses it.
 
 *   `bind`: Keyboard commands (e.g., `"Super+Return"`).
 *   `pointer-bind`: Mouse button commands.

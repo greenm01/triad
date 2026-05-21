@@ -152,6 +152,7 @@ bindings {
     bind "Super+Alt+z" "toggle-scratchpad"
     bind "Super+Shift+i" "restore-scratchpad"
     bind "Super+n" "switch-layout"
+    bind "Super+Shift+n" "new-workspace"
     bind "Super+e" "split-tree-layout-toggle-split"
     bind "Super+s" "split-tree-layout-stacking"
     bind "Super+w" "split-tree-layout-tabbed"

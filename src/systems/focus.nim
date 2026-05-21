@@ -58,6 +58,21 @@ proc learnedOutputForTag(model: Model, tagId: TagId): OutputId =
     return outputId
   NullOutputId
 
+proc emptyDynamicWorkspace(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and tagOpt.get().slot > model.defaultWorkspaceCount() and
+    not model.tagHasNonStickyFocusableWindow(tagId)
+
+proc activeFallbackOutput(model: Model): OutputId =
+  if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
+    return model.activeOutput
+  NullOutputId
+
+proc primaryFallbackOutput(model: Model): OutputId =
+  if model.primaryOutput != NullOutputId and model.hasOutput(model.primaryOutput):
+    return model.primaryOutput
+  NullOutputId
+
 proc workspaceFocusOutputDecision(
     model: Model, tagId: TagId
 ): tuple[outputId: OutputId, reason: string] =
@@ -71,21 +86,59 @@ proc workspaceFocusOutputDecision(
     result.reason = "visible"
     return
 
+  if model.emptyDynamicWorkspace(tagId):
+    result.outputId = model.activeFallbackOutput()
+    if result.outputId != NullOutputId:
+      result.reason = "active-fallback"
+      return
+    result.outputId = model.primaryFallbackOutput()
+    if result.outputId != NullOutputId:
+      result.reason = "primary-fallback"
+      return
+
   result.outputId = model.learnedOutputForTag(tagId)
   if result.outputId != NullOutputId:
     result.reason = "learned"
     return
 
-  if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
-    result.outputId = model.activeOutput
+  result.outputId = model.activeFallbackOutput()
+  if result.outputId != NullOutputId:
     result.reason = "active-fallback"
     return
 
-  result.outputId = model.primaryOutput
+  result.outputId = model.primaryFallbackOutput()
   if result.outputId != NullOutputId:
     result.reason = "primary-fallback"
   else:
     result.reason = "none"
+
+proc focusNewWorkspaceOnActiveOutput*(model: var Model): bool =
+  var outputId = model.activeFallbackOutput()
+  if outputId == NullOutputId:
+    outputId = model.primaryFallbackOutput()
+  let slot = model.nextDynamicWorkspaceSlot()
+  let tagId = model.ensureWorkspaceSlot(slot)
+  if tagId == NullTagId:
+    return false
+  if outputId != NullOutputId:
+    discard model.setOutputTag(outputId, tagId)
+    discard model.setActiveOutput(outputId)
+    discard model.learnTagOutputFromActive(tagId)
+  writeBehaviorEvent(
+    "new_workspace_output_decision",
+    %*{
+      "slot": slot,
+      "tag": uint32(tagId),
+      "chosen_output": model.shellOutputName(outputId),
+    },
+  )
+  discard model.setActiveWorkspace(tagId)
+  model.refreshVisibleWorkspaceSlots()
+  discard model.recordWorkspace(tagId)
+  let focused = model.recomputeVisibleFocus(tagId)
+  if focused != NullWindowId:
+    discard model.recordFocus(focused)
+  true
 
 proc tagForWindow*(model: Model, winId: WindowId): TagId =
   if model.activeTag != NullTagId and model.windowOnTag(model.activeTag, winId):

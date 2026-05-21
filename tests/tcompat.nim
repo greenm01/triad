@@ -609,6 +609,10 @@ suite "Shell compatibility contracts":
     check focusHelp.contains("Usage: triad msg focus-workspace <workspace-idx>")
     check focusHelp.contains("required-workspace-idx")
 
+    let newWorkspaceHelp = renderMsgHelp("new-workspace")
+    check newWorkspaceHelp.contains("Usage: triad msg new-workspace")
+    check newWorkspaceHelp.contains("none")
+
     let aliasHelp = renderMsgHelp("toggle-fullscreen")
     check aliasHelp.contains("fullscreen-window [window-id]")
     check aliasHelp.contains("toggle-fullscreen")
@@ -617,6 +621,9 @@ suite "Shell compatibility contracts":
     check catalog["commands"].len == CommandSpecs.len
     check catalog["commands"].getElems().anyIt(
       it["name"].getStr() == "focus-next" and it["arg_shape"].getStr() == "none"
+    )
+    check catalog["commands"].getElems().anyIt(
+      it["name"].getStr() == "new-workspace" and it["arg_shape"].getStr() == "none"
     )
     check catalog["special_requests"].getElems().anyIt(
       it["name"].getStr() == "state" and it["usage"].getStr() == "triad msg state"

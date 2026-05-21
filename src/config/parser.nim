@@ -945,6 +945,7 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "Up", modifiers: 8'u32, command: "focus-up"),
     KeyBindingConfig(key: "Down", modifiers: 8'u32, command: "focus-down"),
     KeyBindingConfig(key: "n", modifiers: 64'u32, command: "switch-layout"),
+    KeyBindingConfig(key: "n", modifiers: 65'u32, command: "new-workspace"),
     KeyBindingConfig(key: "1", modifiers: 64'u32, command: "focus-workspace 1"),
     KeyBindingConfig(key: "2", modifiers: 64'u32, command: "focus-workspace 2"),
     KeyBindingConfig(key: "3", modifiers: 64'u32, command: "focus-workspace 3"),

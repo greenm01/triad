@@ -80,6 +80,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Output | Cursor theme/size/find | | `river_seat_v1.set_xcursor_theme` | `cursor { theme; size; shake-to-find }` | X | Applied through River seat protocol. Shake-to-find temporarily reapplies the configured theme at a larger size. |
 | Output | Cursor inactivity hiding | `cursor_hide_timeout` | `wl_pointer.set_cursor`, `wp_cursor_shape_manager_v1`, River seat cursor ownership | `cursor { hide-after-inactive-ms; hide-when-typing }` | X | Triad hides the compositor cursor with a null pointer cursor and restores the default cursor shape when cursor-shape support is advertised. |
 | Tags | View tag/workspace | `view`, `viewtoleft`, `viewtoright` | WM policy | `focus-tag`, `focus-tag-left/right`, `focus-workspace` | X | Triad has tags plus derived workspace navigation. |
+| Tags | Create workspace | | WM policy | `new-workspace` | X | Creates the next dynamic workspace on the currently focused output and focuses it. Empty dynamic workspaces are pruned after leaving them. |
 | Tags | View occupied tag | `viewtoleft_have_client`, `viewtoright_have_client` | WM policy | `focus-occupied-tag-left/right` | X | Triad skips empty tags. |
 | Tags | Move window to tag | `tag`, `tagtoleft`, `tagtoright` | WM policy | `move-to-tag`, `move-to-tag-left/right` | X | Triad follows the moved window and also has `move-to-workspace`. |
 | Tags | Toggle/multi-tag view | `toggletag`, `toggleview`, `comboview` | WM policy | | | Triad uses canonical tag masks internally but exposes single-target commands. |
@@ -419,7 +420,7 @@ Text IPC and bind commands:
   `focus-occupied-tag-right`, `focus-column-first`,
   `focus-column-last`, `focus-window-or-workspace-up`,
   `focus-window-or-workspace-down`, `focus-window`,
-  `focus-workspace`, `focus-tag`, `focus-output`, `focus-shell-ui`,
+  `focus-workspace`, `new-workspace`, `focus-tag`, `focus-output`, `focus-shell-ui`,
   `recent-window-next`, `recent-window-prev`, `recent-window-confirm`,
   `recent-window-cancel`, `recent-window-first`, `recent-window-last`,
   `recent-window-scope`, `recent-window-cycle-scope`,

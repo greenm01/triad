@@ -941,6 +941,125 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.tagData(secondTag).isSome
     check model.tagData(thirdTag).isSome
 
+  test "New workspace opens on active output and prunes empty after leaving":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let firstTag = model.outputActiveTag(first)
+    let previousSecondTag = model.outputActiveTag(second)
+    discard model.setActiveOutput(second)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+
+    let dynamicTag = model.tagForSlot(3)
+    check dynamicTag != NullTagId
+    check model.activeOutput == second
+    check model.activeTag == dynamicTag
+    check model.outputActiveTag(first) == firstTag
+    check model.outputActiveTag(second) == dynamicTag
+    check model.workspaceOutput(dynamicTag) == second
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    check model.tagData(dynamicTag).isNone
+    check model.outputActiveTag(second) == previousSecondTag
+
+  test "New workspace with a window keeps its output home after leaving":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    discard model.setActiveOutput(second)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+    let dynamicTag = model.tagForSlot(3)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 40, appId: "term", title: "term")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    check model.activeOutput == first
+    check model.tagData(dynamicTag).isSome
+    check model.outputActiveTag(second) == dynamicTag
+    check model.workspaceOutput(dynamicTag) == second
+
+  test "Hidden empty dynamic workspace focuses on active output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    discard model.setActiveOutput(second)
+    let dynamicTag = model.ensureWorkspaceSlot(4)
+    check model.workspaceOutput(dynamicTag) == second
+
+    discard model.setActiveOutput(first)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 4))
+
+    check model.activeOutput == first
+    check model.outputActiveTag(first) == dynamicTag
+    check model.workspaceOutput(dynamicTag) == first
+
+  test "Hidden occupied dynamic workspace keeps learned output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    discard model.setActiveOutput(second)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 4))
+    let dynamicTag = model.tagForSlot(4)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 41, appId: "term", title: "term")
+    )
+    discard model.setOutputTag(second, model.tagForSlot(2))
+    discard model.setActiveOutput(first)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 4))
+
+    check model.activeOutput == second
+    check model.outputActiveTag(second) == dynamicTag
+    check model.workspaceOutput(dynamicTag) == second
+
   test "Active workspace output sync keeps visible workspace anchored":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

@@ -178,6 +178,7 @@ type
     CmdResizeFloating
     CmdSelectWindow
     CmdFocusTag
+    CmdNewWorkspace
     CmdFocusWorkspaceIndex
     CmdReorderWorkspaceIndex
     CmdMoveToWorkspaceIndex
