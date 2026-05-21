@@ -270,6 +270,30 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         result = true
       continue
 
+    if msg.kind == MsgKind.WlRenderStart:
+      inc daemon.perfCounters.renderStarts
+      daemon.riverPhase = RiverPhase.RiverRender
+      if daemon.canSkipRenderStart():
+        inc daemon.perfCounters.skippedRenderStarts
+        daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
+        daemon.riverPhase = RiverPhase.RiverIdle
+        continue
+      inc daemon.perfCounters.renderLayoutProjections
+      let projection = syncRuntimeLayoutProjection("render layout", msg)
+      daemon.currentFrameTabBars = projection.frameTabBars
+      daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
+      daemon.currentBspPreselections = projection.bspPreselections
+      daemon.recordDesiredPlacements(projection.instructions)
+      daemon.renderDesiredPlacements()
+      for windowId in daemon.runtimeState.pendingAdmissionWindowIds():
+        daemon.enqueue(
+          Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: windowId)
+        )
+      daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
+      daemon.markRenderCleanAfterFullRender()
+      daemon.riverPhase = RiverPhase.RiverIdle
+      continue
+
     if msg.kind == MsgKind.CmdTick:
       inc daemon.perfCounters.frameTicks
       if daemon.frameTickNeeded():
@@ -399,30 +423,6 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           %*{"reason": reason, "snapshot": snapshot.snapshotBehaviorPayload()},
         )
         broadcastNiriSnapshot(snapshot)
-      continue
-
-    if msg.kind == MsgKind.WlRenderStart:
-      inc daemon.perfCounters.renderStarts
-      daemon.riverPhase = RiverPhase.RiverRender
-      if daemon.canSkipRenderStart():
-        inc daemon.perfCounters.skippedRenderStarts
-        daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
-        daemon.riverPhase = RiverPhase.RiverIdle
-        continue
-      inc daemon.perfCounters.renderLayoutProjections
-      let projection = syncRuntimeLayoutProjection("render layout", msg)
-      daemon.currentFrameTabBars = projection.frameTabBars
-      daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
-      daemon.currentBspPreselections = projection.bspPreselections
-      daemon.recordDesiredPlacements(projection.instructions)
-      daemon.renderDesiredPlacements()
-      for windowId in daemon.runtimeState.pendingAdmissionWindowIds():
-        daemon.enqueue(
-          Msg(kind: MsgKind.WlWindowAdmissionSettled, admissionWindowId: windowId)
-        )
-      daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
-      daemon.markRenderCleanAfterFullRender()
-      daemon.riverPhase = RiverPhase.RiverIdle
       continue
 
     for eff in effects:

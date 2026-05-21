@@ -1,4 +1,4 @@
-import std/[json, options, os, sequtils, strtabs, tables, unittest]
+import std/[json, options, os, sequtils, strtabs, strutils, tables, unittest]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
@@ -112,6 +112,15 @@ suite "Crash hardening":
     daemon.markRenderDirty("layout")
     check daemon.renderDirtyReason == "layout"
     check not daemon.canSkipRenderStart()
+
+  test "render start fast path bypasses general runtime update":
+    let source = readFile("src/daemon/app.nim")
+    let renderStart = source.find("if msg.kind == MsgKind.WlRenderStart:")
+    let runtimeUpdate = source.find("let effects = syncRuntimeUpdate")
+
+    check renderStart >= 0
+    check runtimeUpdate >= 0
+    check renderStart < runtimeUpdate
 
   test "pending admissions force full render start":
     var daemon = initTriadDaemon()
