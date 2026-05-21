@@ -175,6 +175,13 @@ type
     active*: bool
     outputId*: uint32
 
+  SpawnPlacementContext* = object
+    pid*: int32
+    outputId*: uint32
+    slot*: uint32
+    createdMs*: int64
+    remainingManageCycles*: int
+
   RuntimeReasonHook* = proc(daemon: pointer, reason: string) {.nimcall.}
   ConfigNotificationHook* = proc(
     daemon: pointer, event: ConfigNotificationEvent, command: seq[string]
@@ -317,6 +324,7 @@ type
     windowUnreliablePids*: Table[uint32, int32]
     pendingWindows*: Table[uint32, ProjectedWindow]
     fireAndForgetProcesses*: seq[Process]
+    pendingSpawnPlacements*: seq[SpawnPlacementContext]
 
     configPath*: string
     configWatchPaths*: seq[string]
@@ -357,6 +365,7 @@ proc initTriadDaemon*(): TriadDaemon =
   result.renderDirtyReason = "startup"
   result.pendingLiveRestore = none(LiveRestoreState)
   result.fireAndForgetProcesses = @[]
+  result.pendingSpawnPlacements = @[]
 
 proc daemonData*(daemon: var TriadDaemon): pointer =
   cast[pointer](addr daemon)

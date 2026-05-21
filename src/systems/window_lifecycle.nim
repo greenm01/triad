@@ -53,9 +53,8 @@ proc placeSecondaryRuleTarget(
     discard model.setTagFocus(targetTag, winId)
   true
 
-proc visibleSlotForOutputRule(model: Model, name: string): uint32 =
-  let outputId = model.outputForTarget(name)
-  if outputId == NullOutputId:
+proc visibleSlotForOutputId(model: Model, outputId: OutputId): uint32 =
+  if outputId == NullOutputId or not model.hasOutput(outputId):
     return 0
   for mappedOutputId, tagId in model.outputTagsWithId():
     if mappedOutputId == outputId:
@@ -63,6 +62,33 @@ proc visibleSlotForOutputRule(model: Model, name: string): uint32 =
       if tagOpt.isSome:
         return tagOpt.get().slot
   0
+
+proc visibleSlotForOutputRule(model: Model, name: string): uint32 =
+  let outputId = model.outputForTarget(name)
+  if outputId == NullOutputId:
+    return 0
+  model.visibleSlotForOutputId(outputId)
+
+proc selectedOutputWorkspaceSlot(model: Model): uint32 =
+  let outputId =
+    if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
+      model.activeOutput
+    elif model.primaryOutput != NullOutputId and model.hasOutput(model.primaryOutput):
+      model.primaryOutput
+    else:
+      NullOutputId
+  result = model.visibleSlotForOutputId(outputId)
+  if result == 0:
+    result = model.activeWorkspaceSlot()
+  if result == 0:
+    result = 1'u32
+
+proc spawnContextWorkspaceSlot(model: Model, outputId: uint32, slot: uint32): uint32 =
+  if slot != 0:
+    return slot
+  if outputId != 0:
+    return model.visibleSlotForOutputId(OutputId(outputId))
+  0'u32
 
 proc remapWindowRuleOutput(
     model: var Model,
@@ -493,6 +519,8 @@ proc createWindowForExternal*(
     parentExternalId = NullExternalWindowId,
     swallowHostExternalId = NullExternalWindowId,
     deferAdmission = false,
+    spawnContextOutputId = 0'u32,
+    spawnContextSlot = 0'u32,
 ): WindowId =
   if externalId == NullExternalWindowId:
     return NullWindowId
@@ -504,11 +532,7 @@ proc createWindowForExternal*(
   discard model.clearSettledRestoreFocus()
   let restoreFocusPending =
     model.restoreFocusedWindowPending() or model.restoreWindowCount() > 0
-  var targetSlot =
-    if model.activeWorkspaceSlot() == 0:
-      1'u32
-    else:
-      model.activeWorkspaceSlot()
+  var targetSlot = model.selectedOutputWorkspaceSlot()
 
   if model.restoreWindowCount() > 0:
     let matched = model.findRestoredWindowByIdentity(appId, title, identifier)
@@ -561,15 +585,18 @@ proc createWindowForExternal*(
     else:
       @[]
   let ruleForcesSlot = ruleTargetSlots.len > 0
+  let ruleOutputSlot =
+    if ruleMatch.found:
+      model.visibleSlotForOutputRule(ruleMatch.rule.openOnOutput)
+    else:
+      0'u32
   let opensNamedScratchpad =
     ruleMatch.found and not hasRestoredWindow and not hasRestoredTag and
     not ruleOpensUnmanagedGlobal and ruleMatch.rule.openNamedScratchpad.len > 0
   if ruleForcesSlot and not hasRestoredTag:
     targetSlot = ruleTargetSlots[0]
-  elif ruleMatch.found and not hasRestoredTag:
-    let outputSlot = model.visibleSlotForOutputRule(ruleMatch.rule.openOnOutput)
-    if outputSlot != 0:
-      targetSlot = outputSlot
+  elif ruleOutputSlot != 0 and not hasRestoredTag:
+    targetSlot = ruleOutputSlot
   let forcedLayout = if ruleMatch.found: ruleMatch.rule.forcedLayout else: 0
   let parentKnown =
     parentExternalId != NullExternalWindowId and
@@ -580,9 +607,18 @@ proc createWindowForExternal*(
     else:
       true
   let parentSlot = model.parentWorkspaceSlot(parentExternalId)
-  if parentSlot != 0 and not hasRestoredTag and not ruleForcesSlot and
-      parentedRole != ParentedRole.Plain:
+  let parentOverrides =
+    parentSlot != 0 and not hasRestoredTag and not ruleForcesSlot and
+    parentedRole != ParentedRole.Plain
+  if parentOverrides:
     targetSlot = parentSlot
+  let spawnSlot =
+    model.spawnContextWorkspaceSlot(spawnContextOutputId, spawnContextSlot)
+  let spawnContextApplies =
+    spawnSlot != 0 and not hasRestoredTag and not ruleForcesSlot and ruleOutputSlot == 0 and
+    not parentOverrides
+  if spawnContextApplies:
+    targetSlot = spawnSlot
   let openSticky =
     ruleMatch.found and ruleMatch.rule.openOnAllWorkspacesSet and
     ruleMatch.rule.openOnAllWorkspaces and not opensNamedScratchpad and
@@ -743,10 +779,22 @@ proc createWindowForExternal*(
     discard model.pruneDynamicWorkspaces()
     return
 
+  let restoredScratchpad =
+    hasRestoredWindow and restored.slot == 0 and
+    model.restoredScratchpadContains(restoredExternalId)
+  var placementTargetTag = NullTagId
+  if not hasRestoredTag and not isUnmanagedGlobal and not opensNamedScratchpad and
+      not restoredScratchpad:
+    placementTargetTag = model.ensureWorkspaceSlot(targetSlot, forcedLayout)
+    if placementTargetTag == NullTagId:
+      return NullWindowId
+
   if isFloating and not hasRestoredWindow:
     discard model.ensureFloatingAt(
       result,
-      model.floatingGeomForWindow(result, parentExternalId),
+      model.floatingGeomForWindow(
+        result, parentExternalId, placementTargetTag, OutputId(spawnContextOutputId)
+      ),
       parentAutoFloating = parentAutoFloating,
     )
 
@@ -757,9 +805,6 @@ proc createWindowForExternal*(
   let restoresFocusedWindow =
     model.restoreFocusedWindowPending() and
     restoredExternalId == model.restoreFocusedWindowId()
-  let restoredScratchpad =
-    hasRestoredWindow and restored.slot == 0 and
-    model.restoredScratchpadContains(restoredExternalId)
 
   if isUnmanagedGlobal:
     discard model.removeWindowFromAllTagsAndRefreshFocus(result)
@@ -774,7 +819,11 @@ proc createWindowForExternal*(
       if isSticky:
         discard model.syncStickyWindow(result, model.tagForSlot(targetSlot))
     else:
-      let targetTag = model.ensureWorkspaceSlot(targetSlot, forcedLayout)
+      let targetTag =
+        if placementTargetTag != NullTagId:
+          placementTargetTag
+        else:
+          model.ensureWorkspaceSlot(targetSlot, forcedLayout)
       if targetTag == NullTagId:
         return NullWindowId
       let placementReason =
@@ -787,6 +836,8 @@ proc createWindowForExternal*(
         elif parentSlot != 0 and targetSlot == parentSlot and
           parentedRole != ParentedRole.Plain:
           "parent-workspace"
+        elif spawnContextApplies:
+          "spawn-context"
         else:
           "active-workspace"
       if ruleForcesSlot and ruleMatch.rule.openOnOutput.len > 0:

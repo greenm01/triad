@@ -112,6 +112,8 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       msg.createdParentWindowId.externalWindowId(),
       msg.createdSwallowHostWindowId.externalWindowId(),
       msg.deferAdmission,
+      msg.spawnContextOutputId,
+      msg.spawnContextSlot,
     )
     result.dirty = winId != NullWindowId
   of MsgKind.WlWindowDestroyed:

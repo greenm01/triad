@@ -746,7 +746,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.outputActiveTag(second) == tag2
     check model.outputActiveTag(first) != tag2
 
-  test "New window uses active workspace without rewriting output affinity":
+  test "New window uses selected output visible workspace":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
     ).model
@@ -778,11 +778,135 @@ suite "Core Runtime Logic: output sticky scratchpad":
       Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "kitty", title: "Term")
     )
 
-    check model.snapshotWindow(11).workspaceIdx == 1
-    check model.instructionGeom(11).fullyWithin(model.outputScreen(first))
+    check model.snapshotWindow(11).workspaceIdx == 2
+    check model.instructionGeom(11).fullyWithin(model.outputScreen(second))
     check model.outputActiveTag(first) == tag1
     check model.outputActiveTag(second) == tag2
-    check model.workspaceOutput(tag1) == first
+    check model.workspaceOutput(tag2) == second
+
+  test "Spawn context places new window on launcher output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+
+    let left = model.outputForExternal(ExternalOutputId(1))
+    let right = model.outputForExternal(ExternalOutputId(2))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(right, model.tagForSlot(2))
+    discard model.setActiveOutput(left)
+    discard model.setActiveWorkspace(model.tagForSlot(1))
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 12,
+        appId: "spawned",
+        title: "Spawned",
+        spawnContextOutputId: uint32(right),
+        spawnContextSlot: 2,
+      )
+    )
+
+    check model.activeOutput == left
+    check model.snapshotWindow(12).workspaceIdx == 2
+    check model.instructionGeom(12).fullyWithin(model.outputScreen(right))
+
+  test "Explicit workspace rule overrides spawn context":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules: @[WindowRule(appIdMatch: "ruled", defaultWorkspace: 1)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+
+    let left = model.outputForExternal(ExternalOutputId(1))
+    let right = model.outputForExternal(ExternalOutputId(2))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(right, model.tagForSlot(2))
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 13,
+        appId: "ruled",
+        title: "Ruled",
+        spawnContextOutputId: uint32(right),
+        spawnContextSlot: 2,
+      )
+    )
+
+    check model.snapshotWindow(13).workspaceIdx == 1
+    check model.instructionGeom(13).fullyWithin(model.outputScreen(left))
+
+  test "Spawn-context floating window uses launcher output geometry":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[WindowRule(appIdMatch: "float", openFloatingSet: true, openFloating: true)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+
+    let left = model.outputForExternal(ExternalOutputId(1))
+    let right = model.outputForExternal(ExternalOutputId(2))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(right, model.tagForSlot(2))
+    discard model.setActiveOutput(left)
+    discard model.setActiveWorkspace(model.tagForSlot(1))
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 14,
+        appId: "float",
+        title: "Float",
+        spawnContextOutputId: uint32(right),
+        spawnContextSlot: 2,
+      )
+    )
+
+    let geom = model.snapshotWindow(14).floatingGeom
+    check model.snapshotWindow(14).workspaceIdx == 2
+    check geom.fullyWithin(model.outputScreen(right))
 
   test "Command focus on visible output makes new windows open there":
     var model = initRuntimeStateFromConfig(

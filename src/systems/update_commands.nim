@@ -65,6 +65,24 @@ proc showActiveLayoutSwitchToast(model: var Model): bool =
   let tag = tagOpt.get()
   model.showLayoutSwitchToast(tag.layoutMode, tag.customLayoutId, tag.nativeLayoutId)
 
+proc activeSpawnPlacementContext(model: Model): tuple[outputId: uint32, slot: uint32] =
+  var outputId =
+    if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
+      model.activeOutput
+    elif model.primaryOutput != NullOutputId and model.hasOutput(model.primaryOutput):
+      model.primaryOutput
+    else:
+      NullOutputId
+  var slot = 0'u32
+  if outputId != NullOutputId:
+    let tagId = model.outputActiveTag(outputId)
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isSome:
+      slot = tagOpt.get().slot
+  if slot == 0:
+    slot = model.activeWorkspaceSlot()
+  (uint32(outputId), slot)
+
 proc applyCommand*(
     model: var Model, msg: Msg, movementEval: CustomLayoutMovementEval = nil
 ): UpdateStep =
@@ -549,8 +567,14 @@ proc applyCommand*(
       )
   of MsgKind.CmdSpawn:
     if msg.spawnCommand.len > 0:
+      let context = model.activeSpawnPlacementContext()
       result.effects.add(
-        Effect(kind: EffectKind.EffSpawn, spawnCommand: msg.spawnCommand)
+        Effect(
+          kind: EffectKind.EffSpawn,
+          spawnCommand: msg.spawnCommand,
+          spawnContextOutputId: context.outputId,
+          spawnContextSlot: context.slot,
+        )
       )
   of MsgKind.CmdTick:
     let elapsedMs =

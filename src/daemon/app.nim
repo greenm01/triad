@@ -15,8 +15,8 @@ import
   bindings_runtime, child_process_runtime, effects_runtime, input_runtime,
   janet_script_runtime, live_restore_runtime, manage_requests, message_queue,
   memory_status, output_management_runtime, process_runner, quickshell_runner,
-  registry_runtime, reload_runtime, render_runtime, render_invalidation, state,
-  switch_event_runtime
+  registry_runtime, reload_runtime, render_runtime, render_invalidation, spawn_context,
+  state, switch_event_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -256,7 +256,11 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           )
 
     if msg.kind == MsgKind.CmdSpawnTerminal:
-      daemon.trackChildProcess(spawnTerminal(daemon.runtimeState.model))
+      let process = spawnTerminal(daemon.runtimeState.model)
+      daemon.rememberSpawnPlacement(
+        process, daemon.runtimeState.model, "spawn-terminal"
+      )
+      daemon.trackChildProcess(process)
       continue
 
     if msg.kind == MsgKind.CmdConfigReload:

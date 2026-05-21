@@ -10,7 +10,8 @@ import ../types/projection_values as projection_values
 import ../utils/process_tree
 import
   bindings_runtime, input_runtime, live_restore_runtime, manage_requests, message_queue,
-  protocol_surface_runtime, river_outputs_runtime, river_windows, state, wayland_helpers
+  protocol_surface_runtime, river_outputs_runtime, river_windows, spawn_context, state,
+  wayland_helpers
 
 proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
   result = daemonFromData(data)
@@ -157,8 +158,10 @@ proc onManageStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
     return
   debug "River manage start", pendingWindows = daemon.pendingWindows.len
   daemon[].applyPendingLiveRestore("manage start")
+  daemon[].expireSpawnPlacementContexts()
   for id, data in daemon.pendingWindows:
     let pid = daemon[].pendingWindowPid(id)
+    let spawnContext = daemon[].consumeSpawnPlacementForPid(pid)
     daemon.enqueue(
       Msg(
         kind: MsgKind.WlWindowCreated,
@@ -170,6 +173,8 @@ proc onManageStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
         title: data.title,
         createdIdentifier: data.identifier,
         deferAdmission: data.parentId == 0,
+        spawnContextOutputId: spawnContext.outputId,
+        spawnContextSlot: spawnContext.slot,
       )
     )
 
@@ -233,6 +238,7 @@ proc onManageStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
         Msg(kind: MsgKind.WlWindowMinimizeRequested, minimizeRequestId: id)
       )
   daemon.pendingWindows.clear()
+  daemon[].ageSpawnPlacementContexts()
   daemon.enqueue(Msg(kind: MsgKind.WlManageStart))
 
 proc onRenderStart(data: pointer, mgr: ptr RiverWindowManagerV1) =

@@ -37,6 +37,21 @@ proc parentScreen(model: Model, parentExternalId: ExternalWindowId): Rect =
     return model.windowScreen(parentId)
   model.activeWorkspaceScreen()
 
+proc targetWindowScreen(
+    model: Model,
+    winId: WindowId,
+    parentExternalId: ExternalWindowId,
+    targetTag = NullTagId,
+    targetOutput = NullOutputId,
+): Rect =
+  if parentExternalId != NullExternalWindowId:
+    return model.parentScreen(parentExternalId)
+  if targetTag != NullTagId:
+    return model.tagScreen(targetTag)
+  if targetOutput != NullOutputId and model.hasOutput(targetOutput):
+    return model.outputScreen(targetOutput)
+  model.windowScreen(winId)
+
 proc parentVisibleInProjection*(
     model: Model, parentExternalId: ExternalWindowId
 ): bool =
@@ -105,7 +120,11 @@ proc instructionGeomFor(model: Model, winId: WindowId): GeometryRect =
       return instr.geom
 
 proc floatingGeomForWindow*(
-  model: Model, winId: WindowId, parentExternalId = NullExternalWindowId
+  model: Model,
+  winId: WindowId,
+  parentExternalId = NullExternalWindowId,
+  targetTag = NullTagId,
+  targetOutput = NullOutputId,
 ): Rect
 
 proc recenterLeadFloatingAnchor*(
@@ -192,13 +211,14 @@ proc floatingGeomFromRule(
     result.center = ruleMatch.rule.centerFloatingSet and ruleMatch.rule.centerFloating
 
 proc floatingGeomForWindow*(
-    model: Model, winId: WindowId, parentExternalId: ExternalWindowId
+    model: Model,
+    winId: WindowId,
+    parentExternalId: ExternalWindowId,
+    targetTag: TagId,
+    targetOutput: OutputId,
 ): Rect =
   let screen =
-    if parentExternalId != NullExternalWindowId:
-      model.parentScreen(parentExternalId)
-    else:
-      model.windowScreen(winId)
+    model.targetWindowScreen(winId, parentExternalId, targetTag, targetOutput)
   result = model.defaultFloatingGeom(screen)
   let winOpt = model.windowData(winId)
   if winOpt.isNone:

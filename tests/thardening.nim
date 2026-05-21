@@ -5,7 +5,7 @@ import
   ../src/daemon/[
     bindings_runtime, child_process_runtime, cursor_shake, effects_runtime,
     input_device_classification, memory_status, message_queue, process_runner,
-    reload_runtime, render_invalidation, switch_event_runtime,
+    reload_runtime, render_invalidation, spawn_context, switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
@@ -168,6 +168,22 @@ suite "Crash hardening":
 
     check reaped == 1
     check daemon.fireAndForgetProcesses.len == 0
+
+  test "spawn placement context matches descendant window pid":
+    var daemon = initTriadDaemon()
+    daemon.rememberSpawnPlacementForPid(100, 2, 4, "DP-2", "launcher")
+    proc parentPid(pid: int32): int32 {.gcsafe.} =
+      case pid
+      of 120: 110
+      of 110: 100
+      else: 0
+
+    let context = daemon.consumeSpawnPlacementForPid(120, parentPid)
+
+    check context.pid == 100
+    check context.outputId == 2
+    check context.slot == 4
+    check daemon.pendingSpawnPlacements.len == 0
 
   test "axis bindings dispatch matching wheel detents":
     var daemon = initTriadDaemon()

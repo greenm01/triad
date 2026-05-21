@@ -1,4 +1,4 @@
-import std/[asyncdispatch, json, options, tables]
+import std/[asyncdispatch, json, options, osproc, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_xkb_bindings/client as riverXkb
@@ -11,7 +11,7 @@ import ../utils/behavior_log
 import
   child_process_runtime, idle_inhibit_runtime, live_restore_runtime, manage_requests,
   process_runner, protocol_surface_runtime, quickshell_runner, render_runtime,
-  screenshot_runner, state
+  screenshot_runner, spawn_context, state
 
 proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
   case eff.kind
@@ -162,7 +162,19 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       )
     )
   of EffectKind.EffSpawn:
-    daemon.trackChildProcess(spawnCommand(daemon.runtimeState.model, eff.spawnCommand))
+    let process = spawnCommand(daemon.runtimeState.model, eff.spawnCommand)
+    if process != nil:
+      daemon.rememberSpawnPlacementForPid(
+        int32(process.processID),
+        eff.spawnContextOutputId,
+        eff.spawnContextSlot,
+        $eff.spawnContextOutputId,
+        if eff.spawnCommand.len > 0:
+          eff.spawnCommand[0]
+        else:
+          "",
+      )
+    daemon.trackChildProcess(process)
   of EffectKind.EffPointerWarp:
     for seat in daemon.seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)

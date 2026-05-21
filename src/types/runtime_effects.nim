@@ -74,6 +74,8 @@ type
       windowMenuY*: int32
     of EffectKind.EffSpawn:
       spawnCommand*: seq[string]
+      spawnContextOutputId*: uint32
+      spawnContextSlot*: uint32
     of EffectKind.EffPointerWarp:
       warpX*, warpY*: int32
     of EffectKind.EffSetKeyboardLayout:

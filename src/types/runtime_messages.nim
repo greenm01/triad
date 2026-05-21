@@ -225,6 +225,8 @@ type
       title*: string
       createdIdentifier*: string
       deferAdmission*: bool
+      spawnContextOutputId*: uint32
+      spawnContextSlot*: uint32
     of MsgKind.WlWindowDestroyed:
       destroyedId*: uint32
     of MsgKind.WlFocusChanged:
