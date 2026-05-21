@@ -92,6 +92,35 @@ ICC, or HDR/luminance monitor controls through Triad's output-management path.
 Triad documents those names as future features and rejects them during strict
 validation instead of accepting no-op configuration.
 
+## Hotplug Behavior
+
+Triad is designed to keep workspaces and windows managed when monitors are
+unplugged or plugged back in. A configured monitor block can stay in your config
+even when that monitor is temporarily disconnected.
+
+When an output disappears, Triad removes that output from the live output list
+and falls back to a connected output for affected workspaces. Windows remain on
+their existing workspaces, and those workspaces stay occupied instead of being
+discarded because the monitor went away.
+
+When the same output name reconnects, Triad can re-apply its monitor
+configuration and move remembered workspaces back to that output. For example,
+if workspace 3 was visible on `DP-3`, unplugging `DP-3` may temporarily place
+workspace 3 on another connected output. When `DP-3` returns, Triad can restore
+workspace 3 and its windows to `DP-3`.
+
+Useful checks while testing monitor hotplug:
+
+```sh
+wlr-randr
+triad msg state
+triad msg perf-status
+```
+
+`wlr-randr` shows what the compositor currently exposes. `triad msg state`
+shows Triad's live outputs, workspace-to-output mapping, and window outputs.
+`triad msg perf-status` confirms the daemon stayed alive and responsive.
+
 ## Pin Workspaces
 
 You can pin workspaces from either side.
