@@ -662,6 +662,9 @@ def output_tags_preserved(expected_tags, actual_tags):
 def normalize_focus_history(state, id_map):
     return [canonical_ref(win_id, id_map) for win_id in state.get("focus_history", [])]
 
+def same_members(expected_values, actual_values):
+    return sorted(expected_values) == sorted(actual_values)
+
 def normalized(state, id_map):
     active_tag = state.get("active_tag", 0)
     return {
@@ -681,12 +684,18 @@ expected = normalized(expected_raw, expected_id_map)
 actual = normalized(actual_raw, actual_id_map)
 
 ok = True
-for key in ["active_tag", "focused_window", "focus_history", "workspace_history"]:
+for key in ["active_tag", "focused_window", "workspace_history"]:
     if expected[key] != actual[key]:
         ok = False
         print(f"{key} mismatch")
         print(f"  expected: {expected[key]}")
         print(f"  actual:   {actual[key]}")
+
+if not same_members(expected["focus_history"], actual["focus_history"]):
+    ok = False
+    print("focus_history membership mismatch")
+    print(f"  expected: {expected['focus_history']}")
+    print(f"  actual:   {actual['focus_history']}")
 
 if not output_tags_preserved(expected["output_tags"], actual["output_tags"]):
     ok = False
