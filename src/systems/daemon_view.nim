@@ -2,7 +2,7 @@ import std/options
 from ../core/layout_selection_codec import layoutIdString
 from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
-import presentation_policy
+import presentation_policy, window_rules
 import recent_windows
 
 proc runtimeWindowId*(model: Model, winId: WindowId): uint32 =
@@ -72,15 +72,12 @@ proc windowRenderFocused*(model: Model, winId: uint32): bool =
       return frameId != NullFrameId and frameId == tagOpt.get().focusedFrame
   winId == model.activeFocusRiverId()
 
-proc windowRenderWorkspaceLocalFocusOnly*(model: Model, logicalId: WindowId): bool =
-  if logicalId == NullWindowId or model.recentWindowsActive or model.overviewActive:
-    return false
-  if model.riverIdForWindow(logicalId) == model.activeFocusRiverId():
-    return false
-  for tagId, _ in model.tagsWithId():
-    if model.tagVisibleOnOutput(tagId) and
-        model.effectiveTagFocusedWindow(tagId) == logicalId:
-      return true
+proc renderWindowBorder*(
+    model: Model, logicalId: WindowId, focused: bool
+): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
+  if model.recentWindowsVisible():
+    return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
+  model.effectiveWindowBorder(logicalId, focused)
 
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)

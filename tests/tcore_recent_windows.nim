@@ -1,4 +1,5 @@
 import std/math
+import ../src/systems/daemon_view
 import tcore_support
 
 proc recentConfig(debounceMs = 0'i32, openDelayMs = 0'i32): RecentWindowsConfig =

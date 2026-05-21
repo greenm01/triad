@@ -13,8 +13,8 @@ from ../types/runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, JanetLayoutId, SpiralLayoutConfig,
   SplitTreeNodeMode
 import
-  floating_geometry, overview_geometry, presentation_policy, popup_tree, recent_windows,
-  window_rules
+  daemon_view, floating_geometry, overview_geometry, presentation_policy, popup_tree,
+  recent_windows, window_rules
 
 type
   CustomLayoutEval* = proc(context: JanetLayoutContext): JanetLayoutEvalResult
@@ -532,7 +532,6 @@ proc layoutFrameTree*(
     model: Model, tagId: TagId, screen: rv.Rect, outerGap, innerGap: int32
 ): seq[rv.RenderInstruction] =
   let rects = model.frameTreeLayoutRects(tagId, screen, outerGap, innerGap)
-  let tagOpt = model.tagData(tagId)
   for item in rects:
     let frameOpt = model.frameData(item.frameId)
     if frameOpt.isNone:
@@ -540,8 +539,8 @@ proc layoutFrameTree*(
     let active = model.frameTreeVisibleActiveWindow(item.frameId)
     if active == NullWindowId:
       continue
-    let focused = tagOpt.isSome and item.frameId == tagOpt.get().focusedFrame
-    let border = model.effectiveWindowBorder(active, focused)
+    let focused = model.windowRenderFocused(uint32(model.externalWindowId(active)))
+    let border = model.renderWindowBorder(active, focused)
     result.add(
       rv.RenderInstruction(
         windowId: model.externalWindowId(active),
@@ -578,7 +577,6 @@ proc frameTreeTabBars*(
     let frameOpt = model.frameData(item.frameId)
     if frameOpt.isNone:
       continue
-    let frame = frameOpt.get()
     let active = model.frameTreeVisibleActiveWindow(item.frameId)
     if active == NullWindowId:
       continue
@@ -588,21 +586,17 @@ proc frameTreeTabBars*(
     let tabs = model.frameTreeVisibleTabs(item.frameId)
     if tabs.len == 0:
       continue
-    let border =
-      model.effectiveWindowBorder(active, item.frameId == tagOpt.get().focusedFrame)
+    let focused = model.windowRenderFocused(uint32(model.externalWindowId(active)))
+    let border = model.renderWindowBorder(active, focused)
     result.add(
       rv.ProjectedFrameTabBar(
         frameId: uint32(item.frameId),
         windowId: model.externalWindowId(active),
         geom: frameTreeTabContentRect(item.rect, border.width),
-        focused: item.frameId == tagOpt.get().focusedFrame,
+        focused: focused,
         frameTabs: model.frameTabs,
         ringWidth: border.width,
-        ringColor:
-          if item.frameId == tagOpt.get().focusedFrame:
-            border.activeColor
-          else:
-            border.inactiveColor,
+        ringColor: if focused: border.activeColor else: border.inactiveColor,
         tabs: tabs,
       )
     )
@@ -625,7 +619,7 @@ proc frameTreeEmptyChrome*(
       continue
     if model.frameTreeVisibleTabs(item.frameId).len > 0:
       continue
-    let focused = item.frameId == tagOpt.get().focusedFrame
+    let focused = tagId == model.activeTag and item.frameId == tagOpt.get().focusedFrame
     let border = model.effectiveWindowBorder(NullWindowId, focused)
     result.add(
       rv.ProjectedFrameEmptyChrome(
@@ -794,8 +788,8 @@ proc splitTreeTabBars*(
     let tabs = model.splitTreeVisibleTabs(node, activeChild)
     if tabs.len == 0:
       continue
-    let focused = active == tagOpt.get().focusedWindow
-    let border = model.effectiveWindowBorder(active, focused)
+    let focused = model.windowRenderFocused(uint32(model.externalWindowId(active)))
+    let border = model.renderWindowBorder(active, focused)
     result.add(
       rv.ProjectedFrameTabBar(
         frameId: uint32(item.nodeId),
@@ -1130,11 +1124,8 @@ proc applyFrameInstructionClientRects(
 ) =
   for instr in instructions.mitems:
     let logicalId = model.windowForExternal(ExternalWindowId(uint32(instr.windowId)))
-    let frameId = model.frameForWindowOnTag(tagId, logicalId)
-    let focused =
-      frameId != NullFrameId and model.tagData(tagId).isSome and
-      frameId == model.tagData(tagId).get().focusedFrame
-    let border = model.effectiveWindowBorder(logicalId, focused)
+    let renderFocused = model.windowRenderFocused(uint32(instr.windowId))
+    let border = model.renderWindowBorder(logicalId, renderFocused)
     instr.geom = frameTreeClientRect(instr.geom, border.width)
 
 proc focusIsOverlayForProjection(

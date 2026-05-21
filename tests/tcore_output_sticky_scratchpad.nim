@@ -1,10 +1,86 @@
 import std/sets
+from ../src/core/layout_selection_codec import janetLayoutId
+from ../src/core/native_layout_codec import nativeLayoutId
 import ../src/systems/daemon_view
 import tcore_support
 
 proc fullyWithin(rect, screen: Rect): bool =
   rect.x >= screen.x and rect.y >= screen.y and rect.x + rect.w <= screen.x + screen.w and
     rect.y + rect.h <= screen.y + screen.h
+
+proc inactiveOutputLocalFocusScenario(
+    layoutId: string
+): tuple[model: Model, localWindow: uint32, activeWindow: uint32, localScreen: Rect] =
+  var model = initRuntimeStateFromConfig(
+    Config(
+      layout: LayoutConfig(borderWidth: 4), workspaces: WorkspaceConfig(defaultCount: 3)
+    )
+  ).model
+  model.applyMsg(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 2560, height: 1440)
+  )
+  model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-2"))
+  model.applyMsg(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1920, height: 1080)
+  )
+  model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-3"))
+
+  let middle = model.outputForExternal(ExternalOutputId(1))
+  let left = model.outputForExternal(ExternalOutputId(2))
+  let tag1 = model.tagForSlot(1)
+  let tag3 = model.tagForSlot(3)
+  discard model.setOutputTag(middle, tag1)
+  discard model.setOutputTag(left, tag3)
+
+  model.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "term")
+  )
+  model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+  model.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 30, appId: "files", title: "files")
+  )
+
+  case layoutId
+  of "dwindle":
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("dwindle"))
+    )
+  of "bsp-tree":
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("bsp-tree"))
+    )
+  of "i3", "i3-tabbed":
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+  of "frame-tree":
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("frame-tree"))
+    )
+  of "notion":
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("notion"))
+    )
+  else:
+    discard
+
+  model.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 31, appId: "shell", title: "shell")
+  )
+  model.applyMsg(
+    Msg(kind: MsgKind.WlWindowCreated, windowId: 32, appId: "log", title: "log")
+  )
+  if layoutId == "i3-tabbed":
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+  model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 30))
+  model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+  (
+    model: model,
+    localWindow: 30'u32,
+    activeWindow: 10'u32,
+    localScreen: model.outputScreen(left),
+  )
 
 suite "Core Runtime Logic: output sticky scratchpad":
   test "Output identity events store make model and description":
@@ -595,7 +671,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.instructionGeom(20).fullyWithin(model.outputScreen(middle))
     check model.instructionGeom(30).fullyWithin(model.outputScreen(right))
 
-  test "Normal render suppresses inactive output workspace focus ring":
+  test "Normal render keeps inactive output local focus border unfocused":
     var model = initRuntimeStateFromConfig(
       Config(
         layout: LayoutConfig(borderWidth: 4),
@@ -634,12 +710,69 @@ suite "Core Runtime Logic: output sticky scratchpad":
     let localActive = model.windowForExternal(ExternalWindowId(31))
     check model.effectiveTagFocusedWindow(tag3) == localActive
     check model.focusedWindowId() == 10'u32
-    check model.renderWindowBorder(localActive, focused = false).width == 0
+    check model.renderWindowBorder(localActive, focused = false).width == 4
     check model.renderWindowBorder(localActive, focused = true).width == 4
 
     var overview = model
     overview.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
     check overview.renderWindowBorder(localActive, focused = false).width == 4
+
+  test "Inactive output local focus keeps border alignment across layouts":
+    for layoutId in ["scroller", "dwindle", "bsp-tree", "i3"]:
+      let scenario = inactiveOutputLocalFocusScenario(layoutId)
+      let localLogical =
+        scenario.model.windowForExternal(ExternalWindowId(scenario.localWindow))
+      let activeLogical =
+        scenario.model.windowForExternal(ExternalWindowId(scenario.activeWindow))
+      let projection = scenario.model.layoutProjection()
+      let localInstructions =
+        projection.instructions.filterIt(it.windowId == scenario.localWindow)
+      let activeInstructions =
+        projection.instructions.filterIt(it.windowId == scenario.activeWindow)
+
+      check localInstructions.len == 1
+      check activeInstructions.len == 1
+      check scenario.model.renderWindowBorder(localLogical, focused = false).width == 4
+      check scenario.model.renderWindowBorder(activeLogical, focused = true).width == 4
+
+      var daemon = initTriadDaemon()
+      daemon.runtimeState.model = scenario.model
+      let localState = daemon.desiredRenderWindowState(
+        scenario.localWindow, localInstructions[0].geom, scenario.localScreen, false
+      )
+      let activeState = daemon.desiredRenderWindowState(
+        scenario.activeWindow,
+        activeInstructions[0].geom,
+        scenario.model.activeWorkspaceScreen(),
+        false,
+      )
+
+      check localState.visible
+      check localState.borderWidth == 4
+      check localState.renderBorderWidth == 4
+      check activeState.visible
+      check activeState.focused
+      check activeState.borderWidth == 4
+      check activeState.renderBorderWidth == 4
+
+  test "Inactive output local focus keeps unfocused aligned tab chrome":
+    for layoutId in ["frame-tree", "notion", "i3-tabbed"]:
+      let scenario = inactiveOutputLocalFocusScenario(layoutId)
+      let localLogical =
+        scenario.model.windowForExternal(ExternalWindowId(scenario.localWindow))
+      let projection = scenario.model.layoutProjection()
+      let bars = projection.frameTabBars.filterIt(it.windowId == scenario.localWindow)
+
+      check scenario.model.renderWindowBorder(localLogical, focused = false).width == 4
+      check bars.len == 1
+      check not bars[0].focused
+      check bars[0].ringWidth == 4
+
+      let matching = projection.instructions.filterIt(it.windowId == bars[0].windowId)
+      check matching.len == 1
+      check matching[0].geom.x == bars[0].geom.x
+      check matching[0].geom.w == bars[0].geom.w
+      check matching[0].geom.y == bars[0].geom.y + bars[0].geom.h
 
   test "Visible workspace focus repairs stale learned output":
     var model = initRuntimeStateFromConfig(

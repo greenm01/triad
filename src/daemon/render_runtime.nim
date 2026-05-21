@@ -30,30 +30,15 @@ template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
 template recentWindowsChromeSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsChromeSurfaceId
 
-proc renderWindowBorder*(
-    model: Model, logicalId: WindowId, focused: bool
-): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
-  if model.recentWindowsVisible():
-    return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
-  result = model.effectiveWindowBorder(logicalId, focused)
-  if not focused and model.windowRenderWorkspaceLocalFocusOnly(logicalId):
-    result.width = 0
-
-proc applyBorder(
-    daemon: TriadDaemon,
-    id: uint32,
-    win: ptr RiverWindowV1,
-    focused: bool,
-    edges: uint32,
-) =
-  let logicalId = daemon.currentModel.windowForRiverId(id)
-  let border = daemon.currentModel.renderWindowBorder(logicalId, focused)
+proc applyBorder(win: ptr RiverWindowV1, state: RenderWindowState) =
   let color =
-    if focused:
-      premulColor(border.activeColor)
+    if state.focused:
+      premulColor(state.borderActiveColor)
     else:
-      premulColor(border.inactiveColor)
-  win.setBorders(edges, border.width, color.r, color.g, color.b, color.a)
+      premulColor(state.borderInactiveColor)
+  win.setBorders(
+    state.borderEdges, state.borderWidth, color.r, color.g, color.b, color.a
+  )
 
 proc supportedCapabilities*(model: Model): uint32 =
   const
@@ -292,15 +277,14 @@ proc applyHiddenRenderWindowState(win: ptr RiverWindowV1) =
   win.setBorders(0'u32, 0'i32, 0'u32, 0'u32, 0'u32, 0'u32)
   win.hide()
 
-proc desiredRenderWindowState(
+proc desiredRenderWindowState*(
     daemon: TriadDaemon, id: uint32, geom, visibilityBounds: Rect, clipSet: bool
 ): RenderWindowState =
   let logicalId = daemon.currentModel.windowForRiverId(id)
   let focused = daemon.currentModel.windowRenderFocused(id)
-  let clipBorder = daemon.currentModel.effectiveWindowBorder(logicalId, focused)
   let renderBorder = daemon.currentModel.renderWindowBorder(logicalId, focused)
   let visibility =
-    renderVisibility(geom, visibilityBounds, max(clipBorder.width * 2, 4'i32))
+    renderVisibility(geom, visibilityBounds, max(renderBorder.width * 2, 4'i32))
   RenderWindowState(
     visible: visibility.visible,
     geom: geom,
@@ -309,7 +293,7 @@ proc desiredRenderWindowState(
     forceClip:
       clipSet or daemon.currentModel.windowClipToGeometry(logicalId) or
       daemon.placementNeedsCellClip(id, geom),
-    borderWidth: clipBorder.width,
+    borderWidth: renderBorder.width,
     renderBorderWidth: renderBorder.width,
     borderActiveColor: renderBorder.activeColor,
     borderInactiveColor: renderBorder.inactiveColor,
@@ -343,7 +327,7 @@ proc applyRenderWindowState(
   let visibility =
     renderVisibility(state.geom, state.clip, max(state.borderWidth * 2, 4'i32))
   win.applyVisibility(visibility, state.forceClip, state.borderWidth)
-  daemon.applyBorder(id, win, state.focused, state.borderEdges)
+  win.applyBorder(state)
 
 proc renderDesiredPlacements*(daemon: var TriadDaemon) =
   if daemon.currentModel.hasPresentationPreference():
