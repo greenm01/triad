@@ -335,6 +335,7 @@ proc applyRestoredFallbackScreen(model: var Model, state: PendingRestoreState) =
     discard model.setScreenSize(fallbackW, fallbackH)
 
 proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
+  model.outputStartupFocusResolved = true
   discard model.loadRestoreState(state)
   model.applyRestoredFallbackScreen(state)
   for slot, _ in state.tags.pairs:

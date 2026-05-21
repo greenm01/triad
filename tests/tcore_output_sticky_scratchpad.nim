@@ -974,6 +974,27 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check restoredModel.outputActiveTag(second) == restoredModel.tagForSlot(2)
     check restoredModel.activeWorkspaceSlot() == 2
 
+  test "Live restore suppresses startup output focus":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules: @[OutputRule(target: "DP-2", focusAtStartup: true)],
+      )
+    ).model
+    var restore = PendingRestoreState(activeSlot: 3)
+    model.applyLiveRestore(restore)
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    check model.activeWorkspaceSlot() == 3
+
   test "Moved workspace restores to reconnected output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
