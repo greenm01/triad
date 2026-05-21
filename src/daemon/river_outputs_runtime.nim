@@ -49,6 +49,12 @@ proc onOutputRemoved(data: pointer, output: ptr RiverOutputV1) =
     daemon.outputGlobalDescriptions.del(globalName)
     daemon.outputGlobalRefreshRates.del(globalName)
     daemon.outputWlNames.del(id)
+  if daemon.outputPointers.len == 0:
+    let dropped = daemon[].dropQueuedOutputRemovals()
+    warn "All River outputs disappeared; preserving model outputs until outputs return",
+      outputId = id, droppedQueuedRemovals = dropped
+    output.destroy()
+    return
   daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
   output.destroy()
 

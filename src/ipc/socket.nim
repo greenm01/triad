@@ -488,6 +488,7 @@ proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
             eventPayload["workspaces"].kind == JArray:
           let distribution = newJArray()
           var signatureParts: seq[string]
+          var focusedWorkspaceSeen = false
           for workspace in eventPayload["workspaces"]:
             if workspace.kind != JObject:
               continue
@@ -521,11 +522,18 @@ proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
             signatureParts.add(
               $id & ":" & $idx & ":" & $active & ":" & $focused & ":" & $occupied
             )
-            if focused:
+            if focused or
+                (
+                  active and not focusedWorkspaceSeen and not result.hasKey(
+                    "active_tag"
+                  )
+                ):
               if workspace.hasKey("id"):
                 result["active_tag"] = workspace["id"]
               if workspace.hasKey("idx"):
                 result["active_workspace_idx"] = workspace["idx"]
+              if focused:
+                focusedWorkspaceSeen = true
           result["workspace_distribution"] = distribution
           result["workspace_signature"] = %signatureParts.join("|")
         let activeTag =

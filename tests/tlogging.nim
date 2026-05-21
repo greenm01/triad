@@ -461,8 +461,8 @@ suite "Runtime logging":
         %*{
           "WorkspacesChanged": {
             "workspaces": [
-              {"id": 1, "idx": 1, "is_active": false},
-              {"id": 2, "idx": 2, "is_active": true},
+              {"id": 2, "idx": 2, "is_active": false, "is_focused": true},
+              {"id": 3, "idx": 3, "is_active": true, "is_focused": false},
             ]
           }
         }

@@ -77,6 +77,27 @@ suite "Crash hardening":
     check hook.origin == QueuedMsgOrigin.JanetHook
     check hook.msg.targetTag == 3
 
+  test "message queue can drop pending output removals":
+    var daemon = initTriadDaemon()
+
+    daemon.enqueue(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+    daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 1))
+    daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 2))
+    daemon.enqueue(
+      Msg(kind: MsgKind.CmdMoveToTag, targetTag: 3), QueuedMsgOrigin.JanetHook
+    )
+
+    check daemon.dropQueuedOutputRemovals() == 2
+    let normal = daemon.popQueuedMessageWithOrigin()
+    let hook = daemon.popQueuedMessageWithOrigin()
+    check normal.msg.kind == MsgKind.CmdFocusTag
+    check normal.msg.focusTag == 2
+    check normal.origin == QueuedMsgOrigin.Normal
+    check hook.msg.kind == MsgKind.CmdMoveToTag
+    check hook.msg.targetTag == 3
+    check hook.origin == QueuedMsgOrigin.JanetHook
+    check not daemon.hasQueuedMessages()
+
   test "render start skip requires clean render state":
     var daemon = initTriadDaemon()
     daemon.runtimeState = initRuntimeStateFromConfig(Config())
