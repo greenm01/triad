@@ -341,6 +341,9 @@ proc activeWindowForSplitNode(
         return node.window
   0'u32
 
+proc requiresCompleteWindowCoverage(context: JanetLayoutContext): bool =
+  context.layoutId.layoutIdString() != "monocle"
+
 proc validateLayoutInstructions*(
     context: JanetLayoutContext, instructions: openArray[JanetLayoutInstruction]
 ): tuple[
@@ -421,7 +424,7 @@ proc validateLayoutInstructions*(
       seen.incl(winId)
       result.instructions.add(rv.RenderInstruction(windowId: winId, geom: instr.geom))
     for winId in expected:
-      if winId notin seen:
+      if context.requiresCompleteWindowCoverage() and winId notin seen:
         return (false, "layout omitted tiled window " & $winId, targetKind, @[])
   of JanetLayoutTargetKind.Frame:
     if not context.frameSubstrateActive():

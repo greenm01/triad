@@ -717,6 +717,57 @@ suite "Core Runtime Logic: output sticky scratchpad":
     overview.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
     check overview.renderWindowBorder(localActive, focused = false).width == 4
 
+  test "Inactive output monocle keeps local focused window visible":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 5))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1200, height: 800)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1200, outputY: 0
+      )
+    )
+
+    let activeOutput = model.outputForExternal(ExternalOutputId(1))
+    let localOutput = model.outputForExternal(ExternalOutputId(2))
+    let tag2 = model.tagForSlot(2)
+    let tag5 = model.tagForSlot(5)
+    discard model.setOutputTag(activeOutput, tag2)
+    discard model.setOutputTag(localOutput, tag5)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 5))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("monocle"))
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 50, appId: "kitty", title: "shell")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 51, appId: "kitty", title: "btop")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "browser", title: "web")
+    )
+
+    let localFocused = model.windowForExternal(ExternalWindowId(51))
+    let projection = model.layoutProjection()
+    let localProjected =
+      projection.instructions.filterIt(uint32(it.windowId) in [50'u32, 51'u32])
+
+    check model.activeTag == tag2
+    check model.effectiveTagFocusedWindow(tag5) == localFocused
+    check localProjected.len == 1
+    check localProjected[0].windowId == 51'u32
+    check localProjected[0].geom.fullyWithin(model.outputScreen(localOutput))
+
   test "Inactive output local focus keeps border alignment across layouts":
     for layoutId in ["scroller", "dwindle", "bsp-tree", "i3"]:
       let scenario = inactiveOutputLocalFocusScenario(layoutId)

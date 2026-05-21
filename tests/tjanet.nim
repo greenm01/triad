@@ -821,6 +821,35 @@ suite "embedded Janet runtime":
       check not evaluated.ok
       check evaluated.op == JanetLayoutMovementOp.None
 
+  test "bundled monocle projects focused window only":
+    var runtime = initJanetRuntime(
+      JanetConfig(
+        enabled: false,
+        automationDir: getTempDir() / "triad-unused-janet-dir",
+        layoutDir: getTempDir() / "triad-unused-layout-dir",
+        fuelLimit: 500000,
+      )
+    )
+    defer:
+      runtime.close()
+
+    var context = testLayoutContext()
+    context.layoutId = janetLayoutId("monocle")
+    context.tag.focusedWindow = 11
+    let focused = runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check focused.outcome == JanetLayoutOutcome.Applied
+    check focused.instructions.len == 1
+    check focused.instructions[0].windowId == 11'u32
+    check focused.instructions[0].geom == Rect(x: 0, y: 0, w: 1000, h: 800)
+
+    context.tag.focusedWindow = 99
+    let fallback = runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check fallback.outcome == JanetLayoutOutcome.Applied
+    check fallback.instructions.len == 1
+    check fallback.instructions[0].windowId == 10'u32
+
   test "Janet layout movement hook is optional":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
     defer:
