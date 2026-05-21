@@ -39,6 +39,11 @@ proc addOutput*(
       w: w,
       h: h,
       refreshRate: refreshRate,
+      baseUsableX: usableX,
+      baseUsableY: usableY,
+      baseUsableW: usableW,
+      baseUsableH: usableH,
+      hasBaseUsable: hasUsable,
       usableX: usableX,
       usableY: usableY,
       usableW: usableW,
@@ -96,6 +101,23 @@ proc setOutputRefreshRate*(
   true
 
 proc setOutputUsable*(model: var Model, outputId: OutputId, x, y, w, h: int32): bool =
+  if model.outputs.entity(outputId).isNone:
+    return false
+  model.outputs.mEntity(outputId).baseUsableX = x
+  model.outputs.mEntity(outputId).baseUsableY = y
+  model.outputs.mEntity(outputId).baseUsableW = max(0'i32, w)
+  model.outputs.mEntity(outputId).baseUsableH = max(0'i32, h)
+  model.outputs.mEntity(outputId).hasBaseUsable = true
+  model.outputs.mEntity(outputId).usableX = x
+  model.outputs.mEntity(outputId).usableY = y
+  model.outputs.mEntity(outputId).usableW = max(0'i32, w)
+  model.outputs.mEntity(outputId).usableH = max(0'i32, h)
+  model.outputs.mEntity(outputId).hasUsable = true
+  true
+
+proc setOutputEffectiveUsable*(
+    model: var Model, outputId: OutputId, x, y, w, h: int32
+): bool =
   if model.outputs.entity(outputId).isNone:
     return false
   model.outputs.mEntity(outputId).usableX = x

@@ -30,6 +30,10 @@ proc outputMatchesTarget*(
   let wanted = target.strip()
   if wanted.len == 0:
     return false
+  if wanted.startsWith("desc:"):
+    let description = wanted[5 ..^ 1].strip()
+    return
+      output.description.len > 0 and output.description.cmpIgnoreCase(description) == 0
   if output.name.cmpIgnoreCase(wanted) == 0:
     return true
   if model.shellOutputName(outputId).cmpIgnoreCase(wanted) == 0:
@@ -38,6 +42,53 @@ proc outputMatchesTarget*(
   if stableName.len > 0 and stableName.cmpIgnoreCase(wanted) == 0:
     return true
   output.description.len > 0 and output.description.cmpIgnoreCase(wanted) == 0
+
+proc reservedAreaForOutput(
+    model: Model, outputId: OutputId, output: OutputData
+): tuple[found: bool, top, right, bottom, left: int32] =
+  var fallback: tuple[found: bool, top, right, bottom, left: int32]
+  for rule in model.outputRules:
+    if not rule.reservedAreaSet:
+      continue
+    if rule.target.len == 0:
+      fallback = (
+        true, rule.reservedTop, rule.reservedRight, rule.reservedBottom,
+        rule.reservedLeft,
+      )
+    elif model.outputMatchesTarget(outputId, output, rule.target):
+      return (
+        true, rule.reservedTop, rule.reservedRight, rule.reservedBottom,
+        rule.reservedLeft,
+      )
+  fallback
+
+proc applyConfiguredOutputUsable*(model: var Model, outputId: OutputId): bool =
+  let outputOpt = model.outputData(outputId)
+  if outputOpt.isNone:
+    return false
+
+  let output = outputOpt.get()
+  let reserved = model.reservedAreaForOutput(outputId, output)
+  let baseX = if output.hasBaseUsable: output.baseUsableX else: output.x
+  let baseY = if output.hasBaseUsable: output.baseUsableY else: output.y
+  let baseW = if output.hasBaseUsable: output.baseUsableW else: output.w
+  let baseH = if output.hasBaseUsable: output.baseUsableH else: output.h
+
+  if not reserved.found:
+    if output.hasBaseUsable and (
+      output.usableX != baseX or output.usableY != baseY or output.usableW != baseW or
+      output.usableH != baseH or not output.hasUsable
+    ):
+      result = model.setOutputEffectiveUsable(outputId, baseX, baseY, baseW, baseH)
+    return
+
+  let x = baseX + reserved.left
+  let y = baseY + reserved.top
+  let w = max(0'i32, baseW - reserved.left - reserved.right)
+  let h = max(0'i32, baseH - reserved.top - reserved.bottom)
+  if output.usableX != x or output.usableY != y or output.usableW != w or
+      output.usableH != h or not output.hasUsable:
+    result = model.setOutputEffectiveUsable(outputId, x, y, w, h)
 
 proc outputForTarget*(model: Model, target: string): OutputId =
   if target.strip().len == 0:
@@ -111,6 +162,7 @@ proc applyStartupOutputFocus*(model: var Model): bool =
         return
 
 proc syncConfiguredOutputState*(model: var Model, outputId: OutputId): bool =
+  result = model.applyConfiguredOutputUsable(outputId)
   result = model.restoreWorkspaceOutputsFor(outputId)
   result = model.applyStartupOutputFocus() or result
 

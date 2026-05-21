@@ -6,12 +6,12 @@ from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
   KeyBindingConfig, LayoutMode, LayoutSelection, HotkeyOverlayConfig, FrameTabsConfig,
-  LayoutSwitchToastConfig, OutputConfigTransform, ParentedRole, SpiralLayoutConfig,
-  OverviewHotCornersConfig, PointerBindingConfig, PointerOpKind, PresentationMode,
-  ProtocolSurfacesConfig, QuickshellConfig, ShellsConfig, RecentWindowFilter,
-  RecentWindowScope, RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig,
-  TerminalConfig, WindowRuleBorderConfig, WindowRuleFloatingConfig,
-  WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  LayoutSwitchToastConfig, OutputConfigTransform, OutputModeKind, OutputPositionKind,
+  ParentedRole, SpiralLayoutConfig, OverviewHotCornersConfig, PointerBindingConfig,
+  PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
+  ShellsConfig, RecentWindowFilter, RecentWindowScope, RecentWindowsConfig,
+  ScreenshotConfig, SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig,
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
   WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy, SplitTreeNodeMode
 from runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, NativeLayoutId
@@ -131,6 +131,8 @@ type
     description*: string
     x*, y*, w*, h*: int32
     refreshRate*: int32
+    baseUsableX*, baseUsableY*, baseUsableW*, baseUsableH*: int32
+    hasBaseUsable*: bool
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
     currentTag*: TagId
@@ -314,18 +316,29 @@ type
     focusAtStartup*: bool
     workspaceSlots*: seq[uint32]
     modeSet*: bool
+    modeKind*: OutputModeKind
+    modeCustomAllowed*: bool
     modeWidth*: int32
     modeHeight*: int32
     modeRefresh*: int32
     scaleSet*: bool
+    scaleAuto*: bool
     scale*: float32
     positionSet*: bool
+    positionKind*: OutputPositionKind
     positionX*: int32
     positionY*: int32
     transformSet*: bool
     transform*: OutputConfigTransform
     adaptiveSyncSet*: bool
     adaptiveSync*: bool
+    enabledSet*: bool
+    enabled*: bool
+    reservedAreaSet*: bool
+    reservedTop*: int32
+    reservedRight*: int32
+    reservedBottom*: int32
+    reservedLeft*: int32
 
   RestoredWindowData* = object
     slot*: uint32

@@ -19,6 +19,25 @@ type
     OutputTransformFlipped180
     OutputTransformFlipped270
 
+  OutputModeKind* {.pure.} = enum
+    OutputModeExplicit
+    OutputModePreferred
+    OutputModeHighRes
+    OutputModeHighRr
+    OutputModeMaxWidth
+
+  OutputPositionKind* {.pure.} = enum
+    OutputPositionExplicit
+    OutputPositionAuto
+    OutputPositionAutoRight
+    OutputPositionAutoLeft
+    OutputPositionAutoUp
+    OutputPositionAutoDown
+    OutputPositionAutoCenterRight
+    OutputPositionAutoCenterLeft
+    OutputPositionAutoCenterUp
+    OutputPositionAutoCenterDown
+
   LayoutMode* {.pure.} = enum
     Scroller
     VerticalScroller
@@ -263,18 +282,29 @@ type
     focusAtStartup*: bool
     workspaceSlots*: seq[uint32]
     modeSet*: bool
+    modeKind*: OutputModeKind
+    modeCustomAllowed*: bool
     modeWidth*: int32
     modeHeight*: int32
     modeRefresh*: int32
     scaleSet*: bool
+    scaleAuto*: bool
     scale*: float32
     positionSet*: bool
+    positionKind*: OutputPositionKind
     positionX*: int32
     positionY*: int32
     transformSet*: bool
     transform*: OutputConfigTransform
     adaptiveSyncSet*: bool
     adaptiveSync*: bool
+    enabledSet*: bool
+    enabled*: bool
+    reservedAreaSet*: bool
+    reservedTop*: int32
+    reservedRight*: int32
+    reservedBottom*: int32
+    reservedLeft*: int32
 
   EnvironmentEntryConfig* = object
     name*: string

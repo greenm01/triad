@@ -89,6 +89,76 @@ proc parseOutputConfigTransform(
   value: string
 ): tuple[valid: bool, transform: OutputConfigTransform]
 
+proc parseOutputModeString(
+    value: string
+): tuple[valid: bool, kind: OutputModeKind, width: int32, height: int32, refresh: int32] =
+  let normalized = value.strip().toLowerAscii()
+  case normalized
+  of "preferred":
+    return (true, OutputModeKind.OutputModePreferred, 0'i32, 0'i32, 0'i32)
+  of "highres":
+    return (true, OutputModeKind.OutputModeHighRes, 0'i32, 0'i32, 0'i32)
+  of "highrr":
+    return (true, OutputModeKind.OutputModeHighRr, 0'i32, 0'i32, 0'i32)
+  of "maxwidth":
+    return (true, OutputModeKind.OutputModeMaxWidth, 0'i32, 0'i32, 0'i32)
+
+  let xPos = normalized.find('x')
+  if xPos <= 0:
+    return (false, OutputModeKind.OutputModeExplicit, 0'i32, 0'i32, 0'i32)
+  let atPos = normalized.find('@')
+  let widthText = normalized[0 ..< xPos]
+  let heightText =
+    if atPos > xPos:
+      normalized[xPos + 1 ..< atPos]
+    else:
+      normalized[xPos + 1 ..^ 1]
+  try:
+    let width = parseInt(widthText)
+    let height = parseInt(heightText)
+    var refresh = 0'i32
+    if atPos > xPos:
+      refresh = int32(max(0.0, parseFloat(normalized[atPos + 1 ..^ 1]) * 1000.0 + 0.5))
+    if width <= 0 or height <= 0 or refresh < 0:
+      return (false, OutputModeKind.OutputModeExplicit, 0'i32, 0'i32, 0'i32)
+    (true, OutputModeKind.OutputModeExplicit, int32(width), int32(height), refresh)
+  except CatchableError:
+    (false, OutputModeKind.OutputModeExplicit, 0'i32, 0'i32, 0'i32)
+
+proc parseOutputPositionString(
+    value: string
+): tuple[valid: bool, kind: OutputPositionKind, x: int32, y: int32] =
+  let normalized = value.strip().toLowerAscii()
+  case normalized
+  of "auto":
+    return (true, OutputPositionKind.OutputPositionAuto, 0'i32, 0'i32)
+  of "auto-right":
+    return (true, OutputPositionKind.OutputPositionAutoRight, 0'i32, 0'i32)
+  of "auto-left":
+    return (true, OutputPositionKind.OutputPositionAutoLeft, 0'i32, 0'i32)
+  of "auto-up":
+    return (true, OutputPositionKind.OutputPositionAutoUp, 0'i32, 0'i32)
+  of "auto-down":
+    return (true, OutputPositionKind.OutputPositionAutoDown, 0'i32, 0'i32)
+  of "auto-center-right":
+    return (true, OutputPositionKind.OutputPositionAutoCenterRight, 0'i32, 0'i32)
+  of "auto-center-left":
+    return (true, OutputPositionKind.OutputPositionAutoCenterLeft, 0'i32, 0'i32)
+  of "auto-center-up":
+    return (true, OutputPositionKind.OutputPositionAutoCenterUp, 0'i32, 0'i32)
+  of "auto-center-down":
+    return (true, OutputPositionKind.OutputPositionAutoCenterDown, 0'i32, 0'i32)
+
+  let xPos = normalized.find('x')
+  if xPos <= 0:
+    return (false, OutputPositionKind.OutputPositionExplicit, 0'i32, 0'i32)
+  try:
+    let x = parseInt(normalized[0 ..< xPos])
+    let y = parseInt(normalized[xPos + 1 ..^ 1])
+    (true, OutputPositionKind.OutputPositionExplicit, int32(x), int32(y))
+  except CatchableError:
+    (false, OutputPositionKind.OutputPositionExplicit, 0'i32, 0'i32)
+
 proc outputConfigError(target, field, message: string): string =
   if field.len > 0:
     "output \"" & target & "\" " & field & ": " & message
@@ -144,9 +214,19 @@ proc validateOutputWorkspaceField(target: string, child: KdlNode): string =
       return outputConfigError(target, child.name, "workspace ids must be positive")
 
 proc validateOutputModeField(target: string, child: KdlNode): string =
-  result = outputFieldArgs(target, child, 3)
-  if result.len > 0:
-    return
+  let propError = outputFieldHasProps(target, child)
+  if propError.len > 0:
+    return propError
+  if child.args.len == 1 and child.args[0].kind == KString:
+    let parsed = parseOutputModeString(child.args[0].kString())
+    if parsed.valid:
+      return
+    return outputConfigError(
+      target, child.name,
+      "expected preferred, highres, highrr, maxwidth, WxH, WxH@Hz, or W H Hz",
+    )
+  if child.args.len != 3:
+    return outputConfigError(target, child.name, "expected 1 or 3 argument(s)")
   if not child.args[0].isIntegerValue() or not child.args[1].isIntegerValue():
     return outputConfigError(target, child.name, "width and height must be integers")
   if child.args[0].kInt() <= 0 or child.args[1].kInt() <= 0:
@@ -160,16 +240,27 @@ proc validateOutputScaleField(target: string, child: KdlNode): string =
   result = outputFieldArgs(target, child, 1)
   if result.len > 0:
     return
+  if child.args[0].kind == KString and child.args[0].kString().cmpIgnoreCase("auto") == 0:
+    return
   if not child.args[0].isNumberValue():
-    return outputConfigError(target, child.name, "expected a numeric scale")
+    return outputConfigError(target, child.name, "expected a numeric scale or auto")
   let scale = child.args[0].numberValue()
   if scale < 0.01 or scale > 64.0:
     return outputConfigError(target, child.name, "scale must be in range 0.01..64.0")
 
 proc validateOutputPositionField(target: string, child: KdlNode): string =
-  result = outputFieldArgs(target, child, 2)
-  if result.len > 0:
-    return
+  let propError = outputFieldHasProps(target, child)
+  if propError.len > 0:
+    return propError
+  if child.args.len == 1 and child.args[0].kind == KString:
+    let parsed = parseOutputPositionString(child.args[0].kString())
+    if parsed.valid:
+      return
+    return outputConfigError(
+      target, child.name, "expected XxY, auto, or auto-{right,left,up,down}"
+    )
+  if child.args.len != 2:
+    return outputConfigError(target, child.name, "expected 1 or 2 argument(s)")
   if not child.args[0].isIntegerValue() or not child.args[1].isIntegerValue():
     return outputConfigError(target, child.name, "x and y must be integers")
 
@@ -177,8 +268,13 @@ proc validateOutputTransformField(target: string, child: KdlNode): string =
   result = outputFieldArgs(target, child, 1)
   if result.len > 0:
     return
+  if child.args[0].isIntegerValue():
+    let value = child.args[0].kInt()
+    if value >= 0 and value <= 7:
+      return
+    return outputConfigError(target, child.name, "integer transform must be 0..7")
   if child.args[0].kind != KString:
-    return outputConfigError(target, child.name, "expected a transform string")
+    return outputConfigError(target, child.name, "expected a transform string or 0..7")
   let parsed = parseOutputConfigTransform(child.args[0].kString())
   if not parsed.valid:
     return outputConfigError(
@@ -192,6 +288,47 @@ proc validateOutputAdaptiveSyncField(target: string, child: KdlNode): string =
     return
   if child.args[0].kind != KBool:
     return outputConfigError(target, child.name, "expected a bool value")
+
+proc validateOutputEnabledField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 1)
+  if result.len > 0:
+    return
+  if child.args[0].kind != KBool:
+    return outputConfigError(target, child.name, "expected a bool value")
+
+proc validateOutputVrrField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 1)
+  if result.len > 0:
+    return
+  if not child.args[0].isIntegerValue():
+    return outputConfigError(target, child.name, "expected an integer mode 0..3")
+  let value = child.args[0].kInt()
+  if value < 0 or value > 3:
+    return outputConfigError(target, child.name, "expected an integer mode 0..3")
+
+proc validateOutputReservedAreaField(target: string, child: KdlNode): string =
+  for key, value in child.props.pairs:
+    if key notin ["top", "right", "bottom", "left"]:
+      return outputConfigError(target, child.name, "unknown property " & key)
+    if not value.isIntegerValue() or value.kInt() < 0:
+      return outputConfigError(
+        target, child.name, "reserved area values must be non-negative integers"
+      )
+
+  if child.props.len > 0:
+    if child.args.len > 0:
+      return outputConfigError(
+        target, child.name, "expected properties or arguments, not both"
+      )
+    return
+
+  if child.args.len notin [1, 4]:
+    return outputConfigError(target, child.name, "expected 1 or 4 argument(s)")
+  for arg in child.args:
+    if not arg.isIntegerValue() or arg.kInt() < 0:
+      return outputConfigError(
+        target, child.name, "reserved area values must be non-negative integers"
+      )
 
 proc parseColor(value: string, fallback: uint32): uint32 =
   var hex = value.strip()
@@ -748,10 +885,16 @@ proc validateOutputRuleNode(node: KdlNode, index: int): string =
     return outputNodeError(index, "output target must be a string")
 
   let target = node.args[0].kString().strip()
-  if target.len == 0:
-    return outputNodeError(index, "output target must not be empty")
 
+  var enabledSet = false
+  var enabled = true
+  var disabledSet = false
+  var disabled = false
   for child in node.children:
+    if target.len == 0 and child.name in ["focus-at-startup", "workspaces"]:
+      return outputConfigError(
+        target, child.name, "fallback output rules cannot set workspace or focus fields"
+      )
     case child.name
     of "focus-at-startup":
       result = validateOutputFocusField(target, child)
@@ -767,9 +910,22 @@ proc validateOutputRuleNode(node: KdlNode, index: int): string =
       result = validateOutputTransformField(target, child)
     of "adaptive-sync":
       result = validateOutputAdaptiveSyncField(target, child)
-    of "enabled", "disabled", "mirror", "auto", "auto-position", "custom", "modeline",
-        "reserved", "reserved_area", "reserved-area", "addreserved", "bitdepth", "cm",
-        "sdr_eotf", "sdr-eotf", "sdrbrightness", "sdrsaturation", "vrr", "icc",
+    of "enabled":
+      result = validateOutputEnabledField(target, child)
+      if result.len == 0:
+        enabledSet = true
+        enabled = child.args[0].kBool()
+    of "disabled":
+      result = validateOutputEnabledField(target, child)
+      if result.len == 0:
+        disabledSet = true
+        disabled = child.args[0].kBool()
+    of "vrr":
+      result = validateOutputVrrField(target, child)
+    of "reserved", "reserved_area", "reserved-area", "addreserved":
+      result = validateOutputReservedAreaField(target, child)
+    of "mirror", "auto", "auto-position", "custom", "modeline", "bitdepth", "cm",
+        "sdr_eotf", "sdr-eotf", "sdrbrightness", "sdrsaturation", "icc",
         "supports_wide_color", "supports-wide-color", "supports_hdr", "supports-hdr",
         "sdr_min_luminance", "sdr-min-luminance", "sdr_max_luminance",
         "sdr-max-luminance", "min_luminance", "min-luminance", "max_luminance",
@@ -781,6 +937,11 @@ proc validateOutputRuleNode(node: KdlNode, index: int): string =
       result = outputConfigError(target, child.name, "unknown field")
     if result.len > 0:
       return
+
+  if enabledSet and disabledSet and enabled == disabled:
+    return outputConfigError(
+      target, "enabled", "enabled and disabled fields request contradictory states"
+    )
 
 proc validateOutputRuleNodes(doc: KdlDoc): string =
   var outputIndex = 0
@@ -1044,21 +1205,21 @@ proc parseOutputConfigTransform(
     value: string
 ): tuple[valid: bool, transform: OutputConfigTransform] =
   case value.toLowerAscii()
-  of "normal":
+  of "normal", "0":
     (true, OutputConfigTransform.OutputTransformNormal)
-  of "90":
+  of "90", "1":
     (true, OutputConfigTransform.OutputTransform90)
-  of "180":
+  of "180", "2":
     (true, OutputConfigTransform.OutputTransform180)
-  of "270":
+  of "270", "3":
     (true, OutputConfigTransform.OutputTransform270)
-  of "flipped":
+  of "flipped", "4":
     (true, OutputConfigTransform.OutputTransformFlipped)
-  of "flipped-90":
+  of "flipped-90", "5":
     (true, OutputConfigTransform.OutputTransformFlipped90)
-  of "flipped-180":
+  of "flipped-180", "6":
     (true, OutputConfigTransform.OutputTransformFlipped180)
-  of "flipped-270":
+  of "flipped-270", "7":
     (true, OutputConfigTransform.OutputTransformFlipped270)
   else:
     (false, OutputConfigTransform.OutputTransformNormal)
@@ -1457,39 +1618,98 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 rule.focusAtStartup = child.childFlagEnabled()
               elif child.name == "workspaces":
                 rule.workspaceSlots = child.workspaceTargets()
-              elif child.name == "mode" and child.args.len >= 3:
-                rule.modeSet = true
-                rule.modeWidth = clamp32(int32(child.args[0].kInt()), 1, 65535)
-                rule.modeHeight = clamp32(int32(child.args[1].kInt()), 1, 65535)
-                rule.modeRefresh = child.args[2].outputModeRefreshMilliHz()
+              elif child.name == "mode" and child.args.len > 0:
+                if child.args.len == 1 and child.args[0].kind == KString:
+                  let parsed = parseOutputModeString(child.args[0].kString())
+                  if parsed.valid:
+                    rule.modeSet = true
+                    rule.modeKind = parsed.kind
+                    rule.modeCustomAllowed =
+                      parsed.kind == OutputModeKind.OutputModeExplicit
+                    rule.modeWidth = parsed.width
+                    rule.modeHeight = parsed.height
+                    rule.modeRefresh = parsed.refresh
+                elif child.args.len >= 3:
+                  rule.modeSet = true
+                  rule.modeKind = OutputModeKind.OutputModeExplicit
+                  rule.modeWidth = clamp32(int32(child.args[0].kInt()), 1, 65535)
+                  rule.modeHeight = clamp32(int32(child.args[1].kInt()), 1, 65535)
+                  rule.modeRefresh = child.args[2].outputModeRefreshMilliHz()
               elif child.name == "scale" and child.args.len > 0:
-                rule.scaleSet = true
-                rule.scale = clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
+                if child.args[0].kind == KString and
+                    child.args[0].kString().cmpIgnoreCase("auto") == 0:
+                  rule.scaleSet = true
+                  rule.scaleAuto = true
+                else:
+                  rule.scaleSet = true
+                  rule.scale = clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
               elif child.name == "position" and child.args.len >= 2:
                 rule.positionSet = true
+                rule.positionKind = OutputPositionKind.OutputPositionExplicit
                 rule.positionX = clamp32(int32(child.args[0].kInt()), -65535, 65535)
                 rule.positionY = clamp32(int32(child.args[1].kInt()), -65535, 65535)
+              elif child.name == "position" and child.args.len == 1 and
+                  child.args[0].kind == KString:
+                let parsed = parseOutputPositionString(child.args[0].kString())
+                if parsed.valid:
+                  rule.positionSet = true
+                  rule.positionKind = parsed.kind
+                  rule.positionX = clamp32(parsed.x, -65535, 65535)
+                  rule.positionY = clamp32(parsed.y, -65535, 65535)
               elif child.name == "transform" and child.args.len > 0:
-                let parsed = parseOutputConfigTransform(child.args[0].kString())
+                let transformValue =
+                  if child.args[0].isIntegerValue():
+                    $child.args[0].kInt()
+                  else:
+                    child.args[0].kString()
+                let parsed = parseOutputConfigTransform(transformValue)
                 if parsed.valid:
                   rule.transformSet = true
                   rule.transform = parsed.transform
                 else:
                   warn "Ignoring invalid output transform",
-                    target = rule.target, value = child.args[0].kString()
+                    target = rule.target, value = transformValue
               elif child.name == "adaptive-sync" and child.args.len > 0:
                 rule.adaptiveSyncSet = true
                 rule.adaptiveSync = child.args[0].kBool()
               elif child.name == "enabled":
-                warn "Ignoring unsupported output rule field",
-                  field = child.name, reason = "output disabling is not supported"
+                rule.enabledSet = true
+                rule.enabled = child.args[0].kBool()
+              elif child.name == "disabled":
+                rule.enabledSet = true
+                rule.enabled = not child.args[0].kBool()
+              elif child.name == "vrr" and child.args.len > 0:
+                rule.adaptiveSyncSet = true
+                rule.adaptiveSync = child.args[0].kInt() != 0
+              elif child.name in
+                  ["reserved", "reserved_area", "reserved-area", "addreserved"]:
+                rule.reservedAreaSet = true
+                if child.props.len > 0:
+                  if child.props.hasKey("top"):
+                    rule.reservedTop = int32(child.props["top"].kInt())
+                  if child.props.hasKey("right"):
+                    rule.reservedRight = int32(child.props["right"].kInt())
+                  if child.props.hasKey("bottom"):
+                    rule.reservedBottom = int32(child.props["bottom"].kInt())
+                  if child.props.hasKey("left"):
+                    rule.reservedLeft = int32(child.props["left"].kInt())
+                elif child.args.len == 1:
+                  let inset = int32(child.args[0].kInt())
+                  rule.reservedTop = inset
+                  rule.reservedRight = inset
+                  rule.reservedBottom = inset
+                  rule.reservedLeft = inset
+                elif child.args.len >= 4:
+                  rule.reservedTop = int32(child.args[0].kInt())
+                  rule.reservedRight = int32(child.args[1].kInt())
+                  rule.reservedBottom = int32(child.args[2].kInt())
+                  rule.reservedLeft = int32(child.args[3].kInt())
               else:
                 warn "Ignoring unsupported output rule field", field = child.name
             except CatchableError as e:
               warn "Ignoring invalid output rule field",
                 field = child.name, error = e.msg
-          if rule.target.len > 0:
-            result.outputRules.add(rule)
+          result.outputRules.add(rule)
         except CatchableError as e:
           warn "Ignoring invalid output rule", error = e.msg
       elif node.name == "workspace-rules":

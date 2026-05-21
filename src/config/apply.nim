@@ -233,18 +233,29 @@ proc outputRuleData(rule: rv.OutputRule): OutputRuleData =
     focusAtStartup: rule.focusAtStartup,
     workspaceSlots: rule.workspaceSlots,
     modeSet: rule.modeSet,
+    modeKind: rule.modeKind,
+    modeCustomAllowed: rule.modeCustomAllowed,
     modeWidth: rule.modeWidth,
     modeHeight: rule.modeHeight,
     modeRefresh: rule.modeRefresh,
     scaleSet: rule.scaleSet,
+    scaleAuto: rule.scaleAuto,
     scale: rule.scale,
     positionSet: rule.positionSet,
+    positionKind: rule.positionKind,
     positionX: rule.positionX,
     positionY: rule.positionY,
     transformSet: rule.transformSet,
     transform: rule.transform,
     adaptiveSyncSet: rule.adaptiveSyncSet,
     adaptiveSync: rule.adaptiveSync,
+    enabledSet: rule.enabledSet,
+    enabled: rule.enabled,
+    reservedAreaSet: rule.reservedAreaSet,
+    reservedTop: rule.reservedTop,
+    reservedRight: rule.reservedRight,
+    reservedBottom: rule.reservedBottom,
+    reservedLeft: rule.reservedLeft,
   )
 
 proc legacyShellsFromQuickshell(config: rv.QuickshellConfig): rv.ShellsConfig =
@@ -519,6 +530,12 @@ proc applyConfig*(model: var Model, config: Config) =
           if outputId != NullOutputId:
             discard model.setTagOutput(tagId, outputId)
             discard model.clearVisibleTagOutside(tagId, outputId)
+
+  var configuredOutputIds: seq[OutputId] = @[]
+  for outputId, _ in model.outputsWithId():
+    configuredOutputIds.add(outputId)
+  for outputId in configuredOutputIds:
+    discard model.applyConfiguredOutputUsable(outputId)
 
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()

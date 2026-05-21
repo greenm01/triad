@@ -221,13 +221,35 @@ output "DP-1" {
   transform "flipped-90"
   adaptive-sync #true
 }
+output "desc:Dell U2720Q" {
+  mode "highrr"
+  scale "auto"
+  position "auto-center-right"
+  transform 5
+  disabled #false
+  vrr 2
+  reserved_area top=10 right=20 bottom=30 left=40
+}
+output "" {
+  mode "preferred"
+  position "auto"
+}
 """,
       "valid-output",
     )
 
     check loaded.ok
-    check loaded.config.outputRules.len == 1
+    check loaded.config.outputRules.len == 3
     check loaded.config.outputRules[0].workspaceSlots == @[1'u32, 2'u32]
+    check loaded.config.outputRules[1].modeKind == OutputModeKind.OutputModeHighRr
+    check loaded.config.outputRules[1].scaleAuto
+    check loaded.config.outputRules[1].positionKind ==
+      OutputPositionKind.OutputPositionAutoCenterRight
+    check loaded.config.outputRules[1].enabledSet
+    check loaded.config.outputRules[1].enabled
+    check loaded.config.outputRules[1].adaptiveSync
+    check loaded.config.outputRules[1].reservedLeft == 40
+    check loaded.config.outputRules[2].target.len == 0
 
   test "Strict config load rejects invalid output rule fields":
     let cases =
@@ -257,10 +279,10 @@ output 1 {
           content:
             """
 output "DP-1" {
-  enabled #false
+  mirror "eDP-1"
 }
 """,
-          needle: "output \"DP-1\" enabled: field is not supported",
+          needle: "output \"DP-1\" mirror: field is not supported",
         ),
         (
           name: "unknown-field",
@@ -271,6 +293,27 @@ output "DP-1" {
 }
 """,
           needle: "output \"DP-1\" mystery: unknown field",
+        ),
+        (
+          name: "fallback-workspace",
+          content:
+            """
+output "" {
+  workspaces 1
+}
+""",
+          needle: "output \"\" workspaces: fallback output rules cannot set",
+        ),
+        (
+          name: "contradictory-enabled",
+          content:
+            """
+output "DP-1" {
+  enabled #true
+  disabled #true
+}
+""",
+          needle: "output \"DP-1\" enabled: enabled and disabled fields request",
         ),
         (
           name: "unsupported-hyprland-field",
@@ -290,27 +333,27 @@ output "DP-1" {
   mode 1920 1080
 }
 """,
-          needle: "output \"DP-1\" mode: expected 3 argument",
+          needle: "output \"DP-1\" mode: expected 1 or 3 argument",
         ),
         (
           name: "bad-scale",
           content:
             """
 output "DP-1" {
-  scale -1
+  scale "bogus"
 }
 """,
-          needle: "output \"DP-1\" scale: scale must be in range 0.01..64.0",
+          needle: "output \"DP-1\" scale: expected a numeric scale or auto",
         ),
         (
           name: "bad-position",
           content:
             """
 output "DP-1" {
-  position 0 "right"
+  position "middle"
 }
 """,
-          needle: "output \"DP-1\" position: x and y must be integers",
+          needle: "output \"DP-1\" position: expected XxY",
         ),
         (
           name: "bad-transform",
@@ -342,12 +385,73 @@ output "DP-1" {
 """,
           needle: "output \"DP-1\" workspaces: workspace ids must be positive",
         ),
+        (
+          name: "bad-reserved-area",
+          content:
+            """
+output "DP-1" {
+  reserved_area top=-1
+}
+""",
+          needle:
+            "output \"DP-1\" reserved_area: reserved area values must be non-negative",
+        ),
       ]
 
     for testCase in cases:
       let loaded = loadStrictConfigContent(testCase.content, testCase.name)
       check not loaded.ok
       check loaded.error.contains(testCase.needle)
+
+  test "Configured reserved area is additive over live usable output area":
+    var state = initRuntimeStateFromConfig(
+      Config(
+        outputRules:
+          @[
+            OutputRule(
+              target: "HDMI-A-1",
+              reservedAreaSet: true,
+              reservedTop: 10,
+              reservedRight: 20,
+              reservedBottom: 30,
+              reservedLeft: 40,
+            )
+          ]
+      )
+    )
+
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "HDMI-A-1")
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(
+        kind: MsgKind.WlOutputUsable,
+        usableOutputId: 1,
+        usableX: 0,
+        usableY: 24,
+        usableW: 1000,
+        usableH: 676,
+      )
+    )
+
+    var model = state.model
+    let outputId = model.outputForExternal(ExternalOutputId(1))
+    let output = model.outputData(outputId).get()
+    check output.baseUsableY == 24
+    check output.usableX == 40
+    check output.usableY == 34
+    check output.usableW == 940
+    check output.usableH == 636
+
+    model.applyConfig(Config())
+    let restored = model.outputData(outputId).get()
+    check restored.usableX == 0
+    check restored.usableY == 24
+    check restored.usableW == 1000
+    check restored.usableH == 676
 
   test "Strict config load rejects invalid window rule regex":
     let path = getCurrentDir() / "test_invalid_window_rule_regex.kdl"

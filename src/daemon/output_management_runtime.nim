@@ -1,4 +1,4 @@
-import std/[strutils, tables]
+import std/[algorithm, strutils, tables]
 import chronicles
 import wayland/native/client
 import protocols/wlr_output_management/client as wlrOutput
@@ -6,6 +6,26 @@ import ../types/[model, runtime_values]
 import state, wayland_helpers
 
 const OutputModeRefreshTolerance = 1000'i32
+
+type
+  SelectedOutputMode = object
+    modeId: uint32
+    custom: bool
+    width: int32
+    height: int32
+    refresh: int32
+
+  ProposedHead = object
+    headId: uint32
+    head: OutputManagementHeadRuntime
+    ruleOpt: tuple[found: bool, rule: OutputRuleData]
+    mode: SelectedOutputMode
+    enabled: bool
+    width: int32
+    height: int32
+    x: int32
+    y: int32
+    positionSet: bool
 
 var wlrOutputManagerListener*: wlrOutput.ZwlrOutputManagerV1Listener
 var wlrOutputHeadListener*: wlrOutput.ZwlrOutputHeadV1Listener
@@ -35,7 +55,7 @@ proc floatChanged(a, b: float32): bool =
 proc hasOutputManagementConfig(model: Model): bool =
   for rule in model.outputRules:
     if rule.modeSet or rule.scaleSet or rule.positionSet or rule.transformSet or
-        rule.adaptiveSyncSet:
+        rule.adaptiveSyncSet or rule.enabledSet:
       return true
   false
 
@@ -43,6 +63,9 @@ proc headMatchesTarget(head: OutputManagementHeadRuntime, target: string): bool 
   let wanted = target.strip()
   if wanted.len == 0:
     return false
+  if wanted.startsWith("desc:"):
+    let description = wanted[5 ..^ 1].strip()
+    return head.description.len > 0 and head.description.cmpIgnoreCase(description) == 0
   if head.name.cmpIgnoreCase(wanted) == 0:
     return true
   if head.description.len > 0 and head.description.cmpIgnoreCase(wanted) == 0:
@@ -72,9 +95,14 @@ proc headMatchesTarget(head: OutputManagementHeadRuntime, target: string): bool 
 proc outputRuleForHead(
     model: Model, head: OutputManagementHeadRuntime
 ): tuple[found: bool, rule: OutputRuleData] =
+  var fallback: tuple[found: bool, rule: OutputRuleData]
   for rule in model.outputRules:
-    if head.headMatchesTarget(rule.target):
+    if rule.target.len == 0:
+      fallback = (true, rule)
+    elif head.headMatchesTarget(rule.target):
       result = (true, rule)
+      return
+  fallback
 
 proc findMode(
     daemon: TriadDaemon,
@@ -95,42 +123,119 @@ proc findMode(
       bestDelta = delta
   bestId
 
+proc modeScore(
+    mode: OutputManagementModeRuntime, kind: OutputModeKind
+): tuple[a, b, c: int64] =
+  let area = int64(mode.width) * int64(mode.height)
+  case kind
+  of OutputModeKind.OutputModeHighRes:
+    (area, int64(mode.refresh), int64(mode.width))
+  of OutputModeKind.OutputModeHighRr:
+    (int64(mode.refresh), area, int64(mode.width))
+  of OutputModeKind.OutputModeMaxWidth:
+    (int64(mode.width), int64(mode.height), int64(mode.refresh))
+  else:
+    (0'i64, 0'i64, 0'i64)
+
+proc betterMode(
+    daemon: TriadDaemon, currentId, candidateId: uint32, kind: OutputModeKind
+): bool =
+  if not daemon.wlrOutputModes.hasKey(candidateId):
+    return false
+  if currentId == 0'u32 or not daemon.wlrOutputModes.hasKey(currentId):
+    return true
+  let candidate = daemon.wlrOutputModes[candidateId]
+  let current = daemon.wlrOutputModes[currentId]
+  candidate.modeScore(kind) > current.modeScore(kind)
+
+proc preferredMode(daemon: TriadDaemon, head: OutputManagementHeadRuntime): uint32 =
+  for modeId in head.modeIds:
+    if daemon.wlrOutputModes.hasKey(modeId):
+      let mode = daemon.wlrOutputModes[modeId]
+      if not mode.finished and mode.preferred:
+        return modeId
+
+proc bestMode(
+    daemon: TriadDaemon, head: OutputManagementHeadRuntime, kind: OutputModeKind
+): uint32 =
+  for modeId in head.modeIds:
+    if not daemon.wlrOutputModes.hasKey(modeId):
+      continue
+    let mode = daemon.wlrOutputModes[modeId]
+    if mode.finished:
+      continue
+    if daemon.betterMode(result, modeId, kind):
+      result = modeId
+
 proc selectedModeId(
     daemon: TriadDaemon,
     head: OutputManagementHeadRuntime,
     ruleOpt: tuple[found: bool, rule: OutputRuleData],
-): uint32 =
-  result = head.currentModeId
+): SelectedOutputMode =
+  result = SelectedOutputMode(modeId: head.currentModeId)
   if not ruleOpt.found or not ruleOpt.rule.modeSet:
     return
-  let modeId = daemon.findMode(
-    head, ruleOpt.rule.modeWidth, ruleOpt.rule.modeHeight, ruleOpt.rule.modeRefresh
-  )
-  if modeId == 0'u32:
+  let rule = ruleOpt.rule
+  case rule.modeKind
+  of OutputModeKind.OutputModeExplicit:
+    let modeId =
+      daemon.findMode(head, rule.modeWidth, rule.modeHeight, rule.modeRefresh)
+    if modeId != 0'u32:
+      result.modeId = modeId
+      return
+    if rule.modeCustomAllowed:
+      result = SelectedOutputMode(
+        custom: true,
+        width: rule.modeWidth,
+        height: rule.modeHeight,
+        refresh: rule.modeRefresh,
+      )
+      return
     warn "Configured output mode is not advertised; keeping current mode",
       output = head.name,
-      width = ruleOpt.rule.modeWidth,
-      height = ruleOpt.rule.modeHeight,
-      refresh = ruleOpt.rule.modeRefresh
-    return
-  result = modeId
+      width = rule.modeWidth,
+      height = rule.modeHeight,
+      refresh = rule.modeRefresh
+  of OutputModeKind.OutputModePreferred:
+    let modeId = daemon.preferredMode(head)
+    if modeId != 0'u32:
+      result.modeId = modeId
+  of OutputModeKind.OutputModeHighRes, OutputModeKind.OutputModeHighRr,
+      OutputModeKind.OutputModeMaxWidth:
+    let modeId = daemon.bestMode(head, rule.modeKind)
+    if modeId != 0'u32:
+      result.modeId = modeId
 
 proc needsOutputApply(
     daemon: TriadDaemon,
     head: OutputManagementHeadRuntime,
     ruleOpt: tuple[found: bool, rule: OutputRuleData],
-    modeId: uint32,
+    selectedMode: SelectedOutputMode,
+    positionSet: bool,
+    positionX, positionY: int32,
 ): bool =
   if not ruleOpt.found:
     return false
   let rule = ruleOpt.rule
-  if rule.modeSet and modeId != 0'u32 and modeId != head.currentModeId:
+  if rule.enabledSet and (not head.enabledSet or head.enabled != rule.enabled):
     return true
-  if rule.positionSet and (head.x != rule.positionX or head.y != rule.positionY):
+  if selectedMode.custom:
+    if head.currentModeId != 0'u32 and daemon.wlrOutputModes.hasKey(head.currentModeId):
+      let current = daemon.wlrOutputModes[head.currentModeId]
+      if current.width != selectedMode.width or current.height != selectedMode.height or
+          abs(current.refresh - selectedMode.refresh) > OutputModeRefreshTolerance:
+        return true
+    else:
+      return true
+  elif rule.modeSet and selectedMode.modeId != 0'u32 and
+      selectedMode.modeId != head.currentModeId:
+    return true
+  if positionSet and (head.x != positionX or head.y != positionY):
     return true
   if rule.transformSet and head.transform != rule.transform.outputTransformValue():
     return true
-  if rule.scaleSet and (not head.scaleSet or head.scale.floatChanged(rule.scale)):
+  if rule.scaleSet and not rule.scaleAuto and
+      (not head.scaleSet or head.scale.floatChanged(rule.scale)):
     return true
   if rule.adaptiveSyncSet and
       (not head.adaptiveSyncSet or head.adaptiveSync != rule.adaptiveSync):
@@ -142,20 +247,30 @@ proc configureHead(
     config: ptr wlrOutput.ZwlrOutputConfigurationV1,
     head: OutputManagementHeadRuntime,
     ruleOpt: tuple[found: bool, rule: OutputRuleData],
-    modeId: uint32,
+    selectedMode: SelectedOutputMode,
+    positionSet: bool,
+    positionX, positionY: int32,
 ) =
-  if not head.enabledSet or not head.enabled:
+  if ruleOpt.found and ruleOpt.rule.enabledSet and not ruleOpt.rule.enabled:
     config.disableHead(head.pointer)
     return
+  if not head.enabledSet or not head.enabled:
+    if not ruleOpt.found or not ruleOpt.rule.enabledSet or not ruleOpt.rule.enabled:
+      config.disableHead(head.pointer)
+      return
 
   let headConfig = config.enableHead(head.pointer)
-  if modeId != 0'u32 and daemon.wlrOutputModes.hasKey(modeId):
-    headConfig.setMode(daemon.wlrOutputModes[modeId].pointer)
+  if selectedMode.custom:
+    headConfig.setCustomMode(
+      selectedMode.width, selectedMode.height, selectedMode.refresh
+    )
+  elif selectedMode.modeId != 0'u32 and daemon.wlrOutputModes.hasKey(
+    selectedMode.modeId
+  ):
+    headConfig.setMode(daemon.wlrOutputModes[selectedMode.modeId].pointer)
 
-  let x =
-    if ruleOpt.found and ruleOpt.rule.positionSet: ruleOpt.rule.positionX else: head.x
-  let y =
-    if ruleOpt.found and ruleOpt.rule.positionSet: ruleOpt.rule.positionY else: head.y
+  let x = if positionSet: positionX else: head.x
+  let y = if positionSet: positionY else: head.y
   headConfig.setPosition(x, y)
 
   let transform =
@@ -166,7 +281,7 @@ proc configureHead(
   headConfig.setTransform(transform)
 
   let scale =
-    if ruleOpt.found and ruleOpt.rule.scaleSet:
+    if ruleOpt.found and ruleOpt.rule.scaleSet and not ruleOpt.rule.scaleAuto:
       ruleOpt.rule.scale
     elif head.scaleSet:
       head.scale
@@ -185,6 +300,135 @@ proc configureHead(
   elif head.adaptiveSyncSet and canSetAdaptiveSync:
     headConfig.setAdaptiveSync(if head.adaptiveSync: 1'u32 else: 0'u32)
 
+proc selectedModeSize(
+    daemon: TriadDaemon,
+    head: OutputManagementHeadRuntime,
+    selectedMode: SelectedOutputMode,
+): tuple[w, h: int32] =
+  if selectedMode.custom:
+    return (selectedMode.width, selectedMode.height)
+  if selectedMode.modeId != 0'u32 and daemon.wlrOutputModes.hasKey(selectedMode.modeId):
+    let mode = daemon.wlrOutputModes[selectedMode.modeId]
+    return (mode.width, mode.height)
+  if head.currentModeId != 0'u32 and daemon.wlrOutputModes.hasKey(head.currentModeId):
+    let mode = daemon.wlrOutputModes[head.currentModeId]
+    return (mode.width, mode.height)
+  (0'i32, 0'i32)
+
+proc logicalHeadSize(
+    daemon: TriadDaemon,
+    head: OutputManagementHeadRuntime,
+    ruleOpt: tuple[found: bool, rule: OutputRuleData],
+    selectedMode: SelectedOutputMode,
+): tuple[w, h: int32] =
+  let size = daemon.selectedModeSize(head, selectedMode)
+  var w = size.w
+  var h = size.h
+  let transform =
+    if ruleOpt.found and ruleOpt.rule.transformSet:
+      ruleOpt.rule.transform.outputTransformValue()
+    else:
+      head.transform
+  if transform in [1'i32, 3'i32, 5'i32, 7'i32]:
+    swap(w, h)
+  let scale =
+    if ruleOpt.found and ruleOpt.rule.scaleSet and not ruleOpt.rule.scaleAuto:
+      ruleOpt.rule.scale
+    elif head.scaleSet:
+      head.scale
+    else:
+      1.0'f32
+  (
+    max(1'i32, int32(float32(w) / max(0.01'f32, scale))),
+    max(1'i32, int32(float32(h) / max(0.01'f32, scale))),
+  )
+
+proc resolveAutoPositions(heads: var seq[ProposedHead]) =
+  var minX = 0'i32
+  var minY = 0'i32
+  var maxX = 0'i32
+  var maxY = 0'i32
+  var placed = false
+
+  for i in 0 ..< heads.len:
+    if not heads[i].enabled:
+      continue
+    let ruleOpt = heads[i].ruleOpt
+    if ruleOpt.found and ruleOpt.rule.positionSet and
+        ruleOpt.rule.positionKind == OutputPositionKind.OutputPositionExplicit:
+      heads[i].x = ruleOpt.rule.positionX
+      heads[i].y = ruleOpt.rule.positionY
+      heads[i].positionSet = true
+    else:
+      heads[i].x = heads[i].head.x
+      heads[i].y = heads[i].head.y
+      heads[i].positionSet = false
+
+    if heads[i].positionSet:
+      if not placed:
+        minX = heads[i].x
+        minY = heads[i].y
+        maxX = heads[i].x + heads[i].width
+        maxY = heads[i].y + heads[i].height
+        placed = true
+      else:
+        minX = min(minX, heads[i].x)
+        minY = min(minY, heads[i].y)
+        maxX = max(maxX, heads[i].x + heads[i].width)
+        maxY = max(maxY, heads[i].y + heads[i].height)
+
+  for i in 0 ..< heads.len:
+    if not heads[i].enabled:
+      continue
+    let ruleOpt = heads[i].ruleOpt
+    if not ruleOpt.found or not ruleOpt.rule.positionSet or
+        ruleOpt.rule.positionKind == OutputPositionKind.OutputPositionExplicit:
+      continue
+    if not placed:
+      heads[i].x = 0
+      heads[i].y = 0
+    else:
+      case ruleOpt.rule.positionKind
+      of OutputPositionKind.OutputPositionAuto,
+          OutputPositionKind.OutputPositionAutoRight:
+        heads[i].x = maxX
+        heads[i].y = minY
+      of OutputPositionKind.OutputPositionAutoLeft:
+        heads[i].x = minX - heads[i].width
+        heads[i].y = minY
+      of OutputPositionKind.OutputPositionAutoUp:
+        heads[i].x = minX
+        heads[i].y = minY - heads[i].height
+      of OutputPositionKind.OutputPositionAutoDown:
+        heads[i].x = minX
+        heads[i].y = maxY
+      of OutputPositionKind.OutputPositionAutoCenterRight:
+        heads[i].x = maxX
+        heads[i].y = minY + (maxY - minY - heads[i].height) div 2
+      of OutputPositionKind.OutputPositionAutoCenterLeft:
+        heads[i].x = minX - heads[i].width
+        heads[i].y = minY + (maxY - minY - heads[i].height) div 2
+      of OutputPositionKind.OutputPositionAutoCenterUp:
+        heads[i].x = minX + (maxX - minX - heads[i].width) div 2
+        heads[i].y = minY - heads[i].height
+      of OutputPositionKind.OutputPositionAutoCenterDown:
+        heads[i].x = minX + (maxX - minX - heads[i].width) div 2
+        heads[i].y = maxY
+      of OutputPositionKind.OutputPositionExplicit:
+        discard
+    heads[i].positionSet = true
+    if not placed:
+      minX = heads[i].x
+      minY = heads[i].y
+      maxX = heads[i].x + heads[i].width
+      maxY = heads[i].y + heads[i].height
+      placed = true
+    else:
+      minX = min(minX, heads[i].x)
+      minY = min(minY, heads[i].y)
+      maxX = max(maxX, heads[i].x + heads[i].width)
+      maxY = max(maxY, heads[i].y + heads[i].height)
+
 proc destroyOutputConfig*(daemon: var TriadDaemon) =
   if daemon.wlrOutputConfig != nil:
     daemon.wlrOutputConfig.destroy()
@@ -202,25 +446,62 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
   if not daemon.runtimeState.model.hasOutputManagementConfig():
     return
 
-  var anyChange = false
-  var selectedModes: Table[uint32, uint32]
+  var proposedHeads: seq[ProposedHead] = @[]
   var matchedTargets: Table[string, bool]
   for headId, head in daemon.wlrOutputHeads.pairs:
     if head.finished:
       continue
     let ruleOpt = daemon.runtimeState.model.outputRuleForHead(head)
-    if ruleOpt.found:
+    if ruleOpt.found and ruleOpt.rule.target.len > 0:
       matchedTargets[ruleOpt.rule.target] = true
-    let modeId = daemon.selectedModeId(head, ruleOpt)
-    selectedModes[headId] = modeId
-    if daemon.needsOutputApply(head, ruleOpt, modeId):
+    let mode = daemon.selectedModeId(head, ruleOpt)
+    let size = daemon.logicalHeadSize(head, ruleOpt, mode)
+    let enabled =
+      if ruleOpt.found and ruleOpt.rule.enabledSet:
+        ruleOpt.rule.enabled
+      else:
+        not head.enabledSet or head.enabled
+    proposedHeads.add(
+      ProposedHead(
+        headId: headId,
+        head: head,
+        ruleOpt: ruleOpt,
+        mode: mode,
+        enabled: enabled,
+        width: size.w,
+        height: size.h,
+      )
+    )
+
+  proposedHeads.sort(
+    proc(a, b: ProposedHead): int =
+      result = cmp(a.head.name, b.head.name)
+      if result == 0:
+        result = cmp(a.headId, b.headId)
+  )
+  proposedHeads.resolveAutoPositions()
+
+  var enabledCount = 0
+  var anyChange = false
+  for proposed in proposedHeads:
+    if proposed.enabled:
+      inc enabledCount
+    if daemon.needsOutputApply(
+      proposed.head, proposed.ruleOpt, proposed.mode, proposed.positionSet, proposed.x,
+      proposed.y,
+    ):
       anyChange = true
+
+  if proposedHeads.len > 0 and enabledCount == 0:
+    warn "Output-management config ignored; it would disable every output",
+      reason = reason
+    return
 
   for rule in daemon.runtimeState.model.outputRules:
     if (
       rule.modeSet or rule.scaleSet or rule.positionSet or rule.transformSet or
-      rule.adaptiveSyncSet
-    ) and not matchedTargets.getOrDefault(rule.target, false):
+      rule.adaptiveSyncSet or rule.enabledSet
+    ) and rule.target.len > 0 and not matchedTargets.getOrDefault(rule.target, false):
       warn "Configured output target is not available", target = rule.target
 
   if not anyChange:
@@ -238,11 +519,11 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
     wlrOutputConfigListener.addr, cast[pointer](daemon.wlrOutputConfigListenerData)
   )
 
-  for headId, head in daemon.wlrOutputHeads.pairs:
-    if head.finished:
-      continue
-    let ruleOpt = daemon.runtimeState.model.outputRuleForHead(head)
-    daemon.configureHead(config, head, ruleOpt, selectedModes.getOrDefault(headId, 0))
+  for proposed in proposedHeads:
+    daemon.configureHead(
+      config, proposed.head, proposed.ruleOpt, proposed.mode, proposed.positionSet,
+      proposed.x, proposed.y,
+    )
 
   daemon.wlrOutputApplyInFlight = true
   info "Applying output-management config",

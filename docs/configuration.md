@@ -202,23 +202,27 @@ Configure monitor-specific settings.
 | :--- | :--- | :--- |
 | `focus-at-startup` | `Flag` | Focus this output on Triad launch. If workspace 1 is not explicitly pinned elsewhere, startup places workspace 1 on this output before filling other monitors. |
 | `workspaces` | `Int...` | Pin these workspace IDs to this output. Pinned workspaces stay on this output when focused unless the output is unavailable or the user explicitly moves the workspace. |
-| `mode` | `W H Hz` | Set resolution and refresh rate (e.g., `1920 1080 60`). |
-| `scale` | `Float` | Output scaling factor (0.01..64.0). |
-| `position` | `X Y` | Global coordinate position. |
-| `transform` | `String` | Rotation (e.g., `"90"`, `"flipped"`, `"normal"`). |
+| `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Set resolution and refresh rate, or choose from advertised modes. |
+| `scale` | `Float`, `"auto"` | Output scaling factor (0.01..64.0). `"auto"` keeps the compositor's current scale. |
+| `position` | `X Y`, `"XxY"`, `"auto-*"` | Global coordinate position or automatic arrangement. |
+| `transform` | `String`, `0..7` | Rotation (e.g., `"90"`, `"flipped"`, `"normal"`). |
 | `adaptive-sync` | `Bool` | Toggle VRR/Adaptive Sync. |
+| `vrr` | `0..3` | Hyprland-compatible alias for `adaptive-sync`; nonzero enables VRR. |
+| `enabled` / `disabled` | `Bool` | Enable or disable an output through wlroots output-management. |
+| `reserved_area` | `Int`, `Int Int Int Int`, or properties | Add top/right/bottom/left usable-area insets on top of live bar reservations. |
 
-Unsupported monitor fields such as output disabling, mirroring, auto placement,
-reserved areas, custom modelines, bit depth, color management, ICC, and HDR
-metadata are rejected by strict validation.
+Unsupported Hyprland monitor fields such as mirroring, bit depth, color
+management, ICC, and HDR/luminance metadata are rejected by strict validation.
+River does not expose those controls to Triad today; they are documented as
+future features instead of accepted as no-ops.
 
 **Example Output Configuration:**
 ```kdl
 output "HDMI-A-1" {
-  mode 1920 1080 144
-  position 0 0
+  mode "1920x1080@144"
+  position "0x0"
   workspaces 1 2 3
-  adaptive-sync #true
+  vrr 1
 }
 
 output "DP-1" {

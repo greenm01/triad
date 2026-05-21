@@ -30,16 +30,17 @@ connector name shown by tools such as `wlr-randr`.
 
 ```kdl
 output "DP-1" {
-  mode 1920 1080 60
-  position 4480 180
-  scale 1.0
+  mode "preferred"
+  position "auto-right"
+  scale "auto"
 }
 
 output "DP-2" {
-  mode 2560 1440 120
-  position 1920 0
+  mode "2560x1440@120"
+  position "0x0"
   focus-at-startup
-  adaptive-sync #true
+  vrr 2
+  reserved_area top=8 bottom=8
 }
 
 output "DP-3" {
@@ -64,16 +65,24 @@ Supported output fields:
 | :--- | :--- | :--- |
 | `focus-at-startup` | Flag or bool | Select the startup-focused output. |
 | `workspaces` | Positive integers | Pin workspace IDs to this output. |
-| `mode` | `W H Hz` | Request an advertised output mode. |
-| `scale` | Float | Request output scale in the range `0.01..64.0`. |
-| `position` | `X Y` | Set global output coordinates. |
-| `transform` | String | One of `normal`, `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180`, or `flipped-270`. |
+| `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Request an advertised output mode, or a custom string mode when the compositor accepts one. |
+| `scale` | Float or `"auto"` | Request output scale in the range `0.01..64.0`; `"auto"` keeps the compositor's current scale. |
+| `position` | `X Y`, `"XxY"`, `"auto"`, `"auto-right"`, `"auto-left"`, `"auto-up"`, `"auto-down"`, `"auto-center-*"` | Set or auto-arrange global output coordinates. |
+| `transform` | String or `0..7` | One of `normal`, `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180`, or `flipped-270`; integers follow the same Wayland transform order. |
 | `adaptive-sync` | Bool | Request VRR/Adaptive Sync when the compositor protocol supports it. |
+| `vrr` | `0..3` | Hyprland-compatible alias for `adaptive-sync`; `0` disables and nonzero enables because River exposes only a bool. |
+| `enabled` | Bool | Enable or disable this output through wlroots output-management. |
+| `disabled` | Bool | Inverse alias for `enabled`. |
+| `reserved_area` | One int, four ints, or `top/right/bottom/left` properties | Add an inset on top of live layer-shell/bar usable-area reservations. |
 
-Triad intentionally does not expose Hyprland-style output disabling, mirror
-rules, auto placement, custom modelines, reserved areas, bit depth, color
-management, ICC, or HDR metadata in `output` blocks. These fields fail strict
-validation instead of being ignored.
+Use `output ""` for fallback monitor-management fields. Fallback output rules
+apply to connected heads that do not match a more specific output rule, but
+they cannot set `focus-at-startup` or `workspaces`.
+
+River does not currently expose Hyprland's mirror, bit depth, color-management,
+ICC, or HDR/luminance monitor controls through Triad's output-management path.
+Triad documents those names as future features and rejects them during strict
+validation instead of accepting no-op configuration.
 
 ## Pin Workspaces
 
