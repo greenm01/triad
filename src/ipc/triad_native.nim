@@ -428,6 +428,54 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
     result.reply = okReply(
       %*{"version": TriadIpcVersion, "type": "state", "state": triadStateJson(snapshot)}
     )
+  of "workspaces":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "workspaces",
+        "workspaces": triadWorkspacesJson(snapshot),
+      }
+    )
+  of "outputs":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "outputs",
+        "outputs": triadOutputsJson(snapshot),
+      }
+    )
+  of "windows":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "windows",
+        "windows": triadWindowsJson(snapshot),
+      }
+    )
+  of "focused-window":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "focused-window",
+        "window": triadFocusedWindowJson(snapshot),
+      }
+    )
+  of "overview-state":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "overview-state",
+        "overview": triadOverviewJson(snapshot),
+      }
+    )
+  of "keyboard-layouts":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "keyboard-layouts",
+        "keyboard_layouts": triadKeyboardLayoutsJson(snapshot),
+      }
+    )
   of "layout-state":
     result.reply = okReply(
       %*{

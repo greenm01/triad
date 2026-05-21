@@ -23,6 +23,12 @@ triad msg <command> [arguments]
 | `validate <command…>` | Validate a command locally without sending it. |
 | `request <json>` | Send a raw JSON IPC request. |
 | `state` | Print current session state as JSON. |
+| `workspaces` | Print current workspace state as JSON. |
+| `outputs` | Print current output state as JSON. |
+| `windows` | Print current window state as JSON. |
+| `focused-window` | Print focused window state as JSON. |
+| `overview-state` | Print overview state as JSON. |
+| `keyboard-layouts` | Print keyboard layout state as JSON. |
 | `layout-state` | Print layout state for all visible workspaces. |
 | `perf-status` | Print daemon performance and timing diagnostics. |
 | `mem-status` | Print memory diagnostics. |

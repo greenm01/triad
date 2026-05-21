@@ -3,6 +3,7 @@ import layout_descriptor_codec
 import layout_mode_codec
 import layout_selection_codec
 import native_layout_codec
+import shell_focus
 import ../types/shell_snapshot
 from ../types/runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, LayoutMode, LayoutSelectionKind,
@@ -262,11 +263,13 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     },
   }
 
-proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
+proc triadWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
   let workspaces = newJArray()
   for workspace in snapshot.workspaces:
     workspaces.add(triadWorkspaceLayoutJson(workspace))
+  result = workspaces
 
+proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
   %*{
     "version": snapshot.version,
     "layouts": triadSupportedLayoutsJson(snapshot),
@@ -274,7 +277,7 @@ proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
     "layout_cycle_entries": triadLayoutCycleEntriesJson(snapshot),
     "active_tag": snapshot.activeTag,
     "active_workspace_idx": snapshot.activeWorkspaceIdx,
-    "workspaces": workspaces,
+    "workspaces": triadWorkspacesJson(snapshot),
   }
 
 proc triadOutputJson(output: ShellOutput): JsonNode =
@@ -285,6 +288,11 @@ proc triadOutputJson(output: ShellOutput): JsonNode =
     "refresh_rate": output.refreshRate,
     "geometry": {"x": output.x, "y": output.y, "width": output.w, "height": output.h},
   }
+
+proc triadOutputsJson*(snapshot: ShellSnapshot): JsonNode =
+  result = newJArray()
+  for output in snapshot.outputs:
+    result.add(triadOutputJson(output))
 
 proc idleInhibitModeId(mode: WindowRuleIdleInhibitMode): string =
   case mode
@@ -368,30 +376,42 @@ proc triadWindowJson(win: ShellWindow): JsonNode =
         %win.swallowing,
   }
 
-proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
-  let outputs = newJArray()
-  for output in snapshot.outputs:
-    outputs.add(triadOutputJson(output))
-
-  let windows = newJArray()
+proc triadWindowsJson*(snapshot: ShellSnapshot): JsonNode =
+  result = newJArray()
   for win in snapshot.windows:
-    windows.add(triadWindowJson(win))
+    result.add(triadWindowJson(win))
+
+proc triadFocusedWindowJson*(snapshot: ShellSnapshot): JsonNode =
+  let focused = snapshot.focusedWindowId()
+  for win in snapshot.windows:
+    if win.id == focused:
+      return triadWindowJson(win)
+  newJNull()
+
+proc triadOverviewJson*(snapshot: ShellSnapshot): JsonNode =
+  %*{
+    "is_open": snapshot.overviewActive,
+    "selected_window_id":
+      if snapshot.overviewSelectedWindow == 0:
+        newJNull()
+      else:
+        %snapshot.overviewSelectedWindow,
+  }
+
+proc triadKeyboardLayoutsJson*(snapshot: ShellSnapshot): JsonNode =
+  %*{"names": snapshot.keyboardLayoutNames, "current_idx": snapshot.keyboardLayoutIndex}
+
+proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
+  let keyboardLayouts = triadKeyboardLayoutsJson(snapshot)
 
   %*{
     "version": snapshot.version,
-    "overview": {
-      "is_open": snapshot.overviewActive,
-      "selected_window_id":
-        if snapshot.overviewSelectedWindow == 0:
-          newJNull()
-        else:
-          %snapshot.overviewSelectedWindow,
-    },
+    "overview": triadOverviewJson(snapshot),
     "layout": triadLayoutStateJson(snapshot),
-    "keyboard_layouts": snapshot.keyboardLayoutNames,
-    "current_keyboard_layout_idx": snapshot.keyboardLayoutIndex,
-    "outputs": outputs,
-    "windows": windows,
+    "keyboard_layouts": keyboardLayouts["names"],
+    "current_keyboard_layout_idx": keyboardLayouts["current_idx"],
+    "outputs": triadOutputsJson(snapshot),
+    "windows": triadWindowsJson(snapshot),
   }
 
 proc triadLayoutStateChangedEvent*(snapshot: ShellSnapshot): string =

@@ -12,6 +12,12 @@ Dispatch commands to the running Triad instance using:
 *   `validate <command...>`: Validates a command locally without sending it.
 *   `request <json>`: Sends a raw JSON IPC request.
 *   `state`: Prints the current session state as JSON.
+*   `workspaces`: Prints the current workspace state as JSON.
+*   `outputs`: Prints the current output state as JSON.
+*   `windows`: Prints the current window state as JSON.
+*   `focused-window`: Prints the focused window as JSON.
+*   `overview-state`: Prints overview state as JSON.
+*   `keyboard-layouts`: Prints keyboard layout state as JSON.
 *   `layout-state`: Prints the layout state for all visible workspaces.
 *   `perf-status`: Prints daemon performance and timing diagnostics.
 *   `mem-status`: Prints memory diagnostics.

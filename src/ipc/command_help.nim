@@ -39,6 +39,36 @@ const SpecialMsgCommands* = [
     description: "Print native Triad shell state JSON.",
   ),
   SpecialMsgCommand(
+    name: "workspaces",
+    usage: "triad msg workspaces",
+    description: "Print native Triad workspace state JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "outputs",
+    usage: "triad msg outputs",
+    description: "Print native Triad output state JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "windows",
+    usage: "triad msg windows",
+    description: "Print native Triad window state JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "focused-window",
+    usage: "triad msg focused-window",
+    description: "Print native Triad focused window JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "overview-state",
+    usage: "triad msg overview-state",
+    description: "Print native Triad overview state JSON.",
+  ),
+  SpecialMsgCommand(
+    name: "keyboard-layouts",
+    usage: "triad msg keyboard-layouts",
+    description: "Print native Triad keyboard layout state JSON.",
+  ),
+  SpecialMsgCommand(
     name: "layout-state",
     usage: "triad msg layout-state",
     description: "Print native Triad layout state JSON.",
@@ -283,6 +313,18 @@ proc triadMsgRequestPayload*(cmd: string): Option[string] =
   case cmd
   of "state":
     some(triadRequestPayload("state"))
+  of "workspaces":
+    some(triadRequestPayload("workspaces"))
+  of "outputs":
+    some(triadRequestPayload("outputs"))
+  of "windows":
+    some(triadRequestPayload("windows"))
+  of "focused-window":
+    some(triadRequestPayload("focused-window"))
+  of "overview-state":
+    some(triadRequestPayload("overview-state"))
+  of "keyboard-layouts":
+    some(triadRequestPayload("keyboard-layouts"))
   of "layout-state":
     some(triadRequestPayload("layout-state"))
   of "switch-layout":
