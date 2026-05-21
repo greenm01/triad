@@ -6,9 +6,7 @@ from ../types/runtime_values import
   JanetLayoutId, LayoutMode, NativeLayoutId, PointerOpKind
 import focus, layout_projection, overview_geometry, placement, workspaces
 
-const
-  OverviewHoldMs = 752'i32
-  ShiftModifier = 1'u32
+const ShiftModifier = 1'u32
 
 proc tickElapsedMs(msgElapsedMs: int32): int32 =
   if msgElapsedMs > 0: msgElapsedMs else: DefaultFrameIntervalMs
@@ -362,11 +360,7 @@ proc tickOverviewPointerHold*(
   if op.kind != PointerOpKind.OpOverviewDrag or not op.overviewDragPastThreshold():
     return false
   discard model.updateOverviewDragHover(op, elapsedMs.tickElapsedMs())
-  op = model.pointerOp
-  if op.hoverSlot == 0 or op.hoverElapsedMs < OverviewHoldMs:
-    return false
-  result = model.commitOverviewDrag(op, activateDrop = true)
-  discard model.clearPointerOp()
+  false
 
 proc moveFloatingFocused*(model: var Model, dx, dy: int32): bool =
   let tagOpt = model.tagData(model.activeTag)
@@ -577,10 +571,6 @@ proc hasPendingViewportAnimation*(model: Model): bool =
 proc needsFrameTick*(model: Model): bool =
   if model.hasPendingViewportAnimation():
     return true
-  if model.pointerOp.kind == PointerOpKind.OpOverviewDrag and
-      model.pointerOp.overviewDragPastThreshold() and model.pointerOp.hoverSlot != 0 and
-      model.pointerOp.hoverElapsedMs < OverviewHoldMs:
-    return true
   if model.pendingRecentFocusWindow != NullWindowId:
     return true
   if model.recentWindowsActive and
@@ -593,10 +583,6 @@ proc needsFrameTick*(model: Model): bool =
 proc frameTickReasons*(model: Model): seq[string] =
   if model.hasPendingViewportAnimation():
     result.add("viewport-animation")
-  if model.pointerOp.kind == PointerOpKind.OpOverviewDrag and
-      model.pointerOp.overviewDragPastThreshold() and model.pointerOp.hoverSlot != 0 and
-      model.pointerOp.hoverElapsedMs < OverviewHoldMs:
-    result.add("overview-hover")
   if model.pendingRecentFocusWindow != NullWindowId:
     result.add("recent-focus")
   if model.recentWindowsActive and

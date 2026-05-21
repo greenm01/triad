@@ -206,7 +206,7 @@ suite "Core Runtime Logic: overview interactions":
         it.jsonPayload.contains("WorkspacesChanged")
     )
 
-  test "Holding unified overview drag over workspace activates drop":
+  test "Holding unified overview drag waits for release before moving window":
     var model = configuredModel()
     model.applyMsg(
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
@@ -239,9 +239,16 @@ suite "Core Runtime Logic: overview interactions":
     for _ in 0 ..< 47:
       model.applyMsg(Msg(kind: MsgKind.CmdTick))
 
-    check not model.overviewActive
-    check model.activeTag == model.tagForSlot(2)
-    check model.activeWorkspaceFocusId() == 1
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
+    check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(1)
+    check model.pointerOp.kind == PointerOpKind.OpOverviewDrag
+
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
+    check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(2)
     check model.pointerOp.kind == PointerOpKind.OpNone
 
   test "Blank click on secondary output activates that output workspace":
