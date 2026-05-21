@@ -133,6 +133,12 @@ proc resolveRestoreHistories(model: var Model) =
     discard model.replaceWorkspaceHistory(workspaceHistory)
 
 proc syncRestoreOutputTags(model: var Model) =
+  for slot, outputExt in model.restoreTagOutputsWithId():
+    let outputId = model.outputForExternal(outputExt)
+    let tagId = model.tagForSlot(slot)
+    if outputId != NullOutputId and tagId != NullTagId:
+      discard model.setTagOutput(tagId, outputId)
+
   for outputExt, slot in model.restoreOutputTagsWithId():
     let outputId = model.outputForExternal(outputExt)
     let tagId = model.tagForSlot(slot)

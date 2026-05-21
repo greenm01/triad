@@ -8,6 +8,7 @@ proc loadRestoreState*(model: var Model, state: PendingRestoreState): bool =
   model.restoreWindows = state.windows
   model.restoreTags = state.tags
   model.restoreOutputTags = state.outputTags
+  model.restoreTagOutputs = state.tagOutputs
   model.restoreScratchpadWindows = state.scratchpadWindows
   model.restoreNamedScratchpads = state.namedScratchpads
   model.restoreScratchpadSlots = state.scratchpadRestoreSlots

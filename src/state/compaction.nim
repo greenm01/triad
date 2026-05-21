@@ -89,6 +89,7 @@ proc compactModelMemory*(model: var Model) =
   model.restoreWindows.compactTable()
   model.restoreTags.compactTable()
   model.restoreOutputTags.compactTable()
+  model.restoreTagOutputs.compactTable()
   model.restoreScratchpadWindows = model.restoreScratchpadWindows.compactSeq()
   model.restoreNamedScratchpads.compactTable()
   model.restoreScratchpadSlots.compactTableSeq()

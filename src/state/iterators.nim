@@ -134,6 +134,12 @@ iterator restoreOutputTagsWithId*(
   for externalId, slot in model.restoreOutputTags.pairs:
     yield (externalId, slot)
 
+iterator restoreTagOutputsWithId*(
+    model: Model
+): tuple[slot: uint32, externalId: ExternalOutputId] =
+  for slot, externalId in model.restoreTagOutputs.pairs:
+    yield (slot, externalId)
+
 iterator restoreNamedScratchpadsWithId*(
     model: Model
 ): tuple[name: string, externalId: ExternalWindowId] =

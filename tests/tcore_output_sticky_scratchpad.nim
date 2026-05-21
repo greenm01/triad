@@ -995,6 +995,68 @@ suite "Core Runtime Logic: output sticky scratchpad":
 
     check model.activeWorkspaceSlot() == 3
 
+  test "Live restore preserves nonvisible workspace home output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 4))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 4))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-3"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 40, appId: "chat", title: "chat")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+    check restore.tagOutputs[4] == 3'u32
+
+    var restoredModel = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 4))
+    ).model
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1")
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2")
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1000, height: 700)
+    )
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3")
+    )
+    restoredModel.applyLiveRestore(restore.pendingRestoreState())
+    restoredModel.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 40, appId: "chat", title: "chat")
+    )
+
+    var workspace4 = ShellWorkspace()
+    for workspace in restoredModel.shellSnapshot().workspaces:
+      if workspace.tagId == 4:
+        workspace4 = workspace
+    check workspace4.tagId == 4
+    check workspace4.occupied
+    check not workspace4.isOutputVisible
+    check workspace4.outputName == "DP-3"
+
   test "Moved workspace restores to reconnected output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
