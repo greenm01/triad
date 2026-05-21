@@ -162,20 +162,28 @@ cursor {
 presentation-mode "vsync"
 allow-exit-session #true
 
-output "DP-1" {
-    mode 1920 1080 60
-    position 4480 180
-}
+output {
+    monitor "DP-1" {
+        mode "1920x1080@60"
+        position "4480x180"
+        scale "auto"
+        disabled #false
+    }
 
-output "DP-2" {
-    mode 2560 1440 120
-    position 1920 0
-    focus-at-startup
-}
+    monitor "DP-2" {
+        mode "2560x1440@120"
+        position "1920x0"
+        scale "auto"
+        focus-at-startup
+        vrr 1
+    }
 
-output "DP-3" {
-    mode 1920 1080 60
-    position 0 180
+    monitor "DP-3" {
+        mode "1920x1080@60"
+        position "0x180"
+        scale "auto"
+        enabled #true
+    }
 }
 
 protocol-surfaces {

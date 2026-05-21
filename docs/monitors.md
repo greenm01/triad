@@ -246,6 +246,138 @@ version, or the compositor may reject an output-management apply.
 
 Shell integrations receive output-aware workspace snapshots. A workspace should
 appear on the bar for the output where Triad currently shows or remembers it.
+Workspace labels come from `workspace-rules` names:
+
+```kdl
+workspace-rules {
+  workspace 1 name="term"
+  workspace 2 name="web"
+  workspace 3 name="files"
+}
+```
+
+### Noctalia
+
+Noctalia works through Triad's Niri-compatible IPC facade. Start it from a
+shell profile with `niri-compat #true` so Triad provides `$NIRI_SOCKET`:
+
+```kdl
+shells {
+  enabled #true
+  active "noctalia"
+
+  profile "noctalia" {
+    launch "noctalia-shell"
+    stop "pkill" "-f" "noctalia-shell|noctalia-qs|qs.*noctalia-shell"
+    niri-compat #true
+  }
+}
+```
+
+Noctalia's bar needs a `Workspace` widget. These are Noctalia settings, not
+Triad settings: edit them in Noctalia's settings UI under the bar/widget
+configuration, or directly in `~/.config/noctalia/settings.json` under the
+`bar.widgets` section for the `Workspace` widget. The `labelMode` setting
+controls whether the bar shows workspace numbers, names, both, or only pills:
+
+```jsonc
+{
+  "id": "Workspace",
+  "labelMode": "index",
+  "hideUnoccupied": false,
+  "showLabelsOnlyWhenOccupied": true
+}
+```
+
+Use Noctalia `labelMode: "name"` to show Triad workspace names, or
+`labelMode: "index+name"` to show both. If multi-monitor workspace lists look
+wrong, keep the Noctalia `followFocusedScreen` option disabled on the
+`Workspace` widget so each bar uses its own screen instead of the currently
+focused screen.
+
+### DankMaterialShell
+
+DankMaterialShell also works through the Niri-compatible shell environment:
+
+```kdl
+shells {
+  enabled #true
+  active "dank"
+
+  profile "dank" {
+    launch "dms" "run" "--session"
+    stop "dms" "kill"
+    niri-compat #true
+  }
+}
+```
+
+The Dank bar needs the `workspaceSwitcher` widget enabled. These are
+DankMaterialShell settings, not Triad settings: edit them in DMS's settings UI,
+or directly in `~/.config/DankMaterialShell/settings.json`. Workspace numbers
+and names are controlled by these global DMS keys:
+
+```jsonc
+{
+  "showWorkspaceSwitcher": true,
+  "showWorkspaceIndex": true,
+  "showWorkspaceName": false
+}
+```
+
+Use `dms ipc` to update a running shell and persist the same settings to
+`~/.config/DankMaterialShell/settings.json`:
+
+```sh
+dms ipc call settings set showWorkspaceIndex true
+dms ipc call settings set showWorkspaceName true
+```
+
+Turn the DMS `showWorkspaceName` setting on only when you want labels from
+Triad `workspace-rules`; with both DMS settings enabled, DMS shows an index
+plus the workspace name.
+
+### Waybar
+
+Waybar works through Triad's Niri-compatible IPC facade. Start it from a shell
+profile with `niri-compat #true` so Triad provides `$NIRI_SOCKET` and the
+compatibility tools in that shell's private environment:
+
+```kdl
+shells {
+  enabled #true
+  active "waybar"
+
+  profile "waybar" {
+    launch "waybar"
+    stop "pkill" "-x" "waybar"
+    niri-compat #true
+  }
+}
+```
+
+Use Waybar's `niri/workspaces` module. These are Waybar settings, not Triad
+settings: edit them in `~/.config/waybar/config`,
+`~/.config/waybar/config.jsonc`, or whichever file your Waybar launch command
+passes with `--config`. For normal multi-monitor bars, do not set a top-level
+Waybar `output`; Waybar will create one bar per monitor. Keep the Waybar
+`niri/workspaces.all-outputs` setting disabled so each bar filters workspaces
+to the output that owns that bar:
+
+```jsonc
+{
+  "modules-left": ["niri/workspaces"],
+
+  "niri/workspaces": {
+    "on-click": "activate",
+    "all-outputs": false,
+    "format": "{index}"
+  }
+}
+```
+
+Set the Waybar `all-outputs` option to `true` only when you intentionally want
+every bar to show the complete workspace list from all monitors.
 
 If a shell bar shows a workspace on one monitor while the actual workspace is on
 another, check these first:
