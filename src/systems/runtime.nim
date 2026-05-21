@@ -4,7 +4,7 @@ import ../state/engine
 import ../types/projection_values as rv
 from ../types/runtime_values import
   JanetLayoutId, LayoutMode, NativeLayoutId, PointerOpKind
-import focus, layout_projection, overview_geometry, placement
+import focus, layout_projection, overview_geometry, placement, workspaces
 
 const
   OverviewHoldMs = 752'i32
@@ -64,14 +64,25 @@ proc beginPointerResize*(
     )
   )
 
-proc overviewScreen(model: Model): rv.Rect =
+proc overviewScreen(model: Model, outputId: OutputId = NullOutputId): rv.Rect =
+  if outputId != NullOutputId:
+    return model.outputScreen(outputId)
   model.activeWorkspaceScreen()
+
+proc overviewOutputUnderPointer(model: Model, x, y: int32): Option[OutputId] =
+  let outputId = model.overviewOutputAt(x, y)
+  if outputId != NullOutputId:
+    return some(outputId)
+  if model.sortedOutputIdsByExternal().len == 0:
+    return some(NullOutputId)
+  none(OutputId)
 
 proc updateOverviewDragHover(
     model: var Model, op: var PointerOpData, elapsedMs = 0'i32
 ): bool =
-  let target =
-    model.overviewDropTargetAt(model.overviewScreen(), op.currentX, op.currentY)
+  let target = model.overviewDropTargetAtForOutput(
+    op.outputId, model.overviewScreen(op.outputId), op.currentX, op.currentY
+  )
   let slot =
     if target.kind in {OverviewDropKind.DropWorkspace, OverviewDropKind.DropDynamicGap}:
       target.slot
@@ -89,11 +100,16 @@ proc beginOverviewDrag*(
 ): bool =
   if not model.overviewUsesWorkspacePreviews():
     return false
+  let outputOpt = model.overviewOutputUnderPointer(x, y)
+  if outputOpt.isNone:
+    return false
+  let outputId = outputOpt.get()
+  let screen = model.overviewScreen(outputId)
   let winId = model.windowForExternal(externalId)
   if winId != NullWindowId and model.overviewWindowIds().find(winId) == -1:
     return false
   if winId == NullWindowId and
-      model.overviewWorkspaceSlotAt(model.overviewScreen(), x, y) == 0:
+      model.overviewWorkspaceSlotAtForOutput(outputId, screen, x, y) == 0:
     return false
   if winId != NullWindowId:
     discard model.setOverviewSelection(winId)
@@ -104,6 +120,7 @@ proc beginOverviewDrag*(
     startY: y,
     currentX: x,
     currentY: y,
+    outputId: outputId,
   )
   discard model.updateOverviewDragHover(op)
   true
@@ -111,8 +128,13 @@ proc beginOverviewDrag*(
 proc beginOverviewScroll*(model: var Model, x, y: int32): bool =
   if not model.overviewUsesWorkspacePreviews():
     return false
+  let outputOpt = model.overviewOutputUnderPointer(x, y)
+  if outputOpt.isNone:
+    return false
+  let outputId = outputOpt.get()
+  let screen = model.overviewScreen(outputId)
   let slot =
-    model.overviewWorkspaceSlotAt(model.overviewScreen(), x, y, extendedX = true)
+    model.overviewWorkspaceSlotAtForOutput(outputId, screen, x, y, extendedX = true)
   if slot == 0:
     return false
   let tagId = model.tagForSlot(slot)
@@ -131,6 +153,7 @@ proc beginOverviewScroll*(model: var Model, x, y: int32): bool =
       startY: y,
       currentX: x,
       currentY: y,
+      outputId: outputId,
       startScrollOffset: startOffset,
       hoverSlot: slot,
     )
@@ -143,13 +166,21 @@ proc signedStep(value: int32): int =
     return -1
   0
 
-proc overviewWorkspaceUnderPointerSlot(model: Model, x, y: int32): uint32 =
-  model.overviewWorkspaceSlotAt(model.overviewScreen(), x, y, extendedX = true)
+proc overviewWorkspaceUnderPointerSlot(
+    model: Model, outputId: OutputId, x, y: int32
+): uint32 =
+  model.overviewWorkspaceSlotAtForOutput(
+    outputId, model.overviewScreen(outputId), x, y, extendedX = true
+  )
 
 proc focusOverviewColumnWheel(model: var Model, x, y: int32, step: int): bool =
   if step == 0:
     return false
-  let slot = model.overviewWorkspaceUnderPointerSlot(x, y)
+  let outputOpt = model.overviewOutputUnderPointer(x, y)
+  if outputOpt.isNone:
+    return false
+  let outputId = outputOpt.get()
+  let slot = model.overviewWorkspaceUnderPointerSlot(outputId, x, y)
   if slot == 0:
     return false
   result = model.focusWorkspaceSlot(slot)
@@ -164,10 +195,14 @@ proc handleOverviewWheel*(model: var Model, x, y, horizontal, vertical: int32): 
     result = model.focusOverviewColumnWheel(x, y, horizontal.signedStep())
     let workspaceStep = vertical.signedStep()
     if workspaceStep != 0:
-      let slot = model.overviewWorkspaceUnderPointerSlot(x, y)
-      if slot != 0:
-        result = model.focusWorkspaceSlot(slot) or result
-        result = model.focusOverviewWorkspaceStep(workspaceStep) or result
+      let outputOpt = model.overviewOutputUnderPointer(x, y)
+      if outputOpt.isSome:
+        let outputId = outputOpt.get()
+        let slot = model.overviewWorkspaceUnderPointerSlot(outputId, x, y)
+        if slot != 0:
+          result = model.focusWorkspaceSlot(slot) or result
+          result =
+            model.focusOverviewWorkspaceStepForOutput(outputId, workspaceStep) or result
   elif modifiers == ShiftModifier:
     result = model.focusOverviewColumnWheel(x, y, vertical.signedStep())
 
@@ -190,8 +225,9 @@ proc closeOverviewToSlot(model: var Model, slot: uint32): bool =
   result = model.closeOverviewFromPointer() or result
 
 proc commitOverviewDrag(model: var Model, op: PointerOpData, activateDrop: bool): bool =
-  let target =
-    model.overviewDropTargetAt(model.overviewScreen(), op.currentX, op.currentY)
+  let target = model.overviewDropTargetAtForOutput(
+    op.outputId, model.overviewScreen(op.outputId), op.currentX, op.currentY
+  )
 
   if op.windowId == NullWindowId:
     if not op.overviewDragPastThreshold() and
@@ -202,6 +238,13 @@ proc commitOverviewDrag(model: var Model, op: PointerOpData, activateDrop: bool)
   if op.overviewDragPastThreshold() and
       target.kind in {OverviewDropKind.DropWorkspace, OverviewDropKind.DropDynamicGap} and
       target.slot != 0:
+    if target.kind == OverviewDropKind.DropDynamicGap and target.outputId != NullOutputId:
+      let targetTag = model.ensureWorkspaceSlot(target.slot)
+      if targetTag != NullTagId:
+        discard model.setTagOutput(targetTag, target.outputId)
+        if activateDrop:
+          discard model.setOutputTag(target.outputId, targetTag)
+          discard model.setActiveOutput(target.outputId)
     result = model.moveWindowToSlot(op.windowId, target.slot, activateDrop)
     if activateDrop and result:
       result = model.focusWindow(op.windowId) or result

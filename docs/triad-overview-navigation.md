@@ -31,11 +31,11 @@ The **Scroller** layout allows windows to be arranged in columns; the strip scro
 
 ## Overview Mode
 
-Overview mode is a zoomed-out view of all workspaces. It allows navigation and window selection without exiting the overview. Overview state lives at the workspace manager level; no individual layout owns it.
+Overview mode is a zoomed-out view of the workspaces visible on each connected output. It allows navigation and window selection without exiting the overview. Overview state lives at the workspace manager level; no individual layout owns it.
 
 ### Workspace Arrangement
 
-Workspaces are arranged as a vertical strip of bounding boxes. Each layout renders itself into its assigned rect:
+On every connected output, that output's workspaces are arranged as a vertical strip of bounding boxes. Each layout renders itself into its assigned rect:
 
 - **Open (horizontal)** — Scroller: all columns compressed into the rect, with a horizontal scroll indicator for offscreen content.
 - **Open (vertical)** — Vertical Scroller: all rows compressed into the rect, with a vertical scroll indicator.
@@ -168,7 +168,7 @@ Overview enters with `ofWindow` focus on the most recently focused window of the
 
 ## Constraints and Non-Goals
 
-- Overview is global; it is not scoped to a single workspace.
+- Overview is global; it is not scoped to a single workspace or output, but each output renders its own workspace strip.
 - Layout selection is per-workspace, never per-output.
 - Layout switching does not occur within overview.
 - Floating windows are out of scope for this revision.

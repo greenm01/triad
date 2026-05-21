@@ -95,6 +95,7 @@ proc surfaceKindId(kind: ProtocolSurfaceKind): string =
   of ProtocolSurfaceKind.PskHotkeyOverlay: "hotkey_overlay"
   of ProtocolSurfaceKind.PskExitSessionConfirm: "exit_session_confirm"
   of ProtocolSurfaceKind.PskLayoutSwitchToast: "layout_switch_toast"
+  of ProtocolSurfaceKind.PskOverview: "overview"
   of ProtocolSurfaceKind.PskRecentWindows: "recent_windows"
   of ProtocolSurfaceKind.PskRecentWindowsChrome: "recent_windows_chrome"
   of ProtocolSurfaceKind.PskDecorationAbove: "decoration_above"

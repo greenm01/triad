@@ -35,6 +35,7 @@ type
 
   OverviewDropTarget* = object
     kind*: OverviewDropKind
+    outputId*: core_types.OutputId
     slot*: uint32
 
   OverviewHiddenCountBadge* = object

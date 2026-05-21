@@ -1,5 +1,5 @@
 import ../state/engine
-import ../systems/[overview_geometry, workspaces]
+import ../systems/overview_geometry
 import ../types/model
 import ../types/projection_values as rv
 import overlay_text_render
@@ -13,6 +13,14 @@ const
   ScrollIndicatorColor = 0x55ffffff'u32
   ScrollIndicatorThickness = 2'i32
 
+proc overviewOverlayCacheKeyForOutput*(
+  model: Model, outputId: OutputId, screen: rv.Rect
+): string
+
+proc drawOverviewOverlayBufferForOutput*(
+  model: Model, outputId: OutputId, screen: rv.Rect, buf: var PixelBuffer
+)
+
 proc emptyWorkspaceFrameThickness*(model: Model): int32 =
   max(2'i32, min(max(0'i32, model.borderWidth), 8'i32))
 
@@ -21,19 +29,25 @@ proc overviewWorkspaceSlotEmpty(model: Model, slot: uint32): bool =
   tagId == NullTagId or not model.tagHasLiveWindows(tagId)
 
 proc overviewOverlayCacheKey*(model: Model, screen: rv.Rect): string =
+  model.overviewOverlayCacheKeyForOutput(model.activeOutput, screen)
+
+proc overviewOverlayCacheKeyForOutput*(
+    model: Model, outputId: OutputId, screen: rv.Rect
+): string =
   result =
     $screen.x & ":" & $screen.y & ":" & $screen.w & ":" & $screen.h & ":" &
-    $model.activeWorkspaceSlot() & ":" & $model.effectiveOverviewZoom() & ":" &
-    $model.overviewScrollerIndicators & ":" & $model.borderWidth & ":" &
-    $model.focusedBorderColor & ":" & $model.unfocusedBorderColor
-  for slot in model.previewSlots():
+    $uint32(outputId) & ":" & $model.activeWorkspaceSlotForOutput(outputId) & ":" &
+    $model.effectiveOverviewZoom() & ":" & $model.overviewScrollerIndicators & ":" &
+    $model.borderWidth & ":" & $model.focusedBorderColor & ":" &
+    $model.unfocusedBorderColor
+  for slot in model.previewSlotsForOutput(outputId):
     result.add(":")
     result.add($slot)
     result.add(if model.overviewWorkspaceSlotEmpty(slot): "e" else: "o")
-  let slots = model.previewSlots()
+  let slots = model.previewSlotsForOutput(outputId)
   for idx, slot in slots:
-    let badge = model.overviewHiddenCountBadge(screen, slots, idx)
-    let indicator = model.overviewScrollIndicator(screen, slots, idx)
+    let badge = model.overviewHiddenCountBadgeForOutput(outputId, screen, slots, idx)
+    let indicator = model.overviewScrollIndicatorForOutput(outputId, screen, slots, idx)
     result.add(":b")
     result.add($slot)
     result.add("=")
@@ -129,17 +143,22 @@ proc drawScrollIndicator(
       )
 
 proc drawOverviewOverlayBuffer*(model: Model, screen: rv.Rect, buf: var PixelBuffer) =
+  model.drawOverviewOverlayBufferForOutput(model.activeOutput, screen, buf)
+
+proc drawOverviewOverlayBufferForOutput*(
+    model: Model, outputId: OutputId, screen: rv.Rect, buf: var PixelBuffer
+) =
   if not model.overviewActive:
     return
 
-  let slots = model.previewSlots()
-  let active = model.activeWorkspaceSlot()
+  let slots = model.previewSlotsForOutput(outputId)
+  let active = model.activeWorkspaceSlotForOutput(outputId)
   let thickness = model.emptyWorkspaceFrameThickness()
   for idx, slot in slots:
     if not model.overviewWorkspaceSlotEmpty(slot):
       continue
 
-    let rect = model.workspacePreviewRect(screen, slots, idx)
+    let rect = model.workspacePreviewRectForOutput(screen, slots, idx, outputId)
     let color =
       if slot == active:
         rgbaColorToArgb(model.focusedBorderColor)
@@ -154,10 +173,20 @@ proc drawOverviewOverlayBuffer*(model: Model, screen: rv.Rect, buf: var PixelBuf
 
   if model.overviewScrollerIndicators:
     for idx, _ in slots:
-      buf.drawScrollIndicator(screen, model.overviewScrollIndicator(screen, slots, idx))
+      buf.drawScrollIndicator(
+        screen, model.overviewScrollIndicatorForOutput(outputId, screen, slots, idx)
+      )
   for idx, _ in slots:
-    buf.drawHiddenCountBadge(screen, model.overviewHiddenCountBadge(screen, slots, idx))
+    buf.drawHiddenCountBadge(
+      screen, model.overviewHiddenCountBadgeForOutput(outputId, screen, slots, idx)
+    )
 
 proc renderOverviewOverlayBuffer*(model: Model, screen: rv.Rect): PixelBuffer =
   result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
   model.drawOverviewOverlayBuffer(screen, result)
+
+proc renderOverviewOverlayBufferForOutput*(
+    model: Model, outputId: OutputId, screen: rv.Rect
+): PixelBuffer =
+  result = initPixelBuffer(max(1'i32, screen.w), max(1'i32, screen.h), Transparent)
+  model.drawOverviewOverlayBufferForOutput(outputId, screen, result)

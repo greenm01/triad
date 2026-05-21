@@ -992,15 +992,17 @@ proc focusWindowOrWorkspace*(model: var Model, direction: int): bool =
   let target = model.nearestWorkspaceSlot(direction, false)
   target != 0 and model.focusWorkspaceSlot(target)
 
-proc focusOverviewWorkspaceStep*(model: var Model, direction: int): bool =
+proc focusOverviewWorkspaceStepForOutput*(
+    model: var Model, outputId: OutputId, direction: int
+): bool =
   if direction == 0:
     return false
 
-  let slots = model.previewSlots()
+  let slots = model.previewSlotsForOutput(outputId)
   if slots.len == 0:
     return false
 
-  let active = model.activeWorkspaceSlot()
+  let active = model.activeWorkspaceSlotForOutput(outputId)
   var startIdx = slots.find(active)
   if startIdx == -1:
     startIdx =
@@ -1016,6 +1018,9 @@ proc focusOverviewWorkspaceStep*(model: var Model, direction: int): bool =
     if slot != active:
       return model.focusWorkspaceSlot(slot)
   false
+
+proc focusOverviewWorkspaceStep*(model: var Model, direction: int): bool =
+  model.focusOverviewWorkspaceStepForOutput(model.activeOutput, direction)
 
 proc focusOverviewBoundaryStep(model: var Model, direction: Direction): bool =
   case direction

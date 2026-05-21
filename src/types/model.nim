@@ -432,6 +432,7 @@ type
     startX*, startY*: int32
     currentX*, currentY*: int32
     totalDX*, totalDY*: int32
+    outputId*: OutputId
     startScrollOffset*: float32
     hoverSlot*: uint32
     hoverElapsedMs*: int32

@@ -24,6 +24,9 @@ template surfaceTable(daemon: TriadDaemon): untyped =
 template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.ownedShellSurfaceId
 
+template overviewSurfaceByOutput(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.overviewSurfaceByOutput
+
 template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
 
@@ -154,6 +157,8 @@ proc renderOrderKey(daemon: TriadDaemon, ids: seq[uint32]): seq[uint32] =
   result.add(highlighted)
   result.add(daemon.currentModel.visibleScratchpadRiverId())
   result.add(daemon.ownedShellSurfaceId)
+  for outputId in daemon.currentModel.sortedOutputIdsByExternal():
+    result.add(daemon.overviewSurfaceByOutput.getOrDefault(outputId, 0'u32))
   result.add(daemon.recentWindowsSurfaceId)
   result.add(daemon.recentWindowsChromeSurfaceId)
   result.add(if daemon.currentModel.overviewActive: 1'u32 else: 0'u32)
@@ -447,6 +452,22 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
           if firstNode != nil:
             shell.node.placeBelow(firstNode)
     daemon.surfaceTable[daemon.ownedShellSurfaceId] = shell
+
+  daemon.syncOverviewSurfaces()
+  for outputId, surfaceId in daemon.overviewSurfaceByOutput.pairs:
+    if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
+      continue
+    let outputScreen = daemon.currentModel.outputScreen(outputId)
+    var overview = daemon.surfaceTable[surfaceId]
+    if overview.node != nil:
+      overview.node.setPosition(outputScreen.x, outputScreen.y)
+      if daemon.currentModel.overviewActive:
+        overview.node.placeTop()
+      else:
+        overview.node.placeBottom()
+        if firstNode != nil:
+          overview.node.placeBelow(firstNode)
+    daemon.surfaceTable[surfaceId] = overview
 
   daemon.syncHotkeyOverlaySurface(screen)
   daemon.syncRecentWindowsSurface(screen)

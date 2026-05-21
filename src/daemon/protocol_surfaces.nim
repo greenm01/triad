@@ -1,6 +1,7 @@
 import std/tables
 import wayland/native/client
 import protocols/river/client as river
+import ../types/core
 
 type
   ProtocolSurfaceKind* {.pure.} = enum
@@ -8,6 +9,7 @@ type
     PskHotkeyOverlay
     PskExitSessionConfirm
     PskLayoutSwitchToast
+    PskOverview
     PskRecentWindows
     PskRecentWindowsChrome
     PskDecorationAbove
@@ -39,6 +41,7 @@ type
     hotkeyOverlaySurfaceId*: uint32
     exitSessionConfirmSurfaceId*: uint32
     layoutSwitchToastSurfaceId*: uint32
+    overviewSurfaceByOutput*: Table[OutputId, uint32]
     recentWindowsSurfaceId*: uint32
     recentWindowsChromeSurfaceId*: uint32
     windowDecorationAbove*: Table[uint32, uint32]

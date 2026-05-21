@@ -39,6 +39,10 @@ type
 
 const FrameTreeTabBarHeight* = 24'i32
 
+proc mergeNormalProjection(
+  result: var LayoutProjection, projection: LayoutProjection, replaceInstructions: bool
+)
+
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.ProjectionWindowId =
   let winOpt = model.windowData(winId)
   if winOpt.isSome:
@@ -1104,6 +1108,14 @@ proc applyOverviewDrag(model: Model, instructions: var seq[rv.RenderInstruction]
       instr.clipSet = false
       return
 
+proc addOverviewInstruction(
+    instructions: var seq[rv.RenderInstruction], instruction: rv.RenderInstruction
+) =
+  for existing in instructions:
+    if existing.windowId == instruction.windowId:
+      return
+  instructions.add(instruction)
+
 proc columnHasMaximizedWindow(
     col: rv.ProjectedColumn, windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow]
 ): bool =
@@ -1441,13 +1453,14 @@ proc overviewFinderTagLayout(
     result.tag, windows, screen, model.outerGaps, model.innerGaps, false, false, "never"
   )
 
-proc layoutWorkspaceStripOverview(
+proc layoutWorkspaceStripOverviewForOutput(
     model: Model,
     windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    outputId: core_types.OutputId,
     screen: rv.Rect,
     layoutEval: CustomLayoutEval,
 ): LayoutProjection =
-  let slots = model.previewSlots()
+  let slots = model.previewSlotsForOutput(outputId)
   if slots.len == 0:
     return
 
@@ -1460,7 +1473,7 @@ proc layoutWorkspaceStripOverview(
     var projected = model.projectedTag(tagId)
     if not projected.found:
       continue
-    let preview = model.workspacePreviewRect(screen, slots, idx)
+    let preview = model.workspacePreviewRectForOutput(screen, slots, idx, outputId)
     let tagDataOpt = model.tagData(tagId)
     if tagDataOpt.isNone:
       continue
@@ -1498,7 +1511,7 @@ proc layoutWorkspaceStripOverview(
     if tagData.tagDataUsesCoreScroller() and not layout.representativeOnly:
       model.addFloatingInstructions(tagId, workspaceScreen, instructions)
     for instr in instructions:
-      result.instructions.add(
+      result.instructions.addOverviewInstruction(
         rv.RenderInstruction(
           windowId: instr.windowId,
           geom: scaledOverviewRect(transform.source, transform.dest, instr.geom, zoom),
@@ -1507,6 +1520,25 @@ proc layoutWorkspaceStripOverview(
         )
       )
   model.applyOverviewDrag(result.instructions)
+
+proc layoutWorkspaceStripOverview(
+    model: Model,
+    windows: Table[rv.ProjectionWindowId, rv.ProjectedWindow],
+    screen: rv.Rect,
+    layoutEval: CustomLayoutEval,
+): LayoutProjection =
+  let outputs = model.sortedOutputIdsByExternal()
+  if outputs.len == 0:
+    return model.layoutWorkspaceStripOverviewForOutput(
+      windows, model.activeOutput, screen, layoutEval
+    )
+
+  for outputId in outputs:
+    let outputScreen = model.outputScreen(outputId)
+    let projection = model.layoutWorkspaceStripOverviewForOutput(
+      windows, outputId, outputScreen, layoutEval
+    )
+    result.mergeNormalProjection(projection, replaceInstructions = false)
 
 proc visibleOutputTagsForLayout(model: Model): seq[VisibleOutputTag] =
   for outputId, tagId in model.outputTagsWithId():

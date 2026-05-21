@@ -12,6 +12,22 @@ export system_views
 const OverviewDragThreshold* = 8'i32
 const NiriWorkspaceGapRatio = 0.1'f32
 
+proc activePreviewIndexForOutput*(
+  model: Model, outputId: OutputId, slots: openArray[uint32]
+): int
+
+proc workspacePreviewRectForOutput*(
+  model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int, outputId: OutputId
+): rv.Rect
+
+proc overviewWorkspaceSlotAtForOutput*(
+  model: Model, outputId: OutputId, screen: rv.Rect, x, y: int32, extendedX = false
+): uint32
+
+proc overviewDropTargetAtForOutput*(
+  model: Model, outputId: OutputId, screen: rv.Rect, x, y: int32
+): OverviewDropTarget
+
 proc effectiveOverviewZoom*(model: Model): float32 =
   if model.overviewZoom > 0:
     clamp(model.overviewZoom, 0.0001'f32, 0.75'f32)
@@ -32,8 +48,44 @@ proc overviewOutput(model: Model): OutputId =
     return outputId
   model.primaryOutput
 
+proc overviewScreenForOutput(model: Model, outputId: OutputId): rv.Rect =
+  if outputId != NullOutputId:
+    let outputOpt = model.outputData(outputId)
+    if outputOpt.isSome:
+      let output = outputOpt.get()
+      if output.hasUsable and output.usableW > 0 and output.usableH > 0:
+        return rv.Rect(
+          x: output.usableX, y: output.usableY, w: output.usableW, h: output.usableH
+        )
+      if output.w > 0 and output.h > 0:
+        return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+  rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
+
+proc rectContains(rect: rv.Rect, x, y: int32): bool =
+  x >= rect.x and y >= rect.y and x < rect.x + rect.w and y < rect.y + rect.h
+
+proc yContains(rect: rv.Rect, y: int32): bool =
+  y >= rect.y and y < rect.y + rect.h
+
+proc overviewOutputAt*(model: Model, x, y: int32): OutputId =
+  for outputId in model.sortedOutputIdsByExternal():
+    if model.overviewScreenForOutput(outputId).rectContains(x, y):
+      return outputId
+  NullOutputId
+
+proc activeWorkspaceSlotForOutput*(model: Model, outputId: OutputId): uint32 =
+  let outputOpt = model.outputData(outputId)
+  if outputOpt.isSome:
+    let tagId = outputOpt.get().currentTag
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isSome:
+      return tagOpt.get().slot
+  if outputId == model.overviewOutput():
+    return model.activeWorkspaceSlot()
+  0'u32
+
 proc overviewSlotVisible(model: Model, slot: uint32, outputId: OutputId): bool =
-  if slot == model.activeWorkspaceSlot():
+  if slot == model.activeWorkspaceSlotForOutput(outputId):
     return true
   let tagId = model.tagForSlot(slot)
   if tagId == NullTagId:
@@ -42,18 +94,25 @@ proc overviewSlotVisible(model: Model, slot: uint32, outputId: OutputId): bool =
     return false
   model.tagHasNonStickyLiveWindows(tagId)
 
-proc previewSlots*(model: Model): seq[uint32] =
-  let outputId = model.overviewOutput()
+proc previewSlotsForOutput*(model: Model, outputId: OutputId): seq[uint32] =
   for slot in model.visibleWorkspaceSlots():
     if model.overviewSlotVisible(slot, outputId):
       result.add(slot)
   if result.len == 0:
-    let active = model.activeWorkspaceSlot()
+    let active = model.activeWorkspaceSlotForOutput(outputId)
     if active != 0:
       result.add(active)
 
+proc previewSlots*(model: Model): seq[uint32] =
+  model.previewSlotsForOutput(model.overviewOutput())
+
 proc activePreviewIndex*(model: Model, slots: openArray[uint32]): int =
-  let active = model.activeWorkspaceSlot()
+  model.activePreviewIndexForOutput(model.overviewOutput(), slots)
+
+proc activePreviewIndexForOutput*(
+    model: Model, outputId: OutputId, slots: openArray[uint32]
+): int =
+  let active = model.activeWorkspaceSlotForOutput(outputId)
   for idx, slot in slots:
     if slot == active:
       return idx
@@ -77,8 +136,17 @@ proc workspacePreviewGap*(model: Model, screen: rv.Rect): int32 =
 proc workspacePreviewRect*(
     model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
 ): rv.Rect =
+  model.workspacePreviewRectForOutput(screen, slots, idx, model.overviewOutput())
+
+proc workspacePreviewRectForOutput*(
+    model: Model,
+    screen: rv.Rect,
+    slots: openArray[uint32],
+    idx: int,
+    outputId: OutputId,
+): rv.Rect =
   let size = model.previewSize(screen)
-  let activeIdx = model.activePreviewIndex(slots)
+  let activeIdx = model.activePreviewIndexForOutput(outputId, slots)
   if activeIdx < 0 or idx < 0:
     return rv.Rect()
 
@@ -161,8 +229,12 @@ proc overviewSelectedLayoutMode(tag: TagData): Option[rv.LayoutMode] =
     return none(rv.LayoutMode)
   some(tag.layoutMode)
 
-proc overviewHiddenCountBadge*(
-    model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
+proc overviewHiddenCountBadgeForOutput*(
+    model: Model,
+    outputId: OutputId,
+    screen: rv.Rect,
+    slots: openArray[uint32],
+    idx: int,
 ): OverviewHiddenCountBadge =
   if model.overviewActive:
     return
@@ -185,7 +257,7 @@ proc overviewHiddenCountBadge*(
   if windowCount <= 1:
     return
 
-  let preview = model.workspacePreviewRect(screen, slots, idx)
+  let preview = model.workspacePreviewRectForOutput(screen, slots, idx, outputId)
   let usable = model.previewUsableRect(preview)
   let innerGap = model.overviewScaledGap(model.innerGaps)
   let masterCount = min(windowCount, max(1, tag.masterCount))
@@ -224,8 +296,17 @@ proc overviewHiddenCountBadge*(
   else:
     result = OverviewHiddenCountBadge()
 
-proc overviewScrollIndicator*(
+proc overviewHiddenCountBadge*(
     model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
+): OverviewHiddenCountBadge =
+  model.overviewHiddenCountBadgeForOutput(model.overviewOutput(), screen, slots, idx)
+
+proc overviewScrollIndicatorForOutput*(
+    model: Model,
+    outputId: OutputId,
+    screen: rv.Rect,
+    slots: openArray[uint32],
+    idx: int,
 ): OverviewScrollIndicator =
   if idx < 0 or idx >= slots.len:
     return
@@ -259,7 +340,7 @@ proc overviewScrollIndicator*(
       (columns.len == 0 or columns[0].scrollerSingleProportion > 0.0'f32):
     return
 
-  let preview = model.workspacePreviewRect(screen, slots, idx)
+  let preview = model.workspacePreviewRectForOutput(screen, slots, idx, outputId)
   let usable = model.previewUsableRect(preview)
   let innerGap = model.overviewScaledGap(model.innerGaps)
 
@@ -292,21 +373,27 @@ proc overviewScrollIndicator*(
   else:
     result = OverviewScrollIndicator()
 
-proc rectContains(rect: rv.Rect, x, y: int32): bool =
-  x >= rect.x and y >= rect.y and x < rect.x + rect.w and y < rect.y + rect.h
-
-proc yContains(rect: rv.Rect, y: int32): bool =
-  y >= rect.y and y < rect.y + rect.h
+proc overviewScrollIndicator*(
+    model: Model, screen: rv.Rect, slots: openArray[uint32], idx: int
+): OverviewScrollIndicator =
+  model.overviewScrollIndicatorForOutput(model.overviewOutput(), screen, slots, idx)
 
 proc overviewWorkspaceSlotAt*(
     model: Model, screen: rv.Rect, x, y: int32, extendedX = false
 ): uint32 =
+  model.overviewWorkspaceSlotAtForOutput(
+    model.overviewOutputAt(x, y), screen, x, y, extendedX
+  )
+
+proc overviewWorkspaceSlotAtForOutput*(
+    model: Model, outputId: OutputId, screen: rv.Rect, x, y: int32, extendedX = false
+): uint32 =
   if not model.overviewActive:
     return 0
 
-  let slots = model.previewSlots()
+  let slots = model.previewSlotsForOutput(outputId)
   for idx, slot in slots:
-    let rect = model.workspacePreviewRect(screen, slots, idx)
+    let rect = model.workspacePreviewRectForOutput(screen, slots, idx, outputId)
     if extendedX:
       if x >= screen.x and x < screen.x + screen.w and rect.yContains(y):
         return slot
@@ -328,26 +415,36 @@ proc nextDynamicDropSlot(model: Model): uint32 =
 proc overviewDropTargetAt*(
     model: Model, screen: rv.Rect, x, y: int32
 ): OverviewDropTarget =
+  let outputId = model.overviewOutputAt(x, y)
+  model.overviewDropTargetAtForOutput(outputId, screen, x, y)
+
+proc overviewDropTargetAtForOutput*(
+    model: Model, outputId: OutputId, screen: rv.Rect, x, y: int32
+): OverviewDropTarget =
   if not model.overviewActive:
     return OverviewDropTarget(kind: OverviewDropKind.DropNone)
 
-  let slots = model.previewSlots()
+  let slots = model.previewSlotsForOutput(outputId)
   if slots.len == 0:
     return OverviewDropTarget(kind: OverviewDropKind.DropNone)
 
   var minY = high(int32)
   var maxY = low(int32)
   for idx, slot in slots:
-    let rect = model.workspacePreviewRect(screen, slots, idx)
+    let rect = model.workspacePreviewRectForOutput(screen, slots, idx, outputId)
     minY = min(minY, rect.y)
     maxY = max(maxY, rect.y + rect.h)
     if x >= screen.x and x < screen.x + screen.w and rect.yContains(y):
-      return OverviewDropTarget(kind: OverviewDropKind.DropWorkspace, slot: slot)
+      return OverviewDropTarget(
+        kind: OverviewDropKind.DropWorkspace, outputId: outputId, slot: slot
+      )
 
   let gap = model.workspacePreviewGap(screen)
   if x >= screen.x and x < screen.x + screen.w and y >= minY - gap and y <= maxY + gap:
     let slot = model.nextDynamicDropSlot()
     if slot != 0:
-      return OverviewDropTarget(kind: OverviewDropKind.DropDynamicGap, slot: slot)
+      return OverviewDropTarget(
+        kind: OverviewDropKind.DropDynamicGap, outputId: outputId, slot: slot
+      )
 
   OverviewDropTarget(kind: OverviewDropKind.DropNone)

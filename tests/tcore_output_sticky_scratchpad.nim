@@ -1210,6 +1210,19 @@ suite "Core Runtime Logic: output sticky scratchpad":
 
     check model.activeOutput == middle
     check model.previewSlots() == @[2'u32]
+    check model.previewSlotsForOutput(left) == @[1'u32]
+    check model.previewSlotsForOutput(middle) == @[2'u32]
+    check model.previewSlotsForOutput(right) == @[3'u32]
+
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    let projection = model.layoutProjection()
+    let ids = projection.instructions.mapIt(uint32(it.windowId))
+    check ids.contains(10'u32)
+    check ids.contains(20'u32)
+    check ids.contains(30'u32)
+    check model.instructionGeom(10).fullyWithin(model.outputScreen(left))
+    check model.instructionGeom(20).fullyWithin(model.outputScreen(middle))
+    check model.instructionGeom(30).fullyWithin(model.outputScreen(right))
 
   test "Output-visible dynamic workspaces survive pruning":
     var model = initRuntimeStateFromConfig(

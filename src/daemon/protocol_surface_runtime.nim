@@ -6,8 +6,9 @@ import wayland/native/client
 import protocols/river/client as river
 import wayland/protocols/wayland/client as wlCore
 import wayland/protocols/staging/singlepixelbuffer/v1/client as singlepixel
-import ../systems/[hotkey_overlay, recent_windows]
-from ../types/core import Rect
+import ../state/engine
+import ../systems/[hotkey_overlay, layout_projection, recent_windows]
+import ../types/core
 from ../types/projection_values import
   ProjectedBspPreselection, ProjectedFrameEmptyChrome, ProjectedFrameTabBar
 import ../types/runtime_values
@@ -41,6 +42,9 @@ template exitSessionConfirmSurfaceId(daemon: TriadDaemon): untyped =
 
 template layoutSwitchToastSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.layoutSwitchToastSurfaceId
+
+template overviewSurfaceByOutput(daemon: TriadDaemon): untyped =
+  daemon.protocolSurfaceRuntime.overviewSurfaceByOutput
 
 template recentWindowsSurfaceId(daemon: TriadDaemon): untyped =
   daemon.protocolSurfaceRuntime.recentWindowsSurfaceId
@@ -86,6 +90,8 @@ proc createProtocolBuffer(daemon: TriadDaemon, kind: ProtocolSurfaceKind): ptr B
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskLayoutSwitchToast:
       0x11111100'u32 or alpha
+    of ProtocolSurfaceKind.PskOverview:
+      0x00000000'u32 or alpha
     of ProtocolSurfaceKind.PskRecentWindows:
       0x11111100'u32 or alpha
     of ProtocolSurfaceKind.PskRecentWindowsChrome:
@@ -176,19 +182,24 @@ type ScreenOverlayBufferKind {.pure.} = enum
 proc drawScreenOverlayBuffer(
     daemon: TriadDaemon,
     kind: ScreenOverlayBufferKind,
+    outputId: OutputId,
     screen: Rect,
     buf: var PixelBuffer,
 ) =
   case kind
   of SobOverview:
-    daemon.currentModel.drawOverviewOverlayBuffer(screen, buf)
+    daemon.currentModel.drawOverviewOverlayBufferForOutput(outputId, screen, buf)
   of SobRecentBackdrop:
     daemon.currentModel.drawRecentWindowsBackdropBuffer(screen, buf)
   of SobRecentChrome:
     daemon.currentModel.drawRecentWindowsChromeBuffer(screen, buf)
 
 proc createMappedScreenOverlayBuffer(
-    daemon: var TriadDaemon, screen: Rect, name: cstring, kind: ScreenOverlayBufferKind
+    daemon: var TriadDaemon,
+    outputId: OutputId,
+    screen: Rect,
+    name: cstring,
+    kind: ScreenOverlayBufferKind,
 ): ptr Buffer =
   if daemon.shm == nil:
     return nil
@@ -218,7 +229,7 @@ proc createMappedScreenOverlayBuffer(
         zeroMem(mapped, size)
         var pixels =
           initPixelBufferView(width, height, cast[ptr UncheckedArray[uint32]](mapped))
-        daemon.drawScreenOverlayBuffer(kind, screen, pixels)
+        daemon.drawScreenOverlayBuffer(kind, outputId, screen, pixels)
         result = daemon.createArgbBufferFromFd(fd, width, height)
       finally:
         discard posix.munmap(mapped, size)
@@ -228,7 +239,7 @@ proc createMappedScreenOverlayBuffer(
     let rendered =
       case kind
       of SobOverview:
-        daemon.currentModel.renderOverviewOverlayBuffer(screen)
+        daemon.currentModel.renderOverviewOverlayBufferForOutput(outputId, screen)
       of SobRecentBackdrop:
         daemon.currentModel.renderRecentWindowsBackdropBuffer(screen)
       of SobRecentChrome:
@@ -236,22 +247,24 @@ proc createMappedScreenOverlayBuffer(
     daemon.createArgbShmBuffer(rendered)
 
 proc createMappedOverviewOverlayBuffer(
-    daemon: var TriadDaemon, screen: Rect
+    daemon: var TriadDaemon, outputId: OutputId, screen: Rect
 ): ptr Buffer =
-  daemon.createMappedScreenOverlayBuffer(screen, "triad-overview-overlay", SobOverview)
+  daemon.createMappedScreenOverlayBuffer(
+    outputId, screen, "triad-overview-overlay", SobOverview
+  )
 
 proc createMappedRecentWindowsBackdropBuffer(
     daemon: var TriadDaemon, screen: Rect
 ): ptr Buffer =
   daemon.createMappedScreenOverlayBuffer(
-    screen, "triad-recent-windows-backdrop", SobRecentBackdrop
+    NullOutputId, screen, "triad-recent-windows-backdrop", SobRecentBackdrop
   )
 
 proc createMappedRecentWindowsChromeBuffer(
     daemon: var TriadDaemon, screen: Rect
 ): ptr Buffer =
   daemon.createMappedScreenOverlayBuffer(
-    screen, "triad-recent-windows-chrome", SobRecentChrome
+    NullOutputId, screen, "triad-recent-windows-chrome", SobRecentChrome
   )
 
 proc createProtocolWlSurface(
@@ -416,6 +429,33 @@ proc ensureLayoutSwitchToastSurface*(daemon: var TriadDaemon) =
   debug "Created layout-switch toast shell surface",
     shellSurfaceId = daemon.layoutSwitchToastSurfaceId
 
+proc ensureOverviewSurface*(daemon: var TriadDaemon, outputId: OutputId) =
+  if not daemon.currentModel.protocolSurfaces.enabled:
+    return
+  if daemon.overviewSurfaceByOutput.hasKey(outputId):
+    let surfaceId = daemon.overviewSurfaceByOutput[outputId]
+    if surfaceId != 0 and daemon.surfaceTable.hasKey(surfaceId):
+      return
+  if daemon.riverManager == nil or daemon.compositor == nil:
+    return
+  var surf = daemon.createProtocolWlSurface(ProtocolSurfaceKind.PskOverview)
+  if surf.surface == nil:
+    warn "Unable to create overview wl_surface"
+    return
+  surf.shellSurface = daemon.riverManager.getShellSurface(surf.surface)
+  if surf.shellSurface == nil:
+    warn "Unable to create overview shell surface"
+    daemon.destroyProtocolSurface(surf)
+    return
+  surf.node = surf.shellSurface.getNode()
+  let surfaceId = surf.shellSurface.id()
+  daemon.overviewSurfaceByOutput[outputId] = surfaceId
+  daemon.shellSurfacePointers[surfaceId] = surf.shellSurface
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[surfaceId] = surf
+  debug "Created overview shell surface",
+    outputId = uint32(outputId), shellSurfaceId = surfaceId
+
 proc ensureRecentWindowsSurface*(daemon: var TriadDaemon) =
   if not daemon.currentModel.protocolSurfaces.enabled:
     return
@@ -472,7 +512,7 @@ proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
     return
 
   var surf = daemon.surfaceTable[daemon.ownedShellSurfaceId]
-  let wantsShield = daemon.currentModel.overviewActive and daemon.shm != nil
+  let wantsShield = false
   let desiredW =
     if wantsShield:
       max(1'i32, screen.w)
@@ -492,7 +532,9 @@ proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
       surf.bufferCacheKey != overlayKey:
     let buffer =
       if wantsShield:
-        daemon.createMappedOverviewOverlayBuffer(screen)
+        daemon.createMappedOverviewOverlayBuffer(
+          daemon.currentModel.activeOutput, screen
+        )
       else:
         daemon.createProtocolBuffer(ProtocolSurfaceKind.PskShell)
     if buffer != nil:
@@ -509,6 +551,72 @@ proc syncOwnedShellSurface*(daemon: var TriadDaemon, screen: Rect) =
     surf.inputH = 0
   daemon.commitProtocolSurface(surf)
   daemon.surfaceTable[daemon.ownedShellSurfaceId] = surf
+
+proc syncOverviewSurface*(daemon: var TriadDaemon, outputId: OutputId, screen: Rect) =
+  daemon.ensureOverviewSurface(outputId)
+  if not daemon.overviewSurfaceByOutput.hasKey(outputId):
+    return
+  let surfaceId = daemon.overviewSurfaceByOutput[outputId]
+  if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
+    return
+
+  var surf = daemon.surfaceTable[surfaceId]
+  let wantsOverview = daemon.currentModel.overviewActive and daemon.shm != nil
+  let desiredW =
+    if wantsOverview:
+      max(1'i32, screen.w)
+    else:
+      1'i32
+  let desiredH =
+    if wantsOverview:
+      max(1'i32, screen.h)
+    else:
+      1'i32
+  let overlayKey =
+    if wantsOverview:
+      daemon.currentModel.overviewOverlayCacheKeyForOutput(outputId, screen)
+    else:
+      ""
+  if surf.buffer == nil or surf.bufferW != desiredW or surf.bufferH != desiredH or
+      surf.bufferCacheKey != overlayKey:
+    let buffer =
+      if wantsOverview:
+        daemon.createMappedOverviewOverlayBuffer(outputId, screen)
+      else:
+        daemon.createProtocolBuffer(ProtocolSurfaceKind.PskOverview)
+    if buffer != nil:
+      surf.setProtocolSurfaceBuffer(buffer, desiredW, desiredH)
+      surf.bufferCacheKey = overlayKey
+    elif wantsOverview:
+      warn "Overview output shield unavailable; previews may receive pointer",
+        outputId = uint32(outputId)
+
+  if wantsOverview and surf.bufferW == desiredW and surf.bufferH == desiredH:
+    surf.inputW = desiredW
+    surf.inputH = desiredH
+  else:
+    surf.inputW = 0
+    surf.inputH = 0
+  daemon.commitProtocolSurface(surf)
+  daemon.surfaceTable[surfaceId] = surf
+
+proc syncOverviewSurfaces*(daemon: var TriadDaemon) =
+  var liveOutputs: seq[OutputId]
+  for outputId in daemon.currentModel.sortedOutputIdsByExternal():
+    liveOutputs.add(outputId)
+    daemon.syncOverviewSurface(outputId, daemon.currentModel.outputScreen(outputId))
+
+  var staleOutputs: seq[OutputId]
+  for outputId in daemon.overviewSurfaceByOutput.keys:
+    if liveOutputs.find(outputId) == -1:
+      staleOutputs.add(outputId)
+  for outputId in staleOutputs:
+    let surfaceId = daemon.overviewSurfaceByOutput[outputId]
+    daemon.overviewSurfaceByOutput.del(outputId)
+    if daemon.surfaceTable.hasKey(surfaceId):
+      var surf = daemon.surfaceTable[surfaceId]
+      daemon.surfaceTable.del(surfaceId)
+      daemon.destroyProtocolSurface(surf)
 
 proc syncHotkeyOverlaySurface*(daemon: var TriadDaemon, screen: Rect) =
   if not daemon.currentModel.hotkeyOverlayOpen:
@@ -1018,6 +1126,7 @@ proc destroyAllProtocolSurfaces*(daemon: var TriadDaemon) =
   daemon.hotkeyOverlaySurfaceId = 0
   daemon.exitSessionConfirmSurfaceId = 0
   daemon.layoutSwitchToastSurfaceId = 0
+  daemon.overviewSurfaceByOutput.clear()
   daemon.recentWindowsSurfaceId = 0
   daemon.recentWindowsChromeSurfaceId = 0
   daemon.windowDecorationAbove.clear()
