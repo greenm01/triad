@@ -1,4 +1,5 @@
 import std/sets
+import ../src/systems/daemon_view
 import tcore_support
 
 proc fullyWithin(rect, screen: Rect): bool =
@@ -362,6 +363,25 @@ suite "Core Runtime Logic: output sticky scratchpad":
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "left"))
     check model.activeOutput == model.outputForExternal(ExternalOutputId(1))
+
+  test "Layer shell default output follows active output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    discard model.setActiveOutput(second)
+
+    check model.primaryOutput == first
+    check model.activeOutput == second
+    check model.activeLayerDefaultOutputRiverId() == 2'u32
 
   test "External focus on visible secondary workspace moves active output":
     var model = initRuntimeStateFromConfig(

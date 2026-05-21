@@ -162,8 +162,20 @@ cursor {
 presentation-mode "vsync"
 allow-exit-session #true
 
+output "DP-1" {
+    mode 1920 1080 60
+    position 4480 180
+}
+
 output "DP-2" {
     mode 2560 1440 120
+    position 1920 0
+    focus-at-startup
+}
+
+output "DP-3" {
+    mode 1920 1080 60
+    position 0 180
 }
 
 protocol-surfaces {
@@ -266,6 +278,7 @@ bindings {
     bind "Super+7" "focus-workspace 7"
     bind "Super+8" "focus-workspace 8"
     bind "Super+9" "focus-workspace 9"
+    bind "Super+Shift+n" "new-workspace" hotkey-overlay-title="New Workspace"
 
     bind "Super+Ctrl+1" "move-to-workspace 1"
     bind "Super+Ctrl+2" "move-to-workspace 2"

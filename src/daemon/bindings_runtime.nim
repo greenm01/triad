@@ -1971,6 +1971,6 @@ proc applyManageState*(daemon: var TriadDaemon) =
     else:
       seat.clearFocus()
 
-  let primaryOutput = daemon.currentModel.primaryOutputRiverId()
-  if primaryOutput != 0 and daemon.layerOutputPointers.hasKey(primaryOutput):
-    daemon.layerOutputPointers[primaryOutput].setDefault()
+  let layerDefaultOutput = daemon.currentModel.activeLayerDefaultOutputRiverId()
+  if layerDefaultOutput != 0 and daemon.layerOutputPointers.hasKey(layerDefaultOutput):
+    daemon.layerOutputPointers[layerDefaultOutput].setDefault()

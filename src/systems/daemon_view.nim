@@ -85,6 +85,12 @@ proc windowRenderWorkspaceLocalFocusOnly*(model: Model, logicalId: WindowId): bo
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 
+proc activeLayerDefaultOutputRiverId*(model: Model): uint32 =
+  let activeOutput = model.riverIdForOutput(model.activeOutput)
+  if activeOutput != 0:
+    return activeOutput
+  model.primaryOutputRiverId()
+
 proc visibleScratchpadRiverId*(model: Model): uint32 =
   let scratchpad = model.activeScratchpadWindow()
   if scratchpad != NullWindowId:
