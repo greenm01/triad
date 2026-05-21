@@ -7,7 +7,7 @@ import ../types/projection_values
 import ../types/runtime_values
 import ../utils/overview_hit_test
 import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
-from ../types/core import NullOutputId, WindowId
+from ../types/core import NullOutputId, NullWindowId, WindowId
 
 const
   RiverEdgeBottom* = 2'u32
@@ -306,8 +306,20 @@ proc desiredRenderWindowState*(
     focused: focused,
   )
 
+proc overviewDraggedRiverId(model: Model): uint32 =
+  if not model.overviewActive:
+    return 0
+  let op = model.pointerOp
+  if op.kind == PointerOpKind.OpOverviewDrag and op.windowId != NullWindowId:
+    return model.riverIdForWindow(op.windowId)
+  0
+
 proc desiredVisibilityBounds(daemon: TriadDaemon, id: uint32): Rect =
-  if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
+  if daemon.currentModel.overviewActive:
+    if id == daemon.currentModel.overviewDraggedRiverId():
+      return daemon.currentModel.overviewDragVisibilityBounds()
+    return daemon.currentModel.activeWorkspaceScreen()
+  if daemon.currentModel.recentWindowsActive:
     return daemon.currentModel.activeWorkspaceScreen()
   let logicalId = daemon.currentModel.windowForRiverId(id)
   if uint32(logicalId) != 0:
@@ -469,6 +481,10 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
         if firstNode != nil:
           overview.node.placeBelow(firstNode)
     daemon.surfaceTable[surfaceId] = overview
+
+  let draggedOverviewWindow = daemon.currentModel.overviewDraggedRiverId()
+  if draggedOverviewWindow != 0 and daemon.windowNodes.hasKey(draggedOverviewWindow):
+    daemon.windowNodes[draggedOverviewWindow].placeTop()
 
   daemon.syncHotkeyOverlaySurface(screen)
   daemon.syncRecentWindowsSurface(screen)

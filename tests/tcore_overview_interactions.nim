@@ -24,6 +24,24 @@ proc twoOutputOverviewModel(): Model =
   result.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
   result.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
 
+proc rectIntersection(a, b: Rect): Rect =
+  let x1 = max(a.x, b.x)
+  let y1 = max(a.y, b.y)
+  let x2 = min(a.x + a.w, b.x + b.w)
+  let y2 = min(a.y + a.h, b.y + b.h)
+  if x2 <= x1 or y2 <= y1:
+    return Rect(x: x1, y: y1, w: 0, h: 0)
+  Rect(x: x1, y: y1, w: x2 - x1, h: y2 - y1)
+
+proc positiveArea(rect: Rect): bool =
+  rect.w > 0 and rect.h > 0
+
+proc projectedInstruction(model: Model, id: uint32): RenderInstruction =
+  for instr in model.layoutProjection().instructions:
+    if uint32(instr.windowId) == id:
+      return instr
+  RenderInstruction()
+
 suite "Core Runtime Logic: overview interactions":
   test "Dragging unified overview preview moves window without closing":
     var model = configuredModel()
@@ -319,6 +337,45 @@ suite "Core Runtime Logic: overview interactions":
     check model.activeTag == model.tagForSlot(1)
     check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(2)
     check model.pointerOp.kind == PointerOpKind.OpNone
+
+  test "Dragging overview window renders across both outputs while held":
+    var model = twoOutputOverviewModel()
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let firstScreen = model.outputScreen(first)
+    let secondScreen = model.outputScreen(second)
+    let start = model.instructionGeom(1).rectCenter()
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 1,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+
+    let base = model.projectedInstruction(1).geom
+    let boundary = firstScreen.x + firstScreen.w
+    model.applyMsg(
+      Msg(kind: MsgKind.WlPointerDelta, dx: boundary - base.rectCenter().x, dy: 0)
+    )
+
+    let dragged = model.projectedInstruction(1)
+    let fullBounds = model.overviewDragVisibilityBounds()
+    let fullVisibility = renderVisibility(dragged.geom, fullBounds, 4)
+    let activeVisibility =
+      renderVisibility(dragged.geom, model.activeWorkspaceScreen(), 4)
+
+    check model.pointerOp.kind == PointerOpKind.OpOverviewDrag
+    check uint32(dragged.windowId) == 1
+    check not dragged.clipSet
+    check dragged.geom.rectIntersection(firstScreen).positiveArea()
+    check dragged.geom.rectIntersection(secondScreen).positiveArea()
+    check fullVisibility.visible
+    check not fullVisibility.clipped
+    check activeVisibility.visible
+    check activeVisibility.clipped
 
   test "Clicking overview window commits focus":
     var model = configuredModel()

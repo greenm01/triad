@@ -83,6 +83,32 @@ proc activeWorkspaceScreen*(model: Model): rv.Rect =
     return model.outputScreen(outputId)
   model.primaryScreen()
 
+proc overviewDragVisibilityBounds*(model: Model): rv.Rect =
+  var found = false
+  var left = 0'i32
+  var top = 0'i32
+  var right = 0'i32
+  var bottom = 0'i32
+  for outputId in model.sortedOutputIdsByExternal():
+    let screen = model.outputScreen(outputId)
+    if screen.w <= 0 or screen.h <= 0:
+      continue
+    if not found:
+      left = screen.x
+      top = screen.y
+      right = screen.x + screen.w
+      bottom = screen.y + screen.h
+      found = true
+    else:
+      left = min(left, screen.x)
+      top = min(top, screen.y)
+      right = max(right, screen.x + screen.w)
+      bottom = max(bottom, screen.y + screen.h)
+  if found:
+    return
+      rv.Rect(x: left, y: top, w: max(1'i32, right - left), h: max(1'i32, bottom - top))
+  model.activeWorkspaceScreen()
+
 proc activeFocus*(model: Model): core_types.WindowId =
   let scratchpad = model.activeScratchpadWindow()
   if scratchpad != NullWindowId:
