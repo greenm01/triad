@@ -3,6 +3,7 @@ base_url = "https://greenm01.github.io/triad"
 title = "Triad Window Manager"
 description = "Programmable Wayland window manager for River"
 default_language = "en"
+build_search_index = true
 
 [markdown]
 render_emoji = true

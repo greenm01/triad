@@ -45,7 +45,8 @@ Focusing a pinned workspace moves focus to its assigned output.
 
 ## Dynamic Workspaces
 
-Create a new workspace on the active output with `new-workspace`:
+Create a new workspace on the active output with `new-workspace`. Add a custom
+binding if you want a shortcut:
 
 ```kdl
 bindings {
@@ -61,8 +62,8 @@ Move the active workspace to another monitor:
 
 ```kdl
 bindings {
-  bind "Super+Shift+Left" "move-workspace-to-output left"
-  bind "Super+Shift+Right" "move-workspace-to-output right"
+  bind "Super+Shift+h" "move-workspace-to-output left"
+  bind "Super+Shift+l" "move-workspace-to-output right"
 }
 ```
 

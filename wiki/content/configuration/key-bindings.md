@@ -12,18 +12,19 @@ touchpad gestures. All live in the `bindings` block and reload on save.
 
 ```kdl
 bindings {
-  bind "Super+Return"       "spawn-terminal"
-  bind "Super+Q"            "close-window"
-  bind "Super+Space"        "switch-layout"
-  bind "Super+F"            "toggle-overview"
-  bind "Super+H"            "focus-left"
-  bind "Super+L"            "focus-right"
-  bind "Super+J"            "focus-down"
-  bind "Super+K"            "focus-up"
-  bind "Super+Shift+H"      "move-column-left"
-  bind "Super+Shift+L"      "move-column-right"
-  bind "Super+1"            "focus-workspace 1"
-  bind "Super+Shift+1"      "move-to-workspace 1"
+  bind "Super+Return"  "spawn kitty"
+  bind "Super+Space"   "spawn fuzzel"
+  bind "Super+q"       "close-window"
+  bind "Super+o"       "toggle-overview"
+  bind "Super+n"       "switch-layout"
+  bind "Super+h"       "focus-left"
+  bind "Super+l"       "focus-right"
+  bind "Super+j"       "focus-down"
+  bind "Super+k"       "focus-up"
+  bind "Super+Alt+h"   "move-column-left"
+  bind "Super+Alt+l"   "move-column-right"
+  bind "Super+1"       "focus-workspace 1"
+  bind "Super+Ctrl+1"  "move-to-workspace 1"
 }
 ```
 
@@ -38,14 +39,14 @@ Bind mouse buttons with `pointer-bind`:
 
 ```kdl
 bindings {
-  pointer-bind "Super+btn-left"   "move"
-  pointer-bind "Super+btn-right"  "resize"
-  pointer-bind "Super+btn-middle" "toggle-floating"
+  pointer-bind "Super+left"   "move"
+  pointer-bind "Super+right"  "resize"
+  pointer-bind "Super+middle" "toggle-maximized"
 }
 ```
 
-Button names: `btn-left`, `btn-right`, `btn-middle`, `btn-side`,
-`btn-extra`, `btn-forward`, `btn-back`.
+Button names: `left`, `right`, `middle`, `side`, `extra`, `forward`, `back`,
+`task`.
 
 ## Scroll Wheel Bindings
 
@@ -53,25 +54,25 @@ Bind scroll axes with `axis-bind`:
 
 ```kdl
 bindings {
-  axis-bind "Super+scroll-up"    "focus-workspace-up"
-  axis-bind "Super+scroll-down"  "focus-workspace-down"
+  axis-bind "Super+wheel-up"    "focus-left"
+  axis-bind "Super+wheel-down"  "focus-right"
 }
 ```
 
 ## Gesture Bindings
 
-Bind touchpad swipe gestures with `gesture-bind`:
+Bind custom touchpad swipe gestures with `gesture-bind`:
 
 ```kdl
 bindings {
-  gesture-bind "swipe-left-3"   "focus-tag-left"
-  gesture-bind "swipe-right-3"  "focus-tag-right"
-  gesture-bind "swipe-up-4"     "toggle-overview"
+  gesture-bind "Super+swipe-left"   "focus-tag-left"  fingers=3
+  gesture-bind "Super+swipe-right"  "focus-tag-right" fingers=3
+  gesture-bind "Super+swipe-up"     "toggle-overview" fingers=4
 }
 ```
 
-Gesture names follow the pattern `swipe-<direction>-<fingers>`. Direction:
-`left`, `right`, `up`, `down`. Fingers: `3` or `4`.
+Gesture names are `swipe-left`, `swipe-right`, `swipe-up`, or `swipe-down`.
+Set `fingers=3` or `fingers=4`.
 
 ## Layout-Scoped Bindings
 
@@ -80,26 +81,26 @@ binding takes precedence when that layout is active:
 
 ```kdl
 bindings {
-  bind "Super+Alt+H" "move-column-left"
+  bind "Super+Alt+h" "move-column-left"
 
   layout "i3" {
-    bind "Super+Alt+H" "split-tree-split-horizontal"
-    bind "Super+Alt+V" "split-tree-split-vertical"
-    bind "Super+E"     "split-tree-layout-toggle-split"
-    bind "Super+S"     "split-tree-layout-stacking"
-    bind "Super+W"     "split-tree-layout-tabbed"
+    bind "Super+Alt+h" "split-tree-split-horizontal"
+    bind "Super+Alt+v" "split-tree-split-vertical"
+    bind "Super+e"     "split-tree-layout-toggle-split"
+    bind "Super+s"     "split-tree-layout-stacking"
+    bind "Super+w"     "split-tree-layout-tabbed"
   }
 }
 ```
 
 ## Spawning Programs
 
-Pass arguments to `spawn` as separate strings:
+Use the same command text you would pass to `triad msg`:
 
 ```kdl
 bindings {
-  bind "Super+D"        spawn="fuzzel"
-  bind "Super+Shift+S"  spawn="grim" "-g" {slurp} "-"
+  bind "Super+Space"  "spawn fuzzel"
+  bind "Super+Print"  "screenshot --clipboard-only"
 }
 ```
 
@@ -110,8 +111,8 @@ that should fire repeatedly while held:
 
 ```kdl
 bindings {
-  bind "Super+H" "focus-left"  repeat=#true
-  bind "Super+L" "focus-right" repeat=#true
+  bind "Super+h" "focus-left"  repeat=#true
+  bind "Super+l" "focus-right" repeat=#true
 }
 ```
 

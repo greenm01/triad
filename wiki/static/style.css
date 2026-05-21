@@ -241,47 +241,41 @@ tbody tr:hover {
     text-decoration: none;
 }
 
-/* Modern Wiki Additions: cards, hero, responsive, search */
+/* Modern Wiki Additions: cards, responsive, search */
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1.25rem;
-    margin: 2rem 0;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin: 1.5rem 0;
 }
 
 .card {
-    background: var(--sidebar-bg);
+    display: block;
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 1.25rem;
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    border-radius: 6px;
+    padding: 1rem;
+    color: var(--text-color);
+    text-decoration: none;
 }
 
 .card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border-color: var(--link-hover);
+    background: rgba(122, 162, 247, 0.07);
+    text-decoration: none;
 }
 
 .card h3 {
     margin-top: 0;
+    margin-bottom: 0.35rem;
     color: var(--nim-yellow);
 }
 
 .card p {
-    margin-bottom: 0.5rem;
-}
-
-.card ul {
     margin: 0;
-    padding-left: 1.1rem;
-    list-style: disc;
-}
-
-.card ul li {
-    font-size: 0.85rem;
     color: var(--text-color);
-    margin-bottom: 3px;
-    line-height: 1.4;
+    font-size: 0.92rem;
+    line-height: 1.45;
 }
 
 .search-result {
@@ -294,6 +288,12 @@ tbody tr:hover {
 
 .search-result:hover {
     background: var(--code-bg);
+}
+
+.search-empty {
+    padding: 10px;
+    color: #565f89;
+    font-size: 0.9rem;
 }
 
 #search-results {

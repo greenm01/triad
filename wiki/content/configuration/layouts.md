@@ -18,10 +18,10 @@ layout {
 }
 
 bindings {
-  bind "Super+Space" "switch-layout"
-  bind "Super+S"     "layout-scroller"
-  bind "Super+T"     "layout-tile"
-  bind "Super+M"     "layout-monocle"
+  bind "Super+n"       "switch-layout"
+  bind "Super+d"       "layout-tile"
+  bind "Super+g"       "layout-grid"
+  bind "Super+Ctrl+x"  "layout-monocle"
 }
 ```
 

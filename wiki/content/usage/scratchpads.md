@@ -28,8 +28,9 @@ Bind both for quick access:
 
 ```kdl
 bindings {
-  bind "Super+Minus"       "move-to-scratchpad"
-  bind "Super+Shift+Minus" "toggle-scratchpad"
+  bind "Super+s"       "move-to-scratchpad"
+  bind "Super+Alt+s"   "toggle-scratchpad"
+  bind "Super+Shift+s" "restore-scratchpad"
 }
 ```
 
@@ -38,14 +39,14 @@ bindings {
 Named scratchpads let you maintain separate pools for different tools:
 
 ```bash
-triad msg move-to-named-scratchpad "term"
-triad msg toggle-named-scratchpad  "term"
+triad msg move-to-named-scratchpad "terminal"
+triad msg toggle-named-scratchpad  "terminal"
 ```
 
 ```kdl
 bindings {
-  bind "Super+T" { toggle-named-scratchpad "term"; }
-  bind "Super+N" { toggle-named-scratchpad "notes"; }
+  bind "Super+Ctrl+e"       "toggle-named-scratchpad terminal"
+  bind "Super+Ctrl+Shift+e" "move-to-named-scratchpad terminal"
 }
 ```
 
@@ -57,9 +58,9 @@ toggling shows or hides the entire pool.
 A typical setup keeps a terminal in a named scratchpad:
 
 1. Open a terminal (`Super+Return`).
-2. Send it to the scratchpad (`triad msg move-to-named-scratchpad "term"`).
-3. From any workspace, `Super+T` brings it up as a centered overlay.
-4. `Super+T` again hides it.
+2. Send it to the scratchpad (`triad msg move-to-named-scratchpad "terminal"`).
+3. From any workspace, `Super+Ctrl+e` brings it up as a centered overlay.
+4. `Super+Ctrl+e` again hides it.
 
 The window stays running in the background. Its state — shell history, running
 processes — persists between toggles.

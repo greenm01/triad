@@ -10,7 +10,7 @@ navigate between windows and workspaces without leaving overview.
 
 ## Entering and Exiting
 
-Toggle overview with the configured binding (default `Super+F`) or:
+Toggle overview with the configured binding (default `Super+o`) or:
 
 ```bash
 triad msg toggle-overview
@@ -46,8 +46,9 @@ own layout:
 
 ```kdl
 bindings {
-  bind "Super+F"    "toggle-overview"
-  bind "Super+Tab"  "recent-window-next"
+  bind "Super+o"       "toggle-overview"
+  bind "Alt+Tab"       "recent-window-next"
+  bind "Alt+Shift+Tab" "recent-window-prev"
 }
 ```
 

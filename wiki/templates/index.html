@@ -8,38 +8,23 @@
 <h2>Get Started Quickly</h2>
 <div class="card-grid">
   {% set gs = get_section(path="getting-started/_index.md") %}
-  <div class="card">
-    <h3><a href="{{ gs.permalink }}">Getting Started</a></h3>
-    <p>You need River 0.4+ first, then Triad on top. The installer handles the login session entry.</p>
-    <ul>
-      <li>Install on Void, Arch, Debian, or NixOS</li>
-      <li>Launch from your display manager or a TTY</li>
-      <li>Validate with <code>triad msg state</code></li>
-    </ul>
-  </div>
+  <a class="card" href="{{ gs.permalink }}">
+    <h3>Getting Started</h3>
+    <p>Install Triad, start a session, and validate IPC.</p>
+  </a>
   {% set cfg = get_section(path="configuration/_index.md") %}
-  <div class="card">
-    <h3><a href="{{ cfg.permalink }}">Configuration</a></h3>
-    <p>Your config lives at <code>~/.config/triad/config.kdl</code> and reloads on save — no restart needed.</p>
-    <ul>
-      <li>Set key bindings, startup apps, and shell/bar</li>
-      <li>Write window rules to control placement and floating</li>
-      <li>Configure monitors, workspaces, and layouts</li>
-    </ul>
-  </div>
+  <a class="card" href="{{ cfg.permalink }}">
+    <h3>Configuration</h3>
+    <p>Edit key bindings, layouts, monitors, shells, and rules.</p>
+  </a>
   {% set use = get_section(path="usage/_index.md") %}
-  <div class="card">
-    <h3><a href="{{ use.permalink }}">Usage &amp; IPC</a></h3>
-    <p>Control Triad from the keyboard or any script that can open a Unix socket.</p>
-    <ul>
-      <li>Switch layouts mid-session with a binding or <code>triad msg</code></li>
-      <li>Move windows across workspaces and monitors</li>
-      <li>Automate placement with Janet scripts</li>
-    </ul>
-  </div>
-  <div class="card">
-    <h3><a href="{{ config.extra.github_url }}">Source Code</a></h3>
-    <p>Contribute, report issues, or browse the source on GitHub.</p>
-  </div>
+  <a class="card" href="{{ use.permalink }}">
+    <h3>Usage &amp; IPC</h3>
+    <p>Control windows, scratchpads, overview, tags, and scripts.</p>
+  </a>
+  <a class="card" href="{{ config.extra.github_url }}">
+    <h3>Source Code</h3>
+    <p>Browse the repository, report issues, or contribute patches.</p>
+  </a>
 </div>
 {% endblock content %}

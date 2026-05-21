@@ -15,7 +15,12 @@
             </div>
             <nav class="navbar-menu">
                 <div class="search-container">
-                    <input type="text" id="search" placeholder="Search...">
+                    <input
+                        type="text"
+                        id="search"
+                        placeholder="Search..."
+                        autocomplete="off"
+                    >
                     <div id="search-results"></div>
                 </div>
             </nav>
@@ -72,6 +77,7 @@
         </div>
     </footer>
 
+    <script src="{{ get_url(path="elasticlunr.min.js") }}"></script>
     <script src="{{ get_url(path="search.js") }}"></script>
 </body>
 </html>

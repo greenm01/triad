@@ -214,7 +214,7 @@ Or bind it:
 
 ```kdl
 bindings {
-  bind "Super+Shift+B" "cycle-shell"
+  bind "Ctrl+Alt+0" "cycle-shell"
 }
 ```
 

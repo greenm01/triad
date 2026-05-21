@@ -328,12 +328,13 @@ bindings {
 **Example Bindings:**
 ```kdl
 bindings {
-  bind "Super+Return" "spawn-terminal"
-  bind "Super+Q" "close-window"
-  bind "Super+Space" "toggle-overview"
+  bind "Super+Return" "spawn kitty"
+  bind "Super+Space" "spawn fuzzel"
+  bind "Super+q" "close-window"
+  bind "Super+o" "toggle-overview"
   
-  pointer-bind "Super+btn-left" "move"
-  pointer-bind "Super+btn-right" "resize"
+  pointer-bind "Super+left" "move"
+  pointer-bind "Super+right" "resize"
 }
 ```
 

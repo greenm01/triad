@@ -10,9 +10,9 @@ You've logged into a River (Triad) session. Here's how to get your bearings.
 ## Open a Terminal
 
 The starter config launches your terminal with `Super+Return`. If nothing
-happens, the configured terminal isn't installed. Edit
-`~/.config/triad/config.kdl` and change the `spawn-terminal` command to one
-you have — `foot`, `kitty`, `alacritty`, or `wezterm` all work.
+happens, `kitty` may not be installed. Edit `~/.config/triad/config.kdl` and
+change the `Super+Return` binding to a terminal you have, such as `foot`,
+`alacritty`, or `wezterm`.
 
 ## Validate Your Config
 
@@ -52,14 +52,15 @@ where you define keyboard shortcuts:
 
 ```kdl
 bindings {
-  bind "Super+Return"  "spawn-terminal"
-  bind "Super+Q"       "close-window"
-  bind "Super+Space"   "switch-layout"
-  bind "Super+F"       "toggle-overview"
-  bind "Super+H"       "focus-left"
-  bind "Super+L"       "focus-right"
-  bind "Super+J"       "focus-down"
-  bind "Super+K"       "focus-up"
+  bind "Super+Return"  "spawn kitty"
+  bind "Super+Space"   "spawn fuzzel"
+  bind "Super+q"       "close-window"
+  bind "Super+o"       "toggle-overview"
+  bind "Super+n"       "switch-layout"
+  bind "Super+h"       "focus-left"
+  bind "Super+l"       "focus-right"
+  bind "Super+j"       "focus-down"
+  bind "Super+k"       "focus-up"
 }
 ```
 
@@ -84,7 +85,7 @@ layout {
   layout-cycle "scroller" "tile" "monocle"
 }
 bindings {
-  bind "Super+Tab" "switch-layout"
+  bind "Super+n" "switch-layout"
 }
 ```
 
