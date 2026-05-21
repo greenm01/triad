@@ -267,6 +267,23 @@ tbody tr:hover {
     color: var(--nim-yellow);
 }
 
+.card p {
+    margin-bottom: 0.5rem;
+}
+
+.card ul {
+    margin: 0;
+    padding-left: 1.1rem;
+    list-style: disc;
+}
+
+.card ul li {
+    font-size: 0.85rem;
+    color: var(--text-color);
+    margin-bottom: 3px;
+    line-height: 1.4;
+}
+
 .search-result {
     display: block;
     padding: 10px;

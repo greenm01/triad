@@ -10,17 +10,36 @@
   {% set gs = get_section(path="getting-started/_index.md") %}
   <div class="card">
     <h3><a href="{{ gs.permalink }}">Getting Started</a></h3>
-    <p>Install Triad and launch your first session in minutes.</p>
+    <p>You need River 0.4+ first, then Triad on top. The installer handles the login session entry.</p>
+    <ul>
+      <li>Install on Void, Arch, Debian, or NixOS</li>
+      <li>Launch from your display manager or a TTY</li>
+      <li>Validate with <code>triad msg state</code></li>
+    </ul>
   </div>
   {% set cfg = get_section(path="configuration/_index.md") %}
   <div class="card">
     <h3><a href="{{ cfg.permalink }}">Configuration</a></h3>
-    <p>Master config.kdl, rules, monitors, and input.</p>
+    <p>Your config lives at <code>~/.config/triad/config.kdl</code> and reloads on save — no restart needed.</p>
+    <ul>
+      <li>Set key bindings, startup apps, and shell/bar</li>
+      <li>Write window rules to control placement and floating</li>
+      <li>Configure monitors, workspaces, and layouts</li>
+    </ul>
   </div>
   {% set use = get_section(path="usage/_index.md") %}
   <div class="card">
     <h3><a href="{{ use.permalink }}">Usage &amp; IPC</a></h3>
-    <p>Control windows with commands and Janet scripts.</p>
+    <p>Control Triad from the keyboard or any script that can open a Unix socket.</p>
+    <ul>
+      <li>Switch layouts mid-session with a binding or <code>triad msg</code></li>
+      <li>Move windows across workspaces and monitors</li>
+      <li>Automate placement with Janet scripts</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><a href="{{ config.extra.github_url }}">Source Code</a></h3>
+    <p>Contribute, report issues, or browse the source on GitHub.</p>
   </div>
 </div>
 {% endblock content %}

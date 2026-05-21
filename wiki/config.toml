@@ -5,8 +5,10 @@ description = "Programmable Wayland window manager for River"
 default_language = "en"
 
 [markdown]
-# Whether to render emojis
 render_emoji = true
+external_links_target_blank = true
+external_links_no_follow = false
+external_links_no_referrer = true
 
 [markdown.highlighting]
 # Whether to highlight code blocks

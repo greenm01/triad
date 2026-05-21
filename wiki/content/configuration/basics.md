@@ -7,7 +7,7 @@ weight = 10
 
 Triad uses the KDL configuration format. Edit your configuration at `$XDG_CONFIG_HOME/triad/config.kdl` (defaulting to `~/.config/triad/config.kdl`). Triad provides a default configuration on first start.
 
-Practical examples are in `examples/config/`.
+For real-world examples, see the [example configs](https://github.com/greenm01/triad/tree/master/examples/config) in the repository.
 
 ## Basics
 

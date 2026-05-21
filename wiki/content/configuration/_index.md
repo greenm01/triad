@@ -7,8 +7,26 @@ render = true
 
 # Configuration
 
-Triad reads `~/.config/triad/config.kdl`. Use KDL for rules, layouts, bindings, shells, and Janet scripting.
+Everything lives in `~/.config/triad/config.kdl`. The file reloads on save.
+Split it across multiple files with `include` if it grows large.
 
-Hot reload happens on save. Split files with `include`.
+---
 
-Start with [basics](@/configuration/basics.md) and [monitors](@/configuration/monitors.md). Full reference lives in the internal docs for advanced cases.
+### [Basics](@/configuration/basics.md)
+
+The config format, hot reload, modular includes, key bindings, startup
+commands, input devices, cursor, and shell/bar setup.
+
+### [Monitors](@/configuration/monitors.md)
+
+Output modes, positions, scaling, VRR, reserved areas, and hotplug behavior.
+
+### [Workspaces](@/configuration/workspaces.md)
+
+Naming workspaces, setting default layouts, pinning to outputs, dynamic
+creation, and moving workspaces between monitors.
+
+### [Layouts](@/configuration/layouts.md)
+
+The full layout reference: scroller, BSP, i3, frame-tree, algorithmic layouts,
+and custom Janet layouts.

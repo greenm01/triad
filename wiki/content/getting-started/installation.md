@@ -46,16 +46,21 @@ Install Triad's local build requirements:
 - `libxkbcommon`
 - `pixman`
 
-For example:
+### Void Linux
 
 ```bash
-# Void Linux
 sudo xbps-install -S nim nimble pkg-config wayland-devel libxkbcommon-devel pixman-devel
+```
 
-# Arch Linux
+### Arch Linux
+
+```bash
 sudo pacman -S nim nimble pkgconf wayland libxkbcommon pixman
+```
 
-# Debian / Ubuntu
+### Debian / Ubuntu
+
+```bash
 sudo apt install nim nimble pkg-config libwayland-dev libxkbcommon-dev libpixman-1-dev
 ```
 

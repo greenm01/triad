@@ -164,7 +164,7 @@ scripts.
       (triad/command "layout-monocle"))))
 ```
 
-See `examples/janet/` for full per-app examples (gimp, telegram, vesktop).
+See the [Janet examples](https://github.com/greenm01/triad/tree/master/examples/janet) for full per-app scripts (gimp, telegram, vesktop, and custom layouts).
 
 This is the executable successor to ICCCM/EWMH placement hints. KDL window
 rules handle the static, unconditional cases well. Scripts handle
