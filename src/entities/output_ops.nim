@@ -105,9 +105,7 @@ proc setOutputUsable*(model: var Model, outputId: OutputId, x, y, w, h: int32): 
   model.outputs.mEntity(outputId).hasUsable = true
   true
 
-proc setOutputTag*(model: var Model, outputId: OutputId, tagId: TagId): bool =
-  if model.outputs.entity(outputId).isNone or model.tags.entity(tagId).isNone:
-    return false
+proc clearVisibleTagOutside*(model: var Model, tagId: TagId, outputId: OutputId): bool =
   var duplicateOutputs: seq[OutputId] = @[]
   for mappedOutputId, mappedTagId in model.outputTags.pairs:
     if mappedOutputId != outputId and mappedTagId == tagId:
@@ -117,9 +115,15 @@ proc setOutputTag*(model: var Model, outputId: OutputId, tagId: TagId): bool =
     if model.outputs.entity(mappedOutputId).isSome and
         model.outputs.mEntity(mappedOutputId).currentTag == tagId:
       model.outputs.mEntity(mappedOutputId).currentTag = NullTagId
+    result = true
+
+proc setOutputTag*(model: var Model, outputId: OutputId, tagId: TagId): bool =
+  if model.outputs.entity(outputId).isNone or model.tags.entity(tagId).isNone:
+    return false
+
+  discard model.clearVisibleTagOutside(tagId, outputId)
   model.outputTags[outputId] = tagId
   model.outputs.mEntity(outputId).currentTag = tagId
-  model.tagOutputs[tagId] = outputId
   if model.activeTag == tagId:
     model.activeOutput = outputId
   true
@@ -145,29 +149,14 @@ proc setActiveOutput*(model: var Model, outputId: OutputId): bool =
 proc setTagOutput*(model: var Model, tagId: TagId, outputId: OutputId): bool =
   if model.tags.entity(tagId).isNone or model.outputs.entity(outputId).isNone:
     return false
-  var staleOutputs: seq[OutputId] = @[]
-  for mappedOutputId, mappedTagId in model.outputTags.pairs:
-    if mappedOutputId != outputId and mappedTagId == tagId:
-      staleOutputs.add(mappedOutputId)
-  for mappedOutputId in staleOutputs:
-    model.outputTags.del(mappedOutputId)
-    if model.outputs.entity(mappedOutputId).isSome and
-        model.outputs.mEntity(mappedOutputId).currentTag == tagId:
-      model.outputs.mEntity(mappedOutputId).currentTag = NullTagId
   if model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
-    return staleOutputs.len > 0
+    return false
   model.tagOutputs[tagId] = outputId
   true
 
 proc clearTagOutput*(model: var Model, tagId: TagId): bool =
   if not model.tagOutputs.hasKey(tagId):
     return false
-  let outputId = model.tagOutputs[tagId]
-  if model.outputTags.getOrDefault(outputId, NullTagId) == tagId:
-    model.outputTags.del(outputId)
-  if model.outputs.entity(outputId).isSome and
-      model.outputs.mEntity(outputId).currentTag == tagId:
-    model.outputs.mEntity(outputId).currentTag = NullTagId
   model.tagOutputs.del(tagId)
   true
 

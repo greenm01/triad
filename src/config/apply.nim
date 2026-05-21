@@ -474,6 +474,7 @@ proc applyConfig*(model: var Model, config: Config) =
           let outputId = model.outputForTarget(rule.target)
           if outputId != NullOutputId:
             discard model.setTagOutput(tagId, outputId)
+            discard model.clearVisibleTagOutside(tagId, outputId)
 
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
@@ -517,6 +518,7 @@ proc applyConfig*(model: var Model, config: Config) =
           let outputId = model.outputForTarget(tagRule.rule.openOnOutput)
           if outputId != NullOutputId:
             discard model.setTagOutput(tagId, outputId)
+            discard model.clearVisibleTagOutside(tagId, outputId)
 
   discard model.pruneDynamicWorkspaces()
   model.refreshVisibleWorkspaceSlots()

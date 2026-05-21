@@ -63,6 +63,7 @@ proc restoreWorkspaceOutputsFor*(model: var Model, outputId: OutputId): bool =
     let target = model.tagHomeOutputTargets.getOrDefault(tagId, "")
     if target.len > 0 and model.outputMatchesTarget(outputId, output, target):
       result = model.setTagOutput(tagId, outputId) or result
+      result = model.clearVisibleTagOutside(tagId, outputId) or result
 
   let rememberedSlot = model.outputLastActiveSlots.getOrDefault(stableTarget, 0'u32)
   if rememberedSlot != 0:

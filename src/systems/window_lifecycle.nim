@@ -86,7 +86,8 @@ proc remapWindowRuleOutput(
   for mappedOutputId in duplicateOutputs:
     discard model.clearOutputTag(mappedOutputId)
 
-  model.setOutputTag(outputId, targetTag)
+  result = model.setOutputTag(outputId, targetTag)
+  result = model.setTagOutput(targetTag, outputId) or result
 
 proc restoredWindowId(model: Model, externalId: ExternalWindowId): WindowId =
   result = model.restoredWindowRef(externalId)

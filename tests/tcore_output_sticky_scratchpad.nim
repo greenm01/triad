@@ -282,6 +282,69 @@ suite "Core Runtime Logic: output sticky scratchpad":
     )
     check snapshot.workspaces.anyIt(it.outputName == "DP-1" and it.isOutputVisible)
 
+  test "Focusing workspace on third output keeps center workspace visible":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 4))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 1, outputX: 4480, outputY: 180
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 2560, height: 1440)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1920, outputY: 0
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputPosition, positionOutputId: 3, outputX: 0, outputY: 180)
+    )
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let center = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+    let tag1 = model.tagForSlot(1)
+    let tag2 = model.tagForSlot(2)
+    let tag4 = model.tagForSlot(4)
+    discard model.setTagOutput(tag1, right)
+    discard model.setTagOutput(tag2, center)
+    discard model.setTagOutput(tag4, left)
+    discard model.setOutputTag(right, tag1)
+    discard model.setOutputTag(center, tag2)
+    discard model.setOutputTag(left, tag4)
+    discard model.setActiveOutput(center)
+    discard model.setActiveWorkspace(tag2)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-3"))
+
+    check model.activeOutput == left
+    check model.activeTag == tag4
+    check model.outputActiveTag(center) == tag2
+    check model.outputActiveTag(left) == tag4
+    check model.tagOutputs[tag2] == center
+    check model.tagOutputs[tag4] == left
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces.anyIt(
+      it.workspaceIdx == 2 and it.outputName == "DP-2" and it.isOutputVisible
+    )
+    check snapshot.workspaces.anyIt(
+      it.workspaceIdx == 4 and it.outputName == "DP-3" and it.isOutputVisible and
+        it.isActive
+    )
+
   test "Layout projection renders output-visible workspaces on their outputs":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
@@ -366,6 +429,38 @@ suite "Core Runtime Logic: output sticky scratchpad":
 
     check model.activeOutput == middle
     check model.workspaceOutput(tag2) == middle
+    check model.tagOutputs[tag2] == right
+
+  test "Focusing nonvisible workspace does not rewrite home output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let tag3 = model.tagForSlot(3)
+    discard model.setTagOutput(tag3, second)
+    discard model.setActiveOutput(first)
+    discard model.setActiveWorkspace(model.tagForSlot(1))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+
+    check model.activeOutput == first
+    check model.outputActiveTag(first) == tag3
+    check model.tagOutputs[tag3] == second
 
   test "Command focus on visible output makes new windows open there":
     var model = initRuntimeStateFromConfig(

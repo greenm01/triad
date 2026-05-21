@@ -32,6 +32,7 @@ proc moveActiveWorkspaceToOutputTarget*(model: var Model, target: string): bool 
 
   result = model.setActiveOutput(outputId)
   result = model.setOutputTag(outputId, tagId) or result
+  result = model.setTagOutput(tagId, outputId) or result
   result =
     model.setTagHomeOutput(
       tagId,
