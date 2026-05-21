@@ -25,28 +25,34 @@ workspace when the target output reconnects.
 
 ## Configure Outputs
 
-Use `output` blocks to describe your monitors. The output name is usually the
-connector name shown by tools such as `wlr-randr`.
+Use one `output` block to describe your monitors. Each nested `monitor` target
+is usually the connector name shown by tools such as `wlr-randr`.
 
 ```kdl
-output "DP-1" {
-  mode "preferred"
-  position "auto-right"
-  scale "auto"
-}
+output {
+  monitor "DP-1" {
+    mode "preferred"
+    position "auto-right"
+    scale "auto"
+  }
 
-output "DP-2" {
-  mode "2560x1440@120"
-  position "0x0"
-  focus-at-startup
-  vrr 2
-  reserved_area top=8 bottom=8
-}
+  monitor "DP-2" {
+    mode "2560x1440@120"
+    position "0x0"
+    focus-at-startup
+    vrr 2
+    reserved_area top=8 bottom=8
+  }
 
-output "DP-3" {
-  mode 1920 1080 60
-  position 0 180
-  transform "normal"
+  monitor "DP-3" {
+    mode 1920 1080 60
+    position 0 180
+    transform "normal"
+  }
+
+  default {
+    scale "auto"
+  }
 }
 ```
 
@@ -75,9 +81,11 @@ Supported output fields:
 | `disabled` | Bool | Inverse alias for `enabled`. |
 | `reserved_area` | One int, four ints, or `top/right/bottom/left` properties | Add an inset on top of live layer-shell/bar usable-area reservations. |
 
-Use `output ""` for fallback monitor-management fields. Fallback output rules
-apply to connected heads that do not match a more specific output rule, but
-they cannot set `focus-at-startup` or `workspaces`.
+Use `default` inside the grouped `output` block for fallback monitor-management
+fields. Fallback output rules apply to connected heads that do not match a more
+specific monitor rule, but they cannot set `focus-at-startup` or `workspaces`.
+Top-level `output "DP-1" { ... }` and `output "" { ... }` rules remain
+supported for existing configs.
 
 River does not currently expose Hyprland's mirror, bit depth, color-management,
 ICC, or HDR/luminance monitor controls through Triad's output-management path.
@@ -91,8 +99,10 @@ You can pin workspaces from either side.
 Pin specific workspaces in an output block:
 
 ```kdl
-output "DP-2" {
-  workspaces 1 2 8
+output {
+  monitor "DP-2" {
+    workspaces 1 2 8
+  }
 }
 ```
 
@@ -245,7 +255,7 @@ spawned commands.
 
 If workspaces jump between monitors, look for conflicting placement sources:
 
-- `output "<name>" { workspaces ... }`
+- `output { monitor "<name>" { workspaces ... } }`
 - `workspace-rules { workspace N open-on-output="..." }`
 - `window-rule { default-workspace ... open-on-output ... }`
 - explicit `move-workspace-to-output` commands

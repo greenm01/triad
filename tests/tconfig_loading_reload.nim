@@ -234,12 +234,22 @@ output "" {
   mode "preferred"
   position "auto"
 }
+output {
+  monitor "DP-3" {
+    mode "1920x1080@60"
+    position "0x180"
+    enabled #true
+  }
+  default {
+    scale "auto"
+  }
+}
 """,
       "valid-output",
     )
 
     check loaded.ok
-    check loaded.config.outputRules.len == 3
+    check loaded.config.outputRules.len == 5
     check loaded.config.outputRules[0].workspaceSlots == @[1'u32, 2'u32]
     check loaded.config.outputRules[1].modeKind == OutputModeKind.OutputModeHighRr
     check loaded.config.outputRules[1].scaleAuto
@@ -250,6 +260,9 @@ output "" {
     check loaded.config.outputRules[1].adaptiveSync
     check loaded.config.outputRules[1].reservedLeft == 40
     check loaded.config.outputRules[2].target.len == 0
+    check loaded.config.outputRules[3].target == "DP-3"
+    check loaded.config.outputRules[4].target.len == 0
+    check loaded.config.outputRules[4].scaleAuto
 
   test "Strict config load rejects invalid output rule fields":
     let cases =
@@ -262,7 +275,7 @@ output {
   mode 1920 1080 60
 }
 """,
-          needle: "output[0]: expected exactly one output target",
+          needle: "output[0]: unknown grouped output child \"mode\"",
         ),
         (
           name: "bad-target-type",
@@ -273,6 +286,45 @@ output 1 {
 }
 """,
           needle: "output[0]: output target must be a string",
+        ),
+        (
+          name: "bad-group-monitor-target",
+          content:
+            """
+output {
+  monitor 1 {
+    mode "preferred"
+  }
+}
+""",
+          needle: "output[0]: monitor[0]: output target must be a string",
+        ),
+        (
+          name: "group-unknown-child",
+          content:
+            """
+output {
+  screen "DP-1" {
+    mode "preferred"
+  }
+}
+""",
+          needle: "output[0]: unknown grouped output child \"screen\"",
+        ),
+        (
+          name: "duplicate-group-default",
+          content:
+            """
+output {
+  default {
+    scale "auto"
+  }
+  default {
+    mode "preferred"
+  }
+}
+""",
+          needle: "output[0]: default output rule is duplicated",
         ),
         (
           name: "unsupported-field",

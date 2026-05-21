@@ -876,16 +876,7 @@ proc validateWindowRuleRegexes(config: Config): string =
       if result.len > 0:
         return
 
-proc validateOutputRuleNode(node: KdlNode, index: int): string =
-  if node.props.len > 0:
-    return outputNodeError(index, "properties are not supported")
-  if node.args.len != 1:
-    return outputNodeError(index, "expected exactly one output target")
-  if node.args[0].kind != KString:
-    return outputNodeError(index, "output target must be a string")
-
-  let target = node.args[0].kString().strip()
-
+proc validateOutputRuleFields(target: string, node: KdlNode): string =
   var enabledSet = false
   var enabled = true
   var disabledSet = false
@@ -942,6 +933,52 @@ proc validateOutputRuleNode(node: KdlNode, index: int): string =
     return outputConfigError(
       target, "enabled", "enabled and disabled fields request contradictory states"
     )
+
+proc validateOutputGroupChild(target: string, child: KdlNode): string =
+  if child.props.len > 0:
+    return outputConfigError(target, "", child.name & ": properties are not supported")
+  result = validateOutputRuleFields(target, child)
+
+proc validateOutputRuleNode(node: KdlNode, index: int): string =
+  if node.props.len > 0:
+    return outputNodeError(index, "properties are not supported")
+  if node.args.len == 1:
+    if node.args[0].kind != KString:
+      return outputNodeError(index, "output target must be a string")
+    return validateOutputRuleFields(node.args[0].kString().strip(), node)
+
+  if node.args.len > 1:
+    return outputNodeError(index, "expected zero or one output target")
+
+  var monitorIndex = 0
+  var defaultSeen = false
+  for child in node.children:
+    case child.name
+    of "monitor":
+      if child.args.len != 1:
+        return outputNodeError(
+          index, "monitor[" & $monitorIndex & "]: expected exactly one output target"
+        )
+      if child.args[0].kind != KString:
+        return outputNodeError(
+          index, "monitor[" & $monitorIndex & "]: output target must be a string"
+        )
+      result = validateOutputGroupChild(child.args[0].kString().strip(), child)
+      if result.len > 0:
+        return
+      inc monitorIndex
+    of "default":
+      if defaultSeen:
+        return outputNodeError(index, "default output rule is duplicated")
+      if child.args.len != 0:
+        return outputNodeError(index, "default: expected no arguments")
+      result = validateOutputGroupChild("", child)
+      if result.len > 0:
+        return
+      defaultSeen = true
+    else:
+      return
+        outputNodeError(index, "unknown grouped output child \"" & child.name & "\"")
 
 proc validateOutputRuleNodes(doc: KdlDoc): string =
   var outputIndex = 0
@@ -1231,6 +1268,103 @@ proc outputModeRefreshMilliHz(value: KdlVal): int32 =
   except CatchableError:
     hz = float64(value.kInt())
   int32(max(0.0, hz * 1000.0 + 0.5))
+
+proc parseOutputRuleNode(node: KdlNode, target: string): OutputRule =
+  result = OutputRule(target: target.strip())
+  for child in node.children:
+    try:
+      if child.name == "focus-at-startup":
+        result.focusAtStartup = child.childFlagEnabled()
+      elif child.name == "workspaces":
+        result.workspaceSlots = child.workspaceTargets()
+      elif child.name == "mode" and child.args.len > 0:
+        if child.args.len == 1 and child.args[0].kind == KString:
+          let parsed = parseOutputModeString(child.args[0].kString())
+          if parsed.valid:
+            result.modeSet = true
+            result.modeKind = parsed.kind
+            result.modeCustomAllowed = parsed.kind == OutputModeKind.OutputModeExplicit
+            result.modeWidth = parsed.width
+            result.modeHeight = parsed.height
+            result.modeRefresh = parsed.refresh
+        elif child.args.len >= 3:
+          result.modeSet = true
+          result.modeKind = OutputModeKind.OutputModeExplicit
+          result.modeWidth = clamp32(int32(child.args[0].kInt()), 1, 65535)
+          result.modeHeight = clamp32(int32(child.args[1].kInt()), 1, 65535)
+          result.modeRefresh = child.args[2].outputModeRefreshMilliHz()
+      elif child.name == "scale" and child.args.len > 0:
+        if child.args[0].kind == KString and
+            child.args[0].kString().cmpIgnoreCase("auto") == 0:
+          result.scaleSet = true
+          result.scaleAuto = true
+        else:
+          result.scaleSet = true
+          result.scale = clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
+      elif child.name == "position" and child.args.len >= 2:
+        result.positionSet = true
+        result.positionKind = OutputPositionKind.OutputPositionExplicit
+        result.positionX = clamp32(int32(child.args[0].kInt()), -65535, 65535)
+        result.positionY = clamp32(int32(child.args[1].kInt()), -65535, 65535)
+      elif child.name == "position" and child.args.len == 1 and
+          child.args[0].kind == KString:
+        let parsed = parseOutputPositionString(child.args[0].kString())
+        if parsed.valid:
+          result.positionSet = true
+          result.positionKind = parsed.kind
+          result.positionX = clamp32(parsed.x, -65535, 65535)
+          result.positionY = clamp32(parsed.y, -65535, 65535)
+      elif child.name == "transform" and child.args.len > 0:
+        let transformValue =
+          if child.args[0].isIntegerValue():
+            $child.args[0].kInt()
+          else:
+            child.args[0].kString()
+        let parsed = parseOutputConfigTransform(transformValue)
+        if parsed.valid:
+          result.transformSet = true
+          result.transform = parsed.transform
+        else:
+          warn "Ignoring invalid output transform",
+            target = result.target, value = transformValue
+      elif child.name == "adaptive-sync" and child.args.len > 0:
+        result.adaptiveSyncSet = true
+        result.adaptiveSync = child.args[0].kBool()
+      elif child.name == "enabled":
+        result.enabledSet = true
+        result.enabled = child.args[0].kBool()
+      elif child.name == "disabled":
+        result.enabledSet = true
+        result.enabled = not child.args[0].kBool()
+      elif child.name == "vrr" and child.args.len > 0:
+        result.adaptiveSyncSet = true
+        result.adaptiveSync = child.args[0].kInt() != 0
+      elif child.name in ["reserved", "reserved_area", "reserved-area", "addreserved"]:
+        result.reservedAreaSet = true
+        if child.props.len > 0:
+          if child.props.hasKey("top"):
+            result.reservedTop = int32(child.props["top"].kInt())
+          if child.props.hasKey("right"):
+            result.reservedRight = int32(child.props["right"].kInt())
+          if child.props.hasKey("bottom"):
+            result.reservedBottom = int32(child.props["bottom"].kInt())
+          if child.props.hasKey("left"):
+            result.reservedLeft = int32(child.props["left"].kInt())
+        elif child.args.len == 1:
+          let inset = int32(child.args[0].kInt())
+          result.reservedTop = inset
+          result.reservedRight = inset
+          result.reservedBottom = inset
+          result.reservedLeft = inset
+        elif child.args.len >= 4:
+          result.reservedTop = int32(child.args[0].kInt())
+          result.reservedRight = int32(child.args[1].kInt())
+          result.reservedBottom = int32(child.args[2].kInt())
+          result.reservedLeft = int32(child.args[3].kInt())
+      else:
+        warn "Ignoring unsupported output rule field", field = child.name
+    except CatchableError as e:
+      warn "Ignoring invalid output rule field", field = child.name, error = e.msg
 
 proc parseIdleInhibitMode(
     value: string
@@ -1609,107 +1743,18 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
           except CatchableError as e:
             warn "Ignoring invalid workspace config field",
               field = child.name, error = e.msg
-      elif node.name == "output" and node.args.len > 0:
+      elif node.name == "output":
         try:
-          var rule = OutputRule(target: node.args[0].kString().strip())
-          for child in node.children:
-            try:
-              if child.name == "focus-at-startup":
-                rule.focusAtStartup = child.childFlagEnabled()
-              elif child.name == "workspaces":
-                rule.workspaceSlots = child.workspaceTargets()
-              elif child.name == "mode" and child.args.len > 0:
-                if child.args.len == 1 and child.args[0].kind == KString:
-                  let parsed = parseOutputModeString(child.args[0].kString())
-                  if parsed.valid:
-                    rule.modeSet = true
-                    rule.modeKind = parsed.kind
-                    rule.modeCustomAllowed =
-                      parsed.kind == OutputModeKind.OutputModeExplicit
-                    rule.modeWidth = parsed.width
-                    rule.modeHeight = parsed.height
-                    rule.modeRefresh = parsed.refresh
-                elif child.args.len >= 3:
-                  rule.modeSet = true
-                  rule.modeKind = OutputModeKind.OutputModeExplicit
-                  rule.modeWidth = clamp32(int32(child.args[0].kInt()), 1, 65535)
-                  rule.modeHeight = clamp32(int32(child.args[1].kInt()), 1, 65535)
-                  rule.modeRefresh = child.args[2].outputModeRefreshMilliHz()
-              elif child.name == "scale" and child.args.len > 0:
-                if child.args[0].kind == KString and
-                    child.args[0].kString().cmpIgnoreCase("auto") == 0:
-                  rule.scaleSet = true
-                  rule.scaleAuto = true
-                else:
-                  rule.scaleSet = true
-                  rule.scale = clampF32(float32(child.args[0].kFloat()), 0.01, 64.0)
-              elif child.name == "position" and child.args.len >= 2:
-                rule.positionSet = true
-                rule.positionKind = OutputPositionKind.OutputPositionExplicit
-                rule.positionX = clamp32(int32(child.args[0].kInt()), -65535, 65535)
-                rule.positionY = clamp32(int32(child.args[1].kInt()), -65535, 65535)
-              elif child.name == "position" and child.args.len == 1 and
-                  child.args[0].kind == KString:
-                let parsed = parseOutputPositionString(child.args[0].kString())
-                if parsed.valid:
-                  rule.positionSet = true
-                  rule.positionKind = parsed.kind
-                  rule.positionX = clamp32(parsed.x, -65535, 65535)
-                  rule.positionY = clamp32(parsed.y, -65535, 65535)
-              elif child.name == "transform" and child.args.len > 0:
-                let transformValue =
-                  if child.args[0].isIntegerValue():
-                    $child.args[0].kInt()
-                  else:
-                    child.args[0].kString()
-                let parsed = parseOutputConfigTransform(transformValue)
-                if parsed.valid:
-                  rule.transformSet = true
-                  rule.transform = parsed.transform
-                else:
-                  warn "Ignoring invalid output transform",
-                    target = rule.target, value = transformValue
-              elif child.name == "adaptive-sync" and child.args.len > 0:
-                rule.adaptiveSyncSet = true
-                rule.adaptiveSync = child.args[0].kBool()
-              elif child.name == "enabled":
-                rule.enabledSet = true
-                rule.enabled = child.args[0].kBool()
-              elif child.name == "disabled":
-                rule.enabledSet = true
-                rule.enabled = not child.args[0].kBool()
-              elif child.name == "vrr" and child.args.len > 0:
-                rule.adaptiveSyncSet = true
-                rule.adaptiveSync = child.args[0].kInt() != 0
-              elif child.name in
-                  ["reserved", "reserved_area", "reserved-area", "addreserved"]:
-                rule.reservedAreaSet = true
-                if child.props.len > 0:
-                  if child.props.hasKey("top"):
-                    rule.reservedTop = int32(child.props["top"].kInt())
-                  if child.props.hasKey("right"):
-                    rule.reservedRight = int32(child.props["right"].kInt())
-                  if child.props.hasKey("bottom"):
-                    rule.reservedBottom = int32(child.props["bottom"].kInt())
-                  if child.props.hasKey("left"):
-                    rule.reservedLeft = int32(child.props["left"].kInt())
-                elif child.args.len == 1:
-                  let inset = int32(child.args[0].kInt())
-                  rule.reservedTop = inset
-                  rule.reservedRight = inset
-                  rule.reservedBottom = inset
-                  rule.reservedLeft = inset
-                elif child.args.len >= 4:
-                  rule.reservedTop = int32(child.args[0].kInt())
-                  rule.reservedRight = int32(child.args[1].kInt())
-                  rule.reservedBottom = int32(child.args[2].kInt())
-                  rule.reservedLeft = int32(child.args[3].kInt())
-              else:
-                warn "Ignoring unsupported output rule field", field = child.name
-            except CatchableError as e:
-              warn "Ignoring invalid output rule field",
-                field = child.name, error = e.msg
-          result.outputRules.add(rule)
+          if node.args.len > 0:
+            result.outputRules.add(node.parseOutputRuleNode(node.args[0].kString()))
+          else:
+            for child in node.children:
+              if child.name == "monitor" and child.args.len > 0:
+                result.outputRules.add(
+                  child.parseOutputRuleNode(child.args[0].kString())
+                )
+              elif child.name == "default":
+                result.outputRules.add(child.parseOutputRuleNode(""))
         except CatchableError as e:
           warn "Ignoring invalid output rule", error = e.msg
       elif node.name == "workspace-rules":

@@ -198,6 +198,31 @@ workspace-rules {
 ### Output Rules
 Configure monitor-specific settings.
 
+The recommended form groups all monitor rules in one `output` section:
+
+```kdl
+output {
+  monitor "HDMI-A-1" {
+    mode "1920x1080@144"
+    position "0x0"
+    workspaces 1 2 3
+    vrr 1
+  }
+
+  monitor "DP-1" {
+    transform "90"
+    position 1920 0
+    scale 1.5
+  }
+
+  default {
+    scale "auto"
+  }
+}
+```
+
+Existing top-level `output "name" { ... }` rules remain supported.
+
 | Setting | Format | Description |
 | :--- | :--- | :--- |
 | `focus-at-startup` | `Flag` | Focus this output on Triad launch. If workspace 1 is not explicitly pinned elsewhere, startup places workspace 1 on this output before filling other monitors. |
@@ -215,22 +240,6 @@ Unsupported Hyprland monitor fields such as mirroring, bit depth, color
 management, ICC, and HDR/luminance metadata are rejected by strict validation.
 River does not expose those controls to Triad today; they are documented as
 future features instead of accepted as no-ops.
-
-**Example Output Configuration:**
-```kdl
-output "HDMI-A-1" {
-  mode "1920x1080@144"
-  position "0x0"
-  workspaces 1 2 3
-  vrr 1
-}
-
-output "DP-1" {
-  transform "90"
-  position 1920 0
-  scale 1.5
-}
-```
 
 ---
 
