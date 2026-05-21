@@ -56,8 +56,8 @@ proc frameTabIndexAt*(bar: ProjectedFrameTabBar, x: int32): int =
 
 proc frameTabBarCacheKey*(bar: ProjectedFrameTabBar): string =
   result =
-    "tab-v2:" & $bar.frameId & ":" & $bar.windowId & ":" & $bar.geom.w & ":" &
-    $bar.geom.h & ":" & $bar.focused
+    "tab-v2:" & $bar.containerKind & ":" & $bar.frameId & ":" & $bar.windowId & ":" &
+    $bar.geom.w & ":" & $bar.geom.h & ":" & $bar.focused
   for tab in bar.tabs:
     result.add("|")
     result.add($tab.windowId)

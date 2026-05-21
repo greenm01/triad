@@ -328,7 +328,9 @@ type
     of MsgKind.WlShellSurfaceInteraction:
       shellSurfaceId*: uint32
     of MsgKind.WlFrameTabClicked:
-      frameClickFrameId*: uint32
+      frameClickContainerKind*: FrameTabContainerKind
+      frameClickContainerId*: uint32
+      frameClickWindowId*: uint32
       frameClickTabIndex*: int
     of MsgKind.WlFrameEmptyFocused:
       frameFocusFrameId*: uint32

@@ -590,6 +590,7 @@ proc frameTreeTabBars*(
     let border = model.renderWindowBorder(active, focused)
     result.add(
       rv.ProjectedFrameTabBar(
+        containerKind: FrameTabContainerKind.FrameTree,
         frameId: uint32(item.frameId),
         windowId: model.externalWindowId(active),
         geom: frameTreeTabContentRect(item.rect, border.width),
@@ -792,6 +793,7 @@ proc splitTreeTabBars*(
     let border = model.renderWindowBorder(active, focused)
     result.add(
       rv.ProjectedFrameTabBar(
+        containerKind: FrameTabContainerKind.SplitTree,
         frameId: uint32(item.nodeId),
         windowId: model.externalWindowId(active),
         geom: rv.Rect(x: item.rect.x, y: item.rect.y, w: item.rect.w, h: tabHeight),

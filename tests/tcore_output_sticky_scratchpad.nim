@@ -774,6 +774,32 @@ suite "Core Runtime Logic: output sticky scratchpad":
       check matching[0].geom.w == bars[0].geom.w
       check matching[0].geom.y == bars[0].geom.y + bars[0].geom.h
 
+  test "Clicking inactive output tabs activates their workspace":
+    for layoutId in ["notion", "i3-tabbed"]:
+      let scenario = inactiveOutputLocalFocusScenario(layoutId)
+      var model = scenario.model
+      let tag3 = model.tagForSlot(3)
+      let dp3 = model.outputForExternal(ExternalOutputId(2))
+      let bars = model.layoutProjection().frameTabBars.filterIt(
+          it.windowId == scenario.localWindow
+        )
+
+      check bars.len == 1
+      check bars[0].tabs.len >= 2
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlFrameTabClicked,
+          frameClickContainerKind: bars[0].containerKind,
+          frameClickContainerId: bars[0].frameId,
+          frameClickWindowId: bars[0].tabs[1].windowId,
+          frameClickTabIndex: 1,
+        )
+      )
+
+      check model.activeTag == tag3
+      check model.activeOutput == dp3
+      check model.focusedWindowId() == 31'u32
+
   test "Visible workspace focus repairs stale learned output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

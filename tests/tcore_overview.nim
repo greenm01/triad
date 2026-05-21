@@ -1079,7 +1079,9 @@ suite "Core Runtime Logic: overview navigation":
     model.applyMsg(
       Msg(
         kind: MsgKind.WlFrameTabClicked,
-        frameClickFrameId: uint32(frameId),
+        frameClickContainerKind: FrameTabContainerKind.FrameTree,
+        frameClickContainerId: uint32(frameId),
+        frameClickWindowId: focused,
         frameClickTabIndex: 0,
       )
     )

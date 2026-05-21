@@ -1,5 +1,5 @@
 import std/[options, tables]
-import tag_ops
+import active_workspace_ops, tag_ops
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
 from ../types/runtime_values import FrameNodeKind, FrameSplitOrientation
@@ -586,18 +586,20 @@ proc selectableFrameTabWindows(model: Model, frameId: FrameId): seq[WindowId] =
     result.add(winId)
 
 proc focusFrameTabAt*(model: var Model, frameId: FrameId, tabIndex: int): bool =
-  let tagId = model.activeTag
-  if tagId == NullTagId or tabIndex < 0:
+  if tabIndex < 0:
     return false
   let frameOpt = model.frames.entity(frameId)
-  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf or
-      not model.frameUsesTag(frameId, tagId):
+  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf:
+    return false
+  let tagId = frameOpt.get().tagId
+  if model.tags.entity(tagId).isNone:
     return false
   discard model.repairFrameActiveWindow(frameId)
   let windows = model.selectableFrameTabWindows(frameId)
   if tabIndex >= windows.len:
     return false
   let next = windows[tabIndex]
+  let workspaceChanged = model.setActiveWorkspace(tagId)
   let activeChanged = model.frames.entity(frameId).get().activeWindow != next
   let focusChanged =
     model.tags.entity(tagId).isSome and
@@ -607,7 +609,20 @@ proc focusFrameTabAt*(model: var Model, frameId: FrameId, tabIndex: int): bool =
     model.frames.mEntity(frameId).activeWindow = next
   if focusChanged:
     model.tags.mEntity(tagId).focusedWindow = next
-  activeChanged or focusChanged or frameChanged
+  workspaceChanged or activeChanged or focusChanged or frameChanged
+
+proc focusFrameTabWindow*(model: var Model, frameId: FrameId, winId: WindowId): bool =
+  if winId == NullWindowId:
+    return false
+  let frameOpt = model.frames.entity(frameId)
+  if frameOpt.isNone or frameOpt.get().kind != FrameNodeKind.Leaf:
+    return false
+  discard model.repairFrameActiveWindow(frameId)
+  let windows = model.selectableFrameTabWindows(frameId)
+  let tabIndex = windows.find(winId)
+  if tabIndex == -1:
+    return false
+  model.focusFrameTabAt(frameId, tabIndex)
 
 proc focusFrameOnly*(model: var Model, frameId: FrameId): bool =
   let tagId = model.activeTag

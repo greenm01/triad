@@ -617,6 +617,7 @@ suite "Runtime state primitives":
 
   test "frame tab bar renderer draws tabs and hit tests":
     let bar = pv.ProjectedFrameTabBar(
+      containerKind: FrameTabContainerKind.FrameTree,
       frameId: 7,
       windowId: 11,
       geom: pv.Rect(x: 0, y: 0, w: 120, h: 24),
@@ -1759,6 +1760,61 @@ suite "Runtime state primitives":
     model.applyMsg(Msg(kind: MsgKind.CmdFrameTabPrev))
     check model.tagData(tagId).get().focusedWindow == second
 
+  test "frame tab click selects native i3 tabbed and stacking tabs":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+
+    let tagId = model.activeTag
+    let root = model.splitRootForTag(tagId)
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.SplitTree,
+        frameClickContainerId: uint32(root),
+        frameClickWindowId: 10,
+        frameClickTabIndex: 0,
+      )
+    )
+    check model.tagData(tagId).get().focusedWindow ==
+      model.windowForExternal(ExternalWindowId(10))
+    check model.layoutProjection().instructions[0].windowId == 10'u32
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutStacking))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.SplitTree,
+        frameClickContainerId: uint32(root),
+        frameClickWindowId: 11,
+        frameClickTabIndex: 1,
+      )
+    )
+    check model.tagData(tagId).get().focusedWindow ==
+      model.windowForExternal(ExternalWindowId(11))
+    check model.layoutProjection().instructions[0].windowId == 11'u32
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.SplitTree,
+        frameClickContainerId: uint32(root),
+        frameClickWindowId: 10,
+        frameClickTabIndex: 1,
+      )
+    )
+    check model.tagData(tagId).get().focusedWindow ==
+      model.windowForExternal(ExternalWindowId(10))
+    check model.layoutProjection().instructions[0].windowId == 10'u32
+
   test "frame tab commands cycle nested native i3 tabbed children":
     var model = initRuntimeStateFromConfig(baseConfig()).model
     model.applyMsg(
@@ -1797,6 +1853,39 @@ suite "Runtime state primitives":
     model.applyMsg(Msg(kind: MsgKind.CmdFrameTabPrev))
     check model.tagData(tagId).get().focusedWindow == first
     check model.layoutProjection().instructions[0].windowId == 10'u32
+
+  test "frame tab click selects nested native i3 tabbed children":
+    var model = initRuntimeStateFromConfig(baseConfig()).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: nativeLayoutId("i3"))
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 11))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 12))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeSplitVertical))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 13))
+    model.applyMsg(Msg(kind: MsgKind.CmdSplitTreeLayoutTabbed))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+
+    let tagId = model.activeTag
+    let second = model.windowForExternal(ExternalWindowId(13))
+    let bar = model.layoutProjection().frameTabBars[0]
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.SplitTree,
+        frameClickContainerId: bar.frameId,
+        frameClickWindowId: 13,
+        frameClickTabIndex: 1,
+      )
+    )
+
+    check model.tagData(tagId).get().focusedWindow == second
+    check model.layoutProjection().instructions[0].windowId == 13'u32
 
   test "split-tree floating removes and reinserts tiled leaves":
     var model = initRuntimeStateFromConfig(baseConfig()).model
@@ -2648,7 +2737,9 @@ suite "Runtime state primitives":
     let (tabClick, _) = model.update(
       Msg(
         kind: MsgKind.WlFrameTabClicked,
-        frameClickFrameId: uint32(clickedFrame),
+        frameClickContainerKind: FrameTabContainerKind.FrameTree,
+        frameClickContainerId: uint32(clickedFrame),
+        frameClickWindowId: 11,
         frameClickTabIndex: 0,
       )
     )
@@ -2656,6 +2747,39 @@ suite "Runtime state primitives":
     check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
     let (tabNext, _) = model.update(Msg(kind: MsgKind.CmdFrameTabNext))
     model = tabNext
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(3)
+    let (staleIndexTabClick, _) = model.update(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.FrameTree,
+        frameClickContainerId: uint32(clickedFrame),
+        frameClickWindowId: 11,
+        frameClickTabIndex: 1,
+      )
+    )
+    model = staleIndexTabClick
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
+    let (invalidTabClick, _) = model.update(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.FrameTree,
+        frameClickContainerId: uint32(clickedFrame),
+        frameClickWindowId: 10,
+        frameClickTabIndex: 0,
+      )
+    )
+    model = invalidTabClick
+    check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(2)
+    let (restoreFocusTabClick, _) = model.update(
+      Msg(
+        kind: MsgKind.WlFrameTabClicked,
+        frameClickContainerKind: FrameTabContainerKind.FrameTree,
+        frameClickContainerId: uint32(clickedFrame),
+        frameClickWindowId: 12,
+        frameClickTabIndex: 1,
+      )
+    )
+    model = restoreFocusTabClick
     check model.tagData(model.activeTag).get().focusedWindow == tc.WindowId(3)
 
     block:

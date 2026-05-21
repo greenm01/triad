@@ -10,10 +10,10 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlWindowAppId,
     MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
     MsgKind.WlWindowMinimizeRequested, MsgKind.WlSessionLocked,
-    MsgKind.WlSessionUnlocked, MsgKind.WlFocusChanged, MsgKind.CmdFocusTag,
-    MsgKind.CmdFocusTagLeft, MsgKind.CmdFocusTagRight, MsgKind.CmdFocusWorkspaceIndex,
-    MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTag, MsgKind.CmdMoveToTagLeft,
-    MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindowToTag,
+    MsgKind.WlSessionUnlocked, MsgKind.WlFocusChanged, MsgKind.WlFrameTabClicked,
+    MsgKind.CmdFocusTag, MsgKind.CmdFocusTagLeft, MsgKind.CmdFocusTagRight,
+    MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTag,
+    MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindowToTag,
     MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
     MsgKind.CmdMoveWindowUpOrToWorkspaceUp, MsgKind.CmdMoveWindowDownOrToWorkspaceDown,
     MsgKind.CmdSetLayout, MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout,
@@ -55,6 +55,8 @@ proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
     ids.addTrackedWindowId(msg.destroyedId)
   of MsgKind.WlFocusChanged:
     ids.addTrackedWindowId(msg.newFocusedId)
+  of MsgKind.WlFrameTabClicked:
+    ids.addTrackedWindowId(msg.frameClickWindowId)
   of MsgKind.WlWindowAppId:
     ids.addTrackedWindowId(msg.appIdWindowId)
   of MsgKind.WlWindowMaximizeRequested:

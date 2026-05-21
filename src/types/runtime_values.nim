@@ -93,6 +93,10 @@ type
     Stacking
     Tabbed
 
+  FrameTabContainerKind* {.pure.} = enum
+    FrameTree
+    SplitTree
+
   LayoutSelection* = object
     kind*: LayoutSelectionKind
     builtin*: LayoutMode

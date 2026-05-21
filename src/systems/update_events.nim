@@ -1,8 +1,9 @@
-import std/options
+import std/[json, options]
 import ../core/[effects, msg]
 from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
-from ../types/runtime_values import PointerOpKind
+from ../types/runtime_values import FrameTabContainerKind, PointerOpKind
+import ../utils/behavior_log
 import focus
 import outputs
 import recent_windows
@@ -49,6 +50,78 @@ proc setExternalFocus(model: var Model, externalId: ExternalWindowId): bool =
   if focusedTag != tagId:
     discard model.setActiveWorkspace(focusedTag)
   model.focusWindow(winId, restorePopupTree = false)
+
+proc focusClickedFrameTab(
+    model: var Model,
+    containerKind: FrameTabContainerKind,
+    containerId: uint32,
+    windowId: uint32,
+    tabIndex: int,
+): bool =
+  if model.overviewActive:
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{"reason": "overview_active", "target_window_id": windowId},
+    )
+    return false
+  let beforeTag = model.activeTag
+  let beforeFocus =
+    if beforeTag != NullTagId and model.tagData(beforeTag).isSome:
+      model.runtimeWindowId(model.tagData(beforeTag).get().focusedWindow)
+    else:
+      0'u32
+  let clicked = model.windowForExternal(ExternalWindowId(windowId))
+  if clicked == NullWindowId:
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{
+        "reason": "unknown_window",
+        "container_kind": $containerKind,
+        "container_id": containerId,
+        "target_window_id": windowId,
+        "tab_index": tabIndex,
+      },
+    )
+    return false
+  case containerKind
+  of FrameTabContainerKind.FrameTree:
+    result = model.focusFrameTabWindow(FrameId(containerId), clicked)
+  of FrameTabContainerKind.SplitTree:
+    result = model.focusSplitTreeTabWindow(SplitNodeId(containerId), clicked)
+  if not result:
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{
+        "reason": "stale_container_or_window",
+        "container_kind": $containerKind,
+        "container_id": containerId,
+        "target_window_id": windowId,
+        "tab_index": tabIndex,
+      },
+    )
+    return false
+  result = model.focusWindow(clicked, restorePopupTree = false) or result
+  let afterTag = model.activeTag
+  let afterFocus =
+    if afterTag != NullTagId and model.tagData(afterTag).isSome:
+      model.runtimeWindowId(model.tagData(afterTag).get().focusedWindow)
+    else:
+      0'u32
+  writeBehaviorEvent(
+    "frame_tab_click_reducer",
+    %*{
+      "container_kind": $containerKind,
+      "container_id": containerId,
+      "target_window_id": windowId,
+      "target_logical_window_id": uint32(clicked),
+      "tab_index": tabIndex,
+      "before_tag": uint32(beforeTag),
+      "after_tag": uint32(afterTag),
+      "before_focus": beforeFocus,
+      "after_focus": afterFocus,
+      "dirty": result,
+    },
+  )
 
 proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
   case msg.kind
@@ -193,9 +266,10 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     if model.hotkeyOverlayOpen:
       result.dirty = model.setHotkeyOverlayOpen(false)
   of MsgKind.WlFrameTabClicked:
-    result.dirty =
-      not model.overviewActive and
-      model.focusFrameTabAt(FrameId(msg.frameClickFrameId), msg.frameClickTabIndex)
+    result.dirty = model.focusClickedFrameTab(
+      msg.frameClickContainerKind, msg.frameClickContainerId, msg.frameClickWindowId,
+      msg.frameClickTabIndex,
+    )
   of MsgKind.WlFrameEmptyFocused:
     result.dirty =
       not model.overviewActive and model.focusFrameOnly(FrameId(msg.frameFocusFrameId))

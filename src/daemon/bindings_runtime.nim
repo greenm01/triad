@@ -258,8 +258,38 @@ proc queueWindowFocus(daemon: var TriadDaemon, target: uint32) =
     return
   daemon.enqueue(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: target))
 
+proc clearFrameTabClickSuppression(daemon: var TriadDaemon) =
+  daemon.frameTabClickSuppressWindowId = 0
+  daemon.frameTabClickTargetWindowId = 0
+  daemon.frameTabClickSuppressUntilMs = 0
+
+proc shouldSuppressFrameTabWindowInteraction(
+    daemon: var TriadDaemon, target: uint32
+): bool =
+  if daemon.frameTabClickSuppressUntilMs == 0:
+    return false
+  let now = nowMs()
+  if now > daemon.frameTabClickSuppressUntilMs:
+    daemon.clearFrameTabClickSuppression()
+    return false
+  if target == daemon.frameTabClickTargetWindowId:
+    daemon.clearFrameTabClickSuppression()
+    return false
+  result = target == daemon.frameTabClickSuppressWindowId
+  if result:
+    writeBehaviorEvent(
+      "frame_tab_click_window_interaction_suppressed",
+      %*{
+        "window_id": target,
+        "target_window_id": daemon.frameTabClickTargetWindowId,
+        "suppress_until_ms": daemon.frameTabClickSuppressUntilMs,
+      },
+    )
+
 proc queueWindowInteraction(daemon: var TriadDaemon, target: uint32) =
   if daemon.currentModel.overviewActive:
+    return
+  if daemon.shouldSuppressFrameTabWindowInteraction(target):
     return
   daemon.queueWindowFocus(target)
 
@@ -1280,6 +1310,7 @@ proc onWlPointerEnter(
     return
   daemon[].wlPointerSurfaceIds[pointer.id()] = surface.id()
   daemon[].wlPointerSurfaceXs[pointer.id()] = int32(surfaceX.fixedToFloat())
+  daemon[].wlPointerSurfaceYs[pointer.id()] = int32(surfaceY.fixedToFloat())
 
 proc onWlPointerLeave(
     data: pointer, pointer: ptr Pointer, serial: uint32, surface: ptr Surface
@@ -1289,6 +1320,7 @@ proc onWlPointerLeave(
     return
   daemon[].wlPointerSurfaceIds.del(pointer.id())
   daemon[].wlPointerSurfaceXs.del(pointer.id())
+  daemon[].wlPointerSurfaceYs.del(pointer.id())
 
 proc onWlPointerMotion(
     data: pointer, pointer: ptr Pointer, time: uint32, surfaceX: Fixed, surfaceY: Fixed
@@ -1297,31 +1329,105 @@ proc onWlPointerMotion(
   if daemon == nil or pointer == nil:
     return
   daemon[].wlPointerSurfaceXs[pointer.id()] = int32(surfaceX.fixedToFloat())
+  daemon[].wlPointerSurfaceYs[pointer.id()] = int32(surfaceY.fixedToFloat())
 
 proc dispatchFrameTabClick(
-    daemon: var TriadDaemon, surfaceId: uint32, surfaceX: int32
+    daemon: var TriadDaemon, surfaceId: uint32, surfaceX, surfaceY: int32
 ): bool =
   let ownedId =
     daemon.protocolSurfaceRuntime.surfaceToOwned.getOrDefault(surfaceId, 0'u32)
   if ownedId == 0 or not daemon.protocolSurfaceRuntime.surfaces.hasKey(ownedId):
+    writeBehaviorEvent(
+      "frame_tab_click_noop", %*{"reason": "unknown_surface", "surface_id": surfaceId}
+    )
     return false
   let surf = daemon.protocolSurfaceRuntime.surfaces[ownedId]
   if surf.kind != ProtocolSurfaceKind.PskDecorationAbove or surf.windowId == 0:
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{
+        "reason": "not_frame_tab_surface",
+        "surface_id": surfaceId,
+        "owned_surface_id": ownedId,
+        "surface_kind": $surf.kind,
+        "window_id": surf.windowId,
+      },
+    )
     return false
-  for bar in daemon.currentFrameTabBars:
-    if bar.windowId == surf.windowId:
-      let tabIndex = bar.frameTabIndexAt(surfaceX)
-      if tabIndex < 0:
-        return false
-      daemon.enqueue(
-        Msg(
-          kind: MsgKind.WlFrameTabClicked,
-          frameClickFrameId: bar.frameId,
-          frameClickTabIndex: tabIndex,
-        )
-      )
-      return true
-  false
+  if surfaceX < 0 or surfaceY < 0 or surfaceX >= surf.inputW or surfaceY >= surf.inputH:
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{
+        "reason": "outside_input",
+        "surface_id": surfaceId,
+        "owned_surface_id": ownedId,
+        "window_id": surf.windowId,
+        "surface_x": surfaceX,
+        "surface_y": surfaceY,
+        "input_w": surf.inputW,
+        "input_h": surf.inputH,
+      },
+    )
+    return false
+  if not daemon.currentFrameTabBarsBySurface.hasKey(ownedId):
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{
+        "reason": "missing_tab_bar",
+        "surface_id": surfaceId,
+        "owned_surface_id": ownedId,
+        "window_id": surf.windowId,
+      },
+    )
+    return false
+  let bar = daemon.currentFrameTabBarsBySurface[ownedId]
+  let tabIndex = bar.frameTabIndexAt(surfaceX)
+  if tabIndex < 0 or tabIndex >= bar.tabs.len:
+    writeBehaviorEvent(
+      "frame_tab_click_noop",
+      %*{
+        "reason": "invalid_tab_index",
+        "surface_id": surfaceId,
+        "owned_surface_id": ownedId,
+        "window_id": surf.windowId,
+        "surface_x": surfaceX,
+        "tab_index": tabIndex,
+        "tab_count": bar.tabs.len,
+      },
+    )
+    return false
+  let targetWindowId = bar.tabs[tabIndex].windowId
+  if targetWindowId != surf.windowId:
+    daemon.frameTabClickSuppressWindowId = surf.windowId
+    daemon.frameTabClickTargetWindowId = targetWindowId
+    daemon.frameTabClickSuppressUntilMs = nowMs() + 500
+  writeBehaviorEvent(
+    "frame_tab_click_dispatch",
+    %*{
+      "surface_id": surfaceId,
+      "owned_surface_id": ownedId,
+      "surface_window_id": surf.windowId,
+      "target_window_id": targetWindowId,
+      "container_kind": $bar.containerKind,
+      "container_id": bar.frameId,
+      "tab_index": tabIndex,
+      "tab_count": bar.tabs.len,
+      "surface_x": surfaceX,
+      "surface_y": surfaceY,
+      "input_w": surf.inputW,
+      "input_h": surf.inputH,
+    },
+  )
+  daemon.enqueue(
+    Msg(
+      kind: MsgKind.WlFrameTabClicked,
+      frameClickContainerKind: bar.containerKind,
+      frameClickContainerId: bar.frameId,
+      frameClickWindowId: targetWindowId,
+      frameClickTabIndex: tabIndex,
+    )
+  )
+  true
 
 proc dispatchFrameEmptyFocus(daemon: var TriadDaemon, surfaceId: uint32): bool =
   let ownedId =
@@ -1357,7 +1463,8 @@ proc onWlPointerButton(
   if surfaceId == 0:
     return
   let surfaceX = daemon[].wlPointerSurfaceXs.getOrDefault(pointerId, 0'i32)
-  if not daemon[].dispatchFrameTabClick(surfaceId, surfaceX):
+  let surfaceY = daemon[].wlPointerSurfaceYs.getOrDefault(pointerId, 0'i32)
+  if not daemon[].dispatchFrameTabClick(surfaceId, surfaceX, surfaceY):
     discard daemon[].dispatchFrameEmptyFocus(surfaceId)
 
 proc ignoreWlPointerAxis(
@@ -1747,6 +1854,7 @@ proc detachWlPointer*(daemon: var TriadDaemon, globalName: uint32) =
   daemon.wlPointerWheelRemainders.del(pointerId)
   daemon.wlPointerSurfaceIds.del(pointerId)
   daemon.wlPointerSurfaceXs.del(pointerId)
+  daemon.wlPointerSurfaceYs.del(pointerId)
 
 proc destroyPointerGesturesRuntime*(daemon: var TriadDaemon) =
   for swipe in daemon.wlSwipePointers.values:

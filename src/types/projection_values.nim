@@ -115,6 +115,7 @@ type
     active*: bool
 
   ProjectedFrameTabBar* = object
+    containerKind*: FrameTabContainerKind
     frameId*: uint32
     windowId*: ProjectionWindowId
     geom*: Rect

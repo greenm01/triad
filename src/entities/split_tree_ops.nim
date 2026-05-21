@@ -1,5 +1,5 @@
 import std/[options, tables]
-import tag_ops
+import active_workspace_ops, tag_ops
 import ../state/[entity_manager, id_gen, iterators]
 import ../types/[core, model]
 from ../core/native_layout_codec import SplitTreeLayoutId, nativeLayoutIdString
@@ -238,6 +238,65 @@ proc focusSplitTreeTab*(model: var Model, delta: int): bool =
   if next == NullWindowId or next == focused:
     return false
   model.setTagFocus(tagId, next)
+
+proc focusSplitTreeTabAt*(
+    model: var Model, containerId: SplitNodeId, tabIndex: int
+): bool =
+  if containerId == NullSplitNodeId or tabIndex < 0:
+    return false
+  let nodeOpt = model.splitNodes.entity(containerId)
+  if nodeOpt.isNone:
+    return false
+  let node = nodeOpt.get()
+  if node.kind != FrameNodeKind.Split or
+      node.mode notin {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+    return false
+  let tagId = node.tagId
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+
+  var windows: seq[WindowId] = @[]
+  for child in node.children:
+    let winId = model.splitTreeActiveWindowInSubtree(child)
+    if winId != NullWindowId:
+      windows.add(winId)
+  if tabIndex >= windows.len:
+    return false
+
+  let next = windows[tabIndex]
+  let workspaceChanged = model.setActiveWorkspace(tagId)
+  let focused = model.tags.entity(tagId).get().focusedWindow
+  let containerFocus = model.tags.entity(tagId).get().focusedSplitNode
+  if next == NullWindowId or (next == focused and containerFocus == NullSplitNodeId):
+    return workspaceChanged
+  discard model.setTagFocus(tagId, next)
+  true
+
+proc focusSplitTreeTabWindow*(
+    model: var Model, containerId: SplitNodeId, winId: WindowId
+): bool =
+  if containerId == NullSplitNodeId or winId == NullWindowId:
+    return false
+  let nodeOpt = model.splitNodes.entity(containerId)
+  if nodeOpt.isNone:
+    return false
+  let node = nodeOpt.get()
+  if node.kind != FrameNodeKind.Split or
+      node.mode notin {SplitTreeNodeMode.Stacking, SplitTreeNodeMode.Tabbed}:
+    return false
+  let tagId = node.tagId
+  let tagOpt = model.tags.entity(tagId)
+  if tagOpt.isNone or not tagOpt.get().tagUsesSplitTree():
+    return false
+  let child = model.splitTreeChildForWindow(containerId, winId)
+  if child == NullSplitNodeId or model.splitTreeActiveWindowInSubtree(child) != winId:
+    return false
+
+  let workspaceChanged = model.setActiveWorkspace(tagId)
+  let focusChanged = tagOpt.get().focusedWindow != winId
+  discard model.setTagFocus(tagId, winId)
+  workspaceChanged or focusChanged
 
 proc focusSplitTreeSibling*(model: var Model, delta: int): bool =
   let tagId = model.activeTag

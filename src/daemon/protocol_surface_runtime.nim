@@ -831,6 +831,7 @@ proc ensureBspPreselectionSurface(daemon: var TriadDaemon, nodeId: uint32): uint
 proc syncFrameTabBarSurfaces*(
     daemon: var TriadDaemon, tabBars: openArray[ProjectedFrameTabBar]
 ) =
+  daemon.currentFrameTabBarsBySurface.clear()
   if not daemon.currentModel.protocolSurfaces.enabled:
     for _, surfaceId in daemon.windowDecorationAbove.pairs:
       daemon.clearDecorationSurface(surfaceId)
@@ -846,6 +847,7 @@ proc syncFrameTabBarSurfaces*(
     if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
       continue
     activeWindows.incl(bar.windowId)
+    daemon.currentFrameTabBarsBySurface[surfaceId] = bar
     var surf = daemon.surfaceTable[surfaceId]
     let key = bar.frameTabBarCacheKey()
     let ringInset = max(0'i32, bar.ringWidth)
@@ -863,6 +865,9 @@ proc syncFrameTabBarSurfaces*(
         )
     let offsetX = bar.geom.x - windowGeom.x - ringInset
     let offsetY = bar.geom.y - windowGeom.y - ringInset
+    let dirty =
+      surf.offsetX != offsetX or surf.offsetY != offsetY or surf.inputW != surfaceW or
+      surf.inputH != surfaceH or surf.bufferCacheKey != key
     surf.decoration.setOffset(offsetX, offsetY)
     surf.offsetX = offsetX
     surf.offsetY = offsetY
@@ -874,7 +879,8 @@ proc syncFrameTabBarSurfaces*(
       if buffer != nil:
         surf.setProtocolSurfaceBuffer(buffer, rendered.width, rendered.height)
         surf.bufferCacheKey = key
-        daemon.commitProtocolSurface(surf)
+    if dirty:
+      daemon.commitProtocolSurface(surf)
     daemon.surfaceTable[surfaceId] = surf
 
   for windowId, surfaceId in daemon.windowDecorationAbove.pairs:

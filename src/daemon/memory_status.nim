@@ -204,6 +204,7 @@ proc memoryStatusPayload*(daemon: TriadDaemon): JsonNode =
       "desired_placement_clips": daemon.desiredPlacementClips.len,
       "desired_placement_order": daemon.desiredPlacementOrder.len,
       "current_frame_tab_bars": daemon.currentFrameTabBars.len,
+      "current_frame_tab_bars_by_surface": daemon.currentFrameTabBarsBySurface.len,
       "current_frame_empty_chrome": daemon.currentFrameEmptyChrome.len,
       "current_bsp_preselections": daemon.currentBspPreselections.len,
       "last_render_window_states": daemon.lastRenderWindowStates.len,
@@ -291,6 +292,7 @@ proc compactDaemonMemory(daemon: var TriadDaemon) =
   daemon.outputPointers.compactTable()
   daemon.layerOutputPointers.compactTable()
   daemon.layerOutputOwners.compactTable()
+  daemon.currentFrameTabBarsBySurface.compactTable()
   daemon.seatPointers = daemon.seatPointers.compactSeq()
   daemon.layerSeatPointers = daemon.layerSeatPointers.compactSeq()
   daemon.xkbBindings.compactTable()
@@ -330,6 +332,7 @@ proc compactDaemonMemory(daemon: var TriadDaemon) =
   daemon.wlPointerWheelRemainders.compactTable()
   daemon.wlPointerSurfaceIds.compactTable()
   daemon.wlPointerSurfaceXs.compactTable()
+  daemon.wlPointerSurfaceYs.compactTable()
   daemon.wlSwipePointers.compactTable()
   daemon.wlSwipePointerIds.compactTable()
   daemon.wlSwipeStates.compactTable()

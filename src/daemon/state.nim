@@ -241,6 +241,7 @@ type
     desiredPlacementClips*: Table[uint32, Rect]
     desiredPlacementOrder*: seq[uint32]
     currentFrameTabBars*: seq[ProjectedFrameTabBar]
+    currentFrameTabBarsBySurface*: Table[uint32, ProjectedFrameTabBar]
     currentFrameEmptyChrome*: seq[ProjectedFrameEmptyChrome]
     currentBspPreselections*: seq[ProjectedBspPreselection]
     lastRenderWindowStates*: Table[uint32, RenderWindowState]
@@ -304,12 +305,16 @@ type
     wlPointerWheelRemainders*: Table[uint32, WlPointerWheelRemainder]
     wlPointerSurfaceIds*: Table[uint32, uint32]
     wlPointerSurfaceXs*: Table[uint32, int32]
+    wlPointerSurfaceYs*: Table[uint32, int32]
     wlSwipePointers*: Table[uint32, ptr pointerGestures.ZwpPointerGestureSwipeV1]
     wlSwipePointerIds*: Table[uint32, uint32]
     wlSwipeStates*: Table[uint32, WlSwipeState]
     cursorShapeDevices*: Table[uint32, ptr cursorShape.WpCursorShapeDeviceV1]
     cursorHiddenPointers*: Table[uint32, bool]
     cursorLastMotionMsByPointer*: Table[uint32, int64]
+    frameTabClickSuppressWindowId*: uint32
+    frameTabClickTargetWindowId*: uint32
+    frameTabClickSuppressUntilMs*: int64
     pointerWindowBySeat*: Table[uint32, uint32]
     pointerPositionBySeat*: Table[uint32, Rect]
     pointerHotCornerInsideBySeat*: Table[uint32, bool]
