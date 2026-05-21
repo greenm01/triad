@@ -7,6 +7,7 @@ Welcome to the Triad documentation. This directory contains everything from high
 If you are looking to set up and use Triad, start here:
 
 - **[Configuration Guide](configuration.md)**: The definitive reference for `config.kdl`, including window rules, input settings, and layout tuning.
+- **[Monitors and Workspaces](monitors.md)**: A practical guide to multi-monitor output setup, workspace placement, launchers, and shell bars.
 - **[IPC & Commands](ipc.md)**: A complete list of commands available via `triad msg` and the underlying JSON protocol.
 
 ## For Developers & Contributors
