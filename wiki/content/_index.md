@@ -43,6 +43,21 @@ everything from that on every render pass.
 Conditional logic stays cheap. A placement decision is a handful of index
 lookups against a flat snapshot, not a tree traversal.
 
+## Built on River
+
+River separates the Wayland compositor from the window manager at the protocol
+level. River owns rendering, input routing, and the Wayland session. Triad runs
+as a separate process — owning placement and policy, nothing more.
+
+The consequence is practical: a Triad crash or reload doesn't drop your
+session. River keeps your windows visible. Triad restarts, reconnects, and
+resumes. Frame synchronization happens at the compositor level, so layout
+changes are atomic — no torn frames, no gaps while windows resize into place.
+Input latency stays compositor-level regardless of what Triad does.
+
+Isaac Freund explains the design in [Separating the Wayland Compositor and
+Window Manager](https://isaacfreund.com/blog/river-window-management/).
+
 ## Built to Last
 
 **Crash-resilient.** Layout errors don't reach the compositor. Stable tag and

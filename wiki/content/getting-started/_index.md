@@ -17,3 +17,8 @@ layer. The installer writes a session entry so your display manager can see it.
 Step-by-step instructions for Void, Arch, Debian, and NixOS. Covers dependency
 installation, building from source, TTY and nested Wayland smoke testing,
 first-run validation, and shell profile setup.
+
+### [First Steps](@/getting-started/first-steps.md)
+
+You're logged in. Open a terminal, validate your config, set your first key
+bindings, pick a layout, and get your shell running.

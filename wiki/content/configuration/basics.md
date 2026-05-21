@@ -73,31 +73,9 @@ spawn-at-startup "nm-applet" "--indicator"
 ```
 
 ### Shell & Bar Profiles
-Manage shells, status bars, and desktop overlays using `shells`.
 
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `active` | `String` | The default profile to start. |
-| `cycle` | `List` | Profiles to rotate through via `cycle-shell`. |
-
-**Example Profile Configuration:**
-```kdl
-shells {
-  active "noctalia"
-  cycle "noctalia" "waybar"
-
-  profile "noctalia" {
-    launch "noctalia-shell"
-    stop "pkill" "-f" "noctalia-shell"
-    niri-compat #true 
-  }
-
-  profile "waybar" {
-    launch "waybar"
-    stop "pkill" "-x" "waybar"
-  }
-}
-```
+For shell and bar configuration — profiles, Waybar, Quickshell, Noctalia,
+niri-compat — see [Shell Setup](@/configuration/shell-setup.md).
 
 ---
 
@@ -155,185 +133,65 @@ For workspace configuration — naming, pinning, dynamic creation — see [Works
 
 ## Window Rules
 
-Window rules define how windows behave based on their identity or state.
-
-### Matching & Exclusion
-Every rule begins with a `match` or `exclude` block. 
-
-| Matcher | Type | Description |
-| :--- | :--- | :--- |
-| `app-id` | `Regex` | Match application ID. |
-| `title` | `Regex` | Match window title. |
-| `is-focused` | `Bool` | Match if focused. |
-| `is-floating` | `Bool` | Match if floating. |
-
-### Behavior & Placement
-
-| Property | Values | Description |
-| :--- | :--- | :--- |
-| `open-floating` | `Bool` | Force window to open floating. |
-| `open-focused` | `Bool` | Grant focus immediately on open. |
-| `open-fullscreen` | `Bool` | Force fullscreen mode. |
-| `open-maximized` | `Bool` | Open as a full-width column in scroller layouts. |
-| `maximize-policy` | `"edge"`, `"column"`, `"ignore"` | Set behavior for the maximize command. |
-| `default-workspace` | `Int` | Send window to a specific workspace. |
-| `open-on-output` | `String` | Pin window to a specific monitor. |
-| `open-on-all-workspaces` | `Bool` | Make window sticky across all workspaces. |
-| `idle-inhibit` | `"none"`, `"focused"`, `"visible"` | Prevent screen idle/sleep. |
-| `presentation-mode` | `"default"`, `"vsync"`, `"async"` | Output presentation policy. |
-
-### Sizing & Geometry
-
-| Property | Values | Description |
-| :--- | :--- | :--- |
-| `min-width` / `max-width` | `Pixels` | Size boundaries. |
-| `scroller-proportion` | `0.05..1.0` | Initial width/height in scroller layouts. |
-| `center-floating` | `Bool` | Center the window if floating. |
-
-**Example Window Rules:**
-```kdl
-window-rule {
-  match app-id="^org\.keepassxc\.KeePassXC$"
-  open-floating #true
-  center-floating #true
-  default-workspace 2
-}
-
-window-rule {
-  match app-id="^steam_app_"
-  open-fullscreen #true
-  idle-inhibit "visible"
-}
-```
+Declare how windows behave on open — floating state, placement, target workspace.
+See [Window Rules](@/configuration/window-rules.md).
 
 ---
 
-## Interaction & Input
+## Input
 
-### Input Devices
-Configure peripherals like keyboards, mice, and touchpads.
-
-| Setting | Values | Description |
-| :--- | :--- | :--- |
-| `off` | `Bool` | Disable the device. |
-| `repeat-rate` | `Hz` | Keys repeated per second. |
-| `repeat-delay` | `ms` | Delay before key repeat starts. |
-| `natural-scroll` | `Bool` | Reverse scroll direction. |
-| `tap` | `Bool` | (Touchpad) Enable tap-to-click. |
-| `dwt` | `Bool` | Disable while typing. |
-
-**Example Input Configuration:**
-```kdl
-input {
-  keyboard {
-    xkb {
-      layout "us"
-      options "ctrl:nocaps"
-    }
-    repeat-rate 40
-    repeat-delay 300
-  }
-
-  touchpad {
-    tap #true
-    natural-scroll #true
-  }
-}
-```
-
-### Cursor
-
-| Setting | Format | Description |
-| :--- | :--- | :--- |
-| `theme` | `String` | Cursor theme name. |
-| `size` | `Pixels` | Base cursor size. |
-| `shake-to-find` | `Bool` | Enlarge cursor when shaken. |
+Configure keyboards (XKB layout, repeat rate), touchpads, mice, and cursor
+theme. See [Input](@/configuration/input.md).
 
 ---
 
-## Bindings & Events
+## Key Bindings
 
-### Bindings
-Triad supports keyboard, pointer, wheel, and gesture bindings.
-
-*   `bind`: Keyboard commands.
-*   `pointer-bind`: Mouse buttons.
-*   `axis-bind`: Scroll wheel.
-*   `gesture-bind`: Touchpad gestures.
-
-Bindings can be scoped to a layout:
-
-```kdl
-bindings {
-  bind "Super+Alt+h" "move-column-left"
-
-  layout "i3" {
-    bind "Super+Alt+h" "split-tree-split-horizontal"
-  }
-}
-```
-
-**Example Bindings:**
-```kdl
-bindings {
-  bind "Super+Return" "spawn-terminal"
-  bind "Super+Q" "close-window"
-  bind "Super+Space" "toggle-overview"
-  
-  pointer-bind "Super+btn-left" "move"
-  pointer-bind "Super+btn-right" "resize"
-}
-```
+Bind keyboard shortcuts, mouse buttons, scroll axes, and gestures.
+See [Key Bindings](@/configuration/key-bindings.md).
 
 ---
 
 ## Native Features
 
-### Recent Windows (Switcher)
-A Most Recently Used (MRU) switcher with native previews.
+**Recent windows (MRU switcher).** Cycle through recently used windows with
+`recent-window-next` / `recent-window-prev`. Confirm with
+`recent-window-confirm` or cancel with `recent-window-cancel`.
 
-| Setting | Format | Description |
-| :--- | :--- | :--- |
-| `enabled` | `Bool` | Toggle the MRU switcher. |
-| `debounce-ms" | `ms` | Time before a window is recorded. |
+**Hotkey overlay.** A live guide to your current bindings. Bind
+`toggle-hotkey-overlay` to show it on demand.
 
-### Hotkey Overlay
-A visual guide to current keybindings.
+**Scratchpads.** Hidden window pools you toggle as floating overlays.
+See [Scratchpads](@/usage/scratchpads.md).
 
-### Scratchpads
-Persistent, hidden window pools.
-
-### Overview
-A birds-eye view of all workspaces.
+**Overview.** A zoomed-out strip of all workspaces.
+See [Overview](@/usage/overview.md).
 
 ---
 
-## Integration
+## Janet Scripting
 
-### Shell Compatibility
-Triad provides a compatibility layer for shells expecting Niri-style IPC.
+Enable the embedded Janet runtime for event-driven placement and custom layouts:
 
-When a shell profile uses `niri-compat #true`, Triad sets `$NIRI_SOCKET` and provides a compatible IPC facade.
-
-### Janet Scripting
-Triad embeds Janet for advanced automation. Scripts in `automation-dir` can subscribe to events and emit commands.
-
-**Example Janet Configuration:**
 ```kdl
 janet {
   enabled #true
   automation-dir "~/.config/triad/automation"
-  layout-dir "~/.config/triad/layouts"
-  layout "cascade" fallback="scroller"
+  layout-dir     "~/.config/triad/layouts"
 }
 ```
 
-### Config Notifications
-Run commands to notify you of configuration reload results.
+See [Janet Scripting](@/usage/janet-scripting.md).
+
+---
+
+## Config Notifications
+
+Run a command when the config reloads:
 
 ```kdl
 config-notification {
-  reload-succeeded "notify-send" "Triad" "Config reloaded"
-  reload-failed "notify-send" "Triad" "Syntax error in config"
+  reload-succeeded "notify-send" "Triad" "Config reloaded."
+  reload-failed    "notify-send" "Triad" "Config error — check the log."
 }
 ```
