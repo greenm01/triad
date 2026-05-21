@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ config.title }}{% endblock title %}</title>
+    <link rel="stylesheet" href="{{ get_url(path="style.css") }}">
+    {% block extra_head %}{% endblock extra_head %}
+</head>
+<body>
+    <header class="navbar">
+        <div class="container">
+            <div class="navbar-brand">
+                <a href="{{ config.base_url }}">{{ config.extra.logo_text }}</a>
+            </div>
+            <nav class="navbar-menu">
+                <a href="{{ config.extra.github_url }}">GitHub</a>
+                <div class="search-container">
+                    <input type="text" id="search" placeholder="Search...">
+                    <div id="search-results"></div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="main-container container">
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="{{ config.base_url }}">Home</a></li>
+
+                    {% set gs = get_section(path="getting-started/_index.md") %}
+                    <li>
+                        <strong>Getting Started</strong>
+                        <ul>
+                            {% for page in gs.pages %}
+                            <li><a href="{{ page.permalink }}">{{ page.title }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+
+                    {% set cfg = get_section(path="configuration/_index.md") %}
+                    <li>
+                        <strong>Configuration</strong>
+                        <ul>
+                            {% for page in cfg.pages %}
+                            <li><a href="{{ page.permalink }}">{{ page.title }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+
+                    {% set use = get_section(path="usage/_index.md") %}
+                    <li>
+                        <strong>Usage</strong>
+                        <ul>
+                            {% for page in use.pages %}
+                            <li><a href="{{ page.permalink }}">{{ page.title }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            {% block content %}{% endblock content %}
+        </main>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; {{ now() | date(format="%Y") }} Triad Project.</p>
+        </div>
+    </footer>
+
+    <script src="{{ get_url(path="search.js") }}"></script>
+</body>
+</html>

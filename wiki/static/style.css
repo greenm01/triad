@@ -1,0 +1,311 @@
+:root {
+    --nim-yellow: #FFE953;
+    --bg-color: #1a1b26;
+    --sidebar-bg: #16161e;
+    --navbar-bg: #16161e;
+    --text-color: #a9b1d6;
+    --header-color: #7aa2f7;
+    --link-color: #bb9af7;
+    --link-hover: #7aa2f7;
+    --border-color: #414868;
+    --code-bg: #24283b;
+    --sidebar-width: 250px;
+    --navbar-height: 60px;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.6;
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Navbar */
+.navbar {
+    height: var(--navbar-height);
+    background-color: var(--navbar-bg);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.navbar-brand a {
+    color: var(--nim-yellow);
+    text-decoration: none;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.navbar-menu a {
+    color: var(--text-color);
+    text-decoration: none;
+    margin-left: 20px;
+}
+
+.navbar-menu a:hover {
+    color: var(--link-hover);
+}
+
+.search-container {
+    position: relative;
+    margin-left: 20px;
+}
+
+#search {
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: var(--code-bg);
+    color: var(--text-color);
+}
+
+/* Main Layout */
+.main-container {
+    display: flex;
+    margin-top: 20px;
+    min-height: calc(100vh - var(--navbar-height) - 100px);
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    padding-right: 20px;
+    border-right: 1px solid var(--border-color);
+    background-color: var(--sidebar-bg);
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    padding: 10px 10px 10px 14px;
+    margin: 0;
+}
+
+.sidebar-nav li {
+    margin-bottom: 3px;
+}
+
+.sidebar-nav strong {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--text-color);
+    font-size: 0.875rem;
+}
+
+.sidebar-nav a {
+    color: var(--text-color);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+
+.sidebar-nav a:hover {
+    color: var(--link-hover);
+}
+
+.sidebar-nav ul ul {
+    padding-left: 12px;
+    margin-top: 2px;
+}
+
+.content {
+    flex-grow: 1;
+    padding: 0 40px 40px 40px;
+    max-width: 850px;
+}
+
+.content h1, .content h2, .content h3 {
+    color: var(--header-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3em;
+}
+
+.content h1 { font-size: 2.2rem; }
+.content h2 { font-size: 1.8rem; margin-top: 1.5em; }
+.content h3 { font-size: 1.4rem; margin-top: 1.2em; border-bottom: none; }
+
+/* Anchor links */
+.content h1 .zola-anchor,
+.content h2 .zola-anchor,
+.content h3 .zola-anchor {
+    font-size: 0.55em;
+    margin-left: 0.3em;
+    opacity: 0.15;
+    text-decoration: none;
+    transition: opacity 0.15s ease;
+}
+
+.content h1:hover .zola-anchor,
+.content h2:hover .zola-anchor,
+.content h3:hover .zola-anchor {
+    opacity: 0.5;
+}
+
+.content a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.content a:hover {
+    text-decoration: underline;
+    color: var(--link-hover);
+}
+
+pre {
+    background-color: var(--code-bg);
+    padding: 15px;
+    border-radius: 6px;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+}
+
+code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9rem;
+}
+
+/* Tables in Content */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
+}
+
+thead tr {
+    background-color: var(--sidebar-bg);
+    border-bottom: 2px solid var(--border-color);
+}
+
+th {
+    padding: 10px 14px;
+    text-align: left;
+    color: var(--header-color);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+}
+
+td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+}
+
+td:first-child {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.85rem;
+    color: var(--nim-yellow);
+    white-space: nowrap;
+}
+
+tbody tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+tbody tr:hover {
+    background-color: rgba(122, 162, 247, 0.07);
+}
+
+/* Footer */
+.footer {
+    margin-top: 40px;
+    padding: 30px 0;
+    background-color: var(--sidebar-bg);
+    text-align: center;
+    color: #565f89;
+    font-size: 0.9rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.footer a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+/* Modern Wiki Additions: cards, hero, responsive, search */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+    margin: 2rem 0;
+}
+
+.card {
+    background: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.25rem;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.card h3 {
+    margin-top: 0;
+    color: var(--nim-yellow);
+}
+
+.search-result {
+    display: block;
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.search-result:hover {
+    background: var(--code-bg);
+}
+
+#search-results {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 280px;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    z-index: 100;
+    display: none;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+/* Responsive sidebar */
+@media (max-width: 900px) {
+    .main-container {
+        flex-direction: column;
+    }
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .content {
+        padding: 0 20px;
+        max-width: 100%;
+    }
+}

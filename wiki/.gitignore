@@ -1,0 +1,5 @@
+# Zola build output
+/public/
+
+# Temporary build dirs
+/tmp/

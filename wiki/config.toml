@@ -1,0 +1,33 @@
+# The URL the site will be built for. Update for Cloudzy or custom domain.
+base_url = "https://greenm01.github.io/triad"
+title = "Triad Window Manager"
+description = "Programmable Wayland window manager for River"
+default_language = "en"
+
+[markdown]
+# Whether to render emojis
+render_emoji = true
+
+[markdown.highlighting]
+# Whether to highlight code blocks
+render = true
+# The theme to use for code highlighting
+theme = "github-dark"
+
+[search]
+# Whether to index the content
+index_format = "elasticlunr_json"
+# Whether to include the title in the index
+include_title = true
+# Whether to include the description in the index
+include_description = true
+# Whether to include the path in the index
+include_path = true
+# Whether to include the content in the index
+include_content = true
+
+[extra]
+# Add custom variables here
+logo_text = "Triad Window Manager"
+github_url = "https://github.com/greenm01/triad"
+version = "0.1"

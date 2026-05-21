@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}{{ config.title }}{% endblock title %}
+
+{% block content %}
+{{ section.content | safe }}
+
+<h2>Get Started Quickly</h2>
+<div class="card-grid">
+  {% set gs = get_section(path="getting-started/_index.md") %}
+  <div class="card">
+    <h3><a href="{{ gs.permalink }}">Getting Started</a></h3>
+    <p>Install Triad and launch your first session in minutes.</p>
+  </div>
+  {% set cfg = get_section(path="configuration/_index.md") %}
+  <div class="card">
+    <h3><a href="{{ cfg.permalink }}">Configuration</a></h3>
+    <p>Master config.kdl, rules, monitors, and input.</p>
+  </div>
+  {% set use = get_section(path="usage/_index.md") %}
+  <div class="card">
+    <h3><a href="{{ use.permalink }}">Usage &amp; IPC</a></h3>
+    <p>Control windows with commands and Janet scripts.</p>
+  </div>
+</div>
+{% endblock content %}
