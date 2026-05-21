@@ -729,6 +729,60 @@ sys.exit(0 if ok else 1)
 PY
 }
 
+use_retained_restore_state() {
+  restore_path="$1"
+  [ -e "$restore_path" ] ||
+    fail "retained live restore snapshot is missing: $restore_path"
+
+  tmp="$restore_path.tmp.$$"
+  snapshot_active_tag="$(
+    python3 - "$restore_path" "$tmp" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+tmp = sys.argv[2]
+
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        state = json.load(handle)
+    if state.get("schema") != "triad-live-restore-v2":
+        sys.exit(2)
+    active_tag = state.get("active_tag")
+    if not isinstance(active_tag, int) or active_tag <= 0:
+        sys.exit(3)
+    state["restore_status"] = "pending"
+    state.pop("applied_at_unix_ms", None)
+    state.pop("applied_by_pid", None)
+    restore_dir = os.path.dirname(path)
+    if restore_dir:
+        os.makedirs(restore_dir, exist_ok=True)
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(state, handle, separators=(",", ":"))
+        handle.write("\n")
+    os.replace(tmp, path)
+    print(active_tag)
+except Exception:
+    try:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    except Exception:
+        pass
+    sys.exit(1)
+PY
+  )" || fail "retained live restore snapshot could not be reactivated"
+
+  snapshot_tmp="$restore_path"
+  log_info "reactivated retained live restore snapshot at $restore_path"
+  summary_tmp="$restore_path.summary.$$"
+  snapshot_summary "$(cat "$restore_path")" > "$summary_tmp"
+  while IFS= read -r line; do
+    log_info "retained $line"
+  done < "$summary_tmp"
+  rm -f "$summary_tmp"
+}
+
 wait_restore_ready() {
   i=0
   current_snapshot=""
@@ -811,7 +865,7 @@ snapshot_restore_state() {
       echo "$snapshot" > "$tmp"
       if snapshot_suspicious_collapse "$restore_path" "$tmp"; then
         rm -f "$tmp"
-        fail "native live restore snapshot collapsed existing workspaces; set TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE=1 to override"
+        fail "native live restore snapshot collapsed existing workspaces; set TRIAD_LIVE_RELOAD_USE_RETAINED_RESTORE=1 to replay the retained snapshot or TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE=1 to overwrite it"
       fi
       snapshot_tmp="$tmp"
       mv -f "$tmp" "$restore_path"
@@ -846,13 +900,18 @@ runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
 restore_path="${TRIAD_LIVE_RESTORE_PATH:-$runtime_dir/triad-live-restore.json}"
 backup_dir=""
 old_pid=""
+use_retained_restore="${TRIAD_LIVE_RELOAD_USE_RETAINED_RESTORE:-}"
 
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"
 
 require_hardened_runtime
 validate_live_config
-snapshot_restore_state "$restore_path"
+if [ "$use_retained_restore" = "1" ]; then
+  use_retained_restore_state "$restore_path"
+else
+  snapshot_restore_state "$restore_path"
+fi
 enable_live_reload_dev_mode
 
 mkdir -p "$bin_dir"
@@ -861,9 +920,15 @@ backup_live_binaries
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 
-if "$repo_dir/triad" msg triad-reload; then
+if [ "$use_retained_restore" = "1" ]; then
+  reload_command="stop-manager"
+else
+  reload_command="triad-reload"
+fi
+
+if "$repo_dir/triad" msg "$reload_command"; then
   wait_reload_ready ||
     rollback_and_fail "installed binaries and requested reload, but triad did not become ready"
 else
-  rollback_and_fail "installed binaries, but triad-reload IPC failed"
+  rollback_and_fail "installed binaries, but $reload_command IPC failed"
 fi

@@ -60,6 +60,17 @@ snapshot cannot be captured, the reload aborts rather than falling back to the
 Niri-compatible state view, because that view cannot preserve camera offsets or
 full floating geometry.
 
+If the live model is already collapsed but the retained handoff still contains
+the desired workspace state, recover with:
+
+```bash
+TRIAD_LIVE_RELOAD_USE_RETAINED_RESTORE=1 nimble liveReload
+```
+
+That mode replays the retained snapshot instead of capturing a fresh one from
+the damaged runtime. Use `TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE=1` only when the
+collapsed runtime is intentionally the state to keep.
+
 If the installed `triad-manager-loop` is stale or missing, `nimble liveReload`
 installs the current repo copy first, writes a restart-required marker in
 `$XDG_RUNTIME_DIR`, and aborts. Restart the River/Triad session so River runs
