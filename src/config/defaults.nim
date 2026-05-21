@@ -77,9 +77,18 @@ janet {
     fuel-limit 500000
 }
 
-// output "HDMI-A-1" {
-//     focus-at-startup
-//     workspaces 2 4
+// output {
+//     monitor "HDMI-A-1" {
+//         mode "preferred"
+//         position "auto"
+//         scale "auto"
+//         focus-at-startup
+//         workspaces 2 4
+//     }
+//
+//     default {
+//         scale "auto"
+//     }
 // }
 
 workspace-rules {
