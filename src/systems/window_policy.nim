@@ -19,11 +19,29 @@ proc parentRenderRect(
       return (true, instr.geom)
   (false, Rect())
 
+proc tagScreen(model: Model, tagId: TagId): Rect =
+  let outputId = model.workspaceOutput(tagId)
+  if outputId != NullOutputId:
+    return model.outputScreen(outputId)
+  model.activeWorkspaceScreen()
+
+proc windowScreen(model: Model, winId: WindowId): Rect =
+  let position = model.firstWindowPosition(winId)
+  if position.found:
+    return model.tagScreen(position.tagId)
+  model.activeWorkspaceScreen()
+
+proc parentScreen(model: Model, parentExternalId: ExternalWindowId): Rect =
+  let parentId = model.windowForExternal(parentExternalId)
+  if parentId != NullWindowId:
+    return model.windowScreen(parentId)
+  model.activeWorkspaceScreen()
+
 proc parentVisibleInProjection*(
     model: Model, parentExternalId: ExternalWindowId
 ): bool =
   let parent = model.parentRenderRect(parentExternalId)
-  parent.found and parent.rect.fullyWithin(model.primaryScreen())
+  parent.found and parent.rect.fullyWithin(model.parentScreen(parentExternalId))
 
 proc parentWorkspaceSlot*(model: Model, parentExternalId: ExternalWindowId): uint32 =
   let parentId = model.windowForExternal(parentExternalId)
@@ -109,24 +127,54 @@ proc recenterLeadFloatingAnchor*(
 
   let centered = mainGeom
     .centeredIn(leadOpt.get().applyFloatingSizeHints(leadGeom))
-    .clampToScreen(model.primaryScreen())
+    .clampToScreen(model.windowScreen(mainWinId))
   model.setWindowFloatingGeom(anchor.winId, centered)
 
+proc defaultFloatingGeom(model: Model, screen: Rect): Rect =
+  let screenW = max(0'i32, screen.w)
+  let screenH = max(0'i32, screen.h)
+  let xRatio =
+    if model.floatingXRatio > 0: model.floatingXRatio else: DefaultFloatingXRatio
+  let yRatio =
+    if model.floatingYRatio > 0: model.floatingYRatio else: DefaultFloatingYRatio
+  let widthRatio =
+    if model.floatingWidthRatio > 0:
+      model.floatingWidthRatio
+    else:
+      DefaultFloatingWidthRatio
+  let heightRatio =
+    if model.floatingHeightRatio > 0:
+      model.floatingHeightRatio
+    else:
+      DefaultFloatingHeightRatio
+  Rect(
+    x: screen.x + int32(float32(screenW) * clampProportion(xRatio, 0.0'f32, 1.0'f32)),
+    y: screen.y + int32(float32(screenH) * clampProportion(yRatio, 0.0'f32, 1.0'f32)),
+    w: max(
+      model.effectiveFloatingMinWidth(),
+      int32(float32(screenW) * clampProportion(widthRatio, 0.0'f32, 1.0'f32)),
+    ),
+    h: max(
+      model.effectiveFloatingMinHeight(),
+      int32(float32(screenH) * clampProportion(heightRatio, 0.0'f32, 1.0'f32)),
+    ),
+  )
+
 proc floatingGeomFromRule(
-    model: Model, win: WindowData
+    model: Model, win: WindowData, screen: Rect
 ): tuple[
   geom: Rect, position: runtime_values.WindowRuleFloatingPositionConfig, center: bool
 ] =
-  let screenW = max(0'i32, model.screenWidth)
-  let screenH = max(0'i32, model.screenHeight)
-  result.geom = model.defaultFloatingGeom()
+  let screenW = max(0'i32, screen.w)
+  let screenH = max(0'i32, screen.h)
+  result.geom = model.defaultFloatingGeom(screen)
   let ruleMatch = model.windowRuleFor(win)
   if ruleMatch.found:
     let floating = ruleMatch.rule.floating
     if floating.xRatioSet:
-      result.geom.x = int32(float32(screenW) * floating.xRatio)
+      result.geom.x = screen.x + int32(float32(screenW) * floating.xRatio)
     if floating.yRatioSet:
-      result.geom.y = int32(float32(screenH) * floating.yRatio)
+      result.geom.y = screen.y + int32(float32(screenH) * floating.yRatio)
     if floating.widthRatioSet:
       result.geom.w = max(
         model.effectiveFloatingMinWidth(), int32(float32(screenW) * floating.widthRatio)
@@ -146,13 +194,17 @@ proc floatingGeomFromRule(
 proc floatingGeomForWindow*(
     model: Model, winId: WindowId, parentExternalId: ExternalWindowId
 ): Rect =
-  let screen = model.primaryScreen()
-  result = model.defaultFloatingGeom()
+  let screen =
+    if parentExternalId != NullExternalWindowId:
+      model.parentScreen(parentExternalId)
+    else:
+      model.windowScreen(winId)
+  result = model.defaultFloatingGeom(screen)
   let winOpt = model.windowData(winId)
   if winOpt.isNone:
     return result.clampToScreen(screen)
   let win = winOpt.get()
-  let resolved = model.floatingGeomFromRule(win)
+  let resolved = model.floatingGeomFromRule(win, screen)
   result = resolved.geom
   let parent = model.parentRenderRect(parentExternalId)
   if parent.found and model.parentedRoleFor(win) == runtime_values.ParentedRole.Dialog:

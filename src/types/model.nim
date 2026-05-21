@@ -133,6 +133,7 @@ type
     refreshRate*: int32
     usableX*, usableY*, usableW*, usableH*: int32
     hasUsable*: bool
+    currentTag*: TagId
 
   GroupData* = object
     id*: GroupId

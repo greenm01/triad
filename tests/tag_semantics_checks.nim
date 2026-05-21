@@ -51,7 +51,8 @@ proc okPayload(reply: string, key: string): JsonNode =
   parsed["Ok"][key]
 
 proc niriWorkspaceVisible(workspace: ShellWorkspace): bool =
-  workspace.isActive or workspace.occupied or workspace.focusedWindow != 0'u32
+  workspace.isActive or workspace.isOutputVisible or workspace.occupied or
+    workspace.focusedWindow != 0'u32
 
 proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
   let workspacesReply = niri_compat.handleNiriRequest("\"Workspaces\"", snapshot)
@@ -63,7 +64,7 @@ proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
     "Niri workspace projection cannot exceed shell snapshot",
   )
 
-  var activeCount = 0
+  var focusedWorkspaceCount = 0
   for workspace in workspaces:
     let tagId = uint32(workspace["id"].getInt())
     let shellWorkspace = snapshot.workspaceByTag(tagId)
@@ -79,20 +80,27 @@ proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
       "Niri workspace index differs from shell snapshot",
     )
     if workspace["is_active"].getBool():
-      inc activeCount
+      require(
+        context, shellWorkspace.workspace.isOutputVisible,
+        "Niri active workspace is not output-visible",
+      )
+    if workspace["is_focused"].getBool():
+      inc focusedWorkspaceCount
       require(
         context,
         uint32(workspace["idx"].getInt()) == snapshot.activeWorkspaceIdx,
-        "Niri active workspace index differs from snapshot",
+        "Niri focused workspace index differs from snapshot",
       )
       require(
         context,
         uint32(workspace["id"].getInt()) == snapshot.activeTag,
-        "Niri active workspace id differs from snapshot",
+        "Niri focused workspace id differs from snapshot",
       )
   if snapshot.workspaces.len > 0:
     require(
-      context, activeCount == 1, "Niri projection must expose one active workspace"
+      context,
+      focusedWorkspaceCount == 1,
+      "Niri projection must expose one focused workspace",
     )
 
   let windowsReply = niri_compat.handleNiriRequest("\"Windows\"", snapshot)

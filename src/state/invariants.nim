@@ -46,10 +46,26 @@ proc validateInvariants*(model: Model): InvariantReport =
     result.addError("active slot has no tag: " & $model.activeSlot)
 
   for outputId, tagId in model.outputTags.pairs:
-    if model.outputs.entity(outputId).isNone:
+    let outputOpt = model.outputs.entity(outputId)
+    if outputOpt.isNone:
       result.addError("outputTags references missing output: " & $outputId)
+    elif outputOpt.get().currentTag != tagId:
+      result.addError("outputTags does not match output current tag: " & $outputId)
     if model.tags.entity(tagId).isNone:
       result.addError("outputTags references missing tag: " & $tagId)
+
+  var visibleTags = initHashSet[TagId]()
+  for outputId, output in model.outputsWithId():
+    if output.currentTag == NullTagId:
+      continue
+    if model.tags.entity(output.currentTag).isNone:
+      result.addError("output current tag references missing tag: " & $outputId)
+    if not model.outputTags.hasKey(outputId) or
+        model.outputTags[outputId] != output.currentTag:
+      result.addError("output current tag missing outputTags row: " & $outputId)
+    if visibleTags.contains(output.currentTag):
+      result.addError("tag is visible on more than one output: " & $output.currentTag)
+    visibleTags.incl(output.currentTag)
 
   for tagId, outputId in model.tagOutputs.pairs:
     if model.tags.entity(tagId).isNone:
@@ -66,9 +82,8 @@ proc validateInvariants*(model: Model): InvariantReport =
       result.addError("primary output is missing: " & $model.primaryOutput)
 
   if model.activeOutput != NullOutputId and model.activeTag != NullTagId:
-    if not model.outputTags.hasKey(model.activeOutput):
-      result.addError("active output has no active tag mapping")
-    elif model.outputTags[model.activeOutput] != model.activeTag:
+    let activeOutputOpt = model.outputs.entity(model.activeOutput)
+    if activeOutputOpt.isSome and activeOutputOpt.get().currentTag != model.activeTag:
       result.addError("active output tag does not match active tag")
 
   for _, column in model.columnsWithId():

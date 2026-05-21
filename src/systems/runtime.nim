@@ -65,16 +65,7 @@ proc beginPointerResize*(
   )
 
 proc overviewScreen(model: Model): rv.Rect =
-  if model.primaryOutput != NullOutputId:
-    let outputOpt = model.outputData(model.primaryOutput)
-    if outputOpt.isSome:
-      let output = outputOpt.get()
-      if output.hasUsable and output.usableW > 0 and output.usableH > 0:
-        return rv.Rect(
-          x: output.usableX, y: output.usableY, w: output.usableW, h: output.usableH
-        )
-      return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
-  rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
+  model.activeWorkspaceScreen()
 
 proc updateOverviewDragHover(
     model: var Model, op: var PointerOpData, elapsedMs = 0'i32

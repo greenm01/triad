@@ -1,13 +1,13 @@
 import std/[algorithm, options, tables]
 import protocols/river/client as river
 import ../core/render_visibility
+import ../state/engine
 import ../systems/[daemon_view, layout_projection, recent_windows, window_rules]
-import ../types/model
 import ../types/projection_values
 import ../types/runtime_values
 import ../utils/overview_hit_test
 import protocol_surface_runtime, protocol_surfaces, state, wayland_helpers
-from ../types/core import WindowId
+from ../types/core import NullOutputId, WindowId
 
 const
   RiverEdgeBottom* = 2'u32
@@ -310,6 +310,21 @@ proc desiredRenderWindowState(
     focused: focused,
   )
 
+proc desiredVisibilityBounds(daemon: TriadDaemon, id: uint32): Rect =
+  if daemon.currentModel.overviewActive or daemon.currentModel.recentWindowsActive:
+    return daemon.currentModel.activeWorkspaceScreen()
+  let logicalId = daemon.currentModel.windowForRiverId(id)
+  if uint32(logicalId) != 0:
+    if daemon.currentModel.isScratchpadVisible and
+        daemon.currentModel.visibleScratchpadRiverId() == id:
+      return daemon.currentModel.activeWorkspaceScreen()
+    let position = daemon.currentModel.firstWindowPosition(logicalId)
+    if position.found:
+      let outputId = daemon.currentModel.workspaceOutput(position.tagId)
+      if outputId != NullOutputId:
+        return daemon.currentModel.outputScreen(outputId)
+  daemon.currentModel.activeWorkspaceScreen()
+
 proc applyRenderWindowState(
     daemon: TriadDaemon,
     id: uint32,
@@ -324,11 +339,11 @@ proc applyRenderWindowState(
   daemon.applyBorder(id, win, state.focused, state.borderEdges)
 
 proc renderDesiredPlacements*(daemon: var TriadDaemon) =
-  let screen = daemon.currentModel.primaryScreen()
   if daemon.currentModel.hasPresentationPreference():
     let mode = daemon.currentModel.configuredPresentationMode()
     for output in daemon.outputPointers.values:
       output.setPresentationMode(mode)
+  let screen = daemon.currentModel.activeWorkspaceScreen()
   let ids = daemon.orderedDesiredIds()
   let orderKey = daemon.renderOrderKey(ids)
   let orderChanged = daemon.lastRenderOrder != orderKey
@@ -355,7 +370,7 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
           if hasClip:
             daemon.desiredPlacementClips[id]
           else:
-            screen
+            daemon.desiredVisibilityBounds(id)
         let nextState =
           daemon.desiredRenderWindowState(id, geom, visibilityBounds, hasClip)
         if not daemon.lastRenderWindowStates.hasKey(id) or

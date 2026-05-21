@@ -273,6 +273,9 @@ proc destroyTag*(model: var Model, tagId: TagId): bool =
       outputIds.add(outputId)
   for outputId in outputIds:
     model.outputTags.del(outputId)
+    if model.outputs.entity(outputId).isSome and
+        model.outputs.mEntity(outputId).currentTag == tagId:
+      model.outputs.mEntity(outputId).currentTag = NullTagId
   model.tagOutputs.del(tagId)
   model.tagHomeOutputTargets.del(tagId)
   model.tagHomeOutputPinned.excl(tagId)

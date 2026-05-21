@@ -1,5 +1,9 @@
 import tcore_support
 
+proc fullyWithin(rect, screen: Rect): bool =
+  rect.x >= screen.x and rect.y >= screen.y and rect.x + rect.w <= screen.x + screen.w and
+    rect.y + rect.h <= screen.y + screen.h
+
 suite "Core Runtime Logic: output sticky scratchpad":
   test "Output identity events store make model and description":
     var model = initRuntimeStateFromConfig(Config()).model
@@ -186,6 +190,49 @@ suite "Core Runtime Logic: output sticky scratchpad":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "left"))
     check model.activeOutput == model.outputForExternal(ExternalOutputId(1))
 
+  test "External focus on visible secondary workspace moves active output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputPosition, positionOutputId: 1, outputX: 0, outputY: 0)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(1)), model.tagForSlot(1)
+    )
+    discard model.setOutputTag(
+      model.outputForExternal(ExternalOutputId(2)), model.tagForSlot(2)
+    )
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "left", title: "Left")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "right", title: "Right")
+    )
+    check model.activeOutput == model.outputForExternal(ExternalOutputId(2))
+
+    model.applyMsg(Msg(kind: MsgKind.WlFocusChanged, newFocusedId: 10))
+    check model.activeOutput == model.outputForExternal(ExternalOutputId(1))
+    check model.activeTag == model.tagForSlot(1)
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "next", title: "Next")
+    )
+    check model.snapshotWindow(11).workspaceIdx == 1
+
   test "Moving workspace to middle output leaves side outputs visible":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
@@ -234,6 +281,215 @@ suite "Core Runtime Logic: output sticky scratchpad":
       it.outputName == "DP-2" and it.isOutputVisible and it.isActive
     )
     check snapshot.workspaces.anyIt(it.outputName == "DP-1" and it.isOutputVisible)
+
+  test "Layout projection renders output-visible workspaces on their outputs":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 1, outputX: 4480, outputY: 180
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 2560, height: 1440)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1920, outputY: 0
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputPosition, positionOutputId: 3, outputX: 0, outputY: 180)
+    )
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(middle, model.tagForSlot(2))
+    discard model.setOutputTag(right, model.tagForSlot(3))
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "left", title: "Left")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "middle", title: "Middle")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 30, appId: "right", title: "Right")
+    )
+
+    let projection = model.layoutProjection()
+    check projection.instructions.mapIt(uint32(it.windowId)).contains(10'u32)
+    check projection.instructions.mapIt(uint32(it.windowId)).contains(20'u32)
+    check projection.instructions.mapIt(uint32(it.windowId)).contains(30'u32)
+    check model.instructionGeom(10).fullyWithin(model.outputScreen(left))
+    check model.instructionGeom(20).fullyWithin(model.outputScreen(middle))
+    check model.instructionGeom(30).fullyWithin(model.outputScreen(right))
+
+  test "Visible workspace focus ignores stale remembered output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let tag2 = model.tagForSlot(2)
+    discard model.setOutputTag(middle, tag2)
+    model.tagOutputs[tag2] = right
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.activeOutput == middle
+    check model.workspaceOutput(tag2) == middle
+
+  test "Command focus on visible output makes new windows open there":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    let left = model.outputForExternal(ExternalOutputId(1))
+    let right = model.outputForExternal(ExternalOutputId(2))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(right, model.tagForSlot(2))
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "left", title: "Left")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "right", title: "Right")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: 10))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 11, appId: "next", title: "Next")
+    )
+
+    check model.activeOutput == left
+    check model.snapshotWindow(11).workspaceIdx == 1
+    check model.instructionGeom(11).fullyWithin(model.outputScreen(left))
+
+  test "Floating windows use the focused output coordinate space":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 2),
+        windowRules:
+          @[WindowRule(appIdMatch: "float", openFloatingSet: true, openFloating: true)],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    let left = model.outputForExternal(ExternalOutputId(1))
+    let right = model.outputForExternal(ExternalOutputId(2))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(right, model.tagForSlot(2))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "float", title: "Float")
+    )
+
+    let geom = model.snapshotWindow(20).floatingGeom
+    check model.activeOutput == right
+    check geom.fullyWithin(model.outputScreen(right))
+    check geom.x >= model.outputScreen(right).x
+    check geom.x < model.outputScreen(right).x + model.outputScreen(right).w
+
+  test "Overview preview slots are scoped to the focused output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 800, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 3, outputX: 1900, outputY: 0
+      )
+    )
+    let left = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let right = model.outputForExternal(ExternalOutputId(3))
+    discard model.setOutputTag(left, model.tagForSlot(1))
+    discard model.setOutputTag(middle, model.tagForSlot(2))
+    discard model.setOutputTag(right, model.tagForSlot(3))
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "one", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "two", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 30, appId: "three", title: "Three")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.activeOutput == middle
+    check model.previewSlots() == @[2'u32]
 
   test "Output-visible dynamic workspaces survive pruning":
     var model = initRuntimeStateFromConfig(

@@ -15,17 +15,26 @@ const RecentPreviewFallbackH = 600'i32
 
 proc recentWindowPreviews*(model: Model, screen: rv.Rect): seq[RecentWindowPreview]
 
-proc recentPrimaryScreen(model: Model): rv.Rect =
-  if model.primaryOutput != NullOutputId:
-    let outputOpt = model.outputData(model.primaryOutput)
+proc recentOutputScreen(model: Model, outputId: core_types.OutputId): rv.Rect =
+  if outputId != NullOutputId:
+    let outputOpt = model.outputData(outputId)
     if outputOpt.isSome:
       let output = outputOpt.get()
       if output.hasUsable and output.usableW > 0 and output.usableH > 0:
         return rv.Rect(
           x: output.usableX, y: output.usableY, w: output.usableW, h: output.usableH
         )
-      return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+      if output.w > 0 and output.h > 0:
+        return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
   rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
+
+proc recentPrimaryScreen(model: Model): rv.Rect =
+  if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
+    return model.recentOutputScreen(model.activeOutput)
+  let outputId = model.workspaceOutput(model.activeTag)
+  if outputId != NullOutputId:
+    return model.recentOutputScreen(outputId)
+  model.recentOutputScreen(model.primaryOutput)
 
 proc recentWindowsVisible*(model: Model): bool =
   model.recentWindowsActive and

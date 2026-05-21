@@ -114,15 +114,23 @@ proc setOutputTag*(model: var Model, outputId: OutputId, tagId: TagId): bool =
       duplicateOutputs.add(mappedOutputId)
   for mappedOutputId in duplicateOutputs:
     model.outputTags.del(mappedOutputId)
+    if model.outputs.entity(mappedOutputId).isSome and
+        model.outputs.mEntity(mappedOutputId).currentTag == tagId:
+      model.outputs.mEntity(mappedOutputId).currentTag = NullTagId
   model.outputTags[outputId] = tagId
+  model.outputs.mEntity(outputId).currentTag = tagId
   model.tagOutputs[tagId] = outputId
   if model.activeTag == tagId:
     model.activeOutput = outputId
   true
 
 proc clearOutputTag*(model: var Model, outputId: OutputId): bool =
-  if not model.outputTags.hasKey(outputId):
+  if model.outputs.entity(outputId).isNone or (
+    not model.outputTags.hasKey(outputId) and
+    model.outputs.mEntity(outputId).currentTag == NullTagId
+  ):
     return false
+  model.outputs.mEntity(outputId).currentTag = NullTagId
   model.outputTags.del(outputId)
   true
 
@@ -143,6 +151,9 @@ proc setTagOutput*(model: var Model, tagId: TagId, outputId: OutputId): bool =
       staleOutputs.add(mappedOutputId)
   for mappedOutputId in staleOutputs:
     model.outputTags.del(mappedOutputId)
+    if model.outputs.entity(mappedOutputId).isSome and
+        model.outputs.mEntity(mappedOutputId).currentTag == tagId:
+      model.outputs.mEntity(mappedOutputId).currentTag = NullTagId
   if model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
     return staleOutputs.len > 0
   model.tagOutputs[tagId] = outputId
@@ -154,6 +165,9 @@ proc clearTagOutput*(model: var Model, tagId: TagId): bool =
   let outputId = model.tagOutputs[tagId]
   if model.outputTags.getOrDefault(outputId, NullTagId) == tagId:
     model.outputTags.del(outputId)
+  if model.outputs.entity(outputId).isSome and
+      model.outputs.mEntity(outputId).currentTag == tagId:
+    model.outputs.mEntity(outputId).currentTag = NullTagId
   model.tagOutputs.del(tagId)
   true
 

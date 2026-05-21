@@ -725,7 +725,10 @@ proc shellOutputName*(model: Model, outputId: OutputId): string =
   "triad-0"
 
 proc outputActiveTag*(model: Model, outputId: OutputId): TagId =
-  model.outputTags.getOrDefault(outputId, NullTagId)
+  let outputOpt = model.outputData(outputId)
+  if outputOpt.isSome:
+    return outputOpt.get().currentTag
+  NullTagId
 
 proc tagHasOutput*(model: Model, tagId: TagId): bool =
   model.tagOutputs.getOrDefault(tagId, NullOutputId) != NullOutputId
@@ -733,8 +736,6 @@ proc tagHasOutput*(model: Model, tagId: TagId): bool =
 proc tagVisibleOnOutput*(model: Model, tagId: TagId): bool =
   if tagId == NullTagId:
     return false
-  if tagId == model.activeTag:
-    return true
   for _, outputTag in model.outputTagsWithId():
     if outputTag == tagId:
       return true

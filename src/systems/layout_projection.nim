@@ -35,6 +35,8 @@ type
     aggregate: bool
     representativeOnly: bool
 
+  VisibleOutputTag = tuple[outputId: core_types.OutputId, tagId: core_types.TagId]
+
 const FrameTreeTabBarHeight* = 24'i32
 
 proc externalWindowId(model: Model, winId: core_types.WindowId): rv.ProjectionWindowId =
@@ -55,6 +57,27 @@ proc primaryScreen*(model: Model): rv.Rect =
       return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
 
   rv.Rect(x: 0, y: 0, w: model.screenWidth, h: model.screenHeight)
+
+proc outputScreen*(model: Model, outputId: core_types.OutputId): rv.Rect =
+  if outputId != NullOutputId:
+    let outputOpt = model.outputData(outputId)
+    if outputOpt.isSome:
+      let output = outputOpt.get()
+      if output.hasUsable and output.usableW > 0 and output.usableH > 0:
+        return rv.Rect(
+          x: output.usableX, y: output.usableY, w: output.usableW, h: output.usableH
+        )
+      if output.w > 0 and output.h > 0:
+        return rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+  model.primaryScreen()
+
+proc activeWorkspaceScreen*(model: Model): rv.Rect =
+  if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
+    return model.outputScreen(model.activeOutput)
+  let outputId = model.workspaceOutput(model.activeTag)
+  if outputId != NullOutputId:
+    return model.outputScreen(outputId)
+  model.primaryScreen()
 
 proc activeFocus*(model: Model): core_types.WindowId =
   let scratchpad = model.activeScratchpadWindow()
@@ -862,7 +885,7 @@ proc activeFocusLayoutInstructions*(model: Model): seq[rv.RenderInstruction] =
   if not projected.found:
     return
 
-  let screen = model.primaryScreen()
+  let screen = model.activeWorkspaceScreen()
   let windows = model.runtimeWindowTable()
   var currentOuterGap = model.outerGaps
   var currentInnerGap = model.innerGaps
@@ -1492,14 +1515,92 @@ proc layoutWorkspaceStripOverview(
       )
   model.applyOverviewDrag(result.instructions)
 
+proc visibleOutputTagsForLayout(model: Model): seq[VisibleOutputTag] =
+  for outputId, tagId in model.outputTagsWithId():
+    if model.outputData(outputId).isSome and model.tagData(tagId).isSome:
+      result.add((outputId: outputId, tagId: tagId))
+
+  result.sort(
+    proc(a, b: VisibleOutputTag): int =
+      let aOutput = model.outputData(a.outputId)
+      let bOutput = model.outputData(b.outputId)
+      let ax =
+        if aOutput.isSome:
+          aOutput.get().x
+        else:
+          high(int32)
+      let bx =
+        if bOutput.isSome:
+          bOutput.get().x
+        else:
+          high(int32)
+      if ax != bx:
+        return cmp(ax, bx)
+      let ay =
+        if aOutput.isSome:
+          aOutput.get().y
+        else:
+          high(int32)
+      let by =
+        if bOutput.isSome:
+          bOutput.get().y
+        else:
+          high(int32)
+      if ay != by:
+        return cmp(ay, by)
+      cmp(uint32(a.outputId), uint32(b.outputId))
+  )
+
+  var activeIdx = -1
+  for idx, item in result:
+    if item.tagId == model.activeTag:
+      activeIdx = idx
+      break
+  if activeIdx >= 0:
+    let active = result[activeIdx]
+    result.delete(activeIdx)
+    result.add(active)
+  elif model.activeTag != NullTagId and model.tagData(model.activeTag).isSome:
+    let outputId = model.workspaceOutput(model.activeTag)
+    if outputId != NullOutputId and model.outputData(outputId).isSome:
+      result.add((outputId: outputId, tagId: model.activeTag))
+    else:
+      result.add((outputId: NullOutputId, tagId: model.activeTag))
+
 proc needsLocalLayoutEval(model: Model): bool =
   if model.overviewActive:
     return false
 
-  if model.activeTag == NullTagId:
-    return false
-  let tagOpt = model.tagData(model.activeTag)
-  tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len > 0
+  for item in model.visibleOutputTagsForLayout():
+    let tagId = item.tagId
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len > 0:
+      return true
+  if model.activeTag != NullTagId:
+    let tagOpt = model.tagData(model.activeTag)
+    return tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len > 0
+  false
+
+proc mergeNormalProjection(
+    result: var LayoutProjection,
+    projection: LayoutProjection,
+    replaceInstructions: bool,
+) =
+  for instr in projection.instructions:
+    if replaceInstructions:
+      result.instructions.upsertInstruction(instr)
+    else:
+      var found = false
+      for existing in result.instructions:
+        if existing.windowId == instr.windowId:
+          found = true
+          break
+      if not found:
+        result.instructions.add(instr)
+  result.frameTabBars.add(projection.frameTabBars)
+  result.frameEmptyChrome.add(projection.frameEmptyChrome)
+  result.bspPreselections.add(projection.bspPreselections)
+  result.viewportTargets.add(projection.viewportTargets)
 
 proc layoutProjection*(
     model: Model, layoutEval: CustomLayoutEval = nil
@@ -1519,7 +1620,7 @@ proc layoutProjection*(
     if localRuntimeOpen:
       localRuntime.close()
 
-  let screen = model.primaryScreen()
+  let screen = model.activeWorkspaceScreen()
   let windows = model.runtimeWindowTable()
 
   if model.overviewActive:
@@ -1532,23 +1633,25 @@ proc layoutProjection*(
     model.addUnmanagedGlobalInstructions(screen, result.instructions)
     return
 
-  if model.activeTag == NullTagId:
-    return
-
-  let projected = model.projectedTag(model.activeTag)
-  if not projected.found:
-    return
-
-  result = model.projectNormalTag(
-    model.activeTag,
-    projected.tag,
-    windows,
-    screen,
-    effectiveLayoutEval,
-    model.activeFocus(),
-    includeScratchpad = true,
-    includeUnmanagedGlobals = true,
-  )
+  for item in model.visibleOutputTagsForLayout():
+    let projected = model.projectedTag(item.tagId)
+    if not projected.found:
+      continue
+    let activeTag = item.tagId == model.activeTag
+    let tagProjection = model.projectNormalTag(
+      item.tagId,
+      projected.tag,
+      windows,
+      model.outputScreen(item.outputId),
+      effectiveLayoutEval,
+      if activeTag:
+        model.activeFocus()
+      else:
+        model.effectiveTagFocusedWindow(item.tagId),
+      includeScratchpad = activeTag,
+      includeUnmanagedGlobals = activeTag,
+    )
+    result.mergeNormalProjection(tagProjection, replaceInstructions = activeTag)
 
 proc applyLayoutProjection*(model: var Model, projection: LayoutProjection) =
   for target in projection.viewportTargets:

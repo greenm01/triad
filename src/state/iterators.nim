@@ -90,8 +90,9 @@ iterator placementsWithId*(
     yield (key[0], key[1], placement)
 
 iterator outputTagsWithId*(model: Model): tuple[outputId: OutputId, tagId: TagId] =
-  for outputId, tagId in model.outputTags.pairs:
-    yield (outputId, tagId)
+  for outputId, output in model.outputsWithId():
+    if output.currentTag != NullTagId:
+      yield (outputId, output.currentTag)
 
 iterator scratchpadWindowIds*(model: Model): WindowId =
   for winId in model.scratchpadWindows:

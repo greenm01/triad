@@ -11,6 +11,18 @@ import update_effects
 import window_lifecycle
 import window_state
 
+proc externallyFocusedTag(model: Model, winId: WindowId): TagId =
+  if model.activeTag != NullTagId and
+      model.placementForWindowOnTag(model.activeTag, winId).isSome:
+    return model.activeTag
+
+  for tagId, _ in model.tagsWithId():
+    if model.tagVisibleOnOutput(tagId) and
+        model.placementForWindowOnTag(tagId, winId).isSome:
+      return tagId
+
+  NullTagId
+
 proc setExternalFocus(model: var Model, externalId: ExternalWindowId): bool =
   if model.overviewActive and externalId == NullExternalWindowId:
     return false
@@ -29,8 +41,13 @@ proc setExternalFocus(model: var Model, externalId: ExternalWindowId): bool =
   if externalId == NullExternalWindowId:
     return model.setTagFocus(tagId, NullWindowId)
   let winId = model.windowForExternal(externalId)
-  if winId == NullWindowId or model.placementForWindowOnTag(tagId, winId).isNone:
+  if winId == NullWindowId:
     return false
+  let focusedTag = model.externallyFocusedTag(winId)
+  if focusedTag == NullTagId:
+    return false
+  if focusedTag != tagId:
+    discard model.setActiveWorkspace(focusedTag)
   model.focusWindow(winId, restorePopupTree = false)
 
 proc applyEvent*(model: var Model, msg: Msg): UpdateStep =

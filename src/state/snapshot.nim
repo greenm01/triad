@@ -209,6 +209,11 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
           layoutModeId(tag.layoutMode)
       else:
         layoutModeId(tag.layoutMode)
+    let outputVisible =
+      tagId != NullTagId and (
+        model.tagVisibleOnOutput(tagId) or
+        (model.outputCount() == 0 and slot == model.activeSlot)
+      )
 
     result.workspaces.add(
       ShellWorkspace(
@@ -222,7 +227,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         layoutSource: layoutSourceForId(layoutId).layoutSourceId(),
         fallbackLayout: fallbackLayout,
         isActive: slot == model.activeSlot,
-        isOutputVisible: tagId != NullTagId and model.tagVisibleOnOutput(tagId),
+        isOutputVisible: outputVisible,
         focusedWindow: model.externalWindowId(model.effectiveTagFocusedWindow(tagId)),
         occupied: tagId != NullTagId and model.tagHasNonStickyLiveWindows(tagId),
         outputName:

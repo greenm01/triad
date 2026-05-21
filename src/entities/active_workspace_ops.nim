@@ -1,6 +1,7 @@
 import std/[options, tables]
 import ../state/entity_manager
 import ../types/[core, model]
+import output_ops
 
 proc syncPrimaryOutputTag*(model: var Model): bool =
   let outputId =
@@ -9,15 +10,7 @@ proc syncPrimaryOutputTag*(model: var Model): bool =
     return false
   if model.outputs.entity(outputId).isNone or model.tags.entity(model.activeTag).isNone:
     return false
-  var staleOutputs: seq[OutputId] = @[]
-  for mappedOutputId, mappedTagId in model.outputTags.pairs:
-    if mappedOutputId != outputId and mappedTagId == model.activeTag:
-      staleOutputs.add(mappedOutputId)
-  for mappedOutputId in staleOutputs:
-    model.outputTags.del(mappedOutputId)
-  model.outputTags[outputId] = model.activeTag
-  model.tagOutputs[model.activeTag] = outputId
-  true
+  model.setOutputTag(outputId, model.activeTag)
 
 proc setActiveWorkspace*(model: var Model, tagId: TagId): bool =
   if tagId == NullTagId:
@@ -25,7 +18,18 @@ proc setActiveWorkspace*(model: var Model, tagId: TagId): bool =
   let tagOpt = model.tags.entity(tagId)
   if tagOpt.isNone:
     return false
-  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  var mappedOutput = NullOutputId
+  for outputId, outputTag in model.outputTags.pairs:
+    if outputTag == tagId and model.outputs.entity(outputId).isSome:
+      mappedOutput = outputId
+      break
+  if mappedOutput == NullOutputId:
+    mappedOutput =
+      if model.activeOutput != NullOutputId and
+          model.outputs.entity(model.activeOutput).isSome:
+        model.activeOutput
+      else:
+        model.tagOutputs.getOrDefault(tagId, NullOutputId)
   if mappedOutput != NullOutputId and model.outputs.entity(mappedOutput).isSome:
     model.activeOutput = mappedOutput
   elif model.activeOutput == NullOutputId and model.primaryOutput != NullOutputId and

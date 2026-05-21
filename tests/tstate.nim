@@ -3697,7 +3697,7 @@ suite "Runtime state primitives":
     model = next
 
     let activeOutput = model.activeOutput
-    model.outputTags[activeOutput] = model.tagForSlot(2)
+    model.outputs.mEntity(activeOutput).currentTag = model.tagForSlot(2)
 
     let report = model.validateInvariants()
     check not report.ok

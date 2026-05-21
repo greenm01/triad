@@ -128,6 +128,21 @@ proc focusWorkspaceSlot*(model: var Model, slot: uint32): bool =
   let tagId = model.ensureWorkspaceSlot(slot)
   if tagId == NullTagId:
     return false
+  var visibleOutput = NullOutputId
+  for outputId, outputTag in model.outputTagsWithId():
+    if outputTag == tagId:
+      visibleOutput = outputId
+      break
+  if visibleOutput != NullOutputId:
+    discard model.setActiveOutput(visibleOutput)
+  else:
+    let outputId =
+      if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
+        model.activeOutput
+      else:
+        model.primaryOutput
+    if outputId != NullOutputId:
+      discard model.setOutputTag(outputId, tagId)
   discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()
   discard model.recordWorkspace(tagId)
@@ -332,7 +347,7 @@ proc frameTreeFocusRects(
     currentOuterGap = 0
     currentInnerGap = 0
   model.frameTreeLayoutRects(
-    model.activeTag, model.primaryScreen(), currentOuterGap, currentInnerGap
+    model.activeTag, model.activeWorkspaceScreen(), currentOuterGap, currentInnerGap
   )
 
 proc activeBspLeafRects(model: Model): seq[BspLeafRect] =
@@ -347,7 +362,7 @@ proc activeBspLeafRects(model: Model): seq[BspLeafRect] =
     currentOuterGap = 0
     currentInnerGap = 0
   model.bspTreeLeafRects(
-    model.activeTag, model.primaryScreen(), currentOuterGap, currentInnerGap
+    model.activeTag, model.activeWorkspaceScreen(), currentOuterGap, currentInnerGap
   )
 
 proc activeSplitLeafRects(model: Model): seq[SplitLeafRect] =
@@ -363,7 +378,7 @@ proc activeSplitLeafRects(model: Model): seq[SplitLeafRect] =
     currentInnerGap = 0
   model.splitTreeLeafRects(
     model.activeTag,
-    model.primaryScreen(),
+    model.activeWorkspaceScreen(),
     currentOuterGap,
     currentInnerGap,
     FrameTreeTabBarHeight,

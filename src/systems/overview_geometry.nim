@@ -24,15 +24,28 @@ proc overviewStyle*(model: Model): OverviewStyle =
 proc overviewUsesWorkspacePreviews*(model: Model): bool =
   model.overviewActive
 
-proc overviewSlotVisible(model: Model, slot: uint32): bool =
+proc overviewOutput(model: Model): OutputId =
+  if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
+    return model.activeOutput
+  let outputId = model.workspaceOutput(model.activeTag)
+  if outputId != NullOutputId:
+    return outputId
+  model.primaryOutput
+
+proc overviewSlotVisible(model: Model, slot: uint32, outputId: OutputId): bool =
   if slot == model.activeWorkspaceSlot():
     return true
   let tagId = model.tagForSlot(slot)
-  tagId != NullTagId and model.tagHasNonStickyLiveWindows(tagId)
+  if tagId == NullTagId:
+    return false
+  if outputId != NullOutputId and model.workspaceOutput(tagId) != outputId:
+    return false
+  model.tagHasNonStickyLiveWindows(tagId)
 
 proc previewSlots*(model: Model): seq[uint32] =
+  let outputId = model.overviewOutput()
   for slot in model.visibleWorkspaceSlots():
-    if model.overviewSlotVisible(slot):
+    if model.overviewSlotVisible(slot, outputId):
       result.add(slot)
   if result.len == 0:
     let active = model.activeWorkspaceSlot()
