@@ -575,6 +575,52 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.instructionGeom(20).fullyWithin(model.outputScreen(middle))
     check model.instructionGeom(30).fullyWithin(model.outputScreen(right))
 
+  test "Normal render suppresses inactive output workspace focus ring":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(borderWidth: 4),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 2560, height: 1440)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1920, height: 1080)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-3"))
+
+    let middle = model.outputForExternal(ExternalOutputId(1))
+    let left = model.outputForExternal(ExternalOutputId(2))
+    let tag1 = model.tagForSlot(1)
+    let tag3 = model.tagForSlot(3)
+    discard model.setOutputTag(middle, tag1)
+    discard model.setOutputTag(left, tag3)
+
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "term")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 30, appId: "files", title: "files")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 31, appId: "shell", title: "shell")
+    )
+    model.focusExternal(31)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    let localActive = model.windowForExternal(ExternalWindowId(31))
+    check model.effectiveTagFocusedWindow(tag3) == localActive
+    check model.focusedWindowId() == 10'u32
+    check model.renderWindowBorder(localActive, focused = false).width == 0
+    check model.renderWindowBorder(localActive, focused = true).width == 4
+
+    var overview = model
+    overview.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+    check overview.renderWindowBorder(localActive, focused = false).width == 4
+
   test "Visible workspace focus repairs stale learned output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

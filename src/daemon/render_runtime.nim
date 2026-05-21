@@ -35,7 +35,9 @@ proc renderWindowBorder*(
 ): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
   if model.recentWindowsVisible():
     return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
-  model.effectiveWindowBorder(logicalId, focused)
+  result = model.effectiveWindowBorder(logicalId, focused)
+  if not focused and model.windowRenderWorkspaceLocalFocusOnly(logicalId):
+    result.width = 0
 
 proc applyBorder(
     daemon: TriadDaemon,

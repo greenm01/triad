@@ -72,6 +72,16 @@ proc windowRenderFocused*(model: Model, winId: uint32): bool =
       return frameId != NullFrameId and frameId == tagOpt.get().focusedFrame
   winId == model.activeFocusRiverId()
 
+proc windowRenderWorkspaceLocalFocusOnly*(model: Model, logicalId: WindowId): bool =
+  if logicalId == NullWindowId or model.recentWindowsActive or model.overviewActive:
+    return false
+  if model.riverIdForWindow(logicalId) == model.activeFocusRiverId():
+    return false
+  for tagId, _ in model.tagsWithId():
+    if model.tagVisibleOnOutput(tagId) and
+        model.effectiveTagFocusedWindow(tagId) == logicalId:
+      return true
+
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 
