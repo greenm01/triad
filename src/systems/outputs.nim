@@ -75,11 +75,22 @@ proc restoreWorkspaceOutputsFor*(model: var Model, outputId: OutputId): bool =
         result = model.setOutputTag(outputId, tagId) or result
 
 proc focusStartupOutput*(model: var Model, outputId: OutputId): bool =
-  if outputId == NullOutputId or model.outputData(outputId).isNone:
+  let outputOpt = model.outputData(outputId)
+  if outputId == NullOutputId or outputOpt.isNone:
     return false
 
   result = model.setActiveOutput(outputId)
-  var tagId = model.outputActiveTag(outputId)
+  var tagId = NullTagId
+  let startupTag = model.tagForSlot(1)
+  if startupTag != NullTagId:
+    let pinnedTarget = model.tagHomeOutputTargets.getOrDefault(startupTag, "")
+    if not model.tagHomeOutputPinned.contains(startupTag) or pinnedTarget.len == 0 or
+        model.outputMatchesTarget(outputId, outputOpt.get(), pinnedTarget):
+      tagId = startupTag
+      result = model.setTagOutput(tagId, outputId) or result
+      result = model.setOutputTag(outputId, tagId) or result
+  if tagId == NullTagId:
+    tagId = model.outputActiveTag(outputId)
   if tagId == NullTagId:
     for candidateTagId, mappedOutputId in model.tagOutputs.pairs:
       if mappedOutputId == outputId:

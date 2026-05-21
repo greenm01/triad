@@ -1,10 +1,11 @@
-import std/[options, tables]
+import std/[json, options, tables]
 import
   focus, outputs, placement, popup_tree, sticky_windows, window_policy, scratchpad,
   window_rules, window_state, workspaces
 import ../core/layout_selection_codec
 import ../core/native_layout_codec
 import ../state/engine
+import ../utils/behavior_log
 from ../types/runtime_values import LayoutMode, ParentedRole, WindowRuleIdleInhibitMode
 
 proc supportsOpenColumnMaximize(model: Model, tagId: TagId): bool =
@@ -769,13 +770,37 @@ proc createWindowForExternal*(
       let targetTag = model.ensureWorkspaceSlot(targetSlot, forcedLayout)
       if targetTag == NullTagId:
         return NullWindowId
+      let placementReason =
+        if ruleForcesSlot and ruleMatch.rule.openOnOutput.len > 0:
+          "rule-workspace-output"
+        elif ruleForcesSlot:
+          "rule-workspace"
+        elif ruleMatch.found and ruleMatch.rule.openOnOutput.len > 0:
+          "rule-output-visible-workspace"
+        elif parentSlot != 0 and targetSlot == parentSlot and
+          parentedRole != ParentedRole.Plain:
+          "parent-workspace"
+        else:
+          "active-workspace"
       if ruleForcesSlot and ruleMatch.rule.openOnOutput.len > 0:
         discard model.remapWindowRuleOutput(
           targetTag, ruleMatch.rule.openOnOutput, parentKnown, hasRestoredTag,
           hasRestoredWindow,
         )
-      else:
-        discard model.learnTagOutputFromActive(targetTag)
+      writeBehaviorEvent(
+        "window_placement_decision",
+        %*{
+          "window_id": uint32(result),
+          "external_window_id": uint32(externalId),
+          "reason": placementReason,
+          "target_slot": targetSlot,
+          "target_tag": uint32(targetTag),
+          "active_slot": model.activeWorkspaceSlot(),
+          "active_tag": uint32(model.activeTag),
+          "active_output": model.shellOutputName(model.activeOutput),
+          "target_output": model.shellOutputName(model.workspaceOutput(targetTag)),
+        },
+      )
       if forcedLayout != 0:
         discard model.setTagLayout(
           targetTag, safeLayoutMode(forcedLayout, model.tag(targetTag).get().layoutMode)
