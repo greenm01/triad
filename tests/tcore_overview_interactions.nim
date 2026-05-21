@@ -291,6 +291,35 @@ suite "Core Runtime Logic: overview interactions":
     check model.pointerOp.kind == PointerOpKind.OpNone
     check model.firstWindowPosition(WindowId(2)).tagId == model.tagForSlot(2)
 
+  test "Dragging overview window across outputs moves to target workspace":
+    var model = twoOutputOverviewModel()
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let start = model.instructionGeom(1).rectCenter()
+    let slots = model.previewSlotsForOutput(second)
+    let target = model
+      .workspacePreviewRectForOutput(
+        model.outputScreen(second), slots, slots.find(2'u32), second
+      )
+      .rectCenter()
+
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 1,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlPointerDelta, dx: target.x - start.x, dy: target.y - start.y)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check model.overviewActive
+    check model.activeTag == model.tagForSlot(1)
+    check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(2)
+    check model.pointerOp.kind == PointerOpKind.OpNone
+
   test "Clicking overview window commits focus":
     var model = configuredModel()
     model.applyMsg(

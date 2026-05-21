@@ -80,6 +80,12 @@ proc overviewOutputUnderPointer(model: Model, x, y: int32): Option[OutputId] =
 proc updateOverviewDragHover(
     model: var Model, op: var PointerOpData, elapsedMs = 0'i32
 ): bool =
+  let outputOpt = model.overviewOutputUnderPointer(op.currentX, op.currentY)
+  if outputOpt.isNone:
+    op.hoverSlot = 0
+    op.hoverElapsedMs = 0
+    return model.setPointerOpState(op)
+  op.outputId = outputOpt.get()
   let target = model.overviewDropTargetAtForOutput(
     op.outputId, model.overviewScreen(op.outputId), op.currentX, op.currentY
   )
@@ -225,8 +231,15 @@ proc closeOverviewToSlot(model: var Model, slot: uint32): bool =
   result = model.closeOverviewFromPointer() or result
 
 proc commitOverviewDrag(model: var Model, op: PointerOpData, activateDrop: bool): bool =
+  let outputOpt = model.overviewOutputUnderPointer(op.currentX, op.currentY)
+  if outputOpt.isNone:
+    if op.windowId != NullWindowId:
+      result = model.focusWindow(op.windowId)
+      result = model.closeOverviewFromPointer() or result
+    return
+  let outputId = outputOpt.get()
   let target = model.overviewDropTargetAtForOutput(
-    op.outputId, model.overviewScreen(op.outputId), op.currentX, op.currentY
+    outputId, model.overviewScreen(outputId), op.currentX, op.currentY
   )
 
   if op.windowId == NullWindowId:
