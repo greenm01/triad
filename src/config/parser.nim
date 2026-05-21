@@ -85,6 +85,114 @@ proc workspaceTargets(node: KdlNode): seq[uint32] =
       if result.find(slot) == -1:
         result.add(slot)
 
+proc parseOutputConfigTransform(
+  value: string
+): tuple[valid: bool, transform: OutputConfigTransform]
+
+proc outputConfigError(target, field, message: string): string =
+  if field.len > 0:
+    "output \"" & target & "\" " & field & ": " & message
+  else:
+    "output \"" & target & "\": " & message
+
+proc outputNodeError(index: int, message: string): string =
+  "output[" & $index & "]: " & message
+
+proc isIntegerValue(value: KdlVal): bool =
+  value.kind in {KInt, KInt8, KInt16, KInt32, KInt64}
+
+proc isNumberValue(value: KdlVal): bool =
+  value.kind in {KInt, KInt8, KInt16, KInt32, KInt64, KFloat, KFloat32, KFloat64}
+
+proc numberValue(value: KdlVal): float64 =
+  if value.kind in {KFloat, KFloat32, KFloat64}:
+    value.kFloat()
+  else:
+    float64(value.kInt())
+
+proc outputFieldHasProps(target: string, child: KdlNode): string =
+  if child.props.len > 0:
+    result = outputConfigError(target, child.name, "properties are not supported")
+
+proc outputFieldArgs(target: string, child: KdlNode, count: int): string =
+  let propError = outputFieldHasProps(target, child)
+  if propError.len > 0:
+    return propError
+  if child.args.len != count:
+    result =
+      outputConfigError(target, child.name, "expected " & $count & " argument(s)")
+
+proc validateOutputFocusField(target: string, child: KdlNode): string =
+  let propError = outputFieldHasProps(target, child)
+  if propError.len > 0:
+    return propError
+  if child.args.len > 1:
+    return outputConfigError(target, child.name, "expected a flag or bool")
+  if child.args.len == 1 and child.args[0].kind != KBool:
+    return outputConfigError(target, child.name, "expected a bool value")
+
+proc validateOutputWorkspaceField(target: string, child: KdlNode): string =
+  let propError = outputFieldHasProps(target, child)
+  if propError.len > 0:
+    return propError
+  if child.args.len == 0:
+    return outputConfigError(target, child.name, "expected at least one workspace id")
+  for arg in child.args:
+    if not arg.isIntegerValue():
+      return outputConfigError(target, child.name, "workspace ids must be integers")
+    if arg.kInt() <= 0:
+      return outputConfigError(target, child.name, "workspace ids must be positive")
+
+proc validateOutputModeField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 3)
+  if result.len > 0:
+    return
+  if not child.args[0].isIntegerValue() or not child.args[1].isIntegerValue():
+    return outputConfigError(target, child.name, "width and height must be integers")
+  if child.args[0].kInt() <= 0 or child.args[1].kInt() <= 0:
+    return outputConfigError(target, child.name, "width and height must be positive")
+  if not child.args[2].isNumberValue():
+    return outputConfigError(target, child.name, "refresh must be numeric")
+  if child.args[2].numberValue() <= 0.0:
+    return outputConfigError(target, child.name, "refresh must be positive")
+
+proc validateOutputScaleField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 1)
+  if result.len > 0:
+    return
+  if not child.args[0].isNumberValue():
+    return outputConfigError(target, child.name, "expected a numeric scale")
+  let scale = child.args[0].numberValue()
+  if scale < 0.01 or scale > 64.0:
+    return outputConfigError(target, child.name, "scale must be in range 0.01..64.0")
+
+proc validateOutputPositionField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 2)
+  if result.len > 0:
+    return
+  if not child.args[0].isIntegerValue() or not child.args[1].isIntegerValue():
+    return outputConfigError(target, child.name, "x and y must be integers")
+
+proc validateOutputTransformField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 1)
+  if result.len > 0:
+    return
+  if child.args[0].kind != KString:
+    return outputConfigError(target, child.name, "expected a transform string")
+  let parsed = parseOutputConfigTransform(child.args[0].kString())
+  if not parsed.valid:
+    return outputConfigError(
+      target, child.name,
+      "expected one of normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270",
+    )
+
+proc validateOutputAdaptiveSyncField(target: string, child: KdlNode): string =
+  result = outputFieldArgs(target, child, 1)
+  if result.len > 0:
+    return
+  if child.args[0].kind != KBool:
+    return outputConfigError(target, child.name, "expected a bool value")
+
 proc parseColor(value: string, fallback: uint32): uint32 =
   var hex = value.strip()
   if hex.startsWith("#"):
@@ -630,6 +738,58 @@ proc validateWindowRuleRegexes(config: Config): string =
       )
       if result.len > 0:
         return
+
+proc validateOutputRuleNode(node: KdlNode, index: int): string =
+  if node.props.len > 0:
+    return outputNodeError(index, "properties are not supported")
+  if node.args.len != 1:
+    return outputNodeError(index, "expected exactly one output target")
+  if node.args[0].kind != KString:
+    return outputNodeError(index, "output target must be a string")
+
+  let target = node.args[0].kString().strip()
+  if target.len == 0:
+    return outputNodeError(index, "output target must not be empty")
+
+  for child in node.children:
+    case child.name
+    of "focus-at-startup":
+      result = validateOutputFocusField(target, child)
+    of "workspaces":
+      result = validateOutputWorkspaceField(target, child)
+    of "mode":
+      result = validateOutputModeField(target, child)
+    of "scale":
+      result = validateOutputScaleField(target, child)
+    of "position":
+      result = validateOutputPositionField(target, child)
+    of "transform":
+      result = validateOutputTransformField(target, child)
+    of "adaptive-sync":
+      result = validateOutputAdaptiveSyncField(target, child)
+    of "enabled", "disabled", "mirror", "auto", "auto-position", "custom", "modeline",
+        "reserved", "reserved_area", "reserved-area", "addreserved", "bitdepth", "cm",
+        "sdr_eotf", "sdr-eotf", "sdrbrightness", "sdrsaturation", "vrr", "icc",
+        "supports_wide_color", "supports-wide-color", "supports_hdr", "supports-hdr",
+        "sdr_min_luminance", "sdr-min-luminance", "sdr_max_luminance",
+        "sdr-max-luminance", "min_luminance", "min-luminance", "max_luminance",
+        "max-luminance", "max_avg_luminance", "max-avg-luminance":
+      result = outputConfigError(
+        target, child.name, "field is not supported by Triad output rules"
+      )
+    else:
+      result = outputConfigError(target, child.name, "unknown field")
+    if result.len > 0:
+      return
+
+proc validateOutputRuleNodes(doc: KdlDoc): string =
+  var outputIndex = 0
+  for node in doc:
+    if node.name == "output":
+      result = validateOutputRuleNode(node, outputIndex)
+      if result.len > 0:
+        return
+      inc outputIndex
 
 proc parsePointerOp(value: string): PointerOpKind =
   case value
@@ -2100,6 +2260,10 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
     document = loadConfigDocument(path)
   except CatchableError as e:
     return ConfigLoadResult(ok: false, error: e.msg)
+
+  let outputError = validateOutputRuleNodes(document.nodes)
+  if outputError.len > 0:
+    return ConfigLoadResult(ok: false, error: outputError)
 
   let config = loadConfigNodes(document.nodes, path)
   let regexError = config.validateWindowRuleRegexes()

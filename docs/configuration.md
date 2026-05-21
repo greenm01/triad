@@ -20,6 +20,10 @@ Before applying changes, you can ensure your configuration is syntactically soun
 triad validate-config
 ```
 
+Validation also checks strict output-rule shapes. Unknown or unsupported
+`output` fields, invalid transforms, malformed modes, non-positive workspace
+IDs, and out-of-range scales are rejected before startup or reload.
+
 ### Hot Reloading
 Triad is alive. It watches your configuration files and reloads them instantly whenever you save. This includes any files you've pulled in via the `include` directive.
 
@@ -203,6 +207,10 @@ Configure monitor-specific settings.
 | `position` | `X Y` | Global coordinate position. |
 | `transform` | `String` | Rotation (e.g., `"90"`, `"flipped"`, `"normal"`). |
 | `adaptive-sync` | `Bool` | Toggle VRR/Adaptive Sync. |
+
+Unsupported monitor fields such as output disabling, mirroring, auto placement,
+reserved areas, custom modelines, bit depth, color management, ICC, and HDR
+metadata are rejected by strict validation.
 
 **Example Output Configuration:**
 ```kdl

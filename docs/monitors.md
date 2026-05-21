@@ -1,7 +1,5 @@
 # Monitors and Workspaces
 
-This is a draft user guide for running Triad on more than one monitor.
-
 Triad treats each monitor as its own output with its own visible workspace. It
 does not lay out normal windows against one large desktop canvas. Output
 positions still use global coordinates because that is how Wayland output
@@ -34,17 +32,20 @@ connector name shown by tools such as `wlr-randr`.
 output "DP-1" {
   mode 1920 1080 60
   position 4480 180
+  scale 1.0
 }
 
 output "DP-2" {
   mode 2560 1440 120
   position 1920 0
   focus-at-startup
+  adaptive-sync #true
 }
 
 output "DP-3" {
   mode 1920 1080 60
   position 0 180
+  transform "normal"
 }
 ```
 
@@ -56,6 +57,23 @@ usable region.
 `focus-at-startup` selects the monitor Triad should focus first. If workspace 1
 is not explicitly pinned elsewhere, Triad also places workspace 1 there at
 startup before filling the other monitors.
+
+Supported output fields:
+
+| Field | Format | Purpose |
+| :--- | :--- | :--- |
+| `focus-at-startup` | Flag or bool | Select the startup-focused output. |
+| `workspaces` | Positive integers | Pin workspace IDs to this output. |
+| `mode` | `W H Hz` | Request an advertised output mode. |
+| `scale` | Float | Request output scale in the range `0.01..64.0`. |
+| `position` | `X Y` | Set global output coordinates. |
+| `transform` | String | One of `normal`, `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180`, or `flipped-270`. |
+| `adaptive-sync` | Bool | Request VRR/Adaptive Sync when the compositor protocol supports it. |
+
+Triad intentionally does not expose Hyprland-style output disabling, mirror
+rules, auto placement, custom modelines, reserved areas, bit depth, color
+management, ICC, or HDR metadata in `output` blocks. These fields fail strict
+validation instead of being ignored.
 
 ## Pin Workspaces
 
@@ -162,6 +180,19 @@ focus from unrelated monitors.
 Live restore wins over opening rules. If a window is restored from a previous
 session or live reload, Triad prefers the restored workspace, output, and window
 state.
+
+## Diagnostics
+
+Run `triad validate-config` after editing output rules. Strict validation rejects
+unknown output fields, unsupported Hyprland-style fields, malformed supported
+fields, empty output targets, non-positive workspace IDs, invalid transforms,
+and out-of-range scales before the daemon starts or reloads the config.
+
+Some output problems can only be known after Triad sees the live compositor
+state. These stay as runtime warnings: the output-management protocol may be
+missing, a configured output target may not be connected, a requested mode may
+not be advertised by the monitor, `adaptive-sync` may require a newer protocol
+version, or the compositor may reject an output-management apply.
 
 ## Shell Bars
 

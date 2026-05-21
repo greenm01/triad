@@ -2,6 +2,13 @@ import tconfig_support
 import ../src/daemon/reload_runtime
 from ../src/daemon/state import initTriadDaemon
 
+proc loadStrictConfigContent(content, name: string): ConfigLoadResult =
+  let path =
+    getTempDir() / ("triad-config-" & name & "-" & $getCurrentProcessId() & ".kdl")
+  writeFile(path, content)
+  result = loadConfigStrict(path)
+  removeFile(path)
+
 suite "KDL Configuration Parser: loading reload":
   test "config application preserves live window state":
     let initial = initRuntimeStateFromConfig(
@@ -201,6 +208,146 @@ suite "KDL Configuration Parser: loading reload":
 
     check not loaded.ok
     check loaded.error.len > 0
+
+  test "Strict config load accepts supported output rule fields":
+    let loaded = loadStrictConfigContent(
+      """
+output "DP-1" {
+  focus-at-startup
+  workspaces 1 2 2
+  mode 2560 1440 120
+  scale 1.25
+  position -1920 0
+  transform "flipped-90"
+  adaptive-sync #true
+}
+""",
+      "valid-output",
+    )
+
+    check loaded.ok
+    check loaded.config.outputRules.len == 1
+    check loaded.config.outputRules[0].workspaceSlots == @[1'u32, 2'u32]
+
+  test "Strict config load rejects invalid output rule fields":
+    let cases =
+      @[
+        (
+          name: "missing-target",
+          content:
+            """
+output {
+  mode 1920 1080 60
+}
+""",
+          needle: "output[0]: expected exactly one output target",
+        ),
+        (
+          name: "bad-target-type",
+          content:
+            """
+output 1 {
+  mode 1920 1080 60
+}
+""",
+          needle: "output[0]: output target must be a string",
+        ),
+        (
+          name: "unsupported-field",
+          content:
+            """
+output "DP-1" {
+  enabled #false
+}
+""",
+          needle: "output \"DP-1\" enabled: field is not supported",
+        ),
+        (
+          name: "unknown-field",
+          content:
+            """
+output "DP-1" {
+  mystery "right"
+}
+""",
+          needle: "output \"DP-1\" mystery: unknown field",
+        ),
+        (
+          name: "unsupported-hyprland-field",
+          content:
+            """
+output "DP-1" {
+  auto "right"
+}
+""",
+          needle: "output \"DP-1\" auto: field is not supported",
+        ),
+        (
+          name: "bad-mode",
+          content:
+            """
+output "DP-1" {
+  mode 1920 1080
+}
+""",
+          needle: "output \"DP-1\" mode: expected 3 argument",
+        ),
+        (
+          name: "bad-scale",
+          content:
+            """
+output "DP-1" {
+  scale -1
+}
+""",
+          needle: "output \"DP-1\" scale: scale must be in range 0.01..64.0",
+        ),
+        (
+          name: "bad-position",
+          content:
+            """
+output "DP-1" {
+  position 0 "right"
+}
+""",
+          needle: "output \"DP-1\" position: x and y must be integers",
+        ),
+        (
+          name: "bad-transform",
+          content:
+            """
+output "DP-1" {
+  transform "inverted"
+}
+""",
+          needle: "output \"DP-1\" transform: expected one of",
+        ),
+        (
+          name: "bad-adaptive-sync",
+          content:
+            """
+output "DP-1" {
+  adaptive-sync "true"
+}
+""",
+          needle: "output \"DP-1\" adaptive-sync: expected a bool value",
+        ),
+        (
+          name: "bad-workspace",
+          content:
+            """
+output "DP-1" {
+  workspaces 1 -2
+}
+""",
+          needle: "output \"DP-1\" workspaces: workspace ids must be positive",
+        ),
+      ]
+
+    for testCase in cases:
+      let loaded = loadStrictConfigContent(testCase.content, testCase.name)
+      check not loaded.ok
+      check loaded.error.contains(testCase.needle)
 
   test "Strict config load rejects invalid window rule regex":
     let path = getCurrentDir() / "test_invalid_window_rule_regex.kdl"
