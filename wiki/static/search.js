@@ -5,16 +5,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (!searchInput || !resultsContainer) return;
 
-  let index;
   let documents = {};
   let indexReady = false;
   let indexFailed = false;
 
-  function searchIndexUrl() {
+  function searchIndexUrls() {
+    const urls = [new URL('/search_index.en.json', window.location.origin).toString()];
     const script = document.currentScript ||
       document.querySelector('script[src$="search.js"]');
-    if (!script || !script.src) return 'search_index.en.json';
-    return new URL('search_index.en.json', script.src).toString();
+
+    if (script && script.src) {
+      urls.push(new URL('search_index.en.json', script.src).toString());
+    }
+
+    urls.push(new URL('search_index.en.json', window.location.href).toString());
+    return [...new Set(urls)];
   }
 
   function hideResults() {
@@ -43,17 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    const results = index
-      ? index.search(query, {
-          bool: 'OR',
-          expand: true,
-          fields: {
-            title: { boost: 2 },
-            body: { boost: 1 },
-            path: { boost: 1 },
-          },
-        })
-      : fallbackSearch(query);
+    const results = searchDocuments(query);
 
     if (results.length === 0) {
       showMessage('No results');
@@ -83,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function() {
     resultsContainer.style.display = 'block';
   }
 
-  function fallbackSearch(query) {
+  function searchDocuments(query) {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     return Object.values(documents)
       .map(doc => {
@@ -104,16 +99,23 @@ document.addEventListener('DOMContentLoaded', function() {
       .sort((a, b) => b.score - a.score);
   }
 
-  fetch(searchIndexUrl())
-    .then(response => {
-      if (!response.ok) throw new Error('search index not found');
-      return response.json();
-    })
+  function fetchSearchIndex(urls) {
+    const [url, ...fallbacks] = urls;
+
+    return fetch(url)
+      .then(response => {
+        if (!response.ok) throw new Error('search index not found');
+        return response.json();
+      })
+      .catch(error => {
+        if (fallbacks.length === 0) throw error;
+        return fetchSearchIndex(fallbacks);
+      });
+  }
+
+  fetchSearchIndex(searchIndexUrls())
     .then(data => {
-      documents = data.documents || data.documentStore.docs || {};
-      if (window.elasticlunr) {
-        index = elasticlunr.Index.load(data.index ? data.index : data);
-      }
+      documents = data.documents || (data.documentStore && data.documentStore.docs) || {};
       indexReady = true;
       indexFailed = false;
       renderResults(searchInput.value.trim());
