@@ -285,6 +285,11 @@ proc applyVisibility(
   else:
     win.hide()
 
+proc applyHiddenRenderWindowState(win: ptr RiverWindowV1) =
+  # River border state is sticky; clear it before hiding a formerly focused window.
+  win.setBorders(0'u32, 0'i32, 0'u32, 0'u32, 0'u32, 0'u32)
+  win.hide()
+
 proc desiredRenderWindowState(
     daemon: TriadDaemon, id: uint32, geom, visibilityBounds: Rect, clipSet: bool
 ): RenderWindowState =
@@ -386,7 +391,7 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
       let hiddenState = RenderWindowState(visible: false)
       if not daemon.lastRenderWindowStates.hasKey(id) or
           daemon.lastRenderWindowStates[id] != hiddenState:
-        win.hide()
+        win.applyHiddenRenderWindowState()
         daemon.lastRenderWindowStates[id] = hiddenState
         inc daemon.perfCounters.renderRequests
       else:
