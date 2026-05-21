@@ -340,7 +340,6 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
     for output in daemon.outputPointers.values:
       output.setPresentationMode(mode)
   let screen = daemon.currentModel.activeWorkspaceScreen()
-  daemon.syncOverviewSurfaces()
   let ids = daemon.orderedDesiredIds()
   let orderKey = daemon.renderOrderKey(ids)
   let orderChanged = daemon.lastRenderOrder != orderKey

@@ -2041,6 +2041,7 @@ proc applyManageState*(daemon: var TriadDaemon) =
   daemon.syncHotkeyOverlayKeyCapture()
   if daemon.currentModel.protocolSurfaces.enabled:
     daemon.ensureOwnedShellSurface()
+    daemon.syncOverviewSurfaces()
   else:
     daemon.destroyAllProtocolSurfaces()
 

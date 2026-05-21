@@ -219,7 +219,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       daemon.riverManager.exitSession()
   of EffectKind.EffFocusShellUi:
     if daemon.runtimeState.model.overviewActive:
-      daemon.syncOverviewSurfaces()
+      daemon.requestManage("focus overview shell ui")
     else:
       daemon.ensureOwnedShellSurface()
     let surfaceId =
