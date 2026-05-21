@@ -60,6 +60,11 @@ snapshot cannot be captured, the reload aborts rather than falling back to the
 Niri-compatible state view, because that view cannot preserve camera offsets or
 full floating geometry.
 
+If the installed `triad-manager-loop` is stale or missing, `nimble liveReload`
+installs the current repo copy first, writes a restart-required marker in
+`$XDG_RUNTIME_DIR`, and aborts. Restart the River/Triad session so River runs
+the updated manager loop, then retry `nimble liveReload`.
+
 `nimble liveReload` also writes a one-shot runtime marker so the replacement
 daemon starts in dev mode and behavior JSONL logging is available immediately
 after the reload. A direct `triad-reload` command, including the default

@@ -50,6 +50,162 @@ atomic_install() {
   mv -f "$tmp" "$dst"
 }
 
+manager_loop_restart_marker() {
+  echo "$runtime_dir/triad-manager-loop-restart-required"
+}
+
+latest_manager_loop_pid() {
+  manager_loop="$1"
+  latest=""
+
+  for proc_cmdline in /proc/[0-9]*/cmdline; do
+    pid="${proc_cmdline%/cmdline}"
+    pid="${pid##*/}"
+    exe="$(readlink "/proc/$pid/exe" 2>/dev/null || true)"
+    case "$exe" in
+      */sh|*/bash|*/dash|*/busybox) ;;
+      *) continue ;;
+    esac
+
+    cmdline="$(tr '\0' ' ' < "$proc_cmdline" 2>/dev/null || true)"
+    case "$cmdline" in
+      *"$manager_loop"*)
+        if [ -z "$latest" ] || [ "$pid" -gt "$latest" ]; then
+          latest="$pid"
+        fi
+        ;;
+    esac
+  done
+
+  [ -n "$latest" ] || return 1
+  echo "$latest"
+}
+
+process_started_after_file() {
+  pid="$1"
+  marker="$2"
+  [ -d "/proc/$pid" ] || return 1
+  [ -e "$marker" ] || return 1
+
+  python3 - "$pid" "$marker" <<'PY'
+import os
+import sys
+
+pid = sys.argv[1]
+path = sys.argv[2]
+
+try:
+    with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as handle:
+        proc_stat = handle.read()
+    fields_after_comm = proc_stat.rsplit(") ", 1)[1].split()
+    start_ticks = int(fields_after_comm[19])
+    clock_ticks = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+
+    boot_time = 0
+    with open("/proc/stat", "r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.startswith("btime "):
+                boot_time = int(line.split()[1])
+                break
+    if boot_time <= 0:
+        sys.exit(1)
+
+    proc_start = boot_time + (start_ticks / clock_ticks)
+    file_mtime = os.stat(path).st_mtime
+except Exception:
+    sys.exit(1)
+
+sys.exit(0 if proc_start >= file_mtime else 1)
+PY
+}
+
+write_manager_loop_restart_marker() {
+  marker="$(manager_loop_restart_marker)"
+  marker_dir="$(dirname -- "$marker")"
+  manager_pid="$(latest_manager_loop_pid "$live_manager_loop" || true)"
+  mkdir -p "$marker_dir"
+  {
+    printf '%s\n' "$live_manager_loop"
+    date -Is
+    printf 'manager_pid=%s\n' "$manager_pid"
+  } > "$marker"
+  log_info "marked manager loop restart required via $marker"
+}
+
+require_manager_loop_restart_if_pending() {
+  marker="$(manager_loop_restart_marker)"
+  [ -e "$marker" ] || return 0
+
+  marker_loop="$(sed -n '1p' "$marker" 2>/dev/null || true)"
+  if [ -n "$marker_loop" ] && [ "$marker_loop" != "$live_manager_loop" ]; then
+    log_info "ignoring manager loop restart marker for different path: $marker_loop"
+    return 0
+  fi
+
+  manager_pid="$(latest_manager_loop_pid "$live_manager_loop" || true)"
+  marker_pid="$(sed -n 's/^manager_pid=//p' "$marker" 2>/dev/null || true)"
+  if [ -n "$manager_pid" ] &&
+      [ -n "$marker_pid" ] &&
+      [ "$manager_pid" != "$marker_pid" ]; then
+    rm -f "$marker"
+    log_info "manager loop restart marker cleared by manager pid $manager_pid"
+    return 0
+  fi
+
+  if [ -z "$marker_pid" ] &&
+      [ -n "$manager_pid" ] &&
+      process_started_after_file "$manager_pid" "$marker"; then
+    rm -f "$marker"
+    log_info "manager loop restart marker cleared by manager pid $manager_pid"
+    return 0
+  fi
+
+  if [ -n "$manager_pid" ]; then
+    log_error "manager loop was updated, but running manager pid $manager_pid predates the update"
+  else
+    log_error "manager loop was updated, but no running manager loop was found"
+  fi
+  log_error "restart the River/Triad session, then retry liveReload"
+  fail "refusing live reload until updated manager loop is running"
+}
+
+sync_live_manager_loop() {
+  if [ -x "$live_manager_loop" ] &&
+      cmp -s "$repo_dir/tools/triad-manager-loop.sh" "$live_manager_loop"; then
+    return 0
+  fi
+
+  if [ -e "$live_manager_loop" ]; then
+    log_error "installed manager loop is not the hardened repo version: $live_manager_loop"
+  else
+    log_error "live manager loop is missing: $live_manager_loop"
+  fi
+
+  if ! atomic_install \
+      "$repo_dir/tools/triad-manager-loop.sh" "$live_manager_loop" 755; then
+    fail "failed to install updated manager loop: $live_manager_loop"
+  fi
+
+  write_manager_loop_restart_marker
+  log_error "installed updated manager loop: $live_manager_loop"
+  log_error "restart the River/Triad session, then retry liveReload"
+  fail "updated live manager loop; restart required before live reload"
+}
+
+require_running_manager_loop_current() {
+  manager_pid="$(latest_manager_loop_pid "$live_manager_loop" || true)"
+  [ -n "$manager_pid" ] || return 0
+
+  if process_started_after_file "$manager_pid" "$live_manager_loop"; then
+    return 0
+  fi
+
+  write_manager_loop_restart_marker
+  log_error "installed manager loop is newer than running manager pid $manager_pid"
+  log_error "restart the River/Triad session, then retry liveReload"
+  fail "refusing live reload until updated manager loop is running"
+}
+
 latest_live_triad_pid() {
   latest=""
   for proc_exe in /proc/[0-9]*/exe; do
@@ -113,15 +269,9 @@ if isinstance(pid, int) and pid > 0:
 require_hardened_runtime() {
   live_manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
 
-  if [ ! -x "$live_manager_loop" ]; then
-    fail "live manager loop is missing or not executable: $live_manager_loop"
-  fi
-
-  if ! cmp -s "$repo_dir/tools/triad-manager-loop.sh" "$live_manager_loop"; then
-    log_error "installed manager loop is not the hardened repo version: $live_manager_loop"
-    log_error "install the updated manager loop, restart the River/Triad session, then retry liveReload"
-    fail "refusing live reload with stale live manager loop"
-  fi
+  require_manager_loop_restart_if_pending
+  sync_live_manager_loop
+  require_running_manager_loop_current
 
   if ! old_pid="$(running_triad_pid)"; then
     log_error "running Triad daemon does not expose perf-status pid"
