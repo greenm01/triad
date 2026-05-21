@@ -49,6 +49,25 @@ proc writeCurrentLiveRestoreState*(daemon: var TriadDaemon): LiveRestoreWriteRes
         "live_restore_snapshot_written", result.path, "runtime", candidate.get()
       )
 
+proc markPendingLiveRestoreApplied(daemon: var TriadDaemon): bool =
+  if daemon.pendingLiveRestorePath.len == 0:
+    return false
+
+  if completeLiveRestoreState(daemon.pendingLiveRestorePath):
+    info "Live restore snapshot committed", path = daemon.pendingLiveRestorePath
+    writeBehaviorEvent(
+      "live_restore_committed",
+      %*{
+        "path": daemon.pendingLiveRestorePath,
+        "restore_status": LiveRestoreStatusApplied,
+      },
+    )
+    return true
+
+  warn "Live restore snapshot could not be committed",
+    path = daemon.pendingLiveRestorePath
+  false
+
 proc applyPendingLiveRestore*(daemon: var TriadDaemon, context: string) =
   if daemon.pendingLiveRestore.isNone:
     return
@@ -62,6 +81,8 @@ proc applyPendingLiveRestore*(daemon: var TriadDaemon, context: string) =
   daemon.markRenderDirty("live restore")
   daemon.pendingLiveRestore = none(LiveRestoreState)
   daemon.liveRestoreCommitPending = daemon.pendingLiveRestorePath.len > 0
+  if daemon.liveRestoreCommitPending:
+    daemon.liveRestoreCommitPending = not daemon.markPendingLiveRestoreApplied()
   info "Live restore snapshot applied",
     path = daemon.pendingLiveRestorePath,
     context = context,
@@ -72,16 +93,4 @@ proc commitPendingLiveRestore*(daemon: var TriadDaemon) =
   if not daemon.liveRestoreCommitPending:
     return
 
-  if completeLiveRestoreState(daemon.pendingLiveRestorePath):
-    info "Live restore snapshot committed", path = daemon.pendingLiveRestorePath
-    writeBehaviorEvent(
-      "live_restore_committed",
-      %*{
-        "path": daemon.pendingLiveRestorePath,
-        "restore_status": LiveRestoreStatusApplied,
-      },
-    )
-    daemon.liveRestoreCommitPending = false
-  else:
-    warn "Live restore snapshot could not be committed",
-      path = daemon.pendingLiveRestorePath
+  daemon.liveRestoreCommitPending = not daemon.markPendingLiveRestoreApplied()

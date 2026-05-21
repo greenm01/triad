@@ -4,8 +4,9 @@ import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, child_process_runtime, cursor_shake, effects_runtime,
-    input_device_classification, memory_status, message_queue, process_runner,
-    reload_runtime, render_invalidation, spawn_context, switch_event_runtime,
+    input_device_classification, live_restore_runtime, memory_status, message_queue,
+    process_runner, reload_runtime, render_invalidation, spawn_context,
+    switch_event_runtime,
   ]
 from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
@@ -1336,6 +1337,80 @@ VmSwap:        0 kB
       check applied["restore_status"].getStr() == LiveRestoreStatusApplied
       check applied.hasKey("applied_at_unix_ms")
       check applied.hasKey("applied_by_pid")
+    finally:
+      if fileExists(path):
+        removeFile(path)
+
+  test "pending live restore is marked applied immediately after runtime apply":
+    let path =
+      getTempDir() / ("triad-live-restore-apply-" & $getCurrentProcessId() & ".json")
+    try:
+      writeFile(
+        path,
+        """
+{
+  "schema": "triad-live-restore-v2",
+  "restore_status": "pending",
+  "active_tag": 2,
+  "tags": [{"id": 2, "layout_mode": "scroller"}]
+}
+""",
+      )
+      let restore = loadLiveRestoreState(path)
+      check restore.isSome
+
+      var daemon = initTriadDaemon()
+      daemon.pendingLiveRestorePath = path
+      daemon.pendingLiveRestore = restore
+      daemon.runtimeState = initRuntimeStateFromConfig(Config())
+
+      daemon.applyPendingLiveRestore("test")
+
+      check daemon.pendingLiveRestore.isNone
+      check not daemon.liveRestoreCommitPending
+      check liveRestoreStateApplied(path)
+      check loadLiveRestoreState(path).isNone
+    finally:
+      if fileExists(path):
+        removeFile(path)
+
+  test "runtime live restore write rejects collapse against applied snapshot":
+    let path =
+      getTempDir() / ("triad-live-restore-collapse-" & $getCurrentProcessId() & ".json")
+    try:
+      writeFile(
+        path,
+        """
+{
+  "schema": "triad-live-restore-v2",
+  "restore_status": "applied",
+  "active_tag": 2,
+  "tags": [{"id": 1, "layout_mode": "scroller"}, {"id": 2, "layout_mode": "scroller"}],
+  "windows": [{"id": 10, "tag_id": 1}, {"id": 20, "tag_id": 2}]
+}
+""",
+      )
+
+      var daemon = initTriadDaemon()
+      daemon.pendingLiveRestorePath = path
+      daemon.runtimeState =
+        initRuntimeStateFromConfig(Config(workspaces: WorkspaceConfig(defaultCount: 2)))
+      discard daemon.runtimeState.applyRuntimeUpdate(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "app", title: "One")
+      )
+      discard daemon.runtimeState.applyRuntimeUpdate(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "app", title: "Two")
+      )
+
+      let result = daemon.writeCurrentLiveRestoreState()
+
+      check not result.ok
+      check result.error == "refusing suspicious live restore collapse"
+      check liveRestoreStateApplied(path)
+      let retained = readLiveRestoreState(path)
+      check retained.isSome
+      check retained.get().windows[10'u32].tagId == 1
+      check retained.get().windows[20'u32].tagId == 2
     finally:
       if fileExists(path):
         removeFile(path)
