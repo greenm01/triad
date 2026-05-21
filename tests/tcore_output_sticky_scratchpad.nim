@@ -1,3 +1,4 @@
+import std/sets
 import tcore_support
 
 proc fullyWithin(rect, screen: Rect): bool =
@@ -101,6 +102,129 @@ suite "Core Runtime Logic: output sticky scratchpad":
     let outputId = model.outputForExternal(ExternalOutputId(3))
     check model.workspaceOutput(tagId) == outputId
     check model.tagHomeOutputTargets[tagId] == "DP-1"
+
+  test "Output rule pinned workspace focus uses configured monitor":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules: @[OutputRule(target: "DP-1", workspaceSlots: @[2'u32])],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let pinnedOutput = model.outputForExternal(ExternalOutputId(1))
+    let activeOutput = model.outputForExternal(ExternalOutputId(2))
+    let tag1 = model.tagForSlot(1)
+    let tag2 = model.tagForSlot(2)
+    let tag3 = model.tagForSlot(3)
+    discard model.setOutputTag(pinnedOutput, tag1)
+    discard model.setOutputTag(activeOutput, tag3)
+    discard model.setActiveOutput(activeOutput)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.activeOutput == pinnedOutput
+    check model.activeTag == tag2
+    check model.outputActiveTag(pinnedOutput) == tag2
+    check model.outputActiveTag(activeOutput) == tag3
+    check model.workspaceOutput(tag2) == pinnedOutput
+
+  test "Workspace rule pinned focus repairs wrong visible output":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules: @[TagRule(tagId: 2, openOnOutput: "DP-1")],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let pinnedOutput = model.outputForExternal(ExternalOutputId(1))
+    let wrongOutput = model.outputForExternal(ExternalOutputId(2))
+    let tag1 = model.tagForSlot(1)
+    let tag2 = model.tagForSlot(2)
+    discard model.setOutputTag(pinnedOutput, tag1)
+    discard model.setOutputTag(wrongOutput, tag2)
+    discard model.setActiveOutput(wrongOutput)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.activeOutput == pinnedOutput
+    check model.outputActiveTag(pinnedOutput) == tag2
+    check model.outputActiveTag(wrongOutput) != tag2
+    check model.workspaceOutput(tag2) == pinnedOutput
+
+  test "Pinned workspace focus falls back while output is missing":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules: @[TagRule(tagId: 2, openOnOutput: "DP-1")],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let fallbackOutput = model.outputForExternal(ExternalOutputId(2))
+    let tag2 = model.tagForSlot(2)
+    discard model.setActiveOutput(fallbackOutput)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.activeOutput == fallbackOutput
+    check model.outputActiveTag(fallbackOutput) == tag2
+    check model.tagHomeOutputPinned.contains(tag2)
+    check model.tagHomeOutputTargets[tag2] == "DP-1"
+
+  test "Multiple workspaces pinned to one output switch on that output":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 4),
+        outputRules: @[OutputRule(target: "DP-1", workspaceSlots: @[2'u32, 4'u32])],
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let pinnedOutput = model.outputForExternal(ExternalOutputId(1))
+    let sideOutput = model.outputForExternal(ExternalOutputId(2))
+    let tag1 = model.tagForSlot(1)
+    let tag2 = model.tagForSlot(2)
+    let tag4 = model.tagForSlot(4)
+    discard model.setOutputTag(sideOutput, tag1)
+    discard model.setActiveOutput(sideOutput)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    check model.activeOutput == pinnedOutput
+    check model.outputActiveTag(pinnedOutput) == tag2
+    check model.outputActiveTag(sideOutput) == tag1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 4))
+    check model.activeOutput == pinnedOutput
+    check model.outputActiveTag(pinnedOutput) == tag4
+    check model.outputActiveTag(sideOutput) == tag1
+    check model.workspaceOutput(tag2) == pinnedOutput
+    check model.workspaceOutput(tag4) == pinnedOutput
 
   test "Output focus-at-startup focuses configured output once":
     var model = initRuntimeStateFromConfig(
@@ -451,7 +575,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.instructionGeom(20).fullyWithin(model.outputScreen(middle))
     check model.instructionGeom(30).fullyWithin(model.outputScreen(right))
 
-  test "Visible workspace focus ignores stale remembered output":
+  test "Visible workspace focus repairs stale learned output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
     ).model
@@ -478,7 +602,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
 
     check model.activeOutput == middle
     check model.workspaceOutput(tag2) == middle
-    check model.tagOutputs[tag2] == right
+    check model.tagOutputs[tag2] == middle
 
   test "Active workspace sync follows visible output over stale active output":
     var model = initRuntimeStateFromConfig(
@@ -513,7 +637,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.outputActiveTag(first) == tag1
     check model.outputActiveTag(second) == tag2
 
-  test "Focusing nonvisible workspace does not rewrite home output":
+  test "Focusing nonvisible workspace uses learned home output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
     ).model
@@ -540,9 +664,41 @@ suite "Core Runtime Logic: output sticky scratchpad":
 
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
 
-    check model.activeOutput == first
-    check model.outputActiveTag(first) == tag3
+    check model.activeOutput == second
+    check model.outputActiveTag(second) == tag3
+    check model.outputActiveTag(first) != tag3
     check model.tagOutputs[tag3] == second
+
+  test "Unpinned workspace without learned output uses active output fallback":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let tag2 = model.tagForSlot(2)
+    discard model.clearTagOutput(tag2)
+    discard model.setActiveOutput(second)
+    discard model.setActiveWorkspace(model.tagForSlot(1))
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+
+    check model.activeOutput == second
+    check model.outputActiveTag(second) == tag2
+    check model.outputActiveTag(first) != tag2
 
   test "New window uses active workspace without rewriting output affinity":
     var model = initRuntimeStateFromConfig(

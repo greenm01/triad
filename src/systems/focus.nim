@@ -1,4 +1,4 @@
-import std/options
+import std/[json, options, sets, tables]
 import workspaces
 import ../core/[layout_descriptor_codec, layout_selection_codec]
 from ../core/native_layout_codec import
@@ -6,8 +6,10 @@ from ../core/native_layout_codec import
 import ../state/engine
 from ../types/projection_values import RenderInstruction
 from ../types/runtime_values import Direction, LayoutMode
+import ../utils/behavior_log
 import layout_projection
 import overview_geometry
+import outputs
 import popup_tree
 
 type FocusCandidate = object
@@ -35,6 +37,55 @@ proc focusedOnActiveTag*(model: Model): WindowId =
 proc recomputeVisibleFocus*(model: var Model, tagId: TagId): WindowId =
   result = model.effectiveTagFocusedWindow(tagId)
   discard model.setTagFocus(tagId, result)
+
+proc visibleOutputForTag(model: Model, tagId: TagId): OutputId =
+  for outputId, outputTag in model.outputTagsWithId():
+    if outputTag == tagId:
+      return outputId
+  NullOutputId
+
+proc configuredPinnedOutputForTag(model: Model, tagId: TagId): OutputId =
+  if not model.tagHomeOutputPinned.contains(tagId):
+    return NullOutputId
+  let target = model.tagHomeOutputTargets.getOrDefault(tagId, "")
+  if target.len == 0:
+    return NullOutputId
+  model.outputForTarget(target)
+
+proc learnedOutputForTag(model: Model, tagId: TagId): OutputId =
+  let outputId = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  if outputId != NullOutputId and model.hasOutput(outputId):
+    return outputId
+  NullOutputId
+
+proc workspaceFocusOutputDecision(
+    model: Model, tagId: TagId
+): tuple[outputId: OutputId, reason: string] =
+  result.outputId = model.configuredPinnedOutputForTag(tagId)
+  if result.outputId != NullOutputId:
+    result.reason = "pinned"
+    return
+
+  result.outputId = model.visibleOutputForTag(tagId)
+  if result.outputId != NullOutputId:
+    result.reason = "visible"
+    return
+
+  result.outputId = model.learnedOutputForTag(tagId)
+  if result.outputId != NullOutputId:
+    result.reason = "learned"
+    return
+
+  if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
+    result.outputId = model.activeOutput
+    result.reason = "active-fallback"
+    return
+
+  result.outputId = model.primaryOutput
+  if result.outputId != NullOutputId:
+    result.reason = "primary-fallback"
+  else:
+    result.reason = "none"
 
 proc tagForWindow*(model: Model, winId: WindowId): TagId =
   if model.activeTag != NullTagId and model.windowOnTag(model.activeTag, winId):
@@ -128,21 +179,23 @@ proc focusWorkspaceSlot*(model: var Model, slot: uint32): bool =
   let tagId = model.ensureWorkspaceSlot(slot)
   if tagId == NullTagId:
     return false
-  var visibleOutput = NullOutputId
-  for outputId, outputTag in model.outputTagsWithId():
-    if outputTag == tagId:
-      visibleOutput = outputId
-      break
-  if visibleOutput != NullOutputId:
-    discard model.setActiveOutput(visibleOutput)
-  else:
-    let outputId =
-      if model.activeOutput != NullOutputId and model.hasOutput(model.activeOutput):
-        model.activeOutput
-      else:
-        model.primaryOutput
-    if outputId != NullOutputId:
-      discard model.setOutputTag(outputId, tagId)
+  let previousActiveOutput = model.activeOutput
+  let decision = model.workspaceFocusOutputDecision(tagId)
+  if decision.outputId != NullOutputId:
+    discard model.setOutputTag(decision.outputId, tagId)
+    discard model.setActiveOutput(decision.outputId)
+    if decision.reason != "pinned":
+      discard model.learnTagOutputFromActive(tagId)
+  writeBehaviorEvent(
+    "workspace_focus_output_decision",
+    %*{
+      "slot": slot,
+      "tag": uint32(tagId),
+      "reason": decision.reason,
+      "previous_active_output": model.shellOutputName(previousActiveOutput),
+      "chosen_output": model.shellOutputName(decision.outputId),
+    },
+  )
   discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()
   discard model.recordWorkspace(tagId)

@@ -197,7 +197,7 @@ Configure monitor-specific settings.
 | Setting | Format | Description |
 | :--- | :--- | :--- |
 | `focus-at-startup` | `Flag` | Focus this output on Triad launch. If workspace 1 is not explicitly pinned elsewhere, startup places workspace 1 on this output before filling other monitors. |
-| `workspaces` | `Int...` | Pin these workspace IDs to this output. |
+| `workspaces` | `Int...` | Pin these workspace IDs to this output. Pinned workspaces stay on this output when focused unless the output is unavailable or the user explicitly moves the workspace. |
 | `mode` | `W H Hz` | Set resolution and refresh rate (e.g., `1920 1080 60`). |
 | `scale` | `Float` | Output scaling factor (0.01..64.0). |
 | `position` | `X Y` | Global coordinate position. |
