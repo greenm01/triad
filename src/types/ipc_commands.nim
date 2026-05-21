@@ -84,6 +84,7 @@ type
     CidLayoutTGMix
     CidLayoutSpiral
     CidSwitchLayout
+    CidSwitchKeyboardLayout
     CidToggleOverview
     CidOpenOverview
     CidCloseOverview
@@ -194,6 +195,7 @@ type
     Screenshot
     SplitTreeModeList
     OptionalFloatDelta
+    KeyboardLayoutTarget
 
   CommandSpec* = object
     id*: CommandId
@@ -474,6 +476,11 @@ const CommandSpecs* = [
   CommandSpec(id: CommandId.CidLayoutTGMix, name: "layout-tgmix", argShape: NoArgs),
   CommandSpec(id: CommandId.CidLayoutSpiral, name: "layout-spiral", argShape: NoArgs),
   CommandSpec(id: CommandId.CidSwitchLayout, name: "switch-layout", argShape: NoArgs),
+  CommandSpec(
+    id: CommandId.CidSwitchKeyboardLayout,
+    name: "switch-keyboard-layout",
+    argShape: KeyboardLayoutTarget,
+  ),
   CommandSpec(
     id: CommandId.CidToggleOverview, name: "toggle-overview", argShape: NoArgs
   ),

@@ -327,6 +327,23 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
     if delta.isSome:
       parts.add(delta.get())
     some(parts)
+  of CommandArgShape.KeyboardLayoutTarget:
+    if payload.hasKey("layout"):
+      let layout = payload["layout"]
+      if layout.kind == JString:
+        parts.add(layout.getStr())
+        some(parts)
+      elif layout.kind == JInt:
+        let index = intStringFromField(payload, "layout")
+        if index.isSome:
+          parts.add(index.get())
+          some(parts)
+        else:
+          none(seq[string])
+      else:
+        none(seq[string])
+    else:
+      some(parts)
   of CommandArgShape.SplitTreeModeList:
     let argv = argvFromField(payload, "argv")
     if argv.isSome:

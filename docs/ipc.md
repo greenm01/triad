@@ -19,7 +19,8 @@ Dispatch commands to the running Triad instance using:
 *   `overview-state`: Prints overview state as JSON.
 *   `keyboard-layouts`: Prints keyboard layout state as JSON.
 *   `layout-state`: Prints the layout state for all visible workspaces.
-*   `perf-status`: Prints daemon performance and timing diagnostics.
+*   `switch-keyboard-layout [next|prev|index]`: Switches the active keyboard layout.
+*   `perf-status`: Prints daemon performance, timing, and loop wake diagnostics.
 *   `mem-status`: Prints memory diagnostics.
 *   `config-reload`: Reloads the configuration.
 *   `triad-reload`: Writes a live-restore snapshot and restarts the manager.

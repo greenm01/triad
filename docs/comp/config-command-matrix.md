@@ -68,7 +68,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Pointer | Pointer warp | `warpcursor` | `river_seat_v1.pointer_warp` | `warp-pointer` | X | Triad exposes explicit IPC. |
 | Input | Keyboard repeat | `repeat_rate`, `repeat_delay` | `river_input_device_v1.set_repeat_info` | `input.keyboard.repeat-rate`, `input.keyboard.repeat-delay` | X | Applied to keyboard devices when the River input management protocol is available. |
 | Input | XKB rules/layout/options | `xkb_rules_*` | `river_xkb_config_v1` | `input.keyboard.xkb` | X | Triad builds keymaps with libxkbcommon; binds can still set per-binding layout override. |
-| Input | Keyboard layout switch | `switch_keyboard_layout` | `set_layout_by_index/name` | `bind ... layout=<index>` | X | Triad binds may override layout, and Niri-compatible `SwitchLayout` cycles configured `input.keyboard.xkb.layout` entries through River XKB config. |
+| Input | Keyboard layout switch | `switch_keyboard_layout` | `set_layout_by_index/name` | `switch-keyboard-layout`, `bind ... layout=<index>` | X | Triad binds may override layout, and native `switch-keyboard-layout` plus Niri-compatible `SwitchLayout` cycle configured `input.keyboard.xkb.layout` entries through River XKB config. |
 | Input | NumLock/CapsLock | `numlockon` | `numlock_enable`, `capslock_enable` | `input.keyboard.numlock`, `input.keyboard.capslock` | X | Applies requested initial lock state through River XKB config. |
 | Input | Pointer acceleration | `mouse_accel_*`, `trackpad_accel_*` | `set_accel_profile`, `set_accel_speed` | `input.mouse/touchpad/trackpoint/trackball.accel-profile`, `accel-speed` | X | Applies only when the device reports matching libinput support. |
 | Input | Natural scroll | `mouse_natural_scrolling`, `trackpad_natural_scrolling` | `set_natural_scroll` | `input.*.natural-scroll` | X | Supported for mouse, touchpad, trackpoint, and trackball sections. |
@@ -507,8 +507,8 @@ CLI and environment:
 - `triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]`
   dispatches configured bindings without raw input injection.
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,
-  render-start skips, layout-projection runs, and render/manage counters for
-  live CPU investigations.
+  render-start skips, layout-projection runs, loop wake counters, and
+  render/manage counters for live CPU investigations.
 - `triad msg mem-status` reports process memory, Nim heap counters, model and
   daemon object counts, protocol-surface buffer estimates, Janet script/cache
   counters, shell state, and IPC subscriber counts for live memory

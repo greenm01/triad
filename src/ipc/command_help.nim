@@ -134,6 +134,7 @@ proc argShapeId*(shape: CommandArgShape): string =
   of CommandArgShape.Screenshot: "screenshot"
   of CommandArgShape.SplitTreeModeList: "split-tree-mode-list"
   of CommandArgShape.OptionalFloatDelta: "optional-float-delta"
+  of CommandArgShape.KeyboardLayoutTarget: "keyboard-layout-target"
 
 proc argShapeUsage*(shape: CommandArgShape): string =
   case shape
@@ -187,6 +188,8 @@ proc argShapeUsage*(shape: CommandArgShape): string =
     "<split-h|split-v|stacking|tabbed>..."
   of CommandArgShape.OptionalFloatDelta:
     "[delta]"
+  of CommandArgShape.KeyboardLayoutTarget:
+    "[next|prev|index]"
 
 proc aliasesSeq*(spec: CommandSpec): seq[string] =
   if spec.aliases.len == 0:

@@ -30,6 +30,7 @@ triad msg <command> [arguments]
 | `overview-state` | Print overview state as JSON. |
 | `keyboard-layouts` | Print keyboard layout state as JSON. |
 | `layout-state` | Print layout state for all visible workspaces. |
+| `switch-keyboard-layout [next\|prev\|index]` | Switch active keyboard layout. |
 | `perf-status` | Print daemon performance and timing diagnostics. |
 | `mem-status` | Print memory diagnostics. |
 | `config-reload` | Reload the configuration file. |

@@ -203,6 +203,9 @@ proc sampleCommand(
   of CommandArgShape.OptionalFloatDelta:
     result.textCommand = spec.name & " 0.05"
     result.payload["delta"] = %0.05
+  of CommandArgShape.KeyboardLayoutTarget:
+    result.textCommand = spec.name & " next"
+    result.payload["layout"] = %"next"
   of CommandArgShape.WarpPointer:
     result.textCommand = spec.name & " 12 34"
     result.payload["x"] = %12
@@ -651,6 +654,11 @@ suite "Shell compatibility contracts":
     check newWorkspaceHelp.contains("Usage: triad msg new-workspace")
     check newWorkspaceHelp.contains("none")
 
+    let keyboardLayoutHelp = renderMsgHelp("switch-keyboard-layout")
+    check keyboardLayoutHelp.contains(
+      "Usage: triad msg switch-keyboard-layout [next|prev|index]"
+    )
+
     let aliasHelp = renderMsgHelp("toggle-fullscreen")
     check aliasHelp.contains("fullscreen-window [window-id]")
     check aliasHelp.contains("toggle-fullscreen")
@@ -714,6 +722,18 @@ suite "Shell compatibility contracts":
     let badWindowId = handleTriadAction("focus-window", %*{"id": "bad"})
     check not parseJson(badWindowId.reply)["ok"].getBool()
     check badWindowId.messages.len == 0
+
+    let keyboardNext = handleTriadAction("switch-keyboard-layout", %*{"layout": "next"})
+    check parseJson(keyboardNext.reply)["ok"].getBool()
+    check keyboardNext.messages[0].kind == MsgKind.CmdSwitchKeyboardLayout
+    check keyboardNext.messages[0].keyboardLayoutDelta == 1
+    check keyboardNext.messages[0].keyboardLayoutIndex == -1
+
+    let keyboardIndex = handleTriadAction("switch-keyboard-layout", %*{"layout": 1})
+    check parseJson(keyboardIndex.reply)["ok"].getBool()
+    check keyboardIndex.messages[0].kind == MsgKind.CmdSwitchKeyboardLayout
+    check keyboardIndex.messages[0].keyboardLayoutIndex == 1
+    check keyboardIndex.messages[0].keyboardLayoutDelta == 0
 
     let badScreenshot = handleTriadAction(
       "screenshot", %*{"write_to_disk": false, "copy_to_clipboard": false}

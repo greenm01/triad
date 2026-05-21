@@ -36,6 +36,49 @@ proc parseBoolArg(s: string): Option[bool] =
   else:
     none(bool)
 
+proc parseKeyboardLayoutCommand(parts: seq[string]): Option[Msg] =
+  if parts.len > 2:
+    return none(Msg)
+
+  if parts.len == 1:
+    return some(
+      Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: 1,
+        keyboardLayoutIndex: -1,
+      )
+    )
+
+  case parts[1].normalize()
+  of "next":
+    some(
+      Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: 1,
+        keyboardLayoutIndex: -1,
+      )
+    )
+  of "prev", "previous":
+    some(
+      Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: -1,
+        keyboardLayoutIndex: -1,
+      )
+    )
+  else:
+    let index = parseInt32Arg(parts[1])
+    if index.isSome and index.get() >= 0:
+      some(
+        Msg(
+          kind: MsgKind.CmdSwitchKeyboardLayout,
+          keyboardLayoutIndex: index.get(),
+          keyboardLayoutDelta: 0,
+        )
+      )
+    else:
+      none(Msg)
+
 proc parseScreenshotCommand(parts: seq[string], kind: ScreenshotKind): Option[Msg] =
   var path = ""
   var pointerMode = ScreenshotPointerMode.PointerDefault
@@ -490,6 +533,8 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId("spiral")))
   of CommandId.CidSwitchLayout:
     some(Msg(kind: MsgKind.CmdSwitchLayout))
+  of CommandId.CidSwitchKeyboardLayout:
+    parseKeyboardLayoutCommand(parts)
   of CommandId.CidToggleOverview:
     some(Msg(kind: MsgKind.CmdToggleOverview))
   of CommandId.CidOpenOverview:
