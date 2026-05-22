@@ -1371,6 +1371,36 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.outputActiveTag(second) == dynamicTag
     check model.workspaceOutput(dynamicTag) == second
 
+  test "New workspace reuses hidden empty dynamic workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+
+    let outputId = model.outputForExternal(ExternalOutputId(1))
+    discard model.setActiveOutput(outputId)
+    let emptyTag = model.ensureWorkspaceSlot(4)
+    discard model.setTagName(emptyTag, "code")
+    let occupiedTag = model.ensureWorkspaceSlot(5)
+    discard model.setActiveWorkspace(occupiedTag)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 50, appId: "term", title: "term")
+    )
+    discard model.setActiveWorkspace(model.tagForSlot(1))
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.trailingWorkspaceSlot() == 0
+    check model.visibleWorkspaceSlots().find(6'u32) == -1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+
+    check model.activeTag == emptyTag
+    check model.outputActiveTag(outputId) == emptyTag
+    check model.tagForSlot(6) == NullTagId
+
   test "Hidden empty dynamic workspace focuses on active output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

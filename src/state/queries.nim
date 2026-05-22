@@ -122,6 +122,30 @@ proc hasDurableTagState*(model: Model, tag: TagData): bool =
   tag.masterCount != model.restoreDefaultMasterCount() or
     tag.masterSplitRatio != model.restoreDefaultMasterRatio()
 
+proc tagVisibleOnAnyOutput(model: Model, tagId: TagId): bool =
+  if tagId == NullTagId:
+    return false
+  for _, outputTag in model.outputTagsWithId():
+    if outputTag == tagId:
+      return true
+  false
+
+proc hasReusableEmptyWorkspaceBefore(
+    model: Model, slots: openArray[uint32], beforeSlot: uint32
+): bool =
+  for slot in slots:
+    if slot >= beforeSlot:
+      continue
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
+      continue
+    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnAnyOutput(tagId):
+      continue
+    return true
+
 proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if model.visibleSlots.len > 0:
     return model.visibleSlots
@@ -149,6 +173,8 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
   if result.len > 0:
     let last = result[^1]
     let lastTag = model.tagForSlot(last)
+    if model.hasReusableEmptyWorkspaceBefore(result, last):
+      return
     if last < MaxTagBits and lastTag != NullTagId and
         model.tagHasNonStickyLiveWindows(lastTag):
       result.add(last + 1)
@@ -734,12 +760,7 @@ proc tagHasOutput*(model: Model, tagId: TagId): bool =
   model.tagOutputs.getOrDefault(tagId, NullOutputId) != NullOutputId
 
 proc tagVisibleOnOutput*(model: Model, tagId: TagId): bool =
-  if tagId == NullTagId:
-    return false
-  for _, outputTag in model.outputTagsWithId():
-    if outputTag == tagId:
-      return true
-  false
+  model.tagVisibleOnAnyOutput(tagId)
 
 proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
   for outputId, outputTag in model.outputTagsWithId():

@@ -97,12 +97,30 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
     else:
       inc i
 
+proc hasReusableEmptyWorkspaceBefore(
+    model: Model, slots: openArray[uint32], beforeSlot: uint32
+): bool =
+  for slot in slots:
+    if slot >= beforeSlot:
+      continue
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
+      continue
+    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnOutput(tagId):
+      continue
+    return true
+
 proc trailingWorkspaceSlot*(model: Model): uint32 =
   let slots = model.computedVisibleWorkspaceSlots()
   if slots.len == 0:
     return 0
   let last = slots[^1]
   let tagId = model.tagForSlot(last)
+  if model.hasReusableEmptyWorkspaceBefore(slots, last):
+    return 0
   if last < MaxTagBits and tagId != NullTagId and model.tagHasNonStickyLiveWindows(
     tagId
   ):
@@ -186,6 +204,24 @@ proc workspaceSlotForClampedIndex*(model: Model, index: uint32): uint32 =
     return 0
   let i = min(int(index) - 1, slots.len - 1)
   slots[i]
+
+proc reusableEmptyWorkspaceSlot*(model: Model, outputId: OutputId): uint32 =
+  let defaultCount = model.defaultWorkspaceCount()
+  for slot in model.sortedSlots():
+    if slot <= defaultCount:
+      continue
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
+      continue
+    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnOutput(tagId):
+      continue
+    let workspaceOutput = model.workspaceOutput(tagId)
+    if outputId == NullOutputId or workspaceOutput == NullOutputId or
+        workspaceOutput == outputId:
+      return slot
 
 proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
   result = model.defaultWorkspaceCount() + 1

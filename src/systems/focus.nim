@@ -116,7 +116,9 @@ proc focusNewWorkspaceOnActiveOutput*(model: var Model): bool =
   var outputId = model.activeFallbackOutput()
   if outputId == NullOutputId:
     outputId = model.primaryFallbackOutput()
-  let slot = model.nextDynamicWorkspaceSlot()
+  var slot = model.reusableEmptyWorkspaceSlot(outputId)
+  if slot == 0:
+    slot = model.nextDynamicWorkspaceSlot()
   let tagId = model.ensureWorkspaceSlot(slot)
   if tagId == NullTagId:
     return false

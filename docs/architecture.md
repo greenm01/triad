@@ -72,7 +72,7 @@ Triad uses KDL for robust, hot-reloadable configuration.
 *   **Validation Logic:** Configuration validation checks strict output-rule shapes. Unknown or unsupported `output` fields, invalid transforms, malformed modes, non-positive workspace IDs, and out-of-range scales are rejected before startup or reload.
 *   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
     *   **Gaps:** In native `frame-tree` layouts, gaps represent the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. Native `bsp-tree` and `i3` use traditional outer and inner gaps.
-*   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, one trailing empty creation workspace remains internally available after the last occupied workspace, and stale empty workspaces are pruned. Shell compatibility views and overview previews hide inactive empty workspaces.
+*   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, a trailing empty creation workspace remains available only when no earlier empty dynamic workspace can be reused, and stale empty workspaces are pruned. Shell compatibility views and overview previews hide inactive empty workspaces.
 *   **Workspace Rule Templates:** Provides lazy name/layout templates for workspace slots when internal tags are created (e.g., `workspace 1 default-layout="scroller"`).
 *   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific workspace assignments.
 
