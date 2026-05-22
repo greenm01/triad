@@ -62,6 +62,20 @@ suite "Core Runtime Logic: smoke":
     check powerOnEffects[0].kind == EffectKind.EffSetMonitorPower
     check powerOnEffects[0].monitorPowerEnabled
 
+    let targetOffEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdPowerOffMonitor, outputTarget: "DP-3"))
+    check targetOffEffects.len == 1
+    check targetOffEffects[0].kind == EffectKind.EffSetMonitorPower
+    check not targetOffEffects[0].monitorPowerEnabled
+    check targetOffEffects[0].monitorPowerTarget == "DP-3"
+
+    let targetOnEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdPowerOnMonitor, outputTarget: "DP-3"))
+    check targetOnEffects.len == 1
+    check targetOnEffects[0].kind == EffectKind.EffSetMonitorPower
+    check targetOnEffects[0].monitorPowerEnabled
+    check targetOnEffects[0].monitorPowerTarget == "DP-3"
+
   test "Workspace reorder changes visible workspace order":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

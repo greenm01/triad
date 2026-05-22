@@ -50,8 +50,7 @@ type
     daemon*: ptr TriadDaemon
     serial*: uint32
     monitorPowerCompletionSet*: bool
-    monitorPowerOffActive*: bool
-    monitorPowerClearRestore*: bool
+    monitorPowerRestoreHeadIds*: seq[uint32]
 
   OutputManagementModeRuntime* = object
     pointer*: ptr wlrOutput.ZwlrOutputModeV1

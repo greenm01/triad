@@ -83,6 +83,7 @@ type
       keyboardLayoutIndex*: uint32
     of EffectKind.EffSetMonitorPower:
       monitorPowerEnabled*: bool
+      monitorPowerTarget*: string
     of EffectKind.EffScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string

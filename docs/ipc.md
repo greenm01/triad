@@ -23,6 +23,8 @@ Dispatch commands to the running Triad instance using:
 *   `switch-keyboard-layout [next|prev|index]`: Switches the active keyboard layout.
 *   `power-off-monitors`: Disables currently enabled outputs through output-management and remembers them for restore.
 *   `power-on-monitors`: Restores the outputs remembered by `power-off-monitors`.
+*   `power-off-monitor <output>`: Disables one output target, such as `DP-3`.
+*   `power-on-monitor <output>`: Enables one output target and clears its monitor-power restore entry.
 *   `perf-status`: Prints daemon performance, timing, and loop wake diagnostics.
 *   `mem-status`: Prints memory diagnostics.
 *   `config-reload`: Reloads the configuration.

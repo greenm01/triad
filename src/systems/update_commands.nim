@@ -606,6 +606,22 @@ proc applyCommand*(
     result.effects.add(
       Effect(kind: EffectKind.EffSetMonitorPower, monitorPowerEnabled: true)
     )
+  of MsgKind.CmdPowerOffMonitor:
+    result.effects.add(
+      Effect(
+        kind: EffectKind.EffSetMonitorPower,
+        monitorPowerEnabled: false,
+        monitorPowerTarget: msg.outputTarget,
+      )
+    )
+  of MsgKind.CmdPowerOnMonitor:
+    result.effects.add(
+      Effect(
+        kind: EffectKind.EffSetMonitorPower,
+        monitorPowerEnabled: true,
+        monitorPowerTarget: msg.outputTarget,
+      )
+    )
   of MsgKind.CmdWarpPointer:
     result.effects.add(
       Effect(kind: EffectKind.EffPointerWarp, warpX: msg.warpX, warpY: msg.warpY)

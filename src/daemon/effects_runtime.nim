@@ -196,7 +196,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       if keyboard != nil:
         keyboard.setLayoutByIndex(int32(eff.keyboardLayoutIndex))
   of EffectKind.EffSetMonitorPower:
-    daemon.applyMonitorPower(eff.monitorPowerEnabled)
+    daemon.applyMonitorPower(eff.monitorPowerEnabled, eff.monitorPowerTarget)
   of EffectKind.EffEnsureNextKeyEaten, EffectKind.EffCancelEnsureNextKeyEaten:
     daemon.queueManageEffect(eff)
   of EffectKind.EffStopManager:

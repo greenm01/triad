@@ -1469,4 +1469,10 @@ Categories=System;TerminalEmulator;
     check parseTextCommand("power-off-monitors").get().kind ==
       MsgKind.CmdPowerOffMonitors
     check parseTextCommand("power-on-monitors").get().kind == MsgKind.CmdPowerOnMonitors
+    let powerOffMonitor = parseTextCommand("power-off-monitor DP-3").get()
+    check powerOffMonitor.kind == MsgKind.CmdPowerOffMonitor
+    check powerOffMonitor.outputTarget == "DP-3"
+    let powerOnMonitor = parseTextCommand("power-on-monitor DP-3").get()
+    check powerOnMonitor.kind == MsgKind.CmdPowerOnMonitor
+    check powerOnMonitor.outputTarget == "DP-3"
     check parseTextCommand("mmsg -g -A").isNone

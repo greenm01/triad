@@ -110,6 +110,8 @@ type
     CidLockSession
     CidPowerOffMonitors
     CidPowerOnMonitors
+    CidPowerOffMonitor
+    CidPowerOnMonitor
     CidWarpPointer
     CidEatNextKey
     CidCancelEatNextKey
@@ -566,6 +568,14 @@ const CommandSpecs* = [
   ),
   CommandSpec(
     id: CommandId.CidPowerOnMonitors, name: "power-on-monitors", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidPowerOffMonitor,
+    name: "power-off-monitor",
+    argShape: RequiredOutput,
+  ),
+  CommandSpec(
+    id: CommandId.CidPowerOnMonitor, name: "power-on-monitor", argShape: RequiredOutput
   ),
   CommandSpec(id: CommandId.CidWarpPointer, name: "warp-pointer", argShape: WarpPointer),
   CommandSpec(id: CommandId.CidEatNextKey, name: "eat-next-key", argShape: NoArgs),

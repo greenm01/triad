@@ -617,6 +617,18 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdPowerOffMonitors))
   of CommandId.CidPowerOnMonitors:
     some(Msg(kind: MsgKind.CmdPowerOnMonitors))
+  of CommandId.CidPowerOffMonitor:
+    if parts.len >= 2:
+      some(
+        Msg(kind: MsgKind.CmdPowerOffMonitor, outputTarget: parts[1 ..^ 1].join(" "))
+      )
+    else:
+      none(Msg)
+  of CommandId.CidPowerOnMonitor:
+    if parts.len >= 2:
+      some(Msg(kind: MsgKind.CmdPowerOnMonitor, outputTarget: parts[1 ..^ 1].join(" ")))
+    else:
+      none(Msg)
   of CommandId.CidWarpPointer:
     if parts.len >= 3:
       let x = parseInt32Arg(parts[1])

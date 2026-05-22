@@ -195,6 +195,8 @@ type
     CmdLockSession
     CmdPowerOffMonitors
     CmdPowerOnMonitors
+    CmdPowerOffMonitor
+    CmdPowerOnMonitor
     CmdWarpPointer
     CmdEatNextKey
     CmdCancelEatNextKey
@@ -425,7 +427,8 @@ type
       moveWorkspaceWindowId*: uint32
       moveWorkspaceIndex*: uint32
       moveWorkspaceFollowWindow*: bool
-    of MsgKind.CmdFocusOutput, MsgKind.CmdMoveWorkspaceToOutput, MsgKind.CmdMoveToOutput:
+    of MsgKind.CmdFocusOutput, MsgKind.CmdMoveWorkspaceToOutput,
+        MsgKind.CmdMoveToOutput, MsgKind.CmdPowerOffMonitor, MsgKind.CmdPowerOnMonitor:
       outputTarget*: string
     of MsgKind.CmdFocusWindowById:
       focusWindowId*: uint32

@@ -311,6 +311,38 @@ proc restoreContains(daemon: TriadDaemon, headId: uint32): bool =
       return true
   false
 
+proc addRestoreHead(headIds: var seq[uint32], headId: uint32) =
+  for existing in headIds:
+    if existing == headId:
+      return
+  headIds.add(headId)
+
+proc containsHead(headIds: seq[uint32], headId: uint32): bool =
+  for existing in headIds:
+    if existing == headId:
+      return true
+  false
+
+proc restoreAfterPowerOn(restoreIds, enabledIds: seq[uint32]): seq[uint32] =
+  for restoreId in restoreIds:
+    if not enabledIds.containsHead(restoreId):
+      result.add(restoreId)
+
+proc targetPowerEnabled(
+    daemon: TriadDaemon,
+    headId: uint32,
+    currentlyEnabled: bool,
+    selectedHeadIds: seq[uint32],
+    enabled: bool,
+    restoreAll: bool,
+    targeted: bool,
+): bool =
+  if not selectedHeadIds.containsHead(headId):
+    return currentlyEnabled
+  if enabled:
+    return restoreAll or targeted or daemon.restoreContains(headId)
+  false
+
 proc configureHeadPower(
     daemon: TriadDaemon,
     config: ptr wlrOutput.ZwlrOutputConfigurationV1,
@@ -339,18 +371,20 @@ proc configureHeadPower(
   if head.adaptiveSyncSet and canSetAdaptiveSync:
     headConfig.setAdaptiveSync(if head.adaptiveSync: 1'u32 else: 0'u32)
 
-proc applyMonitorPower*(daemon: var TriadDaemon, enabled: bool) =
+proc applyMonitorPower*(daemon: var TriadDaemon, enabled: bool, target = "") =
   if daemon.wlrOutputManager == nil:
     warn "Monitor power request ignored; output-management protocol is unavailable",
-      enabled = enabled
+      enabled = enabled, target = target
     return
   if not daemon.wlrOutputReady or daemon.wlrOutputApplyInFlight:
     warn "Monitor power request ignored; output-management state is not ready",
       enabled = enabled,
+      target = target,
       ready = daemon.wlrOutputReady,
       inFlight = daemon.wlrOutputApplyInFlight
     return
 
+  let wanted = target.strip()
   var heads: seq[tuple[headId: uint32, head: OutputManagementHeadRuntime]] = @[]
   for headId, head in daemon.wlrOutputHeads.pairs:
     if not head.finished and head.pointer != nil:
@@ -363,35 +397,52 @@ proc applyMonitorPower*(daemon: var TriadDaemon, enabled: bool) =
   )
 
   if heads.len == 0:
-    warn "Monitor power request ignored; no outputs are advertised", enabled = enabled
+    warn "Monitor power request ignored; no outputs are advertised",
+      enabled = enabled, target = wanted
     return
 
-  if not enabled and not daemon.monitorPowerOffActive:
-    daemon.monitorPowerRestoreHeadIds = @[]
+  var selectedHeadIds: seq[uint32] = @[]
+  for item in heads:
+    if wanted.len == 0 or item.head.headMatchesTarget(wanted):
+      selectedHeadIds.add(item.headId)
+
+  if selectedHeadIds.len == 0:
+    warn "Monitor power request ignored; output target is not available",
+      enabled = enabled, target = wanted
+    return
+
+  var nextRestoreHeadIds = daemon.monitorPowerRestoreHeadIds
+  if not enabled:
     for item in heads:
-      if item.head.headRuntimeEnabled():
-        daemon.monitorPowerRestoreHeadIds.add(item.headId)
+      if selectedHeadIds.containsHead(item.headId) and item.head.headRuntimeEnabled():
+        nextRestoreHeadIds.addRestoreHead(item.headId)
+    if nextRestoreHeadIds.len == daemon.monitorPowerRestoreHeadIds.len:
+      warn "Monitor power-off request ignored; no selected enabled outputs were found",
+        target = wanted
+      return
+  else:
+    nextRestoreHeadIds =
+      daemon.monitorPowerRestoreHeadIds.restoreAfterPowerOn(selectedHeadIds)
 
-  if not enabled and daemon.monitorPowerRestoreHeadIds.len == 0:
-    warn "Monitor power-off request ignored; no enabled outputs were found"
-    return
-
-  let restoreAll = enabled and daemon.monitorPowerRestoreHeadIds.len == 0
+  let restoreAll =
+    enabled and wanted.len == 0 and daemon.monitorPowerRestoreHeadIds.len == 0
   var anyChange = false
   for item in heads:
-    let targetEnabled =
-      if enabled:
-        restoreAll or daemon.restoreContains(item.headId)
-      else:
-        false
+    let targetEnabled = daemon.targetPowerEnabled(
+      item.headId,
+      item.head.headRuntimeEnabled(),
+      selectedHeadIds,
+      enabled,
+      restoreAll,
+      wanted.len > 0,
+    )
     if item.head.headRuntimeEnabled() != targetEnabled:
       anyChange = true
       break
 
   if not anyChange:
-    daemon.monitorPowerOffActive = not enabled
-    if enabled:
-      daemon.monitorPowerRestoreHeadIds = @[]
+    daemon.monitorPowerRestoreHeadIds = nextRestoreHeadIds
+    daemon.monitorPowerOffActive = daemon.monitorPowerRestoreHeadIds.len > 0
     return
 
   let config = daemon.wlrOutputManager.createConfiguration(daemon.wlrOutputSerial)
@@ -402,24 +453,26 @@ proc applyMonitorPower*(daemon: var TriadDaemon, enabled: bool) =
     daemon: addr daemon,
     serial: daemon.wlrOutputSerial,
     monitorPowerCompletionSet: true,
-    monitorPowerOffActive: not enabled,
-    monitorPowerClearRestore: enabled,
+    monitorPowerRestoreHeadIds: nextRestoreHeadIds,
   )
   discard config.addListener(
     wlrOutputConfigListener.addr, cast[pointer](daemon.wlrOutputConfigListenerData)
   )
 
   for item in heads:
-    let targetEnabled =
-      if enabled:
-        restoreAll or daemon.restoreContains(item.headId)
-      else:
-        false
+    let targetEnabled = daemon.targetPowerEnabled(
+      item.headId,
+      item.head.headRuntimeEnabled(),
+      selectedHeadIds,
+      enabled,
+      restoreAll,
+      wanted.len > 0,
+    )
     daemon.configureHeadPower(config, item.head, targetEnabled)
 
   daemon.wlrOutputApplyInFlight = true
   info "Applying monitor power request",
-    enabled = enabled, serial = daemon.wlrOutputSerial
+    enabled = enabled, target = wanted, serial = daemon.wlrOutputSerial
   config.apply()
 
 proc selectedModeSize(
@@ -884,9 +937,8 @@ proc onConfigSucceeded(data: pointer, config: ptr wlrOutput.ZwlrOutputConfigurat
   let daemon = listenerData.daemon
   info "Output-management config applied", serial = listenerData.serial
   if listenerData.monitorPowerCompletionSet:
-    daemon.monitorPowerOffActive = listenerData.monitorPowerOffActive
-    if listenerData.monitorPowerClearRestore:
-      daemon.monitorPowerRestoreHeadIds = @[]
+    daemon.monitorPowerRestoreHeadIds = listenerData.monitorPowerRestoreHeadIds
+    daemon.monitorPowerOffActive = daemon.monitorPowerRestoreHeadIds.len > 0
   daemon.wlrOutputApplyInFlight = false
   daemon.wlrOutputRetryPending = false
   daemon.wlrOutputRetryCount = 0
