@@ -276,7 +276,7 @@ config-notification {
 bindings {
   mirror-hjkl-arrows #true
   bind "Super+Return" "spawn-terminal"
-  bind "SUPER+CTRL+c" "layout-center-tile" allow-inhibiting=#false
+  bind "SUPER+CTRL+c" "center-tile" allow-inhibiting=#false
   bind "Super+/" "toggle-hotkey-overlay" hotkey-overlay-title="Show Important Hotkeys"
   bind "Super+Shift+?" "focus-last" hotkey-overlay-title=#null
   bind "NONE+F12" "focus-last"
@@ -595,7 +595,7 @@ switch-events {
     check config.configNotification.reloadRolledBack ==
       @["notify-send", "Triad", "Config rolled back"]
     check config.keyBindings.len > 0
-    check config.commandForBinding("c", Super + Ctrl) == "layout-center-tile"
+    check config.commandForBinding("c", Super + Ctrl) == "center-tile"
     let uppercaseBindings =
       config.keyBindings.filterIt(it.key == "c" and it.modifiers == Super + Ctrl)
     check uppercaseBindings.len == 1
@@ -919,6 +919,13 @@ janet {
     check config.msgKindForBinding("Tab", Alt + Shift, BindingMode.BindRecent) ==
       MsgKind.CmdRecentWindowPrev
     check config.commandForBinding("Tab", Super) == "focus-last"
+    check config.commandForBinding("1", Super + Alt) == "scroller"
+    check config.commandForBinding("2", Super + Alt) == "notion"
+    check config.commandForBinding("3", Super + Alt) == "dwindle"
+    check config.commandForBinding("4", Super + Alt) == "grid"
+    check config.commandForBinding("5", Super + Alt) == "center-tile"
+    check config.commandForBinding("6", Super + Alt) == "spiral"
+    check config.commandForBinding("7", Super + Alt) == "i3"
     check config.commandForBinding("e", Super, BindingMode.BindNormal, "i3") ==
       "split-tree-layout-toggle-split"
     check config.commandForBinding("s", Super, BindingMode.BindNormal, "i3") ==
@@ -970,6 +977,19 @@ janet {
     let spiral = parseTextCommand("layout-spiral").get()
     check spiral.kind == MsgKind.CmdSetCustomLayout
     check spiral.customLayout.layoutIdString() == "spiral"
+    let shortScroller = parseTextCommand("scroller").get()
+    check shortScroller.kind == MsgKind.CmdSetLayout
+    check shortScroller.newLayout == LayoutMode.Scroller
+    let shortNotion = parseTextCommand("notion").get()
+    check shortNotion.kind == MsgKind.CmdSetCustomLayout
+    check shortNotion.customLayout.layoutIdString() == "notion"
+    let shortDwindle = parseTextCommand("dwindle").get()
+    check shortDwindle.kind == MsgKind.CmdSetCustomLayout
+    check shortDwindle.customLayout.layoutIdString() == "dwindle"
+    let shortI3 = parseTextCommand("i3").get()
+    check shortI3.kind == MsgKind.CmdSetNativeLayout
+    check shortI3.nativeLayout.nativeLayoutIdString() == "i3"
+    check parseTextCommand("not-a-layout").isNone
     let preset = parseTextCommand("switch-proportion-preset -1").get()
     check preset.kind == MsgKind.CmdSwitchProportionPreset
     check preset.proportionPresetDelta == -1

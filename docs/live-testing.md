@@ -124,7 +124,7 @@ From another terminal in the same session:
 
 ```bash
 ./triad msg focus-next
-./triad msg layout-tile
+./triad msg tile
 ./triad msg toggle-overview
 ./triad msg focus-shell-ui
 ./triad msg warp-pointer 100 100

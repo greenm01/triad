@@ -73,9 +73,9 @@ For the full bindings reference, see [Key Bindings](@/configuration/key-bindings
 Each workspace picks its own layout. Switch the active one:
 
 ```bash
-triad msg layout-tile
-triad msg layout-scroller
-triad msg layout-monocle
+triad msg tile
+triad msg scroller
+triad msg monocle
 ```
 
 Or cycle through a configured list with a binding:

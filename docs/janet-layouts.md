@@ -69,6 +69,8 @@ LayoutSelection =
 ```
 
 - existing commands such as `layout-grid` keep targeting built-ins;
+- short layout IDs such as `notion`, `dwindle`, `spiral`, and `i3` select
+  bundled or native layouts directly;
 - `layout-custom <name>` selects a declared custom layout;
 - `layout-native <name>` selects a native substrate-backed layout;
 - layout cycles can include built-ins, declared custom names, and native layout
@@ -262,6 +264,8 @@ Implemented.
 - Config supports `janet { layout "<name>" fallback="<builtin>" }`.
 - `layout-cycle`, `workspaces default-layout`, and
   `workspace-rules default-layout=...` accept declared custom names.
+- short built-in, bundled, and native layout IDs select layouts directly, so
+  binds can use `notion`, `dwindle`, `spiral`, or `i3`.
 - `layout-custom <name>` selects a custom layout for the active workspace.
 - `set-layout-for-workspace <tag> <layout>` accepts built-in ids or custom
   names.

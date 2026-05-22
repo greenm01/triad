@@ -66,14 +66,9 @@ triad msg <command> [arguments]
 
 | Command | Description |
 |---|---|
-| `layout-scroller` | Activate the scroller layout. |
-| `layout-tile` | Activate master-stack tiling. |
-| `layout-grid` | Activate grid layout. |
-| `layout-monocle` | Activate monocle (fullscreen stack) layout. |
-| `layout-deck` | Activate deck layout. |
-| `layout-spiral` | Activate spiral layout. |
-| `layout-tgmix` | Activate tgmix layout. |
-| `layout-custom <name>` | Select a declared Janet layout by name. |
+| `scroller`, `grid`, `notion`, `dwindle`, `center-tile`, `spiral`, `i3` | Select a layout by its layout ID. |
+| `layout-scroller`, `layout-grid`, `layout-spiral`, ... | Legacy explicit aliases for common layouts. |
+| `layout-custom <name>` | Select a user-declared Janet layout when it is not one of Triad's bundled layout IDs. |
 | `layout-native <name>` | Select a native substrate: `frame-tree`, `bsp-tree`, or `i3`. |
 | `switch-layout` | Cycle through the configured `layout-cycle`. |
 | `set-layout-for-workspace <tag> <layout>` | Set a layout on a specific workspace by tag ID. |

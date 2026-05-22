@@ -51,8 +51,12 @@ Dispatch commands to the running Triad instance using:
 
 ### Layout Management
 Set the layout mode for the active workspace:
-*   `layout-scroller`, `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`, `layout-spiral`, `layout-tgmix`.
-*   `layout-custom <name>`: Selects a declared Janet layout.
+*   Short layout IDs such as `scroller`, `grid`, `notion`, `dwindle`,
+    `center-tile`, `spiral`, and `i3`.
+*   Legacy explicit aliases such as `layout-scroller`, `layout-grid`,
+    `layout-center-tile`, `layout-spiral`, and `layout-tgmix`.
+*   `layout-custom <name>`: Selects a user-declared Janet layout when the
+    short ID is not one of Triad's built-in or bundled layout IDs.
 *   `layout-native <name>`: Selects a native substrate (e.g., `frame-tree`, `bsp-tree`, `i3`).
 *   `switch-layout`: Cycles through the configured `layout-cycle`.
 *   `set-layout-for-workspace <tag> <layout>`: Targets a specific workspace by ID.

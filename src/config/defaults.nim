@@ -156,6 +156,13 @@ bindings {
     bind "Super+Alt+s" "toggle-scratchpad"
     bind "Super+Shift+s" "restore-scratchpad"
     bind "Super+n" "switch-layout"
+    bind "Super+Alt+1" "scroller"
+    bind "Super+Alt+2" "notion"
+    bind "Super+Alt+3" "dwindle"
+    bind "Super+Alt+4" "grid"
+    bind "Super+Alt+5" "center-tile"
+    bind "Super+Alt+6" "spiral"
+    bind "Super+Alt+7" "i3"
     bind "Super+Shift+n" "new-workspace"
     layout "i3" {
         bind "Super+e" "split-tree-layout-toggle-split"

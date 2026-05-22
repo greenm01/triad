@@ -161,7 +161,7 @@ scripts.
 (triad/on :tag-changed
   (fn [ev]
     (when (= (ev :new-tag-id) 5)
-      (triad/command "layout-monocle"))))
+      (triad/command "monocle"))))
 ```
 
 See the [Janet examples](https://github.com/greenm01/triad/tree/master/examples/janet) for full per-app scripts (gimp, telegram, vesktop, and custom layouts).
@@ -426,7 +426,7 @@ command names and aliases used by `triad msg` and config bindings:
 
 ```janet
 (triad/command "focus-workspace" 8)
-(triad/command "layout-grid")
+(triad/command "grid")
 (triad/command "maximize-window-to-edges")
 (triad/command "move-window-to-tag" (triad/current-window :id) 8 true)
 (triad/command "set-window-maximized" (triad/current-window :id) true)

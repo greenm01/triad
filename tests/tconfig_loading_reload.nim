@@ -199,6 +199,22 @@ suite "KDL Configuration Parser: loading reload":
       it.key == "b" and it.modifiers == Super + Shift and it.command == "minimize"
     )
 
+  test "Default parser bindings expose the layout strip":
+    let bindings = defaultKeyBindings()
+
+    check bindings.anyIt(
+      it.key == "1" and it.modifiers == Super + Alt and it.command == "scroller"
+    )
+    check bindings.anyIt(
+      it.key == "2" and it.modifiers == Super + Alt and it.command == "notion"
+    )
+    check bindings.anyIt(
+      it.key == "3" and it.modifiers == Super + Alt and it.command == "dwindle"
+    )
+    check bindings.anyIt(
+      it.key == "7" and it.modifiers == Super + Alt and it.command == "i3"
+    )
+
   test "Strict config load rejects invalid KDL":
     let path = getCurrentDir() / "test_invalid_reload.kdl"
     writeFile(path, "layout { gaps ")

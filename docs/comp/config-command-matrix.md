@@ -113,7 +113,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Window movement | Move across workspace | | WM policy | `move-window-up/down-or-to-workspace-*` | X | Triad-specific command pair. |
 | Window movement | Floating move/resize | `smartmovewin`, `smartresizewin`, `movewin`, `resizewin` | pointer ops and resize primitives | `move-floating`, `resize-floating` | X | Triad also supports pointer move/resize bindings. |
 | Window grouping | Consume/expel/group | `scroller_stack` | WM policy | `consume-window`, `expel-window`, `group-windows`, `ungroup-window`, `focus-next-in-group` | X | Triad groups the focused window with the next rendered neighbor in scroller and frame-tree layouts; BSP ignores grouping to avoid hidden tree leaves. |
-| Layouts | Set layout | `setlayout` | WM policy | `layout-*`, `layout-custom`, native `set-layout`, native action parity | X | Triad supports scroller, bundled Janet layouts, native layouts, and declared user Janet layouts. |
+| Layouts | Set layout | `setlayout` | WM policy | short layout IDs, `layout-*`, `layout-custom`, native `set-layout`, native action parity | X | Triad supports scroller, bundled Janet layouts, native layouts, and declared user Janet layouts. Built-in, bundled, and native layout IDs can be used directly in binds, e.g. `notion`, `dwindle`, `spiral`, and `i3`. |
 | Layouts | Cycle layout | `switch_layout`, `circle_layout` | WM policy | `switch-layout`, `layout-cycle` | X | Triad config controls the cycle order, including bundled and declared Janet layouts. |
 | Layouts | Layout defaults per workspace | `tagrule layout_name` | WM policy | `workspaces default-layout`, `workspace-rules default-layout=...` | X | Built-in ids, bundled Janet ids, native ids, and declared Janet layout names are accepted. |
 | Layouts | Master count | `incnmaster`, `default_nmaster`, `nmaster` | WM policy | `master-count`, `adjust-master-count`, `layout.master.count` | X | |
@@ -438,7 +438,8 @@ Text IPC and bind commands:
   `exit-session`, `config-reload`, `screenshot`, `screenshot-screen`,
   `screenshot-window`, `show-hotkey-overlay`, `hide-hotkey-overlay`,
   `toggle-hotkey-overlay`.
-- Layout: `layout-scroller`, `layout-vertical-scroller`,
+- Layout: short layout IDs such as `scroller`, `notion`, `dwindle`,
+  `center-tile`, `spiral`, and `i3`; legacy aliases `layout-scroller`, `layout-vertical-scroller`,
   `layout-tile`, `layout-grid`, `layout-monocle`, `layout-deck`,
   `layout-center-tile`, `layout-right-tile`, `layout-vertical-tile`,
   `layout-vertical-grid`, `layout-vertical-deck`, `layout-tgmix`,

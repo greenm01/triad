@@ -19,19 +19,23 @@ layout {
 
 bindings {
   bind "Super+n"       "switch-layout"
-  bind "Super+d"       "layout-tile"
-  bind "Super+g"       "layout-grid"
-  bind "Super+Ctrl+x"  "layout-monocle"
+  bind "Super+d"       "tile"
+  bind "Super+g"       "grid"
+  bind "Super+Ctrl+x"  "monocle"
 }
 ```
 
 Or switch at any time via IPC:
 
 ```bash
-triad msg layout-scroller
-triad msg layout-tile
+triad msg scroller
+triad msg tile
 triad msg switch-layout
 ```
+
+Short layout IDs work in binds and IPC commands for Triad's built-in, bundled,
+and native layouts. Use names like `notion`, `dwindle`, `center-tile`,
+`spiral`, or `i3` directly.
 
 ---
 

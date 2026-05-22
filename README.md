@@ -90,7 +90,7 @@ Interact with Triad's IPC socket via the CLI:
 ```bash
 triad msg focus-next
 triad msg toggle-overview
-triad msg layout-tile
+triad msg tile
 ```
 
 See `docs/ipc.md` for the full command guide.

@@ -190,13 +190,34 @@ proc parseRecentAdvanceCommand(parts: seq[string], kind: MsgKind): Option[Msg] =
       return none(Msg)
   some(msg)
 
+proc parseLayoutIdCommand(parts: seq[string]): Option[Msg] =
+  if parts.len != 1:
+    return none(Msg)
+
+  let id = parts[0].strip()
+  if id.len == 0:
+    return none(Msg)
+
+  let builtin = parseCoreLayoutModeId(id)
+  if builtin.isSome:
+    return some(Msg(kind: MsgKind.CmdSetLayout, newLayout: builtin.get()))
+
+  let native = parseNativeLayoutId(id)
+  if native.isSome:
+    return some(Msg(kind: MsgKind.CmdSetNativeLayout, nativeLayout: native.get().id))
+
+  if id.isBundledLayoutId():
+    return some(Msg(kind: MsgKind.CmdSetCustomLayout, customLayout: janetLayoutId(id)))
+
+  none(Msg)
+
 proc parseCommandParts*(parts: seq[string]): Option[Msg] =
   if parts.len == 0:
     return none(Msg)
 
   let spec = resolveCommandSpec(parts[0])
   if spec.isNone:
-    return none(Msg)
+    return parseLayoutIdCommand(parts)
 
   case spec.get().id
   of CommandId.CidFocusNext:
