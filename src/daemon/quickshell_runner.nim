@@ -2,7 +2,7 @@ import std/[json, options, os, osproc, sequtils, strutils, times]
 import chronicles
 import process_runner
 import ../core/[defaults, shell_profiles]
-import ../ipc/quickshell_compat
+import ../ipc/niri_shell_compat
 import ../types/model
 from ../types/runtime_values import
   QuickshellConfig, ShellProfileConfig, ShellWatchdogConfig, ShellsConfig
@@ -196,7 +196,7 @@ proc writeQuickshellBehaviorEvent*(
   writeBehaviorEvent(eventName, quickshellBehaviorPayload(config, reason, extra))
 
 proc shellCompatBehaviorPayload(
-    profile: ShellProfileConfig, niriSocketPath: string, compat: QuickshellCompatEnv
+    profile: ShellProfileConfig, niriSocketPath: string, compat: NiriShellCompatEnv
 ): JsonNode =
   result = %*{"launch": profile.launch, "niri_socket": niriSocketPath}
   if not profile.niriCompat:
@@ -498,14 +498,22 @@ proc spawnShellProfile(
     return
 
   var spawnInfo =
-    shellCompatBehaviorPayload(profile, niriSocketPath, QuickshellCompatEnv())
+    shellCompatBehaviorPayload(profile, niriSocketPath, NiriShellCompatEnv())
   try:
     let baseEnv = model.configuredProcessEnv()
-    var compat = QuickshellCompatEnv()
+    var compat = NiriShellCompatEnv()
     let env =
       if profile.niriCompat:
-        compat = prepareQuickshellCompatEnv(niriSocketPath, baseEnv = baseEnv)
+        compat = prepareNiriShellCompatEnv(niriSocketPath, baseEnv = baseEnv)
         spawnInfo = shellCompatBehaviorPayload(profile, niriSocketPath, compat)
+        let niriSocketAccepting = waitForNiriCompatSocket(compat.niriSocketPath)
+        spawnInfo["niri_socket_accepting"] = %niriSocketAccepting
+        if not niriSocketAccepting:
+          warn "Niri compatibility socket is not accepting connections before shell launch",
+            profile = profile.name, niriSocket = compat.niriSocketPath
+          writeShellBehaviorEvent(
+            "shell_compat_socket_unavailable", shells, profile, reason, spawnInfo
+          )
         if compat.warning.len > 0:
           warn "Shell compatibility environment is incomplete",
             profile = profile.name, warning = compat.warning
@@ -710,14 +718,14 @@ proc spawnQuickshell*(
     )
 
     try:
-      let compat = prepareQuickshellCompatEnv(
+      let compat = prepareNiriShellCompatEnv(
         niriSocketPath, baseEnv = model.configuredProcessEnv()
       )
       if compat.warning.len > 0:
         warn "Quickshell compatibility environment is incomplete",
           warning = compat.warning
         writeQuickshellBehaviorEvent(
-          "quickshell_compat_warning",
+          "niri_shell_compat_warning",
           model.quickshell,
           reason,
           %*{"warning": compat.warning},

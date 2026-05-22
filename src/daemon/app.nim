@@ -6,7 +6,7 @@ import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
 import ../config/[parser, reload_policy]
-from ../ipc/quickshell_compat import chooseNiriCompatSocketPath
+from ../ipc/niri_shell_compat import chooseNiriCompatSocketPath
 import ../ipc/[binding_dispatch, command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts

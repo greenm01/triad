@@ -6,7 +6,7 @@ import ../src/daemon/quickshell_runner
 import
   ../src/ipc/[
     binding_dispatch, command_help, command_registry, commands, niri_cli, niri_compat,
-    quickshell_compat, shell_overlay, triad_native,
+    niri_shell_compat, shell_overlay, triad_native,
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 import ../src/utils/behavior_log
@@ -890,7 +890,7 @@ suite "Shell compatibility contracts":
     defer:
       putEnv("XDG_DATA_DIRS", oldDataDirs)
 
-    let compat = prepareQuickshellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri)
+    let compat = prepareNiriShellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri)
     check compat.env["NIRI_SOCKET"] == tmp / "niri.sock"
     check compat.env["TRIAD_SOCKET"] == tmp / "triad.sock"
     check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
@@ -919,7 +919,7 @@ suite "Shell compatibility contracts":
     base["CUSTOM_TRIAD_ENV"] = "kept"
 
     let compat =
-      prepareQuickshellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri, baseEnv = base)
+      prepareNiriShellCompatEnv(tmp / "niri.sock", tmp, fakeTriadNiri, baseEnv = base)
     check compat.env["CUSTOM_TRIAD_ENV"] == "kept"
     check compat.env["XDG_CURRENT_DESKTOP"] == "triad"
     check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")

@@ -1,4 +1,4 @@
-import std/[os, posix, strtabs, strutils]
+import std/[asyncdispatch, os, posix, strtabs, strutils]
 import shell_overlay, socket
 import ../types/runtime_values
 
@@ -9,7 +9,7 @@ type
     AuthoritativeStop
     AuthoritativeRestart
 
-  QuickshellCompatEnv* = object
+  NiriShellCompatEnv* = object
     env*: StringTableRef
     niriSocketPath*: string
     compatBinPath*: string
@@ -191,6 +191,25 @@ proc appendWarning(existing, warning: string): string =
     return warning
   existing & "; " & warning
 
+proc niriCompatSocketAcceptsWithin(
+    path: string, timeoutMs = 1500, pollMs = 25
+): Future[bool] {.async.} =
+  if path.len == 0:
+    return false
+  if not unixPathExists(path):
+    return false
+
+  var elapsed = 0
+  while elapsed <= timeoutMs:
+    if await unixSocketAcceptsConnections(path):
+      return true
+    await sleepAsync(pollMs)
+    elapsed += pollMs
+  false
+
+proc waitForNiriCompatSocket*(path: string, timeoutMs = 1500, pollMs = 25): bool =
+  waitFor niriCompatSocketAcceptsWithin(path, timeoutMs, pollMs)
+
 proc installNiriShim(
     compatBinPath, triadNiriPath: string
 ): tuple[ok: bool, warning: string] =
@@ -228,13 +247,13 @@ proc installNiriShim(
   except CatchableError as e:
     (false, "failed to install niri shim: " & e.msg)
 
-proc prepareQuickshellCompatEnv*(
+proc prepareNiriShellCompatEnv*(
     niriSocketPath: string,
     runtimeDir = runtimeDir(),
     triadNiriPath = findTriadNiri(),
     triadSocketPath = "",
     baseEnv: StringTableRef = nil,
-): QuickshellCompatEnv =
+): NiriShellCompatEnv =
   result.env = baseEnv.copyEnv()
   result.niriSocketPath = niriSocketPath
   result.compatBinPath = runtimeDir / "triad-compat-bin"
