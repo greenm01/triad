@@ -82,6 +82,7 @@ proc compactModelMemory*(model: var Model) =
   model.switchEvents = model.switchEvents.compactSeq()
   model.screenLockCommand = model.screenLockCommand.compactSeq()
   model.outputRules = model.outputRules.compactSeq()
+  model.outputLayoutRows = model.outputLayoutRows.compactSeq()
   model.windowRules = model.windowRules.compactSeq()
   model.tagRules = model.tagRules.compactSeq()
 

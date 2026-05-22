@@ -6,6 +6,7 @@ type
     layout*: LayoutConfig
     workspaces*: WorkspaceConfig
     outputRules*: seq[OutputRule]
+    outputLayoutRows*: seq[OutputLayoutRowConfig]
     tagRules*: seq[TagRule]
     windowRules*: seq[WindowRule]
     environment*: seq[EnvironmentEntryConfig]

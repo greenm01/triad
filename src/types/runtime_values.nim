@@ -38,6 +38,15 @@ type
     OutputPositionAutoCenterUp
     OutputPositionAutoCenterDown
 
+  OutputLayoutRowAlign* {.pure.} = enum
+    Left
+    Center
+    Right
+
+  OutputLayoutRow* = object
+    targets*: seq[string]
+    align*: OutputLayoutRowAlign
+
   LayoutMode* {.pure.} = enum
     Scroller
     VerticalScroller
@@ -309,6 +318,8 @@ type
     reservedRight*: int32
     reservedBottom*: int32
     reservedLeft*: int32
+
+  OutputLayoutRowConfig* = OutputLayoutRow
 
   EnvironmentEntryConfig* = object
     name*: string

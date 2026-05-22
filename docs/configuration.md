@@ -186,16 +186,19 @@ The recommended form groups all monitor rules in one `output` section:
 
 ```kdl
 output {
+  layout {
+    row "DP-3" "DP-2" "DP-1"
+    row "HDMI-A-1" align="center"
+  }
+
   monitor "HDMI-A-1" {
     mode "1920x1080@144"
-    position "0x0"
     workspaces 1 2 3
     vrr 1
   }
 
   monitor "DP-1" {
     transform "90"
-    position 1920 0
     scale 1.5
   }
 
@@ -207,6 +210,7 @@ output {
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
+| `layout` | `String...` or `row String...` children | Declare physical monitor arrangement. A shorthand list is one left-to-right row; `layout { row ... }` rows stack top-to-bottom. |
 | `focus-at-startup` | `Flag` | Focus this output on launch. |
 | `workspaces` | `Int...` | Pin workspace IDs to this output. |
 | `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Set resolution and refresh rate. |
@@ -215,6 +219,11 @@ output {
 | `transform` | `String`, `0..7` | Rotation (e.g., `"90"`, `"flipped"`, `"normal"`). |
 | `vrr` | `0..3` | Enable VRR/Adaptive Sync (nonzero enables). |
 | `reserved_area` | `Int`, `Int Int Int Int`, or properties | Add usable-area insets. |
+
+Rows in `output.layout` accept `align="left"`, `"center"`, or `"right"`.
+The matrix starts at `0x0`, skips missing monitors, and packs remaining
+monitors without gaps. Monitors listed in the matrix cannot also set
+`position`; unlisted monitors may still use explicit or automatic positions.
 
 ---
 

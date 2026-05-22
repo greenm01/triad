@@ -8,24 +8,24 @@ import state, wayland_helpers
 const OutputModeRefreshTolerance = 1000'i32
 
 type
-  SelectedOutputMode = object
-    modeId: uint32
-    custom: bool
-    width: int32
-    height: int32
-    refresh: int32
+  SelectedOutputMode* = object
+    modeId*: uint32
+    custom*: bool
+    width*: int32
+    height*: int32
+    refresh*: int32
 
-  ProposedHead = object
-    headId: uint32
-    head: OutputManagementHeadRuntime
-    ruleOpt: tuple[found: bool, rule: OutputRuleData]
-    mode: SelectedOutputMode
-    enabled: bool
-    width: int32
-    height: int32
-    x: int32
-    y: int32
-    positionSet: bool
+  ProposedHead* = object
+    headId*: uint32
+    head*: OutputManagementHeadRuntime
+    ruleOpt*: tuple[found: bool, rule: OutputRuleData]
+    mode*: SelectedOutputMode
+    enabled*: bool
+    width*: int32
+    height*: int32
+    x*: int32
+    y*: int32
+    positionSet*: bool
 
 var wlrOutputManagerListener*: wlrOutput.ZwlrOutputManagerV1Listener
 var wlrOutputHeadListener*: wlrOutput.ZwlrOutputHeadV1Listener
@@ -55,6 +55,8 @@ proc floatChanged(a, b: float32): bool =
   abs(a - b) > 0.0001'f32
 
 proc hasOutputManagementConfig(model: Model): bool =
+  if model.outputLayoutRows.len > 0:
+    return true
   for rule in model.outputRules:
     if rule.modeSet or rule.scaleSet or rule.positionSet or rule.transformSet or
         rule.adaptiveSyncSet or rule.enabledSet:
@@ -217,7 +219,7 @@ proc needsOutputApply(
     positionX, positionY: int32,
 ): bool =
   if not ruleOpt.found:
-    return false
+    return positionSet and (head.x != positionX or head.y != positionY)
   let rule = ruleOpt.rule
   if rule.enabledSet and (not head.enabledSet or head.enabled != rule.enabled):
     return true
@@ -518,7 +520,61 @@ proc logicalHeadSize(
     max(1'i32, int32(float32(h) / max(0.01'f32, scale))),
   )
 
-proc resolveAutoPositions(heads: var seq[ProposedHead]) =
+proc findLayoutHead(
+    heads: seq[ProposedHead], target: string, used: openArray[bool]
+): int =
+  for idx, proposed in heads:
+    if used[idx] or not proposed.enabled:
+      continue
+    if proposed.head.headMatchesTarget(target):
+      return idx
+  -1
+
+proc resolveLayoutPositions*(model: Model, heads: var seq[ProposedHead]) =
+  if model.outputLayoutRows.len == 0:
+    return
+
+  var used = newSeq[bool](heads.len)
+  var rows: seq[
+    tuple[indices: seq[int], align: OutputLayoutRowAlign, width: int32, height: int32]
+  ]
+  var matrixWidth = 0'i32
+
+  for row in model.outputLayoutRows:
+    var indices: seq[int]
+    var rowWidth = 0'i32
+    var rowHeight = 0'i32
+    for target in row.targets:
+      let idx = heads.findLayoutHead(target, used)
+      if idx < 0:
+        warn "Configured output layout target is not available", target = target
+        continue
+      used[idx] = true
+      indices.add(idx)
+      rowWidth += heads[idx].width
+      rowHeight = max(rowHeight, heads[idx].height)
+    if indices.len > 0:
+      rows.add((indices: indices, align: row.align, width: rowWidth, height: rowHeight))
+      matrixWidth = max(matrixWidth, rowWidth)
+
+  var y = 0'i32
+  for row in rows:
+    var x =
+      case row.align
+      of OutputLayoutRowAlign.Left:
+        0'i32
+      of OutputLayoutRowAlign.Center:
+        (matrixWidth - row.width) div 2
+      of OutputLayoutRowAlign.Right:
+        matrixWidth - row.width
+    for idx in row.indices:
+      heads[idx].x = x
+      heads[idx].y = y + (row.height - heads[idx].height) div 2
+      heads[idx].positionSet = true
+      x += heads[idx].width
+    y += row.height
+
+proc resolveAutoPositions*(heads: var seq[ProposedHead]) =
   var minX = 0'i32
   var minY = 0'i32
   var maxX = 0'i32
@@ -528,16 +584,17 @@ proc resolveAutoPositions(heads: var seq[ProposedHead]) =
   for i in 0 ..< heads.len:
     if not heads[i].enabled:
       continue
-    let ruleOpt = heads[i].ruleOpt
-    if ruleOpt.found and ruleOpt.rule.positionSet and
-        ruleOpt.rule.positionKind == OutputPositionKind.OutputPositionExplicit:
-      heads[i].x = ruleOpt.rule.positionX
-      heads[i].y = ruleOpt.rule.positionY
-      heads[i].positionSet = true
-    else:
-      heads[i].x = heads[i].head.x
-      heads[i].y = heads[i].head.y
-      heads[i].positionSet = false
+    if not heads[i].positionSet:
+      let ruleOpt = heads[i].ruleOpt
+      if ruleOpt.found and ruleOpt.rule.positionSet and
+          ruleOpt.rule.positionKind == OutputPositionKind.OutputPositionExplicit:
+        heads[i].x = ruleOpt.rule.positionX
+        heads[i].y = ruleOpt.rule.positionY
+        heads[i].positionSet = true
+      else:
+        heads[i].x = heads[i].head.x
+        heads[i].y = heads[i].head.y
+        heads[i].positionSet = false
 
     if heads[i].positionSet:
       if not placed:
@@ -554,6 +611,8 @@ proc resolveAutoPositions(heads: var seq[ProposedHead]) =
 
   for i in 0 ..< heads.len:
     if not heads[i].enabled:
+      continue
+    if heads[i].positionSet:
       continue
     let ruleOpt = heads[i].ruleOpt
     if not ruleOpt.found or not ruleOpt.rule.positionSet or
@@ -656,6 +715,7 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
       if result == 0:
         result = cmp(a.headId, b.headId)
   )
+  daemon.runtimeState.model.resolveLayoutPositions(proposedHeads)
   proposedHeads.resolveAutoPositions()
 
   var enabledCount = 0

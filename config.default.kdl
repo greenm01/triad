@@ -64,20 +64,6 @@ workspaces {
 //     adaptive-sync #false
 // }
 
-workspace-rules {
-    // Workspaces 1 and 3 inherit the global scroller default.
-    workspace 1 name="main"
-    workspace 2 name="browser" default-layout="grid"
-    workspace 3 name="scratch"
-
-    // Dynamic workspace templates can use specialized layouts.
-    workspace 4 name="chat" default-layout="deck"
-    workspace 5 name="media" default-layout="monocle"
-    workspace 6 name="studio" default-layout="center-tile"
-    workspace 7 name="vm" default-layout="right-tile"
-    workspace 8 name="float" default-layout="grid"
-}
-
 shells {
     enabled #true
     active "noctalia"

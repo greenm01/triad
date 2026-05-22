@@ -5,16 +5,17 @@ import
   ../src/daemon/[
     bindings_runtime, child_process_runtime, cursor_shake, effects_runtime,
     input_device_classification, live_restore_runtime, memory_status, message_queue,
-    process_runner, reload_runtime, render_invalidation, spawn_context,
-    switch_event_runtime,
+    output_management_runtime, process_runner, reload_runtime, render_invalidation,
+    spawn_context, switch_event_runtime,
   ]
-from ../src/daemon/state import consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
+from ../src/daemon/state import
+  OutputManagementHeadRuntime, consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
 from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[binding_dispatch, commands, niri_compat, socket]
 import ../src/layouts/scroller
 import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
-from ../src/types/model import Model
+from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
 import ../src/utils/[process_memory, session_env]
 
@@ -27,6 +28,17 @@ proc recordConfigNotification(
   discard daemon
   observedConfigNotificationEvent = event
   observedConfigNotificationCommand = command
+
+proc proposedOutput(
+    name: string, width, height: int32, rule = OutputRuleData()
+): ProposedHead =
+  ProposedHead(
+    head: OutputManagementHeadRuntime(name: name, enabled: true, enabledSet: true),
+    ruleOpt: (found: rule.target.len > 0 or rule.positionSet, rule: rule),
+    enabled: true,
+    width: width,
+    height: height,
+  )
 
 proc baseSnapshot(): ShellSnapshot =
   ShellSnapshot(
@@ -50,6 +62,101 @@ proc baseSnapshot(): ShellSnapshot =
   )
 
 suite "Crash hardening":
+  test "output layout row resolves left-to-right physical coordinates":
+    var model = Model(
+      outputLayoutRows:
+        @[
+          OutputLayoutRow(
+            targets: @["DP-3", "DP-2", "DP-1"], align: OutputLayoutRowAlign.Center
+          )
+        ]
+    )
+    var heads =
+      @[
+        proposedOutput("DP-1", 1920, 1080),
+        proposedOutput("DP-2", 2560, 1440),
+        proposedOutput("DP-3", 1920, 1080),
+      ]
+
+    model.resolveLayoutPositions(heads)
+
+    check heads.mapIt((it.head.name, it.x, it.y)) ==
+      @[
+        ("DP-1", 4480'i32, 180'i32), ("DP-2", 1920'i32, 0'i32), ("DP-3", 0'i32, 180'i32)
+      ]
+
+  test "output layout matrix supports stacked monitors":
+    var model = Model(
+      outputLayoutRows:
+        @[
+          OutputLayoutRow(targets: @["DP-1"], align: OutputLayoutRowAlign.Center),
+          OutputLayoutRow(targets: @["DP-2"], align: OutputLayoutRowAlign.Center),
+        ]
+    )
+    var heads =
+      @[proposedOutput("DP-1", 1920, 1080), proposedOutput("DP-2", 2560, 1440)]
+
+    model.resolveLayoutPositions(heads)
+
+    check heads.mapIt((it.head.name, it.x, it.y)) ==
+      @[("DP-1", 320'i32, 0'i32), ("DP-2", 0'i32, 1080'i32)]
+
+  test "output layout centers uneven rows and closes missing target gaps":
+    var model = Model(
+      outputLayoutRows:
+        @[
+          OutputLayoutRow(targets: @["DP-4"], align: OutputLayoutRowAlign.Center),
+          OutputLayoutRow(
+            targets: @["DP-3", "missing-output", "DP-2"],
+            align: OutputLayoutRowAlign.Center,
+          ),
+        ]
+    )
+    var heads =
+      @[
+        proposedOutput("DP-2", 2000, 1000),
+        proposedOutput("DP-3", 1000, 1000),
+        proposedOutput("DP-4", 1000, 500),
+      ]
+
+    model.resolveLayoutPositions(heads)
+
+    check heads.mapIt((it.head.name, it.x, it.y)) ==
+      @[
+        ("DP-2", 1000'i32, 500'i32), ("DP-3", 0'i32, 500'i32), ("DP-4", 1000'i32, 0'i32)
+      ]
+
+  test "output layout seeds existing auto placement for unlisted outputs":
+    var model = Model(
+      outputLayoutRows:
+        @[
+          OutputLayoutRow(
+            targets: @["DP-1", "DP-2"], align: OutputLayoutRowAlign.Center
+          )
+        ]
+    )
+    var heads =
+      @[
+        proposedOutput("DP-1", 1000, 1000),
+        proposedOutput("DP-2", 1000, 1000),
+        proposedOutput(
+          "DP-9",
+          500,
+          500,
+          OutputRuleData(
+            target: "DP-9",
+            positionSet: true,
+            positionKind: OutputPositionKind.OutputPositionAutoRight,
+          ),
+        ),
+      ]
+
+    model.resolveLayoutPositions(heads)
+    heads.resolveAutoPositions()
+
+    check heads.mapIt((it.head.name, it.x, it.y)) ==
+      @[("DP-1", 0'i32, 0'i32), ("DP-2", 1000'i32, 0'i32), ("DP-9", 2000'i32, 0'i32)]
+
   test "daemon startup rejects missing Wayland session environment":
     check waylandSessionProblem("", "wayland-1") == "XDG_RUNTIME_DIR is not set"
     check waylandSessionProblem("/run/user/1000", "") == "WAYLAND_DISPLAY is not set"

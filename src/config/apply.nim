@@ -258,6 +258,9 @@ proc outputRuleData(rule: rv.OutputRule): OutputRuleData =
     reservedLeft: rule.reservedLeft,
   )
 
+proc outputLayoutRowData(row: rv.OutputLayoutRowConfig): OutputLayoutRowData =
+  OutputLayoutRowData(targets: row.targets, align: row.align)
+
 proc legacyShellsFromQuickshell(config: rv.QuickshellConfig): rv.ShellsConfig =
   var command = config.command.strip()
   if command.len == 0:
@@ -347,6 +350,9 @@ proc applyConfig*(model: var Model, config: Config) =
   model.outputRules = @[]
   for rule in config.outputRules:
     model.outputRules.add(rule.outputRuleData())
+  model.outputLayoutRows = @[]
+  for row in config.outputLayoutRows:
+    model.outputLayoutRows.add(row.outputLayoutRowData())
   model.tagRules = @[]
   for rule in config.tagRules:
     model.tagRules.add(rule.tagRuleData())

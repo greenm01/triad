@@ -980,6 +980,17 @@ janet {
     check preset.kind == MsgKind.CmdSwitchProportionPreset
     check preset.proportionPresetDelta == -1
 
+  test "Default configs do not reserve workspace rules":
+    let shipped = loadConfig(getCurrentDir() / "config.default.kdl")
+    let fallback = loadConfigNodes(parseKdl(FallbackConfigContent))
+
+    check shipped.workspaces.defaultCount == 3
+    check shipped.workspaces.defaultLayout == LayoutMode.Scroller
+    check shipped.tagRules.len == 0
+    check fallback.workspaces.defaultCount == 3
+    check fallback.workspaces.defaultLayout == LayoutMode.Scroller
+    check fallback.tagRules.len == 0
+
   test "layout-scoped bindings parse as normal-mode canonical layout overrides":
     let config = loadConfigNodes(
       parseKdl(

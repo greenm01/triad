@@ -78,6 +78,8 @@ janet {
 }
 
 // output {
+//     layout "DP-3" "DP-2" "DP-1"
+//
 //     monitor "HDMI-A-1" {
 //         mode "preferred"
 //         position "auto"
@@ -90,13 +92,6 @@ janet {
 //         scale "auto"
 //     }
 // }
-
-workspace-rules {
-    workspace 1 name="term"
-    workspace 2 name="web"
-    workspace 3 name="files"
-    workspace 4 name="chat" default-layout="monocle" open-on-output="HDMI-A-1"
-}
 
 // cursor {
 //     theme "default"

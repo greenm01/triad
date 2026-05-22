@@ -159,6 +159,25 @@ proc parseOutputPositionString(
   except CatchableError:
     (false, OutputPositionKind.OutputPositionExplicit, 0'i32, 0'i32)
 
+proc parseOutputLayoutRowAlign(
+    value: string
+): tuple[valid: bool, align: OutputLayoutRowAlign] =
+  case value.strip().toLowerAscii()
+  of "left":
+    (true, OutputLayoutRowAlign.Left)
+  of "center":
+    (true, OutputLayoutRowAlign.Center)
+  of "right":
+    (true, OutputLayoutRowAlign.Right)
+  else:
+    (false, OutputLayoutRowAlign.Center)
+
+proc targetSeen(targets: openArray[string], target: string): bool =
+  for existing in targets:
+    if existing.cmpIgnoreCase(target) == 0:
+      return true
+  false
+
 proc outputConfigError(target, field, message: string): string =
   if field.len > 0:
     "output \"" & target & "\" " & field & ": " & message
@@ -263,6 +282,54 @@ proc validateOutputPositionField(target: string, child: KdlNode): string =
     return outputConfigError(target, child.name, "expected 1 or 2 argument(s)")
   if not child.args[0].isIntegerValue() or not child.args[1].isIntegerValue():
     return outputConfigError(target, child.name, "x and y must be integers")
+
+proc validateOutputLayoutRow(
+    row: KdlNode, context: string, targets: var seq[string]
+): string =
+  if row.args.len == 0:
+    return context & ": expected at least one output target"
+  for arg in row.args:
+    if arg.kind != KString:
+      return context & ": output targets must be strings"
+    let target = arg.kString().strip()
+    if target.len == 0:
+      return context & ": output targets must not be empty"
+    if targets.targetSeen(target):
+      return context & ": duplicate output target \"" & target & "\""
+    targets.add(target)
+  for key, value in row.props.pairs:
+    case key
+    of "align":
+      if value.kind != KString:
+        return context & " align: expected left, center, or right"
+      if not parseOutputLayoutRowAlign(value.kString()).valid:
+        return context & " align: expected left, center, or right"
+    else:
+      return context & ": unknown property \"" & key & "\""
+
+proc validateOutputLayoutNode(node: KdlNode, index: int): string =
+  var targets: seq[string]
+  if node.args.len > 0 and node.children.len > 0:
+    return
+      outputNodeError(index, "layout: expected arguments or row children, not both")
+  if node.args.len > 0:
+    if node.props.len > 0:
+      return outputNodeError(index, "layout: properties are not supported")
+    return validateOutputLayoutRow(node, "output[" & $index & "] layout", targets)
+  if node.children.len == 0:
+    return outputNodeError(index, "layout: expected at least one row")
+  if node.props.len > 0:
+    return outputNodeError(index, "layout: properties are not supported")
+  var rowIndex = 0
+  for child in node.children:
+    if child.name != "row":
+      return outputNodeError(index, "layout: unknown child \"" & child.name & "\"")
+    result = validateOutputLayoutRow(
+      child, "output[" & $index & "] layout row[" & $rowIndex & "]", targets
+    )
+    if result.len > 0:
+      return
+    inc rowIndex
 
 proc validateOutputTransformField(target: string, child: KdlNode): string =
   result = outputFieldArgs(target, child, 1)
@@ -952,6 +1019,24 @@ proc validateOutputRuleNode(node: KdlNode, index: int): string =
 
   var monitorIndex = 0
   var defaultSeen = false
+  var layoutTargets: seq[string]
+  var layoutCount = 0
+  for child in node.children:
+    if child.name == "layout":
+      inc layoutCount
+      if layoutCount > 1:
+        return outputNodeError(index, "layout is duplicated")
+      result = validateOutputLayoutNode(child, index)
+      if result.len > 0:
+        return
+      if child.args.len > 0:
+        for arg in child.args:
+          layoutTargets.add(arg.kString().strip())
+      else:
+        for row in child.children:
+          for arg in row.args:
+            layoutTargets.add(arg.kString().strip())
+
   for child in node.children:
     case child.name
     of "monitor":
@@ -963,10 +1048,19 @@ proc validateOutputRuleNode(node: KdlNode, index: int): string =
         return outputNodeError(
           index, "monitor[" & $monitorIndex & "]: output target must be a string"
         )
-      result = validateOutputGroupChild(child.args[0].kString().strip(), child)
+      let target = child.args[0].kString().strip()
+      if layoutTargets.targetSeen(target):
+        for ruleChild in child.children:
+          if ruleChild.name == "position":
+            return outputConfigError(
+              target, "position", "cannot be set for an output listed in output layout"
+            )
+      result = validateOutputGroupChild(target, child)
       if result.len > 0:
         return
       inc monitorIndex
+    of "layout":
+      discard
     of "default":
       if defaultSeen:
         return outputNodeError(index, "default output rule is duplicated")
@@ -1268,6 +1362,27 @@ proc outputModeRefreshMilliHz(value: KdlVal): int32 =
   except CatchableError:
     hz = float64(value.kInt())
   int32(max(0.0, hz * 1000.0 + 0.5))
+
+proc parseOutputLayoutRowNode(node: KdlNode): OutputLayoutRowConfig =
+  result.align = OutputLayoutRowAlign.Center
+  if node.props.hasKey("align"):
+    let parsed = parseOutputLayoutRowAlign(node.props["align"].kString())
+    if parsed.valid:
+      result.align = parsed.align
+  for arg in node.args:
+    let target = arg.kString().strip()
+    if target.len > 0 and not result.targets.targetSeen(target):
+      result.targets.add(target)
+
+proc parseOutputLayoutNode(node: KdlNode): seq[OutputLayoutRowConfig] =
+  if node.args.len > 0:
+    result.add(node.parseOutputLayoutRowNode())
+  else:
+    for child in node.children:
+      if child.name == "row":
+        let row = child.parseOutputLayoutRowNode()
+        if row.targets.len > 0:
+          result.add(row)
 
 proc parseOutputRuleNode(node: KdlNode, target: string): OutputRule =
   result = OutputRule(target: target.strip())
@@ -1749,7 +1864,10 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
             result.outputRules.add(node.parseOutputRuleNode(node.args[0].kString()))
           else:
             for child in node.children:
-              if child.name == "monitor" and child.args.len > 0:
+              if child.name == "layout":
+                for row in child.parseOutputLayoutNode():
+                  result.outputLayoutRows.add(row)
+              elif child.name == "monitor" and child.args.len > 0:
                 result.outputRules.add(
                   child.parseOutputRuleNode(child.args[0].kString())
                 )

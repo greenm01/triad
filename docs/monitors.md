@@ -29,15 +29,15 @@ Use the `output` block to configure your monitors. Identify targets using the co
 
 ```kdl
 output {
+  layout "DP-3" "DP-2" "DP-1"
+
   monitor "DP-1" {
     mode "preferred"
-    position "auto-right"
     scale "auto"
   }
 
   monitor "DP-2" {
     mode "2560x1440@120"
-    position "0x0"
     focus-at-startup
     vrr 2
     reserved_area top=8 bottom=8
@@ -49,12 +49,29 @@ output {
 }
 ```
 
-`position` defines the monitor arrangement; it does not tile windows across combined rectangles. Each output tiles windows within its own resolution and usable area.
+For monitors not listed in `layout`, `position` defines the monitor
+arrangement; it does not tile windows across combined rectangles. Each output
+tiles windows within its own resolution and usable area.
+
+For stacked or mixed physical arrangements, use a matrix layout:
+
+```kdl
+output {
+  layout {
+    row "DP-4" align="center"
+    row "DP-3" "DP-2" "DP-1"
+  }
+}
+```
+
+Rows are top-to-bottom and monitors within a row are left-to-right. Missing
+monitors are skipped, and remaining monitors close the gap.
 
 ### Output Settings
 
 | Field | Format | Purpose |
 | :--- | :--- | :--- |
+| `layout` | `String...` or `row String...` children | Arrange listed monitors physically through output-management. |
 | `focus-at-startup` | Flag or bool | Select the startup-focused output. |
 | `workspaces` | Positive integers | Pin workspace IDs to this output. |
 | `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Request an advertised mode or a custom string mode. |

@@ -6,13 +6,14 @@ from runtime_values import
   AxisBindingConfig, ConfigNotificationConfig, CursorConfig, EnvironmentEntryConfig,
   InputConfig, GestureBindingConfig, JanetConfig, JanetLayoutConfig, JanetLayoutId,
   KeyBindingConfig, LayoutMode, LayoutSelection, HotkeyOverlayConfig, FrameTabsConfig,
-  LayoutSwitchToastConfig, OutputConfigTransform, OutputModeKind, OutputPositionKind,
-  ParentedRole, SpiralLayoutConfig, OverviewHotCornersConfig, PointerBindingConfig,
-  PointerOpKind, PresentationMode, ProtocolSurfacesConfig, QuickshellConfig,
-  ShellsConfig, RecentWindowFilter, RecentWindowScope, RecentWindowsConfig,
-  ScreenshotConfig, SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig,
-  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
-  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy, SplitTreeNodeMode
+  LayoutSwitchToastConfig, OutputConfigTransform, OutputLayoutRow, OutputModeKind,
+  OutputPositionKind, ParentedRole, SpiralLayoutConfig, OverviewHotCornersConfig,
+  PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
+  QuickshellConfig, ShellsConfig, RecentWindowFilter, RecentWindowScope,
+  RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig, TerminalConfig,
+  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
+  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy,
+  SplitTreeNodeMode
 from runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, NativeLayoutId
 
@@ -343,6 +344,8 @@ type
     reservedBottom*: int32
     reservedLeft*: int32
 
+  OutputLayoutRowData* = OutputLayoutRow
+
   RestoredWindowData* = object
     slot*: uint32
     parentExternalId*: ExternalWindowId
@@ -652,6 +655,7 @@ type
     allowExitSession*: bool
     startupWindowRulesActive*: bool
     outputRules*: seq[OutputRuleData]
+    outputLayoutRows*: seq[OutputLayoutRowData]
     windowRules*: seq[WindowRuleData]
     tagRules*: seq[TagRuleData]
     restoreActiveSlot*: uint32

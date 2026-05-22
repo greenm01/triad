@@ -235,9 +235,12 @@ output "" {
   position "auto"
 }
 output {
+  layout {
+    row "DP-4" align="center"
+    row "DP-3" "DP-2" "DP-1"
+  }
   monitor "DP-3" {
     mode "1920x1080@60"
-    position "0x180"
     enabled #true
   }
   default {
@@ -263,6 +266,21 @@ output {
     check loaded.config.outputRules[3].target == "DP-3"
     check loaded.config.outputRules[4].target.len == 0
     check loaded.config.outputRules[4].scaleAuto
+    check loaded.config.outputLayoutRows.len == 2
+    check loaded.config.outputLayoutRows[0].targets == @["DP-4"]
+    check loaded.config.outputLayoutRows[0].align == OutputLayoutRowAlign.Center
+    check loaded.config.outputLayoutRows[1].targets == @["DP-3", "DP-2", "DP-1"]
+
+    let shorthand = loadStrictConfigContent(
+      """
+output {
+  layout "DP-3" "DP-2" "DP-1"
+}
+""", "valid-output-layout-shorthand",
+    )
+    check shorthand.ok
+    check shorthand.config.outputLayoutRows.len == 1
+    check shorthand.config.outputLayoutRows[0].targets == @["DP-3", "DP-2", "DP-1"]
 
   test "Strict config load rejects invalid output rule fields":
     let cases =
@@ -406,6 +424,55 @@ output "DP-1" {
 }
 """,
           needle: "output \"DP-1\" position: expected XxY",
+        ),
+        (
+          name: "duplicate-layout",
+          content:
+            """
+output {
+  layout "DP-1"
+  layout "DP-2"
+}
+""",
+          needle: "output[0]: layout is duplicated",
+        ),
+        (
+          name: "duplicate-layout-target",
+          content:
+            """
+output {
+  layout {
+    row "DP-1" "DP-1"
+  }
+}
+""",
+          needle: "output[0] layout row[0]: duplicate output target \"DP-1\"",
+        ),
+        (
+          name: "bad-layout-align",
+          content:
+            """
+output {
+  layout {
+    row "DP-1" align="middle"
+  }
+}
+""",
+          needle: "output[0] layout row[0] align: expected left, center, or right",
+        ),
+        (
+          name: "layout-position-conflict",
+          content:
+            """
+output {
+  layout "DP-1"
+  monitor "DP-1" {
+    position "0x0"
+  }
+}
+""",
+          needle:
+            "output \"DP-1\" position: cannot be set for an output listed in output layout",
         ),
         (
           name: "bad-transform",
