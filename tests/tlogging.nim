@@ -84,6 +84,7 @@ suite "Runtime logging":
     check source.contains("incrementFrameTickReasonCounts")
     check source.contains("nowMs - lastMotion >= delay")
     check source.contains("reason != \"recent-focus\"")
+    check source.contains("AnimationTickIntervalMs = int64(DefaultFrameIntervalMs)")
     check renderStart >= 0
     check cmdTick > renderStart
     check sampleWrite >= 0

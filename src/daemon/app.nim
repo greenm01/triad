@@ -29,6 +29,7 @@ var daemon = initTriadDaemon()
 
 const
   IdleWakeIntervalMs = 50
+  AnimationTickIntervalMs = int64(DefaultFrameIntervalMs)
   RuntimeLoopSampleIntervalMs = 1_000'i64
 
 proc failCli(message: string) =
@@ -159,7 +160,7 @@ proc reasonsNeedFrameRate(reasons: seq[string]): bool =
 
 proc tickIntervalMs(daemon: TriadDaemon, reasons: seq[string]): int64 =
   if reasons.reasonsNeedFrameRate():
-    return int64(daemon.targetFrameIntervalMs())
+    return max(int64(daemon.targetFrameIntervalMs()), AnimationTickIntervalMs)
   int64(IdleWakeIntervalMs)
 
 proc incrementFrameTickReasonCounts(daemon: var TriadDaemon, reasons: seq[string]) =
