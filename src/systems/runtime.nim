@@ -509,6 +509,9 @@ proc elapsedAnimationSpeed(speed: float32, elapsedMs: int32): float32 =
     max(0.0'f32, float32(elapsedMs.tickElapsedMs()) / float32(DefaultFrameIntervalMs))
   1.0'f32 - pow(1.0'f32 - speed, frames)
 
+proc renderedViewportOffset(value: float32): int32 =
+  int32(round(value))
+
 proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool =
   if not model.enableAnimations:
     return false
@@ -530,6 +533,8 @@ proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool
       continue
     var currentX = tag.currentViewportXOffset
     var currentY = tag.currentViewportYOffset
+    let beforeRenderX = renderedViewportOffset(currentX)
+    let beforeRenderY = renderedViewportOffset(currentY)
     let nextX =
       animatedViewportOffset(currentX, tag.targetViewportXOffset, speed, snapThreshold)
     let nextY =
@@ -539,7 +544,9 @@ proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool
     let changed = nextX.changed or nextY.changed
     if changed:
       discard model.setTagViewportCurrent(tagId, currentX, currentY)
-      result = true
+      let afterRenderX = renderedViewportOffset(currentX)
+      let afterRenderY = renderedViewportOffset(currentY)
+      result = result or beforeRenderX != afterRenderX or beforeRenderY != afterRenderY
 
 proc hasPendingViewportAnimation*(model: Model): bool =
   if not model.enableAnimations:

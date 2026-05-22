@@ -110,6 +110,21 @@ suite "Core Runtime Logic: window movement":
     check model.tickAnimations(8)
     check abs(model.viewport(1).currentViewportXOffset - 50.0'f32) < 0.001'f32
 
+  test "Viewport animation stays clean for subpixel-only movement":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(
+          enableAnimations: true, animationSpeed: 0.25, animationSnapThreshold: 0.01
+        ),
+        workspaces: WorkspaceConfig(defaultCount: 1),
+      )
+    ).model
+    model.setViewport(1, targetX = 0.4, currentX = 0.0)
+
+    check not model.tickAnimations()
+    check abs(model.viewport(1).currentViewportXOffset - 0.1'f32) < 0.001'f32
+    check model.hasPendingViewportAnimation()
+
   test "Zero animation speed snaps without repeated dirty ticks":
     var model = initRuntimeStateFromConfig(
       Config(
