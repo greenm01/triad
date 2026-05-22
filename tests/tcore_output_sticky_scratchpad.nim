@@ -1401,6 +1401,49 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.outputActiveTag(outputId) == emptyTag
     check model.tagForSlot(6) == NullTagId
 
+  test "Reusable empty dynamic workspace is scoped to output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let first = model.outputForExternal(ExternalOutputId(1))
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let reusableTag = model.ensureWorkspaceSlot(4)
+    discard model.setTagName(reusableTag, "code")
+    discard model.setTagOutput(reusableTag, first)
+
+    let occupiedTag = model.ensureWorkspaceSlot(5)
+    discard model.setTagOutput(occupiedTag, second)
+    discard model.setOutputTag(second, occupiedTag)
+    discard model.setActiveOutput(second)
+    discard model.setActiveWorkspace(occupiedTag)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 51, appId: "term", title: "term")
+    )
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.reusableEmptyWorkspaceSlot(first) == 4
+    check model.reusableEmptyWorkspaceSlot(second) == 0
+    check model.trailingWorkspaceSlot(second) == 6
+    check model.visibleWorkspaceSlots().find(6'u32) != -1
+
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+
+    let createdTag = model.tagForSlot(6)
+    check createdTag != NullTagId
+    check model.activeTag == createdTag
+    check model.outputActiveTag(second) == createdTag
+    check model.workspaceOutput(createdTag) == second
+    check model.workspaceOutput(reusableTag) == first
+
   test "Hidden empty dynamic workspace focuses on active output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

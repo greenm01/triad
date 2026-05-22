@@ -199,6 +199,31 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check visible.anyIt(it["output"].getStr() == "DP-1")
     check visible.anyIt(it["output"].getStr() == "DP-2")
 
+  test "Shell snapshot keeps output-visible empty dynamic workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+
+    let second = model.outputForExternal(ExternalOutputId(2))
+    let dynamicTag = model.ensureWorkspaceSlot(4)
+    discard model.setOutputTag(second, dynamicTag)
+    model.refreshVisibleWorkspaceSlots()
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces.anyIt(
+      it.tagId == 4 and it.outputName == "DP-2" and it.isOutputVisible and
+        not it.occupied
+    )
+    model.requireTagShellSemantics("output-visible empty dynamic workspace scenario")
+
   test "Empty dynamic workspaces prune after focus leaves":
     var model = configuredModel()
     model.applyMsg(

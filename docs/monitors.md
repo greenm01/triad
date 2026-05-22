@@ -96,7 +96,9 @@ Focusing a pinned workspace moves focus to its assigned output.
 
 ## Dynamic Workspaces
 
-`new-workspace` creates an empty workspace on the active output:
+`new-workspace` reuses the lowest inactive empty configured dynamic workspace on
+the active output. If none is available, it creates the next dynamic workspace on
+that output:
 
 ```kdl
 bindings {
@@ -104,7 +106,8 @@ bindings {
 }
 ```
 
-If you leave a dynamic workspace without opening a window, Triad prunes it.
+If you leave a transient dynamic workspace without opening a window, Triad prunes
+it.
 
 ## Moving Workspaces
 

@@ -122,6 +122,20 @@ proc hasDurableTagState*(model: Model, tag: TagData): bool =
   tag.masterCount != model.restoreDefaultMasterCount() or
     tag.masterSplitRatio != model.restoreDefaultMasterRatio()
 
+proc configuredDefaultWorkspaceCount(model: Model): uint32 =
+  if model.defaultWorkspaceCount == 0:
+    DefaultWorkspaceCount
+  else:
+    min(model.defaultWorkspaceCount, MaxTagBits)
+
+proc resolvedActiveWorkspaceSlot(model: Model): uint32 =
+  let tagOpt = model.tagData(model.activeTag)
+  if tagOpt.isSome:
+    return tagOpt.get().slot
+  if model.activeSlot != 0:
+    return model.activeSlot
+  0
+
 proc tagVisibleOnAnyOutput(model: Model, tagId: TagId): bool =
   if tagId == NullTagId:
     return false
@@ -130,34 +144,52 @@ proc tagVisibleOnAnyOutput(model: Model, tagId: TagId): bool =
       return true
   false
 
-proc hasReusableEmptyWorkspaceBefore(
-    model: Model, slots: openArray[uint32], beforeSlot: uint32
-): bool =
-  for slot in slots:
-    if slot >= beforeSlot:
-      continue
-    let tagId = model.tagForSlot(slot)
-    if tagId == NullTagId:
-      continue
-    let tagOpt = model.tagData(tagId)
-    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
-      continue
-    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnAnyOutput(tagId):
-      continue
-    return true
+proc tagVisibleOnOutput*(model: Model, tagId: TagId): bool =
+  model.tagVisibleOnAnyOutput(tagId)
 
-proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
-  if model.visibleSlots.len > 0:
-    return model.visibleSlots
+proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
+  for outputId, outputTag in model.outputTagsWithId():
+    if outputTag == tagId:
+      return outputId
+  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  if mappedOutput != NullOutputId and model.outputData(mappedOutput).isSome:
+    return mappedOutput
+  if model.outputCount() > 1:
+    return NullOutputId
+  result =
+    if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
+      model.activeOutput
+    else:
+      model.primaryOutput
 
-  for slot in 1'u32 .. model.defaultWorkspaceCount:
+proc outputForWorkspaceSlotPolicy(model: Model, outputId: OutputId): OutputId =
+  if outputId != NullOutputId and model.outputData(outputId).isSome:
+    return outputId
+  if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
+    return model.activeOutput
+  let workspaceOutput = model.workspaceOutput(model.activeTag)
+  if workspaceOutput != NullOutputId:
+    return workspaceOutput
+  model.primaryOutput
+
+proc workspaceBelongsToOutput(model: Model, tagId: TagId, outputId: OutputId): bool =
+  let workspaceOutput = model.workspaceOutput(tagId)
+  if outputId == NullOutputId:
+    return workspaceOutput == NullOutputId
+  workspaceOutput == NullOutputId or workspaceOutput == outputId
+
+proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
+  let defaultCount = model.configuredDefaultWorkspaceCount()
+  for slot in 1'u32 .. defaultCount:
     result.add(slot)
 
+  let activeSlot = model.resolvedActiveWorkspaceSlot()
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
     let tagOpt = model.tagData(tagId)
-    if slot > model.defaultWorkspaceCount and (
-      slot == model.activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
+    if slot > defaultCount and (
+      slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
+      model.tagVisibleOnOutput(tagId) or
       (tagOpt.isSome and model.hasDurableTagState(tagOpt.get()))
     ):
       result.add(slot)
@@ -170,14 +202,53 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
     else:
       inc i
 
-  if result.len > 0:
-    let last = result[^1]
-    let lastTag = model.tagForSlot(last)
-    if model.hasReusableEmptyWorkspaceBefore(result, last):
-      return
-    if last < MaxTagBits and lastTag != NullTagId and
-        model.tagHasNonStickyLiveWindows(lastTag):
-      result.add(last + 1)
+proc reusableEmptyWorkspaceSlot*(
+    model: Model, outputId: OutputId, beforeSlot = 0'u32
+): uint32 =
+  let defaultCount = model.configuredDefaultWorkspaceCount()
+  let targetOutput = model.outputForWorkspaceSlotPolicy(outputId)
+  for slot in model.sortedSlots():
+    if slot <= defaultCount or (beforeSlot != 0 and slot >= beforeSlot):
+      continue
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId:
+      continue
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
+      continue
+    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnOutput(tagId):
+      continue
+    if model.workspaceBelongsToOutput(tagId, targetOutput):
+      return slot
+
+proc trailingWorkspaceSlot*(model: Model, outputId = NullOutputId): uint32 =
+  let slots = model.computedVisibleWorkspaceSlots()
+  if slots.len == 0:
+    return 0
+  let last = slots[^1]
+  let tagId = model.tagForSlot(last)
+  if model.reusableEmptyWorkspaceSlot(outputId, beforeSlot = last) != 0:
+    return 0
+  if last < MaxTagBits and tagId != NullTagId and model.tagHasNonStickyLiveWindows(
+    tagId
+  ):
+    return last + 1
+  0
+
+proc projectedVisibleWorkspaceSlots*(
+    model: Model, outputId = NullOutputId
+): seq[uint32] =
+  result = model.computedVisibleWorkspaceSlots()
+  let trailing = model.trailingWorkspaceSlot(outputId)
+  if trailing != 0 and result.find(trailing) == -1:
+    result.add(trailing)
+    result.sort()
+
+proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
+  if model.visibleSlots.len > 0:
+    return model.visibleSlots
+
+  model.projectedVisibleWorkspaceSlots()
 
 proc workspaceIndexForSlot*(model: Model, slot: uint32): uint32 =
   for idx, candidate in model.visibleWorkspaceSlots():
@@ -758,24 +829,6 @@ proc outputActiveTag*(model: Model, outputId: OutputId): TagId =
 
 proc tagHasOutput*(model: Model, tagId: TagId): bool =
   model.tagOutputs.getOrDefault(tagId, NullOutputId) != NullOutputId
-
-proc tagVisibleOnOutput*(model: Model, tagId: TagId): bool =
-  model.tagVisibleOnAnyOutput(tagId)
-
-proc workspaceOutput*(model: Model, tagId: TagId): OutputId =
-  for outputId, outputTag in model.outputTagsWithId():
-    if outputTag == tagId:
-      return outputId
-  let mappedOutput = model.tagOutputs.getOrDefault(tagId, NullOutputId)
-  if mappedOutput != NullOutputId and model.outputData(mappedOutput).isSome:
-    return mappedOutput
-  if model.outputCount() > 1:
-    return NullOutputId
-  result =
-    if model.activeOutput != NullOutputId and model.outputData(model.activeOutput).isSome:
-      model.activeOutput
-    else:
-      model.primaryOutput
 
 proc shellWorkspaceOutputName*(model: Model, tagId: TagId): string =
   model.shellOutputName(model.workspaceOutput(tagId))

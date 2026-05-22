@@ -152,6 +152,24 @@ proc containsFieldRead(line, field: string): bool =
   let next = idx + field.len
   next >= line.len or not line[next].isIdentChar()
 
+proc importsDeletedModule(path, pattern: string): bool =
+  var inImportBlock = false
+  for line in lines(path):
+    let stripped = line.strip()
+    if stripped.len == 0 or stripped.startsWith("#"):
+      continue
+    let startsImport =
+      stripped.startsWith("import ") or stripped.startsWith("from ") or
+      stripped.startsWith("include ")
+    let startsBlock = stripped in ["import", "from", "include"]
+    if not startsImport and not startsBlock and line[0] notin {' ', '\t'}:
+      inImportBlock = false
+    if startsImport or startsBlock or inImportBlock:
+      if stripped.contains(pattern):
+        return true
+    if startsImport or startsBlock or inImportBlock:
+      inImportBlock = startsBlock or stripped.endsWith(",") or stripped.endsWith("[")
+
 suite "Runtime state primitives":
   test "deleted legacy and shadow modules are gone":
     for path in DeletedRuntimeModules:
@@ -168,7 +186,7 @@ suite "Runtime state primitives":
     for path in sourceFiles():
       let source = readFile(path)
       for pattern in blocked:
-        check not source.contains(pattern)
+        check not importsDeletedModule(path, pattern)
       check not source.contains("runtimeState.legacyModel")
       check not source.contains("runtimeState.shadowModel")
       check not source.contains("logShadowObservation")

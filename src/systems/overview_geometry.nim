@@ -401,8 +401,8 @@ proc overviewWorkspaceSlotAtForOutput*(
       return slot
   0
 
-proc nextDynamicDropSlot(model: Model): uint32 =
-  let trailing = model.trailingWorkspaceSlot()
+proc nextDynamicDropSlot(model: Model, outputId: OutputId): uint32 =
+  let trailing = model.trailingWorkspaceSlot(outputId)
   if trailing != 0:
     return trailing
   result = model.defaultWorkspaceCount() + 1
@@ -441,7 +441,7 @@ proc overviewDropTargetAtForOutput*(
 
   let gap = model.workspacePreviewGap(screen)
   if x >= screen.x and x < screen.x + screen.w and y >= minY - gap and y <= maxY + gap:
-    let slot = model.nextDynamicDropSlot()
+    let slot = model.nextDynamicDropSlot(outputId)
     if slot != 0:
       return OverviewDropTarget(
         kind: OverviewDropKind.DropDynamicGap, outputId: outputId, slot: slot

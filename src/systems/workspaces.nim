@@ -1,4 +1,4 @@
-import std/[algorithm, options, tables]
+import std/[options, tables]
 import outputs
 import sticky_windows
 import ../core/native_layout_codec
@@ -73,67 +73,6 @@ proc ensureWorkspaceSlot*(model: var Model, slot: uint32, forcedLayout = 0): Tag
     discard model.learnTagOutputFromActive(result)
   discard model.syncStickyWindowsForWorkspace(result)
 
-proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
-  let defaultCount = model.defaultWorkspaceCount()
-  for slot in 1'u32 .. defaultCount:
-    result.add(slot)
-
-  let activeSlot = model.activeWorkspaceSlot()
-  for slot in model.sortedSlots():
-    let tagId = model.tagForSlot(slot)
-    let tagOpt = model.tagData(tagId)
-    if slot > defaultCount and (
-      slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
-      model.tagVisibleOnOutput(tagId) or
-      (tagOpt.isSome and model.hasDurableTagState(tagOpt.get()))
-    ):
-      result.add(slot)
-
-  result.sort()
-  var i = 1
-  while i < result.len:
-    if result[i] == result[i - 1]:
-      result.delete(i)
-    else:
-      inc i
-
-proc hasReusableEmptyWorkspaceBefore(
-    model: Model, slots: openArray[uint32], beforeSlot: uint32
-): bool =
-  for slot in slots:
-    if slot >= beforeSlot:
-      continue
-    let tagId = model.tagForSlot(slot)
-    if tagId == NullTagId:
-      continue
-    let tagOpt = model.tagData(tagId)
-    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
-      continue
-    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnOutput(tagId):
-      continue
-    return true
-
-proc trailingWorkspaceSlot*(model: Model): uint32 =
-  let slots = model.computedVisibleWorkspaceSlots()
-  if slots.len == 0:
-    return 0
-  let last = slots[^1]
-  let tagId = model.tagForSlot(last)
-  if model.hasReusableEmptyWorkspaceBefore(slots, last):
-    return 0
-  if last < MaxTagBits and tagId != NullTagId and model.tagHasNonStickyLiveWindows(
-    tagId
-  ):
-    return last + 1
-  0
-
-proc visibleWorkspaceSlots(model: Model): seq[uint32] =
-  result = model.computedVisibleWorkspaceSlots()
-  let trailing = model.trailingWorkspaceSlot()
-  if trailing != 0 and result.find(trailing) == -1:
-    result.add(trailing)
-    result.sort()
-
 proc preserveVisibleWorkspaceOrder(model: Model, slots: seq[uint32]): seq[uint32] =
   for slot in model.visibleSlots:
     if slots.find(slot) != -1 and result.find(slot) == -1:
@@ -143,7 +82,7 @@ proc preserveVisibleWorkspaceOrder(model: Model, slots: seq[uint32]): seq[uint32
       result.add(slot)
 
 proc refreshVisibleWorkspaceSlots*(model: var Model) =
-  let slots = model.visibleWorkspaceSlots()
+  let slots = model.projectedVisibleWorkspaceSlots()
   let ordered =
     if model.visibleSlots.len > 0:
       model.preserveVisibleWorkspaceOrder(slots)
@@ -204,24 +143,6 @@ proc workspaceSlotForClampedIndex*(model: Model, index: uint32): uint32 =
     return 0
   let i = min(int(index) - 1, slots.len - 1)
   slots[i]
-
-proc reusableEmptyWorkspaceSlot*(model: Model, outputId: OutputId): uint32 =
-  let defaultCount = model.defaultWorkspaceCount()
-  for slot in model.sortedSlots():
-    if slot <= defaultCount:
-      continue
-    let tagId = model.tagForSlot(slot)
-    if tagId == NullTagId:
-      continue
-    let tagOpt = model.tagData(tagId)
-    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
-      continue
-    if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnOutput(tagId):
-      continue
-    let workspaceOutput = model.workspaceOutput(tagId)
-    if outputId == NullOutputId or workspaceOutput == NullOutputId or
-        workspaceOutput == outputId:
-      return slot
 
 proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
   result = model.defaultWorkspaceCount() + 1

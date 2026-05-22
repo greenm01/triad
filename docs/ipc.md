@@ -38,7 +38,8 @@ Dispatch commands to the running Triad instance using:
 *   `focus-workspace <index>`: Focuses a workspace by its compact index.
 *   `focus-tag <id>`: Focuses a workspace by its stable tag ID.
 *   `focus-window <id>`: Focuses a specific window by ID.
-*   `new-workspace`: Creates and focuses a new dynamic workspace.
+*   `new-workspace`: Reuses an inactive empty configured dynamic workspace on the
+    active output, or creates and focuses the next dynamic workspace.
 *   `focus-tag-left` / `focus-tag-right`: Moves to the adjacent workspace.
 *   `focus-occupied-tag-left` / `focus-occupied-tag-right`: Skips empty tags.
 *   `focus-column-first` / `focus-column-last`: Jumps to the edge of the scroller.
