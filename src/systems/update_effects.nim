@@ -500,6 +500,7 @@ proc addPostUpdateEffects*(
 ) =
   let beforeFocus = before.focusedWindowId()
   let afterFocus = after.focusedWindowId()
+  let overviewClosed = before.overviewActive and not after.overviewActive
   let overviewPreview = after.overviewActive and msg.kind.isOverviewPreviewCommand()
   let overviewWorkspaceChanged = overviewPreview and before.activeTag != after.activeTag
   let workspaceSnapshotChanged =
@@ -529,6 +530,9 @@ proc addPostUpdateEffects*(
       effects.add(Effect(kind: EffectKind.EffFocusShellUi))
     elif afterFocus != 0:
       effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
+  elif overviewClosed and afterFocus != 0:
+    effects.add(broadcastWindowFocusChanged(afterFocus))
+    effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))
   elif dirty and afterFocus != 0 and not after.overviewActive and
       msg.kind.isFocusPreservingLayoutCommand():
     effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: afterFocus))

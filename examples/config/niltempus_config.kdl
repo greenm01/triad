@@ -64,8 +64,8 @@ workspaces {
 
 shells {
     enabled #true
-    active "noctalia"
-    cycle "noctalia" "dank" "waybar"
+    active "dank"
+    cycle "dank" "noctalia" "waybar"
     watchdog {
         enabled #true
         fallback "waybar"
@@ -158,14 +158,12 @@ output {
     // setup your monitors
     monitor "DP-1" {
         mode "1920x1080@60"
-        position "4480x180"
         scale "auto"
         disabled #false
     }
 
     monitor "DP-2" {
         mode "2560x1440@120"
-        position "1920x0"
         scale "auto"
         focus-at-startup
         vrr 1
@@ -173,7 +171,6 @@ output {
 
     monitor "DP-3" {
         mode "1920x1080@60"
-        position "0x180"
         scale "auto"
         enabled #true
     }

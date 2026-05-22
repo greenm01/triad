@@ -1158,6 +1158,10 @@ suite "Core Runtime Logic: overview navigation":
     check model.activeWorkspaceFocusId() == 1
     check closeEffects.hasOverviewBroadcast(false)
     check closeEffects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowFocusChanged")
+    )
+    check closeEffects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 1
     )
 
