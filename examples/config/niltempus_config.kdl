@@ -62,18 +62,6 @@ workspaces {
     default-layout "scroller"
 }
 
-workspace-rules {
-    workspace 1 name="term"
-    workspace 2 name="web"
-    workspace 3 name="files"
-    workspace 4 name="chat" default-layout="deck"
-    workspace 5 name="media" default-layout="monocle"
-    workspace 6 name="code" default-layout="center-tile"
-    workspace 7 name="vm" default-layout="right-tile"
-    workspace 8 name="graphics" default-layout="scroller"
-    workspace 9 name="spare"
-}
-
 shells {
     enabled #true
     active "noctalia"
@@ -163,6 +151,11 @@ presentation-mode "vsync"
 allow-exit-session #true
 
 output {
+    
+    // set the physical layout order, left to right
+    layout "DP-3" "DP-2" "DP-1"
+
+    // setup your monitors
     monitor "DP-1" {
         mode "1920x1080@60"
         position "4480x180"
