@@ -122,6 +122,18 @@ suite "Crash hardening":
     check runtimeUpdate >= 0
     check renderStart < runtimeUpdate
 
+  test "clean render start is finished in callback without queueing":
+    let source = readFile("src/daemon/river_manager_runtime.nim")
+    let renderStart = source.find("proc onRenderStart")
+    let cleanSkip = source.find("daemon[].canSkipRenderStart()")
+    let renderFinish = source.find("mgr.renderFinish()")
+    let enqueue = source.find("daemon.enqueue(Msg(kind: MsgKind.WlRenderStart))")
+
+    check renderStart >= 0
+    check cleanSkip > renderStart
+    check renderFinish > cleanSkip
+    check enqueue > renderFinish
+
   test "pending admissions force full render start":
     var daemon = initTriadDaemon()
     daemon.runtimeState = initRuntimeStateFromConfig(Config())

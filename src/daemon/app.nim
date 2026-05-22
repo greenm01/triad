@@ -28,8 +28,12 @@ import fsnotify, chronicles
 var daemon = initTriadDaemon()
 
 const
-  IdleWakeIntervalMs = 50
+  IdleWakeIntervalMs = 250
+  RecentFocusTickIntervalMs = 50
   AnimationTickIntervalMs = int64(DefaultFrameIntervalMs)
+  MaintenancePollIntervalMs = 250'i64
+  ChildReapPollIntervalMs = 1_000'i64
+  MemoryMaintenanceIntervalMs = 1_000'i64
   RuntimeLoopSampleIntervalMs = 1_000'i64
 
 proc failCli(message: string) =
@@ -161,7 +165,14 @@ proc reasonsNeedFrameRate(reasons: seq[string]): bool =
 proc tickIntervalMs(daemon: TriadDaemon, reasons: seq[string]): int64 =
   if reasons.reasonsNeedFrameRate():
     return max(int64(daemon.targetFrameIntervalMs()), AnimationTickIntervalMs)
-  int64(IdleWakeIntervalMs)
+  int64(RecentFocusTickIntervalMs)
+
+proc pollDue(lastPollMs, nowMs, intervalMs: int64): bool =
+  lastPollMs <= 0 or nowMs - lastPollMs >= intervalMs
+
+proc memoryMaintenanceDue(daemon: TriadDaemon, lastPollMs, nowMs: int64): bool =
+  lastPollMs.pollDue(nowMs, MemoryMaintenanceIntervalMs) or
+    (daemon.memoryPressureDueMs > 0 and nowMs >= daemon.memoryPressureDueMs)
 
 proc incrementFrameTickReasonCounts(daemon: var TriadDaemon, reasons: seq[string]) =
   for reason in reasons:
@@ -898,34 +909,46 @@ proc main*() =
   daemon.scheduleStartupCommands(daemon.runtimeState.model)
   daemon.quickshellState.scheduleQuickshellSpawn(daemon.runtimeState.model)
 
+  var lastWatcherPollMs = 0'i64
+  var lastChildReapPollMs = 0'i64
+  var lastMemoryMaintenanceMs = 0'i64
+  var lastShellPollMs = 0'i64
+
   var running = true
   while running:
     inc daemon.loopCounters.loopIterations
     if not dispatchPendingWayland(daemon.display):
       break
 
-    # Poll watcher (non-blocking)
-    inc daemon.loopCounters.watcherPolls
-    daemon.watcher.poll(0)
-    inc daemon.loopCounters.switchPolls
-    daemon.pollSwitchEventDevices()
-    inc daemon.loopCounters.childReapPolls
-    daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
-
     let nowMs = unixMs()
+    if lastWatcherPollMs.pollDue(nowMs, MaintenancePollIntervalMs):
+      lastWatcherPollMs = nowMs
+      inc daemon.loopCounters.watcherPolls
+      daemon.watcher.poll(0)
+
+    if lastChildReapPollMs.pollDue(nowMs, ChildReapPollIntervalMs):
+      lastChildReapPollMs = nowMs
+      inc daemon.loopCounters.childReapPolls
+      daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
+
     daemon.enqueueFrameTickIfDue(nowMs)
-    inc daemon.loopCounters.memorySampleChecks
-    daemon.maybeWriteMemorySample(nowMs)
-    inc daemon.loopCounters.memoryCompactionChecks
-    daemon.maybeRunMemoryPressureCompaction(nowMs)
+    if daemon.memoryMaintenanceDue(lastMemoryMaintenanceMs, nowMs):
+      lastMemoryMaintenanceMs = nowMs
+      inc daemon.loopCounters.memorySampleChecks
+      daemon.maybeWriteMemorySample(nowMs)
+      inc daemon.loopCounters.memoryCompactionChecks
+      daemon.maybeRunMemoryPressureCompaction(nowMs)
+
     let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
 
     # Poll async IPC without sleeping before Wayland events are serviced.
     inc daemon.loopCounters.asyncPolls
     asyncdispatch.poll(0)
 
-    inc daemon.loopCounters.configReloadChecks
-    if daemon.configReloadDebouncer.takeDue(unixMs()):
+    if daemon.configReloadDebouncer.pending:
+      inc daemon.loopCounters.configReloadChecks
+    if daemon.configReloadDebouncer.pending and
+        daemon.configReloadDebouncer.takeDue(nowMs):
       inc daemon.loopCounters.configReloadsDue
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
 
@@ -941,22 +964,30 @@ proc main*() =
       daemon.quickshellState.spawnPendingQuickshell(
         daemon.runtimeState.model, niriSocketPath, "initial manage"
       )
-      let shellPollMs = int64(epochTime() * 1000.0)
-      inc daemon.loopCounters.shellWatchdogPolls
-      let watchdogFallback =
-        daemon.quickshellState.pollShellWatchdog(daemon.runtimeState.model, shellPollMs)
-      if watchdogFallback.isSome:
-        daemon.enqueue(
-          Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
+      let shellPollMs = nowMs
+      let recoveryMs = daemon.nextQuickshellRecoveryMs()
+      let shellPollDue =
+        lastShellPollMs.pollDue(shellPollMs, MaintenancePollIntervalMs) or
+        (recoveryMs > 0 and shellPollMs >= recoveryMs)
+      if shellPollDue:
+        lastShellPollMs = shellPollMs
+        inc daemon.loopCounters.shellWatchdogPolls
+        let watchdogFallback = daemon.quickshellState.pollShellWatchdog(
+          daemon.runtimeState.model, shellPollMs
         )
-      else:
-        inc daemon.loopCounters.shellRecoveryPolls
-        discard daemon.quickshellState.pollQuickshellRecovery(
-          daemon.runtimeState.model, niriSocketPath, shellPollMs
-        )
+        if watchdogFallback.isSome:
+          daemon.enqueue(
+            Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
+          )
+        else:
+          inc daemon.loopCounters.shellRecoveryPolls
+          discard daemon.quickshellState.pollQuickshellRecovery(
+            daemon.runtimeState.model, niriSocketPath, shellPollMs
+          )
 
-    inc daemon.loopCounters.manageFlushChecks
-    daemon.flushManageRequest()
+    if daemon.manageRequestPending:
+      inc daemon.loopCounters.manageFlushChecks
+      daemon.flushManageRequest()
 
     if not prepareWaylandRead(daemon.display):
       break

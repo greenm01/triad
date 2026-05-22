@@ -10,8 +10,8 @@ import ../types/projection_values as projection_values
 import ../utils/process_tree
 import
   bindings_runtime, input_runtime, live_restore_runtime, manage_requests, message_queue,
-  protocol_surface_runtime, river_outputs_runtime, river_windows, spawn_context, state,
-  wayland_helpers
+  protocol_surface_runtime, render_invalidation, river_outputs_runtime, river_windows,
+  spawn_context, state, wayland_helpers
 
 proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
   result = daemonFromData(data)
@@ -247,6 +247,13 @@ proc onRenderStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
   if daemon == nil:
     return
   trace "River render start"
+  if daemon[].riverPhase == RiverPhase.RiverIdle and daemon[].canSkipRenderStart():
+    inc daemon[].perfCounters.renderStarts
+    inc daemon[].perfCounters.skippedRenderStarts
+    daemon[].riverPhase = RiverPhase.RiverRender
+    mgr.renderFinish()
+    daemon[].riverPhase = RiverPhase.RiverIdle
+    return
   daemon.enqueue(Msg(kind: MsgKind.WlRenderStart))
 
 proc onWindow(data: pointer, mgr: ptr RiverWindowManagerV1, win: ptr RiverWindowV1) =
