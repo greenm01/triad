@@ -330,6 +330,9 @@ proc ipcCounterDeltasJson(before, after: IpcPerfCounters): JsonNode =
       after.niriBroadcastSkippedDuplicate - before.niriBroadcastSkippedDuplicate,
     "triad_broadcast_skipped_duplicate":
       after.triadBroadcastSkippedDuplicate - before.triadBroadcastSkippedDuplicate,
+    "triad_broadcast_skipped_duplicate_by_event":
+      after.triadBroadcastSkippedDuplicateByEvent -
+      before.triadBroadcastSkippedDuplicateByEvent,
     "niri_broadcast_skipped_filtered":
       after.niriBroadcastSkippedFiltered - before.niriBroadcastSkippedFiltered,
     "dropped_subscribers": after.droppedSubscribers - before.droppedSubscribers,
@@ -363,6 +366,8 @@ proc ipcCountersJson(counters: IpcPerfCounters): JsonNode =
       counters.triadBroadcastSkippedNoSubscribers,
     "niri_broadcast_skipped_duplicate": counters.niriBroadcastSkippedDuplicate,
     "triad_broadcast_skipped_duplicate": counters.triadBroadcastSkippedDuplicate,
+    "triad_broadcast_skipped_duplicate_by_event":
+      counters.triadBroadcastSkippedDuplicateByEvent,
     "niri_broadcast_skipped_filtered": counters.niriBroadcastSkippedFiltered,
     "dropped_subscribers": counters.droppedSubscribers,
   }

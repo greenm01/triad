@@ -542,6 +542,24 @@ suite "Runtime logging":
     check focusEvent["niri_event"].getStr() == "WindowFocusChanged"
     check focusEvent["window_id"].getInt() == 20
 
+  test "native Triad broadcast dedupes per event stream":
+    let marker = "triad-broadcast-dedupe-" & $getCurrentProcessId()
+    let layoutPayload =
+      $(%*{"triad": {"event": "layout-state-changed", "marker": marker}})
+    let statePayload = $(%*{"triad": {"event": "state-changed", "marker": marker}})
+    let before = ipcPerfCounters
+
+    waitFor broadcastTriadJson(layoutPayload, "layout")
+    waitFor broadcastTriadJson(statePayload, "state")
+    waitFor broadcastTriadJson(layoutPayload, "layout")
+    waitFor broadcastTriadJson(statePayload, "state")
+
+    check ipcPerfCounters.triadBroadcasts - before.triadBroadcasts == 2
+    check ipcPerfCounters.triadBroadcastSkippedDuplicate -
+      before.triadBroadcastSkippedDuplicate == 2
+    check ipcPerfCounters.triadBroadcastSkippedDuplicateByEvent -
+      before.triadBroadcastSkippedDuplicateByEvent == 2
+
   test "niri broadcast send filter allows incremental live window events":
     check shouldSendNiriBroadcast(
       $(%*{"WindowOpenedOrChanged": {"window": {"id": 20, "title": "loading"}}})

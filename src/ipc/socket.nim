@@ -1,4 +1,6 @@
-import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, times]
+import
+  std/
+    [asyncdispatch, asyncnet, json, nativesockets, options, os, strutils, tables, times]
 import std/posix except AF_UNIX, SOCK_STREAM, IPPROTO_IP
 import chronicles
 import ../core/msg
@@ -41,6 +43,7 @@ type
     triadBroadcastSkippedNoSubscribers*: uint64
     niriBroadcastSkippedDuplicate*: uint64
     triadBroadcastSkippedDuplicate*: uint64
+    triadBroadcastSkippedDuplicateByEvent*: uint64
     niriBroadcastSkippedFiltered*: uint64
     droppedSubscribers*: uint64
 
@@ -58,7 +61,7 @@ var pendingIpcClients = 0
 var lastNiriBroadcastPayload = ""
 var lastNiriWorkspaceBroadcastKey = ""
 var lastNiriCompactBroadcastKey = ""
-var lastTriadBroadcastKey = ""
+var lastTriadBroadcastPayloadByEvent = initTable[string, string]()
 
 proc runtimeDir*(): string =
   getEnv("XDG_RUNTIME_DIR", "/tmp")
@@ -728,11 +731,11 @@ proc broadcastJson*(payload: string) {.async.} =
         removeSubscriber(client)
 
 proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
-  let broadcastKey = eventName & "\0" & payload
-  if broadcastKey == lastTriadBroadcastKey:
+  if lastTriadBroadcastPayloadByEvent.getOrDefault(eventName) == payload:
     inc ipcPerfCounters.triadBroadcastSkippedDuplicate
+    inc ipcPerfCounters.triadBroadcastSkippedDuplicateByEvent
     return
-  lastTriadBroadcastKey = broadcastKey
+  lastTriadBroadcastPayloadByEvent[eventName] = payload
 
   pruneTriadSubscribers()
   inc ipcPerfCounters.triadBroadcasts
