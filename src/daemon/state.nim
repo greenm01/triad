@@ -30,6 +30,15 @@ type
     msg*: Msg
     origin*: QueuedMsgOrigin
 
+  IpcBroadcastKind* {.pure.} = enum
+    Niri
+    Triad
+
+  PendingIpcBroadcast* = object
+    kind*: IpcBroadcastKind
+    eventName*: string
+    payload*: string
+
   WlOutputListenerData* = object
     daemon*: ptr TriadDaemon
     globalName*: uint32
@@ -260,6 +269,7 @@ type
     runtimeState*: TriadRuntimeState
     janetRuntime*: JanetRuntime
     msgQueue*: Deque[QueuedMsg]
+    pendingIpcBroadcasts*: seq[PendingIpcBroadcast]
     pendingManageEffects*: seq[Effect]
     desiredPlacements*: Table[uint32, Rect]
     desiredPlacementClips*: Table[uint32, Rect]

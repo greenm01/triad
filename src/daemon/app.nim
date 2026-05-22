@@ -13,10 +13,10 @@ import ../types/janet_layouts
 import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, child_process_runtime, effects_runtime, input_runtime,
-  janet_script_runtime, live_restore_runtime, manage_requests, message_queue,
-  memory_status, output_management_runtime, process_runner, quickshell_runner,
-  registry_runtime, reload_runtime, render_runtime, render_invalidation, spawn_context,
-  state, switch_event_runtime
+  ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime, manage_requests,
+  message_queue, memory_status, output_management_runtime, process_runner,
+  quickshell_runner, registry_runtime, reload_runtime, render_runtime,
+  render_invalidation, spawn_context, state, switch_event_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -315,6 +315,23 @@ proc ipcCounterDeltasJson(before, after: IpcPerfCounters): JsonNode =
     "triad_broadcasts": after.triadBroadcasts - before.triadBroadcasts,
     "niri_broadcast_sends": after.niriBroadcastSends - before.niriBroadcastSends,
     "triad_broadcast_sends": after.triadBroadcastSends - before.triadBroadcastSends,
+    "niri_broadcast_queued": after.niriBroadcastQueued - before.niriBroadcastQueued,
+    "triad_broadcast_queued": after.triadBroadcastQueued - before.triadBroadcastQueued,
+    "niri_broadcast_coalesced":
+      after.niriBroadcastCoalesced - before.niriBroadcastCoalesced,
+    "triad_broadcast_coalesced":
+      after.triadBroadcastCoalesced - before.triadBroadcastCoalesced,
+    "niri_broadcast_skipped_no_subscribers":
+      after.niriBroadcastSkippedNoSubscribers - before.niriBroadcastSkippedNoSubscribers,
+    "triad_broadcast_skipped_no_subscribers":
+      after.triadBroadcastSkippedNoSubscribers -
+      before.triadBroadcastSkippedNoSubscribers,
+    "niri_broadcast_skipped_duplicate":
+      after.niriBroadcastSkippedDuplicate - before.niriBroadcastSkippedDuplicate,
+    "triad_broadcast_skipped_duplicate":
+      after.triadBroadcastSkippedDuplicate - before.triadBroadcastSkippedDuplicate,
+    "niri_broadcast_skipped_filtered":
+      after.niriBroadcastSkippedFiltered - before.niriBroadcastSkippedFiltered,
     "dropped_subscribers": after.droppedSubscribers - before.droppedSubscribers,
   }
 
@@ -337,6 +354,16 @@ proc ipcCountersJson(counters: IpcPerfCounters): JsonNode =
     "triad_broadcasts": counters.triadBroadcasts,
     "niri_broadcast_sends": counters.niriBroadcastSends,
     "triad_broadcast_sends": counters.triadBroadcastSends,
+    "niri_broadcast_queued": counters.niriBroadcastQueued,
+    "triad_broadcast_queued": counters.triadBroadcastQueued,
+    "niri_broadcast_coalesced": counters.niriBroadcastCoalesced,
+    "triad_broadcast_coalesced": counters.triadBroadcastCoalesced,
+    "niri_broadcast_skipped_no_subscribers": counters.niriBroadcastSkippedNoSubscribers,
+    "triad_broadcast_skipped_no_subscribers":
+      counters.triadBroadcastSkippedNoSubscribers,
+    "niri_broadcast_skipped_duplicate": counters.niriBroadcastSkippedDuplicate,
+    "triad_broadcast_skipped_duplicate": counters.triadBroadcastSkippedDuplicate,
+    "niri_broadcast_skipped_filtered": counters.niriBroadcastSkippedFiltered,
     "dropped_subscribers": counters.droppedSubscribers,
   }
 
@@ -418,6 +445,7 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
 
 proc perfStatusJson(daemon: TriadDaemon): string =
   let counters = daemon.perfCounters
+  let triadScopes = triadSubscriberScopeCounts()
   var manageRequestReasons = newJObject()
   for reason, count in daemon.manageRequestReasonCounts.pairs:
     manageRequestReasons[reason] = %int(count)
@@ -442,6 +470,9 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "subscribers": {
           "niri": subscribers.len,
           "triad": triadSubscribers.len,
+          "triad_layout_only": triadScopes.layoutOnly,
+          "triad_state_only": triadScopes.stateOnly,
+          "triad_layout_and_state": triadScopes.layoutAndState,
           "total": subscribers.len + triadSubscribers.len,
         },
       }
@@ -476,6 +507,9 @@ proc perfStatusJson(daemon: TriadDaemon): string =
       "subscribers": {
         "niri": subscribers.len,
         "triad": triadSubscribers.len,
+        "triad_layout_only": triadScopes.layoutOnly,
+        "triad_state_only": triadScopes.stateOnly,
+        "triad_layout_and_state": triadScopes.layoutAndState,
         "total": subscribers.len + triadSubscribers.len,
       },
       "recent_delta": recentDelta,
@@ -680,6 +714,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           %*{"reason": reason, "snapshot": snapshot.snapshotBehaviorPayload()},
         )
         broadcastNiriSnapshot(snapshot)
+      daemon.flushIpcBroadcasts()
       continue
 
     for eff in effects:
@@ -687,6 +722,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         daemon.requestManage("effect:" & $msg.kind)
       else:
         daemon.executeEffect(eff)
+    daemon.flushIpcBroadcasts()
 
 proc hasInitialRiverState(): bool =
   daemon.outputPointers.len > 0 or daemon.seatPointers.len > 0

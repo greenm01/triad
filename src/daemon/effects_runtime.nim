@@ -5,15 +5,15 @@ import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import protocols/river_xkb_config/client as riverXkbConfig
 import ../core/effects
-import ../ipc/socket
 import ../systems/daemon_view
 from ../types/core import OutputId
 import ../types/projection_values
 import ../utils/behavior_log
 import
-  child_process_runtime, idle_inhibit_runtime, live_restore_runtime, manage_requests,
-  output_management_runtime, process_runner, protocol_surface_runtime,
-  quickshell_runner, render_runtime, screenshot_runner, spawn_context, state
+  child_process_runtime, idle_inhibit_runtime, ipc_broadcast_runtime,
+  live_restore_runtime, manage_requests, output_management_runtime, process_runner,
+  protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner,
+  spawn_context, state
 
 proc setLayerShellDefaultOutputForSpawn(daemon: var TriadDaemon, outputId: OutputId) =
   var riverOutputId = 0'u32
@@ -158,9 +158,9 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffManageDirty:
     daemon.requestManage("effect")
   of EffectKind.EffBroadcastJson:
-    asyncCheck broadcastJson(eff.jsonPayload)
+    daemon.enqueueNiriBroadcast(eff.jsonPayload)
   of EffectKind.EffBroadcastTriadJson:
-    asyncCheck broadcastTriadJson(eff.jsonPayload, eff.triadEventName)
+    daemon.enqueueTriadBroadcast(eff.jsonPayload, eff.triadEventName)
   of EffectKind.EffSpawnScreenLock:
     daemon.trackChildProcess(
       spawnScreenLock(daemon.runtimeState.model, eff.screenLockCommand)

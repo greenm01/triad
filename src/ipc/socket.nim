@@ -33,6 +33,15 @@ type
     triadBroadcasts*: uint64
     niriBroadcastSends*: uint64
     triadBroadcastSends*: uint64
+    niriBroadcastQueued*: uint64
+    triadBroadcastQueued*: uint64
+    niriBroadcastCoalesced*: uint64
+    triadBroadcastCoalesced*: uint64
+    niriBroadcastSkippedNoSubscribers*: uint64
+    triadBroadcastSkippedNoSubscribers*: uint64
+    niriBroadcastSkippedDuplicate*: uint64
+    triadBroadcastSkippedDuplicate*: uint64
+    niriBroadcastSkippedFiltered*: uint64
     droppedSubscribers*: uint64
 
 const
@@ -166,6 +175,29 @@ proc removeTriadSubscriber(client: AsyncSocket) =
 proc canSubscribeTriad(): bool =
   pruneTriadSubscribers()
   triadSubscribers.len < MaxIpcSubscribers
+
+proc triadSubscriberScopeCounts*(): tuple[
+  layoutOnly: int, stateOnly: int, layoutAndState: int
+] =
+  for subscriber in triadSubscribers:
+    if subscriber.client == nil or subscriber.client.isClosed:
+      continue
+    if subscriber.layout and subscriber.state:
+      inc result.layoutAndState
+    elif subscriber.layout:
+      inc result.layoutOnly
+    elif subscriber.state:
+      inc result.stateOnly
+
+proc triadSubscriberInterested*(eventName: string): bool =
+  for subscriber in triadSubscribers:
+    if subscriber.client == nil or subscriber.client.isClosed:
+      continue
+    if eventName == "layout" and subscriber.layout:
+      return true
+    if eventName == "state" and subscriber.state:
+      return true
+  false
 
 proc sendWithTimeout(
     client: AsyncSocket, payload: string, timeoutMs = IpcSubscriberSendTimeoutMs
@@ -654,6 +686,7 @@ proc shouldSendNiriBroadcast*(payload: string): bool =
 
 proc broadcastJson*(payload: string) {.async.} =
   if payload == lastNiriBroadcastPayload:
+    inc ipcPerfCounters.niriBroadcastSkippedDuplicate
     return
   lastNiriBroadcastPayload = payload
 
@@ -661,6 +694,7 @@ proc broadcastJson*(payload: string) {.async.} =
   if logPayload != nil:
     writeBehaviorEvent("niri_compat_broadcast", logPayload)
   if not payload.shouldSendNiriBroadcast():
+    inc ipcPerfCounters.niriBroadcastSkippedFiltered
     return
   pruneSubscribers()
   inc ipcPerfCounters.niriBroadcasts
@@ -696,6 +730,7 @@ proc broadcastJson*(payload: string) {.async.} =
 proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
   let broadcastKey = eventName & "\0" & payload
   if broadcastKey == lastTriadBroadcastKey:
+    inc ipcPerfCounters.triadBroadcastSkippedDuplicate
     return
   lastTriadBroadcastKey = broadcastKey
 

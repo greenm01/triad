@@ -164,9 +164,13 @@ proc quickshellJson(runner: QuickshellRunner): JsonNode =
   }
 
 proc ipcJson(): JsonNode =
+  let triadScopes = triadSubscriberScopeCounts()
   %*{
     "niri_subscribers": subscribers.len,
     "triad_subscribers": triadSubscribers.len,
+    "triad_layout_only_subscribers": triadScopes.layoutOnly,
+    "triad_state_only_subscribers": triadScopes.stateOnly,
+    "triad_layout_and_state_subscribers": triadScopes.layoutAndState,
     "total_subscribers": subscribers.len + triadSubscribers.len,
   }
 

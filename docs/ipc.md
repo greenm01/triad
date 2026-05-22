@@ -25,8 +25,8 @@ Dispatch commands to the running Triad instance using:
 *   `power-on-monitors`: Restores the outputs remembered by `power-off-monitors`.
 *   `power-off-monitor <output>`: Disables one output target, such as `DP-3`.
 *   `power-on-monitor <output>`: Enables one output target and clears its monitor-power restore entry.
-*   `perf-status`: Prints daemon performance, timing, and loop wake diagnostics.
-*   `mem-status`: Prints memory diagnostics.
+*   `perf-status`: Prints daemon performance, timing, loop wake, and IPC broadcast diagnostics.
+*   `mem-status`: Prints memory and IPC subscriber diagnostics.
 *   `config-reload`: Reloads the configuration.
 *   `triad-reload`: Writes a live-restore snapshot and restarts the manager.
 *   `dispatch-binding <kind> <chord>`: Triggers a configured binding (e.g., `key Super+Return`).
