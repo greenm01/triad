@@ -212,6 +212,10 @@ suite "Runtime state primitives":
     check source.contains("\"wait_backend\"")
     check source.contains("\"skipped_render_starts\"")
     check source.contains("\"render_layout_projections\"")
+    check source.contains("\"loop_counters\"")
+    check source.contains("\"wayland_wakeups\"")
+    check source.contains("\"watcher_polls\"")
+    check source.contains("\"frame_tick_reason_counts\"")
 
   test "in-place runtime update matches pure wrapper for lifecycle commands":
     let config = baseConfig()

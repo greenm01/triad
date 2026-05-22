@@ -72,6 +72,23 @@ suite "Runtime logging":
     check event.hasKey("ts_unix_ms")
     check event.hasKey("pid")
 
+  test "runtime loop behavior sample is aggregated":
+    let source = readFile("src/daemon/app.nim")
+    let renderStart = source.find("if msg.kind == MsgKind.WlRenderStart:")
+    let cmdTick = source.find("if msg.kind == MsgKind.CmdTick:")
+    let sampleWrite = source.find("writeBehaviorEvent(\n    \"runtime_loop_sample\"")
+
+    check source.contains("RuntimeLoopSampleIntervalMs = 1_000")
+    check source.count("\"runtime_loop_sample\"") == 1
+    check source.contains("\"frame_tick_reason_counts\"")
+    check source.contains("incrementFrameTickReasonCounts")
+    check source.contains("nowMs - lastMotion >= delay")
+    check source.contains("reason != \"recent-focus\"")
+    check renderStart >= 0
+    check cmdTick > renderStart
+    check sampleWrite >= 0
+    check sampleWrite < renderStart
+
   test "dev mode enables behavior logging unless explicitly overridden":
     let oldDevMode = getEnv("TRIAD_DEV_MODE", "")
     let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
@@ -158,9 +175,13 @@ suite "Runtime logging":
     ).model
     discard model.update(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
 
-    let lines = readFile(behaviorLogPath()).strip().splitLines()
-    check lines.len == 1
-    let event = parseJson(lines[0])
+    var events: seq[JsonNode]
+    for line in readFile(behaviorLogPath()).strip().splitLines():
+      let event = parseJson(line)
+      if event["event"].getStr() == "runtime_update":
+        events.add(event)
+    check events.len == 1
+    let event = events[0]
     check event["event"].getStr() == "runtime_update"
     check event["kind"].getStr() == "CmdFocusWorkspaceIndex"
     check event["after"]["active_tag"].getInt() == 2
@@ -201,13 +222,17 @@ suite "Runtime logging":
       Msg(kind: MsgKind.WlWindowAppId, appIdWindowId: 42, updatedAppId: "gimp")
     )
 
-    let lines = readFile(behaviorLogPath()).strip().splitLines()
-    check lines.len == 2
-    let birth = parseJson(lines[0])
+    var events: seq[JsonNode]
+    for line in readFile(behaviorLogPath()).strip().splitLines():
+      let event = parseJson(line)
+      if event["event"].getStr() == "runtime_update":
+        events.add(event)
+    check events.len == 2
+    let birth = events[0]
     check birth["event"].getStr() == "runtime_update"
     check birth["kind"].getStr() == "WlWindowCreated"
     check birth["tracked_windows"]["after"][0]["id"].getInt() == 42
-    let appId = parseJson(lines[1])
+    let appId = events[1]
     check appId["event"].getStr() == "runtime_update"
     check appId["kind"].getStr() == "WlWindowAppId"
     check appId["tracked_windows"]["after"][0]["app_id"].getStr() == "gimp"

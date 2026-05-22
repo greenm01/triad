@@ -111,6 +111,15 @@ proc pruneSubscribers() =
     else:
       inc i
 
+proc removeSubscriber(client: AsyncSocket) =
+  var i = 0
+  while i < subscribers.len:
+    let current = subscribers[i]
+    if current == client or current == nil or current.isClosed:
+      subscribers.delete(i)
+    else:
+      inc i
+
 proc canSubscribe(): bool =
   pruneSubscribers()
   subscribers.len < MaxIpcSubscribers
@@ -120,6 +129,15 @@ proc pruneTriadSubscribers() =
   while i < triadSubscribers.len:
     let client = triadSubscribers[i].client
     if client == nil or client.isClosed:
+      triadSubscribers.delete(i)
+    else:
+      inc i
+
+proc removeTriadSubscriber(client: AsyncSocket) =
+  var i = 0
+  while i < triadSubscribers.len:
+    let current = triadSubscribers[i].client
+    if current == client or current == nil or current.isClosed:
       triadSubscribers.delete(i)
     else:
       inc i
@@ -607,25 +625,24 @@ proc broadcastJson*(payload: string) {.async.} =
     writeBehaviorEvent("niri_compat_broadcast", logPayload)
   if not payload.shouldSendNiriBroadcast():
     return
-  var i = 0
-  while i < subscribers.len:
-    let client = subscribers[i]
+  pruneSubscribers()
+  let currentSubscribers = subscribers
+  for client in currentSubscribers:
     if client == nil or client.isClosed:
       writeBehaviorEvent(
         "niri_compat_event_stream_disconnected", %*{"reason": "closed"}
       )
-      subscribers.delete(i)
+      removeSubscriber(client)
     else:
       try:
         if await sendWithTimeout(client, payload & "\L"):
-          inc i
           continue
         warn "Dropping slow IPC subscriber"
         writeBehaviorEvent(
           "niri_compat_event_stream_disconnected", %*{"reason": "send timed out"}
         )
         client.close()
-        subscribers.delete(i)
+        removeSubscriber(client)
       except CatchableError as e:
         warn "Dropping failed IPC subscriber", error = e.msg
         writeBehaviorEvent(
@@ -633,7 +650,7 @@ proc broadcastJson*(payload: string) {.async.} =
           %*{"reason": "send failed", "error": e.msg},
         )
         client.close()
-        subscribers.delete(i)
+        removeSubscriber(client)
 
 proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
   let broadcastKey = eventName & "\0" & payload
@@ -641,24 +658,24 @@ proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
     return
   lastTriadBroadcastKey = broadcastKey
 
-  var i = 0
-  while i < triadSubscribers.len:
-    let subscriber = triadSubscribers[i]
+  pruneTriadSubscribers()
+  let currentSubscribers = triadSubscribers
+  for subscriber in currentSubscribers:
     let client = subscriber.client
     if client == nil or client.isClosed:
-      triadSubscribers.delete(i)
+      removeTriadSubscriber(client)
     elif (eventName == "layout" and not subscriber.layout) or
         (eventName == "state" and not subscriber.state):
-      inc i
+      discard
     else:
       try:
         if await sendWithTimeout(client, payload & "\L"):
-          inc i
+          discard
         else:
           warn "Dropping slow Triad IPC subscriber"
           client.close()
-          triadSubscribers.delete(i)
+          removeTriadSubscriber(client)
       except CatchableError as e:
         warn "Dropping failed Triad IPC subscriber", error = e.msg
         client.close()
-        triadSubscribers.delete(i)
+        removeTriadSubscriber(client)

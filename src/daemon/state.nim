@@ -171,6 +171,24 @@ type
     skippedRenderRequests*: uint64
     manageRequests*: uint64
 
+  RuntimeLoopCounters* = object
+    loopIterations*: uint64
+    watcherPolls*: uint64
+    switchPolls*: uint64
+    childReapPolls*: uint64
+    childReapedProcesses*: uint64
+    memorySampleChecks*: uint64
+    memoryCompactionChecks*: uint64
+    asyncPolls*: uint64
+    configReloadChecks*: uint64
+    configReloadsDue*: uint64
+    shellWatchdogPolls*: uint64
+    shellRecoveryPolls*: uint64
+    manageFlushChecks*: uint64
+    waylandWakeups*: uint64
+    asyncWakeups*: uint64
+    switchWakeups*: uint64
+
   FullscreenRequestState* = object
     active*: bool
     outputId*: uint32
@@ -254,6 +272,12 @@ type
     eventPollFds*: seq[TPollfd]
     eventSwitchFds*: seq[int32]
     perfCounters*: RenderPerfCounters
+    loopCounters*: RuntimeLoopCounters
+    lastRuntimeLoopSampleMs*: int64
+    lastRuntimeLoopSampleCounters*: RuntimeLoopCounters
+    lastRuntimeLoopSamplePerfCounters*: RenderPerfCounters
+    lastRuntimeLoopSampleFrameTickReasonCounts*: Table[string, uint64]
+    frameTickReasonCounts*: Table[string, uint64]
     manageRequestReasonCounts*: Table[string, uint64]
     lastFullscreenRequests*: Table[uint32, FullscreenRequestState]
     lastMaximizedRequests*: Table[uint32, bool]

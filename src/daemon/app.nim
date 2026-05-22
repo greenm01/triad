@@ -27,7 +27,9 @@ import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
 
-const IdleWakeIntervalMs = 50
+const
+  IdleWakeIntervalMs = 50
+  RuntimeLoopSampleIntervalMs = 1_000'i64
 
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
@@ -118,38 +120,66 @@ proc cursorShakeTickNeeded(daemon: TriadDaemon): bool =
     if state.enlarged:
       return true
 
-proc cursorVisibilityTickNeeded(daemon: TriadDaemon): bool =
+proc cursorVisibilityTickNeeded(daemon: TriadDaemon, nowMs: int64): bool =
   if daemon.runtimeState.model.cursor.hideAfterInactiveMs <= 0:
     return daemon.cursorHiddenPointers.len > 0
-  for pointerId in daemon.cursorLastMotionMsByPointer.keys:
+  let delay = int64(daemon.runtimeState.model.cursor.hideAfterInactiveMs)
+  for pointerId, lastMotion in daemon.cursorLastMotionMsByPointer.pairs:
     if not daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
-      if daemon.cursorShapeDevices.hasKey(pointerId) and
+      if nowMs - lastMotion >= delay and daemon.cursorShapeDevices.hasKey(pointerId) and
           daemon.wlPointerGlobalNames.hasKey(pointerId) and
           daemon.wlPointerPointers.hasKey(daemon.wlPointerGlobalNames[pointerId]):
         return true
 
-proc frameTickNeeded(daemon: TriadDaemon): bool =
-  daemon.runtimeState.model.needsFrameTick() or daemon.cursorShakeTickNeeded() or
-    daemon.cursorVisibilityTickNeeded()
+proc cursorVisibilityTickNeeded(daemon: TriadDaemon): bool =
+  daemon.cursorVisibilityTickNeeded(unixMs())
 
-proc frameTickReasons(daemon: TriadDaemon): seq[string] =
+proc frameTickNeeded(daemon: TriadDaemon, nowMs: int64): bool =
+  daemon.runtimeState.model.needsFrameTick() or daemon.cursorShakeTickNeeded() or
+    daemon.cursorVisibilityTickNeeded(nowMs)
+
+proc frameTickNeeded(daemon: TriadDaemon): bool =
+  daemon.frameTickNeeded(unixMs())
+
+proc frameTickReasons(daemon: TriadDaemon, nowMs: int64): seq[string] =
   result = daemon.runtimeState.model.frameTickReasons()
   if daemon.cursorShakeTickNeeded():
     result.add("cursor-shake")
-  if daemon.cursorVisibilityTickNeeded():
+  if daemon.cursorVisibilityTickNeeded(nowMs):
     result.add("cursor-visibility")
 
+proc frameTickReasons(daemon: TriadDaemon): seq[string] =
+  daemon.frameTickReasons(unixMs())
+
+proc reasonsNeedFrameRate(reasons: seq[string]): bool =
+  for reason in reasons:
+    if reason != "recent-focus":
+      return true
+  false
+
+proc tickIntervalMs(daemon: TriadDaemon, reasons: seq[string]): int64 =
+  if reasons.reasonsNeedFrameRate():
+    return int64(daemon.targetFrameIntervalMs())
+  int64(IdleWakeIntervalMs)
+
+proc incrementFrameTickReasonCounts(daemon: var TriadDaemon, reasons: seq[string]) =
+  for reason in reasons:
+    daemon.frameTickReasonCounts[reason] =
+      daemon.frameTickReasonCounts.getOrDefault(reason, 0'u64) + 1'u64
+
 proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
-  if not daemon.frameTickNeeded():
+  let reasons = daemon.frameTickReasons(nowMs)
+  if reasons.len == 0:
     daemon.lastFrameTickMs = nowMs
     return
   if daemon.lastFrameTickMs <= 0:
     daemon.lastFrameTickMs = nowMs
   let elapsedMs = nowMs - daemon.lastFrameTickMs
-  let frameInterval = int64(daemon.targetFrameIntervalMs())
-  if elapsedMs < frameInterval:
+  let tickInterval = daemon.tickIntervalMs(reasons)
+  if elapsedMs < tickInterval:
     return
   daemon.lastFrameTickMs = nowMs
+  daemon.incrementFrameTickReasonCounts(reasons)
   daemon.enqueue(
     Msg(
       kind: MsgKind.CmdTick, tickElapsedMs: int32(max(1'i64, min(1000'i64, elapsedMs)))
@@ -164,14 +194,15 @@ proc nextQuickshellRecoveryMs(daemon: TriadDaemon): int64 =
 
 proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
   result = IdleWakeIntervalMs
-  if daemon.frameTickNeeded():
-    let frameInterval = int64(daemon.targetFrameIntervalMs())
+  if daemon.frameTickNeeded(nowMs):
+    let reasons = daemon.frameTickReasons(nowMs)
+    let tickInterval = daemon.tickIntervalMs(reasons)
     let elapsedMs =
       if daemon.lastFrameTickMs <= 0:
-        frameInterval
+        tickInterval
       else:
         nowMs - daemon.lastFrameTickMs
-    result = max(1, int(max(1'i64, frameInterval - elapsedMs)))
+    result = max(1, int(max(1'i64, tickInterval - elapsedMs)))
   if daemon.configReloadDebouncer.pending:
     result = min(result, max(1, int(daemon.configReloadDebouncer.deadlineMs - nowMs)))
   let recoveryMs = daemon.nextQuickshellRecoveryMs()
@@ -202,6 +233,115 @@ proc waitForRuntimeEvents(
   if result.failed:
     warn "Runtime event poll failed", error = osErrorMsg(result.errorCode)
 
+proc loopCountersJson(counters: RuntimeLoopCounters): JsonNode =
+  %*{
+    "loop_iterations": counters.loopIterations,
+    "watcher_polls": counters.watcherPolls,
+    "switch_polls": counters.switchPolls,
+    "child_reap_polls": counters.childReapPolls,
+    "child_reaped_processes": counters.childReapedProcesses,
+    "memory_sample_checks": counters.memorySampleChecks,
+    "memory_compaction_checks": counters.memoryCompactionChecks,
+    "async_polls": counters.asyncPolls,
+    "config_reload_checks": counters.configReloadChecks,
+    "config_reloads_due": counters.configReloadsDue,
+    "shell_watchdog_polls": counters.shellWatchdogPolls,
+    "shell_recovery_polls": counters.shellRecoveryPolls,
+    "manage_flush_checks": counters.manageFlushChecks,
+    "wayland_wakeups": counters.waylandWakeups,
+    "async_wakeups": counters.asyncWakeups,
+    "switch_wakeups": counters.switchWakeups,
+  }
+
+proc reasonCountsJson(counts: Table[string, uint64]): JsonNode =
+  result = newJObject()
+  for reason, count in counts.pairs:
+    result[reason] = %count
+
+proc reasonCountDeltasJson(before, after: Table[string, uint64]): JsonNode =
+  result = newJObject()
+  for reason, count in after.pairs:
+    let previous = before.getOrDefault(reason, 0'u64)
+    if count > previous:
+      result[reason] = %(count - previous)
+
+proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
+  %*{
+    "frame_ticks": after.frameTicks - before.frameTicks,
+    "active_frame_ticks": after.activeFrameTicks - before.activeFrameTicks,
+    "dirty_frame_ticks": after.dirtyFrameTicks - before.dirtyFrameTicks,
+    "render_starts": after.renderStarts - before.renderStarts,
+    "skipped_render_starts": after.skippedRenderStarts - before.skippedRenderStarts,
+    "render_layout_projections":
+      after.renderLayoutProjections - before.renderLayoutProjections,
+    "render_requests": after.renderRequests - before.renderRequests,
+    "skipped_render_requests":
+      after.skippedRenderRequests - before.skippedRenderRequests,
+    "manage_requests": after.manageRequests - before.manageRequests,
+  }
+
+proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
+  RuntimeLoopCounters(
+    loopIterations: after.loopIterations - before.loopIterations,
+    watcherPolls: after.watcherPolls - before.watcherPolls,
+    switchPolls: after.switchPolls - before.switchPolls,
+    childReapPolls: after.childReapPolls - before.childReapPolls,
+    childReapedProcesses: after.childReapedProcesses - before.childReapedProcesses,
+    memorySampleChecks: after.memorySampleChecks - before.memorySampleChecks,
+    memoryCompactionChecks: after.memoryCompactionChecks - before.memoryCompactionChecks,
+    asyncPolls: after.asyncPolls - before.asyncPolls,
+    configReloadChecks: after.configReloadChecks - before.configReloadChecks,
+    configReloadsDue: after.configReloadsDue - before.configReloadsDue,
+    shellWatchdogPolls: after.shellWatchdogPolls - before.shellWatchdogPolls,
+    shellRecoveryPolls: after.shellRecoveryPolls - before.shellRecoveryPolls,
+    manageFlushChecks: after.manageFlushChecks - before.manageFlushChecks,
+    waylandWakeups: after.waylandWakeups - before.waylandWakeups,
+    asyncWakeups: after.asyncWakeups - before.asyncWakeups,
+    switchWakeups: after.switchWakeups - before.switchWakeups,
+  )
+
+proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
+  if not behaviorLogEnabled():
+    return
+  if daemon.lastRuntimeLoopSampleMs == 0:
+    daemon.lastRuntimeLoopSampleMs = nowMs
+    daemon.lastRuntimeLoopSampleCounters = daemon.loopCounters
+    daemon.lastRuntimeLoopSamplePerfCounters = daemon.perfCounters
+    daemon.lastRuntimeLoopSampleFrameTickReasonCounts = daemon.frameTickReasonCounts
+    return
+  if nowMs - daemon.lastRuntimeLoopSampleMs < RuntimeLoopSampleIntervalMs:
+    return
+
+  let previousMs = daemon.lastRuntimeLoopSampleMs
+  let previousLoopCounters = daemon.lastRuntimeLoopSampleCounters
+  let previousPerfCounters = daemon.lastRuntimeLoopSamplePerfCounters
+  let previousFrameTickReasonCounts = daemon.lastRuntimeLoopSampleFrameTickReasonCounts
+  daemon.lastRuntimeLoopSampleMs = nowMs
+  daemon.lastRuntimeLoopSampleCounters = daemon.loopCounters
+  daemon.lastRuntimeLoopSamplePerfCounters = daemon.perfCounters
+  daemon.lastRuntimeLoopSampleFrameTickReasonCounts = daemon.frameTickReasonCounts
+
+  writeBehaviorEvent(
+    "runtime_loop_sample",
+    %*{
+      "interval_ms": nowMs - previousMs,
+      "wait_timeout_ms": daemon.lastWaitTimeoutMs,
+      "wait_backend": daemon.waitBackend,
+      "frame_tick_active": daemon.frameTickNeeded(),
+      "frame_tick_reasons": daemon.frameTickReasons(),
+      "queue_len": daemon.msgQueue.len,
+      "render_dirty": daemon.renderDirty,
+      "render_dirty_reason": daemon.renderDirtyReason,
+      "loop_counters":
+        daemon.loopCounters.delta(previousLoopCounters).loopCountersJson(),
+      "render_counters":
+        previousPerfCounters.renderCounterDeltasJson(daemon.perfCounters),
+      "frame_tick_reason_counts": previousFrameTickReasonCounts.reasonCountDeltasJson(
+        daemon.frameTickReasonCounts
+      ),
+    },
+  )
+
 proc perfStatusJson(daemon: TriadDaemon): string =
   let counters = daemon.perfCounters
   var manageRequestReasons = newJObject()
@@ -230,6 +370,8 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "skipped_render_requests": counters.skippedRenderRequests,
         "manage_requests": counters.manageRequests,
       },
+      "loop_counters": daemon.loopCounters.loopCountersJson(),
+      "frame_tick_reason_counts": daemon.frameTickReasonCounts.reasonCountsJson(),
       "manage_request_reasons": manageRequestReasons,
     }
   )
@@ -747,24 +889,33 @@ proc main*() =
 
   var running = true
   while running:
+    inc daemon.loopCounters.loopIterations
     if not dispatchPendingWayland(daemon.display):
       break
 
     # Poll watcher (non-blocking)
+    inc daemon.loopCounters.watcherPolls
     daemon.watcher.poll(0)
+    inc daemon.loopCounters.switchPolls
     daemon.pollSwitchEventDevices()
-    discard daemon.reapChildProcesses()
+    inc daemon.loopCounters.childReapPolls
+    daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
 
     let nowMs = unixMs()
     daemon.enqueueFrameTickIfDue(nowMs)
+    inc daemon.loopCounters.memorySampleChecks
     daemon.maybeWriteMemorySample(nowMs)
+    inc daemon.loopCounters.memoryCompactionChecks
     daemon.maybeRunMemoryPressureCompaction(nowMs)
     let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
 
     # Poll async IPC without sleeping before Wayland events are serviced.
+    inc daemon.loopCounters.asyncPolls
     asyncdispatch.poll(0)
 
+    inc daemon.loopCounters.configReloadChecks
     if daemon.configReloadDebouncer.takeDue(unixMs()):
+      inc daemon.loopCounters.configReloadsDue
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
 
     # Process Message Queue
@@ -780,6 +931,7 @@ proc main*() =
         daemon.runtimeState.model, niriSocketPath, "initial manage"
       )
       let shellPollMs = int64(epochTime() * 1000.0)
+      inc daemon.loopCounters.shellWatchdogPolls
       let watchdogFallback =
         daemon.quickshellState.pollShellWatchdog(daemon.runtimeState.model, shellPollMs)
       if watchdogFallback.isSome:
@@ -787,10 +939,12 @@ proc main*() =
           Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
         )
       else:
+        inc daemon.loopCounters.shellRecoveryPolls
         discard daemon.quickshellState.pollQuickshellRecovery(
           daemon.runtimeState.model, niriSocketPath, shellPollMs
         )
 
+    inc daemon.loopCounters.manageFlushChecks
     daemon.flushManageRequest()
 
     if not prepareWaylandRead(daemon.display):
@@ -799,14 +953,20 @@ proc main*() =
     discard daemon.display.flush()
     let waitResult = daemon.waitForRuntimeEvents(waitTimeout)
     if waitResult.waylandReady:
+      inc daemon.loopCounters.waylandWakeups
       if daemon.display.read_events() == -1:
         running = false
     else:
       daemon.display.cancel_read()
     if waitResult.asyncReady:
+      inc daemon.loopCounters.asyncWakeups
+      inc daemon.loopCounters.asyncPolls
       asyncdispatch.poll(0)
     if waitResult.switchReady:
+      inc daemon.loopCounters.switchWakeups
+      inc daemon.loopCounters.switchPolls
       daemon.pollSwitchEventDevices()
+    daemon.maybeWriteRuntimeLoopSample(unixMs())
 
   daemon.closeSwitchEventDevices()
   daemon.janetRuntime.close()
