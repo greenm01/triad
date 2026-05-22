@@ -296,6 +296,7 @@ proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
     "manage_requests": after.manageRequests - before.manageRequests,
     "skipped_animation_manages":
       after.skippedAnimationManages - before.skippedAnimationManages,
+    "skipped_noop_manages": after.skippedNoopManages - before.skippedNoopManages,
     "render_start_callback_skips":
       after.renderStartCallbackSkips - before.renderStartCallbackSkips,
     "render_start_queued_skips":
@@ -559,6 +560,7 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "skipped_render_requests": counters.skippedRenderRequests,
         "manage_requests": counters.manageRequests,
         "skipped_animation_manages": counters.skippedAnimationManages,
+        "skipped_noop_manages": counters.skippedNoopManages,
         "render_start_callback_skips": counters.renderStartCallbackSkips,
         "render_start_queued_skips": counters.renderStartQueuedSkips,
         "dimension_proposals": counters.dimensionProposals,
@@ -748,7 +750,11 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.activeManageReason = ""
       let animationOnlyManage =
         manageReason == AnimationManageReason and daemon.pendingManageEffects.len == 0
-      if not animationOnlyManage:
+      let noopManage =
+        daemon.initialManageComplete and manageReason.len == 0 and
+        daemon.pendingManageEffects.len == 0 and effects.len == 0 and
+        not daemon.renderDirty
+      if not animationOnlyManage and not noopManage:
         let projection = syncRuntimeLayoutProjection("manage layout", msg)
         daemon.currentFrameTabBars = projection.frameTabBars
         daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
@@ -756,8 +762,10 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         daemon.proposeDesiredDimensions(projection.instructions)
         daemon.applyManageState()
         daemon.flushPendingManageEffects()
-      else:
+      elif animationOnlyManage:
         inc daemon.perfCounters.skippedAnimationManages
+      else:
+        inc daemon.perfCounters.skippedNoopManages
       for eff in effects:
         if eff.kind != EffectKind.EffManageDirty:
           daemon.executeEffect(eff)

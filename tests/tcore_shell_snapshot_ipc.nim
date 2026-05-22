@@ -464,6 +464,18 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check not effects.hasFocusEffect(1)
     model.requireTagShellSemantics("scratchpad manage focus scenario")
 
+  test "Manage start with unchanged normal focus is a no-op":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "One")
+    )
+
+    let effects = model.updateModel(Msg(kind: MsgKind.WlManageStart))
+
+    check effects.len == 0
+    check model.focusedWindowId() == 1
+    model.requireTagShellSemantics("normal manage no-op scenario")
+
   test "Clicking visible scratchpad reasserts compositor focus":
     var model = configuredModel()
     model.applyMsg(

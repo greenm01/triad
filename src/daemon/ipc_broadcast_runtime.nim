@@ -42,8 +42,11 @@ proc enqueueNiriBroadcast*(daemon: var TriadDaemon, payload, eventName: string) 
       eventName
     else:
       payload.niriEventName()
-  if not resolvedEventName.shouldSendNiriEventName() or
-      not payload.shouldSendNiriBroadcast():
+  if not resolvedEventName.shouldSendNiriEventName():
+    inc ipcPerfCounters.niriBroadcastSkippedFiltered
+    inc ipcPerfCounters.niriBroadcastSkippedBytes, uint64(payload.len)
+    return
+  if eventName.len == 0 and not payload.shouldSendNiriBroadcast():
     inc ipcPerfCounters.niriBroadcastSkippedFiltered
     inc ipcPerfCounters.niriBroadcastSkippedBytes, uint64(payload.len)
     return

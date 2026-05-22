@@ -89,6 +89,7 @@ suite "Runtime logging":
     check source.contains("\"recent_delta\"")
     check source.contains("\"ipc_counters\"")
     check source.contains("\"skipped_animation_manages\"")
+    check source.contains("\"skipped_noop_manages\"")
     check source.contains("\"skipped_dimension_proposals\"")
     check renderStart >= 0
     check cmdTick > renderStart

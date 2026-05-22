@@ -186,6 +186,7 @@ type
     skippedRenderRequests*: uint64
     manageRequests*: uint64
     skippedAnimationManages*: uint64
+    skippedNoopManages*: uint64
     renderStartCallbackSkips*: uint64
     renderStartQueuedSkips*: uint64
     dimensionProposals*: uint64

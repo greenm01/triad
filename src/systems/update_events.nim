@@ -132,13 +132,18 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       else:
         model.focusedOnActiveTag()
     if focused != NullWindowId:
-      discard model.recordWorkspace(model.activeTag)
-      discard model.recordFocus(focused)
+      let workspaceChanged = model.recordWorkspace(model.activeTag)
+      let focusChanged = model.recordFocus(focused)
       let externalId = model.runtimeWindowId(focused)
-      result.effects.add(broadcastWindowFocusChanged(externalId))
-      if not model.sessionLocked and not model.layerFocusExclusive:
-        result.effects.add(Effect(kind: EffectKind.EffFocusWindow, focusId: externalId))
-    result.dirty = true
+      let shouldReassertFocus =
+        scratchpad != NullWindowId or workspaceChanged or focusChanged
+      if shouldReassertFocus:
+        result.effects.add(broadcastWindowFocusChanged(externalId))
+        if not model.sessionLocked and not model.layerFocusExclusive:
+          result.effects.add(
+            Effect(kind: EffectKind.EffFocusWindow, focusId: externalId)
+          )
+      result.dirty = workspaceChanged or focusChanged
   of MsgKind.WlOutputDimensions:
     result.dirty = model.setOutputDimensionsForExternal(
       msg.outputId.externalOutputId(), msg.width, msg.height

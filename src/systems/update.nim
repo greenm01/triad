@@ -247,6 +247,9 @@ proc updateInPlace*(
     effects.add(effect)
   var dirty = step.dirty
 
+  if msg.kind == MsgKind.WlManageStart and not dirty and effects.len == 0:
+    return effects
+
   let maintenance = model.applyUpdateMaintenance(msg.kind)
   if maintenance.collapsed or maintenance.pruned or maintenance.outputCovered:
     dirty = true
