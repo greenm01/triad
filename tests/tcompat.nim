@@ -532,6 +532,9 @@ suite "Shell compatibility contracts":
       handleTriadRequest("""{"triad":{"version":1,"request":"state"}}""", snapshot)
     check stateReply.handled
     let state = parseJson(stateReply.reply)["triad"]["state"]
+    check state["capabilities"]["overview"].getBool()
+    check state["capabilities"]["keyboard_layout"].getBool()
+    check not state["capabilities"]["monitor_power"].getBool()
     check state["overview"]["is_open"].getBool()
     check state["layout"]["active_tag"].getInt() == 1
     check state["outputs"][0]["name"].getStr() == "triad-0"
@@ -576,6 +579,16 @@ suite "Shell compatibility contracts":
     check keyboardLayouts["names"][0].getStr() == "us"
     check keyboardLayouts["current_idx"].getInt() == 0
 
+    let capabilitiesReply = handleTriadRequest(
+      """{"triad":{"version":1,"request":"capabilities"}}""", snapshot
+    )
+    let capabilities = parseJson(capabilitiesReply.reply)["triad"]["capabilities"]
+    check parseJson(capabilitiesReply.reply)["triad"]["type"].getStr() == "capabilities"
+    check capabilities["workspace_creation"].getBool()
+    check capabilities["output_metadata"].getBool()
+    check capabilities["keyboard_layout"].getBool()
+    check not capabilities["monitor_power"].getBool()
+
     let setLayout = handleTriadRequest(
       """{"triad":{"version":1,"request":"set-layout","layout":"deck","target":{"workspace_idx":2}}}""",
       snapshot,
@@ -617,6 +630,9 @@ suite "Shell compatibility contracts":
       it["name"].getStr() == "layout-state"
     )
     check catalog["special_requests"].getElems().anyIt(
+      it["name"].getStr() == "capabilities"
+    )
+    check catalog["special_requests"].getElems().anyIt(
       it["name"].getStr() == "workspaces"
     )
 
@@ -651,6 +667,7 @@ suite "Shell compatibility contracts":
     check help.contains("triad msg validate <command...>")
     check help.contains("focus-next")
     check help.contains("triad msg state")
+    check help.contains("triad msg capabilities")
     check help.contains("triad msg workspaces")
     check help.contains("triad msg dispatch-binding")
     check help.contains("triad msg mem-status")
@@ -688,6 +705,10 @@ suite "Shell compatibility contracts":
       it["name"].getStr() == "state" and it["usage"].getStr() == "triad msg state"
     )
     check catalog["special_requests"].getElems().anyIt(
+      it["name"].getStr() == "capabilities" and
+        it["usage"].getStr() == "triad msg capabilities"
+    )
+    check catalog["special_requests"].getElems().anyIt(
       it["name"].getStr() == "workspaces" and
         it["usage"].getStr() == "triad msg workspaces"
     )
@@ -697,6 +718,7 @@ suite "Shell compatibility contracts":
     )
 
     check triadMsgRequestPayload("state").isSome
+    check triadMsgRequestPayload("capabilities").isSome
     check triadMsgRequestPayload("workspaces").isSome
     check triadMsgRequestPayload("outputs").isSome
     check triadMsgRequestPayload("windows").isSome

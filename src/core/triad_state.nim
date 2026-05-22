@@ -418,11 +418,28 @@ proc triadOverviewJson*(snapshot: ShellSnapshot): JsonNode =
 proc triadKeyboardLayoutsJson*(snapshot: ShellSnapshot): JsonNode =
   %*{"names": snapshot.keyboardLayoutNames, "current_idx": snapshot.keyboardLayoutIndex}
 
+proc triadCapabilitiesJson*(): JsonNode =
+  %*{
+    "event_stream": true,
+    "state": true,
+    "layout_state": true,
+    "overview": true,
+    "workspace_creation": true,
+    "workspace_switching": true,
+    "window_focus": true,
+    "window_close": true,
+    "spawn": true,
+    "keyboard_layout": true,
+    "output_metadata": true,
+    "monitor_power": false,
+  }
+
 proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =
   let keyboardLayouts = triadKeyboardLayoutsJson(snapshot)
 
   %*{
     "version": snapshot.version,
+    "capabilities": triadCapabilitiesJson(),
     "overview": triadOverviewJson(snapshot),
     "layout": triadLayoutStateJson(snapshot),
     "keyboard_layouts": keyboardLayouts["names"],

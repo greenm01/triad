@@ -23,6 +23,7 @@ triad msg <command> [arguments]
 | `validate <command…>` | Validate a command locally without sending it. |
 | `request <json>` | Send a raw JSON IPC request. |
 | `state` | Print current session state as JSON. |
+| `capabilities` | Print native Triad IPC feature capabilities as JSON. |
 | `workspaces` | Print current workspace state as JSON. |
 | `outputs` | Print current output state as JSON. |
 | `windows` | Print current window state as JSON. |

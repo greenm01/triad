@@ -39,6 +39,11 @@ const SpecialMsgCommands* = [
     description: "Print native Triad shell state JSON.",
   ),
   SpecialMsgCommand(
+    name: "capabilities",
+    usage: "triad msg capabilities",
+    description: "Print native Triad IPC feature capabilities JSON.",
+  ),
+  SpecialMsgCommand(
     name: "workspaces",
     usage: "triad msg workspaces",
     description: "Print native Triad workspace state JSON.",
@@ -280,6 +285,7 @@ Usage:
 
 Useful request commands:
   triad msg state
+  triad msg capabilities
   triad msg layout-state
   triad msg perf-status
   triad msg mem-status
@@ -316,6 +322,8 @@ proc triadMsgRequestPayload*(cmd: string): Option[string] =
   case cmd
   of "state":
     some(triadRequestPayload("state"))
+  of "capabilities":
+    some(triadRequestPayload("capabilities"))
   of "workspaces":
     some(triadRequestPayload("workspaces"))
   of "outputs":

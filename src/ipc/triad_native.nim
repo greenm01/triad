@@ -445,6 +445,14 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
     result.reply = okReply(
       %*{"version": TriadIpcVersion, "type": "state", "state": triadStateJson(snapshot)}
     )
+  of "capabilities":
+    result.reply = okReply(
+      %*{
+        "version": TriadIpcVersion,
+        "type": "capabilities",
+        "capabilities": triadCapabilitiesJson(),
+      }
+    )
   of "workspaces":
     result.reply = okReply(
       %*{
