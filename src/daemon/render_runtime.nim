@@ -1,4 +1,4 @@
-import std/[algorithm, options, tables]
+import std/[options, tables]
 import protocols/river/client as river
 import ../core/render_visibility
 import ../state/engine
@@ -122,6 +122,17 @@ proc desiredStackCmp(daemon: TriadDaemon, a, b: uint32): int =
     return cmp(aLayer, bLayer)
   cmp(daemon.logicalWindowSortKey(a), daemon.logicalWindowSortKey(b))
 
+proc sortDesiredIds(daemon: TriadDaemon, ids: var seq[uint32]) =
+  if ids.len < 2:
+    return
+  for idx in 1 ..< ids.len:
+    let item = ids[idx]
+    var pos = idx
+    while pos > 0 and daemon.desiredStackCmp(item, ids[pos - 1]) < 0:
+      ids[pos] = ids[pos - 1]
+      dec pos
+    ids[pos] = item
+
 proc orderedDesiredIds*(daemon: TriadDaemon): seq[uint32] =
   for id in daemon.desiredPlacements.keys:
     if daemon.desiredPlacementOrder.find(id) == -1:
@@ -129,10 +140,7 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[uint32] =
   for id in daemon.desiredPlacementOrder:
     if daemon.desiredPlacements.hasKey(id) and result.find(id) == -1:
       result.add(id)
-  result.sort(
-    proc(a, b: uint32): int =
-      daemon.desiredStackCmp(a, b)
-  )
+  daemon.sortDesiredIds(result)
 
 proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
   proc desiredInstruction(id: uint32): RenderInstruction =

@@ -1048,14 +1048,14 @@ proc syncFrameEmptySurfaces*(
         daemon.destroyProtocolSurface(surf)
     return
 
-  var activeFrames = initHashSet[uint32]()
+  var activeFrames: seq[uint32]
   for frame in frames:
     if frame.frameId == 0 or frame.geom.w <= 0 or frame.geom.h <= 0:
       continue
     let surfaceId = daemon.ensureFrameEmptySurface(frame.frameId)
     if surfaceId == 0 or not daemon.surfaceTable.hasKey(surfaceId):
       continue
-    activeFrames.incl(frame.frameId)
+    activeFrames.add(frame.frameId)
     var surf = daemon.surfaceTable[surfaceId]
     let key = frame.frameEmptyChromeCacheKey()
     surf.frameId = frame.frameId
@@ -1075,7 +1075,7 @@ proc syncFrameEmptySurfaces*(
 
   var staleFrames: seq[uint32]
   for frameId in daemon.frameEmptySurfaces.keys:
-    if not activeFrames.contains(frameId):
+    if activeFrames.find(frameId) == -1:
       staleFrames.add(frameId)
   for frameId in staleFrames:
     let surfaceId = daemon.frameEmptySurfaces[frameId]

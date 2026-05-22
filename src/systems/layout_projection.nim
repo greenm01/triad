@@ -35,7 +35,8 @@ type
     aggregate: bool
     representativeOnly: bool
 
-  VisibleOutputTag = tuple[outputId: core_types.OutputId, tagId: core_types.TagId]
+  VisibleOutputTag =
+    tuple[outputId: core_types.OutputId, tagId: core_types.TagId, x: int32, y: int32]
 
 const FrameTreeTabBarHeight* = 24'i32
 
@@ -163,6 +164,20 @@ proc floatingStackCmp(
     return cmp(rankA, rankB)
   cmp(uint32(a.id), uint32(b.id))
 
+proc sortFloatingStack(
+    model: Model,
+    floating: var seq[tuple[id: core_types.WindowId, win: model_types.WindowData]],
+) =
+  if floating.len < 2:
+    return
+  for idx in 1 ..< floating.len:
+    let item = floating[idx]
+    var pos = idx
+    while pos > 0 and model.floatingStackCmp(item, floating[pos - 1]) < 0:
+      floating[pos] = floating[pos - 1]
+      dec pos
+    floating[pos] = item
+
 proc applyPopupLayoutFocus(
     model: Model, tag: var rv.ProjectedTag, active: core_types.WindowId
 ) =
@@ -190,10 +205,7 @@ proc addFloatingInstructions(
     if win.windowAdmitted() and win.isFloating and not win.isUnmanagedGlobal and
         not win.isMinimized:
       floating.add((id: winId, win: win))
-  floating.sort(
-    proc(a, b: tuple[id: core_types.WindowId, win: model_types.WindowData]): int =
-      model.floatingStackCmp(a, b)
-  )
+  model.sortFloatingStack(floating)
 
   var geomByWindow = initTable[rv.ProjectionWindowId, rv.Rect]()
   for instr in instructions:
@@ -1569,37 +1581,17 @@ proc layoutWorkspaceStripOverview(
 
 proc visibleOutputTagsForLayout(model: Model): seq[VisibleOutputTag] =
   for outputId, tagId in model.outputTagsWithId():
-    if model.outputData(outputId).isSome and model.tagData(tagId).isSome:
-      result.add((outputId: outputId, tagId: tagId))
+    let outputOpt = model.outputData(outputId)
+    if outputOpt.isSome and model.tagData(tagId).isSome:
+      let output = outputOpt.get()
+      result.add((outputId: outputId, tagId: tagId, x: output.x, y: output.y))
 
   result.sort(
     proc(a, b: VisibleOutputTag): int =
-      let aOutput = model.outputData(a.outputId)
-      let bOutput = model.outputData(b.outputId)
-      let ax =
-        if aOutput.isSome:
-          aOutput.get().x
-        else:
-          high(int32)
-      let bx =
-        if bOutput.isSome:
-          bOutput.get().x
-        else:
-          high(int32)
-      if ax != bx:
-        return cmp(ax, bx)
-      let ay =
-        if aOutput.isSome:
-          aOutput.get().y
-        else:
-          high(int32)
-      let by =
-        if bOutput.isSome:
-          bOutput.get().y
-        else:
-          high(int32)
-      if ay != by:
-        return cmp(ay, by)
+      if a.x != b.x:
+        return cmp(a.x, b.x)
+      if a.y != b.y:
+        return cmp(a.y, b.y)
       cmp(uint32(a.outputId), uint32(b.outputId))
   )
 
@@ -1615,9 +1607,12 @@ proc visibleOutputTagsForLayout(model: Model): seq[VisibleOutputTag] =
   elif model.activeTag != NullTagId and model.tagData(model.activeTag).isSome:
     let outputId = model.workspaceOutput(model.activeTag)
     if outputId != NullOutputId and model.outputData(outputId).isSome:
-      result.add((outputId: outputId, tagId: model.activeTag))
+      let output = model.outputData(outputId).get()
+      result.add((outputId: outputId, tagId: model.activeTag, x: output.x, y: output.y))
     else:
-      result.add((outputId: NullOutputId, tagId: model.activeTag))
+      result.add(
+        (outputId: NullOutputId, tagId: model.activeTag, x: high(int32), y: high(int32))
+      )
 
 proc needsLocalLayoutEval(model: Model): bool =
   if model.overviewActive:

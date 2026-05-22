@@ -518,19 +518,37 @@ proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool
   let tickOverviewPreviews = model.overviewUsesWorkspacePreviews()
   if model.overviewActive and not tickOverviewPreviews:
     return false
-  let previewSlots =
-    if tickOverviewPreviews:
-      model.previewSlots()
-    else:
-      @[]
   let speed = model.animationSpeed.elapsedAnimationSpeed(elapsedMs)
   let snapThreshold = max(model.animationSnapThreshold, 0.01'f32)
-  for tagId, tag in model.tagsWithId():
-    if tickOverviewPreviews:
+  if tickOverviewPreviews:
+    let previewSlots = model.previewSlots()
+    for tagId, tag in model.tagsWithId():
       if previewSlots.find(tag.slot) == -1:
         continue
-    elif tagId != model.activeTag:
-      continue
+      var currentX = tag.currentViewportXOffset
+      var currentY = tag.currentViewportYOffset
+      let beforeRenderX = renderedViewportOffset(currentX)
+      let beforeRenderY = renderedViewportOffset(currentY)
+      let nextX = animatedViewportOffset(
+        currentX, tag.targetViewportXOffset, speed, snapThreshold
+      )
+      let nextY = animatedViewportOffset(
+        currentY, tag.targetViewportYOffset, speed, snapThreshold
+      )
+      currentX = nextX.value
+      currentY = nextY.value
+      let changed = nextX.changed or nextY.changed
+      if changed:
+        discard model.setTagViewportCurrent(tagId, currentX, currentY)
+        let afterRenderX = renderedViewportOffset(currentX)
+        let afterRenderY = renderedViewportOffset(currentY)
+        result =
+          result or beforeRenderX != afterRenderX or beforeRenderY != afterRenderY
+  else:
+    let tagOpt = model.tagData(model.activeTag)
+    if tagOpt.isNone:
+      return false
+    let tag = tagOpt.get()
     var currentX = tag.currentViewportXOffset
     var currentY = tag.currentViewportYOffset
     let beforeRenderX = renderedViewportOffset(currentX)
@@ -543,7 +561,7 @@ proc tickAnimations*(model: var Model, elapsedMs = DefaultFrameIntervalMs): bool
     currentY = nextY.value
     let changed = nextX.changed or nextY.changed
     if changed:
-      discard model.setTagViewportCurrent(tagId, currentX, currentY)
+      discard model.setTagViewportCurrent(model.activeTag, currentX, currentY)
       let afterRenderX = renderedViewportOffset(currentX)
       let afterRenderY = renderedViewportOffset(currentY)
       result = result or beforeRenderX != afterRenderX or beforeRenderY != afterRenderY
@@ -554,18 +572,24 @@ proc hasPendingViewportAnimation*(model: Model): bool =
   let tickOverviewPreviews = model.overviewUsesWorkspacePreviews()
   if model.overviewActive and not tickOverviewPreviews:
     return false
-  let previewSlots =
-    if tickOverviewPreviews:
-      model.previewSlots()
-    else:
-      @[]
   let snapThreshold = max(model.animationSnapThreshold, 0.01'f32)
-  for tagId, tag in model.tagsWithId():
-    if tickOverviewPreviews:
+  if tickOverviewPreviews:
+    let previewSlots = model.previewSlots()
+    for _, tag in model.tagsWithId():
       if previewSlots.find(tag.slot) == -1:
         continue
-    elif tagId != model.activeTag:
-      continue
+      if abs(tag.targetViewportXOffset - tag.currentViewportXOffset) > 0.0'f32 or
+          abs(tag.targetViewportYOffset - tag.currentViewportYOffset) > 0.0'f32:
+        if model.animationSpeed <= 0.0'f32:
+          return true
+        if abs(tag.targetViewportXOffset - tag.currentViewportXOffset) > snapThreshold or
+            abs(tag.targetViewportYOffset - tag.currentViewportYOffset) > snapThreshold:
+          return true
+  else:
+    let tagOpt = model.tagData(model.activeTag)
+    if tagOpt.isNone:
+      return false
+    let tag = tagOpt.get()
     if abs(tag.targetViewportXOffset - tag.currentViewportXOffset) > 0.0'f32 or
         abs(tag.targetViewportYOffset - tag.currentViewportYOffset) > 0.0'f32:
       if model.animationSpeed <= 0.0'f32:
