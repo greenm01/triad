@@ -32,6 +32,8 @@ var wlrOutputHeadListener*: wlrOutput.ZwlrOutputHeadV1Listener
 var wlrOutputModeListener*: wlrOutput.ZwlrOutputModeV1Listener
 var wlrOutputConfigListener*: wlrOutput.ZwlrOutputConfigurationV1Listener
 
+proc destroyOutputConfig*(daemon: var TriadDaemon)
+
 proc fixedFromFloat(value: float32): Fixed =
   Fixed(int32(cdouble(value) * 256.0))
 
@@ -300,6 +302,126 @@ proc configureHead(
   elif head.adaptiveSyncSet and canSetAdaptiveSync:
     headConfig.setAdaptiveSync(if head.adaptiveSync: 1'u32 else: 0'u32)
 
+proc headRuntimeEnabled(head: OutputManagementHeadRuntime): bool =
+  not head.enabledSet or head.enabled
+
+proc restoreContains(daemon: TriadDaemon, headId: uint32): bool =
+  for restoredId in daemon.monitorPowerRestoreHeadIds:
+    if restoredId == headId:
+      return true
+  false
+
+proc configureHeadPower(
+    daemon: TriadDaemon,
+    config: ptr wlrOutput.ZwlrOutputConfigurationV1,
+    head: OutputManagementHeadRuntime,
+    enabled: bool,
+) =
+  if not enabled:
+    config.disableHead(head.pointer)
+    return
+
+  let headConfig = config.enableHead(head.pointer)
+  let modeId =
+    if head.currentModeId != 0'u32:
+      head.currentModeId
+    else:
+      daemon.preferredMode(head)
+  if modeId != 0'u32 and daemon.wlrOutputModes.hasKey(modeId):
+    headConfig.setMode(daemon.wlrOutputModes[modeId].pointer)
+
+  headConfig.setPosition(head.x, head.y)
+  headConfig.setTransform(head.transform)
+  headConfig.setScale((if head.scaleSet: head.scale else: 1.0'f32).fixedFromFloat())
+
+  let canSetAdaptiveSync =
+    daemon.wlrOutputManager != nil and daemon.wlrOutputManager.getVersion() >= 4'u32
+  if head.adaptiveSyncSet and canSetAdaptiveSync:
+    headConfig.setAdaptiveSync(if head.adaptiveSync: 1'u32 else: 0'u32)
+
+proc applyMonitorPower*(daemon: var TriadDaemon, enabled: bool) =
+  if daemon.wlrOutputManager == nil:
+    warn "Monitor power request ignored; output-management protocol is unavailable",
+      enabled = enabled
+    return
+  if not daemon.wlrOutputReady or daemon.wlrOutputApplyInFlight:
+    warn "Monitor power request ignored; output-management state is not ready",
+      enabled = enabled,
+      ready = daemon.wlrOutputReady,
+      inFlight = daemon.wlrOutputApplyInFlight
+    return
+
+  var heads: seq[tuple[headId: uint32, head: OutputManagementHeadRuntime]] = @[]
+  for headId, head in daemon.wlrOutputHeads.pairs:
+    if not head.finished and head.pointer != nil:
+      heads.add((headId: headId, head: head))
+  heads.sort(
+    proc(a, b: tuple[headId: uint32, head: OutputManagementHeadRuntime]): int =
+      result = cmp(a.head.name, b.head.name)
+      if result == 0:
+        result = cmp(a.headId, b.headId)
+  )
+
+  if heads.len == 0:
+    warn "Monitor power request ignored; no outputs are advertised", enabled = enabled
+    return
+
+  if not enabled and not daemon.monitorPowerOffActive:
+    daemon.monitorPowerRestoreHeadIds = @[]
+    for item in heads:
+      if item.head.headRuntimeEnabled():
+        daemon.monitorPowerRestoreHeadIds.add(item.headId)
+
+  if not enabled and daemon.monitorPowerRestoreHeadIds.len == 0:
+    warn "Monitor power-off request ignored; no enabled outputs were found"
+    return
+
+  let restoreAll = enabled and daemon.monitorPowerRestoreHeadIds.len == 0
+  var anyChange = false
+  for item in heads:
+    let targetEnabled =
+      if enabled:
+        restoreAll or daemon.restoreContains(item.headId)
+      else:
+        false
+    if item.head.headRuntimeEnabled() != targetEnabled:
+      anyChange = true
+      break
+
+  if not anyChange:
+    daemon.monitorPowerOffActive = not enabled
+    if enabled:
+      daemon.monitorPowerRestoreHeadIds = @[]
+    return
+
+  let config = daemon.wlrOutputManager.createConfiguration(daemon.wlrOutputSerial)
+  daemon.destroyOutputConfig()
+  daemon.wlrOutputConfig = config
+  daemon.wlrOutputConfigListenerData = new(WlrOutputConfigListenerData)
+  daemon.wlrOutputConfigListenerData[] = WlrOutputConfigListenerData(
+    daemon: addr daemon,
+    serial: daemon.wlrOutputSerial,
+    monitorPowerCompletionSet: true,
+    monitorPowerOffActive: not enabled,
+    monitorPowerClearRestore: enabled,
+  )
+  discard config.addListener(
+    wlrOutputConfigListener.addr, cast[pointer](daemon.wlrOutputConfigListenerData)
+  )
+
+  for item in heads:
+    let targetEnabled =
+      if enabled:
+        restoreAll or daemon.restoreContains(item.headId)
+      else:
+        false
+    daemon.configureHeadPower(config, item.head, targetEnabled)
+
+  daemon.wlrOutputApplyInFlight = true
+  info "Applying monitor power request",
+    enabled = enabled, serial = daemon.wlrOutputSerial
+  config.apply()
+
 proc selectedModeSize(
     daemon: TriadDaemon,
     head: OutputManagementHeadRuntime,
@@ -442,6 +564,8 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
         reason = reason
     return
   if not daemon.wlrOutputReady or daemon.wlrOutputApplyInFlight:
+    return
+  if daemon.monitorPowerOffActive:
     return
   if not daemon.runtimeState.model.hasOutputManagementConfig():
     return
@@ -759,6 +883,10 @@ proc onConfigSucceeded(data: pointer, config: ptr wlrOutput.ZwlrOutputConfigurat
     return
   let daemon = listenerData.daemon
   info "Output-management config applied", serial = listenerData.serial
+  if listenerData.monitorPowerCompletionSet:
+    daemon.monitorPowerOffActive = listenerData.monitorPowerOffActive
+    if listenerData.monitorPowerClearRestore:
+      daemon.monitorPowerRestoreHeadIds = @[]
   daemon.wlrOutputApplyInFlight = false
   daemon.wlrOutputRetryPending = false
   daemon.wlrOutputRetryCount = 0
@@ -784,6 +912,9 @@ proc onConfigCancelled(data: pointer, config: ptr wlrOutput.ZwlrOutputConfigurat
     serial = listenerData.serial, retryCount = daemon.wlrOutputRetryCount
   daemon.wlrOutputApplyInFlight = false
   daemon[].destroyOutputConfig()
+  if listenerData.monitorPowerCompletionSet:
+    daemon.wlrOutputRetryPending = false
+    return
   if daemon.wlrOutputRetryCount == 0:
     daemon.wlrOutputRetryCount = 1
     daemon.wlrOutputRetryPending = true

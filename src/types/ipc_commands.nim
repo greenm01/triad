@@ -108,6 +108,8 @@ type
     CidSpawn
     CidSpawnTerminal
     CidLockSession
+    CidPowerOffMonitors
+    CidPowerOnMonitors
     CidWarpPointer
     CidEatNextKey
     CidCancelEatNextKey
@@ -559,6 +561,12 @@ const CommandSpecs* = [
   CommandSpec(id: CommandId.CidSpawn, name: "spawn", argShape: SpawnArgv),
   CommandSpec(id: CommandId.CidSpawnTerminal, name: "spawn-terminal", argShape: NoArgs),
   CommandSpec(id: CommandId.CidLockSession, name: "lock-session", argShape: NoArgs),
+  CommandSpec(
+    id: CommandId.CidPowerOffMonitors, name: "power-off-monitors", argShape: NoArgs
+  ),
+  CommandSpec(
+    id: CommandId.CidPowerOnMonitors, name: "power-on-monitors", argShape: NoArgs
+  ),
   CommandSpec(id: CommandId.CidWarpPointer, name: "warp-pointer", argShape: WarpPointer),
   CommandSpec(id: CommandId.CidEatNextKey, name: "eat-next-key", argShape: NoArgs),
   CommandSpec(

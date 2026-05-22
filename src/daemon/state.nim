@@ -49,6 +49,9 @@ type
   WlrOutputConfigListenerData* = object
     daemon*: ptr TriadDaemon
     serial*: uint32
+    monitorPowerCompletionSet*: bool
+    monitorPowerOffActive*: bool
+    monitorPowerClearRestore*: bool
 
   OutputManagementModeRuntime* = object
     pointer*: ptr wlrOutput.ZwlrOutputModeV1
@@ -228,6 +231,8 @@ type
     wlrOutputModeListenerData*: Table[uint32, ref WlrOutputModeListenerData]
     wlrOutputConfig*: ptr wlrOutput.ZwlrOutputConfigurationV1
     wlrOutputConfigListenerData*: ref WlrOutputConfigListenerData
+    monitorPowerOffActive*: bool
+    monitorPowerRestoreHeadIds*: seq[uint32]
     compositor*: ptr Compositor
     shm*: ptr Shm
     cursorShapeManager*: ptr cursorShape.WpCursorShapeManagerV1

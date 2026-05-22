@@ -21,6 +21,8 @@ Dispatch commands to the running Triad instance using:
 *   `keyboard-layouts`: Prints keyboard layout state as JSON.
 *   `layout-state`: Prints the layout state for all visible workspaces.
 *   `switch-keyboard-layout [next|prev|index]`: Switches the active keyboard layout.
+*   `power-off-monitors`: Disables currently enabled outputs through output-management and remembers them for restore.
+*   `power-on-monitors`: Restores the outputs remembered by `power-off-monitors`.
 *   `perf-status`: Prints daemon performance, timing, and loop wake diagnostics.
 *   `mem-status`: Prints memory diagnostics.
 *   `config-reload`: Reloads the configuration.

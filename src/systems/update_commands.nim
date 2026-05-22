@@ -598,6 +598,14 @@ proc applyCommand*(
       result.effects.add(
         Effect(kind: EffectKind.EffLog, msg: "screen lock command is not configured")
       )
+  of MsgKind.CmdPowerOffMonitors:
+    result.effects.add(
+      Effect(kind: EffectKind.EffSetMonitorPower, monitorPowerEnabled: false)
+    )
+  of MsgKind.CmdPowerOnMonitors:
+    result.effects.add(
+      Effect(kind: EffectKind.EffSetMonitorPower, monitorPowerEnabled: true)
+    )
   of MsgKind.CmdWarpPointer:
     result.effects.add(
       Effect(kind: EffectKind.EffPointerWarp, warpX: msg.warpX, warpY: msg.warpY)

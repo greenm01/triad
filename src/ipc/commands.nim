@@ -613,6 +613,10 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdSpawnTerminal))
   of CommandId.CidLockSession:
     some(Msg(kind: MsgKind.CmdLockSession))
+  of CommandId.CidPowerOffMonitors:
+    some(Msg(kind: MsgKind.CmdPowerOffMonitors))
+  of CommandId.CidPowerOnMonitors:
+    some(Msg(kind: MsgKind.CmdPowerOnMonitors))
   of CommandId.CidWarpPointer:
     if parts.len >= 3:
       let x = parseInt32Arg(parts[1])

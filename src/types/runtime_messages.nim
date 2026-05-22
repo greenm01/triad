@@ -193,6 +193,8 @@ type
     CmdSpawn
     CmdSpawnTerminal
     CmdLockSession
+    CmdPowerOffMonitors
+    CmdPowerOnMonitors
     CmdWarpPointer
     CmdEatNextKey
     CmdCancelEatNextKey

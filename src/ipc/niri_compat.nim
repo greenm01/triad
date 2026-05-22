@@ -387,8 +387,11 @@ proc actionMessages(
         )
       ],
     )
-  elif action.hasKey("DoScreenTransition") or action.hasKey("PowerOffMonitors") or
-      action.hasKey("PowerOnMonitors") or action.hasKey("CenterColumn") or
+  elif action.hasKey("PowerOffMonitors"):
+    return (true, @[Msg(kind: MsgKind.CmdPowerOffMonitors)])
+  elif action.hasKey("PowerOnMonitors"):
+    return (true, @[Msg(kind: MsgKind.CmdPowerOnMonitors)])
+  elif action.hasKey("DoScreenTransition") or action.hasKey("CenterColumn") or
       action.hasKey("CenterVisibleColumns") or action.hasKey("SwitchPresetColumnWidth") or
       action.hasKey("SwitchPresetWindowHeight") or
       action.hasKey("ToggleColumnTabbedDisplay"):

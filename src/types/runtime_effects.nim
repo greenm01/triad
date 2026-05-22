@@ -25,6 +25,7 @@ type
     EffSpawn
     EffPointerWarp
     EffSetKeyboardLayout
+    EffSetMonitorPower
     EffEnsureNextKeyEaten
     EffCancelEnsureNextKeyEaten
     EffStopManager
@@ -80,6 +81,8 @@ type
       warpX*, warpY*: int32
     of EffectKind.EffSetKeyboardLayout:
       keyboardLayoutIndex*: uint32
+    of EffectKind.EffSetMonitorPower:
+      monitorPowerEnabled*: bool
     of EffectKind.EffScreenshot:
       screenshotKind*: ScreenshotKind
       screenshotPath*: string

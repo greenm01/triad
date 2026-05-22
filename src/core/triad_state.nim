@@ -432,7 +432,7 @@ proc triadCapabilitiesJson*(): JsonNode =
     "spawn": true,
     "keyboard_layout": true,
     "output_metadata": true,
-    "monitor_power": false,
+    "monitor_power": true,
   }
 
 proc triadStateJson*(snapshot: ShellSnapshot): JsonNode =

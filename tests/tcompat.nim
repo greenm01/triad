@@ -439,8 +439,15 @@ suite "Shell compatibility contracts":
 
     let powerOffMonitors =
       handleNiriRequest("""{"Action":{"PowerOffMonitors":{}}}""", snapshot)
-    check powerOffMonitors.messages.len == 0
+    check powerOffMonitors.messages.len == 1
+    check powerOffMonitors.messages[0].kind == MsgKind.CmdPowerOffMonitors
     check parseJson(powerOffMonitors.reply).hasKey("Ok")
+
+    let powerOnMonitors =
+      handleNiriRequest("""{"Action":{"PowerOnMonitors":{}}}""", snapshot)
+    check powerOnMonitors.messages.len == 1
+    check powerOnMonitors.messages[0].kind == MsgKind.CmdPowerOnMonitors
+    check parseJson(powerOnMonitors.reply).hasKey("Ok")
 
     let reorderWorkspace = handleNiriRequest(
       """{"Action":{"MoveWorkspaceToIndex":{"index":2,"reference":{"Index":1}}}}""",
@@ -535,7 +542,7 @@ suite "Shell compatibility contracts":
     check state["capabilities"]["overview"].getBool()
     check state["capabilities"]["workspace_content_scroll"].getBool()
     check state["capabilities"]["keyboard_layout"].getBool()
-    check not state["capabilities"]["monitor_power"].getBool()
+    check state["capabilities"]["monitor_power"].getBool()
     check state["overview"]["is_open"].getBool()
     check state["layout"]["active_tag"].getInt() == 1
     check state["outputs"][0]["name"].getStr() == "triad-0"
@@ -589,7 +596,7 @@ suite "Shell compatibility contracts":
     check capabilities["workspace_content_scroll"].getBool()
     check capabilities["output_metadata"].getBool()
     check capabilities["keyboard_layout"].getBool()
-    check not capabilities["monitor_power"].getBool()
+    check capabilities["monitor_power"].getBool()
 
     let setLayout = handleTriadRequest(
       """{"triad":{"version":1,"request":"set-layout","layout":"deck","target":{"workspace_idx":2}}}""",
@@ -1459,4 +1466,7 @@ Categories=System;TerminalEmulator;
     check msg.isSome
     check msg.get().kind == MsgKind.CmdFocusWorkspaceIndex
     check msg.get().workspaceIndex == 2
+    check parseTextCommand("power-off-monitors").get().kind ==
+      MsgKind.CmdPowerOffMonitors
+    check parseTextCommand("power-on-monitors").get().kind == MsgKind.CmdPowerOnMonitors
     check parseTextCommand("mmsg -g -A").isNone

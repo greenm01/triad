@@ -12,8 +12,8 @@ import ../types/projection_values
 import ../utils/behavior_log
 import
   child_process_runtime, idle_inhibit_runtime, live_restore_runtime, manage_requests,
-  process_runner, protocol_surface_runtime, quickshell_runner, render_runtime,
-  screenshot_runner, spawn_context, state
+  output_management_runtime, process_runner, protocol_surface_runtime,
+  quickshell_runner, render_runtime, screenshot_runner, spawn_context, state
 
 proc setLayerShellDefaultOutputForSpawn(daemon: var TriadDaemon, outputId: OutputId) =
   var riverOutputId = 0'u32
@@ -195,6 +195,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       let keyboard = cast[ptr riverXkbConfig.RiverXkbKeyboardV1](runtime.pointer)
       if keyboard != nil:
         keyboard.setLayoutByIndex(int32(eff.keyboardLayoutIndex))
+  of EffectKind.EffSetMonitorPower:
+    daemon.applyMonitorPower(eff.monitorPowerEnabled)
   of EffectKind.EffEnsureNextKeyEaten, EffectKind.EffCancelEnsureNextKeyEaten:
     daemon.queueManageEffect(eff)
   of EffectKind.EffStopManager:

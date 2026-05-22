@@ -49,6 +49,19 @@ suite "Core Runtime Logic: smoke":
     check effects[0].screenshotWriteToDisk
     check not effects[0].screenshotCopyToClipboard
 
+  test "Monitor power commands emit explicit output-management effects":
+    var model = Model()
+
+    let powerOffEffects = model.updateModel(Msg(kind: MsgKind.CmdPowerOffMonitors))
+    check powerOffEffects.len == 1
+    check powerOffEffects[0].kind == EffectKind.EffSetMonitorPower
+    check not powerOffEffects[0].monitorPowerEnabled
+
+    let powerOnEffects = model.updateModel(Msg(kind: MsgKind.CmdPowerOnMonitors))
+    check powerOnEffects.len == 1
+    check powerOnEffects[0].kind == EffectKind.EffSetMonitorPower
+    check powerOnEffects[0].monitorPowerEnabled
+
   test "Workspace reorder changes visible workspace order":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
