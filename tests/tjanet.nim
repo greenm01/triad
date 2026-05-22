@@ -132,6 +132,8 @@ proc sampleCommandParts(spec: CommandSpec): seq[string] =
     result.add("/tmp/triad.png")
     result.add("--show-pointer")
     result.add("--clipboard-only")
+  of CommandArgShape.KeyboardLayoutTarget:
+    result.add("next")
 
 proc janetStringLiteral(value: string): string =
   "\"" & value.replace("\\", "\\\\").replace("\"", "\\\"") & "\""
@@ -706,6 +708,25 @@ suite "embedded Janet runtime":
     check evaluated.instructions[1].geom == Rect(x: 500, y: 0, w: 500, h: 800)
     check runtime.scripts.hasKey(bundledLayoutPath("grid"))
     check not runtime.scripts.hasKey(bundledLayoutPath("tile"))
+
+  test "bundled Janet layout cache survives user script eviction":
+    let dir = getTempDir() / ("triad-janet-empty-scripts-" & $getCurrentProcessId())
+    createDir(dir)
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if dirExists(dir):
+        removeDir(dir)
+
+    var context = testLayoutContext()
+    context.layoutId = janetLayoutId("grid")
+    discard runtime.evalLayoutDetailed(testSnapshot(), context)
+
+    check runtime.scripts.hasKey(bundledLayoutPath("grid"))
+
+    discard runtime.evalScriptsDetailed("WindowFocusChanged", "nil", testSnapshot())
+
+    check runtime.scripts.hasKey(bundledLayoutPath("grid"))
 
   test "bundled spiral Janet layout computes clockwise recursive geometry":
     var runtime = initJanetRuntime(

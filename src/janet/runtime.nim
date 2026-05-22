@@ -235,8 +235,13 @@ proc loadBundledLayoutEntry(
     warn "Bundled Janet layouts failed", error = result.entry.error
   runtime.scripts[path] = result.entry
 
+proc isBundledLayoutPath(path: string): bool =
+  path.startsWith(BundledLayoutsPathPrefix)
+
 proc evictMissingScripts(runtime: var JanetRuntime, paths: seq[string]) =
   for path in runtime.scripts.keys.toSeq:
+    if path.isBundledLayoutPath():
+      continue
     if path notin paths:
       var entry = runtime.scripts[path]
       entry.freeScript()
