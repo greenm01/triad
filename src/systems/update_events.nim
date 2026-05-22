@@ -1,6 +1,5 @@
 import std/[json, options]
 import ../core/[effects, msg]
-from ../core/native_layout_codec import FrameTreeLayoutId, nativeLayoutIdString
 import ../state/engine
 from ../types/runtime_values import FrameTabContainerKind, PointerOpKind
 import ../utils/behavior_log
@@ -241,10 +240,6 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     )
     result.dirty = titleUpdate.dirty
     if titleUpdate.manageDirty:
-      result.effects.add(Effect(kind: EffectKind.EffManageDirty))
-    let activeTag = model.tagData(model.activeTag)
-    if titleUpdate.dirty and activeTag.isSome and
-        activeTag.get().nativeLayoutId.nativeLayoutIdString() == FrameTreeLayoutId:
       result.effects.add(Effect(kind: EffectKind.EffManageDirty))
   of MsgKind.WlWindowDimensionsHint:
     result.dirty = model.updateWindowDimensionsHintForExternal(

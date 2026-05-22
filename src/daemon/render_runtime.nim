@@ -245,17 +245,30 @@ proc proposeDesiredDimensions*(
     daemon: var TriadDaemon, instructions: seq[RenderInstruction]
 ) =
   daemon.recordDesiredPlacements(instructions)
+  var visible = initTable[uint32, bool]()
   for instr in instructions:
     if daemon.windowPointers.hasKey(instr.windowId):
+      visible[instr.windowId] = true
       var geom = instr.geom
       let proposal = daemon.currentModel.proposalDimensionsForRiverId(
         instr.windowId, geom.w, geom.h, daemon.placementHonorsMinimums(instr.windowId)
       )
-      geom.w = proposal.w
-      geom.h = proposal.h
+      let next = ProposedDimensions(w: proposal.w, h: proposal.h)
+      if daemon.lastProposedDimensions.getOrDefault(instr.windowId) == next:
+        inc daemon.perfCounters.skippedDimensionProposals
+        continue
+      daemon.lastProposedDimensions[instr.windowId] = next
       daemon.windowPointers[instr.windowId].proposeDimensions(
-        max(0'i32, geom.w), max(0'i32, geom.h)
+        max(0'i32, proposal.w), max(0'i32, proposal.h)
       )
+      inc daemon.perfCounters.dimensionProposals
+
+  var staleIds: seq[uint32]
+  for id in daemon.lastProposedDimensions.keys:
+    if not visible.hasKey(id) or not daemon.windowPointers.hasKey(id):
+      staleIds.add(id)
+  for id in staleIds:
+    daemon.lastProposedDimensions.del(id)
 
 proc applyVisibility(
     win: ptr RiverWindowV1,

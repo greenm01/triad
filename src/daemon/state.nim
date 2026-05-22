@@ -171,6 +171,10 @@ type
     borderEdges*: uint32
     focused*: bool
 
+  ProposedDimensions* = object
+    w*: int32
+    h*: int32
+
   RenderPerfCounters* = object
     frameTicks*: uint64
     activeFrameTicks*: uint64
@@ -184,6 +188,8 @@ type
     skippedAnimationManages*: uint64
     renderStartCallbackSkips*: uint64
     renderStartQueuedSkips*: uint64
+    dimensionProposals*: uint64
+    skippedDimensionProposals*: uint64
 
   RuntimeLoopCounters* = object
     loopIterations*: uint64
@@ -276,6 +282,7 @@ type
     desiredPlacements*: Table[uint32, Rect]
     desiredPlacementClips*: Table[uint32, Rect]
     desiredPlacementOrder*: seq[uint32]
+    lastProposedDimensions*: Table[uint32, ProposedDimensions]
     currentFrameTabBars*: seq[ProjectedFrameTabBar]
     currentFrameTabBarsBySurface*: Table[uint32, ProjectedFrameTabBar]
     currentFrameEmptyChrome*: seq[ProjectedFrameEmptyChrome]

@@ -300,6 +300,9 @@ proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
       after.renderStartCallbackSkips - before.renderStartCallbackSkips,
     "render_start_queued_skips":
       after.renderStartQueuedSkips - before.renderStartQueuedSkips,
+    "dimension_proposals": after.dimensionProposals - before.dimensionProposals,
+    "skipped_dimension_proposals":
+      after.skippedDimensionProposals - before.skippedDimensionProposals,
   }
 
 proc ipcCounterDeltasJson(before, after: IpcPerfCounters): JsonNode =
@@ -558,6 +561,8 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "skipped_animation_manages": counters.skippedAnimationManages,
         "render_start_callback_skips": counters.renderStartCallbackSkips,
         "render_start_queued_skips": counters.renderStartQueuedSkips,
+        "dimension_proposals": counters.dimensionProposals,
+        "skipped_dimension_proposals": counters.skippedDimensionProposals,
       },
       "loop_counters": daemon.loopCounters.loopCountersJson(),
       "ipc_counters": ipcPerfCounters.ipcCountersJson(),

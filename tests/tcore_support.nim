@@ -1,6 +1,10 @@
 import std/[asyncdispatch, json, options, os, sequtils, strutils, tables, unittest]
 import ../src/config/[apply, parser]
-import ../src/core/[effects, msg, render_visibility, restore_state, triad_state]
+import
+  ../src/core/[
+    effects, layout_selection_codec, msg, native_layout_codec, render_visibility,
+    restore_state, triad_state,
+  ]
 import ../src/daemon/render_runtime
 import ../src/daemon/state as daemon_state
 import ../src/state/engine
@@ -16,10 +20,11 @@ import tag_semantics_checks
 
 export
   asyncdispatch, json, options, os, sequtils, strutils, tables, unittest, apply, parser,
-  effects, msg, render_visibility, restore_state, triad_state, render_runtime, engine,
-  hotkey_overlay, layout_projection, overview_geometry, popup_tree, recent_windows,
-  runtime_facade, update, window_lifecycle, window_rules, workspaces, model,
-  overview_hit_test, process_tree, screenshot_capture, tag_semantics_checks
+  effects, layout_selection_codec, msg, native_layout_codec, render_visibility,
+  restore_state, triad_state, render_runtime, engine, hotkey_overlay, layout_projection,
+  overview_geometry, popup_tree, recent_windows, runtime_facade, update,
+  window_lifecycle, window_rules, workspaces, model, overview_hit_test, process_tree,
+  screenshot_capture, tag_semantics_checks
 export projection_values except WindowId
 
 proc initTriadDaemon*(): auto =
