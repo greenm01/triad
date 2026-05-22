@@ -117,6 +117,39 @@ proc persistentNiriReplies(
     if not client.isClosed:
       client.close()
 
+proc triadSubscriberCountAfterClientClose(path: string): Future[int] {.async.} =
+  socket.triadSubscribers.setLen(0)
+  asyncCheck socket.startIpcServer(
+    path, discardIpcMsg, hardeningIpcSnapshot, requestTimeoutMs = IpcNoRequestTimeoutMs
+  )
+
+  var ready = false
+  for _ in 0 ..< 50:
+    if await socket.unixSocketAcceptsConnections(path):
+      ready = true
+      break
+    await sleepAsync(10)
+  doAssert ready
+
+  let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+  try:
+    await client.connectUnix(path)
+    await client.send(
+      """{"triad":{"version":1,"request":"event-stream","events":["state"]}}""" & "\L"
+    )
+    discard await client.recvLine()
+    discard await client.recvLine()
+  finally:
+    if not client.isClosed:
+      client.close()
+
+  for _ in 0 ..< 50:
+    if socket.triadSubscribers.len == 0:
+      break
+    await sleepAsync(10)
+  result = socket.triadSubscribers.len
+  socket.triadSubscribers.setLen(0)
+
 suite "Crash hardening":
   test "output layout row resolves left-to-right physical coordinates":
     var model = Model(
@@ -1396,6 +1429,13 @@ config-notification {
     check replies.len == 2
     check parseJson(replies[0])["Ok"].hasKey("Workspaces")
     check replies[1] == """{"Ok":"Handled"}"""
+
+  test "native Triad event-stream subscriber is pruned after client close":
+    let path = getTempDir() / ("triad-native-prune-" & $getCurrentProcessId() & ".sock")
+    if fileExists(path):
+      removeFile(path)
+
+    check (waitFor triadSubscriberCountAfterClientClose(path)) == 0
 
   test "text command parser tolerates malformed commands":
     check parseTextCommand("").isNone

@@ -837,6 +837,21 @@ suite "Shell compatibility contracts":
     check not windowTriad.subscribeState
     check windowTriad.initialEvents.len == 0
 
+  test "native state exposes urgency capability and stable workspace urgency":
+    let capabilitiesReply = handleTriadRequest(
+      """{"triad":{"version":1,"request":"capabilities"}}""", snapshotForShell()
+    )
+    let capabilities = parseJson(capabilitiesReply.reply)["triad"]["capabilities"]
+    check capabilities["workspace_urgency"].getBool() == false
+
+    let stateReply = handleTriadRequest(
+      """{"triad":{"version":1,"request":"state"}}""", snapshotForShell()
+    )
+    let workspaces =
+      parseJson(stateReply.reply)["triad"]["state"]["layout"]["workspaces"]
+    check workspaces.len > 0
+    check workspaces[0]["is_urgent"].getBool() == false
+
   test "triad_niri shim parses shell commands":
     let action = buildNiriCliRequest(@["msg", "action", "focus-workspace", "2"])
     check action.kind == NiriCliKind.NckRequest

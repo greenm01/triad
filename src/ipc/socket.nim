@@ -188,6 +188,22 @@ proc removeTriadSubscriber(client: AsyncSocket) =
     else:
       inc i
 
+proc watchSubscriberDisconnect(client: AsyncSocket, triad = false) {.async.} =
+  try:
+    while client != nil and not client.isClosed:
+      let chunk = await client.recv(1)
+      if chunk.len == 0:
+        break
+  except CatchableError:
+    discard
+  if client != nil:
+    if not client.isClosed:
+      client.close()
+    if triad:
+      removeTriadSubscriber(client)
+    else:
+      removeSubscriber(client)
+
 proc canSubscribeTriad(): bool =
   pruneTriadSubscribers()
   triadSubscribers.len < MaxIpcSubscribers
@@ -468,6 +484,7 @@ proc startIpcServer*(
                         window: triad.subscribeWindow,
                       )
                     )
+                    asyncCheck watchSubscriberDisconnect(client, triad = true)
                     inc ipcPerfCounters.triadSubscriptions
                     keepOpen = true
                   break
@@ -498,6 +515,7 @@ proc startIpcServer*(
                   if niri.subscribe:
                     subscribers.add(client)
                     inc ipcPerfCounters.niriSubscriptions
+                    asyncCheck watchSubscriberDisconnect(client)
                     writeBehaviorEvent(
                       "niri_compat_event_stream_subscribed",
                       %*{"path": path, "subscriber_count": subscribers.len},
@@ -513,6 +531,7 @@ proc startIpcServer*(
                   break
                 subscribers.add(client)
                 inc ipcPerfCounters.niriSubscriptions
+                asyncCheck watchSubscriberDisconnect(client)
                 writeBehaviorEvent(
                   "niri_compat_event_stream_subscribed",
                   %*{

@@ -12,7 +12,7 @@ Dispatch commands to the running Triad instance using:
 *   `validate <command...>`: Validates a command locally without sending it.
 *   `request <json>`: Sends a raw JSON IPC request.
 *   `state`: Prints the current session state as JSON.
-*   `capabilities`: Prints native Triad IPC feature capabilities as JSON, including workspace creation/switching/content-scroll, overview, window, spawn, keyboard-layout, output metadata, and monitor-power support flags.
+*   `capabilities`: Prints native Triad IPC feature capabilities as JSON, including workspace creation/switching/content-scroll, overview, window, spawn, keyboard-layout, output metadata, monitor-power, and workspace-urgency support flags.
 *   `workspaces`: Prints the current workspace state as JSON.
 *   `outputs`: Prints the current output state as JSON.
 *   `windows`: Prints the current window state as JSON.
@@ -161,3 +161,9 @@ Triad sends an initial state for each kind, then pushes updates as they occur.
 The `window` stream carries compact metadata events such as `window-changed`
 for title-only updates, avoiding a full `state-changed` snapshot when the
 layout and structural state are unchanged.
+Native event-stream clients are removed when their socket disconnects or when
+a send fails, so shell reloads do not leave stale subscribers behind.
+
+Workspace objects include `is_urgent`. The `workspace_urgency` capability is
+currently `false`, so consumers should treat urgency as a stable field reserved
+for future protocol support rather than a real attention signal today.
