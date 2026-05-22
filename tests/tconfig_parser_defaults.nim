@@ -123,11 +123,6 @@ environment {
   GTK_THEME "Breeze"
   BAD-NAME "ignored"
 }
-quickshell {
-  command "qs"
-  theme "noctalia"
-  args "--verbose"
-}
 shells {
   enabled #true
   active "noctalia"
@@ -456,7 +451,6 @@ switch-events {
     check config.environment[2].unset
     check config.environment[3].name == "GTK_THEME"
     check config.environment[3].value == "Breeze"
-    check config.quickshell.theme == "noctalia"
     check config.shells.configured
     check config.shells.enabled
     check config.shells.active == "noctalia"

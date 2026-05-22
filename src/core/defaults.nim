@@ -53,7 +53,6 @@ const
   DefaultFloatingHeightRatio* = 0.5'f32
   DefaultFloatingMinWidth* = 50'i32
   DefaultFloatingMinHeight* = 50'i32
-  DefaultQuickshellCommand* = "qs"
   DefaultShellWatchdogExclusiveFocusTimeoutMs* = 30000'i32
   DefaultJanetAutomationDir* = "~/.config/triad/automation"
   DefaultJanetLayoutDir* = "~/.config/triad/layouts"

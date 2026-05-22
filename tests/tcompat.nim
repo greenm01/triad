@@ -2,7 +2,7 @@ import std/[json, options, os, sequtils, strtabs, strutils, unittest]
 import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec]
 import ../src/core/msg
-import ../src/daemon/quickshell_runner
+import ../src/daemon/shell_runner
 import
   ../src/ipc/[
     binding_dispatch, command_help, command_registry, commands, niri_cli, niri_compat,
@@ -227,34 +227,46 @@ proc sampleCommand(
     result.payload["write_to_disk"] = %false
     result.payload["copy_to_clipboard"] = %true
 
-proc writeFakeRecoveringQs(
+proc writeFakeRecoveringShell(
     tmp: string
-): tuple[fakeQs: string, logPath: string, statePath: string] =
-  result.fakeQs = tmp / "qs"
+): tuple[fakeShell: string, logPath: string, statePath: string] =
+  result.fakeShell = tmp / "fake-shell"
   result.logPath = tmp / "calls.log"
   result.statePath = tmp / "state"
   writeFile(
-    result.fakeQs,
+    result.fakeShell,
     """
 #!/bin/sh
-printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
-if [ "$1" = "kill" ]; then
+printf '%s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+if [ "$1" = "stop" ]; then
   exit 0
 fi
 count=0
-if [ -f "$TRIAD_FAKE_QS_STATE" ]; then
-  count="$(cat "$TRIAD_FAKE_QS_STATE")"
+if [ -f "$TRIAD_FAKE_SHELL_STATE" ]; then
+  count="$(cat "$TRIAD_FAKE_SHELL_STATE")"
 fi
 count=$((count + 1))
-printf '%s\n' "$count" > "$TRIAD_FAKE_QS_STATE"
-handoffs="${TRIAD_FAKE_QS_HANDOFFS:-0}"
+printf '%s\n' "$count" > "$TRIAD_FAKE_SHELL_STATE"
+handoffs="${TRIAD_FAKE_SHELL_HANDOFFS:-0}"
 if [ "$count" -le "$handoffs" ]; then
   exit 0
 fi
 sleep 30
 """,
   )
-  setFilePermissions(result.fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
+  setFilePermissions(result.fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
+
+proc singleShellModel(
+    launch: seq[string], stop: seq[string] = @[], enabled = true
+): Model =
+  Model(
+    shells: ShellsConfig(
+      configured: true,
+      enabled: enabled,
+      active: "test-shell",
+      profiles: @[ShellProfileConfig(name: "test-shell", launch: launch, stop: stop)],
+    )
+  )
 
 suite "Shell compatibility contracts":
   setup:
@@ -872,7 +884,7 @@ suite "Shell compatibility contracts":
     check outputMutation.kind == NiriCliKind.NckInvalid
     check outputMutation.error.contains("output mutation")
 
-  test "Quickshell compatibility environment is private":
+  test "Niri shell compatibility environment is private":
     let tmp = getTempDir() / ("triad-compat-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -899,7 +911,7 @@ suite "Shell compatibility contracts":
     check compat.env["PATH"].startsWith(tmp / "triad-compat-bin")
     check compat.env["XDG_DATA_DIRS"].contains("/custom/share")
 
-  test "Quickshell compatibility environment starts from configured env":
+  test "Niri shell compatibility environment starts from configured env":
     let tmp = getTempDir() / ("triad-compat-config-env-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -926,31 +938,6 @@ suite "Shell compatibility contracts":
     check compat.env["PATH"].contains("/configured/bin")
     check compat.env["XDG_DATA_DIRS"].startsWith(compat.xdgSharePath)
     check compat.env["XDG_DATA_DIRS"].contains("/configured/share")
-
-  test "Quickshell launch and kill commands target configured theme":
-    let config = QuickshellConfig(
-      enabled: true, command: "qs", theme: "noctalia-shell", args: @["--verbose"]
-    )
-
-    check quickshellLaunchArgs(config) == @["-c", "noctalia-shell", "--verbose"]
-    check quickshellKillArgs(config) ==
-      @["kill", "-c", "noctalia-shell", "--any-display"]
-
-  test "Quickshell lifecycle actions avoid reload handoff kills":
-    let noctalia = QuickshellConfig(
-      enabled: true, command: "qs", theme: "noctalia-shell", args: @["--verbose"]
-    )
-    var changedTheme = noctalia
-    changedTheme.theme = "other-shell"
-    var disabled = noctalia
-    disabled.enabled = false
-
-    check quickshellStartupAction(noctalia) == QuickshellReloadAction.SpawnOnly
-    check quickshellConfigReloadAction(noctalia, noctalia) == QuickshellReloadAction.Noop
-    check quickshellConfigReloadAction(noctalia, changedTheme) ==
-      QuickshellReloadAction.AuthoritativeRestart
-    check quickshellConfigReloadAction(noctalia, disabled) ==
-      QuickshellReloadAction.AuthoritativeStop
 
   test "Shell switching stops old profile before launching new profile":
     let tmp = getTempDir() / ("triad-shell-switch-" & $getCurrentProcessId())
@@ -1003,7 +990,7 @@ exit 0
       )
     )
 
-    var runner = QuickshellRunner()
+    var runner = ShellRunner()
     runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-old", "launch-new"]
@@ -1050,9 +1037,9 @@ exit 0
           ],
       )
     )
-    var runner = QuickshellRunner()
+    var runner = ShellRunner()
     defer:
-      runner.stopTrackedQuickshell("test cleanup")
+      runner.stopTrackedShell("test cleanup")
 
     runner.switchShell(Model(), model, tmp / "niri.sock", "test spawn")
 
@@ -1108,9 +1095,9 @@ sleep 5
           ],
       )
     )
-    var runner = QuickshellRunner()
+    var runner = ShellRunner()
     runner.switchShell(Model(), model, tmp / "niri.sock", "test spawn")
-    check runner.trackedQuickshellRunning()
+    check runner.trackedShellRunning()
 
     sleep(1200)
     let fallback = runner.pollShellWatchdog(model, 2000)
@@ -1135,7 +1122,7 @@ sleep 5
           ],
       ),
     )
-    var runner = QuickshellRunner()
+    var runner = ShellRunner()
     check runner.pollShellWatchdog(model, 1000).isNone
     let fallback = runner.pollShellWatchdog(model, 1011)
     check fallback.isSome
@@ -1191,27 +1178,24 @@ exit 0
           ],
       )
     )
-    var runner = QuickshellRunner(spawnPending: true)
+    var runner = ShellRunner(spawnPending: true)
     defer:
-      runner.stopTrackedQuickshell("test cleanup")
+      runner.stopTrackedShell("test cleanup")
 
-    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "initial manage")
+    runner.spawnPendingShell(model, tmp / "niri.sock", "initial manage")
 
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-noctalia", "stop-waybar", "stop-dank", "launch-noctalia"]
 
-  test "Quickshell unchanged reload can recover untracked shell":
-    let noctalia =
-      QuickshellConfig(enabled: true, command: "qs", theme: "noctalia-shell")
-    var runner = QuickshellRunner()
-    check runner.needsQuickshellRecovery(Model(quickshell: noctalia))
+  test "Shell unchanged reload can recover untracked active profile":
+    var runner = ShellRunner()
+    check runner.needsShellRecovery(singleShellModel(@["missing-shell"]))
+    check not runner.needsShellRecovery(
+      singleShellModel(@["missing-shell"], enabled = false)
+    )
 
-    var disabled = Model(quickshell: noctalia)
-    disabled.quickshell.enabled = false
-    check not runner.needsQuickshellRecovery(disabled)
-
-  test "Quickshell spawn handoff refreshes configured shell":
-    let tmp = getTempDir() / ("triad-qs-handoff-" & $getCurrentProcessId())
+  test "Shell spawn handoff refreshes configured profile":
+    let tmp = getTempDir() / ("triad-shell-handoff-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
     createDir(tmp)
@@ -1219,43 +1203,37 @@ exit 0
       if dirExists(tmp):
         removeDir(tmp)
 
-    let fakeQs = tmp / "qs"
+    let fakeShell = tmp / "fake-shell"
     let logPath = tmp / "calls.log"
     writeFile(
-      fakeQs,
+      fakeShell,
       """
 #!/bin/sh
-printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
-if [ "$1" = "kill" ]; then
-  exit 0
-fi
-exit "${TRIAD_FAKE_QS_EXIT:-0}"
+printf '%s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
 """,
     )
-    setFilePermissions(fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
+    setFilePermissions(fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
 
-    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
-    let oldExit = getEnv("TRIAD_FAKE_QS_EXIT", "")
-    putEnv("TRIAD_FAKE_QS_LOG", logPath)
-    putEnv("TRIAD_FAKE_QS_EXIT", "0")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldExit = getEnv("TRIAD_FAKE_SHELL_EXIT", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    putEnv("TRIAD_FAKE_SHELL_EXIT", "0")
     defer:
-      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
-      putEnv("TRIAD_FAKE_QS_EXIT", oldExit)
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_EXIT", oldExit)
 
-    let config =
-      QuickshellConfig(enabled: true, command: fakeQs, theme: "noctalia-shell")
-    var runner = QuickshellRunner(spawnPending: true)
-    let model = Model(quickshell: config)
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(@[fakeShell, "launch"], @[fakeShell, "stop"])
 
-    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+    runner.spawnPendingShell(model, tmp / "niri.sock", "test")
 
     let calls = readFile(logPath)
-    check calls.contains("-c noctalia-shell")
-    check calls.contains("kill -c noctalia-shell --any-display")
-    check calls.count("-c noctalia-shell") >= 2
+    check calls.count("launch") >= 2
+    check calls.count("stop") >= 2
 
-  test "Quickshell double handoff schedules recovery until tracked":
-    let tmp = getTempDir() / ("triad-qs-recovery-" & $getCurrentProcessId())
+  test "Shell double handoff schedules recovery until tracked":
+    let tmp = getTempDir() / ("triad-shell-recovery-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
     createDir(tmp)
@@ -1263,43 +1241,41 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
       if dirExists(tmp):
         removeDir(tmp)
 
-    let fake = writeFakeRecoveringQs(tmp)
+    let fake = writeFakeRecoveringShell(tmp)
 
-    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
-    let oldState = getEnv("TRIAD_FAKE_QS_STATE", "")
-    let oldHandoffs = getEnv("TRIAD_FAKE_QS_HANDOFFS", "")
-    putEnv("TRIAD_FAKE_QS_LOG", fake.logPath)
-    putEnv("TRIAD_FAKE_QS_STATE", fake.statePath)
-    putEnv("TRIAD_FAKE_QS_HANDOFFS", "2")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_SHELL_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "2")
     defer:
-      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
-      putEnv("TRIAD_FAKE_QS_STATE", oldState)
-      putEnv("TRIAD_FAKE_QS_HANDOFFS", oldHandoffs)
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
+      putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
 
-    let config =
-      QuickshellConfig(enabled: true, command: fake.fakeQs, theme: "noctalia-shell")
-    var runner = QuickshellRunner(spawnPending: true)
-    let model = Model(quickshell: config)
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
     defer:
-      runner.stopTrackedQuickshell("test cleanup")
+      runner.stopTrackedShell("test cleanup")
 
-    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+    runner.spawnPendingShell(model, tmp / "niri.sock", "test")
 
     check runner.recoveryPending
     check runner.recoveryAttempts == 0
     check readFile(fake.statePath).strip() == "2"
 
     runner.nextRecoveryMs = 0
-    check runner.pollQuickshellRecovery(model, tmp / "niri.sock", 0)
+    check runner.pollShellRecovery(model, tmp / "niri.sock", 0)
     check not runner.recoveryPending
-    check runner.trackedQuickshellRunning()
+    check runner.trackedShellRunning()
     check readFile(fake.statePath).strip() == "3"
 
     let calls = readFile(fake.logPath)
-    check calls.count("kill -c noctalia-shell --any-display") >= 2
+    check calls.count("stop") >= 2
 
-  test "Quickshell recovery exhausts repeated handoffs":
-    let tmp = getTempDir() / ("triad-qs-recovery-exhaust-" & $getCurrentProcessId())
+  test "Shell recovery exhausts repeated handoffs":
+    let tmp = getTempDir() / ("triad-shell-recovery-exhaust-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
     createDir(tmp)
@@ -1307,31 +1283,29 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
       if dirExists(tmp):
         removeDir(tmp)
 
-    let fake = writeFakeRecoveringQs(tmp)
+    let fake = writeFakeRecoveringShell(tmp)
 
-    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
-    let oldState = getEnv("TRIAD_FAKE_QS_STATE", "")
-    let oldHandoffs = getEnv("TRIAD_FAKE_QS_HANDOFFS", "")
-    putEnv("TRIAD_FAKE_QS_LOG", fake.logPath)
-    putEnv("TRIAD_FAKE_QS_STATE", fake.statePath)
-    putEnv("TRIAD_FAKE_QS_HANDOFFS", "99")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_SHELL_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "99")
     defer:
-      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
-      putEnv("TRIAD_FAKE_QS_STATE", oldState)
-      putEnv("TRIAD_FAKE_QS_HANDOFFS", oldHandoffs)
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
+      putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
 
-    let config =
-      QuickshellConfig(enabled: true, command: fake.fakeQs, theme: "noctalia-shell")
-    var runner = QuickshellRunner(spawnPending: true)
-    let model = Model(quickshell: config)
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
 
-    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+    runner.spawnPendingShell(model, tmp / "niri.sock", "test")
     check runner.recoveryPending
 
-    for attempt in 1 .. MaxQuickshellRecoveryAttempts:
+    for attempt in 1 .. MaxShellRecoveryAttempts:
       runner.nextRecoveryMs = 0
-      check runner.pollQuickshellRecovery(model, tmp / "niri.sock", 0)
-      if attempt < MaxQuickshellRecoveryAttempts:
+      check runner.pollShellRecovery(model, tmp / "niri.sock", 0)
+      if attempt < MaxShellRecoveryAttempts:
         check runner.recoveryPending
         check runner.recoveryAttempts == attempt
       else:
@@ -1339,10 +1313,10 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
 
     check readFile(fake.statePath).strip() == "5"
     let calls = readFile(fake.logPath)
-    check calls.count("kill -c noctalia-shell --any-display") >= 4
+    check calls.count("stop") >= 4
 
-  test "Quickshell config reload handoff schedules recovery":
-    let tmp = getTempDir() / ("triad-qs-config-recovery-" & $getCurrentProcessId())
+  test "Shell config reload handoff schedules recovery":
+    let tmp = getTempDir() / ("triad-shell-config-recovery-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
     createDir(tmp)
@@ -1350,42 +1324,35 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
       if dirExists(tmp):
         removeDir(tmp)
 
-    let fake = writeFakeRecoveringQs(tmp)
+    let fake = writeFakeRecoveringShell(tmp)
 
-    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
-    let oldState = getEnv("TRIAD_FAKE_QS_STATE", "")
-    let oldHandoffs = getEnv("TRIAD_FAKE_QS_HANDOFFS", "")
-    putEnv("TRIAD_FAKE_QS_LOG", fake.logPath)
-    putEnv("TRIAD_FAKE_QS_STATE", fake.statePath)
-    putEnv("TRIAD_FAKE_QS_HANDOFFS", "1")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_SHELL_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "1")
     defer:
-      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
-      putEnv("TRIAD_FAKE_QS_STATE", oldState)
-      putEnv("TRIAD_FAKE_QS_HANDOFFS", oldHandoffs)
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
+      putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
 
-    let config =
-      QuickshellConfig(enabled: true, command: fake.fakeQs, theme: "noctalia-shell")
-    var runner = QuickshellRunner()
-    let model = Model(quickshell: config)
+    var runner = ShellRunner()
+    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
     defer:
-      runner.stopTrackedQuickshell("test cleanup")
+      runner.stopTrackedShell("test cleanup")
 
-    let status =
-      runner.spawnQuickshell(model, tmp / "niri.sock", "config reload recovery")
-    check status == QuickshellSpawnStatus.Handoff
-
-    runner.scheduleQuickshellRecovery(model, "config reload recovery", status, 1000)
+    runner.switchShell(Model(), model, tmp / "niri.sock", "config reload recovery")
     check runner.recoveryPending
-    check runner.nextRecoveryMs == 1500
 
     runner.nextRecoveryMs = 0
-    check runner.pollQuickshellRecovery(model, tmp / "niri.sock", 0)
+    check runner.pollShellRecovery(model, tmp / "niri.sock", 0)
     check not runner.recoveryPending
-    check runner.trackedQuickshellRunning()
+    check runner.trackedShellRunning()
     check readFile(fake.statePath).strip() == "2"
 
-  test "Quickshell failed spawn kills stale configured shell":
-    let tmp = getTempDir() / ("triad-qs-failed-" & $getCurrentProcessId())
+  test "Shell failed spawn kills stale configured profile":
+    let tmp = getTempDir() / ("triad-shell-failed-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
     createDir(tmp)
@@ -1393,39 +1360,37 @@ exit "${TRIAD_FAKE_QS_EXIT:-0}"
       if dirExists(tmp):
         removeDir(tmp)
 
-    let fakeQs = tmp / "qs"
+    let fakeShell = tmp / "fake-shell"
     let logPath = tmp / "calls.log"
     writeFile(
-      fakeQs,
+      fakeShell,
       """
 #!/bin/sh
-printf '%s\n' "$*" >> "$TRIAD_FAKE_QS_LOG"
-if [ "$1" = "kill" ]; then
+printf '%s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+if [ "$1" = "stop" ]; then
   exit 0
 fi
-exit "${TRIAD_FAKE_QS_EXIT:-9}"
+exit "${TRIAD_FAKE_SHELL_EXIT:-9}"
 """,
     )
-    setFilePermissions(fakeQs, {fpUserRead, fpUserWrite, fpUserExec})
+    setFilePermissions(fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
 
-    let oldLog = getEnv("TRIAD_FAKE_QS_LOG", "")
-    let oldExit = getEnv("TRIAD_FAKE_QS_EXIT", "")
-    putEnv("TRIAD_FAKE_QS_LOG", logPath)
-    putEnv("TRIAD_FAKE_QS_EXIT", "9")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldExit = getEnv("TRIAD_FAKE_SHELL_EXIT", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    putEnv("TRIAD_FAKE_SHELL_EXIT", "9")
     defer:
-      putEnv("TRIAD_FAKE_QS_LOG", oldLog)
-      putEnv("TRIAD_FAKE_QS_EXIT", oldExit)
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_EXIT", oldExit)
 
-    let config =
-      QuickshellConfig(enabled: true, command: fakeQs, theme: "noctalia-shell")
-    var runner = QuickshellRunner(spawnPending: true)
-    let model = Model(quickshell: config)
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(@[fakeShell, "launch"], @[fakeShell, "stop"])
 
-    runner.spawnPendingQuickshell(model, tmp / "niri.sock", "test")
+    runner.spawnPendingShell(model, tmp / "niri.sock", "test")
 
     let calls = readFile(logPath)
-    check calls.contains("-c noctalia-shell")
-    check calls.contains("kill -c noctalia-shell --any-display")
+    check calls.contains("launch")
+    check calls.contains("stop")
 
   test "shell overlay is generated from terminal desktop metadata":
     let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())

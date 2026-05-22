@@ -117,8 +117,8 @@ fi
 env NIRI_SOCKET="$niri_socket" ./triad_niri msg -j workspaces >/dev/null
 env NIRI_SOCKET="$niri_socket" ./triad_niri msg -j outputs >/dev/null
 
-if [ "${TRIAD_LIVE_TEST_QUICKSHELL:-0}" = "1" ]; then
-  require_log "Spawned Quickshell"
+if [ "${TRIAD_LIVE_TEST_SHELL:-0}" = "1" ]; then
+  require_log "Spawned shell"
   compat_bin="$XDG_RUNTIME_DIR/triad-compat-bin"
   if [ ! -x "$compat_bin/niri" ]; then
     fail "missing private niri shim at $compat_bin/niri"

@@ -1671,7 +1671,6 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.floating.heightRatio = DefaultFloatingHeightRatio
   result.floating.minWidth = DefaultFloatingMinWidth
   result.floating.minHeight = DefaultFloatingMinHeight
-  result.quickshell.command = DefaultQuickshellCommand
   result.shells.watchdog.enabled = true
   result.shells.watchdog.exclusiveFocusTimeoutMs =
     DefaultShellWatchdogExclusiveFocusTimeoutMs
@@ -2297,20 +2296,6 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 result.shells.profiles.add(profile)
           except CatchableError as e:
             warn "Ignoring invalid shells field", field = child.name, error = e.msg
-      elif node.name == "quickshell":
-        for child in node.children:
-          try:
-            if child.name == "enabled" and child.args.len > 0:
-              result.quickshell.enabled = child.args[0].kBool()
-            elif child.name == "command" and child.args.len > 0:
-              result.quickshell.command = child.args[0].kString()
-            elif child.name == "theme" and child.args.len > 0:
-              result.quickshell.theme = child.args[0].kString()
-            elif child.name == "args":
-              for arg in child.args:
-                result.quickshell.args.add(arg.kString())
-          except CatchableError as e:
-            warn "Ignoring invalid quickshell field", field = child.name, error = e.msg
       elif node.name == "janet":
         for child in node.children:
           try:

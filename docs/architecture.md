@@ -5,7 +5,7 @@ Triad is a dynamic window management client built for **River 0.4+**, leveraging
 
 Triad combines the infinite scrolling workflow of **Niri** with the flexible,
 per-workspace hybrid layouts of **Mango**, while remaining extensible enough
-to power a full desktop environment using tools like **Quickshell**.
+to power a full desktop environment using external shell bars.
 
 ## Core Technologies
 *   **Compositor:** River 0.4+
@@ -36,7 +36,7 @@ Source files are kept small and focused. The project is organized into clear dom
 *   `src/layouts/`: Pure mathematical layout algorithms.
 *   `src/protocols/`: Generated Wayland protocol bindings.
 *   `src/config/`: KDL parsing and configuration management.
-*   `src/ipc/`: Unix socket communication for external control (e.g., Quickshell).
+*   `src/ipc/`: Unix socket communication for external control and shell projections.
 *   `src/utils/`: Generic helpers and coordinate math.
 
 ## Architectural Design
@@ -85,11 +85,11 @@ Config names follow the policy in `docs/configuration.md`: Niri-style KDL
 clarity is the naming baseline, while Mango remains a feature reference for
 layouts, tags, scratchpads, and pointer workflows.
 
-### 5. Shell IPC and Quickshell Integration
+### 5. Shell IPC and Niri Projection
 Triad separates Triad-native IPC from shell projection IPC to support both native and legacy shell ecosystems.
 
 *   **Canonical Shell Snapshot:** Triad derives all shell-facing state from a single internal model snapshot. This snapshot contains stable tag IDs, compact workspace indices, windows, outputs, focus history, and layout modes.
-*   **Native Triad IPC (`$TRIAD_SOCKET`):** The primary, long-term protocol for shells (e.g., Quickshell) that integrate with Triad directly. It exposes versioned JSON requests and events including the full shell state and per-tag layout details.
+*   **Native Triad IPC (`$TRIAD_SOCKET`):** The primary, long-term protocol for shells that integrate with Triad directly. It exposes versioned JSON requests and events including the full shell state and per-tag layout details.
 *   **Niri Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics to support existing Niri-aware shells (Noctalia, DankMaterialShell) without modification.
 *   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
@@ -99,7 +99,7 @@ IPC window and output IDs are numeric external compositor IDs, stable for the li
 Triad implements a Niri-shaped JSON IPC stream for shells that consume that
 schema.
 
-*   **Socket Path:** `$NIRI_SOCKET` points at a Triad-owned compatibility socket when Triad launches Quickshell.
+*   **Socket Path:** `$NIRI_SOCKET` points at a Triad-owned compatibility socket when Triad launches a Niri-compatible shell profile.
 *   **Protocol:** Triad implements the Niri request and event shapes used by shell code, including workspaces, windows, outputs, overview state, keyboard layouts, and event streams.
 *   **Event Mapping:** Triad maps its internal shell snapshot to Niri-standard JSON payloads. Workspace `id` values stay as stable Triad tag IDs, while workspace `idx` values are compacted for Niri-style shell bars.
 *   **Focus MRU:** Window and workspace focus history is kept in the model and included in live restore snapshots so close behavior and hot reloads can return to the last useful focus target.

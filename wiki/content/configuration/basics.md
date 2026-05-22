@@ -74,7 +74,7 @@ spawn-at-startup "nm-applet" "--indicator"
 
 ### Shell & Bar Profiles
 
-For shell and bar configuration — profiles, Waybar, Quickshell, Noctalia,
+For shell and bar configuration — profiles, Waybar, Noctalia,
 niri-compat — see [Shell Setup](@/configuration/shell-setup.md).
 
 ---

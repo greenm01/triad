@@ -14,9 +14,9 @@ import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_run
 import
   bindings_runtime, child_process_runtime, effects_runtime, input_runtime,
   ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime, manage_requests,
-  message_queue, memory_status, output_management_runtime, process_runner,
-  quickshell_runner, registry_runtime, reload_runtime, render_runtime,
-  render_invalidation, spawn_context, state, switch_event_runtime
+  message_queue, memory_status, output_management_runtime, process_runner, shell_runner,
+  registry_runtime, reload_runtime, render_runtime, render_invalidation, spawn_context,
+  state, switch_event_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -199,11 +199,8 @@ proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
     )
   )
 
-proc nextQuickshellRecoveryMs(daemon: TriadDaemon): int64 =
-  if daemon.quickshellState.recoveryPending:
-    daemon.quickshellState.nextRecoveryMs
-  else:
-    0'i64
+proc nextShellRecoveryMs(daemon: TriadDaemon): int64 =
+  if daemon.shellRunner.recoveryPending: daemon.shellRunner.nextRecoveryMs else: 0'i64
 
 proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
   result = IdleWakeIntervalMs
@@ -218,7 +215,7 @@ proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
     result = max(1, int(max(1'i64, tickInterval - elapsedMs)))
   if daemon.configReloadDebouncer.pending:
     result = min(result, max(1, int(daemon.configReloadDebouncer.deadlineMs - nowMs)))
-  let recoveryMs = daemon.nextQuickshellRecoveryMs()
+  let recoveryMs = daemon.nextShellRecoveryMs()
   if recoveryMs > 0:
     result = min(result, max(1, int(recoveryMs - nowMs)))
 
@@ -700,7 +697,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         not sameShellsConfig(
           previousModelForShell.get().shells, daemon.runtimeState.model.shells
         ):
-      daemon.quickshellState.switchShell(
+      daemon.shellRunner.switchShell(
         previousModelForShell.get(),
         daemon.runtimeState.model,
         niriSocketPath,
@@ -1111,7 +1108,7 @@ proc main*() =
 
   # Spawn startup commands after River accepts the initial manage pass.
   daemon.scheduleStartupCommands(daemon.runtimeState.model)
-  daemon.quickshellState.scheduleQuickshellSpawn(daemon.runtimeState.model)
+  daemon.shellRunner.scheduleShellSpawn(daemon.runtimeState.model)
 
   var lastWatcherPollMs = 0'i64
   var lastChildReapPollMs = 0'i64
@@ -1165,27 +1162,26 @@ proc main*() =
 
     if daemon.initialManageComplete:
       startIpcServers()
-      daemon.quickshellState.spawnPendingQuickshell(
+      daemon.shellRunner.spawnPendingShell(
         daemon.runtimeState.model, niriSocketPath, "initial manage"
       )
       let shellPollMs = nowMs
-      let recoveryMs = daemon.nextQuickshellRecoveryMs()
+      let recoveryMs = daemon.nextShellRecoveryMs()
       let shellPollDue =
         lastShellPollMs.pollDue(shellPollMs, MaintenancePollIntervalMs) or
         (recoveryMs > 0 and shellPollMs >= recoveryMs)
       if shellPollDue:
         lastShellPollMs = shellPollMs
         inc daemon.loopCounters.shellWatchdogPolls
-        let watchdogFallback = daemon.quickshellState.pollShellWatchdog(
-          daemon.runtimeState.model, shellPollMs
-        )
+        let watchdogFallback =
+          daemon.shellRunner.pollShellWatchdog(daemon.runtimeState.model, shellPollMs)
         if watchdogFallback.isSome:
           daemon.enqueue(
             Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
           )
         else:
           inc daemon.loopCounters.shellRecoveryPolls
-          discard daemon.quickshellState.pollQuickshellRecovery(
+          discard daemon.shellRunner.pollShellRecovery(
             daemon.runtimeState.model, niriSocketPath, shellPollMs
           )
 

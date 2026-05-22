@@ -27,11 +27,6 @@ workspace-rules {
     workspace 4 name="chat" default-layout="deck"
 }
 
-quickshell {
-    enabled #false
-    theme "noctalia-shell"
-}
-
 allow-exit-session #false
 
 protocol-surfaces {

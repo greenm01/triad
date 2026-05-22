@@ -71,18 +71,6 @@ profile "waybar" {
 }
 ```
 
-### Quickshell
-
-Quickshell uses Triad's native IPC (`$TRIAD_SOCKET`) directly. Set `active`
-to your Quickshell launch command:
-
-```kdl
-profile "quickshell" {
-  launch "quickshell" "-c" "~/.config/quickshell/shell.qml"
-  stop   "pkill" "-x" "quickshell"
-}
-```
-
 ### Noctalia and DankMaterialShell
 
 Both expect Niri-shaped IPC. Set `niri-compat #true` in their profiles.

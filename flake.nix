@@ -91,7 +91,6 @@
             pkgs.swaylock
             pkgs.gtklock
             pkgs.sunsetr
-            pkgs.quickshell
             pkgs.noctalia-shell
             dankShell
             pkgs.janet

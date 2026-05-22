@@ -38,7 +38,7 @@ Useful optional passes:
 ```bash
 TRIAD_LIVE_LAUNCH_CLIENTS=1 sh tools/live_smoke.sh
 TRIAD_LIVE_TEST_LOCKME=1 sh tools/live_smoke.sh
-TRIAD_LIVE_TEST_QUICKSHELL=1 sh tools/live_smoke.sh
+TRIAD_LIVE_TEST_SHELL=1 sh tools/live_smoke.sh
 ```
 
 To fold this into preflight:

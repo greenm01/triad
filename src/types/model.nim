@@ -9,11 +9,10 @@ from runtime_values import
   LayoutSwitchToastConfig, OutputConfigTransform, OutputLayoutRow, OutputModeKind,
   OutputPositionKind, ParentedRole, SpiralLayoutConfig, OverviewHotCornersConfig,
   PointerBindingConfig, PointerOpKind, PresentationMode, ProtocolSurfacesConfig,
-  QuickshellConfig, ShellsConfig, RecentWindowFilter, RecentWindowScope,
-  RecentWindowsConfig, ScreenshotConfig, SwitchEventConfig, TerminalConfig,
-  WindowRuleBorderConfig, WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig,
-  WindowRuleFocusRingConfig, WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy,
-  SplitTreeNodeMode
+  ShellsConfig, RecentWindowFilter, RecentWindowScope, RecentWindowsConfig,
+  ScreenshotConfig, SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig,
+  WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy, SplitTreeNodeMode
 from runtime_values import
   Direction, FrameNodeKind, FrameSplitOrientation, NativeLayoutId
 
@@ -630,7 +629,6 @@ type
     scratchpadWidthRatio*: float32
     scratchpadHeightRatio*: float32
     startupCommands*: seq[seq[string]]
-    quickshell*: QuickshellConfig
     shells*: ShellsConfig
     janet*: JanetConfig
     terminal*: TerminalConfig

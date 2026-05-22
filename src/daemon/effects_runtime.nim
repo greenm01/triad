@@ -13,7 +13,7 @@ import ../utils/behavior_log
 import
   child_process_runtime, idle_inhibit_runtime, ipc_broadcast_runtime,
   live_restore_runtime, manage_requests, output_management_runtime, process_runner,
-  protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner,
+  protocol_surface_runtime, shell_runner, render_runtime, screenshot_runner,
   spawn_context, state, render_invalidation
 
 proc executeWindowChangedBroadcast(daemon: var TriadDaemon, winId: uint32) =
@@ -228,8 +228,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffEnsureNextKeyEaten, EffectKind.EffCancelEnsureNextKeyEaten:
     daemon.queueManageEffect(eff)
   of EffectKind.EffStopManager:
-    daemon.quickshellState.spawnPending = false
-    daemon.quickshellState.releaseTrackedQuickshell("manager stop")
+    daemon.shellRunner.spawnPending = false
+    daemon.shellRunner.releaseTrackedShell("manager stop")
     if daemon.riverManager != nil:
       daemon.riverManager.stop()
   of EffectKind.EffTriadReload:
@@ -240,8 +240,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       return
     if devModeEnabled() and not markLiveReloadDevMode():
       warn "Triad reload could not preserve dev mode"
-    daemon.quickshellState.spawnPending = false
-    daemon.quickshellState.releaseTrackedQuickshell("triad reload")
+    daemon.shellRunner.spawnPending = false
+    daemon.shellRunner.releaseTrackedShell("triad reload")
     if daemon.riverManager != nil:
       daemon.riverManager.stop()
   of EffectKind.EffExitSession:

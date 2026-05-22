@@ -41,7 +41,7 @@ sends commands back.
 River compositor
 ├── Triad              (layout + window policy daemon, Janet embedded)
 ├── your.janet         (optional external: subscribes to event-stream)
-├── Quickshell         (QML shell, reads Triad/Niri IPC independently)
+├── shell bar         (reads Triad/Niri IPC independently)
 └── any riverctl script
 ```
 
@@ -291,8 +291,8 @@ remain native reducer behavior.
 - **Block the main loop.** Scripts run synchronously in the event loop.
   `triad/wait-event` yields back to Triad, but there is no sleep, timer, thread,
   or Janet event-loop integration yet.
-- **Replace Quickshell.** Janet has no Qt/QML bindings. Shell UI — bars,
-  panels, notifications — remains Quickshell's domain.
+- **Replace the shell.** Janet has no UI bindings. Shell UI — bars,
+  panels, notifications — remains an external shell's domain.
 
 ---
 
@@ -566,7 +566,7 @@ River compositor
 ├── Triad              (window policy, layouts, IPC daemon, Janet embedded)
 ├── janet-daemon.janet (external: talks to Triad IPC over Unix socket)
 ├── custom-layout      (speaks river-layout-v3 directly — no Triad involvement)
-├── Quickshell         (QML shell, Niri/Triad IPC)
+├── shell bar         (Niri/Triad IPC)
 └── waybar             (status bar, riverctl)
 ```
 

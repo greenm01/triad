@@ -73,6 +73,6 @@ triad msg state
 
 ## Windows and Launchers
 
-New windows open on the active monitor's workspace. Triad sets the default layer-shell output to the active monitor, ensuring launchers like Waybar or Quickshell appear where focus is.
+New windows open on the active monitor's workspace. Triad sets the default layer-shell output to the active monitor, ensuring launchers and shell bars appear where focus is.
 
 For workspace rules, pinning, and dynamic creation, see [Workspaces](@/configuration/workspaces.md).

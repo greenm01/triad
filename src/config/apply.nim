@@ -261,37 +261,6 @@ proc outputRuleData(rule: rv.OutputRule): OutputRuleData =
 proc outputLayoutRowData(row: rv.OutputLayoutRowConfig): OutputLayoutRowData =
   OutputLayoutRowData(targets: row.targets, align: row.align)
 
-proc legacyShellsFromQuickshell(config: rv.QuickshellConfig): rv.ShellsConfig =
-  var command = config.command.strip()
-  if command.len == 0:
-    command = DefaultQuickshellCommand
-  if not config.enabled or config.theme.strip().len == 0:
-    return rv.ShellsConfig(enabled: false)
-
-  var launch = @[command, "-c", config.theme]
-  for arg in config.args:
-    launch.add(arg)
-
-  rv.ShellsConfig(
-    enabled: true,
-    active: "quickshell",
-    cycle: @["quickshell"],
-    watchdog: rv.ShellWatchdogConfig(
-      enabled: true,
-      fallback: "quickshell",
-      exclusiveFocusTimeoutMs: DefaultShellWatchdogExclusiveFocusTimeoutMs,
-    ),
-    profiles:
-      @[
-        rv.ShellProfileConfig(
-          name: "quickshell",
-          launch: launch,
-          stop: @[command, "kill", "-c", config.theme, "--any-display"],
-          niriCompat: true,
-        )
-      ],
-  )
-
 proc applyConfig*(model: var Model, config: Config) =
   model.outerGaps = configClamp32(config.layout.gaps, 0, 512)
   model.borderWidth = configClamp32(config.layout.borderWidth, 0, 64)
@@ -365,14 +334,7 @@ proc applyConfig*(model: var Model, config: Config) =
   discard model.refreshWindowRuleDerivedState()
 
   model.startupCommands = config.startupCommands
-  model.quickshell = config.quickshell
-  if model.quickshell.command.strip().len == 0:
-    model.quickshell.command = DefaultQuickshellCommand
-  model.shells =
-    if config.shells.configured:
-      config.shells
-    else:
-      model.quickshell.legacyShellsFromQuickshell()
+  model.shells = config.shells
   model.shells.normalizeShells()
   model.janet = config.janet
   model.spiral = config.layout.spiral.normalizedSpiralConfig()

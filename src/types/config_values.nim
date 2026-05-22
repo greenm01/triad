@@ -11,7 +11,6 @@ type
     windowRules*: seq[WindowRule]
     environment*: seq[EnvironmentEntryConfig]
     startupCommands*: seq[seq[string]]
-    quickshell*: QuickshellConfig
     shells*: ShellsConfig
     janet*: JanetConfig
     terminal*: TerminalConfig

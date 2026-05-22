@@ -331,12 +331,6 @@ type
     defaultLayout*: LayoutMode
     defaultLayoutSelection*: LayoutSelection
 
-  QuickshellConfig* = object
-    enabled*: bool
-    command*: string
-    theme*: string
-    args*: seq[string]
-
   ShellProfileConfig* = object
     name*: string
     launch*: seq[string]

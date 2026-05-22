@@ -1,5 +1,5 @@
 import std/[deques, json, os, tables, times]
-import protocol_surfaces, quickshell_runner, state
+import protocol_surfaces, shell_runner, state
 import ../janet/runtime as janet_runtime
 import ../state/[compaction, engine]
 import ../utils/[behavior_log, process_memory]
@@ -154,7 +154,7 @@ proc janetJson(counts: JanetRuntimeDiagnosticCounts): JsonNode =
     "janet_gc_heap_bytes": newJNull(),
   }
 
-proc quickshellJson(runner: QuickshellRunner): JsonNode =
+proc shellJson(runner: ShellRunner): JsonNode =
   %*{
     "tracked": runner.trackedProcess != nil,
     "tracked_shell": runner.trackedShellName,
@@ -225,7 +225,7 @@ proc memoryStatusPayload*(daemon: TriadDaemon): JsonNode =
     },
     "protocol_surfaces": daemon.protocolSurfaceRuntime.protocolSurfacesJson(),
     "janet": daemon.janetRuntime.diagnosticCounts().janetJson(),
-    "shell": daemon.quickshellState.quickshellJson(),
+    "shell": daemon.shellRunner.shellJson(),
     "ipc": ipcJson(),
     "memory_pressure": daemon.memoryPressureJson(nowMs),
   }

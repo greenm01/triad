@@ -14,7 +14,7 @@ import ../core/[effects, msg, restore_state]
 import ../config/reload_policy
 import ../janet/runtime
 import ../types/[projection_values, runtime_state, runtime_values]
-import cursor_shake, protocol_surfaces, quickshell_runner
+import cursor_shake, protocol_surfaces, shell_runner
 
 type
   RiverPhase* {.pure.} = enum
@@ -397,7 +397,7 @@ type
     inputConfigReloadHook*: RuntimeReasonHook
     configNotificationHook*: ConfigNotificationHook
     shouldExit*: bool
-    quickshellState*: QuickshellRunner
+    shellRunner*: ShellRunner
     startupCommandsPending*: bool
     initialManageComplete*: bool
     postManageBroadcastPending*: bool

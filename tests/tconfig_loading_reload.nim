@@ -75,7 +75,6 @@ suite "KDL Configuration Parser: loading reload":
         ],
       windowRules: @[WindowRule(appIdMatch: "brave", keyboardShortcutsInhibit: true)],
       startupCommands: @[@["notify-send", "triad"]],
-      quickshell: QuickshellConfig(enabled: true, theme: "noctalia"),
       terminal: TerminalConfig(command: @["kitty"]),
       screenshot: ScreenshotConfig(showPointer: true),
       overview: OverviewConfig(outerGap: -1, innerGapMultiplier: 1.5, zoom: 0.25),

@@ -137,7 +137,7 @@ From another terminal in the same session:
 `triad msg event-stream` writes event data to stdout. Runtime logs stay on
 stderr so they do not corrupt stream output.
 
-## Exercise Quickshell Compatibility
+## Exercise Niri Shell Compatibility
 
 When `shells { enabled #true }` is configured, Triad starts the active shell
 profile with a private Niri-compatible environment when that profile has
@@ -148,7 +148,7 @@ configured stop commands for shell profiles and spawns the active profile after
 initial manage. To include that in live smoke:
 
 ```bash
-TRIAD_LIVE_TEST_QUICKSHELL=1 ./tools/live_smoke.sh
+TRIAD_LIVE_TEST_SHELL=1 ./tools/live_smoke.sh
 ```
 
 The smoke gate verifies that a compatible shell profile was spawned, that

@@ -51,7 +51,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Config lifecycle | Reload notifications | | Shell/WM policy | `config-notification` | X | Optional commands run on config reload success, failure, or rollback. |
 | Startup | Startup commands | `exec-once`, `exec` | Init script starts long-running programs | `spawn-at-startup` | X | Triad has startup commands, not a reload-time `exec` equivalent. |
 | Startup | Environment variables | `env` | Init script environment | `environment` | X | Applies literal set/unset entries to future Triad-spawned user-facing processes. |
-| Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. Niri-compatible `Spawn` and `SpawnSh` actions map to the same configured-process spawn path for Quickshell clients. |
+| Startup | Spawn command | `spawn`, `spawn_shell`, `spawn_on_empty` | WM policy | `spawn`, `spawn-terminal` | X | Triad spawn uses argv-style text command parsing. Niri-compatible `Spawn` and `SpawnSh` actions map to the same configured-process spawn path for shell clients. |
 | Session | Quit manager | `quit` | `river_window_manager_v1.stop` | `stop-manager` | X | Triad also has `exit-session` behind config. |
 | Session | Exit compositor session | `quit` | `river_window_manager_v1.exit_session` | `exit-session`, `allow-exit-session` | X | Guarded by explicit config; default configs bind `Ctrl+Alt+Delete` and require Enter confirmation before exit. Niri `Quit` with `skip_confirmation` bypasses the dialog for shell session menus. |
 | Session | Lock screen | External bind to `spawn` | Init/WM policy | `screen-lock`, `lock-session` | X | Triad stores a configured lock command. |
@@ -342,7 +342,6 @@ KDL config nodes and fields:
   `tablet-mode-off`.
 - `shells`: `enabled`, `active`, `cycle`, `watchdog`, `fallback`,
   `exclusive-focus-timeout-ms`, `profile`, `launch`, `stop`, `niri-compat`.
-- `quickshell`: legacy fallback accepted when `shells` is absent.
 - `janet`: `enabled`, `automation-dir`, `layout-dir`, `fuel-limit`,
   `layout <name> fallback=<scroller|vertical-scroller|frame-tree|bsp-tree|i3>`;
   legacy `script-dir` is accepted as an `automation-dir` alias. User layout

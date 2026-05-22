@@ -71,10 +71,9 @@ For live reload, compositor, focus, session restore, or window-placement bugs:
    seven days by default.
 4. Relevant live-restore behavior events include `live_restore_loaded`,
    `live_restore_applied`, `live_restore_committed`, and
-   `live_restore_snapshot_dumped`. Quickshell/Noctalia reload events include
-   `quickshell_startup_decision`, `quickshell_config_reload_decision`,
-   `quickshell_spawned`, `quickshell_released`, and
-   `quickshell_configured_stop_*`. Niri-compatible shell stream events include
+   `live_restore_snapshot_dumped`. Shell reload events include
+   `shell_startup_decision`, `shell_config_reload_decision`, `shell_spawned`,
+   `shell_released`, and `shell_stop_*`. Niri-compatible shell stream events include
    `niri_compat_ipc_server_starting`,
    `niri_compat_event_stream_subscribed`, and
    `niri_compat_event_stream_disconnected`. Prefer citing these JSON events
