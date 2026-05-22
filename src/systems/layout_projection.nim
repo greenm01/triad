@@ -224,8 +224,9 @@ proc runtimeWindowTable(
     model: Model
 ): Table[rv.ProjectionWindowId, rv.ProjectedWindow] =
   for winId, win in model.windowsWithId():
-    result[model.externalWindowId(winId)] = rv.ProjectedWindow(
-      id: model.externalWindowId(winId),
+    let externalId = rv.ProjectionWindowId(uint32(win.externalId))
+    result[externalId] = rv.ProjectedWindow(
+      id: externalId,
       pid: win.pid,
       title: win.title,
       appId: win.appId,

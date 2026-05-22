@@ -336,18 +336,21 @@ proc removeOutputForExternal*(
       result.add(winId)
 
 proc sortedOutputsByGeometry*(model: Model): seq[OutputId] =
-  for outputId, _ in model.outputsWithId():
-    result.add(outputId)
-  result.sort(
-    proc(a, b: OutputId): int =
-      let aData = model.outputData(a).get()
-      let bData = model.outputData(b).get()
-      result = cmp(aData.y, bData.y)
+  var entries: seq[tuple[id: OutputId, y, x: int32, externalId: uint32]] = @[]
+  for outputId, output in model.outputsWithId():
+    entries.add(
+      (id: outputId, y: output.y, x: output.x, externalId: uint32(output.externalId))
+    )
+  entries.sort(
+    proc(a, b: tuple[id: OutputId, y, x: int32, externalId: uint32]): int =
+      result = cmp(a.y, b.y)
       if result == 0:
-        result = cmp(aData.x, bData.x)
+        result = cmp(a.x, b.x)
       if result == 0:
-        result = cmp(uint32(aData.externalId), uint32(bData.externalId))
+        result = cmp(a.externalId, b.externalId)
   )
+  for entry in entries:
+    result.add(entry.id)
 
 proc directionalOutput*(model: Model, direction: string): OutputId =
   let current = model.activeOutputOrPrimary()

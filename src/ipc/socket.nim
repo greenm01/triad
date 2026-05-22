@@ -711,16 +711,21 @@ proc shouldSendNiriBroadcast*(payload: string): bool =
     discard
   true
 
-proc broadcastJson*(payload: string) {.async.} =
+proc broadcastJson*(payload: string, eventName = "") {.async.} =
   if payload == lastNiriBroadcastPayload:
     inc ipcPerfCounters.niriBroadcastSkippedDuplicate
     return
   lastNiriBroadcastPayload = payload
 
-  let logPayload = niriBroadcastLogPayload(payload, subscribers.len)
-  if logPayload != nil:
-    writeBehaviorEvent("niri_compat_broadcast", logPayload)
-  if not payload.shouldSendNiriBroadcast():
+  if behaviorLogEnabled():
+    let logPayload = niriBroadcastLogPayload(payload, subscribers.len)
+    if logPayload != nil:
+      writeBehaviorEvent("niri_compat_broadcast", logPayload)
+  if eventName.len > 0:
+    if eventName in ["WindowsChanged", "WindowLayoutsChanged"]:
+      inc ipcPerfCounters.niriBroadcastSkippedFiltered
+      return
+  elif not payload.shouldSendNiriBroadcast():
     inc ipcPerfCounters.niriBroadcastSkippedFiltered
     return
   pruneSubscribers()

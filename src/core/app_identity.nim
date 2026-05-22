@@ -27,7 +27,9 @@ const TerminalAliases = {
   "wezterm": "org.wezfurlong.wezterm.desktop",
 }.toTable
 
-var defaultIndex: Option[AppIdentityIndex]
+var defaultIndex = AppIdentityIndex()
+var defaultIndexLoaded = false
+var defaultCompatAppIds = initTable[string, string]()
 
 func normalizeKey(value: string): string =
   value.strip().toLowerAscii()
@@ -207,9 +209,10 @@ proc xdgApplicationDirs*(): seq[string] =
   xdgApplicationsDirs()
 
 proc defaultAppIdentityIndex*(): AppIdentityIndex =
-  if defaultIndex.isNone:
-    defaultIndex = some(buildAppIdentityIndex(xdgApplicationDirs()))
-  defaultIndex.get()
+  if not defaultIndexLoaded:
+    defaultIndex = buildAppIdentityIndex(xdgApplicationDirs())
+    defaultIndexLoaded = true
+  defaultIndex
 
 proc compatAppId*(rawAppId: string, index: AppIdentityIndex): string =
   let raw = rawAppId.strip()
@@ -234,4 +237,12 @@ proc compatAppId*(rawAppId: string, index: AppIdentityIndex): string =
   raw
 
 proc compatAppId*(rawAppId: string): string =
-  compatAppId(rawAppId, defaultAppIdentityIndex())
+  if not defaultIndexLoaded:
+    defaultIndex = buildAppIdentityIndex(xdgApplicationDirs())
+    defaultIndexLoaded = true
+  let raw = rawAppId.strip()
+  let key = raw.normalizeKey()
+  if defaultCompatAppIds.hasKey(key):
+    return defaultCompatAppIds[key]
+  result = compatAppId(raw, defaultIndex)
+  defaultCompatAppIds[key] = result

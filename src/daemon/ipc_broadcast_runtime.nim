@@ -96,6 +96,6 @@ proc flushIpcBroadcasts*(daemon: var TriadDaemon) =
   for broadcast in pending:
     case broadcast.kind
     of IpcBroadcastKind.Niri:
-      asyncCheck broadcastJson(broadcast.payload)
+      asyncCheck broadcastJson(broadcast.payload, broadcast.eventName)
     of IpcBroadcastKind.Triad:
       asyncCheck broadcastTriadJson(broadcast.payload, broadcast.eventName)
