@@ -26,7 +26,7 @@ proc executeWindowChangedBroadcast(daemon: var TriadDaemon, winId: uint32) =
   if not niriInterested and not triadInterested:
     return
 
-  let snapshot = daemon.readModelSnapshot()
+  let snapshot = daemon.readWindowSnapshot(winId)
   for win in snapshot.windows:
     if win.id != winId:
       continue

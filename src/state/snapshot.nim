@@ -126,6 +126,108 @@ proc keyboardLayoutNames(model: Model): seq[string] =
     if stripped.len > 0:
       result.add(stripped)
 
+proc shellWindow(
+    model: Model, winId, activeScratchpad, activeFocused: WindowId
+): Option[ShellWindow] =
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return none(ShellWindow)
+  let win = winOpt.get()
+  if not win.windowAdmitted():
+    return none(ShellWindow)
+  if model.windowHiddenBySwallow(winId):
+    return none(ShellWindow)
+
+  let pos = model.firstWindowPosition(winId)
+  let focused = pos.found and pos.tagId == model.activeTag and winId == activeFocused
+  let isFocused =
+    winId == activeScratchpad or (activeScratchpad == NullWindowId and focused)
+  some(
+    ShellWindow(
+      id: uint32(win.externalId),
+      pid: win.pid,
+      parentId: uint32(win.parentExternalId),
+      title: win.title,
+      appId: win.appId,
+      identifier: win.identifier,
+      tagId:
+        if pos.found:
+          some(pos.slot)
+        else:
+          none(uint32),
+      workspaceIdx:
+        if pos.found:
+          model.workspaceIndexForSlot(pos.slot)
+        else:
+          0'u32,
+      outputName:
+        if pos.found:
+          model.shellWorkspaceOutputName(pos.tagId)
+        else:
+          "",
+      colIdx: pos.colIdx,
+      winIdx: pos.winIdx,
+      isFocused: isFocused,
+      isFloating: win.isFloating,
+      isFullscreen: win.isFullscreen,
+      isMaximized: win.isMaximized,
+      isMinimized: win.isMinimized,
+      isSticky: win.isSticky,
+      isOverlay: win.isOverlay,
+      isUnmanagedGlobal: win.isUnmanagedGlobal,
+      fullscreenOutput: uint32(win.fullscreenOutput),
+      widthProportion: win.widthProportion,
+      heightProportion: win.heightProportion,
+      actualW: win.actualW,
+      actualH: win.actualH,
+      floatingGeom: win.floatingGeom,
+      keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
+      idleInhibitMode: win.idleInhibitMode,
+      isTerminal: win.isTerminal,
+      allowSwallow: win.allowSwallow,
+      swallowedBy: model.externalWindowId(model.swallowedByWindow(winId)),
+      swallowing: model.externalWindowId(model.swallowingWindow(winId)),
+    )
+  )
+
+proc addShellOutputs(snapshot: var ShellSnapshot, model: Model) =
+  if model.outputCount() == 0:
+    snapshot.outputs.add(
+      ShellOutput(
+        id: 0,
+        name: "triad-0",
+        x: 0,
+        y: 0,
+        w: max(0'i32, model.screenWidth),
+        h: max(0'i32, model.screenHeight),
+        refreshRate: 0,
+        physicalWidth: 0,
+        physicalHeight: 0,
+        scale: 1.0'f32,
+        transform: 0,
+        isPrimary: true,
+      )
+    )
+  else:
+    for outputId in model.sortedOutputIdsByExternal():
+      let output = model.outputData(outputId).get()
+      snapshot.outputs.add(
+        ShellOutput(
+          id: uint32(output.externalId),
+          name: model.shellOutputName(outputId),
+          x: output.x,
+          y: output.y,
+          w: max(0'i32, output.w),
+          h: max(0'i32, output.h),
+          refreshRate: output.refreshRate,
+          physicalWidth: output.physicalWidth,
+          physicalHeight: output.physicalHeight,
+          scale: output.scale,
+          transform: output.transform,
+          isPrimary: outputId == model.primaryOutput,
+        )
+      )
+
 proc shellSnapshot*(model: Model): ShellSnapshot =
   result.version = TriadIpcVersion
   result.activeTag = model.activeSlot
@@ -266,96 +368,24 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
 
   let activeFocused = model.effectiveTagFocusedWindow(model.activeTag)
   for winId in model.sortedWindowIdsByExternal():
-    let win = model.windowData(winId).get()
-    if not win.windowAdmitted():
-      continue
-    if model.windowHiddenBySwallow(winId):
-      continue
-    let pos = model.firstWindowPosition(winId)
-    let focused = pos.found and pos.tagId == model.activeTag and winId == activeFocused
-    let isFocused =
-      winId == activeScratchpad or (activeScratchpad == NullWindowId and focused)
-    result.windows.add(
-      ShellWindow(
-        id: uint32(win.externalId),
-        pid: win.pid,
-        parentId: uint32(win.parentExternalId),
-        title: win.title,
-        appId: win.appId,
-        identifier: win.identifier,
-        tagId:
-          if pos.found:
-            some(pos.slot)
-          else:
-            none(uint32),
-        workspaceIdx:
-          if pos.found:
-            model.workspaceIndexForSlot(pos.slot)
-          else:
-            0'u32,
-        outputName:
-          if pos.found:
-            model.shellWorkspaceOutputName(pos.tagId)
-          else:
-            "",
-        colIdx: pos.colIdx,
-        winIdx: pos.winIdx,
-        isFocused: isFocused,
-        isFloating: win.isFloating,
-        isFullscreen: win.isFullscreen,
-        isMaximized: win.isMaximized,
-        isMinimized: win.isMinimized,
-        isSticky: win.isSticky,
-        isOverlay: win.isOverlay,
-        isUnmanagedGlobal: win.isUnmanagedGlobal,
-        fullscreenOutput: uint32(win.fullscreenOutput),
-        widthProportion: win.widthProportion,
-        heightProportion: win.heightProportion,
-        actualW: win.actualW,
-        actualH: win.actualH,
-        floatingGeom: win.floatingGeom,
-        keyboardShortcutsInhibit: win.keyboardShortcutsInhibit,
-        idleInhibitMode: win.idleInhibitMode,
-        isTerminal: win.isTerminal,
-        allowSwallow: win.allowSwallow,
-        swallowedBy: model.externalWindowId(model.swallowedByWindow(winId)),
-        swallowing: model.externalWindowId(model.swallowingWindow(winId)),
-      )
-    )
+    let winOpt = model.shellWindow(winId, activeScratchpad, activeFocused)
+    if winOpt.isSome:
+      result.windows.add(winOpt.get())
 
-  if model.outputCount() == 0:
-    result.outputs.add(
-      ShellOutput(
-        id: 0,
-        name: "triad-0",
-        x: 0,
-        y: 0,
-        w: max(0'i32, model.screenWidth),
-        h: max(0'i32, model.screenHeight),
-        refreshRate: 0,
-        physicalWidth: 0,
-        physicalHeight: 0,
-        scale: 1.0'f32,
-        transform: 0,
-        isPrimary: true,
-      )
+  result.addShellOutputs(model)
+
+proc shellWindowSnapshotForExternal*(
+    model: Model, externalId: ExternalWindowId
+): ShellSnapshot =
+  result.version = TriadIpcVersion
+  result.activeScratchpadWindow = model.externalWindowId(model.activeScratchpadWindow())
+  let winId = model.windowForExternal(externalId)
+  if winId != NullWindowId:
+    let winOpt = model.shellWindow(
+      winId,
+      model.activeScratchpadWindow(),
+      model.effectiveTagFocusedWindow(model.activeTag),
     )
-  else:
-    for outputId in model.sortedOutputIdsByExternal():
-      let output = model.outputData(outputId).get()
-      result.outputs.add(
-        ShellOutput(
-          id: uint32(output.externalId),
-          name: model.shellOutputName(outputId),
-          x: output.x,
-          y: output.y,
-          w: max(0'i32, output.w),
-          h: max(0'i32, output.h),
-          refreshRate: output.refreshRate,
-          physicalWidth: output.physicalWidth,
-          physicalHeight: output.physicalHeight,
-          scale: output.scale,
-          transform: output.transform,
-          isPrimary: outputId == model.primaryOutput,
-        )
-      )
+    if winOpt.isSome:
+      result.windows.add(winOpt.get())
+  result.addShellOutputs(model)

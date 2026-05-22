@@ -10,6 +10,9 @@ import state
 proc readModelSnapshot*(daemon: TriadDaemon): ShellSnapshot =
   daemon.runtimeState.readRuntimeSnapshot()
 
+proc readWindowSnapshot*(daemon: TriadDaemon, externalWindowId: uint32): ShellSnapshot =
+  daemon.runtimeState.readRuntimeWindowSnapshot(externalWindowId)
+
 proc readLiveRestoreJson*(daemon: TriadDaemon): string =
   result = daemon.runtimeState.readRuntimeLiveRestoreJson()
   if behaviorLogEnabled():

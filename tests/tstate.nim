@@ -942,6 +942,25 @@ suite "Runtime state primitives":
     check snapshot.windows[0].id == 42
     check snapshot.workspaces[0].focusedWindow == 42
 
+  test "single window runtime snapshot matches full snapshot window":
+    var state = initRuntimeStateFromConfig(baseConfig())
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "HDMI-A-1")
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 42, appId: "term", title: "A")
+    )
+    discard state.applyRuntimeUpdate(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 43, appId: "term", title: "B")
+    )
+
+    let full = state.readRuntimeSnapshot()
+    let single = state.readRuntimeWindowSnapshot(42)
+
+    check single.windows.len == 1
+    check single.windows[0] == full.windows.filterIt(it.id == 42)[0]
+    check single.outputs == full.outputs
+
   test "switch-layout opens and expires layout switch toast":
     var config = baseConfig()
     config.layoutSwitchToast.enabled = true

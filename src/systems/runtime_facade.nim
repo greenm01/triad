@@ -48,6 +48,11 @@ proc applyRuntimeLiveRestore*(
 proc readRuntimeSnapshot*(state: TriadRuntimeState): ShellSnapshot =
   state.model.shellSnapshot()
 
+proc readRuntimeWindowSnapshot*(
+    state: TriadRuntimeState, externalWindowId: uint32
+): ShellSnapshot =
+  state.model.shellWindowSnapshotForExternal(ExternalWindowId(externalWindowId))
+
 proc readRuntimeLiveRestoreJson*(state: TriadRuntimeState): string =
   state.model.liveRestoreJson()
 
