@@ -64,8 +64,8 @@ workspaces {
 
 shells {
     enabled #true
-    active "dank"
-    cycle "dank" "noctalia" "waybar"
+    active "wayle"
+    cycle "dank" "noctalia" "waybar" "wayle"
     watchdog {
         enabled #true
         fallback "waybar"
@@ -74,7 +74,7 @@ shells {
 
     profile "noctalia" {
         launch "noctalia-shell"
-        stop "pkill" "-f" "noctalia-shell|noctalia-qs|qs.*noctalia-shell"
+        stop "pkill" "-f" "noctalia-shell|noctalia-qs"
         niri-compat #true
     }
 
@@ -87,6 +87,12 @@ shells {
     profile "waybar" {
         launch "waybar"
         stop "pkill" "-x" "waybar"
+        niri-compat #true
+    }
+
+    profile "wayle" {
+        launch "/home/niltempus/src/wayle/target/release/wayle" "shell"
+        stop "/home/niltempus/src/wayle/target/release/wayle" "panel" "stop"
         niri-compat #true
     }
 }
@@ -325,6 +331,13 @@ bindings {
 
     // Layout selection.
     bind "Super+n" "switch-layout"
+    bind "Super+Alt+1" "layout-scroller"
+    bind "Super+Alt+2" "layout-custom notion"
+    bind "Super+Alt+3" "layout-custom dwindle"
+    bind "Super+Alt+4" "layout-grid"
+    bind "Super+Alt+5" "layout-center-tile"
+    bind "Super+Alt+6" "layout-spiral"
+    bind "Super+Alt+7" "layout-native i3"
     bind "Super+d" "layout-tile"
     bind "Super+g" "layout-grid"
     bind "Super+Shift+g" "layout-vertical-grid"
@@ -406,9 +419,10 @@ bindings {
     bind "Super+o" "toggle-overview"
     bind "Super+p" "select-window"
     bind "Super+Shift+Space" "focus-shell-ui"
-    bind "Ctrl+Alt+1" "switch-shell noctalia" allow-inhibiting=#false
-    bind "Ctrl+Alt+2" "switch-shell dank" allow-inhibiting=#false
-    bind "Ctrl+Alt+3" "switch-shell waybar" allow-inhibiting=#false
+    bind "Ctrl+Alt+1" "switch-shell wayle" allow-inhibiting=#false
+    bind "Ctrl+Alt+2" "switch-shell noctalia" allow-inhibiting=#false
+    bind "Ctrl+Alt+3" "switch-shell dank" allow-inhibiting=#false
+    bind "Ctrl+Alt+4" "switch-shell waybar" allow-inhibiting=#false
     bind "Ctrl+Alt+0" "cycle-shell" allow-inhibiting=#false
     bind "h" "focus-left" mode="overview"
     bind "j" "focus-window-or-workspace-down" mode="overview"
