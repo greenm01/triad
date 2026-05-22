@@ -426,6 +426,7 @@ proc triadCapabilitiesJson*(): JsonNode =
     "overview": true,
     "workspace_creation": true,
     "workspace_switching": true,
+    "workspace_content_scroll": true,
     "window_focus": true,
     "window_close": true,
     "spawn": true,

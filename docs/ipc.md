@@ -12,7 +12,7 @@ Dispatch commands to the running Triad instance using:
 *   `validate <command...>`: Validates a command locally without sending it.
 *   `request <json>`: Sends a raw JSON IPC request.
 *   `state`: Prints the current session state as JSON.
-*   `capabilities`: Prints native Triad IPC feature capabilities as JSON.
+*   `capabilities`: Prints native Triad IPC feature capabilities as JSON, including workspace creation/switching/content-scroll, overview, window, spawn, keyboard-layout, output metadata, and monitor-power support flags.
 *   `workspaces`: Prints the current workspace state as JSON.
 *   `outputs`: Prints the current output state as JSON.
 *   `windows`: Prints the current window state as JSON.

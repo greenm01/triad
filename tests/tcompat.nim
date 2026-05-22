@@ -533,6 +533,7 @@ suite "Shell compatibility contracts":
     check stateReply.handled
     let state = parseJson(stateReply.reply)["triad"]["state"]
     check state["capabilities"]["overview"].getBool()
+    check state["capabilities"]["workspace_content_scroll"].getBool()
     check state["capabilities"]["keyboard_layout"].getBool()
     check not state["capabilities"]["monitor_power"].getBool()
     check state["overview"]["is_open"].getBool()
@@ -585,6 +586,7 @@ suite "Shell compatibility contracts":
     let capabilities = parseJson(capabilitiesReply.reply)["triad"]["capabilities"]
     check parseJson(capabilitiesReply.reply)["triad"]["type"].getStr() == "capabilities"
     check capabilities["workspace_creation"].getBool()
+    check capabilities["workspace_content_scroll"].getBool()
     check capabilities["output_metadata"].getBool()
     check capabilities["keyboard_layout"].getBool()
     check not capabilities["monitor_power"].getBool()
