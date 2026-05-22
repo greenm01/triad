@@ -90,7 +90,7 @@ Triad separates Triad-native IPC from shell projection IPC to support both nativ
 
 *   **Canonical Shell Snapshot:** Triad derives all shell-facing state from a single internal model snapshot. This snapshot contains stable tag IDs, compact workspace indices, windows, outputs, focus history, and layout modes.
 *   **Native Triad IPC (`$TRIAD_SOCKET`):** The primary, long-term protocol for shells that integrate with Triad directly. It exposes versioned JSON requests and events including the full shell state and per-tag layout details.
-*   **Niri Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics to support existing Niri-aware shells (Noctalia, DankMaterialShell) without modification.
+*   **Niri Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics to support existing Niri-aware shells (Noctalia, DankMaterialShell, Waylee) and Waybar's `niri/workspaces` module without modification.
 *   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
 IPC window and output IDs are numeric external compositor IDs, stable for the lifetime of the compositor object but distinct from Triad's internal logical IDs.

@@ -66,5 +66,5 @@ See [IPC & Commands](@/usage/ipc-commands.md).
 
 **Fast and lean.** Written in Nim. No object graph to walk on every render pass.
 
-**Shell-ready.** Niri-compatible IPC means Waybar, Noctalia, and
-DankMaterialShell work without modification.
+**Shell-ready.** Niri-compatible IPC means Waybar, Noctalia,
+DankMaterialShell, and Waylee work without modification.

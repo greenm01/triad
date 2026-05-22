@@ -79,7 +79,7 @@ Manage shells, status bars, and desktop overlays using `shells`.
 ```kdl
 shells {
   active "noctalia"
-  cycle "noctalia" "waybar"
+  cycle "noctalia" "waylee" "waybar"
 
   profile "noctalia" {
     launch "noctalia-shell"
@@ -87,9 +87,16 @@ shells {
     niri-compat #true 
   }
 
+  profile "waylee" {
+    launch "wayle"
+    stop "pkill" "-x" "wayle"
+    niri-compat #true
+  }
+
   profile "waybar" {
     launch "waybar"
     stop "pkill" "-x" "waybar"
+    niri-compat #true
   }
 }
 ```
@@ -389,6 +396,8 @@ A birds-eye view of all workspaces.
 Triad provides a compatibility layer for shells expecting Niri-style IPC.
 
 When a shell profile uses `niri-compat #true`, Triad sets `$NIRI_SOCKET` and provides a compatible IPC facade.
+This supports Niri-aware shells such as Noctalia, DankMaterialShell, Waylee,
+and Waybar's `niri/workspaces` module.
 
 ### Janet Scripting
 Triad embeds Janet for advanced automation. Scripts in `automation-dir` can subscribe to events and emit commands.

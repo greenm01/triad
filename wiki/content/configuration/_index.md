@@ -48,5 +48,5 @@ cursor theme.
 
 ### [Shell Setup](@/configuration/shell-setup.md)
 
-Configure Waybar, Noctalia, DankMaterialShell, and other shell bars. Shell profiles,
-niri-compat IPC, and watchdog fallback.
+Configure Waybar, Noctalia, DankMaterialShell, Waylee, and other shell bars.
+Shell profiles, niri-compat IPC, and watchdog fallback.

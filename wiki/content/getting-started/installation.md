@@ -276,9 +276,9 @@ log.
 ## Shell Profiles
 
 The starter config starts Noctalia first, includes DankMaterialShell and Waybar
-as switchable shell profiles, and uses Waybar as the watchdog fallback. These
-programs are normal host dependencies; install them or replace the commands in
-your config.
+as switchable shell profiles, and uses Waybar as the watchdog fallback. Waylee
+can be added as another Niri-compatible profile. These programs are normal host
+dependencies; install them or replace the commands in your config.
 
 The profile commands are plain argv-style config entries, so users can replace
 them with any shell or bar they want:
@@ -286,11 +286,23 @@ them with any shell or bar they want:
 ```kdl
 shells {
   active "noctalia"
-  cycle "noctalia" "dank" "waybar"
+  cycle "noctalia" "waylee" "dank" "waybar"
 
   watchdog {
     enabled #true
     fallback "waybar"
+  }
+
+  profile "waybar" {
+    launch "waybar"
+    stop "pkill" "-x" "waybar"
+    niri-compat #true
+  }
+
+  profile "waylee" {
+    launch "wayle"
+    stop "pkill" "-x" "wayle"
+    niri-compat #true
   }
 }
 ```

@@ -15,7 +15,7 @@ at runtime.
 ```kdl
 shells {
   active "noctalia"
-  cycle  "noctalia" "waybar"
+  cycle  "noctalia" "waylee" "waybar"
 
   watchdog {
     enabled  #true
@@ -31,6 +31,13 @@ shells {
   profile "waybar" {
     launch "waybar"
     stop   "pkill" "-x" "waybar"
+    niri-compat #true
+  }
+
+  profile "waylee" {
+    launch "wayle"
+    stop   "pkill" "-x" "wayle"
+    niri-compat #true
   }
 
   profile "dank" {
@@ -54,33 +61,44 @@ Each profile takes:
 |---|---|---|
 | `launch` | String argv | Command to start the shell. |
 | `stop` | String argv | Command to stop it cleanly. |
-| `niri-compat` | Bool | Set `$NIRI_SOCKET` and expose a Niri-compatible IPC facade. Required for Noctalia, DankMaterialShell, and other Niri-aware shells. |
+| `niri-compat` | Bool | Set `$NIRI_SOCKET` and expose a Niri-compatible IPC facade. Required for Noctalia, DankMaterialShell, Waylee, and Waybar's `niri/workspaces` module. |
 
 ## Supported Shells
 
 ### Waybar
 
-Waybar reads standard Wayland protocols and needs no special Triad
-configuration. Point it at River/Triad outputs using the standard Waybar
-config.
+Waybar reads standard Wayland protocols for most modules. Its
+`niri/workspaces` module uses Triad's Niri-compatible IPC, so add
+`niri-compat #true` when you want Waybar workspace buttons.
 
 ```kdl
 profile "waybar" {
   launch "waybar"
   stop   "pkill" "-x" "waybar"
+  niri-compat #true
 }
 ```
 
-### Noctalia and DankMaterialShell
+### Noctalia, DankMaterialShell, and Waylee
 
-Both expect Niri-shaped IPC. Set `niri-compat #true` in their profiles.
-Triad sets `$NIRI_SOCKET` to a compatibility socket and translates events
-into the Niri JSON format.
+These shells expect Niri-shaped IPC. Set `niri-compat #true` in their
+profiles. Triad sets `$NIRI_SOCKET` to a compatibility socket and translates
+events into the Niri JSON format.
 
 ```kdl
 profile "noctalia" {
   launch "noctalia-shell"
   stop   "pkill" "-f" "noctalia-shell"
+  niri-compat #true
+}
+```
+
+Waylee uses the same compatibility path:
+
+```kdl
+profile "waylee" {
+  launch "wayle"
+  stop   "pkill" "-x" "wayle"
   niri-compat #true
 }
 ```
@@ -177,6 +195,12 @@ will use the names from your `workspace-rules` directly.
 DankMaterialShell also uses `niri-compat #true` and reads workspace state from
 the same Niri-compatible event stream. No additional configuration is needed
 beyond the profile entry.
+
+### Waylee
+
+Waylee also uses `niri-compat #true`. It reads workspaces, windows, outputs,
+overview state, and keyboard layout events through the same `$NIRI_SOCKET`
+facade.
 
 ### Exporting Sockets to the Session
 

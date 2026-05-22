@@ -43,7 +43,7 @@ You can also use Janet to create custom layouts. See [docs/tiling_wm_categories.
 
 ### Shell Support
 
-Triad supports Waybar and Niri-compatible shell bars. It projects state as Niri-shaped JSON, making it compatible with shells like **Noctalia-shell**, **DankMaterialShell**, and **Wayle** without modification.
+Triad supports Waybar and Niri-compatible shell bars. It projects state as Niri-shaped JSON, making it compatible with **Waybar**'s `niri/workspaces` module and shells like **Noctalia-shell**, **DankMaterialShell**, and **Waylee** without modification.
 
 ### Installation
 
