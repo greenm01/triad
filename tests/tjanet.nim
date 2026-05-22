@@ -1764,6 +1764,45 @@ suite "embedded Janet runtime":
     check results[0].messages[0].focusTag == 2
     check results[0].messages[1].focusTag == 3
 
+  test "persistent scripts skip events without matching handlers or waiters":
+    let dir = getTempDir() / ("triad-unmatched-hook-skip-" & $getCurrentProcessId())
+    createDir(dir)
+    writeFile(
+      dir / "handlers.janet",
+      """
+(triad/on :window-ready
+  (fn [_]
+    (triad/command "focus-tag" 7)))
+""",
+    )
+    var runtime = initJanetRuntime(testConfig(dir))
+    defer:
+      runtime.close()
+      if fileExists(dir / "handlers.janet"):
+        removeFile(dir / "handlers.janet")
+      if dirExists(dir):
+        removeDir(dir)
+
+    let missed = runtime.evalScriptsDetailed(
+      "window-title-changed",
+      "{:kind :window-title-changed :window-id 1 :old-title \"A\" :new-title \"B\"}",
+      testSnapshot(),
+    )
+    let matched = runtime.evalScriptsDetailed(
+      "window-ready",
+      windowReadyEvent(ShellWindow(id: 1, appId: "kitty")),
+      testSnapshot(),
+    )
+
+    check missed.len == 1
+    check missed[0].outcome == ScriptOutcome.Evaluated
+    check missed[0].messages.len == 0
+    check matched.len == 1
+    check matched[0].outcome == ScriptOutcome.Evaluated
+    check matched[0].messages.len == 1
+    check matched[0].messages[0].kind == MsgKind.CmdFocusTag
+    check matched[0].messages[0].focusTag == 7
+
   test "hook fibers wait for future events and preserve local state":
     let dir = getTempDir() / ("triad-hook-fiber-wait-" & $getCurrentProcessId())
     createDir(dir)

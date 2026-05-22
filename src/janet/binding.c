@@ -863,6 +863,26 @@ static int dispatch_handlers(
   return 1;
 }
 
+int triad_janet_script_interested_in_event(void *script_ptr, const char *event_name) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL || event_name == NULL) return 0;
+  for (int i = 0; i < script->handler_list_count; i++) {
+    if (
+        script->handler_lists[i].handler_count > 0 &&
+        strcmp(script->handler_lists[i].event_name, event_name) == 0) {
+      return 1;
+    }
+  }
+  for (int i = 0; i < script->waiter_count; i++) {
+    if (
+        script->waiters[i].event_name != NULL &&
+        strcmp(script->waiters[i].event_name, event_name) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static int janet_number_to_int32(Janet value, int32_t *out) {
   if (!janet_checktype(value, JANET_NUMBER)) return 0;
   double number = janet_unwrap_number(value);

@@ -276,6 +276,11 @@ proc evalScriptsDetailed*(
           ScriptOutcome.CachedFailed
       evalResult.error = entry.error
     else:
+      if triadJanetScriptInterestedInEvent(entry.script, cstring(event)) != 1:
+        evalResult.outcome = ScriptOutcome.Evaluated
+        evalResult.durationMs = int64((epochTime() - started) * 1000)
+        result.add(evalResult)
+        continue
       let eventSnapshotSource = snapshot.janetSnapshotSource(currentWindow, eventSource)
       let evaluated =
         triadJanetScriptDispatch(

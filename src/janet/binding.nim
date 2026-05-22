@@ -30,6 +30,10 @@ proc triadJanetScriptDispatch*(
   fuelLimit: int32,
 ): cint {.importc: "triad_janet_script_dispatch".}
 
+proc triadJanetScriptInterestedInEvent*(
+  script: JanetScriptHandle, eventName: cstring
+): cint {.importc: "triad_janet_script_interested_in_event".}
+
 proc triadJanetScriptHasLayout*(
   script: JanetScriptHandle, layoutName: cstring
 ): cint {.importc: "triad_janet_script_has_layout".}
