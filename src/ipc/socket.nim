@@ -16,6 +16,7 @@ type
     client*: AsyncSocket
     layout*: bool
     state*: bool
+    window*: bool
 
   IpcPerfCounters* = object
     requests*: uint64
@@ -45,6 +46,12 @@ type
     triadBroadcastSkippedDuplicate*: uint64
     triadBroadcastSkippedDuplicateByEvent*: uint64
     niriBroadcastSkippedFiltered*: uint64
+    niriBroadcastQueuedBytes*: uint64
+    triadBroadcastQueuedBytes*: uint64
+    niriBroadcastSentBytes*: uint64
+    triadBroadcastSentBytes*: uint64
+    niriBroadcastSkippedBytes*: uint64
+    triadBroadcastSkippedBytes*: uint64
     droppedSubscribers*: uint64
 
 const
@@ -57,6 +64,7 @@ const
 var subscribers*: seq[AsyncSocket] = @[]
 var triadSubscribers*: seq[TriadSubscriber] = @[]
 var ipcPerfCounters*: IpcPerfCounters
+var ipcBroadcastEventCounts*: Table[string, uint64] = initTable[string, uint64]()
 var pendingIpcClients = 0
 var lastNiriBroadcastPayload = ""
 var lastNiriWorkspaceBroadcastKey = ""
@@ -180,11 +188,13 @@ proc canSubscribeTriad(): bool =
   triadSubscribers.len < MaxIpcSubscribers
 
 proc triadSubscriberScopeCounts*(): tuple[
-  layoutOnly: int, stateOnly: int, layoutAndState: int
+  layoutOnly: int, stateOnly: int, layoutAndState: int, window: int
 ] =
   for subscriber in triadSubscribers:
     if subscriber.client == nil or subscriber.client.isClosed:
       continue
+    if subscriber.window:
+      inc result.window
     if subscriber.layout and subscriber.state:
       inc result.layoutAndState
     elif subscriber.layout:
@@ -200,7 +210,17 @@ proc triadSubscriberInterested*(eventName: string): bool =
       return true
     if eventName == "state" and subscriber.state:
       return true
+    if eventName == "window" and subscriber.window:
+      return true
   false
+
+proc hasNiriSubscribers*(): bool =
+  pruneSubscribers()
+  subscribers.len > 0
+
+proc recordIpcBroadcastEvent*(channel, eventName: string) =
+  let key = channel & ":" & eventName
+  ipcBroadcastEventCounts[key] = ipcBroadcastEventCounts.getOrDefault(key, 0'u64) + 1
 
 proc sendWithTimeout(
     client: AsyncSocket, payload: string, timeoutMs = IpcSubscriberSendTimeoutMs
@@ -406,8 +426,10 @@ proc startIpcServer*(
                 let triad = handleTriadRequest(line, snapshot)
                 if triad.handled:
                   inc ipcPerfCounters.triadRequests
-                  if (triad.subscribeLayout or triad.subscribeState) and
-                      not canSubscribeTriad():
+                  if (
+                    triad.subscribeLayout or triad.subscribeState or
+                    triad.subscribeWindow
+                  ) and not canSubscribeTriad():
                     await client.send(
                       """{"ok":false,"error":"too many event-stream subscribers"}""" &
                         "\L"
@@ -430,12 +452,14 @@ proc startIpcServer*(
                     onMsg(msg)
                   for event in triad.initialEvents:
                     await client.send(event & "\L")
-                  if triad.subscribeLayout or triad.subscribeState:
+                  if triad.subscribeLayout or triad.subscribeState or
+                      triad.subscribeWindow:
                     triadSubscribers.add(
                       TriadSubscriber(
                         client: client,
                         layout: triad.subscribeLayout,
                         state: triad.subscribeState,
+                        window: triad.subscribeWindow,
                       )
                     )
                     inc ipcPerfCounters.triadSubscriptions
@@ -712,6 +736,7 @@ proc broadcastJson*(payload: string) {.async.} =
       try:
         if await sendWithTimeout(client, payload & "\L"):
           inc ipcPerfCounters.niriBroadcastSends
+          inc ipcPerfCounters.niriBroadcastSentBytes, uint64(payload.len)
           continue
         warn "Dropping slow IPC subscriber"
         inc ipcPerfCounters.droppedSubscribers
@@ -745,12 +770,14 @@ proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
     if client == nil or client.isClosed:
       removeTriadSubscriber(client)
     elif (eventName == "layout" and not subscriber.layout) or
-        (eventName == "state" and not subscriber.state):
+        (eventName == "state" and not subscriber.state) or
+        (eventName == "window" and not subscriber.window):
       discard
     else:
       try:
         if await sendWithTimeout(client, payload & "\L"):
           inc ipcPerfCounters.triadBroadcastSends
+          inc ipcPerfCounters.triadBroadcastSentBytes, uint64(payload.len)
           discard
         else:
           warn "Dropping slow Triad IPC subscriber"

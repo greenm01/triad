@@ -14,6 +14,7 @@ type TriadIpcResult* = object
   handled*: bool
   subscribeLayout*: bool
   subscribeState*: bool
+  subscribeWindow*: bool
   reply*: string
   initialEvents*: seq[string]
   messages*: seq[Msg]
@@ -65,7 +66,7 @@ proc hasUnsupportedEvent(node: JsonNode): bool =
   for event in events:
     if event.kind != JString:
       return true
-    if event.getStr() notin ["layout", "state"]:
+    if event.getStr() notin ["layout", "state", "window"]:
       return true
   false
 
@@ -554,12 +555,15 @@ proc handleTriadRequest*(line: string, snapshot: ShellSnapshot): TriadIpcResult 
     result.messages.add(Msg(kind: MsgKind.CmdSwitchLayout))
     result.reply = ackReply()
   of "event-stream":
-    if payload.hasUnsupportedEvent() or
-        (not payload.hasEvent("layout") and not payload.hasEvent("state")):
+    if payload.hasUnsupportedEvent() or (
+      not payload.hasEvent("layout") and not payload.hasEvent("state") and
+      not payload.hasEvent("window")
+    ):
       result.reply = errReply("unsupported event stream")
       return
     result.subscribeLayout = payload.hasEvent("layout")
     result.subscribeState = payload.hasEvent("state")
+    result.subscribeWindow = payload.hasEvent("window")
     result.reply = ackReply()
     if result.subscribeLayout:
       result.initialEvents.add(triadLayoutStateChangedEvent(snapshot))

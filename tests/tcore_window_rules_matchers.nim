@@ -140,8 +140,7 @@ suite "Core Runtime Logic: window rules matchers":
     )
 
     check effects.anyIt(
-      it.kind == EffectKind.EffBroadcastJson and
-        it.jsonPayload.contains("WindowOpenedOrChanged")
+      it.kind == EffectKind.EffBroadcastWindowChanged and it.broadcastWindowId == 1
     )
     check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
 

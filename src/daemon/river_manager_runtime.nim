@@ -250,6 +250,7 @@ proc onRenderStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
   if daemon[].riverPhase == RiverPhase.RiverIdle and daemon[].canSkipRenderStart():
     inc daemon[].perfCounters.renderStarts
     inc daemon[].perfCounters.skippedRenderStarts
+    inc daemon[].perfCounters.renderStartCallbackSkips
     daemon[].riverPhase = RiverPhase.RiverRender
     mgr.renderFinish()
     daemon[].riverPhase = RiverPhase.RiverIdle

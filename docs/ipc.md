@@ -151,9 +151,9 @@ Native actions mirror CLI commands:
 ### Subscription
 Subscribe to native layout or state events:
 ```json
-{"triad":{"version":1,"request":"event-stream","events":["state", "layout"]}}
+{"triad":{"version":1,"request":"event-stream","events":["state", "layout", "window"]}}
 ```
 Triad sends an initial state for each kind, then pushes updates as they occur.
-The `state` stream may include compact metadata events such as
-`window-changed` for title-only updates, avoiding a full `state-changed`
-snapshot when the layout and structural state are unchanged.
+The `window` stream carries compact metadata events such as `window-changed`
+for title-only updates, avoiding a full `state-changed` snapshot when the
+layout and structural state are unchanged.

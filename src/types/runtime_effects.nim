@@ -13,6 +13,7 @@ type
     EffManageDirty
     EffBroadcastJson
     EffBroadcastTriadJson
+    EffBroadcastWindowChanged
     EffOpStartPointer
     EffOpEnd
     EffSetFullscreen
@@ -51,6 +52,8 @@ type
     of EffectKind.EffBroadcastJson, EffectKind.EffBroadcastTriadJson:
       jsonPayload*: string
       triadEventName*: string
+    of EffectKind.EffBroadcastWindowChanged:
+      broadcastWindowId*: uint32
     of EffectKind.EffOpStartPointer:
       opSeat*: pointer
     of EffectKind.EffOpEnd:

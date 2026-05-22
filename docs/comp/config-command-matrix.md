@@ -508,9 +508,9 @@ CLI and environment:
 - `triad msg dispatch-binding key|pointer|axis|gesture <chord> [ticks|fingers]`
   dispatches configured bindings without raw input injection.
 - `triad msg perf-status` reports frame pacing, idle wake timing, wait backend,
-  render-start skips, layout-projection runs, loop wake counters, IPC broadcast
-  counters, subscriber scope counts, and render/manage counters for live CPU
-  investigations.
+  render-start skip paths, layout-projection runs, loop wake counters, recent
+  message/effect/event counts, IPC broadcast byte counters, subscriber scope
+  counts, and render/manage counters for live CPU investigations.
 - `triad msg mem-status` reports process memory, Nim heap counters, model and
   daemon object counts, protocol-surface buffer estimates, Janet script/cache
   counters, shell state, and IPC subscriber scope counts for live memory

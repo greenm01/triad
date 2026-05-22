@@ -846,18 +846,13 @@ suite "Core Runtime Logic: shell snapshot ipc":
     )
 
     check effects.anyIt(
-      it.kind == EffectKind.EffBroadcastJson and
-        it.jsonPayload.contains("WindowOpenedOrChanged")
-    )
-    check effects.anyIt(
-      it.kind == EffectKind.EffBroadcastTriadJson and
-        it.jsonPayload.contains("\"event\":\"window-changed\"") and
-        it.jsonPayload.contains("\"title\":\"B\"")
+      it.kind == EffectKind.EffBroadcastWindowChanged and it.broadcastWindowId == 120
     )
     check not effects.anyIt(
       it.kind == EffectKind.EffBroadcastTriadJson and
         it.jsonPayload.contains("\"event\":\"state-changed\"")
     )
+    check not effects.anyIt(it.kind == EffectKind.EffBroadcastJson)
     check not effects.anyIt(
       it.kind == EffectKind.EffBroadcastJson and
         it.jsonPayload.contains("WindowsChanged")

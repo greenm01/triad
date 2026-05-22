@@ -171,6 +171,7 @@ proc ipcJson(): JsonNode =
     "triad_layout_only_subscribers": triadScopes.layoutOnly,
     "triad_state_only_subscribers": triadScopes.stateOnly,
     "triad_layout_and_state_subscribers": triadScopes.layoutAndState,
+    "triad_window_subscribers": triadScopes.window,
     "total_subscribers": subscribers.len + triadSubscribers.len,
   }
 

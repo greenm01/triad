@@ -278,6 +278,9 @@ proc reasonCountDeltasJson(before, after: Table[string, uint64]): JsonNode =
     if count > previous:
       result[reason] = %(count - previous)
 
+proc incCounter(counts: var Table[string, uint64], key: string) =
+  counts[key] = counts.getOrDefault(key, 0'u64) + 1
+
 proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
   %*{
     "frame_ticks": after.frameTicks - before.frameTicks,
@@ -293,6 +296,10 @@ proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
     "manage_requests": after.manageRequests - before.manageRequests,
     "skipped_animation_manages":
       after.skippedAnimationManages - before.skippedAnimationManages,
+    "render_start_callback_skips":
+      after.renderStartCallbackSkips - before.renderStartCallbackSkips,
+    "render_start_queued_skips":
+      after.renderStartQueuedSkips - before.renderStartQueuedSkips,
   }
 
 proc ipcCounterDeltasJson(before, after: IpcPerfCounters): JsonNode =
@@ -335,6 +342,18 @@ proc ipcCounterDeltasJson(before, after: IpcPerfCounters): JsonNode =
       before.triadBroadcastSkippedDuplicateByEvent,
     "niri_broadcast_skipped_filtered":
       after.niriBroadcastSkippedFiltered - before.niriBroadcastSkippedFiltered,
+    "niri_broadcast_queued_bytes":
+      after.niriBroadcastQueuedBytes - before.niriBroadcastQueuedBytes,
+    "triad_broadcast_queued_bytes":
+      after.triadBroadcastQueuedBytes - before.triadBroadcastQueuedBytes,
+    "niri_broadcast_sent_bytes":
+      after.niriBroadcastSentBytes - before.niriBroadcastSentBytes,
+    "triad_broadcast_sent_bytes":
+      after.triadBroadcastSentBytes - before.triadBroadcastSentBytes,
+    "niri_broadcast_skipped_bytes":
+      after.niriBroadcastSkippedBytes - before.niriBroadcastSkippedBytes,
+    "triad_broadcast_skipped_bytes":
+      after.triadBroadcastSkippedBytes - before.triadBroadcastSkippedBytes,
     "dropped_subscribers": after.droppedSubscribers - before.droppedSubscribers,
   }
 
@@ -369,6 +388,12 @@ proc ipcCountersJson(counters: IpcPerfCounters): JsonNode =
     "triad_broadcast_skipped_duplicate_by_event":
       counters.triadBroadcastSkippedDuplicateByEvent,
     "niri_broadcast_skipped_filtered": counters.niriBroadcastSkippedFiltered,
+    "niri_broadcast_queued_bytes": counters.niriBroadcastQueuedBytes,
+    "triad_broadcast_queued_bytes": counters.triadBroadcastQueuedBytes,
+    "niri_broadcast_sent_bytes": counters.niriBroadcastSentBytes,
+    "triad_broadcast_sent_bytes": counters.triadBroadcastSentBytes,
+    "niri_broadcast_skipped_bytes": counters.niriBroadcastSkippedBytes,
+    "triad_broadcast_skipped_bytes": counters.triadBroadcastSkippedBytes,
     "dropped_subscribers": counters.droppedSubscribers,
   }
 
@@ -400,6 +425,9 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
     daemon.lastRuntimeLoopSampleFrameTickReasonCounts = daemon.frameTickReasonCounts
     daemon.lastRuntimeLoopSampleManageRequestReasonCounts =
       daemon.manageRequestReasonCounts
+    daemon.lastRuntimeLoopSampleMessageKindCounts = daemon.messageKindCounts
+    daemon.lastRuntimeLoopSampleEffectKindCounts = daemon.effectKindCounts
+    daemon.lastRuntimeLoopSampleIpcEventCounts = ipcBroadcastEventCounts
     lastRuntimeLoopSampleIpcCounters = ipcPerfCounters
     return
   if nowMs - daemon.lastRuntimeLoopSampleMs < RuntimeLoopSampleIntervalMs:
@@ -411,6 +439,9 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
   let previousFrameTickReasonCounts = daemon.lastRuntimeLoopSampleFrameTickReasonCounts
   let previousManageRequestReasonCounts =
     daemon.lastRuntimeLoopSampleManageRequestReasonCounts
+  let previousMessageKindCounts = daemon.lastRuntimeLoopSampleMessageKindCounts
+  let previousEffectKindCounts = daemon.lastRuntimeLoopSampleEffectKindCounts
+  let previousIpcEventCounts = daemon.lastRuntimeLoopSampleIpcEventCounts
   let previousIpcCounters = lastRuntimeLoopSampleIpcCounters
   daemon.lastRuntimeLoopSampleMs = nowMs
   daemon.lastRuntimeLoopSampleCounters = daemon.loopCounters
@@ -418,6 +449,9 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
   daemon.lastRuntimeLoopSampleFrameTickReasonCounts = daemon.frameTickReasonCounts
   daemon.lastRuntimeLoopSampleManageRequestReasonCounts =
     daemon.manageRequestReasonCounts
+  daemon.lastRuntimeLoopSampleMessageKindCounts = daemon.messageKindCounts
+  daemon.lastRuntimeLoopSampleEffectKindCounts = daemon.effectKindCounts
+  daemon.lastRuntimeLoopSampleIpcEventCounts = ipcBroadcastEventCounts
   lastRuntimeLoopSampleIpcCounters = ipcPerfCounters
 
   if not behaviorLogEnabled():
@@ -444,6 +478,12 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
       "manage_request_reason_counts": previousManageRequestReasonCounts.reasonCountDeltasJson(
         daemon.manageRequestReasonCounts
       ),
+      "message_kind_counts":
+        previousMessageKindCounts.reasonCountDeltasJson(daemon.messageKindCounts),
+      "effect_kind_counts":
+        previousEffectKindCounts.reasonCountDeltasJson(daemon.effectKindCounts),
+      "ipc_event_counts":
+        previousIpcEventCounts.reasonCountDeltasJson(ipcBroadcastEventCounts),
       "ipc_counters": previousIpcCounters.ipcCounterDeltasJson(ipcPerfCounters),
     },
   )
@@ -470,6 +510,15 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "manage_request_reasons": daemon.lastRuntimeLoopSampleManageRequestReasonCounts.reasonCountDeltasJson(
           daemon.manageRequestReasonCounts
         ),
+        "message_kind_counts": daemon.lastRuntimeLoopSampleMessageKindCounts.reasonCountDeltasJson(
+          daemon.messageKindCounts
+        ),
+        "effect_kind_counts": daemon.lastRuntimeLoopSampleEffectKindCounts.reasonCountDeltasJson(
+          daemon.effectKindCounts
+        ),
+        "ipc_event_counts": daemon.lastRuntimeLoopSampleIpcEventCounts.reasonCountDeltasJson(
+          ipcBroadcastEventCounts
+        ),
         "ipc_counters":
           lastRuntimeLoopSampleIpcCounters.ipcCounterDeltasJson(ipcPerfCounters),
         "subscribers": {
@@ -478,6 +527,7 @@ proc perfStatusJson(daemon: TriadDaemon): string =
           "triad_layout_only": triadScopes.layoutOnly,
           "triad_state_only": triadScopes.stateOnly,
           "triad_layout_and_state": triadScopes.layoutAndState,
+          "triad_window": triadScopes.window,
           "total": subscribers.len + triadSubscribers.len,
         },
       }
@@ -506,6 +556,8 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "skipped_render_requests": counters.skippedRenderRequests,
         "manage_requests": counters.manageRequests,
         "skipped_animation_manages": counters.skippedAnimationManages,
+        "render_start_callback_skips": counters.renderStartCallbackSkips,
+        "render_start_queued_skips": counters.renderStartQueuedSkips,
       },
       "loop_counters": daemon.loopCounters.loopCountersJson(),
       "ipc_counters": ipcPerfCounters.ipcCountersJson(),
@@ -515,6 +567,7 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "triad_layout_only": triadScopes.layoutOnly,
         "triad_state_only": triadScopes.stateOnly,
         "triad_layout_and_state": triadScopes.layoutAndState,
+        "triad_window": triadScopes.window,
         "total": subscribers.len + triadSubscribers.len,
       },
       "recent_delta": recentDelta,
@@ -536,6 +589,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
   while daemon.hasQueuedMessages():
     let queued = daemon.popQueuedMessageWithOrigin()
     let msg = queued.msg
+    daemon.messageKindCounts.incCounter($msg.kind)
 
     if msg.kind == MsgKind.WlPointerRelease:
       if daemon.runtimeState.model.pointerOp.kind != PointerOpKind.OpNone:
@@ -564,6 +618,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.riverPhase = RiverPhase.RiverRender
       if daemon.canSkipRenderStart():
         inc daemon.perfCounters.skippedRenderStarts
+        inc daemon.perfCounters.renderStartQueuedSkips
         daemon.executeEffect(Effect(kind: EffectKind.EffRenderFinish))
         daemon.riverPhase = RiverPhase.RiverIdle
         continue
@@ -620,6 +675,8 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       else:
         none(JanetUiHookState)
     let effects = syncRuntimeUpdate("message", msg)
+    for eff in effects:
+      daemon.effectKindCounts.incCounter($eff.kind)
     if msg.kind != MsgKind.WlPointerRelease and previousPointerOpActive and
         daemon.runtimeState.model.pointerOp.kind == PointerOpKind.OpNone and
         daemon.lastPointerOpSeat != nil:
@@ -828,10 +885,10 @@ proc main*() =
       var nativeEvents: seq[string]
       if args.len > 2:
         if args[2] != "--native":
-          failCli("usage: triad msg event-stream [--native [layout,state]]")
+          failCli("usage: triad msg event-stream [--native [layout,state,window]]")
         native = true
         if args.len > 4:
-          failCli("usage: triad msg event-stream [--native [layout,state]]")
+          failCli("usage: triad msg event-stream [--native [layout,state,window]]")
         if args.len == 4:
           nativeEvents = args[3].split(',')
       # Subscription client

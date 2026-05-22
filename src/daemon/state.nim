@@ -182,6 +182,8 @@ type
     skippedRenderRequests*: uint64
     manageRequests*: uint64
     skippedAnimationManages*: uint64
+    renderStartCallbackSkips*: uint64
+    renderStartQueuedSkips*: uint64
 
   RuntimeLoopCounters* = object
     loopIterations*: uint64
@@ -294,8 +296,13 @@ type
     lastRuntimeLoopSamplePerfCounters*: RenderPerfCounters
     lastRuntimeLoopSampleFrameTickReasonCounts*: Table[string, uint64]
     lastRuntimeLoopSampleManageRequestReasonCounts*: Table[string, uint64]
+    lastRuntimeLoopSampleMessageKindCounts*: Table[string, uint64]
+    lastRuntimeLoopSampleEffectKindCounts*: Table[string, uint64]
+    lastRuntimeLoopSampleIpcEventCounts*: Table[string, uint64]
     frameTickReasonCounts*: Table[string, uint64]
     manageRequestReasonCounts*: Table[string, uint64]
+    messageKindCounts*: Table[string, uint64]
+    effectKindCounts*: Table[string, uint64]
     lastFullscreenRequests*: Table[uint32, FullscreenRequestState]
     lastMaximizedRequests*: Table[uint32, bool]
     lastPointerOpSeat*: pointer

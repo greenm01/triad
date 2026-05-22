@@ -744,6 +744,8 @@ suite "Shell compatibility contracts":
     let stream = parseJson(nativeEventStreamPayload(@["layout"]))
     check stream["triad"]["request"].getStr() == "event-stream"
     check stream["triad"]["events"][0].getStr() == "layout"
+    let windowStream = parseJson(nativeEventStreamPayload(@["window"]))
+    check windowStream["triad"]["events"][0].getStr() == "window"
 
     let docs =
       readFile("docs/ipc.md") & "\n" & readFile("docs/comp/config-command-matrix.md")
@@ -802,6 +804,15 @@ suite "Shell compatibility contracts":
     check triad.subscribeLayout
     check triad.subscribeState
     check triad.initialEvents.len == 2
+
+    let windowTriad = handleTriadRequest(
+      """{"triad":{"version":1,"request":"event-stream","events":["window"]}}""",
+      snapshotForShell(),
+    )
+    check windowTriad.subscribeWindow
+    check not windowTriad.subscribeLayout
+    check not windowTriad.subscribeState
+    check windowTriad.initialEvents.len == 0
 
   test "triad_niri shim parses shell commands":
     let action = buildNiriCliRequest(@["msg", "action", "focus-workspace", "2"])

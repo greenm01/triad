@@ -16,6 +16,9 @@ proc niriEventName(payload: string): string =
 proc coalescesNiriEvent(eventName: string): bool =
   eventName in ["WorkspacesChanged", "OutputsChanged", "KeyboardLayoutsChanged"]
 
+proc shouldSendNiriEventName(eventName: string): bool =
+  eventName notin ["WindowsChanged", "WindowLayoutsChanged"]
+
 proc removePendingBroadcast(
     daemon: var TriadDaemon, kind: IpcBroadcastKind, eventName: string
 ): bool =
@@ -28,34 +31,50 @@ proc removePendingBroadcast(
     else:
       inc i
 
-proc enqueueNiriBroadcast*(daemon: var TriadDaemon, payload: string) =
-  if not payload.shouldSendNiriBroadcast():
-    inc ipcPerfCounters.niriBroadcastSkippedFiltered
-    return
+proc enqueueNiriBroadcast*(daemon: var TriadDaemon, payload, eventName: string) =
   if subscribers.len == 0:
     inc ipcPerfCounters.niriBroadcastSkippedNoSubscribers
+    inc ipcPerfCounters.niriBroadcastSkippedBytes, uint64(payload.len)
+    return
+
+  let resolvedEventName =
+    if eventName.len > 0:
+      eventName
+    else:
+      payload.niriEventName()
+  if not resolvedEventName.shouldSendNiriEventName() or
+      not payload.shouldSendNiriBroadcast():
+    inc ipcPerfCounters.niriBroadcastSkippedFiltered
+    inc ipcPerfCounters.niriBroadcastSkippedBytes, uint64(payload.len)
     return
 
   inc ipcPerfCounters.niriBroadcastQueued
-  let eventName = payload.niriEventName()
-  if eventName.coalescesNiriEvent() and
-      daemon.removePendingBroadcast(IpcBroadcastKind.Niri, eventName):
+  inc ipcPerfCounters.niriBroadcastQueuedBytes, uint64(payload.len)
+  recordIpcBroadcastEvent("niri", resolvedEventName)
+  if resolvedEventName.coalescesNiriEvent() and
+      daemon.removePendingBroadcast(IpcBroadcastKind.Niri, resolvedEventName):
     inc ipcPerfCounters.niriBroadcastCoalesced
 
   daemon.pendingIpcBroadcasts.add(
     PendingIpcBroadcast(
-      kind: IpcBroadcastKind.Niri, eventName: eventName, payload: payload
+      kind: IpcBroadcastKind.Niri, eventName: resolvedEventName, payload: payload
     )
   )
+
+proc enqueueNiriBroadcast*(daemon: var TriadDaemon, payload: string) =
+  daemon.enqueueNiriBroadcast(payload, "")
 
 proc enqueueTriadBroadcast*(
     daemon: var TriadDaemon, payload: string, eventName: string
 ) =
   if not triadSubscriberInterested(eventName):
     inc ipcPerfCounters.triadBroadcastSkippedNoSubscribers
+    inc ipcPerfCounters.triadBroadcastSkippedBytes, uint64(payload.len)
     return
 
   inc ipcPerfCounters.triadBroadcastQueued
+  inc ipcPerfCounters.triadBroadcastQueuedBytes, uint64(payload.len)
+  recordIpcBroadcastEvent("triad", eventName)
   if daemon.removePendingBroadcast(IpcBroadcastKind.Triad, eventName):
     inc ipcPerfCounters.triadBroadcastCoalesced
 

@@ -4,7 +4,8 @@ import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
 import protocols/river_xkb_bindings/client as riverXkb
 import protocols/river_xkb_config/client as riverXkbConfig
-import ../core/effects
+import ../core/[effects, niri_state, triad_state]
+import ../ipc/socket
 import ../systems/daemon_view
 from ../types/core import OutputId
 import ../types/projection_values
@@ -14,6 +15,29 @@ import
   live_restore_runtime, manage_requests, output_management_runtime, process_runner,
   protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner,
   spawn_context, state
+
+proc executeWindowChangedBroadcast(daemon: var TriadDaemon, winId: uint32) =
+  let niriInterested = hasNiriSubscribers()
+  let triadInterested = triadSubscriberInterested("window")
+  if not niriInterested:
+    inc ipcPerfCounters.niriBroadcastSkippedNoSubscribers
+  if not triadInterested:
+    inc ipcPerfCounters.triadBroadcastSkippedNoSubscribers
+  if not niriInterested and not triadInterested:
+    return
+
+  let snapshot = daemon.readModelSnapshot()
+  for win in snapshot.windows:
+    if win.id != winId:
+      continue
+    if niriInterested:
+      daemon.enqueueNiriBroadcast(
+        $(%*{"WindowOpenedOrChanged": {"window": niriWindowJson(snapshot, win)}}),
+        "WindowOpenedOrChanged",
+      )
+    if triadInterested:
+      daemon.enqueueTriadBroadcast(triadWindowChangedEvent(win), "window")
+    return
 
 proc setLayerShellDefaultOutputForSpawn(daemon: var TriadDaemon, outputId: OutputId) =
   var riverOutputId = 0'u32
@@ -161,6 +185,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
     daemon.enqueueNiriBroadcast(eff.jsonPayload)
   of EffectKind.EffBroadcastTriadJson:
     daemon.enqueueTriadBroadcast(eff.jsonPayload, eff.triadEventName)
+  of EffectKind.EffBroadcastWindowChanged:
+    daemon.executeWindowChangedBroadcast(eff.broadcastWindowId)
   of EffectKind.EffSpawnScreenLock:
     daemon.trackChildProcess(
       spawnScreenLock(daemon.runtimeState.model, eff.screenLockCommand)
