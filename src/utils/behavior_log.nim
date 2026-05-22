@@ -30,6 +30,13 @@ var
   lastLayoutProjectionSignatureSet = false
   suppressedLayoutProjectionCount = 0
 
+type BehaviorLogFile = object
+  path: string
+  day: string
+  modified: Time
+  size: BiggestInt
+  active: bool
+
 proc envFlagEnabled*(value: string): bool =
   case value.normalize()
   of "1", "true", "yes", "on": true
@@ -114,22 +121,74 @@ proc behaviorLogKeepDays*(): int =
 proc behaviorLogPath*(day = now().format("yyyy-MM-dd")): string =
   defaultBehaviorLogDir() / (BehaviorLogPrefix & day & BehaviorLogSuffix)
 
-proc cleanupBehaviorLogs(dir: string, keepDays: int) =
+proc behaviorLogDay(name: string): string =
+  if not name.startsWith(BehaviorLogPrefix) or not name.endsWith(BehaviorLogSuffix):
+    return ""
+
+  let stem = name[BehaviorLogPrefix.len ..< name.len - BehaviorLogSuffix.len]
+  if stem.len < 10:
+    return ""
+  stem[0 .. 9]
+
+proc isActiveBehaviorLog(name, day: string): bool =
+  name == BehaviorLogPrefix & day & BehaviorLogSuffix
+
+proc cleanupBehaviorLogs(dir: string, keepDays, maxBytes: int) =
   if keepDays <= 0 or not dirExists(dir):
     return
 
   let cutoff = epochTime() - float(keepDays * 24 * 60 * 60)
+  var filesByDay = initTable[string, seq[BehaviorLogFile]]()
   for kind, path in walkDir(dir):
     if kind != pcFile:
       continue
     let name = path.extractFilename()
-    if not name.startsWith(BehaviorLogPrefix) or not name.endsWith(BehaviorLogSuffix):
+    let day = behaviorLogDay(name)
+    if day.len == 0:
       continue
     try:
-      if getLastModificationTime(path).toUnix().float < cutoff:
+      let modified = getLastModificationTime(path)
+      if modified.toUnix().float < cutoff:
         removeFile(path)
+        continue
+      if not filesByDay.hasKey(day):
+        filesByDay[day] = @[]
+      filesByDay[day].add(
+        BehaviorLogFile(
+          path: path,
+          day: day,
+          modified: modified,
+          size: getFileSize(path),
+          active: name.isActiveBehaviorLog(day),
+        )
+      )
     except CatchableError:
       discard
+
+  if maxBytes <= 0:
+    return
+
+  for day, files in filesByDay.mpairs:
+    files.sort(
+      proc(a, b: BehaviorLogFile): int =
+        if a.active != b.active:
+          if a.active:
+            return -1
+          return 1
+        cmp(b.modified.toUnix(), a.modified.toUnix())
+    )
+
+    var keptBytes: BiggestInt = 0
+    for file in files:
+      let keep =
+        file.active or keptBytes == 0 or keptBytes + file.size <= BiggestInt(maxBytes)
+      if keep:
+        keptBytes += file.size
+      else:
+        try:
+          removeFile(file.path)
+        except CatchableError:
+          discard
 
 proc rotateOversizeLog(path: string, maxBytes: int) =
   if maxBytes <= 0 or not fileExists(path):
@@ -176,8 +235,9 @@ proc writeBehaviorEvent*(eventName: string, payload: JsonNode = nil) =
   try:
     createDir(dir)
     let nowMs = currentUnixMs()
+    let maxBytes = behaviorLogMaxBytes()
     if dir != lastCleanupDir or nowMs - lastCleanupMs >= LogMaintenanceIntervalMs:
-      cleanupBehaviorLogs(dir, behaviorLogKeepDays())
+      cleanupBehaviorLogs(dir, behaviorLogKeepDays(), maxBytes)
       lastCleanupDir = dir
       lastCleanupMs = nowMs
     let path = behaviorLogPath()
@@ -188,7 +248,6 @@ proc writeBehaviorEvent*(eventName: string, payload: JsonNode = nil) =
         event[key] = value
 
     let line = $event
-    let maxBytes = behaviorLogMaxBytes()
     if path != lastRotationPath:
       bytesSinceRotationCheck = 0
       lastRotationPath = path
@@ -197,6 +256,7 @@ proc writeBehaviorEvent*(eventName: string, payload: JsonNode = nil) =
     if bytesSinceRotationCheck >= maxBytes or
         nowMs - lastRotationCheckMs >= LogRotationCheckIntervalMs:
       rotateOversizeLog(path, maxBytes)
+      cleanupBehaviorLogs(dir, behaviorLogKeepDays(), maxBytes)
       lastRotationCheckMs = nowMs
       bytesSinceRotationCheck = 0
 

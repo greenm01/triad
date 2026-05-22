@@ -547,13 +547,22 @@ suite "Runtime logging":
     let stale = dir / "triad-behavior-2000-01-01.jsonl"
     writeFile(stale, "{}\n")
     setLastModificationTime(stale, fromUnix(0))
+    let today = now().format("yyyy-MM-dd")
+    let oldToday1 = dir / ("triad-behavior-" & today & "-000001.jsonl")
+    let oldToday2 = dir / ("triad-behavior-" & today & "-000002.jsonl")
+    writeFile(oldToday1, repeat("a", 80))
+    writeFile(oldToday2, repeat("b", 80))
+    setLastModificationTime(oldToday1, fromUnix(epochTime().int64 - 10))
+    setLastModificationTime(oldToday2, fromUnix(epochTime().int64 - 5))
 
     putEnv("TRIAD_BEHAVIOR_LOG", "1")
     putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
-    putEnv("TRIAD_BEHAVIOR_LOG_MAX_BYTES", "40")
+    putEnv("TRIAD_BEHAVIOR_LOG_MAX_BYTES", "100")
     putEnv("TRIAD_BEHAVIOR_LOG_KEEP_DAYS", "1")
     writeBehaviorEvent("rotate_test", %*{"payload": repeat("x", 80)})
     writeBehaviorEvent("rotate_test", %*{"payload": repeat("y", 80)})
 
     check not fileExists(stale)
+    check not fileExists(oldToday1)
+    check not fileExists(oldToday2)
     check behaviorLogFiles(dir).len >= 2
