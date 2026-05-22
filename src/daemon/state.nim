@@ -283,6 +283,7 @@ type
     lastRuntimeLoopSampleCounters*: RuntimeLoopCounters
     lastRuntimeLoopSamplePerfCounters*: RenderPerfCounters
     lastRuntimeLoopSampleFrameTickReasonCounts*: Table[string, uint64]
+    lastRuntimeLoopSampleManageRequestReasonCounts*: Table[string, uint64]
     frameTickReasonCounts*: Table[string, uint64]
     manageRequestReasonCounts*: Table[string, uint64]
     lastFullscreenRequests*: Table[uint32, FullscreenRequestState]

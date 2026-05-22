@@ -26,6 +26,7 @@ import
 import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
+var lastRuntimeLoopSampleIpcCounters: IpcPerfCounters
 
 const
   IdleWakeIntervalMs = 250
@@ -294,6 +295,51 @@ proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
       after.skippedAnimationManages - before.skippedAnimationManages,
   }
 
+proc ipcCounterDeltasJson(before, after: IpcPerfCounters): JsonNode =
+  %*{
+    "requests": after.requests - before.requests,
+    "dev_mode_requests": after.devModeRequests - before.devModeRequests,
+    "live_restore_requests": after.liveRestoreRequests - before.liveRestoreRequests,
+    "perf_status_requests": after.perfStatusRequests - before.perfStatusRequests,
+    "mem_status_requests": after.memStatusRequests - before.memStatusRequests,
+    "triad_requests": after.triadRequests - before.triadRequests,
+    "niri_requests": after.niriRequests - before.niriRequests,
+    "text_commands": after.textCommands - before.textCommands,
+    "binding_dispatch_requests":
+      after.bindingDispatchRequests - before.bindingDispatchRequests,
+    "invalid_requests": after.invalidRequests - before.invalidRequests,
+    "dispatched_messages": after.dispatchedMessages - before.dispatchedMessages,
+    "niri_subscriptions": after.niriSubscriptions - before.niriSubscriptions,
+    "triad_subscriptions": after.triadSubscriptions - before.triadSubscriptions,
+    "niri_broadcasts": after.niriBroadcasts - before.niriBroadcasts,
+    "triad_broadcasts": after.triadBroadcasts - before.triadBroadcasts,
+    "niri_broadcast_sends": after.niriBroadcastSends - before.niriBroadcastSends,
+    "triad_broadcast_sends": after.triadBroadcastSends - before.triadBroadcastSends,
+    "dropped_subscribers": after.droppedSubscribers - before.droppedSubscribers,
+  }
+
+proc ipcCountersJson(counters: IpcPerfCounters): JsonNode =
+  %*{
+    "requests": counters.requests,
+    "dev_mode_requests": counters.devModeRequests,
+    "live_restore_requests": counters.liveRestoreRequests,
+    "perf_status_requests": counters.perfStatusRequests,
+    "mem_status_requests": counters.memStatusRequests,
+    "triad_requests": counters.triadRequests,
+    "niri_requests": counters.niriRequests,
+    "text_commands": counters.textCommands,
+    "binding_dispatch_requests": counters.bindingDispatchRequests,
+    "invalid_requests": counters.invalidRequests,
+    "dispatched_messages": counters.dispatchedMessages,
+    "niri_subscriptions": counters.niriSubscriptions,
+    "triad_subscriptions": counters.triadSubscriptions,
+    "niri_broadcasts": counters.niriBroadcasts,
+    "triad_broadcasts": counters.triadBroadcasts,
+    "niri_broadcast_sends": counters.niriBroadcastSends,
+    "triad_broadcast_sends": counters.triadBroadcastSends,
+    "dropped_subscribers": counters.droppedSubscribers,
+  }
+
 proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
   RuntimeLoopCounters(
     loopIterations: after.loopIterations - before.loopIterations,
@@ -315,13 +361,14 @@ proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
   )
 
 proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
-  if not behaviorLogEnabled():
-    return
   if daemon.lastRuntimeLoopSampleMs == 0:
     daemon.lastRuntimeLoopSampleMs = nowMs
     daemon.lastRuntimeLoopSampleCounters = daemon.loopCounters
     daemon.lastRuntimeLoopSamplePerfCounters = daemon.perfCounters
     daemon.lastRuntimeLoopSampleFrameTickReasonCounts = daemon.frameTickReasonCounts
+    daemon.lastRuntimeLoopSampleManageRequestReasonCounts =
+      daemon.manageRequestReasonCounts
+    lastRuntimeLoopSampleIpcCounters = ipcPerfCounters
     return
   if nowMs - daemon.lastRuntimeLoopSampleMs < RuntimeLoopSampleIntervalMs:
     return
@@ -330,10 +377,19 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
   let previousLoopCounters = daemon.lastRuntimeLoopSampleCounters
   let previousPerfCounters = daemon.lastRuntimeLoopSamplePerfCounters
   let previousFrameTickReasonCounts = daemon.lastRuntimeLoopSampleFrameTickReasonCounts
+  let previousManageRequestReasonCounts =
+    daemon.lastRuntimeLoopSampleManageRequestReasonCounts
+  let previousIpcCounters = lastRuntimeLoopSampleIpcCounters
   daemon.lastRuntimeLoopSampleMs = nowMs
   daemon.lastRuntimeLoopSampleCounters = daemon.loopCounters
   daemon.lastRuntimeLoopSamplePerfCounters = daemon.perfCounters
   daemon.lastRuntimeLoopSampleFrameTickReasonCounts = daemon.frameTickReasonCounts
+  daemon.lastRuntimeLoopSampleManageRequestReasonCounts =
+    daemon.manageRequestReasonCounts
+  lastRuntimeLoopSampleIpcCounters = ipcPerfCounters
+
+  if not behaviorLogEnabled():
+    return
 
   writeBehaviorEvent(
     "runtime_loop_sample",
@@ -353,6 +409,10 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
       "frame_tick_reason_counts": previousFrameTickReasonCounts.reasonCountDeltasJson(
         daemon.frameTickReasonCounts
       ),
+      "manage_request_reason_counts": previousManageRequestReasonCounts.reasonCountDeltasJson(
+        daemon.manageRequestReasonCounts
+      ),
+      "ipc_counters": previousIpcCounters.ipcCounterDeltasJson(ipcPerfCounters),
     },
   )
 
@@ -361,6 +421,32 @@ proc perfStatusJson(daemon: TriadDaemon): string =
   var manageRequestReasons = newJObject()
   for reason, count in daemon.manageRequestReasonCounts.pairs:
     manageRequestReasons[reason] = %int(count)
+  let recentDelta =
+    if daemon.lastRuntimeLoopSampleMs > 0:
+      %*{
+        "interval_ms": unixMs() - daemon.lastRuntimeLoopSampleMs,
+        "loop_counters": daemon.loopCounters
+          .delta(daemon.lastRuntimeLoopSampleCounters)
+          .loopCountersJson(),
+        "render_counters": daemon.lastRuntimeLoopSamplePerfCounters.renderCounterDeltasJson(
+          daemon.perfCounters
+        ),
+        "frame_tick_reason_counts": daemon.lastRuntimeLoopSampleFrameTickReasonCounts.reasonCountDeltasJson(
+          daemon.frameTickReasonCounts
+        ),
+        "manage_request_reasons": daemon.lastRuntimeLoopSampleManageRequestReasonCounts.reasonCountDeltasJson(
+          daemon.manageRequestReasonCounts
+        ),
+        "ipc_counters":
+          lastRuntimeLoopSampleIpcCounters.ipcCounterDeltasJson(ipcPerfCounters),
+        "subscribers": {
+          "niri": subscribers.len,
+          "triad": triadSubscribers.len,
+          "total": subscribers.len + triadSubscribers.len,
+        },
+      }
+    else:
+      newJObject()
   $(
     %*{
       "ok": true,
@@ -386,6 +472,13 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "skipped_animation_manages": counters.skippedAnimationManages,
       },
       "loop_counters": daemon.loopCounters.loopCountersJson(),
+      "ipc_counters": ipcPerfCounters.ipcCountersJson(),
+      "subscribers": {
+        "niri": subscribers.len,
+        "triad": triadSubscribers.len,
+        "total": subscribers.len + triadSubscribers.len,
+      },
+      "recent_delta": recentDelta,
       "frame_tick_reason_counts": daemon.frameTickReasonCounts.reasonCountsJson(),
       "manage_request_reasons": manageRequestReasons,
     }
@@ -591,7 +684,10 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     for eff in effects:
       if eff.kind == EffectKind.EffManageDirty:
-        daemon.requestManage("effect:" & $msg.kind)
+        if msg.kind == MsgKind.CmdTick:
+          daemon.markRenderDirty(AnimationManageReason)
+        else:
+          daemon.requestManage("effect:" & $msg.kind)
       else:
         daemon.executeEffect(eff)
 

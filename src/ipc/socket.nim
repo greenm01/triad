@@ -15,6 +15,26 @@ type
     layout*: bool
     state*: bool
 
+  IpcPerfCounters* = object
+    requests*: uint64
+    devModeRequests*: uint64
+    liveRestoreRequests*: uint64
+    perfStatusRequests*: uint64
+    memStatusRequests*: uint64
+    triadRequests*: uint64
+    niriRequests*: uint64
+    textCommands*: uint64
+    bindingDispatchRequests*: uint64
+    invalidRequests*: uint64
+    dispatchedMessages*: uint64
+    niriSubscriptions*: uint64
+    triadSubscriptions*: uint64
+    niriBroadcasts*: uint64
+    triadBroadcasts*: uint64
+    niriBroadcastSends*: uint64
+    triadBroadcastSends*: uint64
+    droppedSubscribers*: uint64
+
 const
   MaxIpcLineBytes* = 256 * 1024
   MaxIpcSubscribers* = 64
@@ -24,6 +44,7 @@ const
 
 var subscribers*: seq[AsyncSocket] = @[]
 var triadSubscribers*: seq[TriadSubscriber] = @[]
+var ipcPerfCounters*: IpcPerfCounters
 var pendingIpcClients = 0
 var lastNiriBroadcastPayload = ""
 var lastNiriWorkspaceBroadcastKey = ""
@@ -311,14 +332,17 @@ proc startIpcServer*(
               let line = await recvLineLimited(client)
               if line == "":
                 break
+              inc ipcPerfCounters.requests
 
               let devModeControl = handleDevModeControl(line)
               if devModeControl.isSome:
+                inc ipcPerfCounters.devModeRequests
                 await client.send(devModeControl.get() & "\L")
                 break
 
               if getSnapshot != nil:
                 if line.strip() == "dump-live-restore-state":
+                  inc ipcPerfCounters.liveRestoreRequests
                   if getLiveRestoreJson != nil:
                     await client.send(getLiveRestoreJson() & "\L")
                   else:
@@ -326,6 +350,7 @@ proc startIpcServer*(
                   break
 
                 if line.strip() == "perf-status":
+                  inc ipcPerfCounters.perfStatusRequests
                   if getPerfStatusJson != nil:
                     await client.send(getPerfStatusJson() & "\L")
                   else:
@@ -333,6 +358,7 @@ proc startIpcServer*(
                   break
 
                 if line.strip() == "mem-status":
+                  inc ipcPerfCounters.memStatusRequests
                   if getMemStatusJson != nil:
                     await client.send(getMemStatusJson() & "\L")
                   else:
@@ -344,6 +370,7 @@ proc startIpcServer*(
                 let snapshot = getSnapshot()
                 let triad = handleTriadRequest(line, snapshot)
                 if triad.handled:
+                  inc ipcPerfCounters.triadRequests
                   if (triad.subscribeLayout or triad.subscribeState) and
                       not canSubscribeTriad():
                     await client.send(
@@ -364,6 +391,7 @@ proc startIpcServer*(
                   if triad.reply.len > 0:
                     await client.send(triad.reply & "\L")
                   for msg in triad.messages:
+                    inc ipcPerfCounters.dispatchedMessages
                     onMsg(msg)
                   for event in triad.initialEvents:
                     await client.send(event & "\L")
@@ -375,11 +403,13 @@ proc startIpcServer*(
                         state: triad.subscribeState,
                       )
                     )
+                    inc ipcPerfCounters.triadSubscriptions
                     keepOpen = true
                   break
 
                 let niri = handleNiriRequest(line, snapshot)
                 if niri.handled:
+                  inc ipcPerfCounters.niriRequests
                   writeBehaviorEvent(
                     "niri_compat_request", niriRequestLogPayload(path, niri)
                   )
@@ -391,6 +421,7 @@ proc startIpcServer*(
                   if niri.reply.len > 0:
                     await client.send(niri.reply & "\L")
                   for msg in niri.messages:
+                    inc ipcPerfCounters.dispatchedMessages
                     onMsg(msg)
                   if niri.messages.len > 0:
                     writeBehaviorEvent(
@@ -401,6 +432,7 @@ proc startIpcServer*(
                     await client.send(event & "\L")
                   if niri.subscribe:
                     subscribers.add(client)
+                    inc ipcPerfCounters.niriSubscriptions
                     writeBehaviorEvent(
                       "niri_compat_event_stream_subscribed",
                       %*{"path": path, "subscriber_count": subscribers.len},
@@ -414,6 +446,7 @@ proc startIpcServer*(
                     cap = MaxIpcSubscribers
                   break
                 subscribers.add(client)
+                inc ipcPerfCounters.niriSubscriptions
                 writeBehaviorEvent(
                   "niri_compat_event_stream_subscribed",
                   %*{
@@ -426,6 +459,7 @@ proc startIpcServer*(
                 break
               let dispatch = parseBindingDispatchText(line)
               if dispatch.isSome:
+                inc ipcPerfCounters.bindingDispatchRequests
                 if dispatchBinding == nil:
                   await client.send(
                     bindingDispatchError("binding dispatch unavailable") & "\L"
@@ -435,8 +469,11 @@ proc startIpcServer*(
                 break
               let parsed = parseTextCommand(line)
               if parsed.isSome:
+                inc ipcPerfCounters.textCommands
+                inc ipcPerfCounters.dispatchedMessages
                 onMsg(parsed.get())
               else:
+                inc ipcPerfCounters.invalidRequests
                 warn "Unknown or invalid IPC command", command = line
           except CatchableError as e:
             warn "IPC client error", path = path, error = e.msg
@@ -626,6 +663,7 @@ proc broadcastJson*(payload: string) {.async.} =
   if not payload.shouldSendNiriBroadcast():
     return
   pruneSubscribers()
+  inc ipcPerfCounters.niriBroadcasts
   let currentSubscribers = subscribers
   for client in currentSubscribers:
     if client == nil or client.isClosed:
@@ -636,8 +674,10 @@ proc broadcastJson*(payload: string) {.async.} =
     else:
       try:
         if await sendWithTimeout(client, payload & "\L"):
+          inc ipcPerfCounters.niriBroadcastSends
           continue
         warn "Dropping slow IPC subscriber"
+        inc ipcPerfCounters.droppedSubscribers
         writeBehaviorEvent(
           "niri_compat_event_stream_disconnected", %*{"reason": "send timed out"}
         )
@@ -645,6 +685,7 @@ proc broadcastJson*(payload: string) {.async.} =
         removeSubscriber(client)
       except CatchableError as e:
         warn "Dropping failed IPC subscriber", error = e.msg
+        inc ipcPerfCounters.droppedSubscribers
         writeBehaviorEvent(
           "niri_compat_event_stream_disconnected",
           %*{"reason": "send failed", "error": e.msg},
@@ -659,6 +700,7 @@ proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
   lastTriadBroadcastKey = broadcastKey
 
   pruneTriadSubscribers()
+  inc ipcPerfCounters.triadBroadcasts
   let currentSubscribers = triadSubscribers
   for subscriber in currentSubscribers:
     let client = subscriber.client
@@ -670,12 +712,15 @@ proc broadcastTriadJson*(payload: string, eventName: string) {.async.} =
     else:
       try:
         if await sendWithTimeout(client, payload & "\L"):
+          inc ipcPerfCounters.triadBroadcastSends
           discard
         else:
           warn "Dropping slow Triad IPC subscriber"
+          inc ipcPerfCounters.droppedSubscribers
           client.close()
           removeTriadSubscriber(client)
       except CatchableError as e:
         warn "Dropping failed Triad IPC subscriber", error = e.msg
+        inc ipcPerfCounters.droppedSubscribers
         client.close()
         removeTriadSubscriber(client)

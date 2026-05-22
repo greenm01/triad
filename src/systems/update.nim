@@ -222,8 +222,10 @@ proc updateInPlace*(
   let beforeOverview = model.overviewActive
   let beforeSessionLocked = model.sessionLocked
   let beforeLayerFocusExclusive = model.layerFocusExclusive
+  let cmdTickMayChangeFocus =
+    msg.kind == MsgKind.CmdTick and model.pendingDialogFocusWindows.len > 0
   let needsSnapshotBeforeMutation =
-    msg.kind.needsFullSnapshotAlways() or msg.kind == MsgKind.CmdTick or
+    msg.kind.needsFullSnapshotAlways() or cmdTickMayChangeFocus or
     (behaviorLogEnabled() and msg.kind.shouldLogRuntimeUpdate())
   let before =
     if needsSnapshotBeforeMutation:
@@ -244,7 +246,7 @@ proc updateInPlace*(
   let maintenance = model.applyUpdateMaintenance(msg.kind)
   if maintenance.collapsed or maintenance.pruned or maintenance.outputCovered:
     dirty = true
-  if dirty and model.windowRuleStateMatchersEnabled():
+  if dirty and msg.kind != MsgKind.CmdTick and model.windowRuleStateMatchersEnabled():
     dirty = model.refreshWindowRuleDerivedState() or dirty
 
   let afterFocus = model.modelFocusedWindowId()
