@@ -1,3 +1,4 @@
+import ../src/systems/daemon_view
 import tcore_support
 
 suite "Core Runtime Logic: presentation overview":
@@ -60,6 +61,72 @@ suite "Core Runtime Logic: presentation overview":
     check not win.isFloating
     check effects.hasMaximizedEffect(2, true)
     check model.instructionGeom(2) == model.primaryScreen()
+
+  test "Edge-maximized presentation suppresses compositor border":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(borderWidth: 4),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "editor", title: "Main")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleMaximized))
+
+    let screen = model.primaryScreen()
+    let projection = model.layoutProjection()
+    let instr = projection.instructions.filterIt(it.windowId == 2'u32)[0]
+    var daemon = initTriadDaemon()
+    daemon.runtimeState.model = model
+    let state = daemon.desiredRenderWindowState(2, instr.geom, screen, false)
+
+    check model.windowUsesBorderlessPresentation(
+      model.windowForExternal(ExternalWindowId(2))
+    )
+    check model.renderWindowBorder(model.windowForExternal(ExternalWindowId(2)), true).width ==
+      0
+    check instr.geom == screen
+    check state.visible
+    check state.borderWidth == 0
+    check state.renderBorderWidth == 0
+    check state.borderEdges == 0
+
+  test "Fullscreen presentation suppresses compositor border":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        layout: LayoutConfig(borderWidth: 4),
+        workspaces: WorkspaceConfig(defaultCount: 3),
+      )
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "video", title: "Movie")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFullscreen))
+
+    let screen = model.primaryScreen()
+    let projection = model.layoutProjection()
+    let instr = projection.instructions.filterIt(it.windowId == 2'u32)[0]
+    var daemon = initTriadDaemon()
+    daemon.runtimeState.model = model
+    let state = daemon.desiredRenderWindowState(2, instr.geom, screen, false)
+
+    check model.windowUsesBorderlessPresentation(
+      model.windowForExternal(ExternalWindowId(2))
+    )
+    check model.renderWindowBorder(model.windowForExternal(ExternalWindowId(2)), true).width ==
+      0
+    check instr.geom == screen
+    check state.visible
+    check state.borderWidth == 0
+    check state.renderBorderWidth == 0
+    check state.borderEdges == 0
 
   test "Open-maximized window rule opens full-width scroller column":
     var model = initRuntimeStateFromConfig(

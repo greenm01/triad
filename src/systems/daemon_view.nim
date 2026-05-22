@@ -72,13 +72,6 @@ proc windowRenderFocused*(model: Model, winId: uint32): bool =
       return frameId != NullFrameId and frameId == tagOpt.get().focusedFrame
   winId == model.activeFocusRiverId()
 
-proc renderWindowBorder*(
-    model: Model, logicalId: WindowId, focused: bool
-): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
-  if model.recentWindowsVisible():
-    return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
-  model.effectiveWindowBorder(logicalId, focused)
-
 proc primaryOutputRiverId*(model: Model): uint32 =
   model.riverIdForOutput(model.primaryOutput)
 
@@ -99,6 +92,36 @@ proc activeLayoutSupportsMaximize*(model: Model): bool =
   tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len == 0 and
     tagOpt.get().nativeLayoutId.nativeLayoutIdString().len == 0 and
     tagOpt.get().layoutMode.layoutSupportsMaximize()
+
+proc tagSupportsMaximizedPresentation(model: Model, tagId: TagId): bool =
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and tagOpt.get().customLayoutId.layoutIdString().len == 0 and
+    tagOpt.get().nativeLayoutId.nativeLayoutIdString().len == 0 and
+    tagOpt.get().layoutMode.layoutSupportsMaximize()
+
+proc windowUsesBorderlessPresentation*(model: Model, logicalId: WindowId): bool =
+  if logicalId == NullWindowId or model.overviewActive or model.recentWindowsActive:
+    return false
+  let winOpt = model.windowData(logicalId)
+  if winOpt.isNone:
+    return false
+  let win = winOpt.get()
+  if win.isFullscreen and not win.isMinimized:
+    return true
+  if not win.isMaximized or win.isMinimized or win.isFloating:
+    return false
+  let position = model.firstWindowPosition(logicalId)
+  position.found and model.tagSupportsMaximizedPresentation(position.tagId) and
+    not model.columnFullWidthForWindowOnTag(position.tagId, logicalId)
+
+proc renderWindowBorder*(
+    model: Model, logicalId: WindowId, focused: bool
+): tuple[width: int32, activeColor: uint32, inactiveColor: uint32] =
+  if model.recentWindowsVisible():
+    return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
+  if model.windowUsesBorderlessPresentation(logicalId):
+    return (width: 0'i32, activeColor: 0'u32, inactiveColor: 0'u32)
+  model.effectiveWindowBorder(logicalId, focused)
 
 proc effectivelyMaximizedForRiverId*(model: Model, winId: uint32): bool =
   let logicalId = model.windowForRiverId(winId)

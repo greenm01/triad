@@ -323,7 +323,7 @@ proc desiredRenderWindowState*(
     renderBorderWidth: renderBorder.width,
     borderActiveColor: renderBorder.activeColor,
     borderInactiveColor: renderBorder.inactiveColor,
-    borderEdges: visibility.borderEdges,
+    borderEdges: if renderBorder.width == 0: 0'u32 else: visibility.borderEdges,
     focused: focused,
   )
 
