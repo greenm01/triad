@@ -1,4 +1,8 @@
-import std/[json, options, os, sequtils, strtabs, strutils, tables, unittest]
+import
+  std/[
+    asyncdispatch, asyncnet, json, nativesockets, options, os, sequtils, strtabs,
+    strutils, tables, unittest,
+  ]
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
@@ -60,6 +64,52 @@ proc baseSnapshot(): ShellSnapshot =
       ],
     outputs: @[ShellOutput(name: "triad-0", w: 1920, h: 1080)],
   )
+
+proc discardIpcMsg(msg: Msg) {.gcsafe.} =
+  discard msg
+
+proc hardeningIpcSnapshot(): ShellSnapshot {.gcsafe.} =
+  ShellSnapshot(
+    version: 1,
+    activeTag: 1,
+    activeWorkspaceIdx: 1,
+    layoutCycle: @[LayoutMode.Scroller, LayoutMode.Grid],
+    workspaces:
+      @[
+        ShellWorkspace(
+          tagId: 1,
+          workspaceIdx: 1,
+          layoutMode: LayoutMode.Scroller,
+          isActive: true,
+          outputName: "triad-0",
+          masterCount: 1,
+          masterSplitRatio: 0.5,
+        )
+      ],
+    outputs: @[ShellOutput(name: "triad-0", w: 1920, h: 1080)],
+  )
+
+proc persistentNiriReplies(path: string): Future[seq[string]] {.async.} =
+  asyncCheck socket.startIpcServer(path, discardIpcMsg, hardeningIpcSnapshot)
+
+  var ready = false
+  for _ in 0 ..< 50:
+    if await socket.unixSocketAcceptsConnections(path):
+      ready = true
+      break
+    await sleepAsync(10)
+  doAssert ready
+
+  let client = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+  try:
+    await client.connectUnix(path)
+    await client.send("\"Workspaces\"\L")
+    result.add(await client.recvLine())
+    await client.send("""{"Action":{"FocusWorkspace":{"reference":{"Id":1}}}}""" & "\L")
+    result.add(await client.recvLine())
+  finally:
+    if not client.isClosed:
+      client.close()
 
 suite "Crash hardening":
   test "output layout row resolves left-to-right physical coordinates":
@@ -1317,6 +1367,17 @@ config-notification {
     )
     check unknown.handled
     check parseJson(unknown.reply)["Err"].getStr().len > 0
+
+  test "Niri command socket accepts repeated requests":
+    let path =
+      getTempDir() / ("triad-niri-persistent-" & $getCurrentProcessId() & ".sock")
+    if fileExists(path):
+      removeFile(path)
+
+    let replies = waitFor persistentNiriReplies(path)
+    check replies.len == 2
+    check parseJson(replies[0])["Ok"].hasKey("Workspaces")
+    check replies[1] == """{"Ok":"Handled"}"""
 
   test "text command parser tolerates malformed commands":
     check parseTextCommand("").isNone

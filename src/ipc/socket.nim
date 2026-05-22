@@ -497,7 +497,8 @@ proc startIpcServer*(
                       %*{"path": path, "subscriber_count": subscribers.len},
                     )
                     keepOpen = true
-                  break
+                    break
+                  continue
 
               if line.strip() == "event-stream":
                 if not canSubscribe():
