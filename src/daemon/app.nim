@@ -1100,8 +1100,14 @@ proc main*() =
       info "Starting Niri-compatible IPC server", path = niriSocketPath
       writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
-        niriSocketPath, queueMsg, snapshotModel, snapshotLiveRestoreJson,
-        snapshotPerfStatusJson, snapshotMemStatusJson, dispatchBindingJson,
+        niriSocketPath,
+        queueMsg,
+        snapshotModel,
+        snapshotLiveRestoreJson,
+        snapshotPerfStatusJson,
+        snapshotMemStatusJson,
+        dispatchBindingJson,
+        requestTimeoutMs = IpcNoRequestTimeoutMs,
       )
 
   asyncCheck startStartupWindowRulesExpiry()

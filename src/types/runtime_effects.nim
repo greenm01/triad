@@ -57,6 +57,7 @@ type
       triadEventName*: string
     of EffectKind.EffBroadcastWindowChanged:
       broadcastWindowId*: uint32
+      broadcastNiriWindowChanged*: bool
     of EffectKind.EffOpStartPointer:
       opSeat*: pointer
     of EffectKind.EffOpEnd:

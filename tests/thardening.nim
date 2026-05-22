@@ -89,8 +89,12 @@ proc hardeningIpcSnapshot(): ShellSnapshot {.gcsafe.} =
     outputs: @[ShellOutput(name: "triad-0", w: 1920, h: 1080)],
   )
 
-proc persistentNiriReplies(path: string): Future[seq[string]] {.async.} =
-  asyncCheck socket.startIpcServer(path, discardIpcMsg, hardeningIpcSnapshot)
+proc persistentNiriReplies(
+    path: string, idleDelayMs = 0, requestTimeoutMs = IpcRequestTimeoutMs
+): Future[seq[string]] {.async.} =
+  asyncCheck socket.startIpcServer(
+    path, discardIpcMsg, hardeningIpcSnapshot, requestTimeoutMs = requestTimeoutMs
+  )
 
   var ready = false
   for _ in 0 ..< 50:
@@ -105,6 +109,8 @@ proc persistentNiriReplies(path: string): Future[seq[string]] {.async.} =
     await client.connectUnix(path)
     await client.send("\"Workspaces\"\L")
     result.add(await client.recvLine())
+    if idleDelayMs > 0:
+      await sleepAsync(idleDelayMs)
     await client.send("""{"Action":{"FocusWorkspace":{"reference":{"Id":1}}}}""" & "\L")
     result.add(await client.recvLine())
   finally:
@@ -1375,6 +1381,18 @@ config-notification {
       removeFile(path)
 
     let replies = waitFor persistentNiriReplies(path)
+    check replies.len == 2
+    check parseJson(replies[0])["Ok"].hasKey("Workspaces")
+    check replies[1] == """{"Ok":"Handled"}"""
+
+  test "Niri command socket can idle between repeated requests":
+    let path = getTempDir() / ("triad-niri-idle-" & $getCurrentProcessId() & ".sock")
+    if fileExists(path):
+      removeFile(path)
+
+    let replies = waitFor persistentNiriReplies(
+      path, idleDelayMs = 60, requestTimeoutMs = IpcNoRequestTimeoutMs
+    )
     check replies.len == 2
     check parseJson(replies[0])["Ok"].hasKey("Workspaces")
     check replies[1] == """{"Ok":"Handled"}"""

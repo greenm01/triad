@@ -111,6 +111,22 @@ proc inactiveOutputLocalFocusScenario(
   )
 
 suite "Core Runtime Logic: output sticky scratchpad":
+  test "Explicit workspace focus reasserts focus for the already active workspace":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.addTestOutput(1, "DP-2", 0, 0, 1000, 800)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "term", title: "term")
+    )
+
+    let indexEffects =
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    check indexEffects.hasFocusEffect(10)
+
+    let tagEffects = model.updateModel(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    check tagEffects.hasFocusEffect(10)
+
   test "Output identity events store make model and description":
     var model = initRuntimeStateFromConfig(Config()).model
     model.applyMsg(

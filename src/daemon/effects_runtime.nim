@@ -16,10 +16,11 @@ import
   protocol_surface_runtime, shell_runner, render_runtime, screenshot_runner,
   spawn_context, state, render_invalidation
 
-proc executeWindowChangedBroadcast(daemon: var TriadDaemon, winId: uint32) =
-  let niriInterested = hasNiriSubscribers()
+proc executeWindowChangedBroadcast(daemon: var TriadDaemon, eff: Effect) =
+  let winId = eff.broadcastWindowId
+  let niriInterested = eff.broadcastNiriWindowChanged and hasNiriSubscribers()
   let triadInterested = triadSubscriberInterested("window")
-  if not niriInterested:
+  if eff.broadcastNiriWindowChanged and not niriInterested:
     inc ipcPerfCounters.niriBroadcastSkippedNoSubscribers
   if not triadInterested:
     inc ipcPerfCounters.triadBroadcastSkippedNoSubscribers
@@ -188,7 +189,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffBroadcastTriadJson:
     daemon.enqueueTriadBroadcast(eff.jsonPayload, eff.triadEventName)
   of EffectKind.EffBroadcastWindowChanged:
-    daemon.executeWindowChangedBroadcast(eff.broadcastWindowId)
+    daemon.executeWindowChangedBroadcast(eff)
   of EffectKind.EffSpawnScreenLock:
     daemon.trackChildProcess(
       spawnScreenLock(daemon.runtimeState.model, eff.screenLockCommand)

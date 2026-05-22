@@ -59,6 +59,7 @@ const
   MaxIpcSubscribers* = 64
   MaxPendingIpcClients* = 64
   IpcRequestTimeoutMs* = 5000
+  IpcNoRequestTimeoutMs* = -1
   IpcSubscriberSendTimeoutMs* = 250
 
 var subscribers*: seq[AsyncSocket] = @[]
@@ -127,12 +128,16 @@ proc recvLineLimited(
   var line = ""
   let deadline = epochTime() + float(timeoutMs) / 1000.0
   while line.len <= maxBytes:
-    let remainingMs = int((deadline - epochTime()) * 1000.0)
-    if remainingMs <= 0:
-      raise newException(IOError, "IPC request line timed out")
+    var remainingMs = 0
+    if timeoutMs >= 0:
+      remainingMs = int((deadline - epochTime()) * 1000.0)
+      if remainingMs <= 0:
+        raise newException(IOError, "IPC request line timed out")
     let recvFuture = client.recv(1)
-    if not await recvFuture.withTimeout(remainingMs):
+    if timeoutMs >= 0 and not await recvFuture.withTimeout(remainingMs):
       raise newException(IOError, "IPC request line timed out")
+    elif timeoutMs < 0:
+      discard await recvFuture
     let chunk = recvFuture.read()
     if chunk.len == 0:
       return ""
@@ -338,6 +343,7 @@ proc startIpcServer*(
     getPerfStatusJson: proc(): string {.gcsafe.} = nil,
     getMemStatusJson: proc(): string {.gcsafe.} = nil,
     dispatchBinding: proc(request: BindingDispatchRequest): string {.gcsafe.} = nil,
+    requestTimeoutMs = IpcRequestTimeoutMs,
 ) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
@@ -384,7 +390,7 @@ proc startIpcServer*(
         try:
           try:
             while client != nil and not client.isClosed:
-              let line = await recvLineLimited(client)
+              let line = await recvLineLimited(client, timeoutMs = requestTimeoutMs)
               if line == "":
                 break
               inc ipcPerfCounters.requests

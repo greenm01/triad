@@ -148,8 +148,12 @@ proc broadcastTriadWindowChanged*(snapshot: ShellSnapshot, winId: uint32): Effec
     triadEventName: "window",
   )
 
-proc broadcastWindowChanged*(winId: uint32): Effect =
-  Effect(kind: EffectKind.EffBroadcastWindowChanged, broadcastWindowId: winId)
+proc broadcastWindowChanged*(winId: uint32, niri = true): Effect =
+  Effect(
+    kind: EffectKind.EffBroadcastWindowChanged,
+    broadcastWindowId: winId,
+    broadcastNiriWindowChanged: niri,
+  )
 
 proc renderDirty*(reason: string): Effect =
   Effect(kind: EffectKind.EffRenderDirty, renderDirtyReason: reason)
@@ -299,8 +303,9 @@ proc isFocusChangingCommand*(kind: MsgKind): bool =
     MsgKind.CmdFocusTagRight, MsgKind.CmdFocusOccupiedTagLeft,
     MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusColumnFirst,
     MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,
-    MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdFocusTag, MsgKind.CmdNewWorkspace,
-    MsgKind.CmdFocusWindowById, MsgKind.CmdSelectWindow, MsgKind.CmdRecentWindowConfirm,
+    MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdFocusTag,
+    MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdNewWorkspace, MsgKind.CmdFocusWindowById,
+    MsgKind.CmdSelectWindow, MsgKind.CmdRecentWindowConfirm,
     MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
     MsgKind.CmdRestoreScratchpad, MsgKind.WlShellSurfaceInteraction,
   }
@@ -335,6 +340,8 @@ proc isFocusPreservingLayoutCommand(kind: MsgKind): bool =
 proc shouldReassertFocusedWindow(kind: MsgKind, before, after: ShellSnapshot): bool =
   if after.focusedWindowId() == 0 or after.overviewActive:
     return false
+  if kind in {MsgKind.CmdFocusTag, MsgKind.CmdFocusWorkspaceIndex}:
+    return true
   if kind in {
     MsgKind.CmdMoveToTag, MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
     MsgKind.CmdMoveToWorkspaceIndex,
@@ -568,7 +575,9 @@ proc addPostUpdateEffects*(
       of MsgKind.WlWindowDimensions: msg.dimensionsWindowId
       else: 0'u32
     if msg.kind in {MsgKind.WlWindowTitle, MsgKind.WlWindowDimensions}:
-      effects.add(broadcastWindowChanged(openedId))
+      effects.add(
+        broadcastWindowChanged(openedId, niri = msg.kind != MsgKind.WlWindowTitle)
+      )
     else:
       let effect = after.broadcastWindowOpened(openedId)
       if effect.kind != EffectKind.EffNone:

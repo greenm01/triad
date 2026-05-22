@@ -390,6 +390,17 @@ suite "Shell compatibility contracts":
     check focusWs.actionName == "FocusWorkspace"
     check focusWs.workspaceIndex == 2
 
+    let focusWsId = handleNiriRequest(
+      """{"Action":{"FocusWorkspace":{"reference":{"Id":2}}}}""", snapshot
+    )
+    check focusWsId.messages.len == 1
+    check focusWsId.messages[0].kind == MsgKind.CmdFocusTag
+    check focusWsId.messages[0].focusTag == 2
+    check focusWsId.reply == """{"Ok":"Handled"}"""
+    check focusWsId.requestKind == "action"
+    check focusWsId.actionName == "FocusWorkspace"
+    check focusWsId.workspaceId == 2
+
     let focusNext =
       handleNiriRequest("""{"Action":{"FocusWorkspaceDown":{}}}""", snapshot)
     check focusNext.messages.len == 1
