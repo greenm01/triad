@@ -1449,6 +1449,65 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.windowForExternal(ExternalWindowId(60)) != NullWindowId
     check model.visibleWorkspaceSlots()[0 .. 5] == @[1'u32, 2, 3, 4, 5, 6]
 
+  test "Unconfigured empty dynamic workspaces with stale names are pruned":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+
+    let occupiedTag = model.ensureWorkspaceSlot(4)
+    discard model.setActiveWorkspace(occupiedTag)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 61, appId: "term", title: "term")
+    )
+    discard model.setActiveWorkspace(model.tagForSlot(1))
+
+    let mediaTag = model.ensureWorkspaceSlot(5)
+    discard model.setTagName(mediaTag, "media")
+    let codeTag = model.ensureWorkspaceSlot(6)
+    discard model.setTagName(codeTag, "code")
+    let vmTag = model.ensureWorkspaceSlot(7)
+    discard model.setTagName(vmTag, "vm")
+
+    discard model.pruneDynamicWorkspaces()
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.tagForSlot(4) == occupiedTag
+    check model.tagForSlot(5) == NullTagId
+    check model.tagForSlot(6) == NullTagId
+    check model.tagForSlot(7) == NullTagId
+    check model.nextDynamicWorkspaceSlot() == 5
+
+  test "Restored empty dynamic workspace without pending window is pruned":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    let restoreTag = model.ensureWorkspaceSlot(5)
+    discard model.setTagName(restoreTag, "restore-target")
+    model.restoreTags[5] =
+      RestoredTagData(slot: 5, name: "restore-target", layoutMode: LayoutMode.Scroller)
+
+    discard model.pruneDynamicWorkspaces()
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.tagForSlot(5) == NullTagId
+    check model.visibleWorkspaceSlots().find(5'u32) == -1
+
+  test "Pending restored window dynamic workspace survives pruning":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    let restoreTag = model.ensureWorkspaceSlot(5)
+    discard model.setTagName(restoreTag, "restore-target")
+    model.restoreTags[5] =
+      RestoredTagData(slot: 5, name: "restore-target", layoutMode: LayoutMode.Scroller)
+    model.restoreTagByWindow[ExternalWindowId(777)] = 5
+
+    discard model.pruneDynamicWorkspaces()
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.tagForSlot(5) == restoreTag
+    check model.visibleWorkspaceSlots().find(5'u32) != -1
+
   test "Pinned default workspace preserves output while unpinned defaults fill gaps":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -1537,7 +1596,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.outputActiveTag(second) == dynamicTag
     check model.workspaceOutput(dynamicTag) == second
 
-  test "New workspace reuses hidden empty dynamic workspace":
+  test "New workspace prunes stale empty dynamic workspace":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
     ).model
@@ -1558,16 +1617,20 @@ suite "Core Runtime Logic: output sticky scratchpad":
     discard model.setActiveWorkspace(model.tagForSlot(1))
     model.refreshVisibleWorkspaceSlots()
 
-    check model.trailingWorkspaceSlot() == 0
-    check model.visibleWorkspaceSlots().find(6'u32) == -1
+    check model.tagForSlot(4) == occupiedTag
+    check model.tagForSlot(5) == NullTagId
+    check model.trailingWorkspaceSlot() == 5
 
     model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
 
-    check model.activeTag == emptyTag
-    check model.outputActiveTag(outputId) == emptyTag
+    let createdTag = model.tagForSlot(5)
+    check createdTag != NullTagId
+    check createdTag != emptyTag
+    check model.activeTag == createdTag
+    check model.outputActiveTag(outputId) == createdTag
     check model.tagForSlot(6) == NullTagId
 
-  test "Reusable empty dynamic workspace is scoped to output":
+  test "New workspace prunes stale empty dynamic workspace from other output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))
     ).model
@@ -1596,19 +1659,21 @@ suite "Core Runtime Logic: output sticky scratchpad":
     )
     model.refreshVisibleWorkspaceSlots()
 
-    check model.reusableEmptyWorkspaceSlot(first) == 4
+    check model.tagForSlot(4) == occupiedTag
+    check model.tagForSlot(5) == NullTagId
+    check model.reusableEmptyWorkspaceSlot(first) == 0
     check model.reusableEmptyWorkspaceSlot(second) == 0
-    check model.trailingWorkspaceSlot(second) == 6
-    check model.visibleWorkspaceSlots().find(6'u32) != -1
+    check model.trailingWorkspaceSlot(second) == 5
+    check model.visibleWorkspaceSlots().find(5'u32) != -1
 
     model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
 
-    let createdTag = model.tagForSlot(6)
+    let createdTag = model.tagForSlot(5)
     check createdTag != NullTagId
     check model.activeTag == createdTag
     check model.outputActiveTag(second) == createdTag
     check model.workspaceOutput(createdTag) == second
-    check model.workspaceOutput(reusableTag) == first
+    check model.tagData(reusableTag).isNone
 
   test "Hidden empty dynamic workspace focuses on active output":
     var model = initRuntimeStateFromConfig(

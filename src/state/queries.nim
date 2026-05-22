@@ -766,6 +766,15 @@ proc restoreTag*(model: Model, slot: uint32): Option[RestoredTagData] =
     return none(RestoredTagData)
   some(model.restoreTags[slot])
 
+proc restoreSlotHasPendingWindow*(model: Model, slot: uint32): bool =
+  for _, restoredSlot in model.restoreTagByWindow.pairs:
+    if restoredSlot == slot:
+      return true
+  for _, restoreSlots in model.restoreScratchpadSlots.pairs:
+    if restoreSlots.find(slot) != -1:
+      return true
+  false
+
 proc restoreWindow*(
     model: Model, externalId: ExternalWindowId
 ): Option[RestoredWindowData] =
