@@ -1,5 +1,5 @@
-# The URL the site will be built for. Update for Cloudzy or custom domain.
-base_url = "https://greenm01.github.io/triad"
+# The URL the site will be built for.
+base_url = "https://triadwm.org"
 title = "Triad Window Manager"
 description = "Programmable Wayland window manager for River"
 default_language = "en"
