@@ -61,6 +61,7 @@ type
     runtimeLayoutKind*: string
     layoutSource*: string
     fallbackLayout*: string
+    isConfigured*: bool
     isActive*: bool
     isOutputVisible*: bool
     focusedWindow*: uint32

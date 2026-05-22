@@ -149,7 +149,7 @@ Workspaces are virtual rooms. You can name them, pin them to monitors, and set d
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
-| `default-count` | `Int` | Minimum number of workspaces to keep open. |
+| `default-count` | `Int` | Minimum number of default workspaces to keep open. Connected monitor count can raise the effective reserved count. |
 | `default-layout` | `String` | Default layout ID or Janet layout name. |
 
 **Example Workspace Rules:**
@@ -165,6 +165,19 @@ workspace-rules {
   workspace 4 name="chat" open-on-output="HDMI-A-1"
 }
 ```
+
+On multi-monitor sessions, connected monitors do not need explicit workspace
+pins just to receive a workspace. Triad keeps at least one reserved default
+workspace per connected monitor, so the effective default count is
+`max(default-count, connected monitors)`. Workspace 1 goes to the
+`focus-at-startup` output, or to the primary output if no startup focus is
+configured; remaining reserved workspaces are assigned by monitor geometry
+around that output. Explicit output `workspaces` and
+`workspace-rules open-on-output` entries override that automatic distribution.
+
+Workspace rules above `default-count` are stable configured workspaces. They
+stay visible to shells and bars, are not pruned or renumbered, and dynamic
+workspace allocation starts after the highest configured workspace ID.
 
 ### Output Rules
 Configure monitor-specific settings.

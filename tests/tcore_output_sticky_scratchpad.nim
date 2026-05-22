@@ -8,6 +8,34 @@ proc fullyWithin(rect, screen: Rect): bool =
   rect.x >= screen.x and rect.y >= screen.y and rect.x + rect.w <= screen.x + screen.w and
     rect.y + rect.h <= screen.y + screen.h
 
+proc addTestOutput(
+    model: var Model, externalId: uint32, name: string, x, y, width, height: int32
+) =
+  model.applyMsg(
+    Msg(
+      kind: MsgKind.WlOutputDimensions,
+      outputId: externalId,
+      width: width,
+      height: height,
+    )
+  )
+  model.applyMsg(
+    Msg(kind: MsgKind.WlOutputName, nameOutputId: externalId, outputName: name)
+  )
+  model.applyMsg(
+    Msg(
+      kind: MsgKind.WlOutputPosition,
+      positionOutputId: externalId,
+      outputX: x,
+      outputY: y,
+    )
+  )
+
+proc addThreeConfiguredOutputs(model: var Model) =
+  model.addTestOutput(1, "DP-1", 4480, 180, 1920, 1080)
+  model.addTestOutput(2, "DP-2", 1920, 0, 2560, 1440)
+  model.addTestOutput(3, "DP-3", 0, 180, 1920, 1080)
+
 proc inactiveOutputLocalFocusScenario(
     layoutId: string
 ): tuple[model: Model, localWindow: uint32, activeWindow: uint32, localScreen: Rect] =
@@ -210,7 +238,7 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.activeOutput == pinnedOutput
     check model.activeTag == tag2
     check model.outputActiveTag(pinnedOutput) == tag2
-    check model.outputActiveTag(activeOutput) == tag3
+    check model.outputActiveTag(activeOutput) == tag1
     check model.workspaceOutput(tag2) == pinnedOutput
 
   test "Workspace rule pinned focus repairs wrong visible output":
@@ -1307,6 +1335,144 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check model.outputActiveTag(third) == thirdTag
     check model.tagData(secondTag).isSome
     check model.tagData(thirdTag).isSome
+
+  test "Reserved default workspaces fill configured outputs from startup focus":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", focusAtStartup: true),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    model.addThreeConfiguredOutputs()
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+
+    check model.outputActiveTag(middle) == model.tagForSlot(1)
+    check model.outputActiveTag(left) == model.tagForSlot(2)
+    check model.outputActiveTag(right) == model.tagForSlot(3)
+    check model.workspaceOutput(model.tagForSlot(1)) == middle
+    check model.workspaceOutput(model.tagForSlot(2)) == left
+    check model.workspaceOutput(model.tagForSlot(3)) == right
+
+    discard model.pruneDynamicWorkspaces()
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.tagData(model.tagForSlot(1)).isSome
+    check model.tagData(model.tagForSlot(2)).isSome
+    check model.tagData(model.tagForSlot(3)).isSome
+    check model.visibleWorkspaceSlots()[0 .. 2] == @[1'u32, 2, 3]
+
+  test "Extra reserved default workspaces cycle across output order":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 5),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", focusAtStartup: true),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    model.addThreeConfiguredOutputs()
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+
+    check model.workspaceOutput(model.tagForSlot(1)) == middle
+    check model.workspaceOutput(model.tagForSlot(2)) == left
+    check model.workspaceOutput(model.tagForSlot(3)) == right
+    check model.workspaceOutput(model.tagForSlot(4)) == middle
+    check model.workspaceOutput(model.tagForSlot(5)) == left
+
+  test "Default workspace count expands to cover connected outputs":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 1),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", focusAtStartup: true),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    model.addThreeConfiguredOutputs()
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+
+    check model.defaultWorkspaceCount() == 3
+    check model.outputActiveTag(middle) == model.tagForSlot(1)
+    check model.outputActiveTag(left) == model.tagForSlot(2)
+    check model.outputActiveTag(right) == model.tagForSlot(3)
+    check model.workspaceOutput(model.tagForSlot(1)) == middle
+    check model.workspaceOutput(model.tagForSlot(2)) == left
+    check model.workspaceOutput(model.tagForSlot(3)) == right
+
+  test "Configured workspaces above default count stay visible and stable":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules:
+          @[
+            TagRule(tagId: 4, name: "chat"),
+            TagRule(tagId: 5, name: "media"),
+            TagRule(tagId: 6, name: "code"),
+          ],
+      )
+    ).model
+
+    check model.visibleWorkspaceSlots()[0 .. 5] == @[1'u32, 2, 3, 4, 5, 6]
+    check model.nextDynamicWorkspaceSlot() == 7
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 6))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 60, appId: "editor", title: "Code")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    discard model.pruneDynamicWorkspaces()
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.tagForSlot(4) != NullTagId
+    check model.tagForSlot(5) != NullTagId
+    check model.tagForSlot(6) != NullTagId
+    check model.windowForExternal(ExternalWindowId(60)) != NullWindowId
+    check model.visibleWorkspaceSlots()[0 .. 5] == @[1'u32, 2, 3, 4, 5, 6]
+
+  test "Pinned default workspace preserves output while unpinned defaults fill gaps":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", workspaceSlots: @[3'u32]),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    model.addThreeConfiguredOutputs()
+
+    let right = model.outputForExternal(ExternalOutputId(1))
+    let middle = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+
+    check model.workspaceOutput(model.tagForSlot(1)) == right
+    check model.workspaceOutput(model.tagForSlot(2)) == left
+    check model.workspaceOutput(model.tagForSlot(3)) == middle
+    check model.outputActiveTag(right) == model.tagForSlot(1)
+    check model.outputActiveTag(left) == model.tagForSlot(2)
+    check model.outputActiveTag(middle) == model.tagForSlot(3)
 
   test "New workspace opens on active output and prunes empty after leaving":
     var model = initRuntimeStateFromConfig(

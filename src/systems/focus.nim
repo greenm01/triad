@@ -237,7 +237,12 @@ proc focusWorkspaceSlot*(model: var Model, slot: uint32): bool =
   let previousActiveOutput = model.activeOutput
   let decision = model.workspaceFocusOutputDecision(tagId)
   if decision.outputId != NullOutputId:
+    let displacedTag = model.outputActiveTag(decision.outputId)
     discard model.setOutputTag(decision.outputId, tagId)
+    if decision.reason == "pinned" and previousActiveOutput != decision.outputId and
+        displacedTag != NullTagId and displacedTag != tagId and
+        model.visibleOutputForTag(displacedTag) == NullOutputId:
+      discard model.setOutputTag(previousActiveOutput, displacedTag)
     discard model.setActiveOutput(decision.outputId)
     if decision.reason != "pinned":
       discard model.learnTagOutputFromActive(tagId)

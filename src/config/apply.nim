@@ -473,10 +473,15 @@ proc applyConfig*(model: var Model, config: Config) =
     for mode in model.layoutCycle:
       model.layoutCycleSelections.add(runtimeLayoutSelection(builtinSelection(mode)))
 
-  for slot in 1'u32 .. model.defaultWorkspaceCount:
+  for slot in 1'u32 .. model.defaultWorkspaceCount():
     discard model.ensureWorkspaceSlot(slot)
 
+  for rule in model.tagRules:
+    discard model.ensureWorkspaceSlot(rule.slot)
+
   for rule in model.outputRules:
+    for slot in rule.workspaceSlots:
+      discard model.ensureWorkspaceSlot(slot)
     if rule.target.len > 0:
       for slot in rule.workspaceSlots:
         let tagId = model.ensureWorkspaceSlot(slot)
@@ -490,7 +495,7 @@ proc applyConfig*(model: var Model, config: Config) =
   for slot in model.sortedSlots():
     let tagId = model.tagForSlot(slot)
     let tagOpt = model.tagData(tagId)
-    if tagOpt.isSome and slot <= model.defaultWorkspaceCount and
+    if tagOpt.isSome and slot <= model.defaultWorkspaceCount() and
         tagOpt.get().focusedWindow == NullWindowId and
         model.columnCountForTag(tagId) == 0 and not model.tagHasLiveWindows(tagId):
       discard model.setTagMasterCount(tagId, model.defaultMasterCount)

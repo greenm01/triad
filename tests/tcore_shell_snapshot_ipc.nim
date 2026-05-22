@@ -199,6 +199,25 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check visible.anyIt(it["output"].getStr() == "DP-1")
     check visible.anyIt(it["output"].getStr() == "DP-2")
 
+  test "Niri workspace JSON keeps empty configured workspaces visible":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        tagRules: @[TagRule(tagId: 4, name: "chat"), TagRule(tagId: 5, name: "media")],
+      )
+    ).model
+
+    let workspaces = niriWorkspacesJson(model.shellSnapshot()).getElems()
+
+    check workspaces.anyIt(
+      it["id"].getInt() == 4 and it["name"].getStr() == "chat" and
+        it["is_configured"].getBool()
+    )
+    check workspaces.anyIt(
+      it["id"].getInt() == 5 and it["name"].getStr() == "media" and
+        it["is_configured"].getBool()
+    )
+
   test "Shell snapshot keeps output-visible empty dynamic workspace":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

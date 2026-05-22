@@ -73,10 +73,7 @@ proc defaultMasterRatio*(model: Model): float32 =
     DefaultMasterRatio
 
 proc defaultWorkspaceCount*(model: Model): uint32 =
-  if model.defaultWorkspaceCount == 0:
-    DefaultWorkspaceCount
-  else:
-    min(model.defaultWorkspaceCount, MaxTagBits)
+  model.effectiveDefaultWorkspaceCount()
 
 proc defaultColumnWidth*(model: Model): float32 =
   if model.defaultColumnWidth > 0:

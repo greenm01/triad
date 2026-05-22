@@ -328,6 +328,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         runtimeLayoutKind: layoutKindForId(layoutId).layoutKindId(),
         layoutSource: layoutSourceForId(layoutId).layoutSourceId(),
         fallbackLayout: fallbackLayout,
+        isConfigured: model.workspaceSlotConfigured(slot),
         isActive: slot == model.activeSlot,
         isOutputVisible: outputVisible,
         focusedWindow: model.externalWindowId(model.effectiveTagFocusedWindow(tagId)),

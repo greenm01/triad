@@ -532,6 +532,7 @@ type
     splitNodeByTagWindow*: Table[(TagId, WindowId), SplitNodeId]
     outputTags*: Table[OutputId, TagId]
     tagOutputs*: Table[TagId, OutputId]
+    autoDefaultWorkspaceOutputs*: Table[TagId, OutputId]
     tagHomeOutputTargets*: Table[TagId, string]
     tagHomeOutputPinned*: HashSet[TagId]
     outputLastActiveSlots*: Table[string, uint32]

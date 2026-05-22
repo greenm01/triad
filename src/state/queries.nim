@@ -122,11 +122,39 @@ proc hasDurableTagState*(model: Model, tag: TagData): bool =
   tag.masterCount != model.restoreDefaultMasterCount() or
     tag.masterSplitRatio != model.restoreDefaultMasterRatio()
 
-proc configuredDefaultWorkspaceCount(model: Model): uint32 =
+proc configuredDefaultWorkspaceCount*(model: Model): uint32 =
   if model.defaultWorkspaceCount == 0:
     DefaultWorkspaceCount
   else:
     min(model.defaultWorkspaceCount, MaxTagBits)
+
+proc effectiveDefaultWorkspaceCount*(model: Model): uint32 =
+  let configured = model.configuredDefaultWorkspaceCount()
+  let connectedOutputs = min(uint32(model.outputCount()), MaxTagBits)
+  max(configured, connectedOutputs)
+
+proc workspaceSlotConfigured*(model: Model, slot: uint32): bool =
+  if slot == 0 or slot > MaxTagBits:
+    return false
+  if slot <= model.effectiveDefaultWorkspaceCount():
+    return true
+  for rule in model.tagRules:
+    if rule.slot == slot:
+      return true
+  for rule in model.outputRules:
+    if rule.workspaceSlots.find(slot) != -1:
+      return true
+  false
+
+proc configuredWorkspaceSlotLimit*(model: Model): uint32 =
+  result = model.effectiveDefaultWorkspaceCount()
+  for rule in model.tagRules:
+    if rule.slot <= MaxTagBits:
+      result = max(result, rule.slot)
+  for rule in model.outputRules:
+    for slot in rule.workspaceSlots:
+      if slot <= MaxTagBits:
+        result = max(result, slot)
 
 proc resolvedActiveWorkspaceSlot(model: Model): uint32 =
   let tagOpt = model.tagData(model.activeTag)
@@ -179,7 +207,7 @@ proc workspaceBelongsToOutput(model: Model, tagId: TagId, outputId: OutputId): b
   workspaceOutput == NullOutputId or workspaceOutput == outputId
 
 proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
-  let defaultCount = model.configuredDefaultWorkspaceCount()
+  let defaultCount = model.effectiveDefaultWorkspaceCount()
   for slot in 1'u32 .. defaultCount:
     result.add(slot)
 
@@ -189,7 +217,7 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
     let tagOpt = model.tagData(tagId)
     if slot > defaultCount and (
       slot == activeSlot or model.tagHasNonStickyLiveWindows(tagId) or
-      model.tagVisibleOnOutput(tagId) or
+      model.tagVisibleOnOutput(tagId) or model.workspaceSlotConfigured(slot) or
       (tagOpt.isSome and model.hasDurableTagState(tagOpt.get()))
     ):
       result.add(slot)
@@ -205,10 +233,10 @@ proc computedVisibleWorkspaceSlots*(model: Model): seq[uint32] =
 proc reusableEmptyWorkspaceSlot*(
     model: Model, outputId: OutputId, beforeSlot = 0'u32
 ): uint32 =
-  let defaultCount = model.configuredDefaultWorkspaceCount()
+  let configuredLimit = model.configuredWorkspaceSlotLimit()
   let targetOutput = model.outputForWorkspaceSlotPolicy(outputId)
   for slot in model.sortedSlots():
-    if slot <= defaultCount or (beforeSlot != 0 and slot >= beforeSlot):
+    if slot <= configuredLimit or (beforeSlot != 0 and slot >= beforeSlot):
       continue
     let tagId = model.tagForSlot(slot)
     if tagId == NullTagId:

@@ -169,6 +169,9 @@ proc setOutputTag*(model: var Model, outputId: OutputId, tagId: TagId): bool =
   if model.outputs.entity(outputId).isNone or model.tags.entity(tagId).isNone:
     return false
 
+  model.autoDefaultWorkspaceOutputs.del(tagId)
+  if not model.tagHomeOutputPinned.contains(tagId):
+    model.tagHomeOutputTargets.del(tagId)
   discard model.clearVisibleTagOutside(tagId, outputId)
   model.outputTags[outputId] = tagId
   model.outputs.mEntity(outputId).currentTag = tagId
@@ -197,6 +200,7 @@ proc setActiveOutput*(model: var Model, outputId: OutputId): bool =
 proc setTagOutput*(model: var Model, tagId: TagId, outputId: OutputId): bool =
   if model.tags.entity(tagId).isNone or model.outputs.entity(outputId).isNone:
     return false
+  model.autoDefaultWorkspaceOutputs.del(tagId)
   if model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
     return false
   model.tagOutputs[tagId] = outputId
@@ -206,6 +210,7 @@ proc clearTagOutput*(model: var Model, tagId: TagId): bool =
   if not model.tagOutputs.hasKey(tagId):
     return false
   model.tagOutputs.del(tagId)
+  model.autoDefaultWorkspaceOutputs.del(tagId)
   true
 
 proc setTagHomeOutput*(

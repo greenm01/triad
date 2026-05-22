@@ -241,6 +241,7 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
     "runtime_kind": workspace.runtimeLayoutKind,
     "layout_source": workspace.layoutSource,
     "fallback_layout": workspace.fallbackLayout,
+    "is_configured": workspace.isConfigured,
     "is_active": workspace.isActive,
     "is_output_visible": workspace.isOutputVisible,
     "occupied": workspace.occupied,

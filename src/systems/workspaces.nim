@@ -1,9 +1,20 @@
-import std/[options, tables]
+import std/[algorithm, options, sets, tables]
 import outputs
 import sticky_windows
 import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import LayoutSelectionKind
+
+type ReservedOutputOrderEntry =
+  tuple[
+    id: OutputId,
+    distanceX: int64,
+    side: int,
+    distanceY: int64,
+    y: int32,
+    x: int32,
+    externalId: uint32,
+  ]
 
 proc activeWorkspaceSlot*(model: Model): uint32 =
   let tagOpt = model.tagData(model.activeTag)
@@ -145,7 +156,7 @@ proc workspaceSlotForClampedIndex*(model: Model, index: uint32): uint32 =
   slots[i]
 
 proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
-  result = model.defaultWorkspaceCount() + 1
+  result = model.configuredWorkspaceSlotLimit() + 1
   for slot in model.sortedSlots():
     if slot >= result:
       result = slot + 1
@@ -159,6 +170,182 @@ proc tagVisibleOnAnyOutput(model: Model, tagId: TagId): bool =
     if visibleTagId == tagId:
       return true
   false
+
+proc visibleOutputForTag(model: Model, tagId: TagId): OutputId =
+  if tagId == NullTagId:
+    return NullOutputId
+  for outputId, visibleTagId in model.outputTagsWithId():
+    if visibleTagId == tagId:
+      return outputId
+  NullOutputId
+
+proc addOutputIfMissing(outputs: var seq[OutputId], outputId: OutputId) =
+  if outputId != NullOutputId and outputs.find(outputId) == -1:
+    outputs.add(outputId)
+
+proc reservedWorkspaceAnchorOutput(model: Model): OutputId =
+  for rule in model.outputRules:
+    if rule.focusAtStartup and rule.target.len > 0:
+      let outputId = model.outputForTarget(rule.target)
+      if outputId != NullOutputId:
+        return outputId
+  if model.primaryOutput != NullOutputId and model.outputData(model.primaryOutput).isSome:
+    return model.primaryOutput
+  model.activeOutputOrPrimary()
+
+proc reservedWorkspaceOutputOrder(model: Model): seq[OutputId] =
+  let anchorOutput = model.reservedWorkspaceAnchorOutput()
+  result.addOutputIfMissing(anchorOutput)
+  let activeOpt = model.outputData(anchorOutput)
+  if activeOpt.isNone:
+    for outputId in model.sortedOutputsByGeometry():
+      result.addOutputIfMissing(outputId)
+    return
+
+  let active = activeOpt.get()
+  let activeCenterX = int64(active.x) * 2 + int64(active.w)
+  let activeCenterY = int64(active.y) * 2 + int64(active.h)
+  var entries: seq[ReservedOutputOrderEntry] = @[]
+  for outputId, output in model.outputsWithId():
+    if outputId == anchorOutput:
+      continue
+    let centerX = int64(output.x) * 2 + int64(output.w)
+    let centerY = int64(output.y) * 2 + int64(output.h)
+    entries.add(
+      (
+        id: outputId,
+        distanceX: abs(centerX - activeCenterX),
+        side: if centerX < activeCenterX: 0 else: 1,
+        distanceY: abs(centerY - activeCenterY),
+        y: output.y,
+        x: output.x,
+        externalId: uint32(output.externalId),
+      )
+    )
+  entries.sort(
+    proc(a, b: ReservedOutputOrderEntry): int =
+      result = cmp(a.distanceX, b.distanceX)
+      if result == 0:
+        result = cmp(a.side, b.side)
+      if result == 0:
+        result = cmp(a.distanceY, b.distanceY)
+      if result == 0:
+        result = cmp(a.y, b.y)
+      if result == 0:
+        result = cmp(a.x, b.x)
+      if result == 0:
+        result = cmp(a.externalId, b.externalId)
+  )
+  for entry in entries:
+    result.addOutputIfMissing(entry.id)
+
+proc connectedDefaultWorkspaceOutput(model: Model, tagId: TagId): OutputId =
+  result = model.visibleOutputForTag(tagId)
+  if result != NullOutputId and model.outputData(result).isSome:
+    return
+  result = model.tagOutputs.getOrDefault(tagId, NullOutputId)
+  if result != NullOutputId and model.outputData(result).isSome:
+    return
+  result = NullOutputId
+
+proc incrementOutputCount(counts: var Table[OutputId, int], outputId: OutputId) =
+  counts[outputId] = counts.getOrDefault(outputId, 0) + 1
+
+proc nextReservedWorkspaceOutput(
+    outputs: seq[OutputId], counts: Table[OutputId, int]
+): OutputId =
+  if outputs.len == 0:
+    return NullOutputId
+  for outputId in outputs:
+    if counts.getOrDefault(outputId, 0) == 0:
+      return outputId
+  result = outputs[0]
+  var bestCount = counts.getOrDefault(result, 0)
+  for outputId in outputs:
+    let count = counts.getOrDefault(outputId, 0)
+    if count < bestCount:
+      result = outputId
+      bestCount = count
+
+proc assignWorkspaceHome(
+    model: var Model, tagId: TagId, outputId: OutputId, autoDefault = false
+): bool =
+  if outputId == NullOutputId or model.outputData(outputId).isNone:
+    return false
+  result = model.setTagOutput(tagId, outputId)
+  if autoDefault:
+    model.autoDefaultWorkspaceOutputs[tagId] = outputId
+  if not model.tagHomeOutputPinned.contains(tagId):
+    let output = model.outputData(outputId).get()
+    result =
+      model.setTagHomeOutput(
+        tagId, model.outputStableTarget(outputId, output), pinned = false
+      ) or result
+
+proc ensureReservedDefaultWorkspaceHomes*(model: var Model): bool =
+  let outputs = model.reservedWorkspaceOutputOrder()
+  if outputs.len == 0:
+    return false
+
+  var counts: Table[OutputId, int]
+  var unassigned: seq[TagId]
+  for slot in 1'u32 .. model.defaultWorkspaceCount():
+    let tagId = model.ensureWorkspaceSlot(slot)
+    if tagId == NullTagId:
+      continue
+    if model.tagHomeOutputPinned.contains(tagId):
+      let target = model.tagHomeOutputTargets.getOrDefault(tagId, "")
+      let outputId = model.outputForTarget(target)
+      if outputId != NullOutputId:
+        result = model.assignWorkspaceHome(tagId, outputId) or result
+        if outputs.find(outputId) != -1:
+          counts.incrementOutputCount(outputId)
+
+  for slot in 1'u32 .. model.defaultWorkspaceCount():
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId or model.tagHomeOutputPinned.contains(tagId):
+      continue
+
+    let existingOutput = model.connectedDefaultWorkspaceOutput(tagId)
+    let existingVisibleOutput = model.visibleOutputForTag(tagId)
+    let existingAutoOutput =
+      model.autoDefaultWorkspaceOutputs.getOrDefault(tagId, NullOutputId)
+    let existingHasLearnedTarget =
+      model.tagHomeOutputTargets.getOrDefault(tagId, "").len > 0
+    let existingUsesVisibleOutput = existingVisibleOutput == existingOutput
+    let existingIsAutomatic =
+      existingAutoOutput == existingOutput or (
+        existingHasLearnedTarget and not existingUsesVisibleOutput and
+        tagId != model.activeTag and not model.tagHasNonStickyLiveWindows(tagId)
+      )
+    let existingIsConnected =
+      existingOutput != NullOutputId and outputs.find(existingOutput) != -1
+    if existingIsConnected and existingIsAutomatic and tagId != model.activeTag and
+        not model.tagHasNonStickyLiveWindows(tagId):
+      let outputId = outputs.nextReservedWorkspaceOutput(counts)
+      if outputId != NullOutputId:
+        result =
+          model.assignWorkspaceHome(tagId, outputId, autoDefault = true) or result
+        counts.incrementOutputCount(outputId)
+        continue
+
+    let keepExisting =
+      existingIsConnected and (
+        tagId == model.activeTag or model.tagHasNonStickyLiveWindows(tagId) or
+        not existingIsAutomatic or counts.getOrDefault(existingOutput, 0) == 0
+      )
+    if keepExisting:
+      result = model.assignWorkspaceHome(tagId, existingOutput) or result
+      counts.incrementOutputCount(existingOutput)
+    else:
+      unassigned.add(tagId)
+
+  for tagId in unassigned:
+    let outputId = outputs.nextReservedWorkspaceOutput(counts)
+    if outputId == NullOutputId:
+      continue
+    result = model.assignWorkspaceHome(tagId, outputId, autoDefault = true) or result
+    counts.incrementOutputCount(outputId)
 
 proc validOutputVisibleTag(model: Model, outputId: OutputId): bool =
   let tagId = model.outputActiveTag(outputId)
@@ -179,7 +366,12 @@ proc candidateTagForOutputSlot(
   if existingTagId != NullTagId and homeOutput != NullOutputId and
       homeOutput != targetOutput and model.outputData(homeOutput).isSome:
     return NullTagId
-  if model.tagVisibleOnAnyOutput(result):
+  let visibleOnAnotherOutput = model.tagVisibleOnAnyOutput(result)
+  let canMoveAutomaticDefault =
+    visibleOnAnotherOutput and
+    model.autoDefaultWorkspaceOutputs.getOrDefault(result, NullOutputId) == targetOutput and
+    result != model.activeTag and not model.tagHasNonStickyLiveWindows(result)
+  if visibleOnAnotherOutput and not canMoveAutomaticDefault:
     return NullTagId
   if result == model.activeTag and targetOutput != model.activeOutput:
     return NullTagId
@@ -189,6 +381,14 @@ proc availableTagForOutput*(
 ): TagId =
   if outputId == NullOutputId or model.outputData(outputId).isNone:
     return NullTagId
+
+  for slot in 1'u32 .. model.defaultWorkspaceCount():
+    let tagId = model.tagForSlot(slot)
+    if tagId != NullTagId and
+        model.tagOutputs.getOrDefault(tagId, NullOutputId) == outputId:
+      result = model.candidateTagForOutputSlot(slot, outputId, excludeTag)
+      if result != NullTagId:
+        return
 
   let output = model.outputData(outputId).get()
   let stableTarget = model.outputStableTarget(outputId, output)
@@ -221,12 +421,39 @@ proc availableTagForOutput*(
   )
 
 proc ensureOutputWorkspaceCoverage*(model: var Model): bool =
+  result = model.ensureReservedDefaultWorkspaceHomes()
   for outputId in model.sortedOutputsByGeometry():
-    if model.validOutputVisibleTag(outputId):
-      continue
-    let tagId = model.availableTagForOutput(outputId)
+    let visibleTag = model.outputActiveTag(outputId)
+    let visibleHome = model.tagOutputs.getOrDefault(visibleTag, NullOutputId)
+    let visibleAutoHome =
+      model.autoDefaultWorkspaceOutputs.getOrDefault(visibleTag, NullOutputId)
+    let visibleBelongsElsewhere =
+      visibleTag != NullTagId and visibleHome != NullOutputId and visibleHome != outputId and
+      visibleAutoHome == visibleHome and model.outputData(visibleHome).isSome and
+      visibleTag != model.activeTag and not model.tagHasNonStickyLiveWindows(visibleTag)
+    var tagId = NullTagId
+    if model.validOutputVisibleTag(outputId) and not visibleBelongsElsewhere:
+      let tagOpt = model.tagData(visibleTag)
+      let replaceableDynamic =
+        tagOpt.isSome and tagOpt.get().slot > model.defaultWorkspaceCount() and
+        visibleTag != model.activeTag and
+        not model.tagHasNonStickyLiveWindows(visibleTag)
+      if replaceableDynamic:
+        tagId = model.availableTagForOutput(outputId)
+        if tagId == NullTagId:
+          continue
+      else:
+        continue
+    else:
+      tagId = model.availableTagForOutput(outputId)
     if tagId != NullTagId:
       result = model.setOutputTag(outputId, tagId) or result
+      let tagOpt = model.tagData(tagId)
+      let autoDefault =
+        tagOpt.isSome and tagOpt.get().slot <= model.defaultWorkspaceCount() and
+        not model.tagHomeOutputPinned.contains(tagId)
+      result =
+        model.assignWorkspaceHome(tagId, outputId, autoDefault = autoDefault) or result
 
 proc tagHasFocusableWindow*(model: Model, tagId: TagId): bool =
   for _, win in model.windowsOnTagWithId(tagId):
@@ -338,13 +565,13 @@ proc workspaceWasFocused(model: Model, tagId: TagId): bool =
   false
 
 proc pruneDynamicWorkspaces*(model: var Model): bool =
-  let defaultCount = model.defaultWorkspaceCount()
+  let configuredLimit = model.configuredWorkspaceSlotLimit()
   let activeSlot = model.activeWorkspaceSlot()
   let trailing = model.trailingWorkspaceSlot()
   let slots = model.sortedSlots()
   for slot in slots:
     let tagId = model.tagForSlot(slot)
-    if tagId == NullTagId or slot <= defaultCount or slot == activeSlot or
+    if tagId == NullTagId or model.workspaceSlotConfigured(slot) or slot == activeSlot or
         slot == trailing:
       continue
     let tagOpt = model.tagData(tagId)
@@ -361,5 +588,5 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
     if model.destroyTag(tagId):
       result = true
   if result:
-    discard model.compactDynamicWorkspaceSlots(defaultCount)
+    discard model.compactDynamicWorkspaceSlots(configuredLimit)
     model.refreshVisibleWorkspaceSlots()

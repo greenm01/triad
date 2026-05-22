@@ -9,10 +9,19 @@ Triad presents tags as workspaces. In a multi-monitor setup:
 - Each monitor shows one active workspace.
 - Each workspace remembers its assigned output.
 - Focusing a workspace shows it on its remembered output.
-- Every connected output maintains at least one visible workspace.
+- Every connected output maintains at least one assigned, visible workspace.
 - Empty dynamic workspaces are pruned when you leave them.
 
 Workspaces stay on their assigned monitors unless moved or pinned elsewhere. If a monitor is disconnected, its workspaces fall back to a connected monitor and return once the original monitor reconnects.
+
+Triad keeps enough reserved default workspaces to cover the connected monitors,
+even when `workspaces.default-count` is lower than the monitor count. The
+startup-focused monitor gets workspace 1, or the primary monitor does when no
+startup focus is configured. Remaining monitors are assigned by geometry around
+that anchor; side monitors at the same distance prefer left before right. Extra
+default workspaces cycle through that same order. You only need `workspaces` in
+an output rule when you want to pin specific workspace IDs to a specific
+monitor.
 
 ## Configuring Outputs
 
@@ -94,11 +103,20 @@ workspace-rules {
 
 Focusing a pinned workspace moves focus to its assigned output.
 
+Pins override the automatic default workspace distribution. Unpinned default
+workspaces still fill any connected monitors that do not have a pinned
+workspace.
+
+Workspace rules above `workspaces.default-count` are stable configured
+workspaces. They stay materialized and visible in shell workspace projections,
+and dynamic workspace allocation starts after the highest configured workspace
+ID.
+
 ## Dynamic Workspaces
 
-`new-workspace` reuses the lowest inactive empty configured dynamic workspace on
-the active output. If none is available, it creates the next dynamic workspace on
-that output:
+`new-workspace` reuses the lowest inactive empty dynamic workspace on the active
+output. If none is available, it creates the next dynamic workspace after the
+reserved and configured workspace range on that output:
 
 ```kdl
 bindings {

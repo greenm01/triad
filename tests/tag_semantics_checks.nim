@@ -51,8 +51,8 @@ proc okPayload(reply: string, key: string): JsonNode =
   parsed["Ok"][key]
 
 proc niriWorkspaceVisible(workspace: ShellWorkspace): bool =
-  workspace.isActive or workspace.isOutputVisible or workspace.occupied or
-    workspace.focusedWindow != 0'u32
+  workspace.isConfigured or workspace.isActive or workspace.isOutputVisible or
+    workspace.occupied or workspace.focusedWindow != 0'u32
 
 proc requireNiriProjection(context: string, snapshot: ShellSnapshot) =
   let workspacesReply = niri_compat.handleNiriRequest("\"Workspaces\"", snapshot)

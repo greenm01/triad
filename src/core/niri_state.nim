@@ -79,8 +79,8 @@ proc niriWindowJson*(snapshot: ShellSnapshot, win: ShellWindow): JsonNode =
     result["raw_app_id"] = %win.appId
 
 proc niriWorkspaceVisible(workspace: ShellWorkspace): bool =
-  workspace.isActive or workspace.isOutputVisible or workspace.occupied or
-    workspace.focusedWindow != 0'u32
+  workspace.isConfigured or workspace.isActive or workspace.isOutputVisible or
+    workspace.occupied or workspace.focusedWindow != 0'u32
 
 proc niriWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
@@ -100,6 +100,7 @@ proc niriWorkspacesJson*(snapshot: ShellSnapshot): JsonNode =
         "is_urgent": false,
         "is_active": workspace.isOutputVisible,
         "is_focused": workspace.isActive,
+        "is_configured": workspace.isConfigured,
         "active_window_id":
           if workspace.focusedWindow != 0:
             %workspace.focusedWindow
