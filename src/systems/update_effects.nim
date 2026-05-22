@@ -514,6 +514,8 @@ proc addPostUpdateEffects*(
       )
     )
 
+  if before.overviewActive != after.overviewActive:
+    effects.add(broadcastOverview(after.overviewActive))
   if before.activeTag != after.activeTag and after.activeTag != 0:
     effects.add(broadcastWorkspaceActivated(after))
   for workspace in after.workspaces:

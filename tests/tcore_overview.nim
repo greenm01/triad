@@ -3,6 +3,13 @@ import tcore_support
 import ../src/core/[layout_selection_codec, native_layout_codec]
 import ../src/types/janet_layouts
 
+proc hasOverviewBroadcast(effects: seq[Effect], open: bool): bool =
+  effects.anyIt(
+    it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("OverviewOpenedOrClosed") and
+      it.jsonPayload.contains("\"is_open\":" & $open)
+  )
+
 proc geomWithinPreview(geom, preview: Rect): bool =
   geom.x >= preview.x and geom.y >= preview.y and
     geom.x + geom.w <= preview.x + preview.w and geom.y + geom.h <= preview.y + preview.h
@@ -103,6 +110,7 @@ suite "Core Runtime Logic: overview navigation":
     check model.selectedOverviewWindow() == WindowId(1)
     check model.focusedWindowId() == 1
     check model.activeWorkspaceFocusId() == 1
+    check effects.hasOverviewBroadcast(true)
     check effects.anyIt(it.kind == EffectKind.EffFocusShellUi)
 
   test "Overview tab mode opens, cycles with opener, and closes on modifier release":
@@ -144,6 +152,7 @@ suite "Core Runtime Logic: overview navigation":
     check not model.overviewTabModeActive
     check model.overviewTabModeModifiers == 0'u32
     check model.focusedWindowId() == 2
+    check effects.hasOverviewBroadcast(false)
     check effects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
@@ -1147,6 +1156,7 @@ suite "Core Runtime Logic: overview navigation":
     check not model.overviewActive
     check model.overviewSelectedWindow == NullWindowId
     check model.activeWorkspaceFocusId() == 1
+    check closeEffects.hasOverviewBroadcast(false)
     check closeEffects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 1
     )
@@ -1461,6 +1471,7 @@ suite "Core Runtime Logic: overview navigation":
     check model.activeTag == model.tagForSlot(3)
     check model.focusedWindowId() == 3
     check model.activeWorkspaceFocusId() == 3
+    check effects.hasOverviewBroadcast(false)
     check effects.anyIt(it.kind == EffectKind.EffFocusWindow and it.focusId == 3)
 
   test "Selecting overview window commits focus":
@@ -1482,6 +1493,7 @@ suite "Core Runtime Logic: overview navigation":
     check model.overviewSelectedWindow == NullWindowId
     check model.activeWorkspaceFocusId() == 2
     check model.activeTag == model.tagForSlot(2)
+    check effects.hasOverviewBroadcast(false)
     check effects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )

@@ -1,5 +1,12 @@
 import tcore_support
 
+proc hasOverviewBroadcast(effects: seq[Effect], open: bool): bool =
+  effects.anyIt(
+    it.kind == EffectKind.EffBroadcastJson and
+      it.jsonPayload.contains("OverviewOpenedOrClosed") and
+      it.jsonPayload.contains("\"is_open\":" & $open)
+  )
+
 proc twoOutputOverviewModel(): Model =
   result = configuredModel()
   result.applyMsg(
@@ -401,6 +408,7 @@ suite "Core Runtime Logic: overview interactions":
     check not model.overviewActive
     check model.activeTag == model.tagForSlot(2)
     check model.focusedWindowId() == 2
+    check effects.hasOverviewBroadcast(false)
     check effects.anyIt(
       it.kind == EffectKind.EffFocusWindow and uint32(it.focusId) == 2
     )
@@ -430,11 +438,12 @@ suite "Core Runtime Logic: overview interactions":
         overviewDragY: target.y + 1,
       )
     )
-    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+    let effects = model.updateModel(Msg(kind: MsgKind.WlPointerRelease))
 
     check not model.overviewActive
     check model.activeTag == model.tagForSlot(2)
     check model.focusedWindowId() == 2
+    check effects.hasOverviewBroadcast(false)
 
   test "Overview hides trailing dynamic empty workspace":
     var model = configuredModel()

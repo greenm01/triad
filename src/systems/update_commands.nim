@@ -455,21 +455,16 @@ proc applyCommand*(
       result.dirty = model.closeOverview()
       if result.dirty:
         model.recomputeAllTagFocus()
-        result.effects.add(broadcastOverview(false))
     else:
       result.dirty = model.openOverview()
       if result.dirty:
-        result.effects.add(broadcastOverview(true))
         result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
   of MsgKind.CmdOpenOverview:
     result.dirty = model.openOverview()
     if result.dirty:
-      result.effects.add(broadcastOverview(true))
       result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
   of MsgKind.CmdCloseOverview:
     result.dirty = model.closeOverview()
-    if result.dirty:
-      result.effects.add(broadcastOverview(false))
   of MsgKind.CmdOverviewTab:
     if model.overviewTabMode and msg.overviewTabModifiers != 0:
       if not model.overviewActive:
@@ -477,7 +472,6 @@ proc applyCommand*(
         result.dirty =
           model.setOverviewTabModeActive(true, msg.overviewTabModifiers) or result.dirty
         if result.dirty:
-          result.effects.add(broadcastOverview(true))
           result.effects.add(Effect(kind: EffectKind.EffFocusShellUi))
       else:
         result.dirty =
