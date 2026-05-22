@@ -138,6 +138,16 @@ proc broadcastTriadStateChanged*(snapshot: ShellSnapshot): Effect =
     triadEventName: "state",
   )
 
+proc broadcastTriadWindowChanged*(snapshot: ShellSnapshot, winId: uint32): Effect =
+  let win = snapshot.windowById(winId)
+  if win.isNone:
+    return Effect(kind: EffectKind.EffNone)
+  Effect(
+    kind: EffectKind.EffBroadcastTriadJson,
+    jsonPayload: triadWindowChangedEvent(win.get()),
+    triadEventName: "state",
+  )
+
 proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
   case kind
   of MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlFocusChanged,
@@ -241,6 +251,8 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
     false
 
 proc shouldBroadcastTriadStateChanged*(kind: MsgKind): bool =
+  if kind == MsgKind.WlWindowTitle:
+    return false
   kind.shouldBroadcastTriadLayoutChanged() or kind.shouldBroadcastWindowsChanged() or
     kind.shouldBroadcastOutputsChanged() or
     kind in {
@@ -545,6 +557,10 @@ proc addPostUpdateEffects*(
     let effect = after.broadcastWindowOpened(openedId)
     if effect.kind != EffectKind.EffNone:
       effects.add(effect)
+    if msg.kind == MsgKind.WlWindowTitle:
+      let triadEffect = after.broadcastTriadWindowChanged(openedId)
+      if triadEffect.kind != EffectKind.EffNone:
+        effects.add(triadEffect)
 
   if dirty and msg.kind.shouldRequestManageDirty() and
       not effects.hasEffect(EffectKind.EffManageDirty):

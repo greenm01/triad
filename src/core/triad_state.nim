@@ -470,3 +470,14 @@ proc triadStateChangedEvent*(snapshot: ShellSnapshot): string =
       }
     }
   )
+
+proc triadWindowChangedEvent*(win: ShellWindow): string =
+  $(
+    %*{
+      "triad": {
+        "version": TriadIpcVersion,
+        "event": "window-changed",
+        "window": triadWindowJson(win),
+      }
+    }
+  )

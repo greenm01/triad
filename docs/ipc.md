@@ -154,3 +154,6 @@ Subscribe to native layout or state events:
 {"triad":{"version":1,"request":"event-stream","events":["state", "layout"]}}
 ```
 Triad sends an initial state for each kind, then pushes updates as they occur.
+The `state` stream may include compact metadata events such as
+`window-changed` for title-only updates, avoiding a full `state-changed`
+snapshot when the layout and structural state are unchanged.
