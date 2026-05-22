@@ -248,8 +248,6 @@ type
     idleInhibitDesired*: bool
     idleInhibitUnavailableWarned*: bool
     riverPhase*: RiverPhase
-    cleanRenderStartPending*: bool
-    cleanRenderFinishDueMs*: int64
     bindingsConfigured*: bool
     bindingsReconfigurePending*: bool
     hotkeyOverlayKeyEatArmed*: bool
