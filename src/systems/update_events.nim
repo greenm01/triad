@@ -164,6 +164,17 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
     result.dirty = model.setOutputRefreshRateForExternal(
       msg.refreshOutputId.externalOutputId(), msg.outputRefreshRate
     )
+  of MsgKind.WlOutputPhysicalMetadata:
+    result.dirty = model.setOutputPhysicalMetadataForExternal(
+      msg.metadataOutputId.externalOutputId(),
+      msg.outputPhysicalWidth,
+      msg.outputPhysicalHeight,
+      msg.outputTransform,
+    )
+  of MsgKind.WlOutputScale:
+    result.dirty = model.setOutputScaleForExternal(
+      msg.scaleOutputId.externalOutputId(), msg.outputScale
+    )
   of MsgKind.WlOutputUsable:
     result.dirty = model.setOutputUsableForExternal(
       msg.usableOutputId.externalOutputId(),

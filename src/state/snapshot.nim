@@ -333,6 +333,10 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
         w: max(0'i32, model.screenWidth),
         h: max(0'i32, model.screenHeight),
         refreshRate: 0,
+        physicalWidth: 0,
+        physicalHeight: 0,
+        scale: 1.0'f32,
+        transform: 0,
         isPrimary: true,
       )
     )
@@ -348,6 +352,10 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
           w: max(0'i32, output.w),
           h: max(0'i32, output.h),
           refreshRate: output.refreshRate,
+          physicalWidth: output.physicalWidth,
+          physicalHeight: output.physicalHeight,
+          scale: output.scale,
+          transform: output.transform,
           isPrimary: outputId == model.primaryOutput,
         )
       )

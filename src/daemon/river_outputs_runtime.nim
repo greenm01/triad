@@ -48,6 +48,8 @@ proc onOutputRemoved(data: pointer, output: ptr RiverOutputV1) =
     daemon.outputGlobalIdentities.del(globalName)
     daemon.outputGlobalDescriptions.del(globalName)
     daemon.outputGlobalRefreshRates.del(globalName)
+    daemon.outputGlobalPhysicalMetadata.del(globalName)
+    daemon.outputGlobalScales.del(globalName)
     daemon.outputWlNames.del(id)
   if daemon.outputPointers.len == 0:
     let dropped = daemon[].dropQueuedOutputRemovals()
@@ -100,6 +102,25 @@ proc onOutputWlOutput(data: pointer, output: ptr RiverOutputV1, name: uint32) =
         outputRefreshRate: daemon.outputGlobalRefreshRates[name],
       )
     )
+  if daemon.outputGlobalPhysicalMetadata.hasKey(name):
+    let metadata = daemon.outputGlobalPhysicalMetadata[name]
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputPhysicalMetadata,
+        metadataOutputId: outputId,
+        outputPhysicalWidth: metadata.physicalWidth,
+        outputPhysicalHeight: metadata.physicalHeight,
+        outputTransform: metadata.transform,
+      )
+    )
+  if daemon.outputGlobalScales.hasKey(name):
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputScale,
+        scaleOutputId: outputId,
+        outputScale: daemon.outputGlobalScales[name],
+      )
+    )
 
 proc onWlOutputGeometry(
     data: pointer,
@@ -120,6 +141,8 @@ proc onWlOutputGeometry(
   let daemon = listenerData.daemon
   let globalName = listenerData.globalName
   daemon.outputGlobalIdentities[globalName] = (make: $make, modelName: $model)
+  daemon.outputGlobalPhysicalMetadata[globalName] =
+    (physicalWidth: physicalWidth, physicalHeight: physicalHeight, transform: transform)
   if daemon.outputGlobalOwners.hasKey(globalName):
     daemon.enqueue(
       Msg(
@@ -127,6 +150,15 @@ proc onWlOutputGeometry(
         identityOutputId: daemon.outputGlobalOwners[globalName],
         outputMake: $make,
         outputModel: $model,
+      )
+    )
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputPhysicalMetadata,
+        metadataOutputId: daemon.outputGlobalOwners[globalName],
+        outputPhysicalWidth: physicalWidth,
+        outputPhysicalHeight: physicalHeight,
+        outputTransform: transform,
       )
     )
 
@@ -163,7 +195,23 @@ proc onWlOutputDone(data: pointer, output: ptr Output) =
   discard
 
 proc onWlOutputScale(data: pointer, output: ptr Output, factor: int32) =
-  discard
+  let listenerData = cast[ptr WlOutputListenerData](data)
+  if listenerData == nil or listenerData.daemon == nil:
+    warn "Ignoring wl_output scale without daemon context"
+    return
+  if factor <= 0:
+    return
+  let daemon = listenerData.daemon
+  let globalName = listenerData.globalName
+  daemon.outputGlobalScales[globalName] = float32(factor)
+  if daemon.outputGlobalOwners.hasKey(globalName):
+    daemon.enqueue(
+      Msg(
+        kind: MsgKind.WlOutputScale,
+        scaleOutputId: daemon.outputGlobalOwners[globalName],
+        outputScale: float32(factor),
+      )
+    )
 
 proc onWlOutputName(data: pointer, output: ptr Output, name: cstring) =
   let listenerData = cast[ptr WlOutputListenerData](data)

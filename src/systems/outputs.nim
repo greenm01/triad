@@ -262,6 +262,33 @@ proc setOutputRefreshRateForExternal*(
   discard model.syncPrimaryOutputTag()
   result = model.syncConfiguredOutputState(outputId) or result
 
+proc setOutputPhysicalMetadataForExternal*(
+    model: var Model,
+    externalId: ExternalOutputId,
+    physicalWidth, physicalHeight, transform: int32,
+): bool =
+  if externalId == NullExternalOutputId:
+    return false
+
+  let outputId = model.upsertOutputForExternal(externalId)
+  result =
+    model.setOutputPhysicalMetadata(outputId, physicalWidth, physicalHeight, transform)
+  model.syncPrimaryOutput()
+  discard model.syncPrimaryOutputTag()
+  result = model.syncConfiguredOutputState(outputId) or result
+
+proc setOutputScaleForExternal*(
+    model: var Model, externalId: ExternalOutputId, scale: float32
+): bool =
+  if externalId == NullExternalOutputId:
+    return false
+
+  let outputId = model.upsertOutputForExternal(externalId)
+  result = model.setOutputScale(outputId, scale)
+  model.syncPrimaryOutput()
+  discard model.syncPrimaryOutputTag()
+  result = model.syncConfiguredOutputState(outputId) or result
+
 proc setOutputUsableForExternal*(
     model: var Model, externalId: ExternalOutputId, x, y, w, h: int32
 ): bool =

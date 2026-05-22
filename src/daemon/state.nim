@@ -293,6 +293,9 @@ type
     outputGlobalIdentities*: Table[uint32, tuple[make, modelName: string]]
     outputGlobalDescriptions*: Table[uint32, string]
     outputGlobalRefreshRates*: Table[uint32, int32]
+    outputGlobalPhysicalMetadata*:
+      Table[uint32, tuple[physicalWidth, physicalHeight, transform: int32]]
+    outputGlobalScales*: Table[uint32, float32]
     wlOutputPointers*: Table[uint32, ptr Output]
     wlOutputListenerData*: Table[uint32, ref WlOutputListenerData]
     seatWlNames*: Table[uint32, uint32]

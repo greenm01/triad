@@ -15,6 +15,10 @@ proc addOutput*(
     w = 0'i32,
     h = 0'i32,
     refreshRate = 0'i32,
+    physicalWidth = 0'i32,
+    physicalHeight = 0'i32,
+    scale = 1.0'f32,
+    transform = 0'i32,
     usableX = 0'i32,
     usableY = 0'i32,
     usableW = 0'i32,
@@ -39,6 +43,10 @@ proc addOutput*(
       w: w,
       h: h,
       refreshRate: refreshRate,
+      physicalWidth: physicalWidth,
+      physicalHeight: physicalHeight,
+      scale: scale,
+      transform: transform,
       baseUsableX: usableX,
       baseUsableY: usableY,
       baseUsableW: usableW,
@@ -98,6 +106,24 @@ proc setOutputRefreshRate*(
   if model.outputs.entity(outputId).isNone:
     return false
   model.outputs.mEntity(outputId).refreshRate = max(0'i32, refreshRate)
+  true
+
+proc setOutputPhysicalMetadata*(
+    model: var Model,
+    outputId: OutputId,
+    physicalWidth, physicalHeight, transform: int32,
+): bool =
+  if model.outputs.entity(outputId).isNone:
+    return false
+  model.outputs.mEntity(outputId).physicalWidth = max(0'i32, physicalWidth)
+  model.outputs.mEntity(outputId).physicalHeight = max(0'i32, physicalHeight)
+  model.outputs.mEntity(outputId).transform = max(0'i32, transform)
+  true
+
+proc setOutputScale*(model: var Model, outputId: OutputId, scale: float32): bool =
+  if model.outputs.entity(outputId).isNone:
+    return false
+  model.outputs.mEntity(outputId).scale = max(0.01'f32, scale)
   true
 
 proc setOutputUsable*(model: var Model, outputId: OutputId, x, y, w, h: int32): bool =

@@ -280,12 +280,29 @@ proc triadLayoutStateJson*(snapshot: ShellSnapshot): JsonNode =
     "workspaces": triadWorkspacesJson(snapshot),
   }
 
+proc outputTransformId(transform: int32): string =
+  case transform
+  of 1: "90"
+  of 2: "180"
+  of 3: "270"
+  of 4: "Flipped"
+  of 5: "Flipped90"
+  of 6: "Flipped180"
+  of 7: "Flipped270"
+  else: "Normal"
+
 proc triadOutputJson(output: ShellOutput): JsonNode =
+  let scale = if output.scale > 0.0'f32: output.scale else: 1.0'f32
   %*{
     "id": output.id,
     "name": output.name,
+    "connected": true,
     "is_primary": output.isPrimary,
     "refresh_rate": output.refreshRate,
+    "physical_width": output.physicalWidth,
+    "physical_height": output.physicalHeight,
+    "scale": scale,
+    "transform": output.transform.outputTransformId(),
     "geometry": {"x": output.x, "y": output.y, "width": output.w, "height": output.h},
   }
 

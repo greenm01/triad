@@ -94,7 +94,16 @@ proc snapshotForShell(): ShellSnapshot =
     outputs:
       @[
         ShellOutput(
-          id: 0, name: "triad-0", w: 1920, h: 1080, refreshRate: 144000, isPrimary: true
+          id: 0,
+          name: "triad-0",
+          w: 1920,
+          h: 1080,
+          refreshRate: 144000,
+          physicalWidth: 600,
+          physicalHeight: 340,
+          scale: 2.0,
+          transform: 1,
+          isPrimary: true,
         )
       ],
   )
@@ -526,6 +535,8 @@ suite "Shell compatibility contracts":
     check state["overview"]["is_open"].getBool()
     check state["layout"]["active_tag"].getInt() == 1
     check state["outputs"][0]["name"].getStr() == "triad-0"
+    check state["outputs"][0]["scale"].getFloat() == 2.0
+    check state["outputs"][0]["transform"].getStr() == "90"
     check state["windows"][0]["workspace_idx"].getInt() == 1
     check state["windows"][0]["parent_id"].getInt() == 9
 
@@ -538,8 +549,10 @@ suite "Shell compatibility contracts":
 
     let outputsReply =
       handleTriadRequest("""{"triad":{"version":1,"request":"outputs"}}""", snapshot)
-    check parseJson(outputsReply.reply)["triad"]["outputs"][0]["name"].getStr() ==
-      "triad-0"
+    let outputs = parseJson(outputsReply.reply)["triad"]["outputs"]
+    check outputs[0]["name"].getStr() == "triad-0"
+    check outputs[0]["physical_width"].getInt() == 600
+    check outputs[0]["scale"].getFloat() == 2.0
 
     let windowsReply =
       handleTriadRequest("""{"triad":{"version":1,"request":"windows"}}""", snapshot)

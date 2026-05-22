@@ -321,6 +321,8 @@ proc compactDaemonMemory(daemon: var TriadDaemon) =
   daemon.outputGlobalIdentities.compactTable()
   daemon.outputGlobalDescriptions.compactTable()
   daemon.outputGlobalRefreshRates.compactTable()
+  daemon.outputGlobalPhysicalMetadata.compactTable()
+  daemon.outputGlobalScales.compactTable()
   daemon.wlOutputPointers.compactTable()
   daemon.wlOutputListenerData.compactTable()
   daemon.seatWlNames.compactTable()

@@ -131,6 +131,9 @@ type
     description*: string
     x*, y*, w*, h*: int32
     refreshRate*: int32
+    physicalWidth*, physicalHeight*: int32
+    scale*: float32
+    transform*: int32
     baseUsableX*, baseUsableY*, baseUsableW*, baseUsableH*: int32
     hasBaseUsable*: bool
     usableX*, usableY*, usableW*, usableH*: int32

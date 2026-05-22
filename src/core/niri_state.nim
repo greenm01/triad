@@ -114,19 +114,32 @@ proc niriWindowsJson*(snapshot: ShellSnapshot): JsonNode =
   for win in snapshot.windows:
     result.add(niriWindowJson(snapshot, win))
 
+proc outputTransformId(transform: int32): string =
+  case transform
+  of 1: "90"
+  of 2: "180"
+  of 3: "270"
+  of 4: "Flipped"
+  of 5: "Flipped90"
+  of 6: "Flipped180"
+  of 7: "Flipped270"
+  else: "Normal"
+
 proc niriOutputJson(output: ShellOutput): JsonNode =
   let w = max(0, int(output.w))
   let h = max(0, int(output.h))
   let refreshRate = if output.refreshRate > 0: output.refreshRate else: 60000
+  let scale = if output.scale > 0.0'f32: output.scale else: 1.0'f32
+  let transform = output.transform.outputTransformId()
   %*{
     "name": output.name,
     "connected": true,
     "make": "Triad",
     "model": "River",
     "serial": newJNull(),
-    "physical_size": [0, 0],
-    "physical_width": 0,
-    "physical_height": 0,
+    "physical_size": [output.physicalWidth, output.physicalHeight],
+    "physical_width": output.physicalWidth,
+    "physical_height": output.physicalHeight,
     "modes":
       [{"width": w, "height": h, "refresh_rate": refreshRate, "is_preferred": true}],
     "current_mode": 0,
@@ -138,15 +151,15 @@ proc niriOutputJson(output: ShellOutput): JsonNode =
     "y": int(output.y),
     "width": w,
     "height": h,
-    "scale": 1.0,
-    "transform": "Normal",
+    "scale": scale,
+    "transform": transform,
     "logical": {
       "x": int(output.x),
       "y": int(output.y),
       "width": w,
       "height": h,
-      "scale": 1.0,
-      "transform": "Normal",
+      "scale": scale,
+      "transform": transform,
     },
   }
 

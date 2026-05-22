@@ -75,10 +75,30 @@ suite "Core Runtime Logic: shell snapshot ipc":
         kind: MsgKind.WlOutputRefreshRate, refreshOutputId: 1, outputRefreshRate: 144000
       )
     )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPhysicalMetadata,
+        metadataOutputId: 1,
+        outputPhysicalWidth: 600,
+        outputPhysicalHeight: 340,
+        outputTransform: 1,
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputScale, scaleOutputId: 1, outputScale: 2.0))
 
     let snapshot = model.shellSnapshot()
     check snapshot.outputs.len == 1
     check snapshot.outputs[0].refreshRate == 144000
+    check snapshot.outputs[0].physicalWidth == 600
+    check snapshot.outputs[0].physicalHeight == 340
+    check snapshot.outputs[0].scale == 2.0'f32
+    check snapshot.outputs[0].transform == 1
+
+    let output = triadOutputsJson(snapshot)[0]
+    check output["physical_width"].getInt() == 600
+    check output["physical_height"].getInt() == 340
+    check output["scale"].getFloat() == 2.0
+    check output["transform"].getStr() == "90"
 
   test "Native Triad layout state exposes shell workspace fields":
     var model = configuredModel()

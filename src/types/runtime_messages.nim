@@ -43,6 +43,8 @@ type
     WlOutputDescription
     WlOutputPosition
     WlOutputRefreshRate
+    WlOutputPhysicalMetadata
+    WlOutputScale
     WlOutputUsable
     WlOutputRemoved
     WlManageStart
@@ -296,6 +298,14 @@ type
     of MsgKind.WlOutputRefreshRate:
       refreshOutputId*: uint32
       outputRefreshRate*: int32
+    of MsgKind.WlOutputPhysicalMetadata:
+      metadataOutputId*: uint32
+      outputPhysicalWidth*: int32
+      outputPhysicalHeight*: int32
+      outputTransform*: int32
+    of MsgKind.WlOutputScale:
+      scaleOutputId*: uint32
+      outputScale*: float32
     of MsgKind.WlOutputUsable:
       usableOutputId*: uint32
       usableX*: int32

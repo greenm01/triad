@@ -201,7 +201,8 @@ proc shouldBroadcastNiriWindowsChanged*(kind: MsgKind): bool =
 proc shouldBroadcastOutputsChanged*(kind: MsgKind): bool =
   case kind
   of MsgKind.WlOutputDimensions, MsgKind.WlOutputName, MsgKind.WlOutputPosition,
-      MsgKind.WlOutputUsable, MsgKind.WlOutputRemoved:
+      MsgKind.WlOutputRefreshRate, MsgKind.WlOutputPhysicalMetadata,
+      MsgKind.WlOutputScale, MsgKind.WlOutputUsable, MsgKind.WlOutputRemoved:
     true
   else:
     false

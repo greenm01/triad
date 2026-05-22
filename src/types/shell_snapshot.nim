@@ -115,6 +115,9 @@ type
     name*: string
     x*, y*, w*, h*: int32
     refreshRate*: int32
+    physicalWidth*, physicalHeight*: int32
+    scale*: float32
+    transform*: int32
     isPrimary*: bool
 
   ShellSnapshot* = object
