@@ -684,10 +684,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     for eff in effects:
       if eff.kind == EffectKind.EffManageDirty:
-        if msg.kind == MsgKind.CmdTick:
-          daemon.markRenderDirty(AnimationManageReason)
-        else:
-          daemon.requestManage("effect:" & $msg.kind)
+        daemon.requestManage("effect:" & $msg.kind)
       else:
         daemon.executeEffect(eff)
 

@@ -85,7 +85,7 @@ suite "Runtime logging":
     check source.contains("nowMs - lastMotion >= delay")
     check source.contains("reason != \"recent-focus\"")
     check source.contains("AnimationTickIntervalMs = int64(DefaultFrameIntervalMs)")
-    check source.contains("markRenderDirty(AnimationManageReason)")
+    check source.contains("manageReason == AnimationManageReason")
     check source.contains("\"recent_delta\"")
     check source.contains("\"ipc_counters\"")
     check source.contains("\"skipped_animation_manages\"")
@@ -94,7 +94,7 @@ suite "Runtime logging":
     check sampleWrite >= 0
     check sampleWrite < renderStart
 
-  test "high frequency tick updates avoid full snapshots and manage requests":
+  test "high frequency tick updates avoid full snapshots and rule refresh":
     let updateSource = readFile("src/systems/update.nim")
     let appSource = readFile("src/daemon/app.nim")
 
@@ -105,7 +105,7 @@ suite "Runtime logging":
     check updateSource.contains(
       "dirty and msg.kind != MsgKind.CmdTick and model.windowRuleStateMatchersEnabled()"
     )
-    check appSource.contains("markRenderDirty(AnimationManageReason)")
+    check appSource.contains("AnimationManageReason")
     check appSource.contains("if msg.kind == MsgKind.CmdTick:")
 
   test "dev mode enables behavior logging unless explicitly overridden":
