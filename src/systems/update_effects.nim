@@ -151,24 +151,27 @@ proc broadcastTriadWindowChanged*(snapshot: ShellSnapshot, winId: uint32): Effec
 proc broadcastWindowChanged*(winId: uint32): Effect =
   Effect(kind: EffectKind.EffBroadcastWindowChanged, broadcastWindowId: winId)
 
+proc renderDirty*(reason: string): Effect =
+  Effect(kind: EffectKind.EffRenderDirty, renderDirtyReason: reason)
+
 proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
   case kind
   of MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlFocusChanged,
       MsgKind.WlWindowFullscreenRequested, MsgKind.WlWindowExitFullscreenRequested,
       MsgKind.WlWindowParent, MsgKind.WlWindowMaximizeRequested,
       MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
-      MsgKind.WlWindowDimensions, MsgKind.WlWindowIdentifier, MsgKind.WlWindowAppId,
-      MsgKind.WlWindowTitle, MsgKind.WlWindowDimensionsHint, MsgKind.CmdFocusNext,
-      MsgKind.CmdFocusPrev, MsgKind.CmdFocusDirection, MsgKind.CmdFocusLast,
-      MsgKind.CmdFocusTagLeft, MsgKind.CmdFocusTagRight,
-      MsgKind.CmdFocusOccupiedTagLeft, MsgKind.CmdFocusOccupiedTagRight,
-      MsgKind.CmdFocusColumnFirst, MsgKind.CmdFocusColumnLast,
-      MsgKind.CmdFocusWindowOrWorkspaceUp, MsgKind.CmdFocusWindowOrWorkspaceDown,
-      MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTagLeft,
-      MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveToWorkspaceIndex,
-      MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWindow,
-      MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp,
-      MsgKind.CmdMoveWindowDown, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.WlWindowIdentifier, MsgKind.WlWindowAppId, MsgKind.WlWindowTitle,
+      MsgKind.WlWindowDimensionsHint, MsgKind.CmdFocusNext, MsgKind.CmdFocusPrev,
+      MsgKind.CmdFocusDirection, MsgKind.CmdFocusLast, MsgKind.CmdFocusTagLeft,
+      MsgKind.CmdFocusTagRight, MsgKind.CmdFocusOccupiedTagLeft,
+      MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusColumnFirst,
+      MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,
+      MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdFocusWorkspaceIndex,
+      MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
+      MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
+      MsgKind.CmdMoveWindow, MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight,
+      MsgKind.CmdMoveWindowUp, MsgKind.CmdMoveWindowDown,
+      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
       MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdMoveColumnLeft,
       MsgKind.CmdMoveColumnRight, MsgKind.CmdMoveColumnToFirst,
       MsgKind.CmdMoveColumnToLast, MsgKind.CmdSwapWindowUp, MsgKind.CmdSwapWindowDown,
@@ -222,23 +225,22 @@ proc shouldBroadcastOutputsChanged*(kind: MsgKind): bool =
 
 proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
   case kind
-  of MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlWindowDimensions,
-      MsgKind.WlWindowDimensionsHint, MsgKind.WlWindowParent,
-      MsgKind.WlWindowFullscreenRequested, MsgKind.WlWindowExitFullscreenRequested,
-      MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
-      MsgKind.WlWindowMinimizeRequested, MsgKind.CmdSetLayout,
-      MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout, MsgKind.CmdSetMasterCount,
-      MsgKind.CmdSetMasterRatio, MsgKind.CmdAdjustMasterCount,
-      MsgKind.CmdAdjustMasterRatio, MsgKind.CmdMaximizeColumn, MsgKind.CmdResizeWidth,
-      MsgKind.CmdResizeHeight, MsgKind.CmdSetColumnWidth,
-      MsgKind.CmdSwitchProportionPreset, MsgKind.CmdFocusTag, MsgKind.CmdBspPreselect,
-      MsgKind.CmdBspPreselectCancel, MsgKind.CmdBspPreselectRatio,
-      MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTag,
-      MsgKind.CmdMoveWindowToTag, MsgKind.CmdMoveToWorkspaceIndex,
-      MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveToTagLeft,
-      MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindow, MsgKind.CmdMoveWindowLeft,
-      MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp, MsgKind.CmdMoveWindowDown,
-      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+  of MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlWindowDimensionsHint,
+      MsgKind.WlWindowParent, MsgKind.WlWindowFullscreenRequested,
+      MsgKind.WlWindowExitFullscreenRequested, MsgKind.WlWindowMaximizeRequested,
+      MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
+      MsgKind.CmdSetLayout, MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout,
+      MsgKind.CmdSetMasterCount, MsgKind.CmdSetMasterRatio,
+      MsgKind.CmdAdjustMasterCount, MsgKind.CmdAdjustMasterRatio,
+      MsgKind.CmdMaximizeColumn, MsgKind.CmdResizeWidth, MsgKind.CmdResizeHeight,
+      MsgKind.CmdSetColumnWidth, MsgKind.CmdSwitchProportionPreset, MsgKind.CmdFocusTag,
+      MsgKind.CmdBspPreselect, MsgKind.CmdBspPreselectCancel,
+      MsgKind.CmdBspPreselectRatio, MsgKind.CmdFocusWorkspaceIndex,
+      MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTag, MsgKind.CmdMoveWindowToTag,
+      MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
+      MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindow,
+      MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp,
+      MsgKind.CmdMoveWindowDown, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
       MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdMoveColumnLeft,
       MsgKind.CmdMoveColumnRight, MsgKind.CmdMoveColumnToFirst,
       MsgKind.CmdMoveColumnToLast, MsgKind.CmdSwapWindowUp, MsgKind.CmdSwapWindowDown,
@@ -254,7 +256,7 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
     false
 
 proc shouldBroadcastTriadStateChanged*(kind: MsgKind): bool =
-  if kind == MsgKind.WlWindowTitle:
+  if kind in {MsgKind.WlWindowTitle, MsgKind.WlWindowDimensions}:
     return false
   kind.shouldBroadcastTriadLayoutChanged() or kind.shouldBroadcastWindowsChanged() or
     kind.shouldBroadcastOutputsChanged() or
@@ -388,7 +390,7 @@ proc addMaximizedPresentationEffect(
   effects.addSetMaximizedEffect(win.id, present)
 
 proc shouldRequestManageDirty(kind: MsgKind): bool =
-  kind != MsgKind.WlWindowTitle
+  kind notin {MsgKind.WlWindowTitle, MsgKind.WlWindowDimensions}
 
 proc fullscreenWindow(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
   let win = snapshot.windowById(winId)
@@ -549,15 +551,17 @@ proc addPostUpdateEffects*(
 
   if dirty and
       msg.kind in {
-        MsgKind.WlWindowCreated, MsgKind.WlWindowAppId, MsgKind.WlWindowTitle
+        MsgKind.WlWindowCreated, MsgKind.WlWindowAppId, MsgKind.WlWindowTitle,
+        MsgKind.WlWindowDimensions,
       }:
     let openedId =
       case msg.kind
       of MsgKind.WlWindowCreated: msg.windowId
       of MsgKind.WlWindowAppId: msg.appIdWindowId
       of MsgKind.WlWindowTitle: msg.titleWindowId
+      of MsgKind.WlWindowDimensions: msg.dimensionsWindowId
       else: 0'u32
-    if msg.kind == MsgKind.WlWindowTitle:
+    if msg.kind in {MsgKind.WlWindowTitle, MsgKind.WlWindowDimensions}:
       effects.add(broadcastWindowChanged(openedId))
     else:
       let effect = after.broadcastWindowOpened(openedId)
@@ -567,6 +571,8 @@ proc addPostUpdateEffects*(
   if dirty and msg.kind.shouldRequestManageDirty() and
       not effects.hasEffect(EffectKind.EffManageDirty):
     effects.add(Effect(kind: EffectKind.EffManageDirty))
+  elif dirty and msg.kind == MsgKind.WlWindowDimensions:
+    effects.add(renderDirty("effect:" & $msg.kind))
 
   if dirty or collapsed or pruned:
     if overviewPreview and not overviewWorkspaceChanged:

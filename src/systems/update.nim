@@ -135,6 +135,8 @@ proc compactRuntimeEffects(effects: seq[Effect]): JsonNode =
       )
     of EffectKind.EffFocusWindow:
       result.add(%*{"kind": $effect.kind, "window_id": effect.focusId})
+    of EffectKind.EffRenderDirty:
+      result.add(%*{"kind": $effect.kind, "reason": effect.renderDirtyReason})
     of EffectKind.EffBroadcastWindowChanged:
       result.add(%*{"kind": $effect.kind, "window_id": effect.broadcastWindowId})
     of EffectKind.EffSetIdleInhibit:

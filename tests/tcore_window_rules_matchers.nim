@@ -144,6 +144,31 @@ suite "Core Runtime Logic: window rules matchers":
     )
     check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
 
+  test "Window dimensions update render state without manage dirty":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 1))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "A")
+    )
+
+    let effects = model.updateModel(
+      Msg(
+        kind: MsgKind.WlWindowDimensions,
+        dimensionsWindowId: 1,
+        actualWidth: 800,
+        actualHeight: 600,
+      )
+    )
+
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastWindowChanged and it.broadcastWindowId == 1
+    )
+    check effects.anyIt(it.kind == EffectKind.EffRenderDirty)
+    check not effects.anyIt(it.kind == EffectKind.EffManageDirty)
+    check not effects.anyIt(it.kind == EffectKind.EffBroadcastTriadJson)
+    check not effects.anyIt(it.kind == EffectKind.EffBroadcastJson)
+
   test "Window rule state matchers use focused and active window state":
     var model = initRuntimeStateFromConfig(
       Config(

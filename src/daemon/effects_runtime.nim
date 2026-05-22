@@ -14,7 +14,7 @@ import
   child_process_runtime, idle_inhibit_runtime, ipc_broadcast_runtime,
   live_restore_runtime, manage_requests, output_management_runtime, process_runner,
   protocol_surface_runtime, quickshell_runner, render_runtime, screenshot_runner,
-  spawn_context, state
+  spawn_context, state, render_invalidation
 
 proc executeWindowChangedBroadcast(daemon: var TriadDaemon, winId: uint32) =
   let niriInterested = hasNiriSubscribers()
@@ -179,6 +179,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffRenderFinish:
     if daemon.riverManager != nil and daemon.riverPhase == RiverPhase.RiverRender:
       daemon.riverManager.renderFinish()
+  of EffectKind.EffRenderDirty:
+    daemon.markRenderDirty(eff.renderDirtyReason)
   of EffectKind.EffManageDirty:
     daemon.requestManage("effect")
   of EffectKind.EffBroadcastJson:

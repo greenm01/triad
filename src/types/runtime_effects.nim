@@ -5,6 +5,7 @@ type
     EffNone
     EffManageFinish
     EffRenderFinish
+    EffRenderDirty
     EffProposeDimensions
     EffSetPosition
     EffFocusWindow
@@ -40,6 +41,8 @@ type
     case kind*: EffectKind
     of EffectKind.EffLog:
       msg*: string
+    of EffectKind.EffRenderDirty:
+      renderDirtyReason*: string
     of EffectKind.EffSetPosition:
       windowId*: uint32
       x*, y*, w*, h*: int32
