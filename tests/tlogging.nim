@@ -107,6 +107,7 @@ suite "Runtime logging":
     check updateSource.contains(
       "dirty and msg.kind != MsgKind.CmdTick and model.windowRuleStateMatchersEnabled()"
     )
+    check updateSource.contains("MsgKind.WlWindowTitle, MsgKind.CmdTick")
     check appSource.contains("AnimationManageReason")
     check appSource.contains("if msg.kind == MsgKind.CmdTick:")
 

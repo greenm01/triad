@@ -413,7 +413,7 @@ proc shouldSyncFullscreenPresentation(
     return true
   kind in {
     MsgKind.WlManageStart, MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed,
-    MsgKind.WlWindowAppId, MsgKind.WlWindowTitle, MsgKind.WlWindowFullscreenRequested,
+    MsgKind.WlWindowAppId, MsgKind.WlWindowFullscreenRequested,
     MsgKind.WlWindowExitFullscreenRequested, MsgKind.WlOutputRemoved,
     MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
     MsgKind.CmdExitFullscreenById, MsgKind.CmdToggleOverview, MsgKind.CmdOpenOverview,
@@ -465,7 +465,7 @@ proc shouldSyncMaximizedPresentation(
     return true
   kind in {
     MsgKind.WlManageStart, MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed,
-    MsgKind.WlWindowAppId, MsgKind.WlWindowTitle, MsgKind.WlWindowMaximizeRequested,
+    MsgKind.WlWindowAppId, MsgKind.WlWindowMaximizeRequested,
     MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
     MsgKind.CmdSetLayout, MsgKind.CmdSetCustomLayout, MsgKind.CmdSwitchLayout,
     MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleMaximized, MsgKind.CmdMinimize,

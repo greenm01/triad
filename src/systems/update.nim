@@ -152,7 +152,7 @@ proc needsFullSnapshotAlways(kind: MsgKind): bool =
   of MsgKind.WlPointerDelta, MsgKind.WlRecentWindowPointerMotion,
       MsgKind.WlOverviewPointerScrollRequested, MsgKind.WlPointerMoveRequested,
       MsgKind.WlPointerResizeRequested, MsgKind.WlOverviewPointerDragRequested,
-      MsgKind.CmdTick:
+      MsgKind.WlWindowTitle, MsgKind.CmdTick:
     false
   else:
     true
