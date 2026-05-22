@@ -21,6 +21,7 @@ proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
 proc cleanupRiverObjects*(daemon: var TriadDaemon) =
   daemon.manageRequestPending = false
   daemon.manageRequestReason = ""
+  daemon.activeManageReason = ""
 
   daemon.destroyAllProtocolSurfaces()
 

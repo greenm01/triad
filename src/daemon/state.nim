@@ -172,6 +172,7 @@ type
     renderRequests*: uint64
     skippedRenderRequests*: uint64
     manageRequests*: uint64
+    skippedAnimationManages*: uint64
 
   RuntimeLoopCounters* = object
     loopIterations*: uint64
@@ -252,6 +253,7 @@ type
     hotkeyOverlayKeyEatArmed*: bool
     manageRequestPending*: bool
     manageRequestReason*: string
+    activeManageReason*: string
     screenshotCaptureActive*: bool
     shmBufferCounter*: uint32
 

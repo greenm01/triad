@@ -279,6 +279,8 @@ proc renderCounterDeltasJson(before, after: RenderPerfCounters): JsonNode =
     "skipped_render_requests":
       after.skippedRenderRequests - before.skippedRenderRequests,
     "manage_requests": after.manageRequests - before.manageRequests,
+    "skipped_animation_manages":
+      after.skippedAnimationManages - before.skippedAnimationManages,
   }
 
 proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
@@ -370,6 +372,7 @@ proc perfStatusJson(daemon: TriadDaemon): string =
         "render_requests": counters.renderRequests,
         "skipped_render_requests": counters.skippedRenderRequests,
         "manage_requests": counters.manageRequests,
+        "skipped_animation_manages": counters.skippedAnimationManages,
       },
       "loop_counters": daemon.loopCounters.loopCountersJson(),
       "frame_tick_reason_counts": daemon.frameTickReasonCounts.reasonCountsJson(),
@@ -536,13 +539,20 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     if msg.kind == MsgKind.WlManageStart:
       daemon.riverPhase = RiverPhase.RiverManage
-      let projection = syncRuntimeLayoutProjection("manage layout", msg)
-      daemon.currentFrameTabBars = projection.frameTabBars
-      daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
-      daemon.currentBspPreselections = projection.bspPreselections
-      daemon.proposeDesiredDimensions(projection.instructions)
-      daemon.applyManageState()
-      daemon.flushPendingManageEffects()
+      let manageReason = daemon.activeManageReason
+      daemon.activeManageReason = ""
+      let animationOnlyManage =
+        manageReason == AnimationManageReason and daemon.pendingManageEffects.len == 0
+      if not animationOnlyManage:
+        let projection = syncRuntimeLayoutProjection("manage layout", msg)
+        daemon.currentFrameTabBars = projection.frameTabBars
+        daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
+        daemon.currentBspPreselections = projection.bspPreselections
+        daemon.proposeDesiredDimensions(projection.instructions)
+        daemon.applyManageState()
+        daemon.flushPendingManageEffects()
+      else:
+        inc daemon.perfCounters.skippedAnimationManages
       for eff in effects:
         if eff.kind != EffectKind.EffManageDirty:
           daemon.executeEffect(eff)
