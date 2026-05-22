@@ -217,6 +217,8 @@ proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
     result = max(1, int(max(1'i64, tickInterval - elapsedMs)))
   if daemon.configReloadDebouncer.pending:
     result = min(result, max(1, int(daemon.configReloadDebouncer.deadlineMs - nowMs)))
+  if daemon.cleanRenderStartPending and daemon.cleanRenderFinishDueMs > 0:
+    result = min(result, max(1, int(daemon.cleanRenderFinishDueMs - nowMs)))
   let recoveryMs = daemon.nextQuickshellRecoveryMs()
   if recoveryMs > 0:
     result = min(result, max(1, int(recoveryMs - nowMs)))
@@ -346,6 +348,7 @@ proc maybeWriteRuntimeLoopSample(daemon: var TriadDaemon, nowMs: int64) =
       "queue_len": daemon.msgQueue.len,
       "render_dirty": daemon.renderDirty,
       "render_dirty_reason": daemon.renderDirtyReason,
+      "clean_render_start_pending": daemon.cleanRenderStartPending,
       "loop_counters":
         daemon.loopCounters.delta(previousLoopCounters).loopCountersJson(),
       "render_counters":
@@ -921,6 +924,9 @@ proc main*() =
       break
 
     let nowMs = unixMs()
+    if daemon.cleanRenderStartPending and nowMs >= daemon.cleanRenderFinishDueMs:
+      daemon.finishPendingCleanRender()
+
     if lastWatcherPollMs.pollDue(nowMs, MaintenancePollIntervalMs):
       lastWatcherPollMs = nowMs
       inc daemon.loopCounters.watcherPolls

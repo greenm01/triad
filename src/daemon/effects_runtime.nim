@@ -155,6 +155,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffRenderFinish:
     if daemon.riverManager != nil and daemon.riverPhase == RiverPhase.RiverRender:
       daemon.riverManager.renderFinish()
+    daemon.cleanRenderStartPending = false
+    daemon.cleanRenderFinishDueMs = 0
   of EffectKind.EffManageDirty:
     daemon.requestManage("effect")
   of EffectKind.EffBroadcastJson:

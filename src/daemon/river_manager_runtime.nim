@@ -22,6 +22,8 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
   daemon.manageRequestPending = false
   daemon.manageRequestReason = ""
   daemon.activeManageReason = ""
+  daemon.cleanRenderStartPending = false
+  daemon.cleanRenderFinishDueMs = 0
 
   daemon.destroyAllProtocolSurfaces()
 
@@ -251,8 +253,7 @@ proc onRenderStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
     inc daemon[].perfCounters.renderStarts
     inc daemon[].perfCounters.skippedRenderStarts
     daemon[].riverPhase = RiverPhase.RiverRender
-    mgr.renderFinish()
-    daemon[].riverPhase = RiverPhase.RiverIdle
+    daemon[].deferCleanRenderFinish()
     return
   daemon.enqueue(Msg(kind: MsgKind.WlRenderStart))
 
