@@ -97,7 +97,7 @@ Control window geometry and behavior.
 | `master` | `Block` | Configure `count` and `split-ratio` (0.05..0.95). |
 | `spiral` | `Block` | Configure `ratio`, `main-pane-ratio`, `main-pane`, and `clockwise`. |
 | `border` | `Block` | Global `width` (0..64), `active-color`, and `inactive-color`. |
-| `frame-tabs` | `Block` | Colors for frame-tree tabs and empty frames. |
+| `frame-tabs` | `Block` | Shared colors for frame-tree/notion tabs and i3 tabbed/stacking containers; also controls empty frame backgrounds. |
 | `smart-gaps` | `Bool` | Remove gaps when only one window is visible. |
 | `enable-animations` | `Bool` | Toggle viewport animations. |
 | `animation-speed` | `0.0..1.0` | Speed of camera movement (0.0 is instant). |

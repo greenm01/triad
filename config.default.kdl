@@ -298,7 +298,7 @@ bindings {
     bind "Super+Shift+t" "toggle-floating"
     bind "Super+Shift+b" "minimize"
 
-    // Scratchpad. Mirrors Mango: send, toggle, restore.
+    // Scratchpad: send, toggle, restore.
     bind "Super+s" "move-to-scratchpad"
     bind "Super+Alt+s" "toggle-scratchpad"
     bind "Super+Shift+s" "restore-scratchpad"

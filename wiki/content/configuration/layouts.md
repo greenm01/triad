@@ -41,13 +41,13 @@ and native layouts. Use names like `notion`, `dwindle`, `center-tile`,
 
 ## Scrolling
 
-If you've used Niri or PaperWM, this will feel familiar. Windows sit on an
-infinite horizontal (or vertical) strip. Navigation is scrolling, not switching.
+Windows sit on an infinite horizontal or vertical strip. Navigation is
+scrolling, not switching.
 
-| Layout | Description | You might know it from |
+| Layout | Description | Model |
 |---|---|---|
-| `scroller` | Infinite horizontal strip. Windows scroll left and right past the screen edge. | Niri, PaperWM, Hyprland, Mango |
-| `vertical-scroller` | Same as scroller, oriented vertically. | Mango |
+| `scroller` | Infinite horizontal strip. Windows scroll left and right past the screen edge. | Horizontal strip |
+| `vertical-scroller` | Same as scroller, oriented vertically. | Vertical strip |
 
 ---
 
@@ -56,20 +56,20 @@ infinite horizontal (or vertical) strip. Navigation is scrolling, not switching.
 The layout algorithm places all windows automatically. Windows reflow when
 others open or close. No manual splitting required.
 
-| Layout | Description | You might know it from |
+| Layout | Description | Model |
 |---|---|---|
-| `tile` | One master window takes a fixed portion; the rest stack on the other side. | dwm, awesome, qtile |
-| `vertical-tile` | Master on top, stack below. Portrait orientation of tile. | Mango |
-| `right-tile` | Master on right, stack on left. | Mango |
-| `center-tile` | Master centered; stack windows flank left and right. | Mango |
-| `grid` | Windows fill equal-area cells. Adapts as windows open and close. | awesome, qtile |
-| `vertical-grid` | Grid oriented vertically. | Mango |
-| `monocle` | One window fills the screen. Cycle through the rest. | dwm, xmonad |
-| `deck` | Master visible; others stacked behind as layers. | dwm (patch) |
-| `vertical-deck` | Deck oriented vertically. | Mango |
-| `spiral` | Each new window takes a ratio of the remaining space, spiraling inward. | xmonad, qtile |
-| `master` | Single master with a configurable number of stack windows. | Hyprland |
-| `tgmix` | Shows windows from multiple tags under one layout. | Mango |
+| `tile` | One master window takes a fixed portion; the rest stack on the other side. | Master-stack |
+| `vertical-tile` | Master on top, stack below. Portrait orientation of tile. | Vertical master-stack |
+| `right-tile` | Master on right, stack on left. | Mirrored master-stack |
+| `center-tile` | Master centered; stack windows flank left and right. | Centered master-stack |
+| `grid` | Windows fill equal-area cells. Adapts as windows open and close. | Grid |
+| `vertical-grid` | Grid oriented vertically. | Vertical grid |
+| `monocle` | One window fills the screen. Cycle through the rest. | Single-window view |
+| `deck` | Master visible; others stacked behind as layers. | Master deck |
+| `vertical-deck` | Deck oriented vertically. | Vertical deck |
+| `spiral` | Each new window takes a ratio of the remaining space, spiraling inward. | Recursive split |
+| `master` | Single master with a configurable number of stack windows. | Master-stack |
+| `tgmix` | Shows windows from multiple tags under one layout. | Tag-mixed |
 
 ---
 
@@ -78,24 +78,23 @@ others open or close. No manual splitting required.
 Each new window bisects the focused region. The tree grows automatically as
 windows open; you resize and rebalance after the fact.
 
-| Layout | Description | You might know it from |
+| Layout | Description | Model |
 |---|---|---|
-| `bsp` | New windows split the focused leaf automatically. Janet drives the geometry policy. | bspwm, Hyprland |
-| `bsp-tree` | Persistent binary partition tree. Triad owns insertion, preselection, directional focus, resize, and balance. | bspwm |
-| `dwindle` | New windows split the focused container and spiral inward. | Hyprland, Mango |
+| `bsp` | New windows split the focused leaf automatically. Janet drives the geometry policy. | Automatic BSP |
+| `bsp-tree` | Persistent binary partition tree. Triad owns insertion, preselection, directional focus, resize, and balance. | Native BSP |
+| `dwindle` | New windows split the focused container and spiral inward. | Focused split |
 
 ---
 
 ## Frame-tree
 
 Persistent named frames exist independently of their contents. Build the frame
-structure first; windows fill it. Frames survive when empty. If you've used
-Notion or StumpWM, this model will feel familiar.
+structure first; windows fill it. Frames survive when empty.
 
-| Layout | Description | You might know it from |
+| Layout | Description | Model |
 |---|---|---|
-| `notion` | Janet geometry policy over Triad-owned persistent frames and tabs. | Notion |
-| `frame-tree` | Persistent leaf frames hold tabs. Split nodes divide space. Empty frames survive. | Notion, Ion, StumpWM |
+| `notion` | Janet geometry policy over Triad-owned persistent frames and tabs. | Frame policy |
+| `frame-tree` | Persistent leaf frames hold tabs. Split nodes divide space. Empty frames survive. | Native frame tree |
 
 ---
 
@@ -105,11 +104,11 @@ You build the layout manually by splitting containers. Each container runs in
 split, tabbed, or stacked mode independently. The tree persists across window
 changes.
 
-| Layout | Description | You might know it from |
+| Layout | Description | Model |
 |---|---|---|
-| `i3` | Persistent i3-style container tree. Triad owns splits, insertion, movement, resize, and restore. | i3, Sway |
-| `tabbed` | Windows stacked as tabs inside a split-tree container. | i3, Sway |
-| `stacked` | Windows stacked vertically with visible titlebars inside a split-tree container. | i3, Sway |
+| `i3` | Persistent split-tree container model. Triad owns splits, insertion, movement, resize, and restore. | Native split tree |
+| `tabbed` | Windows stacked as tabs inside a split-tree container. | Tabbed container |
+| `stacked` | Windows stacked vertically with visible titlebars inside a split-tree container. | Stacked container |
 
 ---
 

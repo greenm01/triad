@@ -124,7 +124,7 @@ Control window geometry and behavior.
 | `master` | `Block` | Configure `count` and `split-ratio` (0.05..0.95). |
 | `spiral` | `Block` | Configure `ratio`, `main-pane-ratio`, `main-pane`, and `clockwise`. |
 | `border` | `Block` | Global `width` (0..64), `active-color`, and `inactive-color`. |
-| `frame-tabs` | `Block` | Colors for frame-tree tabs and empty frames. |
+| `frame-tabs` | `Block` | Shared colors for frame-tree/notion tabs and i3 tabbed/stacking containers; also controls empty frame backgrounds. |
 | `smart-gaps` | `Bool` | Remove gaps when only one window is visible. |
 | `enable-animations` | `Bool` | Toggle viewport animations. |
 | `animation-speed` | `0.0..1.0` | Speed of camera movement (0.0 is instant). |
@@ -396,13 +396,14 @@ A birds-eye view of all workspaces.
 ## Integration
 
 ### Shell Compatibility
-Triad provides a compatibility layer for shells expecting Niri-style IPC.
+Triad provides its own native shell IPC and an optional compatibility layer for
+shells that consume the Niri workspace schema.
 
 Every shell profile launched by Triad receives `$TRIAD_SOCKET` for native IPC.
 When a shell profile uses `niri-compat #true`, Triad also sets `$NIRI_SOCKET`
 and provides a compatible IPC facade.
-This supports Niri-aware shells such as Noctalia, DankMaterialShell, Waylee,
-and Waybar's `niri/workspaces` module.
+This lets Noctalia, DankMaterialShell, Waylee, and Waybar's `niri/workspaces`
+module run without Triad-specific patches.
 
 ### Janet Scripting
 Triad embeds Janet for advanced automation. Scripts in `automation-dir` can subscribe to events and emit commands.

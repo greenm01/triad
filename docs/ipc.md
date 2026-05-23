@@ -110,9 +110,11 @@ Set the layout mode for the active workspace:
 
 ---
 
-## Event Stream (Niri Emulation)
+## Event Stream
 
-Triad broadcasts state changes in a Niri-compatible JSON format for integration with Waybar's `niri/workspaces` module and shells like Noctalia, DankMaterialShell, and Waylee.
+Triad broadcasts state changes over its native event stream. It can also expose
+the compatibility JSON schema used by Waybar's `niri/workspaces` module and
+shells like Noctalia, DankMaterialShell, and Waylee.
 
 ### Subscription
 `triad msg event-stream`

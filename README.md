@@ -21,7 +21,7 @@ The layout model supports algorithmic tiling, scrollable strips, BSP trees, and 
 ### Features
 
 * **Crash resilience:** Layout errors do not affect the compositor session.
-* **Shell ready:** Niri-shaped JSON works with popular shell bars.
+* **Shell ready:** Native IPC plus an optional compatibility facade work with popular shell bars.
 * **Dynamic workspaces:** Triad spawns workspaces when needed and prunes them when empty.
 * **Smooth motion:** Configurable frame pacing and exponential easing for window movement.
 * **Scratchpad:** Utility windows manage as centered overlays.
@@ -43,7 +43,7 @@ You can also use Janet to create custom layouts. See [docs/tiling_wm_categories.
 
 ### Shell Support
 
-Triad supports Waybar and Niri-compatible shell bars. It projects state as Niri-shaped JSON, making it compatible with **Waybar**'s `niri/workspaces` module and shells like **Noctalia-shell**, **DankMaterialShell**, and **Waylee** without modification.
+Triad exposes its own state socket for native integrations and can also launch shell profiles with a compatibility socket for existing bars. That lets **Waybar**'s `niri/workspaces` module and shells like **Noctalia-shell**, **DankMaterialShell**, and **Waylee** run without patches.
 
 ### Installation
 

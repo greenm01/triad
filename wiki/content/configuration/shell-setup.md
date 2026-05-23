@@ -61,14 +61,14 @@ Each profile takes:
 |---|---|---|
 | `launch` | String argv | Command to start the shell. |
 | `stop` | String argv | Command to stop it cleanly. |
-| `niri-compat` | Bool | Set `$NIRI_SOCKET` and expose a Niri-compatible IPC facade. Required for Noctalia, DankMaterialShell, Waylee, and Waybar's `niri/workspaces` module. |
+| `niri-compat` | Bool | Set `$NIRI_SOCKET` and expose the compatibility IPC facade used by Noctalia, DankMaterialShell, Waylee, and Waybar's `niri/workspaces` module. |
 
 ## Supported Shells
 
 ### Waybar
 
 Waybar reads standard Wayland protocols for most modules. Its
-`niri/workspaces` module uses Triad's Niri-compatible IPC, so add
+`niri/workspaces` module uses Triad's compatibility IPC facade, so add
 `niri-compat #true` when you want Waybar workspace buttons.
 
 ```kdl
@@ -81,9 +81,9 @@ profile "waybar" {
 
 ### Noctalia, DankMaterialShell, and Waylee
 
-These shells expect Niri-shaped IPC. Set `niri-compat #true` in their
-profiles. Triad sets `$NIRI_SOCKET` to a compatibility socket and translates
-events into the Niri JSON format.
+These shells consume the compatibility IPC schema. Set `niri-compat #true` in
+their profiles. Triad sets `$NIRI_SOCKET` to a compatibility socket and
+translates events from its native snapshot.
 
 ```kdl
 profile "noctalia" {

@@ -3,9 +3,9 @@
 ## Overview
 Triad is a dynamic window management client built for **River 0.4+**, leveraging the `river-window-management-v1` Wayland protocol. It is written in **Nim** for performance and safety, configured via **KDL**, and built around one canonical data model with explicit runtime transformations.
 
-Triad combines the infinite scrolling workflow of **Niri** with the flexible,
-per-workspace hybrid layouts of **Mango**, while remaining extensible enough
-to power a full desktop environment using external shell bars.
+Triad owns a tag-first runtime with per-workspace layouts, programmable policy,
+native IPC, and optional shell compatibility. It is designed to stand on its own
+while still integrating cleanly with existing River and desktop-shell tooling.
 
 ## Core Technologies
 *   **Compositor:** River 0.4+
@@ -61,10 +61,10 @@ River's `window-management-v1` requires a double-buffered sequence. The runtime 
 Layouts are decoupled from the core Wayland event loop. They are simply mathematical functions called during the View phase based on the current `TagState`.
 
 *   **Tag State:** Each Tag (Workspace) maintains its own layout configuration (e.g., Tag 1 is a Scroller, Tag 2 is a Master-Stack).
-*   **Scroller Layout:** Implements a Mango-inspired hybrid scrolling workflow. Unlike Niri's fixed ribbon, Triad's scroller treats scrolling as a swappable policy based on window proportions.
+*   **Scroller Layout:** Implements a proportion-based scrolling workflow. Triad's scroller treats scrolling as a swappable policy based on window and column proportions.
     *   **Proportion-Based:** Windows (or Columns) occupy a fraction of the screen width (e.g., 0.5, 0.8). If total proportions exceed 1.0, windows slide into a virtual overflow area.
-    *   **Viewport Centering (Niri Influence):** While the math is Mango-style, Triad supports an optional `center-focused-column` mode. When enabled, the `viewport_x_offset` is automatically adjusted to center the focused window, providing the smooth Niri-style navigation feel within Mango's flexible framework.
-*   **Tiling Layouts:** Traditional Mango-style layouts (Master-Stack, Grid) execute rigid geometric subdivisions based on configured ratios.
+    *   **Viewport Centering:** Triad supports an optional `center-focused-column` mode. When enabled, the `viewport_x_offset` is automatically adjusted to center the focused window.
+*   **Tiling Layouts:** Algorithmic layouts such as master-stack and grid execute geometric subdivisions based on configured ratios.
 
 ### 4. Configuration (KDL)
 Triad uses KDL for robust, hot-reloadable configuration.
@@ -81,23 +81,23 @@ Triad uses KDL for robust, hot-reloadable configuration.
     *   **BSP-tree Fallback:** Layouts using `fallback="bsp-tree"` can return geometry via `:bsp-node-id`. Triad maps these to tiled windows and exposes preselection state (`:preselect-direction`, `:preselect-ratio`).
     *   **Split-tree (i3) Fallback:** Layouts using `fallback="i3"` receive immutable `:split-nodes` and return geometry via `:split-node-id`. Mutation (insertion, resize, etc.) remains a native state operation.
 
-Config names follow the policy in `docs/configuration.md`: Niri-style KDL
-clarity is the naming baseline, while Mango remains a feature reference for
-layouts, tags, scratchpads, and pointer workflows.
+Config names follow the policy in `docs/configuration.md`: explicit
+kebab-case names, positive booleans, and command names that describe Triad
+behavior directly.
 
-### 5. Shell IPC and Niri Projection
+### 5. Shell IPC and Compatibility Projection
 Triad separates Triad-native IPC from shell projection IPC to support both native and legacy shell ecosystems.
 
 *   **Canonical Shell Snapshot:** Triad derives all shell-facing state from a single internal model snapshot. This snapshot contains stable tag IDs, compact workspace indices, windows, outputs, focus history, and layout modes.
 *   **Native Triad IPC (`$TRIAD_SOCKET`):** The primary, long-term protocol for shells that integrate with Triad directly. It exposes versioned JSON requests and events including the full shell state and per-tag layout details.
-*   **Niri Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into Niri-shaped JSON. It is intentionally constrained to Niri semantics to support existing Niri-aware shells (Noctalia, DankMaterialShell, Waylee) and Waybar's `niri/workspaces` module without modification.
+*   **Compatibility Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into the JSON schema consumed by existing Niri-aware shells (Noctalia, DankMaterialShell, Waylee) and Waybar's `niri/workspaces` module.
 *   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
 
 IPC window and output IDs are numeric external compositor IDs, stable for the lifetime of the compositor object but distinct from Triad's internal logical IDs.
 
-### Niri Projection IPC
-Triad implements a Niri-shaped JSON IPC stream for shells that consume that
-schema.
+### Compatibility Projection IPC
+Triad implements an optional JSON IPC stream for shells that consume the Niri
+workspace schema.
 
 *   **Socket Path:** `$NIRI_SOCKET` points at a Triad-owned compatibility socket when Triad launches a Niri-compatible shell profile.
 *   **Protocol:** Triad implements the Niri request and event shapes used by shell code, including workspaces, windows, outputs, overview state, keyboard layouts, and event streams.
