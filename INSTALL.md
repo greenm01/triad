@@ -75,6 +75,9 @@ git clone https://github.com/greenm01/triad.git
 cd triad
 nimble installSession
 ```
+Before switching your login session, do a quick nested Wayland test from your
+current desktop — see [Try Triad From An Existing Desktop](#try-triad-from-an-existing-desktop)
+below.
 
 Then log out and choose **River (Triad)** from your display manager's session
 menu. The installer writes the session entry to
@@ -99,10 +102,6 @@ distro without requiring extra programs. To add a status bar or launcher, edit
 `~/.config/triad/config.kdl`. Use `examples/config/niltempus_config.kdl` as a
 reference for a fuller personal setup with shell profiles, browser bindings,
 and app-specific window rules.
-
-Before switching your login session, do a quick nested Wayland test from your
-current desktop — see [Try Triad From An Existing Desktop](#try-triad-from-an-existing-desktop)
-below.
 
 ## Optional Nix Dev Shell
 
