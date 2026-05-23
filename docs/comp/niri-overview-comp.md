@@ -47,7 +47,7 @@ Status values:
 | Drop into new workspace or gap | Drag can create or move to a new workspace above, below, or between existing workspaces. | Partial | Dynamic gap targeting exists; add explicit regression coverage. |
 | Keyboard shortcuts | Normal keyboard shortcuts continue to work while overview is open, with Escape/Return and arrow-key overview fallbacks. | Compliant | Triad keeps configured bindings active and adds overview fallback keys when the user has not bound those key slots. |
 | Niri IPC workspace actions | `FocusWorkspace*` actions work while overview is open. | Compliant | Covered by compatibility tests. |
-| Hot corner | Default top-left hot corner toggles overview. | Not Supported | Triad has no hot-corner input feature. |
+| Hot corner | Default top-left hot corner toggles overview. | Partial | Triad supports opt-in `overview.hot-corners` on each output and opens overview only; it does not enable Niri's default top-left toggle behavior. |
 | Multi-output overview | Niri renders and manages overview per output. | Partial | Triad remains primary-output oriented. |
 
 ## Implementation Notes
@@ -58,5 +58,5 @@ state that is restored on close. Focus, pointer, drag, and IPC workspace changes
 made while overview is open should retarget normal workspace camera state.
 
 The main remaining gaps are input-surface gaps rather than layout math gaps:
-continuous touchpad overview gestures, DnD edge scrolling, hot corner
-activation, and multi-output parity.
+continuous touchpad overview gestures, DnD edge scrolling, and multi-output
+parity.
