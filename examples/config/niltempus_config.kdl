@@ -64,23 +64,23 @@ workspaces {
 
 shells {
     enabled #true
-    active "wayle"
+    active "noctalia"
     cycle "dank" "noctalia" "waybar" "wayle"
     watchdog {
         enabled #true
-        fallback "waybar"
+        fallback "dank"
         exclusive-focus-timeout-ms 30000
     }
 
     profile "noctalia" {
-        launch "noctalia-shell"
-        stop "pkill" "-f" "noctalia-shell|noctalia-qs"
+        launch "/usr/bin/env" "EGL_PLATFORM=wayland" "EGL_VENDOR_LIBRARY_FILENAMES=/home/niltempus/.nix-profile/share/glvnd/egl_vendor.d/50_mesa.json" "LIBGL_DRIVERS_PATH=/home/niltempus/.nix-profile/lib/dri" "LD_LIBRARY_PATH=/home/niltempus/.nix-profile/lib" "noctalia"
+        stop "pkill" "-x" "noctalia"
         niri-compat #true
     }
 
     profile "dank" {
-        launch "dms" "run" "--session"
-        stop "dms" "kill"
+        launch "/usr/bin/env" "EGL_PLATFORM=wayland" "EGL_VENDOR_LIBRARY_FILENAMES=/home/niltempus/.nix-profile/share/glvnd/egl_vendor.d/50_mesa.json" "LIBGL_DRIVERS_PATH=/home/niltempus/.nix-profile/lib/dri" "LD_LIBRARY_PATH=/home/niltempus/.nix-profile/lib" "QT_QUICK_BACKEND=software" "/home/niltempus/src/DankMaterialShell/core/bin/dms" "--config" "/home/niltempus/src/DankMaterialShell/quickshell" "run" "--session"
+        stop "/home/niltempus/src/DankMaterialShell/core/bin/dms" "--config" "/home/niltempus/src/DankMaterialShell/quickshell" "kill"
         niri-compat #true
     }
 
@@ -148,7 +148,7 @@ screen-lock {
 }
 
 cursor {
-    theme "default"
+    theme "Vanilla-DMZ-AA"
     size 24
     shake-to-find #true
 }
@@ -225,6 +225,8 @@ recent-windows {
 }
 
 spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"
+spawn-at-startup "sh" "-lc" "command -v awww-daemon >/dev/null 2>&1 && (pgrep -x awww-daemon >/dev/null || awww-daemon &)"
+spawn-at-startup "sh" "-lc" "command -v awww >/dev/null 2>&1 && sleep 0.5 && awww img --resize crop --transition-type simple ~/Pictures/Wallpapers/great_wave_kanagawa.jpg || true"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
 spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"

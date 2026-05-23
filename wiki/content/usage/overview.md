@@ -16,6 +16,19 @@ Toggle overview with the configured binding (default `Super+o`) or:
 triad msg toggle-overview
 ```
 
+You can also open overview from configured hot corners. Hot corners are opt-in
+and open overview only; they do not close it when overview is already active.
+
+```kdl
+overview {
+  hot-corners {
+    size 12
+    top-left
+    bottom-right
+  }
+}
+```
+
 Press `Return` to confirm the selected window and exit. Press `Escape` to exit
 without changing focus.
 
