@@ -7,8 +7,15 @@ weight = 50
 
 ## Check the Session Log
 
-Triad writes a log for each session. The manager loop keeps a symlink to the
-most recent one:
+Two symlinks point to the newest logs. Check the session wrapper log first —
+it's written earliest in the startup chain and captures failures before the
+manager loop starts:
+
+```bash
+tail -n 200 ~/.local/state/triad/river-triad-session-latest.log
+```
+
+The manager loop log has daemon output after startup succeeds:
 
 ```bash
 tail -n 200 ~/.local/state/triad/triad-latest.log

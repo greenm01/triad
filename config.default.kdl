@@ -64,27 +64,22 @@ workspaces {
 //     adaptive-sync #false
 // }
 
+// Shell and bar integration is disabled by default so the session starts on
+// any distro without requiring external programs. To add a status bar, set
+// enabled to #true, uncomment active and cycle, and ensure the profile
+// command is installed. See examples/config/niltempus_config.kdl for a
+// fuller setup with multiple profiles.
 shells {
-    enabled #true
-    active "noctalia"
-    cycle "noctalia" "dank" "waybar"
+    enabled #false
     watchdog {
         enabled #true
         fallback "waybar"
         exclusive-focus-timeout-ms 30000
     }
 
-    profile "noctalia" {
-        launch "noctalia-shell"
-        stop "pkill" "-f" "noctalia-shell|noctalia-qs|qs.*noctalia-shell"
-        niri-compat #true
-    }
-
-    profile "dank" {
-        launch "dms" "run" "--session"
-        stop "dms" "kill"
-        niri-compat #true
-    }
+    // Waybar is widely packaged. Uncomment to use it:
+    // active "waybar"
+    // cycle "waybar"
 
     profile "waybar" {
         launch "waybar"
@@ -94,15 +89,15 @@ shells {
 }
 
 terminal {
-    command "kitty"
+    command "foot"
 }
 
 screenshot {
     directory "~/Pictures/Screenshots"
     filename-prefix "triad-screenshot"
-    capture-command "grim"
-    region-selector-command "slurp"
-    clipboard-command "wl-copy --type image/png"
+    // capture-command "grim"                    // requires grim
+    // region-selector-command "slurp"           // requires slurp
+    // clipboard-command "wl-copy --type image/png"  // requires wl-copy
     show-pointer #false
 }
 
@@ -218,9 +213,9 @@ bindings {
 
     // Launch/session.
     bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
-    bind "Super+Return" "spawn kitty"
-    bind "Super+Space" "spawn fuzzel"
-    // Add browser and file-manager binds in your personal config.
+    bind "Super+Return" "spawn foot"
+    // bind "Super+Space" "spawn fuzzel"  // requires fuzzel; see examples/config/
+    // Add browser, launcher, and file-manager binds in your personal config.
     bind "Super+Escape" "lock-session"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
     bind "Super+?" "toggle-hotkey-overlay" allow-inhibiting=#false hotkey-overlay-title="Show Important Hotkeys"
@@ -228,16 +223,16 @@ bindings {
     bind "Ctrl+Alt+r" "triad-reload" allow-inhibiting=#false
     bind "Ctrl+Alt+Backspace" "exit-session"
 
-    // Clipboard compatibility.
-    bind "Super+c" "spawn wtype -M ctrl -P Insert -p Insert -m ctrl" allow-inhibiting=#false
-    bind "Super+v" "spawn wtype -M shift -P Insert -p Insert -m shift" allow-inhibiting=#false
-    bind "Super+x" "spawn wtype -M ctrl x -m ctrl" allow-inhibiting=#false
+    // Clipboard compatibility (requires wtype; see examples/config/).
+    // bind "Super+c" "spawn wtype -M ctrl -P Insert -p Insert -m ctrl" allow-inhibiting=#false
+    // bind "Super+v" "spawn wtype -M shift -P Insert -p Insert -m shift" allow-inhibiting=#false
+    // bind "Super+x" "spawn wtype -M ctrl x -m ctrl" allow-inhibiting=#false
 
-    // Screenshots.
-    bind "Print" "screenshot"
-    bind "Ctrl+Print" "screenshot-screen"
-    bind "Alt+Print" "screenshot-window"
-    bind "Super+Print" "screenshot --clipboard-only"
+    // Screenshots (requires grim, slurp, wl-copy; see examples/config/).
+    // bind "Print" "screenshot"
+    // bind "Ctrl+Print" "screenshot-screen"
+    // bind "Alt+Print" "screenshot-window"
+    // bind "Super+Print" "screenshot --clipboard-only"
 
     // Focus. Arrow keys mirror h/j/k/l via mirror-hjkl-arrows.
     bind "Super+h" "focus-left"

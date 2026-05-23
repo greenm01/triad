@@ -52,10 +52,21 @@ sudo pacman -S nim nimble pkgconf wayland libxkbcommon pixman
 
 # Debian / Ubuntu
 sudo apt install nim nimble pkg-config libwayland-dev libxkbcommon-dev libpixman-1-dev
+
+# Fedora
+sudo dnf install nim nimble pkgconf wayland-devel libxkbcommon-devel pixman-devel
 ```
 
-If your distribution's `nim` package is older than 2.2.4, install a newer Nim
-with `choosenim` before building Triad.
+If your distribution's `nim` package is older than 2.2.4 (check with
+`nim --version`), install a current release with `choosenim`:
+
+```bash
+curl https://nim-lang.org/choosenim/init.sh -sSf | sh
+choosenim 2.2.4
+```
+
+Then make sure `~/.nimble/bin` is on your `PATH` before building Triad. Fedora
+packages in particular may ship an older Nim.
 
 Then build and install Triad:
 
@@ -82,12 +93,16 @@ TRIAD_RIVER_BIN=/path/to/river tools/install_live_session.sh
 
 The installer creates a starter config only when
 `~/.config/triad/config.kdl` does not already exist. Existing config files and
-symlinks are left in place. The starter config avoids host-specific output and
-input policy, but it references common session tools such as `kitty`,
-`fuzzel`, Noctalia, DankMaterialShell, and Waybar. Install the tools you want
-or edit the shell/binding commands in `~/.config/triad/config.kdl`. Use
-`examples/config/niltempus_config.kdl` as an example for a fuller personal
-setup with browser, file-manager, and app-specific window rules.
+symlinks are left in place. The starter config uses `foot` as the default
+terminal and has shell integration disabled, so it works out of the box on any
+distro without requiring extra programs. To add a status bar or launcher, edit
+`~/.config/triad/config.kdl`. Use `examples/config/niltempus_config.kdl` as a
+reference for a fuller personal setup with shell profiles, browser bindings,
+and app-specific window rules.
+
+Before switching your login session, do a quick nested Wayland test from your
+current desktop — see [Try Triad From An Existing Desktop](#try-triad-from-an-existing-desktop)
+below.
 
 ## Optional Nix Dev Shell
 
@@ -260,30 +275,38 @@ Logs are written under:
 ~/.local/state/triad/
 ```
 
-The manager loop writes `triad-latest.log` as a symlink to the newest session
-log.
+Two symlinks point to the newest logs. The session wrapper writes
+`river-triad-session-latest.log` first; the manager loop writes
+`triad-latest.log` once it starts. Check the session wrapper log first when
+diagnosing startup failures:
 
 ## Shell Profiles
 
-The starter config starts Noctalia first, includes DankMaterialShell and Waybar
-as switchable shell profiles, and uses Waybar as the watchdog fallback. These
-programs are normal host dependencies; install them or replace the commands in
-your config.
-
-The profile commands are plain argv-style config entries, so users can replace
-them with any shell or bar they want:
+Shell integration is disabled in the default config. To add a status bar,
+enable it and configure a profile. Waybar is the most widely packaged option:
 
 ```kdl
 shells {
-  active "noctalia"
-  cycle "noctalia" "dank" "waybar"
+  enabled #true
+  active "waybar"
+  cycle "waybar"
 
   watchdog {
     enabled #true
     fallback "waybar"
   }
+
+  profile "waybar" {
+    launch "waybar"
+    stop "pkill" "-x" "waybar"
+    niri-compat #true
+  }
 }
 ```
+
+The profile commands are plain argv-style entries; replace them with any shell
+or bar you prefer. See `examples/config/niltempus_config.kdl` for a setup with
+multiple profiles including Noctalia and DankMaterialShell.
 
 See [docs/configuration.md](docs/configuration.md) for the full config surface.
 
@@ -311,10 +334,11 @@ directory, captures restore state, and asks the running manager to restart.
 If the login session does not appear, check where your display manager reads
 Wayland session files and install `river-triad.desktop` there.
 
-If Triad starts but the shell does not, inspect the behavior logs and session log:
+If Triad starts but the shell does not, inspect the session log and behavior logs:
 
 ```bash
 ls -la ~/.local/state/triad/
+tail -n 200 ~/.local/state/triad/river-triad-session-latest.log
 tail -n 200 ~/.local/state/triad/triad-latest.log
 ```
 

@@ -5,14 +5,29 @@ weight = 20
 
 # First Steps
 
-You've logged into a River (Triad) session. Here's how to get your bearings.
+If you haven't tested Triad yet, the quickest way is a nested Wayland session
+from your current desktop — no TTY switch needed:
+
+```bash
+WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
+```
+
+Open a second terminal to tail the log while you explore:
+
+```bash
+tail -f ~/.local/state/triad/river-triad-session-latest.log
+```
+
+Once you're comfortable, log out and select **River (Triad)** from your display
+manager for a full session.
+
+---
 
 ## Open a Terminal
 
-The starter config launches your terminal with `Super+Return`. If nothing
-happens, `kitty` may not be installed. Edit `~/.config/triad/config.kdl` and
-change the `Super+Return` binding to a terminal you have, such as `foot`,
-`alacritty`, or `wezterm`.
+The starter config launches `foot` with `Super+Return`. If nothing happens,
+`foot` may not be installed. Edit `~/.config/triad/config.kdl` and change the
+`Super+Return` binding to a terminal you have installed.
 
 ## Validate Your Config
 
@@ -42,7 +57,7 @@ socket path is wrong. Check the session log:
 
 ```bash
 ls -la ~/.local/state/triad/
-tail -n 100 ~/.local/state/triad/triad-latest.log
+tail -n 100 ~/.local/state/triad/river-triad-session-latest.log
 ```
 
 ## Set Your First Bindings
@@ -93,8 +108,8 @@ See the full [layout reference](@/configuration/layouts.md).
 
 ## Set Up a Shell or Bar
 
-The starter config launches Noctalia by default. If you'd prefer Waybar or
-another shell, edit the `shells` block in your config. See
+Shell integration is disabled in the starter config. To add a status bar,
+enable it and configure a profile in the `shells` block. See
 [Shell Setup](@/configuration/shell-setup.md).
 
 ## What's Next
