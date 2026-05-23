@@ -165,6 +165,15 @@ proc syncRestoreOutputTags(model: var Model) =
     if outputId != NullOutputId and tagId != NullTagId:
       discard model.setTagOutput(tagId, outputId)
 
+  for slot, target in model.restoreManualWorkspaceOutputTargets.pairs:
+    let tagId = model.tagForSlot(slot)
+    if tagId == NullTagId or target.len == 0:
+      continue
+    discard model.setManualWorkspaceOutputTarget(tagId, target)
+    let outputId = model.outputForTarget(target)
+    if outputId != NullOutputId:
+      discard model.setTagOutput(tagId, outputId)
+
   for outputExt, slot in model.restoreOutputTagsWithId():
     let outputId = model.outputForExternal(outputExt)
     let tagId = model.tagForSlot(slot)
@@ -392,6 +401,8 @@ proc applyLiveRestore*(model: var Model, state: PendingRestoreState) =
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
   model.syncRestoredSwallowRelations()
+  if model.outputsCount() > 0:
+    discard model.clearSettledRestoreState()
   discard model.syncPrimaryOutputTag()
   model.refreshVisibleWorkspaceSlots()
 
@@ -529,7 +540,7 @@ proc createWindowForExternal*(
   var hasRestoredWindow = false
   var restoredExternalId = externalId
   var restored = RestoredWindowData()
-  discard model.clearSettledRestoreFocus()
+  discard model.clearSettledRestoreState()
   let restoreFocusPending =
     model.restoreFocusedWindowPending() or model.restoreWindowCount() > 0
   var targetSlot = model.selectedOutputWorkspaceSlot()
@@ -763,7 +774,7 @@ proc createWindowForExternal*(
     model.resolveRestoreHistories()
     model.syncRestoreOutputTags()
     model.syncRestoredSwallowRelations()
-    discard model.clearSettledRestoreFocus()
+    discard model.clearSettledRestoreState()
     discard model.pruneDynamicWorkspaces()
     return
 
@@ -775,7 +786,7 @@ proc createWindowForExternal*(
     model.resolveRestoreHistories()
     model.syncRestoreOutputTags()
     model.syncRestoredSwallowRelations()
-    discard model.clearSettledRestoreFocus()
+    discard model.clearSettledRestoreState()
     discard model.pruneDynamicWorkspaces()
     return
 
@@ -942,7 +953,7 @@ proc createWindowForExternal*(
   model.resolveRestoreHistories()
   model.syncRestoreOutputTags()
   model.syncRestoredSwallowRelations()
-  discard model.clearSettledRestoreFocus()
+  discard model.clearSettledRestoreState()
   discard model.pruneDynamicWorkspaces()
   if pendingAdmission and focusAfterAdmission:
     discard model.setWindowAdmission(

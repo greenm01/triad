@@ -456,6 +456,7 @@ type
     tags*: Table[uint32, RestoredTagData]
     outputTags*: Table[ExternalOutputId, uint32]
     tagOutputs*: Table[uint32, ExternalOutputId]
+    manualWorkspaceOutputTargets*: Table[uint32, string]
     scratchpadWindows*: seq[ExternalWindowId]
     namedScratchpads*: Table[string, ExternalWindowId]
     scratchpadRestoreSlots*: Table[ExternalWindowId, seq[uint32]]
@@ -496,6 +497,8 @@ type
     splitNodeByTagWindow*: int
     outputTags*: int
     tagOutputs*: int
+    manualWorkspaceOutputs*: int
+    manualWorkspaceOutputTargets*: int
     tagHomeOutputTargets*: int
     tagHomeOutputPinned*: int
     outputLastActiveSlots*: int
@@ -534,6 +537,8 @@ type
     splitNodeByTagWindow*: Table[(TagId, WindowId), SplitNodeId]
     outputTags*: Table[OutputId, TagId]
     tagOutputs*: Table[TagId, OutputId]
+    manualWorkspaceOutputs*: HashSet[TagId]
+    manualWorkspaceOutputTargets*: Table[TagId, string]
     autoDefaultWorkspaceOutputs*: Table[TagId, OutputId]
     tagHomeOutputTargets*: Table[TagId, string]
     tagHomeOutputPinned*: HashSet[TagId]
@@ -663,6 +668,7 @@ type
     restoreTags*: Table[uint32, RestoredTagData]
     restoreOutputTags*: Table[ExternalOutputId, uint32]
     restoreTagOutputs*: Table[uint32, ExternalOutputId]
+    restoreManualWorkspaceOutputTargets*: Table[uint32, string]
     restoreScratchpadWindows*: seq[ExternalWindowId]
     restoreNamedScratchpads*: Table[string, ExternalWindowId]
     restoreScratchpadSlots*: Table[ExternalWindowId, seq[uint32]]

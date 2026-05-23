@@ -140,7 +140,7 @@ proc ensureActiveWorkspace*(model: var Model): TagId =
 proc workspaceSlotForIndex*(model: Model, index: uint32): uint32 =
   if index == 0:
     return 0
-  let slots = model.visibleWorkspaceSlots()
+  let slots = model.shellVisibleWorkspaceSlots()
   let i = int(index) - 1
   if i >= 0 and i < slots.len:
     return slots[i]
@@ -149,19 +149,16 @@ proc workspaceSlotForIndex*(model: Model, index: uint32): uint32 =
 proc workspaceSlotForClampedIndex*(model: Model, index: uint32): uint32 =
   if index == 0:
     return 0
-  let slots = model.visibleWorkspaceSlots()
-  if slots.len == 0:
-    return 0
-  let i = min(int(index) - 1, slots.len - 1)
-  slots[i]
+  model.workspaceSlotForIndex(index)
 
 proc nextDynamicWorkspaceSlot*(model: Model): uint32 =
-  result = model.configuredWorkspaceSlotLimit() + 1
-  for slot in model.sortedSlots():
-    if slot >= result:
-      result = slot + 1
-  if result > MaxTagBits:
-    result = 0
+  let start = model.configuredWorkspaceSlotLimit() + 1
+  if start > MaxTagBits:
+    return 0
+  for slot in start .. MaxTagBits:
+    if model.tagForSlot(slot) == NullTagId:
+      return slot
+  0
 
 proc tagVisibleOnAnyOutput(model: Model, tagId: TagId): bool =
   if tagId == NullTagId:
@@ -274,6 +271,7 @@ proc assignWorkspaceHome(
     return false
   result = model.setTagOutput(tagId, outputId)
   if autoDefault:
+    result = model.clearManualWorkspaceOutputTarget(tagId) or result
     model.autoDefaultWorkspaceOutputs[tagId] = outputId
   if not model.tagHomeOutputPinned.contains(tagId):
     let output = model.outputData(outputId).get()
@@ -313,10 +311,13 @@ proc ensureReservedDefaultWorkspaceHomes*(model: var Model): bool =
     let existingHasLearnedTarget =
       model.tagHomeOutputTargets.getOrDefault(tagId, "").len > 0
     let existingUsesVisibleOutput = existingVisibleOutput == existingOutput
+    let existingManual = model.manualWorkspaceOutputs.contains(tagId)
     let existingIsAutomatic =
-      existingAutoOutput == existingOutput or (
-        existingHasLearnedTarget and not existingUsesVisibleOutput and
-        tagId != model.activeTag and not model.tagHasNonStickyLiveWindows(tagId)
+      not existingManual and (
+        existingAutoOutput == existingOutput or (
+          existingHasLearnedTarget and not existingUsesVisibleOutput and
+          tagId != model.activeTag and not model.tagHasNonStickyLiveWindows(tagId)
+        )
       )
     let existingIsConnected =
       existingOutput != NullOutputId and outputs.find(existingOutput) != -1
@@ -565,7 +566,6 @@ proc workspaceWasFocused(model: Model, tagId: TagId): bool =
   false
 
 proc pruneDynamicWorkspaces*(model: var Model): bool =
-  let configuredLimit = model.configuredWorkspaceSlotLimit()
   let activeSlot = model.activeWorkspaceSlot()
   let trailing = model.trailingWorkspaceSlot()
   let slots = model.sortedSlots()
@@ -586,5 +586,4 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
     if model.destroyTag(tagId):
       result = true
   if result:
-    discard model.compactDynamicWorkspaceSlots(configuredLimit)
     model.refreshVisibleWorkspaceSlots()

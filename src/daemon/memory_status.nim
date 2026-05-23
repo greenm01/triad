@@ -78,6 +78,8 @@ proc modelCountsJson(counts: ModelDiagnosticCounts): JsonNode =
     "split_node_by_tag_window": counts.splitNodeByTagWindow,
     "output_tags": counts.outputTags,
     "tag_outputs": counts.tagOutputs,
+    "manual_workspace_outputs": counts.manualWorkspaceOutputs,
+    "manual_workspace_output_targets": counts.manualWorkspaceOutputTargets,
     "tag_home_output_targets": counts.tagHomeOutputTargets,
     "tag_home_output_pinned": counts.tagHomeOutputPinned,
     "output_last_active_slots": counts.outputLastActiveSlots,

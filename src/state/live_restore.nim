@@ -138,6 +138,7 @@ proc pendingRestoreState*(source: LiveRestoreState): PendingRestoreState =
     result.outputTags[ExternalOutputId(outputId)] = slot
   for slot, outputId in source.tagOutputs.pairs:
     result.tagOutputs[slot] = ExternalOutputId(outputId)
+  result.manualWorkspaceOutputTargets = source.manualWorkspaceOutputTargets
   for winId in source.scratchpadWindows:
     result.scratchpadWindows.add(ExternalWindowId(uint32(winId)))
   for name, winId in source.namedScratchpads.pairs:
@@ -364,6 +365,14 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     if outputExternal != 0 and slot != 0:
       result.tagOutputs[slot] = outputExternal
 
+  for tagId, target in model.manualWorkspaceOutputTargets.pairs:
+    let tagOpt = model.tagData(tagId)
+    if tagOpt.isNone:
+      continue
+    let slot = tagOpt.get().slot
+    if slot != 0 and target.len > 0:
+      result.manualWorkspaceOutputTargets[slot] = target
+
   for winId in model.scratchpadWindowIds():
     let external = model.externalWindowId(winId)
     if external != 0:
@@ -565,6 +574,16 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
   for slot in tagOutputSlots:
     tagOutputs.add(%*{"tag_id": slot, "output_id": state.tagOutputs[slot]})
 
+  let manualWorkspaceOutputTargets = newJArray()
+  var manualTargetSlots: seq[uint32]
+  for slot in state.manualWorkspaceOutputTargets.keys:
+    manualTargetSlots.add(slot)
+  manualTargetSlots.sort()
+  for slot in manualTargetSlots:
+    manualWorkspaceOutputTargets.add(
+      %*{"tag_id": slot, "output": state.manualWorkspaceOutputTargets[slot]}
+    )
+
   let scratchpads = newJArray()
   for winId in state.scratchpadWindows:
     scratchpads.add(%winId)
@@ -606,6 +625,7 @@ proc liveRestoreStateJson(state: LiveRestoreState): string =
       "windows": windows,
       "output_tags": outputTags,
       "tag_outputs": tagOutputs,
+      "manual_workspace_output_targets": manualWorkspaceOutputTargets,
       "scratchpad_windows": scratchpads,
       "named_scratchpads": namedScratchpads,
       "scratchpad_restore_slots": scratchpadRestoreSlots,

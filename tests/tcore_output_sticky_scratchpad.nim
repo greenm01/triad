@@ -484,6 +484,179 @@ suite "Core Runtime Logic: output sticky scratchpad":
     model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "left"))
     check model.activeOutput == model.outputForExternal(ExternalOutputId(1))
 
+  test "Moving workspace to occupied output creates source replacement without swapping":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.addTestOutput(1, "DP-3", 0, 0, 1000, 700)
+    model.addTestOutput(2, "DP-2", 1000, 0, 1000, 700)
+
+    let source = model.outputForExternal(ExternalOutputId(1))
+    let target = model.outputForExternal(ExternalOutputId(2))
+    let movedTag = model.tagForSlot(1)
+    let targetTag = model.tagForSlot(2)
+    discard model.setOutputTag(source, movedTag)
+    discard model.setTagOutput(movedTag, source)
+    discard model.setOutputTag(target, targetTag)
+    discard model.setTagOutput(targetTag, target)
+    discard model.setActiveOutput(source)
+    discard model.setActiveWorkspace(movedTag)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "source"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "target"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"))
+
+    let replacement = model.outputActiveTag(source)
+    check model.outputActiveTag(target) == movedTag
+    check replacement != NullTagId
+    check replacement != movedTag
+    check replacement != targetTag
+    check model.workspaceOutput(movedTag) == target
+    check model.workspaceOutput(targetTag) == target
+    check model.workspaceOutput(replacement) == source
+    check model.manualWorkspaceOutputs.contains(movedTag)
+    check not model.autoDefaultWorkspaceOutputs.hasKey(movedTag)
+
+    let snapshot = model.shellSnapshot()
+    let movedSlot = model.tagData(movedTag).get().slot
+    let targetSlot = model.tagData(targetTag).get().slot
+    let replacementSlot = model.tagData(replacement).get().slot
+    check snapshot.workspaces.anyIt(
+      it.tagId == movedSlot and it.outputName == "DP-2" and it.isOutputVisible
+    )
+    check snapshot.workspaces.anyIt(
+      it.tagId == targetSlot and it.outputName == "DP-2" and not it.isOutputVisible and
+        it.occupied
+    )
+    check snapshot.workspaces.anyIt(
+      it.tagId == replacementSlot and it.outputName == "DP-3" and it.isOutputVisible
+    )
+
+  test "Pruning empty workspace preserves manually assigned outputs":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", focusAtStartup: true),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    model.addThreeConfiguredOutputs()
+
+    let center = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+    let workspace1 = model.tagForSlot(1)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-2"))
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+    let workspace4 = model.activeTag
+    check model.activeOutput == center
+    check model.tagData(workspace4).get().slot == 4
+    check model.activeTag == workspace4
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 40, appId: "four"))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-3"))
+    check model.workspaceOutput(workspace4) == left
+    check model.manualWorkspaceOutputTargets[workspace4] == "DP-3"
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "one"))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-3"))
+    check model.workspaceOutput(workspace1) == left
+    check model.workspaceOutput(workspace4) == left
+    check model.manualWorkspaceOutputTargets[workspace1] == "DP-3"
+    check model.manualWorkspaceOutputTargets[workspace4] == "DP-3"
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-2"))
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+    let centerDynamicWorkspace = model.activeTag
+    check model.activeOutput == center
+    check model.tagData(centerDynamicWorkspace).get().slot > 3
+    check model.activeTag == centerDynamicWorkspace
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 50, appId: "five"))
+    check model.workspaceOutput(workspace1) == left
+    check model.workspaceOutput(workspace4) == left
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 50))
+
+    check model.workspaceOutput(workspace1) == left
+    check model.workspaceOutput(workspace4) == left
+
+  test "Focusing manually moved workspace preserves manual output":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", focusAtStartup: true),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    model.addThreeConfiguredOutputs()
+
+    let center = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+    let workspace1 = model.tagForSlot(1)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "one"))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-3"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-2"))
+    check model.activeOutput == center
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    check model.activeOutput == left
+    check model.outputActiveTag(left) == workspace1
+    check model.workspaceOutput(workspace1) == left
+    check model.manualWorkspaceOutputs.contains(workspace1)
+    check model.manualWorkspaceOutputTargets[workspace1] == "DP-3"
+
+    discard model.setTagOutput(workspace1, center)
+    discard model.setTagHomeOutput(workspace1, "DP-2", pinned = false)
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-2"))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    check model.activeOutput == left
+    check model.outputActiveTag(left) == workspace1
+    check model.workspaceOutput(workspace1) == left
+    check model.manualWorkspaceOutputTargets[workspace1] == "DP-3"
+
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+    check restore.manualWorkspaceOutputTargets[1] == "DP-3"
+
+    var restored = initRuntimeStateFromConfig(
+      Config(
+        workspaces: WorkspaceConfig(defaultCount: 3),
+        outputRules:
+          @[
+            OutputRule(target: "DP-1"),
+            OutputRule(target: "DP-2", focusAtStartup: true),
+            OutputRule(target: "DP-3"),
+          ],
+      )
+    ).model
+    restored.addThreeConfiguredOutputs()
+    restored.applyLiveRestore(restore.pendingRestoreState())
+
+    let restoredWorkspace1 = restored.tagForSlot(1)
+    let restoredCenter = restored.outputForExternal(ExternalOutputId(2))
+    let restoredLeft = restored.outputForExternal(ExternalOutputId(3))
+    check restored.manualWorkspaceOutputs.contains(restoredWorkspace1)
+    check restored.manualWorkspaceOutputTargets[restoredWorkspace1] == "DP-3"
+
+    discard restored.setTagOutput(restoredWorkspace1, restoredCenter)
+    restored.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-2"))
+    restored.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    check restored.activeOutput == restoredLeft
+    check restored.workspaceOutput(restoredWorkspace1) == restoredLeft
+
   test "Layer shell default output follows active output":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 2))
@@ -1633,17 +1806,19 @@ suite "Core Runtime Logic: output sticky scratchpad":
     discard model.setActiveWorkspace(model.tagForSlot(1))
     model.refreshVisibleWorkspaceSlots()
 
-    check model.tagForSlot(4) == occupiedTag
-    check model.tagForSlot(5) == NullTagId
-    check model.trailingWorkspaceSlot() == 5
+    check model.tagForSlot(4) == NullTagId
+    check model.tagForSlot(5) == occupiedTag
+    check model.trailingWorkspaceSlot() == 6
 
     model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
 
-    let createdTag = model.tagForSlot(5)
+    let createdTag = model.tagForSlot(4)
     check createdTag != NullTagId
     check createdTag != emptyTag
+    check createdTag != occupiedTag
     check model.activeTag == createdTag
     check model.outputActiveTag(outputId) == createdTag
+    check model.tagForSlot(5) == occupiedTag
     check model.tagForSlot(6) == NullTagId
 
   test "New workspace prunes stale empty dynamic workspace from other output":
@@ -1675,20 +1850,23 @@ suite "Core Runtime Logic: output sticky scratchpad":
     )
     model.refreshVisibleWorkspaceSlots()
 
-    check model.tagForSlot(4) == occupiedTag
-    check model.tagForSlot(5) == NullTagId
+    check model.tagForSlot(4) == NullTagId
+    check model.tagForSlot(5) == occupiedTag
     check model.reusableEmptyWorkspaceSlot(first) == 0
     check model.reusableEmptyWorkspaceSlot(second) == 0
-    check model.trailingWorkspaceSlot(second) == 5
-    check model.visibleWorkspaceSlots().find(5'u32) != -1
+    check model.trailingWorkspaceSlot(second) == 6
+    check model.visibleWorkspaceSlots().find(6'u32) != -1
 
     model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
 
-    let createdTag = model.tagForSlot(5)
+    let createdTag = model.tagForSlot(4)
     check createdTag != NullTagId
+    check createdTag != reusableTag
+    check createdTag != occupiedTag
     check model.activeTag == createdTag
     check model.outputActiveTag(second) == createdTag
     check model.workspaceOutput(createdTag) == second
+    check model.tagForSlot(5) == occupiedTag
     check model.tagData(reusableTag).isNone
 
   test "Hidden empty dynamic workspace focuses on active output":
@@ -1908,6 +2086,50 @@ suite "Core Runtime Logic: output sticky scratchpad":
     check workspace4.occupied
     check not workspace4.isOutputVisible
     check workspace4.outputName == "DP-3"
+
+  test "Settled restore targets do not override later manual workspace moves":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 4))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 3, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 3, outputName: "DP-3"))
+
+    var restore = PendingRestoreState(activeSlot: 1)
+    restore.tags[4] = RestoredTagData(slot: 4, name: "chat")
+    restore.tagOutputs[4] = ExternalOutputId(2)
+    restore.manualWorkspaceOutputTargets[4] = "DP-2"
+    model.applyLiveRestore(restore)
+
+    let workspace4 = model.tagForSlot(4)
+    let center = model.outputForExternal(ExternalOutputId(2))
+    let left = model.outputForExternal(ExternalOutputId(3))
+    check model.workspaceOutput(workspace4) == center
+    check not model.restoreManualWorkspaceOutputTargets.hasKey(4)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 4))
+    model.applyMsg(Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-3"))
+    check model.workspaceOutput(workspace4) == left
+    check model.manualWorkspaceOutputTargets[workspace4] == "DP-3"
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusOutput, outputTarget: "DP-2"))
+    model.applyMsg(Msg(kind: MsgKind.CmdNewWorkspace))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 50, appId: "term", title: "term")
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 50))
+
+    check model.workspaceOutput(workspace4) == left
+    check model.manualWorkspaceOutputTargets[workspace4] == "DP-3"
 
   test "Moved workspace restores to reconnected output":
     var model = initRuntimeStateFromConfig(

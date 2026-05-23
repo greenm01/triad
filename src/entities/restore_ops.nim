@@ -9,6 +9,7 @@ proc loadRestoreState*(model: var Model, state: PendingRestoreState): bool =
   model.restoreTags = state.tags
   model.restoreOutputTags = state.outputTags
   model.restoreTagOutputs = state.tagOutputs
+  model.restoreManualWorkspaceOutputTargets = state.manualWorkspaceOutputTargets
   model.restoreScratchpadWindows = state.scratchpadWindows
   model.restoreNamedScratchpads = state.namedScratchpads
   model.restoreScratchpadSlots = state.scratchpadRestoreSlots
@@ -69,3 +70,20 @@ proc clearSettledRestoreFocus*(model: var Model): bool =
   if model.restoreWorkspaceHistory.len > 0:
     model.restoreWorkspaceHistory = @[]
     result = true
+
+proc clearSettledRestoreOutputState*(model: var Model): bool =
+  if model.restoreWindows.len > 0 or model.restoreTagByWindow.len > 0:
+    return false
+  if model.restoreOutputTags.len > 0:
+    model.restoreOutputTags.clear()
+    result = true
+  if model.restoreTagOutputs.len > 0:
+    model.restoreTagOutputs.clear()
+    result = true
+  if model.restoreManualWorkspaceOutputTargets.len > 0:
+    model.restoreManualWorkspaceOutputTargets.clear()
+    result = true
+
+proc clearSettledRestoreState*(model: var Model): bool =
+  result = model.clearSettledRestoreFocus()
+  result = model.clearSettledRestoreOutputState() or result

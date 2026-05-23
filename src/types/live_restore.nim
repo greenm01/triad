@@ -102,6 +102,7 @@ type
     tags*: Table[uint32, RestoredTagState]
     outputTags*: Table[uint32, uint32]
     tagOutputs*: Table[uint32, uint32]
+    manualWorkspaceOutputTargets*: Table[uint32, string]
     scratchpadWindows*: seq[uint32]
     namedScratchpads*: Table[string, uint32]
     scratchpadRestoreSlots*: Table[uint32, seq[uint32]]

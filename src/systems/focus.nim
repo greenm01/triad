@@ -58,6 +58,16 @@ proc learnedOutputForTag(model: Model, tagId: TagId): OutputId =
     return outputId
   NullOutputId
 
+proc manualOutputForTag(model: Model, tagId: TagId): OutputId =
+  if not model.manualWorkspaceOutputs.contains(tagId):
+    return NullOutputId
+  let target = model.manualWorkspaceOutputTargets.getOrDefault(tagId, "")
+  if target.len > 0:
+    result = model.outputForTarget(target)
+    if result != NullOutputId:
+      return
+  result = model.learnedOutputForTag(tagId)
+
 proc emptyDynamicWorkspace(model: Model, tagId: TagId): bool =
   let tagOpt = model.tagData(tagId)
   tagOpt.isSome and tagOpt.get().slot > model.defaultWorkspaceCount() and
@@ -79,6 +89,11 @@ proc workspaceFocusOutputDecision(
   result.outputId = model.configuredPinnedOutputForTag(tagId)
   if result.outputId != NullOutputId:
     result.reason = "pinned"
+    return
+
+  result.outputId = model.manualOutputForTag(tagId)
+  if result.outputId != NullOutputId:
+    result.reason = "manual"
     return
 
   result.outputId = model.visibleOutputForTag(tagId)
@@ -239,12 +254,14 @@ proc focusWorkspaceSlot*(model: var Model, slot: uint32): bool =
   if decision.outputId != NullOutputId:
     let displacedTag = model.outputActiveTag(decision.outputId)
     discard model.setOutputTag(decision.outputId, tagId)
+    if decision.reason == "manual":
+      discard model.setTagOutput(tagId, decision.outputId)
     if decision.reason == "pinned" and previousActiveOutput != decision.outputId and
         displacedTag != NullTagId and displacedTag != tagId and
         model.visibleOutputForTag(displacedTag) == NullOutputId:
       discard model.setOutputTag(previousActiveOutput, displacedTag)
     discard model.setActiveOutput(decision.outputId)
-    if decision.reason != "pinned":
+    if decision.reason != "pinned" and decision.reason != "manual":
       discard model.learnTagOutputFromActive(tagId)
   writeBehaviorEvent(
     "workspace_focus_output_decision",

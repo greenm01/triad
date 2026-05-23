@@ -421,6 +421,8 @@ proc resolveOutputTarget*(model: Model, target: string): OutputId =
 proc learnTagOutputFromActive*(model: var Model, tagId: TagId): bool =
   if tagId == NullTagId:
     return false
+  if model.manualWorkspaceOutputs.contains(tagId):
+    return false
   let outputId = model.activeOutputOrPrimary()
   let outputOpt = model.outputData(outputId)
   if outputOpt.isNone:

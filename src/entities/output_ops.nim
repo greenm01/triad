@@ -210,8 +210,31 @@ proc clearTagOutput*(model: var Model, tagId: TagId): bool =
   if not model.tagOutputs.hasKey(tagId):
     return false
   model.tagOutputs.del(tagId)
+  model.manualWorkspaceOutputs.excl(tagId)
+  model.manualWorkspaceOutputTargets.del(tagId)
   model.autoDefaultWorkspaceOutputs.del(tagId)
   true
+
+proc setManualWorkspaceOutputTarget*(
+    model: var Model, tagId: TagId, target: string
+): bool =
+  if model.tags.entity(tagId).isNone:
+    return false
+  let normalized = target.strip()
+  if normalized.len == 0:
+    return false
+  let oldManual = model.manualWorkspaceOutputs.contains(tagId)
+  let oldTarget = model.manualWorkspaceOutputTargets.getOrDefault(tagId, "")
+  model.manualWorkspaceOutputs.incl(tagId)
+  model.manualWorkspaceOutputTargets[tagId] = normalized
+  not oldManual or oldTarget != normalized
+
+proc clearManualWorkspaceOutputTarget*(model: var Model, tagId: TagId): bool =
+  result =
+    model.manualWorkspaceOutputs.contains(tagId) or
+    model.manualWorkspaceOutputTargets.hasKey(tagId)
+  model.manualWorkspaceOutputs.excl(tagId)
+  model.manualWorkspaceOutputTargets.del(tagId)
 
 proc setTagHomeOutput*(
     model: var Model, tagId: TagId, target: string, pinned: bool

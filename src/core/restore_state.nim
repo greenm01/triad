@@ -511,6 +511,17 @@ proc parseNativeLiveRestore(root: JsonNode): Option[LiveRestoreState] =
       if tagId.isSome and outputId.isSome:
         state.tagOutputs[tagId.get()] = outputId.get()
 
+  if root.hasKey("manual_workspace_output_targets") and
+      root["manual_workspace_output_targets"].kind == JArray:
+    for node in root["manual_workspace_output_targets"]:
+      if node.kind != JObject or not node.hasKey("tag_id") or not node.hasKey("output"):
+        continue
+      let tagId = uint32FromJson(node["tag_id"])
+      if tagId.isSome and node["output"].kind == JString:
+        let target = node["output"].getStr().strip()
+        if target.len > 0:
+          state.manualWorkspaceOutputTargets[tagId.get()] = target
+
   if root.hasKey("scratchpad_windows") and root["scratchpad_windows"].kind == JArray:
     for node in root["scratchpad_windows"]:
       let winId = uint32FromJson(node)

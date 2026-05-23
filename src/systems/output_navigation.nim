@@ -2,6 +2,20 @@ import std/[options, sets]
 import focus, outputs, placement, workspaces
 import ../state/engine
 
+proc assignOutputReplacement(model: var Model, outputId: OutputId, tagId: TagId): bool =
+  if outputId == NullOutputId or tagId == NullTagId:
+    return false
+  let outputOpt = model.outputData(outputId)
+  if outputOpt.isNone:
+    return false
+  result = model.setOutputTag(outputId, tagId)
+  result = model.setTagOutput(tagId, outputId) or result
+  if not model.tagHomeOutputPinned.contains(tagId):
+    result =
+      model.setTagHomeOutput(
+        tagId, model.outputStableTarget(outputId, outputOpt.get()), pinned = false
+      ) or result
+
 proc focusOutputTarget*(model: var Model, target: string): bool =
   let outputId = model.resolveOutputTarget(target)
   if outputId == NullOutputId:
@@ -30,15 +44,28 @@ proc moveActiveWorkspaceToOutputTarget*(model: var Model, target: string): bool 
   if outputOpt.isNone:
     return false
 
-  result = model.setActiveOutput(outputId)
+  let sourceOutput = model.workspaceOutput(tagId)
+  if sourceOutput == outputId:
+    return false
+  let sourceNeedsReplacement =
+    sourceOutput != NullOutputId and model.outputActiveTag(sourceOutput) == tagId
+  let sourceReplacement =
+    if sourceNeedsReplacement:
+      model.availableTagForOutput(sourceOutput, excludeTag = tagId)
+    else:
+      NullTagId
+  let stableTarget = model.outputStableTarget(outputId, outputOpt.get())
+
   result = model.setOutputTag(outputId, tagId) or result
   result = model.setTagOutput(tagId, outputId) or result
+  result = model.setManualWorkspaceOutputTarget(tagId, stableTarget) or result
   result =
     model.setTagHomeOutput(
-      tagId,
-      model.outputStableTarget(outputId, outputOpt.get()),
-      pinned = model.tagHomeOutputPinned.contains(tagId),
+      tagId, stableTarget, pinned = model.tagHomeOutputPinned.contains(tagId)
     ) or result
+  if sourceNeedsReplacement and sourceReplacement != NullTagId:
+    result = model.assignOutputReplacement(sourceOutput, sourceReplacement) or result
+  result = model.setActiveOutput(outputId) or result
   discard model.setActiveWorkspace(tagId)
   model.refreshVisibleWorkspaceSlots()
 

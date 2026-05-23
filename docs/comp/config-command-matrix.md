@@ -88,7 +88,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Tags | Rename tags | | WM policy | `rename-tag`, `workspace-rules { workspace ... name=... }` | X | Runtime commands use tags; config uses workspace language. |
 | Tags | Tag rules | `tagrule` | WM policy | `workspace-rules { workspace ... }` | X | Triad supports workspace name and default layout rules backed by internal tags. Configured workspaces remain visible and stable even when their IDs exceed `workspaces.default-count`. |
 | Monitor focus | Focus monitor | `focusmon` | WM policy | `focus-output` | X | Accepts connector/identity targets plus `left`, `right`, `up`, `down`, `next`, and `previous`. |
-| Monitor focus | Move workspace to monitor | `tagmon`, `toggletagmon` | WM policy | `move-workspace-to-output` | X | Workspaces keep output affinity and restore to reconnected outputs. |
+| Monitor focus | Move workspace to monitor | `tagmon`, `toggletagmon` | WM policy | `move-workspace-to-output` | X | Moves the active workspace without swapping. If the source monitor would be left without a visible workspace, Triad assigns it another workspace. Workspaces keep output affinity and restore to reconnected outputs. |
 | Monitor focus | Move window to monitor | `tagmon`, `tagcrossmon`, `viewcrossmon` | WM policy | `move-to-output` | X | Moves the focused window to the workspace currently visible on the target output. |
 | Focus | Directional focus | `focusdir` | `river_seat_v1.focus_window` primitive | `focus-left/right/up/down` | X | Triad maps to model focus commands. |
 | Focus | Stack/next/previous focus | `focusstack` | WM policy | `focus-next`, `focus-prev` | X | |

@@ -278,8 +278,27 @@ proc visibleWorkspaceSlots*(model: Model): seq[uint32] =
 
   model.projectedVisibleWorkspaceSlots()
 
+proc shellWorkspaceSlotVisible*(model: Model, slot: uint32): bool =
+  if slot == 0 or slot > MaxTagBits:
+    return false
+  if model.workspaceSlotConfigured(slot):
+    return true
+  let tagId = model.tagForSlot(slot)
+  if tagId == NullTagId:
+    return false
+  if slot == model.resolvedActiveWorkspaceSlot() or model.tagVisibleOnOutput(tagId) or
+      model.tagHasNonStickyLiveWindows(tagId):
+    return true
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and model.hasDurableTagState(tagOpt.get())
+
+proc shellVisibleWorkspaceSlots*(model: Model): seq[uint32] =
+  for slot in model.visibleWorkspaceSlots():
+    if model.shellWorkspaceSlotVisible(slot):
+      result.add(slot)
+
 proc workspaceIndexForSlot*(model: Model, slot: uint32): uint32 =
-  for idx, candidate in model.visibleWorkspaceSlots():
+  for idx, candidate in model.shellVisibleWorkspaceSlots():
     if candidate == slot:
       return uint32(idx + 1)
   0
@@ -598,6 +617,8 @@ proc modelDiagnosticCounts*(model: Model): ModelDiagnosticCounts =
   result.splitNodeByTagWindow = model.splitNodeByTagWindow.len
   result.outputTags = model.outputTags.len
   result.tagOutputs = model.tagOutputs.len
+  result.manualWorkspaceOutputs = model.manualWorkspaceOutputs.len
+  result.manualWorkspaceOutputTargets = model.manualWorkspaceOutputTargets.len
   result.tagHomeOutputTargets = model.tagHomeOutputTargets.len
   result.tagHomeOutputPinned = model.tagHomeOutputPinned.len
   result.outputLastActiveSlots = model.outputLastActiveSlots.len
@@ -868,7 +889,10 @@ proc tagHasOutput*(model: Model, tagId: TagId): bool =
   model.tagOutputs.getOrDefault(tagId, NullOutputId) != NullOutputId
 
 proc shellWorkspaceOutputName*(model: Model, tagId: TagId): string =
-  model.shellOutputName(model.workspaceOutput(tagId))
+  let outputId = model.workspaceOutput(tagId)
+  if outputId == NullOutputId:
+    return ""
+  model.shellOutputName(outputId)
 
 proc viewportRetargetRequested*(model: Model, tagId: TagId): bool =
   model.viewportRetargetTags.contains(tagId)

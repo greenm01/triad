@@ -156,6 +156,8 @@ bindings {
 ```
 
 Targets can be directions (`left`, `right`, `up`, `down`) or output names (`DP-2`).
+Moving a workspace does not swap workspaces. If the source monitor would be left
+without a visible workspace, Triad assigns that monitor another workspace.
 
 ## Windows and Launchers
 

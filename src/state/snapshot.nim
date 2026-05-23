@@ -270,7 +270,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     else:
       min(model.keyboardLayoutIndex, uint32(result.keyboardLayoutNames.len - 1))
 
-  for idx, slot in model.visibleWorkspaceSlots():
+  for idx, slot in model.shellVisibleWorkspaceSlots():
     let tagId = model.tagForSlot(slot)
     let tagOpt =
       if tagId != NullTagId:
@@ -337,7 +337,7 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
           if tagId != NullTagId:
             model.shellWorkspaceOutputName(tagId)
           else:
-            "triad-0",
+            "",
         columns:
           if tagId != NullTagId:
             model.shellColumns(tagId)

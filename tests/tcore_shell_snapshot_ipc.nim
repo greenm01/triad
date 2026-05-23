@@ -199,6 +199,53 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check visible.anyIt(it["output"].getStr() == "DP-1")
     check visible.anyIt(it["output"].getStr() == "DP-2")
 
+  test "Workspace output move broadcasts shell workspace and native state changes":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 2))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-3"))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1000, height: 700)
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 2, outputX: 1000, outputY: 0
+      )
+    )
+    model.applyMsg(Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "source"))
+
+    let effects = model.updateModel(
+      Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2")
+    )
+
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WorkspacesChanged")
+    )
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("WindowsChanged")
+    )
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and it.triadEventName == "layout"
+    )
+    check effects.anyIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and it.triadEventName == "state"
+    )
+
+    let workspaces = niriWorkspacesJson(model.shellSnapshot()).getElems()
+    check workspaces.anyIt(
+      it["id"].getInt() == 1 and it["output"].getStr() == "DP-2" and
+        it["is_active"].getBool()
+    )
+    check workspaces.anyIt(
+      it["output"].getStr() == "DP-3" and it["is_active"].getBool()
+    )
+
   test "Niri workspace JSON keeps empty configured workspaces visible":
     var model = initRuntimeStateFromConfig(
       Config(
@@ -242,6 +289,23 @@ suite "Core Runtime Logic: shell snapshot ipc":
         not it.occupied
     )
     model.requireTagShellSemantics("output-visible empty dynamic workspace scenario")
+
+  test "Shell snapshot hides trailing empty dynamic workspace":
+    var model = configuredModel()
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "term", title: "Slot4")
+    )
+    model.refreshVisibleWorkspaceSlots()
+
+    check model.visibleWorkspaceSlots().find(5'u32) != -1
+
+    let snapshot = model.shellSnapshot()
+    check snapshot.workspaces.anyIt(it.tagId == 4 and it.occupied)
+    check not snapshot.workspaces.anyIt(it.tagId == 5)
+    check not snapshot.workspaces.anyIt(it.outputName == "triad-0")
+    model.requireTagShellSemantics("hidden trailing dynamic workspace scenario")
 
   test "Empty dynamic workspaces prune after focus leaves":
     var model = configuredModel()
@@ -620,7 +684,7 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check not effects.hasFocusEffect(1)
     model.requireTagShellSemantics("dynamic close collapse scenario")
 
-  test "Occupied dynamic workspace rolls into pruned empty slot":
+  test "Occupied dynamic workspace keeps number after earlier empty slot prunes":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
@@ -636,15 +700,16 @@ suite "Core Runtime Logic: shell snapshot ipc":
     discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 1))
 
     let snapshot = model.shellSnapshot()
-    # Slot 4 pruned; slot 5 compacts to slot 4
+    # Slot 4 pruned; occupied slot 5 keeps its number.
     check snapshot.activeTag == 3
     let occupied = snapshot.workspaces.filterIt(it.occupied)
     check occupied.len == 1
-    check occupied[0].tagId == 4
+    check occupied[0].tagId == 5
+    check not snapshot.workspaces.anyIt(it.tagId == 4)
     check not snapshot.workspaces.anyIt(it.tagId >= 6)
     model.requireTagShellSemantics("dynamic slot roll single scenario")
 
-  test "Middle dynamic workspace prune rolls subsequent slot down":
+  test "Middle dynamic workspace prune preserves later slot numbers":
     var model = configuredModel()
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
     model.applyMsg(Msg(kind: MsgKind.CmdFocusTagRight))
@@ -663,12 +728,13 @@ suite "Core Runtime Logic: shell snapshot ipc":
     discard model.updateModel(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 2))
 
     let snapshot = model.shellSnapshot()
-    # Slot 5 pruned; slot 6 compacts to slot 5; active follows
-    check snapshot.activeTag == 5
+    # Slot 5 pruned; occupied slot 6 keeps its number.
+    check snapshot.activeTag == 6
     let occupied = snapshot.workspaces.filterIt(it.occupied)
     check occupied.len == 2
     check occupied.anyIt(it.tagId == 4)
-    check occupied.anyIt(it.tagId == 5)
+    check occupied.anyIt(it.tagId == 6)
+    check not snapshot.workspaces.anyIt(it.tagId == 5)
     check not snapshot.workspaces.anyIt(it.tagId >= 7)
     model.requireTagShellSemantics("dynamic slot roll gap scenario")
 
