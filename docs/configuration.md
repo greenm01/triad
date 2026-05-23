@@ -69,6 +69,9 @@ spawn-at-startup "nm-applet" "--indicator"
 
 ### Shell & Bar Profiles
 Manage shells, status bars, and desktop overlays using `shells`.
+Triad sets `$TRIAD_SOCKET` and Triad desktop environment variables for every
+shell profile it launches. Add `niri-compat #true` when a shell also needs the
+Niri-compatible IPC facade and `$NIRI_SOCKET`.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
@@ -395,7 +398,9 @@ A birds-eye view of all workspaces.
 ### Shell Compatibility
 Triad provides a compatibility layer for shells expecting Niri-style IPC.
 
-When a shell profile uses `niri-compat #true`, Triad sets `$NIRI_SOCKET` and provides a compatible IPC facade.
+Every shell profile launched by Triad receives `$TRIAD_SOCKET` for native IPC.
+When a shell profile uses `niri-compat #true`, Triad also sets `$NIRI_SOCKET`
+and provides a compatible IPC facade.
 This supports Niri-aware shells such as Noctalia, DankMaterialShell, Waylee,
 and Waybar's `niri/workspaces` module.
 

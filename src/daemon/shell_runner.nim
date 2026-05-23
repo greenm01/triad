@@ -1,8 +1,8 @@
-import std/[json, options, os, osproc, sequtils, strutils, times]
+import std/[json, options, os, osproc, sequtils, strtabs, strutils, times]
 import chronicles
 import process_runner
 import ../core/shell_profiles
-import ../ipc/niri_shell_compat
+import ../ipc/[niri_shell_compat, socket]
 import ../types/model
 from ../types/runtime_values import ShellProfileConfig, ShellsConfig
 import ../utils/behavior_log
@@ -157,6 +157,13 @@ proc shellCompatBehaviorPayload(
   result["xdg_share"] = %compat.xdgSharePath
   if compat.warning.len > 0:
     result["compat_warning"] = %compat.warning
+
+proc prepareNativeShellEnv(model: Model): StringTableRef =
+  result = model.configuredProcessEnv()
+  result["TRIAD_SOCKET"] = triadSocketPath()
+  result["XDG_CURRENT_DESKTOP"] = "triad"
+  result["XDG_SESSION_DESKTOP"] = "triad"
+  result["DESKTOP_SESSION"] = "triad"
 
 proc shellSpawnEventPayload(
     spawnInfo: JsonNode, childPid = 0, exitCode: Option[int] = none(int), error = ""
@@ -356,7 +363,7 @@ proc spawnShellProfile(
   var spawnInfo =
     shellCompatBehaviorPayload(profile, niriSocketPath, NiriShellCompatEnv())
   try:
-    let baseEnv = model.configuredProcessEnv()
+    let baseEnv = model.prepareNativeShellEnv()
     var compat = NiriShellCompatEnv()
     let env =
       if profile.niriCompat:

@@ -1021,6 +1021,48 @@ exit 0
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-old", "launch-new"]
 
+  test "Shell profiles receive native Triad environment":
+    let tmp = getTempDir() / ("triad-shell-native-env-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = tmp / "fake-shell"
+    let logPath = tmp / "env.log"
+    writeFile(
+      fake,
+      """
+#!/bin/sh
+printf '%s|%s|%s|%s|%s\n' "$TRIAD_SOCKET" "$NIRI_SOCKET" "$XDG_CURRENT_DESKTOP" "$XDG_SESSION_DESKTOP" "$DESKTOP_SESSION" > "$TRIAD_FAKE_SHELL_LOG"
+exit 0
+""",
+    )
+    setFilePermissions(fake, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldRuntimeDir = getEnv("XDG_RUNTIME_DIR", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    putEnv("XDG_RUNTIME_DIR", tmp)
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("XDG_RUNTIME_DIR", oldRuntimeDir)
+
+    let model = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "dank",
+        profiles: @[ShellProfileConfig(name: "dank", launch: @[fake])],
+      )
+    )
+    var runner = ShellRunner()
+
+    runner.switchShell(Model(), model, tmp / "niri.sock", "test native env")
+    check readFile(logPath).strip() == tmp / "triad.sock" & "||triad|triad|triad"
+
   test "Shell profile Niri compatibility logs shim readiness":
     let tmp = getTempDir() / ("triad-shell-niri-log-" & $getCurrentProcessId())
     if dirExists(tmp):
@@ -1031,7 +1073,15 @@ exit 0
         removeDir(tmp)
 
     let fakeShell = tmp / "fake-shell"
-    writeFile(fakeShell, "#!/bin/sh\nsleep 5\n")
+    let envLogPath = tmp / "env.log"
+    writeFile(
+      fakeShell,
+      """
+#!/bin/sh
+printf '%s|%s|%s|%s|%s\n' "$TRIAD_SOCKET" "$NIRI_SOCKET" "$XDG_CURRENT_DESKTOP" "$XDG_SESSION_DESKTOP" "$DESKTOP_SESSION" > "$TRIAD_FAKE_SHELL_LOG"
+sleep 5
+""",
+    )
     setFilePermissions(fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
 
     let fakeTriadNiri = tmp / "triad_niri"
@@ -1042,15 +1092,18 @@ exit 0
     let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
     let oldPath = getEnv("PATH", "")
     let oldRuntimeDir = getEnv("XDG_RUNTIME_DIR", "")
+    let oldShellLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
     putEnv("TRIAD_BEHAVIOR_LOG", "1")
     putEnv("TRIAD_BEHAVIOR_LOG_DIR", tmp / "behavior")
     putEnv("PATH", tmp & $PathSep & oldPath)
     putEnv("XDG_RUNTIME_DIR", tmp)
+    putEnv("TRIAD_FAKE_SHELL_LOG", envLogPath)
     defer:
       putEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
       putEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
       putEnv("PATH", oldPath)
       putEnv("XDG_RUNTIME_DIR", oldRuntimeDir)
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldShellLog)
 
     let model = Model(
       shells: ShellsConfig(
@@ -1079,6 +1132,8 @@ exit 0
     check spawned[0]["overlay_ready"].getBool()
     check spawned[0]["compat_bin"].getStr() == tmp / "triad-compat-bin"
     check spawned[0]["niri_shim"].getStr() == tmp / "triad-compat-bin" / "niri"
+    check readFile(envLogPath).strip() ==
+      tmp / "triad.sock" & "|" & tmp / "niri.sock" & "|triad|triad|triad"
 
   test "Shell watchdog falls back when active tracked shell exits":
     let tmp = getTempDir() / ("triad-shell-watchdog-exit-" & $getCurrentProcessId())
