@@ -1,8 +1,16 @@
-// Triad default starter config.
+// Triad minimal starter config — no app assumptions.
 //
-// This config avoids host-specific output/input policy and only binds
-// applications provided by the packaged River (Triad) session. See
-// examples/config/niltempus_config.kdl for a fuller opinionated setup.
+// Shell integration, screenshots, clipboard helpers, and app-specific window
+// rules are all commented out so this config starts cleanly on any distro.
+//
+// Before your first session, set your terminal:
+//   1. Find the "spawn" bind near Super+Return and uncomment it.
+//   2. Change the app name to a terminal you have installed
+//      (foot, kitty, alacritty, wezterm, …).
+//   3. Update the terminal { command "…" } block to match.
+//
+// For a complete real-world setup — shells, launchers, screenshots, window
+// rules, custom cursor — see examples/config/niltempus_config.kdl.
 
 layout {
     gaps 8
@@ -88,9 +96,10 @@ shells {
     }
 }
 
-terminal {
-    command "foot"
-}
+// Set this to your terminal. Used by the named scratchpad (Super+Ctrl+e).
+// terminal {
+//     command "foot"  // foot, kitty, alacritty, wezterm, …
+// }
 
 screenshot {
     directory "~/Pictures/Screenshots"
@@ -198,7 +207,7 @@ recent-windows {
 //     SSH_AUTH_SOCK #null
 // }
 
-spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"
+// spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"  // uncomment with screenshot tools
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
 spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
 spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"
@@ -206,15 +215,15 @@ spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
 spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"
-spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || true"
+// spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || true"  // night-light daemon
 
 bindings {
     mirror-hjkl-arrows #true
 
     // Launch/session.
     bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
-    bind "Super+Return" "spawn foot"
-    // bind "Super+Space" "spawn fuzzel"  // requires fuzzel; see examples/config/
+    // bind "Super+Return" "spawn foot"  // ← SET YOUR TERMINAL (foot, kitty, alacritty, wezterm, …)
+    // bind "Super+Space" "spawn fuzzel"  // launcher; see examples/config/
     // Add browser, launcher, and file-manager binds in your personal config.
     bind "Super+Escape" "lock-session"
     bind "Super+Ctrl+Escape" "toggle-keyboard-shortcuts-inhibit" allow-inhibiting=#false
@@ -396,42 +405,32 @@ bindings {
     // axis-bind "Super+wheel-down" "focus-right"
 }
 
-window-rule {
-    match app-id="qemu"
-    keyboard-shortcuts-inhibit #true
-}
-
+// App-specific window rules are commented out. See examples/config/niltempus_config.kdl.
+//
+// window-rule {
+//     match app-id="qemu"
+//     keyboard-shortcuts-inhibit #true
+// }
+//
+// window-rule {
+//     match app-id="fuzzel"
+//     open-floating #true
+// }
+//
+// window-rule {
+//     match title="^Picture-in-Picture$"
+//     open-floating #true
+// }
+//
 // Example terminal swallowing rules:
 // window-rule {
 //     match app-id="kitty|Alacritty|foot"
 //     terminal #true
 // }
 //
-// window-rule {
-//     match app-id="keepassxc"
-//     allow-swallow #false
-// }
-
 // Example scroller-specific sizing rule:
 // window-rule {
 //     match app-id="^org\\.wezfurlong\\.wezterm$"
 //     scroller-proportion { proportion 0.65 }
 //     scroller-single-proportion { proportion 0.80 }
 // }
-//
-// Example unmanaged-global window for camera previews or desktop pets:
-// window-rule {
-//     match app-id="cheese|camera"
-//     open-unmanaged-global #true
-//     default-floating-position x=24 y=24 relative-to="bottom-right"
-// }
-
-window-rule {
-    match app-id="fuzzel"
-    open-floating #true
-}
-
-window-rule {
-    match title="^Picture-in-Picture$"
-    open-floating #true
-}

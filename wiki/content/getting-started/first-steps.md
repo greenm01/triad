@@ -25,9 +25,16 @@ manager for a full session.
 
 ## Open a Terminal
 
-The starter config launches `foot` with `Super+Return`. If nothing happens,
-`foot` may not be installed. Edit `~/.config/triad/config.kdl` and change the
-`Super+Return` binding to a terminal you have installed.
+The starter config has the terminal bind commented out. Before your first
+session, open `~/.config/triad/config.kdl`, find the `Super+Return` bind, and
+uncomment it with a terminal you have installed:
+
+```kdl
+bind "Super+Return" "spawn foot"  // or kitty, alacritty, wezterm, …
+```
+
+Also update the `terminal { command "…" }` block to match — that's used by the
+terminal scratchpad (`Super+Ctrl+e`).
 
 ## Validate Your Config
 
