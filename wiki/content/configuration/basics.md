@@ -154,18 +154,79 @@ See [Key Bindings](@/configuration/key-bindings.md).
 
 ## Native Features
 
-**Recent windows (MRU switcher).** Cycle through recently used windows with
-`recent-window-next` / `recent-window-prev`. Confirm with
-`recent-window-confirm` or cancel with `recent-window-cancel`.
+### Recent Windows (Switcher)
+Cycle through recently used windows with native previews.
 
-**Hotkey overlay.** A live guide to your current bindings. Bind
-`toggle-hotkey-overlay` to show it on demand.
+| Setting | Format | Description |
+|---|---|---|
+| `enabled` | `Bool` | Toggle the MRU switcher. |
+| `debounce-ms` | `ms` | Time a window must remain focused to be recorded in history. |
+| `open-delay-ms` | `ms` | Delay before the switcher overlay appears. |
+| `highlight` | `Block` | Configure `active-color`, `urgent-color`, `padding`, and `corner-radius`. |
+| `previews` | `Block` | Configure `max-height` (Pixels) and `max-scale` (0.01..1.0). |
+
+**Hotkey overlay.** A live guide to your current bindings.
+
+| Setting | Format | Description |
+|---|---|---|
+| `skip-at-startup` | `Bool` | Do not show the overlay automatically at startup. |
+| `hide-not-bound` | `Bool` | Only show rows with an active keybinding. |
+| `position` | `"top"`, `"center"`, `"bottom"` | Vertical placement on screen. |
+| `columns` | `Int` | Number of columns to display (1..4). |
 
 **Scratchpads.** Hidden window pools you toggle as floating overlays.
 See [Scratchpads](@/usage/scratchpads.md).
 
 **Overview.** A zoomed-out strip of all workspaces.
 See [Overview](@/usage/overview.md).
+
+---
+
+## System Tools
+
+### Terminal & Screen Lock
+Configure the default terminal and screen locker.
+
+```kdl
+terminal {
+  command "kitty"
+}
+
+screen-lock {
+  command "swaylock" "-c" "000000"
+}
+```
+
+### Window Menu
+Configure the command for window menu requests.
+
+```kdl
+window-menu-command "wmenu"
+```
+
+### Screenshot
+Configure native screenshot behavior and external tools.
+
+| Setting | Format | Description |
+|---|---|---|
+| `directory` | `String` | Where to save screenshots (supports `~/`). |
+| `filename-prefix` | `String` | Prefix for generated filenames. |
+| `capture-command` | `String` | Tool for full-screen capture (e.g. `grim`). |
+| `region-selector-command` | `String` | Tool for region selection (e.g. `slurp`). |
+| `clipboard-command` | `String` | Tool for clipboard copy (e.g. `wl-copy`). |
+| `show-pointer` | `Bool` | Include the mouse pointer in captures. |
+
+**Example Screenshot Configuration:**
+```kdl
+screenshot {
+  directory "~/Pictures/Screenshots"
+  filename-prefix "triad-cap-"
+  capture-command "grim"
+  region-selector-command "slurp"
+  clipboard-command "wl-copy"
+  show-pointer #false
+}
+```
 
 ---
 

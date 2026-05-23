@@ -54,9 +54,14 @@ triad msg <command> [arguments]
 | `focus-tag-left` / `focus-tag-right` | Move to the adjacent workspace. |
 | `focus-occupied-tag-left` / `focus-occupied-tag-right` | Skip empty workspaces. |
 | `focus-column-first` / `focus-column-last` | Jump to the first or last column in the scroller. |
+| `focus-window-or-workspace-up` / `focus-window-or-workspace-down` | Move focus between windows or wrap to the adjacent workspace. |
 | `toggle-overview` | Toggle the bird's-eye workspace view. |
 | `recent-window-next` / `recent-window-prev` | Navigate the MRU switcher. |
 | `recent-window-confirm` / `recent-window-cancel` | Confirm or cancel the switcher selection. |
+| `recent-window-first` / `recent-window-last` | Jump to the start or end of history. |
+| `recent-window-scope [all\|workspace\|output]` | Set the MRU filter scope. |
+| `recent-window-cycle-scope` | Cycle through available MRU scopes. |
+| `recent-window-close-current` | Close the window currently selected in the switcher. |
 | `toggle-scratchpad` | Show or hide the default scratchpad. |
 | `toggle-named-scratchpad <name>` | Show or hide a named scratchpad pool. |
 
@@ -66,8 +71,8 @@ triad msg <command> [arguments]
 
 | Command | Description |
 |---|---|
-| `scroller`, `grid`, `notion`, `dwindle`, `center-tile`, `spiral`, `i3` | Select a layout by its layout ID. |
-| `layout-scroller`, `layout-grid`, `layout-spiral`, ... | Legacy explicit aliases for common layouts. |
+| `scroller`, `vertical-scroller`, `grid`, `notion`, `dwindle`, `center-tile`, `spiral`, `i3` | Select a layout by its layout ID. |
+| `layout-scroller`, `layout-vertical-scroller`, `layout-grid`, `layout-spiral`, ... | Legacy explicit aliases for common layouts. |
 | `layout-custom <name>` | Select a user-declared Janet layout when it is not one of Triad's bundled layout IDs. |
 | `layout-native <name>` | Select a native substrate: `frame-tree`, `bsp-tree`, or `i3`. |
 | `switch-layout` | Cycle through the configured `layout-cycle`. |
@@ -87,6 +92,8 @@ triad msg <command> [arguments]
 | `frame-split-horizontal` / `frame-split-vertical` | Split the focused frame. |
 | `frame-unsplit` | Remove the focused empty frame. |
 | `frame-tab-next` / `frame-tab-prev` | Cycle tabs within a frame. |
+| `frame-focus-parent` / `frame-focus-child` | Navigate the frame hierarchy. |
+| `frame-bind-app` / `frame-unbind-app` | Bind or unbind an application ID to a specific frame. |
 
 ### BSP & Dwindle
 
@@ -95,6 +102,9 @@ triad msg <command> [arguments]
 | `bsp-balance` / `bsp-equalize` | Rebalance the tree or reset split ratios. |
 | `bsp-preselect-left` / `-right` / `-up` / `-down` | Set the insertion target for the next window. |
 | `bsp-preselect-cancel` | Clear the pending insertion target. |
+| `bsp-preselect-ratio <ratio>` | Set the split ratio for the next preselected window. |
+| `dwindle-split-left` / `-right` / `-up` / `-down` | Manual split direction for dwindle. |
+| `dwindle-split-horizontal` / `dwindle-split-vertical` | Fixed orientation splitting. |
 
 ### Split-Tree (i3)
 
@@ -103,7 +113,11 @@ triad msg <command> [arguments]
 | `split-tree-split-horizontal` / `split-tree-split-vertical` | Set insertion direction. |
 | `split-tree-layout-toggle-split` | Toggle horizontal/vertical orientation. |
 | `split-tree-layout-stacking` / `split-tree-layout-tabbed` | Set container mode. |
+| `split-tree-layout-cycle-all` | Cycle through all available container modes. |
+| `split-tree-layout-cycle <modes...>` | Cycle through a specific list of modes. |
+| `split-tree-layout-default` | Reset the container to the default split mode. |
 | `split-tree-focus-parent` / `split-tree-focus-child` | Navigate the container hierarchy. |
+| `split-tree-focus-next-sibling` / `split-tree-focus-prev-sibling` | Move focus between siblings in a split container. |
 
 ---
 
@@ -116,7 +130,8 @@ triad msg <command> [arguments]
 | `fullscreen-window` | Toggle fullscreen mode. |
 | `toggle-maximized` | Toggle the client-visible maximized state. |
 | `move-to-tag <id>` / `move-to-workspace <index>` | Move the window and follow focus. |
-| `move-window-to-tag <id> <tag> [follow]` | Move a specific window by ID. |
+| `move-window-to-tag <id> <tag> [follow]` | Move a specific window by ID to a tag. |
+| `move-window-to-workspace <id> <index> [follow]` | Move a specific window by ID to a workspace. |
 | `move-to-scratchpad` / `move-to-named-scratchpad <name>` | Send the window to a scratchpad pool. |
 | `group-windows` | Group the window with its neighbor. |
 | `ungroup-window` | Dissolve the active group. |
@@ -138,6 +153,11 @@ triad msg <command> [arguments]
 | `screenshot [--path <path>]` | Capture a region, window, or screen. |
 | `lock-session` | Launch the configured screen locker. |
 | `exit-session` | Exit the session (requires `allow-exit-session #true` in config). |
+| `focus-shell-ui` | Shift focus to the shell UI surface. |
+| `switch-shell <name>` | Switch the active shell profile. |
+| `cycle-shell` | Cycle through the configured `shells.cycle` profiles. |
+| `show-hotkey-overlay` / `hide-hotkey-overlay` | Manage the keybinding guide. |
+| `toggle-hotkey-overlay` | Toggle the keybinding guide. |
 | `rename-tag <name>` | Rename the active workspace. |
 | `warp-pointer <x> <y>` | Warp the pointer on all active seats. |
 

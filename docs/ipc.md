@@ -43,17 +43,22 @@ Dispatch commands to the running Triad instance using:
 *   `focus-tag-left` / `focus-tag-right`: Moves to the adjacent workspace.
 *   `focus-occupied-tag-left` / `focus-occupied-tag-right`: Skips empty tags.
 *   `focus-column-first` / `focus-column-last`: Jumps to the edge of the scroller.
+*   `focus-window-or-workspace-up` / `focus-window-or-workspace-down`: Moves focus between windows or wraps to the adjacent workspace.
 *   `toggle-overview`: Toggles the bird's-eye workspace view.
 *   `recent-window-next` / `recent-window-prev`: Navigates the MRU switcher.
 *   `recent-window-confirm` / `recent-window-cancel`: Confirms or cancels the switcher.
+*   `recent-window-first` / `recent-window-last`: Jumps to the start or end of history.
+*   `recent-window-scope [all|workspace|output]`: Sets the MRU filter scope.
+*   `recent-window-cycle-scope`: Cycles through available MRU scopes.
+*   `recent-window-close-current`: Closes the window currently selected in the switcher.
 *   `toggle-scratchpad`: Shows or hides the default scratchpad.
 *   `toggle-named-scratchpad <name>`: Manages named scratchpad pools.
 
 ### Layout Management
 Set the layout mode for the active workspace:
-*   Short layout IDs such as `scroller`, `grid`, `notion`, `dwindle`,
+*   Short layout IDs such as `scroller`, `vertical-scroller`, `grid`, `notion`, `dwindle`,
     `center-tile`, `spiral`, and `i3`.
-*   Legacy explicit aliases such as `layout-scroller`, `layout-grid`,
+*   Legacy explicit aliases such as `layout-scroller`, `layout-vertical-scroller`, `layout-grid`,
     `layout-center-tile`, `layout-spiral`, and `layout-tgmix`.
 *   `layout-custom <name>`: Selects a user-declared Janet layout when the
     short ID is not one of Triad's built-in or bundled layout IDs.
@@ -69,25 +74,35 @@ Set the layout mode for the active workspace:
 *   `frame-split-horizontal` / `frame-split-vertical`: Splits the focused frame.
 *   `frame-unsplit`: Removes the focused empty frame.
 *   `frame-tab-next` / `frame-tab-prev`: Cycles tabs within a frame.
+*   `frame-focus-parent` / `frame-focus-child`: Navigates the frame hierarchy.
+*   `frame-bind-app` / `frame-unbind-app`: Binds or unbinds an application ID to a specific frame.
 
 #### BSP & Dwindle
 *   `bsp-balance` / `bsp-equalize`: Rebalances the tree or resets split ratios.
-*   `bsp-preselect-left/right/up/down`: Sets the insertion target for the next window.
+*   `bsp-preselect-left` / `-right` / `-up` / `-down`: Sets the insertion target for the next window.
 *   `bsp-preselect-cancel`: Clears the pending insertion target.
+*   `bsp-preselect-ratio <ratio>`: Sets the split ratio for the next preselected window.
+*   `dwindle-split-left` / `-right` / `-up` / `-down`: Manual split direction for dwindle.
+*   `dwindle-split-horizontal` / `dwindle-split-vertical`: Fixed orientation splitting.
 
 #### Split-Tree (i3)
 *   `split-tree-split-horizontal` / `split-tree-split-vertical`: Sets insertion direction.
 *   `split-tree-layout-toggle-split`: Toggles horizontal/vertical orientation.
 *   `split-tree-layout-stacking` / `split-tree-layout-tabbed`: Sets container mode.
+*   `split-tree-layout-cycle-all`: Cycles through all available container modes.
+*   `split-tree-layout-cycle <modes...>`: Cycles through a specific list of modes.
+*   `split-tree-layout-default`: Resets the container to the default split mode.
 *   `split-tree-focus-parent` / `split-tree-focus-child`: Navigates the container hierarchy.
+*   `split-tree-focus-next-sibling` / `split-tree-focus-prev-sibling`: Moves focus between siblings in a split container.
 
 ### Window Manipulation
 *   `close-window`: Requests the window to close.
 *   `toggle-floating`: Toggles between tiled and floating states.
 *   `fullscreen-window`: Toggles fullscreen mode.
 *   `toggle-maximized`: Toggles the client-visible maximized state.
-*   `move-to-tag <id>` / `move-to-workspace <index>`: Moves the window and follows focus.
-*   `move-window-to-tag <id> <tag> [follow]`: Moves a specific window.
+*   `move-to-tag <id>` / `move-to-workspace <index>`: Moves the focused window and follows focus.
+*   `move-window-to-tag <id> <tag> [follow]`: Moves a specific window by ID to a tag.
+*   `move-window-to-workspace <id> <index> [follow]`: Moves a specific window by ID to a workspace.
 *   `move-to-scratchpad` / `move-to-named-scratchpad <name>`: Sends the window to a pool.
 *   `group-windows`: Groups the window with its neighbor.
 *   `ungroup-window`: Dissolves the active group.
@@ -105,6 +120,11 @@ Set the layout mode for the active workspace:
 *   `screenshot [--path <path>]`: Captures a region, window, or screen.
 *   `lock-session`: Launches the configured screen locker.
 *   `exit-session`: Exits the session (requires `allow-exit-session #true`).
+*   `focus-shell-ui`: Shifts focus to the shell UI surface.
+*   `switch-shell <name>`: Switches the active shell profile.
+*   `cycle-shell`: Cycles through the configured `shells.cycle` profiles.
+*   `show-hotkey-overlay` / `hide-hotkey-overlay`: Manages the keybinding guide.
+*   `toggle-hotkey-overlay`: Toggles the keybinding guide.
 *   `rename-tag <name>`: Renames the active workspace.
 *   `warp-pointer <x> <y>`: Warps the pointer on all active seats.
 

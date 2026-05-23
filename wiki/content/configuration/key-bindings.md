@@ -118,3 +118,25 @@ bindings {
 
 For the full list of commands you can bind, see
 [IPC & Commands](@/usage/ipc-commands.md).
+
+---
+
+## Switch Events
+
+Trigger commands based on hardware switch state changes, such as closing a laptop lid or toggling tablet mode.
+
+| Event | Description |
+|---|---|
+| `lid-close` | Triggered when the laptop lid is closed. |
+| `lid-open` | Triggered when the laptop lid is opened. |
+| `tablet-mode-on` | Triggered when entering tablet mode. |
+| `tablet-mode-off` | Triggered when leaving tablet mode. |
+
+**Example:**
+
+```kdl
+switch-events {
+  lid-close "lock-session"
+  tablet-mode-on "spawn onboard"
+}
+```

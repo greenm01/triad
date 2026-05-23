@@ -154,6 +154,24 @@ layout {
 }
 ```
 
+### Layout Switch Toast
+A native centered toast shown when switching layout modes.
+
+| Setting | Format | Description |
+| :--- | :--- | :--- |
+| `enabled` | `Bool` | Toggle the layout switch toast. |
+| `timeout-ms` | `ms` | How long the toast remains visible. |
+| `ring-color` | `Color` | Color of the layout indicator ring. |
+
+**Example Toast Configuration:**
+```kdl
+layout-switch-toast {
+  enabled #true
+  timeout-ms 1500
+  ring-color "#7fc8ff"
+}
+```
+
 ### Workspaces
 Workspaces are virtual rooms. You can name them, pin them to monitors, and set default layouts.
 
@@ -364,9 +382,27 @@ bindings {
   bind "Super+Space" "spawn fuzzel"
   bind "Super+q" "close-window"
   bind "Super+o" "toggle-overview"
-  
+
   pointer-bind "Super+left" "move"
   pointer-bind "Super+right" "resize"
+}
+```
+
+### Switch Events
+Trigger commands based on hardware switch state changes, such as closing a laptop lid or toggling tablet mode.
+
+| Event | Description |
+| :--- | :--- |
+| `lid-close` | Triggered when the laptop lid is closed. |
+| `lid-open` | Triggered when the laptop lid is opened. |
+| `tablet-mode-on` | Triggered when entering tablet mode. |
+| `tablet-mode-off` | Triggered when leaving tablet mode. |
+
+**Example Switch Configuration:**
+```kdl
+switch-events {
+  lid-close "lock-session"
+  tablet-mode-on "spawn onboard"
 }
 ```
 
@@ -375,21 +411,115 @@ bindings {
 ## Native Features
 
 ### Recent Windows (Switcher)
-A Most Recently Used (MRU) switcher with native previews.
+A Most Recently Used (MRU) switcher with native previews and customizable behavior.
 
 | Setting | Format | Description |
 | :--- | :--- | :--- |
 | `enabled` | `Bool` | Toggle the MRU switcher. |
-| `debounce-ms" | `ms` | Time before a window is recorded. |
+| `debounce-ms` | `ms` | Time a window must remain focused before it is recorded in history. |
+| `open-delay-ms` | `ms` | Delay before the switcher overlay appears after the command is triggered. |
+| `highlight` | `Block` | Configure `active-color`, `urgent-color`, `padding`, and `corner-radius`. |
+| `previews` | `Block` | Configure `max-height` (Pixels) and `max-scale` (0.01..1.0). |
+
+**Example Switcher Configuration:**
+```kdl
+recent-windows {
+  enabled #true
+  debounce-ms 500
+  open-delay-ms 150
+
+  highlight {
+    active-color "#7fc8ff"
+    urgent-color "#ff5555"
+    padding 8
+    corner-radius 12
+  }
+
+  previews {
+    max-height 300
+    max-scale 0.8
+  }
+}
+```
 
 ### Hotkey Overlay
-A visual guide to current keybindings.
+A visual guide to current keybindings that can be shown on demand or at startup.
+
+| Setting | Format | Description |
+| :--- | :--- | :--- |
+| `skip-at-startup` | `Bool` | If true, do not show the overlay automatically when Triad starts. |
+| `hide-not-bound` | `Bool` | Only show rows that have an active keybinding. |
+| `position` | `"top"`, `"center"`, `"bottom"` | Vertical placement on the screen. |
+| `columns` | `Int` | Number of columns to display (1..4). |
+
+**Example Hotkey Overlay Configuration:**
+```kdl
+hotkey-overlay {
+  skip-at-startup #false
+  position "center"
+  columns 3
+}
+```
 
 ### Scratchpads
 Persistent, hidden window pools.
 
 ### Overview
 A birds-eye view of all workspaces.
+
+---
+
+## System Tools
+
+### Terminal & Screen Lock
+Configure the default terminal and screen locker.
+
+| Setting | Format | Description |
+| :--- | :--- | :--- |
+| `terminal` | `Block` | The command to launch via `spawn-terminal`. |
+| `screen-lock` | `Block` | The command to launch via `lock-session`. |
+
+**Example:**
+```kdl
+terminal {
+  command "kitty"
+}
+
+screen-lock {
+  command "swaylock" "-c" "000000"
+}
+```
+
+### Window Menu
+Configure the command used for window menu requests.
+
+```kdl
+window-menu-command "wmenu"
+```
+
+### Screenshot
+Configure native screenshot behavior and external tools.
+
+| Setting | Format | Description |
+| :--- | :--- | :--- |
+| `directory` | `String` | Where to save screenshots (supports `~/`). |
+| `filename-prefix` | `String` | Prefix for generated filenames. |
+| `capture-command` | `String` | Tool for full-screen capture (e.g., `grim`). |
+| `region-selector-command` | `String` | Tool for region selection (e.g., `slurp`). |
+| `clipboard-command` | `String` | Tool for clipboard copy (e.g., `wl-copy`). |
+| `show-pointer` | `Bool` | Whether to include the mouse pointer in captures. |
+
+**Example Screenshot Configuration:**
+```kdl
+screenshot {
+  directory "~/Pictures/Screenshots"
+  filename-prefix "triad-cap-"
+  capture-command "grim"
+  region-selector-command "slurp"
+  clipboard-command "wl-copy"
+  show-pointer #false
+}
+```
 
 ---
 

@@ -214,19 +214,23 @@ spawn-at-startup "sh" "-lc" \
    WAYLAND_DISPLAY XDG_CURRENT_DESKTOP NIRI_SOCKET TRIAD_SOCKET"
 ```
 
-## Cycling Shells
+## Shell Management Commands
 
-Switch between profiles at runtime:
+Manage your shell profiles and UI focus at runtime:
 
-```bash
-triad msg cycle-shell
-```
+| Command | Description |
+|---|---|
+| `switch-shell <name>` | Switch the active shell profile by name. |
+| `cycle-shell` | Cycle through the profiles in `shells.cycle`. |
+| `focus-shell-ui` | Shift focus to the shell UI surface. |
 
-Or bind it:
+**Example Bindings:**
 
 ```kdl
 bindings {
   bind "Ctrl+Alt+0" "cycle-shell"
+  bind "Ctrl+Alt+9" "switch-shell 'noctalia'"
+  bind "Super+Alt+u" "focus-shell-ui"
 }
 ```
 

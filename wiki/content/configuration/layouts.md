@@ -118,3 +118,25 @@ Need something Triad doesn't ship? Write it in Janet. Any layout you define
 becomes a first-class layout ID — usable in `layout-cycle`, workspace rules,
 and IPC commands. See [Janet Scripting](@/usage/janet-scripting.md) to get
 started.
+
+---
+
+## Layout Switch Toast
+
+Triad can show a native centered toast whenever you change the layout of the active workspace.
+
+| Setting | Format | Description |
+|---|---|---|
+| `enabled` | `Bool` | Toggle the layout switch toast. |
+| `timeout-ms` | `ms` | How long the toast remains visible. |
+| `ring-color` | `Color` | Color of the layout indicator ring. |
+
+**Example:**
+
+```kdl
+layout-switch-toast {
+  enabled #true
+  timeout-ms 1500
+  ring-color "#7fc8ff"
+}
+```
