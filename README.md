@@ -47,21 +47,12 @@ Triad exposes its own state socket for native integrations and can also launch s
 
 ### Installation
 
-See [INSTALL.md](INSTALL.md) for complete setup instructions.
-
-To build Triad locally (requires River 0.4+):
-
-```bash
-git clone https://github.com/greenm01/triad.git
-cd triad
-nimble installSession
-```
-
-`nimble installSession` builds and installs the local session.
+Use the [installation guide](https://triadwm.org/getting-started/installation/).
+It covers River, distro packages, Nim, first-run setup, and the default config.
 
 ### Toolchain
 
-Triad tracks stable Nim via `choosenim`:
+For development, Triad tracks stable Nim via `choosenim`:
 
 ```bash
 choosenim update self
