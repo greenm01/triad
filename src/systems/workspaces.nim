@@ -565,6 +565,12 @@ proc workspaceWasFocused(model: Model, tagId: TagId): bool =
       return true
   false
 
+proc focusedDurableWorkspace(model: Model, tagId: TagId): bool =
+  if not model.workspaceWasFocused(tagId):
+    return false
+  let tagOpt = model.tagData(tagId)
+  tagOpt.isSome and model.hasDurableTagState(tagOpt.get())
+
 proc pruneDynamicWorkspaces*(model: var Model): bool =
   let activeSlot = model.activeWorkspaceSlot()
   let trailing = model.trailingWorkspaceSlot()
@@ -577,6 +583,8 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
     if model.restoreSlotHasPendingWindow(slot):
       continue
     if model.tagHasNonStickyLiveWindows(tagId):
+      continue
+    if model.focusedDurableWorkspace(tagId):
       continue
     if model.tagVisibleOnOutput(tagId):
       if not model.workspaceWasFocused(tagId):

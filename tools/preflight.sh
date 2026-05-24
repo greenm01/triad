@@ -46,7 +46,7 @@ if [ -n "$tracked_execs" ]; then
   fail "tracked executable-mode files found"
 fi
 
-remaining_execs="$(find . -path ./.git -prune -o -type f -perm -111 -print)"
+remaining_execs="$(find . -path ./.git -prune -o -path ./.nimble -prune -o -type f -perm -111 -print)"
 if [ -n "$remaining_execs" ]; then
   printf '%s\n' "$remaining_execs" >&2
   fail "executable files remain after tidy"

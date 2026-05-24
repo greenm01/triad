@@ -77,7 +77,8 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
     "tests/tcore_shell_snapshot_ipc", "tests/tcore_unmanaged_global", "tests/tstate",
     "tests/thardening", "tests/tjanet", "tests/tlayouts", "tests/tlogging",
     "tests/tprotocol", "tests/tstress", "triad-live-smoke.events",
-    "triad-live-smoke.log", "triad-live-smoke.out",
+    "triad-live-smoke.log", "triad-live-smoke.out", "tests/tconfig", "tests/tcore",
+    "tests/tdod",
   ]:
     if fileExists(path):
       rmFile(path)
