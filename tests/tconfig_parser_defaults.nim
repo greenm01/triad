@@ -897,16 +897,12 @@ janet {
     check config.msgKindForBinding("b", Super + Shift) == MsgKind.CmdMinimize
     check config.msgKindForBinding("f", Super + Shift) == MsgKind.CmdToggleFullscreen
     check keySymForBinding("f", Super + Shift) == uint32(ord('f'))
-    check config.spawnForBinding("c", Super) ==
-      @["wtype", "-M", "ctrl", "-P", "Insert", "-p", "Insert", "-m", "ctrl"]
-    check config.spawnForBinding("v", Super) ==
-      @["wtype", "-M", "shift", "-P", "Insert", "-p", "Insert", "-m", "shift"]
-    check config.spawnForBinding("x", Super) ==
-      @["wtype", "-M", "ctrl", "x", "-m", "ctrl"]
-    check config.msgKindForBinding("Print", 0'u32) == MsgKind.CmdScreenshot
-    check config.commandForBinding("Print", Ctrl) == "screenshot-screen"
-    check config.commandForBinding("Print", Alt) == "screenshot-window"
-    check config.commandForBinding("Print", Super) == "screenshot --clipboard-only"
+    for key in ["c", "v", "x"]:
+      check config.commandForBinding(key, Super).len == 0
+    check config.commandForBinding("Print", 0'u32).len == 0
+    check config.commandForBinding("Print", Ctrl).len == 0
+    check config.commandForBinding("Print", Alt).len == 0
+    check config.commandForBinding("Print", Super).len == 0
     check config.msgKindForBinding("Question", Super) == MsgKind.CmdToggleHotkeyOverlay
     check config.msgKindForBinding("Delete", Ctrl + Alt) == MsgKind.CmdExitSession
     check keySymForBinding("Delete", Ctrl + Alt) == 0xffff'u32
@@ -953,10 +949,7 @@ janet {
     check config.commandForBinding("Page_Up", Super) == "frame-tab-prev"
     check config.commandForBinding("Page_Down", Super) == "frame-tab-next"
     for key in ["c", "v", "x"]:
-      let bindings =
-        config.keyBindings.filterIt(it.key == key and it.modifiers == Super)
-      check bindings.len == 1
-      check bindings[0].bypassShortcutsInhibit
+      check config.commandForBinding(key, Super).len == 0
     check config.layoutIdForBinding("c", Super + Ctrl) == "center-tile"
     check config.layoutIdForBinding("v", Super + Ctrl) == "deck"
     check config.layoutIdForBinding("x", Super + Ctrl) == "monocle"
