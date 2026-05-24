@@ -4,7 +4,7 @@ https://github.com/user-attachments/assets/27e4bde8-95fc-40cf-9830-5373ac0bcc74
 
 Triad is a programmable Wayland window manager for River. River handles Wayland; Triad manages placement, policy, IPC, and scripting.
 
-[Triad Wiki](https://triadwm.org/)
+[Installation Guide](https://triadwm.org/getting-started/installation/)
 
 [Documentation](docs/README.md)
 
