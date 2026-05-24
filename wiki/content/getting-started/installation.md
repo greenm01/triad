@@ -20,6 +20,39 @@ Triad. After installation, `river -version` must report 0.4 or newer. For
 daily use, install a release-optimized River build rather than an unoptimized
 development binary.
 
+Install River's source-build dependencies:
+
+### Void Linux
+
+```bash
+sudo xbps-install -S git zig pkg-config wayland-devel wayland-protocols \
+  wlroots-devel libxkbcommon-devel libevdev-devel pixman-devel scdoc
+```
+
+### Arch Linux
+
+```bash
+sudo pacman -S git zig pkgconf wayland wayland-protocols wlroots \
+  libxkbcommon libevdev pixman scdoc
+```
+
+### Debian / Ubuntu
+
+```bash
+sudo apt install git zig pkg-config libwayland-dev wayland-protocols \
+  libwlroots-dev libxkbcommon-dev libevdev-dev libpixman-1-dev scdoc
+```
+
+### Fedora
+
+```bash
+sudo dnf install git zig pkgconf wayland-devel wayland-protocols-devel \
+  wlroots-devel libxkbcommon-devel libevdev-devel pixman-devel scdoc
+```
+
+If your distribution ships an older Zig or wlroots than River requires, follow
+the upstream River instructions for those dependencies.
+
 Recommended local River build:
 
 ```bash
@@ -35,13 +68,6 @@ building an optimized binary. `-Dcpu=baseline` avoids a host-specific
 `-march=native` build, and `-Dstrip -Dpie` match River's packaging
 recommendations. `-Dxwayland` enables support for X11 applications through
 Xwayland.
-
-Fedora packages for a local River source build:
-
-```bash
-sudo dnf install git zig pkgconf wayland-devel wayland-protocols-devel \
-  wlroots-devel libxkbcommon-devel libevdev-devel pixman-devel scdoc
-```
 
 Install Triad's local build dependencies:
 
