@@ -91,8 +91,18 @@ cd triad
 nimble installSession
 ```
 
-Then log out and choose **River (Triad)** from your display manager's session
-menu. The installer writes the session entry to
+Before logging out, test Triad from your current desktop:
+
+```bash
+WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
+```
+
+This catches missing River, Triad, or config setup before you switch your login
+session. See [Try Triad From An Existing Desktop](#try-triad-from-an-existing-desktop)
+and [Nested Wayland Smoke Test](#nested-wayland-smoke-test) below for details.
+
+After the smoke test passes, log out and choose **River (Triad)** from your
+display manager's session menu. The installer writes the session entry to
 `/usr/share/wayland-sessions/river-triad.desktop` by default, writes the
 manager script and optimized Triad binaries to `~/.local/bin`, and uses `sudo`
 or `doas` only for the system session file when needed. Release builds clear
@@ -114,10 +124,6 @@ distro without requiring extra programs. To add a status bar or launcher, edit
 `~/.config/triad/config.kdl`. Use `examples/config/niltempus_config.kdl` as a
 reference for a fuller personal setup with shell profiles, browser bindings,
 and app-specific window rules.
-
-Before switching your login session, do a quick nested Wayland test from your
-current desktop — see [Nested Wayland Smoke Test](#nested-wayland-smoke-test)
-below.
 
 ## Optional Nix Dev Shell
 
