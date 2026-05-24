@@ -1,20 +1,19 @@
 # Installing Triad
 
-Triad runs as a River session. River owns the Wayland compositor process;
-Triad runs as the window-management client inside that session.
+Triad runs inside a River session. River owns the Wayland compositor process;
+Triad is the window-management client.
 
 ## Recommended Local Install
 
-Install River 0.4+ from the upstream River source instructions:
+Install River 0.4+ using the upstream River instructions:
 
 https://codeberg.org/river/river
 
-Triad intentionally does not package River for non-NixOS systems. River owns
-the compositor process and the GPU/session boundary, so install and validate it
-as a normal host component before installing Triad. After River is installed,
-`river -version` must report 0.4 or newer.
-For daily use, build River with the upstream release-optimized install command
-rather than running an unoptimized development binary.
+Triad does not install River for you. River owns the compositor, the GPU
+boundary, and the login session, so install and test River before installing
+Triad. After installation, `river -version` must report 0.4 or newer. For
+daily use, install a release-optimized River build rather than an unoptimized
+development binary.
 
 Recommended local River build:
 
@@ -32,7 +31,14 @@ building an optimized binary. `-Dcpu=baseline` avoids a host-specific
 recommendations. `-Dxwayland` enables support for X11 applications through
 Xwayland.
 
-Install Triad's local build requirements:
+Fedora packages for a local River source build:
+
+```bash
+sudo dnf install git zig pkgconf wayland-devel wayland-protocols-devel \
+  wlroots-devel libxkbcommon-devel libevdev-devel pixman-devel scdoc
+```
+
+Install Triad's local build dependencies:
 
 - Nim 2.2.4 or newer
 - Nimble
@@ -57,18 +63,18 @@ sudo apt install nim nimble pkg-config libwayland-dev libxkbcommon-dev libpixman
 sudo dnf install nim nimble pkgconf wayland-devel libxkbcommon-devel pixman-devel
 ```
 
-If your distribution's `nim` package is older than 2.2.4 (check with
-`nim --version`), install a current release with `choosenim`:
+If your distribution ships an older Nim, install a current release with
+`choosenim`:
 
 ```bash
 curl https://nim-lang.org/choosenim/init.sh -sSf | sh
 choosenim 2.2.4
 ```
 
-Then make sure `~/.nimble/bin` is on your `PATH` before building Triad. Fedora
+Make sure `~/.nimble/bin` is on your `PATH` before building Triad. Fedora
 packages in particular may ship an older Nim.
 
-Then build and install Triad:
+Build and install Triad:
 
 ```bash
 git clone https://github.com/greenm01/triad.git
@@ -76,23 +82,23 @@ cd triad
 nimble installSession
 ```
 
-Before logging out, test Triad from your current desktop:
+Before you log out, test Triad from your current desktop:
 
 ```bash
 WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
 ```
 
-This catches missing River, Triad, or config setup before you switch your login
-session. See [Try Triad From An Existing Desktop](#try-triad-from-an-existing-desktop)
-and [Nested Wayland Smoke Test](#nested-wayland-smoke-test) below for details.
+This catches missing River, Triad, and config setup before you switch login
+sessions. See [Try Triad from an Existing Desktop](#try-triad-from-an-existing-desktop)
+and [Nested Wayland Smoke Test](#nested-wayland-smoke-test).
 
 After the smoke test passes, log out and choose **River (Triad)** from your
-display manager's session menu. The installer writes the session entry to
-`/usr/share/wayland-sessions/river-triad.desktop` by default, writes the
-manager script and optimized Triad binaries to `~/.local/bin`, and uses `sudo`
+display manager's session menu. By default, the installer writes the session
+entry to `/usr/share/wayland-sessions/river-triad.desktop` and writes the
+manager script and optimized Triad binaries to `~/.local/bin`. It uses `sudo`
 or `doas` only for the system session file when needed. Release builds clear
 `TRIAD_DEV_MODE` by default. Run the installer as your normal user, not with
-`sudo`, so the binaries and config land under your home directory.
+`sudo`, so binaries and config files land under your home directory.
 
 `tools/install_live_session.sh` expects `river` 0.4+ on `PATH`. To use a
 specific River build, set:
@@ -103,18 +109,45 @@ TRIAD_RIVER_BIN=/path/to/river tools/install_live_session.sh
 
 The installer creates a starter config only when
 `~/.config/triad/config.kdl` does not already exist. Existing config files and
-symlinks are left in place. The starter config uses `foot` as the default
-terminal and has shell integration disabled, so it works out of the box on any
-distro without requiring extra programs. To add a status bar or launcher, edit
-`~/.config/triad/config.kdl`. Use `examples/config/niltempus_config.kdl` as a
-reference for a fuller personal setup with shell profiles, browser bindings,
-and app-specific window rules.
+symlinks are left in place.
+
+The starter config makes no assumptions about your Linux distribution. It does
+not choose your status bar, launcher, notification daemon, wallpaper tool,
+browser, terminal, or application rules. It keeps shell integration disabled
+and uses `foot` only as an example terminal. Install the tools you want, or
+edit `~/.config/triad/config.kdl` so the commands match your system.
+
+For a fuller personal setup, see
+`examples/config/niltempus_config.kdl` in the GitHub repository. It shows shell
+profiles, browser bindings, and app-specific window rules. Treat it as a
+reference, not a drop-in config. Its shell commands and application rules are
+for one user's machine.
+
+## First Run
+
+With the starter config, Triad opens to an empty desktop with a cursor and the
+startup hotkey overlay. That is expected. The default config does not start a
+shell, status bar, launcher, notification daemon, PipeWire, or desktop portals.
+The `Super+Return` terminal binding is commented out until you set it to a
+terminal installed on your system.
+
+Before your first login session, edit `~/.config/triad/config.kdl` and set at
+least one terminal binding inside the `bindings` block:
+
+```kdl
+bind "Super+Return" "spawn foot"
+```
+
+Replace `foot` with the terminal you installed. Use `Super+?` to show the
+hotkey overlay again. If keybindings appear dead, check the session logs first.
+A config parse error or missing manager process will show up there. If Triad is
+running but no terminal, launcher, or shell is configured, the session can look
+empty even though the compositor started.
 
 ## Optional Nix Dev Shell
 
-On non-NixOS systems, Nix is only a contributor convenience. It provides the
-Triad compiler/toolchain dependencies, not River or the live compositor
-session:
+Nix is only a contributor convenience here. It provides the Triad
+compiler/toolchain dependencies, not River or the live compositor session:
 
 ```bash
 nix develop
@@ -125,7 +158,7 @@ nimble buildRelease
 You still need River 0.4+ installed natively before running the live session
 installer or live reload.
 
-## Add Triad To Your Login Screen
+## Add Triad to Your Login Screen
 
 The local installer writes a system session file here:
 
@@ -133,7 +166,7 @@ The local installer writes a system session file here:
 /usr/share/wayland-sessions/river-triad.desktop
 ```
 
-That is the most portable location for display managers on Void, Arch, Debian,
+This is the most portable location for display managers on Void, Arch, Debian,
 Ubuntu, and similar systems. To install somewhere else:
 
 ```bash
@@ -158,40 +191,10 @@ That writes:
 Many display managers ignore user-local sessions, so prefer the default system
 install unless you know yours scans `$XDG_DATA_HOME/wayland-sessions`.
 
-### NixOS
-
-For NixOS, import the flake module and enable the session declaratively:
-
-```nix
-{
-  inputs.triad.url = "github:greenm01/triad";
-
-  outputs = { nixpkgs, triad, ... }: {
-    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        triad.nixosModules.default
-        {
-          programs.triad.enable = true;
-        }
-      ];
-    };
-  };
-}
-```
-
-Then rebuild your system and log out:
-
-```bash
-sudo nixos-rebuild switch --flake .#host
-```
-
-After that, select **River (Triad)** from the display manager.
-
-## Try Triad From An Existing Desktop
+## Try Triad from an Existing Desktop
 
 The safest first live test is a separate TTY. A nested Wayland session can also
-work when your current compositor and wlroots backend support it.
+work if your current compositor and wlroots backend support it.
 
 ### TTY Smoke Test
 
@@ -220,22 +223,22 @@ From an existing Wayland desktop:
 WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
 ```
 
-This is useful for quick smoke testing. A real login session is the better path
-for daily use because it gives River direct ownership of the Wayland session.
+This is useful for quick smoke testing. For daily use, prefer a real login
+session; it gives River direct ownership of the Wayland session.
 
 ### Development Diagnostics
 
-Normal sessions keep behavior JSON logs off. For a diagnostic session, enable
-dev mode before starting River:
+Normal sessions keep behavior JSON logs off. For diagnostics, enable dev mode
+before starting River:
 
 ```bash
 TRIAD_SESSION_DEV_MODE=1 ~/.local/bin/river-triad-session
 ```
 
 Installed display-manager sessions clear inherited `TRIAD_DEV_MODE` and
-`TRIAD_BEHAVIOR_LOG` so a login session is not accidentally started in
-diagnostic mode. To opt a login session into diagnostics, set
-`TRIAD_SESSION_DEV_MODE=1` in the session environment before launch.
+`TRIAD_BEHAVIOR_LOG`, which prevents accidental diagnostic login sessions. To
+opt in, set `TRIAD_SESSION_DEV_MODE=1` in the session environment before
+launch.
 
 Dev mode enables compact behavior JSONL logs unless
 `TRIAD_BEHAVIOR_LOG=0` is set. You can also run `triad --dev-mode` directly
@@ -245,11 +248,11 @@ In a running Triad session, use `triad msg dev-mode status`,
 `triad msg dev-mode on`, `triad msg dev-mode off`, or
 `triad msg dev-mode toggle` to inspect or change the live diagnostics mode.
 
-## Test In QEMU
+## Test in QEMU
 
 For the most isolated test, run Triad in a VM. This is slower than a TTY smoke
-test, but it avoids risking your current graphical session and is better for
-checking VT switching, compositor startup, recovery, and session behavior.
+test, but it avoids your current graphical session and is better for checking
+VT switching, compositor startup, recovery, and session behavior.
 
 See [docs/qemu-vt-smoke.md](docs/qemu-vt-smoke.md) for setup details.
 
@@ -283,13 +286,14 @@ Logs are written under:
 
 Two symlinks point to the newest logs. The session wrapper writes
 `river-triad-session-latest.log` first; the manager loop writes
-`triad-latest.log` once it starts. Check the session wrapper log first when
-diagnosing startup failures:
+`triad-latest.log` once it starts. If startup fails, check the session wrapper
+log first.
 
 ## Shell Profiles
 
 Shell integration is disabled in the default config. To add a status bar,
-enable it and configure a profile. Waybar is the most widely packaged option:
+enable shell integration and configure a profile. Waybar is the most widely
+packaged option:
 
 ```kdl
 shells {
@@ -310,9 +314,47 @@ shells {
 }
 ```
 
-The profile commands are plain argv-style entries; replace them with any shell
-or bar you prefer. See `examples/config/niltempus_config.kdl` for a setup with
-multiple profiles including Noctalia and DankMaterialShell.
+The profile commands are plain argv-style entries. Replace them with the shell
+or bar commands you use. See `examples/config/niltempus_config.kdl` in the
+GitHub repository for a setup with multiple profiles, including Noctalia and
+DankMaterialShell.
+
+### Noctalia on Fedora
+
+Triad does not install Noctalia. Install Noctalia first, then add a Triad shell
+profile that launches its command.
+
+Noctalia's v4 Fedora docs install `noctalia-shell` from the Terra repository:
+
+```bash
+sudo dnf install --nogpgcheck --repofrompath \
+  'terra,https://repos.fyralabs.com/terra$releasever' terra-release
+sudo dnf install noctalia-shell
+```
+
+Then enable a profile in `~/.config/triad/config.kdl`:
+
+```kdl
+shells {
+  enabled #true
+  active "noctalia"
+  cycle "noctalia"
+
+  watchdog {
+    enabled #true
+    fallback "noctalia"
+  }
+
+  profile "noctalia" {
+    launch "noctalia-shell"
+    stop "pkill" "-f" "noctalia-shell"
+    niri-compat #true
+  }
+}
+```
+
+`niri-compat #true` is required for shells that consume Niri-compatible
+workspace IPC.
 
 See [docs/configuration.md](docs/configuration.md) for the full config surface.
 
@@ -340,7 +382,7 @@ directory, captures restore state, and asks the running manager to restart.
 If the login session does not appear, check where your display manager reads
 Wayland session files and install `river-triad.desktop` there.
 
-If Triad starts but the shell does not, inspect the session log and behavior logs:
+If Triad starts but the shell does not, inspect the session and behavior logs:
 
 ```bash
 ls -la ~/.local/state/triad/

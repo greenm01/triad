@@ -57,7 +57,7 @@ cd triad
 nimble installSession
 ```
 
-`nimble installSession` builds and installs the session. NixOS users can use the provided flake module.
+`nimble installSession` builds and installs the local session.
 
 ### Toolchain
 

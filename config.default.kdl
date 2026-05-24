@@ -1,4 +1,4 @@
-// Triad minimal starter config — no app assumptions.
+// Triad minimal starter config: no app assumptions.
 //
 // Shell integration, screenshots, clipboard helpers, and app-specific window
 // rules are all commented out so this config starts cleanly on any distro.
@@ -6,11 +6,11 @@
 // Before your first session, set your terminal:
 //   1. Find the "spawn" bind near Super+Return and uncomment it.
 //   2. Change the app name to a terminal you have installed
-//      (foot, kitty, alacritty, wezterm, …).
-//   3. Update the terminal { command "…" } block to match.
+//      (foot, kitty, alacritty, wezterm, etc.).
+//   3. Update the terminal { command "..." } block to match.
 //
-// For a complete real-world setup — shells, launchers, screenshots, window
-// rules, custom cursor — see examples/config/niltempus_config.kdl.
+// For a complete real-world setup with shells, launchers, screenshots, window
+// rules, and custom cursor settings, see examples/config/niltempus_config.kdl.
 
 layout {
     gaps 8
@@ -98,7 +98,7 @@ shells {
 
 // Set this to your terminal. Used by the named scratchpad (Super+Ctrl+e).
 // terminal {
-//     command "foot"  // foot, kitty, alacritty, wezterm, …
+//     command "foot"  // foot, kitty, alacritty, wezterm, etc.
 // }
 
 screenshot {
@@ -207,14 +207,16 @@ recent-windows {
 //     SSH_AUTH_SOCK #null
 // }
 
-// spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"  // uncomment with screenshot tools
-spawn-at-startup "sh" "-lc" "pgrep -x pipewire >/dev/null || pipewire"
-spawn-at-startup "sh" "-lc" "pgrep -x wireplumber >/dev/null || wireplumber"
-spawn-at-startup "sh" "-lc" "pgrep -x pipewire-pulse >/dev/null || pipewire-pulse"
-spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev/null 2>&1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE NIRI_SOCKET TRIAD_SOCKET || true"
-spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
-spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
-spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"
+// Optional desktop services. Uncomment only the pieces you installed and want
+// Triad to start for you.
+// spawn-at-startup "sh" "-lc" "mkdir -p ~/Pictures/Screenshots"  // screenshot tools
+// spawn-at-startup "sh" "-lc" "command -v pipewire >/dev/null 2>&1 && ! pgrep -x pipewire >/dev/null && pipewire || true"
+// spawn-at-startup "sh" "-lc" "command -v wireplumber >/dev/null 2>&1 && ! pgrep -x wireplumber >/dev/null && wireplumber || true"
+// spawn-at-startup "sh" "-lc" "command -v pipewire-pulse >/dev/null 2>&1 && ! pgrep -x pipewire-pulse >/dev/null && pipewire-pulse || true"
+// spawn-at-startup "sh" "-lc" "command -v dbus-update-activation-environment >/dev/null 2>&1 && dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE NIRI_SOCKET TRIAD_SOCKET || true"
+// spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal >/dev/null 2>&1 && xdg-desktop-portal -r || true"
+// spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-wlr >/dev/null 2>&1 && xdg-desktop-portal-wlr || true"
+// spawn-at-startup "sh" "-lc" "command -v xdg-desktop-portal-gtk >/dev/null 2>&1 && xdg-desktop-portal-gtk -r || true"
 // spawn-at-startup "sh" "-lc" "command -v sunsetr >/dev/null 2>&1 && sunsetr || true"  // night-light daemon
 
 bindings {
@@ -222,7 +224,7 @@ bindings {
 
     // Launch/session.
     bind "Ctrl+Alt+Delete" "exit-session" allow-inhibiting=#false hotkey-overlay-title="Exit Triad"
-    // bind "Super+Return" "spawn foot"  // ← SET YOUR TERMINAL (foot, kitty, alacritty, wezterm, …)
+    // bind "Super+Return" "spawn foot"  // SET YOUR TERMINAL (foot, kitty, alacritty, wezterm, etc.)
     // bind "Super+Space" "spawn fuzzel"  // launcher; see examples/config/
     // Add browser, launcher, and file-manager binds in your personal config.
     bind "Super+Escape" "lock-session"
