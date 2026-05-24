@@ -5,19 +5,47 @@ import ../core/native_layout_codec
 import ../state/engine
 from ../types/runtime_values import LayoutMode, WindowRuleMaximizePolicy
 
+proc requestedFullscreenOutputValid(model: Model, requested: ExternalOutputId): bool =
+  requested != NullExternalOutputId and
+    model.outputForExternal(requested) != NullOutputId
+
+proc outputFullscreenExternalId(model: Model, outputId: OutputId): ExternalOutputId =
+  if outputId == NullOutputId:
+    return NullExternalOutputId
+  let output = model.output(outputId)
+  if output.isSome:
+    return output.get().externalId
+  return NullExternalOutputId
+
 proc chooseFullscreenOutput*(
     model: Model, requested: ExternalOutputId
 ): ExternalOutputId =
   if requested != NullExternalOutputId and
-      model.outputForExternal(requested) != NullOutputId:
+      model.requestedFullscreenOutputValid(requested):
     return requested
+  result = model.outputFullscreenExternalId(model.activeOutput)
+  if result != NullExternalOutputId:
+    return
   if model.primaryOutput != NullOutputId and model.hasOutput(model.primaryOutput):
-    let output = model.output(model.primaryOutput)
-    if output.isSome:
-      return output.get().externalId
+    result = model.outputFullscreenExternalId(model.primaryOutput)
+    if result != NullExternalOutputId:
+      return
   if requested != NullExternalOutputId:
     return requested
-  NullExternalOutputId
+  return NullExternalOutputId
+
+proc chooseFullscreenOutputForWindow(
+    model: Model, winId: WindowId, requested: ExternalOutputId
+): ExternalOutputId =
+  if requested != NullExternalOutputId and
+      model.requestedFullscreenOutputValid(requested):
+    return requested
+  let position = model.firstWindowPosition(winId)
+  if position.found:
+    result = model.outputFullscreenExternalId(model.workspaceOutput(position.tagId))
+    if result != NullExternalOutputId:
+      return
+  return model.chooseFullscreenOutput(requested)
 
 proc updateWindowDimensionsForExternal*(
     model: var Model, externalId: ExternalWindowId, w, h: int32
@@ -134,7 +162,9 @@ proc requestFullscreenForExternal*(
   let winId = model.windowForExternal(externalId)
   if winId == NullWindowId:
     return false
-  model.setWindowFullscreen(winId, true, model.chooseFullscreenOutput(requestedOutput))
+  model.setWindowFullscreen(
+    winId, true, model.chooseFullscreenOutputForWindow(winId, requestedOutput)
+  )
 
 proc exitFullscreenForExternal*(model: var Model, externalId: ExternalWindowId): bool =
   let winId = model.windowForExternal(externalId)
@@ -152,7 +182,7 @@ proc toggleFullscreenForExternal*(
     winId,
     nextFullscreen,
     if nextFullscreen:
-      model.chooseFullscreenOutput(NullExternalOutputId)
+      model.chooseFullscreenOutputForWindow(winId, NullExternalOutputId)
     else:
       NullExternalOutputId,
   )
@@ -311,7 +341,7 @@ proc toggleFullscreenFocused*(model: var Model): bool =
     winId,
     nextFullscreen,
     if nextFullscreen:
-      model.chooseFullscreenOutput(NullExternalOutputId)
+      model.chooseFullscreenOutputForWindow(winId, NullExternalOutputId)
     else:
       NullExternalOutputId,
   )

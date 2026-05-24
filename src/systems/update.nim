@@ -9,7 +9,8 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
   kind in {
     MsgKind.WlWindowCreated, MsgKind.WlWindowDestroyed, MsgKind.WlWindowAppId,
     MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
-    MsgKind.WlWindowMinimizeRequested, MsgKind.WlSessionLocked,
+    MsgKind.WlWindowMinimizeRequested, MsgKind.WlWindowFullscreenRequested,
+    MsgKind.WlWindowExitFullscreenRequested, MsgKind.WlSessionLocked,
     MsgKind.WlSessionUnlocked, MsgKind.WlFocusChanged, MsgKind.WlFrameTabClicked,
     MsgKind.CmdFocusTag, MsgKind.CmdFocusTagLeft, MsgKind.CmdFocusTagRight,
     MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdNewWorkspace, MsgKind.CmdMoveToTag,
@@ -21,8 +22,10 @@ proc shouldLogRuntimeUpdate(kind: MsgKind): bool =
     MsgKind.CmdMaximizeColumn, MsgKind.CmdToggleFloating,
     MsgKind.CmdSetWindowFloatingById, MsgKind.CmdSetWindowMaximizedById,
     MsgKind.CmdToggleMaximized, MsgKind.CmdMoveToScratchpad,
-    MsgKind.CmdMoveToNamedScratchpad, MsgKind.CmdToggleScratchpad,
-    MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
+    MsgKind.CmdToggleFullscreen, MsgKind.CmdToggleFullscreenById,
+    MsgKind.CmdExitFullscreenById, MsgKind.CmdMoveToNamedScratchpad,
+    MsgKind.CmdToggleScratchpad, MsgKind.CmdToggleNamedScratchpad,
+    MsgKind.CmdRestoreScratchpad,
   }
 
 proc updateSnapshotSummary(
@@ -66,6 +69,10 @@ proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
     ids.addTrackedWindowId(msg.unmaximizeRequestId)
   of MsgKind.WlWindowMinimizeRequested:
     ids.addTrackedWindowId(msg.minimizeRequestId)
+  of MsgKind.WlWindowFullscreenRequested:
+    ids.addTrackedWindowId(msg.fullscreenRequestId)
+  of MsgKind.WlWindowExitFullscreenRequested:
+    ids.addTrackedWindowId(msg.exitFullscreenRequestId)
   of MsgKind.CmdMoveWindowToTag:
     ids.addTrackedWindowId(msg.moveWindowId)
   of MsgKind.CmdMoveWindowToWorkspaceIndex:
@@ -74,6 +81,8 @@ proc addMsgWindowId(ids: var seq[uint32], msg: Msg) =
     ids.addTrackedWindowId(msg.floatingWindowId)
   of MsgKind.CmdSetWindowMaximizedById:
     ids.addTrackedWindowId(msg.maximizedWindowId)
+  of MsgKind.CmdToggleFullscreenById, MsgKind.CmdExitFullscreenById:
+    ids.addTrackedWindowId(msg.fullscreenWindowId)
   else:
     discard
 

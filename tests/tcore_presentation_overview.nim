@@ -32,6 +32,53 @@ suite "Core Runtime Logic: presentation overview":
     check not win.isFloating
     check effects.hasFullscreenEffect(2, true)
 
+  test "Fullscreen commands target the window workspace output":
+    var model = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    ).model
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700)
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 900, height: 700)
+    )
+
+    let primary = model.outputForExternal(ExternalOutputId(1))
+    let secondary = model.outputForExternal(ExternalOutputId(2))
+    let primaryTag = model.tagForSlot(1)
+    let secondaryTag = model.tagForSlot(2)
+    discard model.setOutputTag(primary, primaryTag)
+    discard model.setTagOutput(primaryTag, primary)
+    discard model.setOutputTag(secondary, secondaryTag)
+    discard model.setTagOutput(secondaryTag, secondary)
+    discard model.setActiveOutput(secondary)
+    discard model.setActiveWorkspace(secondaryTag)
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "kitty", title: "term")
+    )
+
+    let focusedEffects = model.updateModel(Msg(kind: MsgKind.CmdToggleFullscreen))
+    let focusedWin = model.snapshotWindow(20)
+
+    check focusedWin.isFullscreen
+    check focusedWin.fullscreenOutput == 2
+    check focusedEffects.anyIt(
+      it.kind == EffectKind.EffSetFullscreen and it.fsWinId == 20 and it.isFullscreen and
+        it.fsOutputId == 2
+    )
+
+    discard model.updateModel(Msg(kind: MsgKind.CmdToggleFullscreen))
+    discard
+      model.updateModel(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 1))
+
+    discard model.updateModel(
+      Msg(kind: MsgKind.CmdToggleFullscreenById, fullscreenWindowId: 20)
+    )
+    let targetedWin = model.snapshotWindow(20)
+
+    check targetedWin.isFullscreen
+    check targetedWin.fullscreenOutput == 2
+
   test "Open-maximized-to-edges window rule creates tiled edge-maximized window":
     var model = initRuntimeStateFromConfig(
       Config(
