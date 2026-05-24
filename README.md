@@ -6,7 +6,7 @@ Triad is a programmable Wayland window manager for River. River handles Wayland;
 
 [Installation Guide](https://triadwm.org/getting-started/installation/)
 
-[Documentation](docs/README.md)
+[Documentation](https://triadwm.org/)
 
 Triad treats your session as data. Windows carry tags rather than living in a fixed tree, allowing rules and scripts to make placement decisions from the current state. If Triad restarts, your windows stay in place.
 
