@@ -9,13 +9,14 @@ If you haven't tested Triad yet, the quickest way is a nested Wayland session
 from your current desktop — no TTY switch needed:
 
 ```bash
-WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
+WLR_BACKENDS=wayland ~/.local/bin/triad session
 ```
 
 Open a second terminal to tail the log while you explore:
 
 ```bash
-tail -f ~/.local/state/triad/river-triad-session-latest.log
+triad logs
+tail -f ~/.local/state/triad/triad-session-latest.log
 ```
 
 Once you're comfortable, log out and select **River (Triad)** from your display
@@ -64,7 +65,8 @@ socket path is wrong. Check the session log:
 
 ```bash
 ls -la ~/.local/state/triad/
-tail -n 100 ~/.local/state/triad/river-triad-session-latest.log
+triad logs
+tail -n 100 ~/.local/state/triad/triad-session-latest.log
 ```
 
 ## Set Your First Bindings

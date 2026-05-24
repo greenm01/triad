@@ -3,6 +3,7 @@ import chronicles
 import ../src/config/parser
 import ../src/core/msg
 import ../src/ipc/[niri_compat, socket]
+import ../src/session/logs as session_logs
 import ../src/systems/[runtime_facade, update]
 import ../src/types/runtime_values
 import ../src/utils/[behavior_log, runtime_log]
@@ -18,6 +19,55 @@ proc behaviorLogFiles(dir: string): seq[string] =
       result.add(path)
 
 suite "Runtime logging":
+  test "session metadata renders live log paths":
+    let dir = getTempDir() / ("triad-session-logs-" & $getCurrentProcessId())
+    createDir(dir)
+    defer:
+      if dirExists(dir):
+        removeDir(dir)
+
+    let record = SessionLogRecord(
+      claimId: "claim-1",
+      sessionId: "session-1",
+      sessionPid: 11,
+      supervisorPid: 12,
+      daemonPid: 13,
+      stateDir: dir,
+      sessionLog: dir / "triad-session-session-1.log",
+      daemonLog: dir / "triad-session-1.log",
+      startedAt: "2026-05-23T12:00:00-04:00",
+      supervisorProtocol: SupervisorProtocolVersion,
+    )
+    let claim = claimSessionRecord(currentSessionPath(dir), record)
+
+    let payload = session_logs.logsJson(dir)
+    check payload["ok"].getBool()
+    check payload["session"]["session_id"].getStr() == "session-1"
+    check renderLogs(dir).contains("daemon log: " & record.daemonLog)
+
+    restoreSessionRecord(claim)
+    check not session_logs.logsJson(dir)["ok"].getBool()
+
+  test "session symlink claims restore previous target":
+    let dir = getTempDir() / ("triad-session-symlinks-" & $getCurrentProcessId())
+    createDir(dir)
+    defer:
+      if dirExists(dir):
+        removeDir(dir)
+
+    let oldTarget = dir / "old.log"
+    let newTarget = dir / "new.log"
+    let linkPath = dir / "triad-latest.log"
+    writeFile(oldTarget, "old")
+    writeFile(newTarget, "new")
+
+    check replaceSymlink(oldTarget, linkPath)
+    let claim = claimSymlink(newTarget, linkPath)
+    check symlinkTarget(linkPath) == newTarget
+
+    restoreSymlink(claim)
+    check symlinkTarget(linkPath) == oldTarget
+
   test "parses supported log levels":
     check parseLogLevel("trace").get() == TRACE
     check parseLogLevel("DEBUG").get() == DEBUG

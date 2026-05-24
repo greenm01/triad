@@ -299,14 +299,21 @@ proc renderTriadHelp*(): string =
   """
 Usage:
   triad [--config <path>] [--dev-mode]
+  triad session
+  triad supervise
+  triad logs [--json]
   triad validate-config [--config <path>]
   triad msg <command> [arguments]
 
 Commands:
+  session            Start a managed River/Triad login session.
+  supervise          Supervise the live Triad daemon inside River.
+  logs               Print the current session and daemon log paths.
   validate-config    Validate config without starting the daemon.
   msg                Send commands or requests to the running daemon.
 
 Try:
+  triad logs
   triad msg --help
   triad msg commands
   triad msg help focus-workspace

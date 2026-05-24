@@ -71,10 +71,12 @@ That mode replays the retained snapshot instead of capturing a fresh one from
 the damaged runtime. Use `TRIAD_LIVE_RELOAD_ALLOW_COLLAPSE=1` only when the
 collapsed runtime is intentionally the state to keep.
 
-If the installed `triad-manager-loop` is stale or missing, `nimble liveReload`
-installs the current repo copy first, writes a restart-required marker in
-`$XDG_RUNTIME_DIR`, and aborts. Restart the River/Triad session so River runs
-the updated manager loop, then retry `nimble liveReload`.
+Current sessions report their supervisor through
+`${XDG_STATE_HOME:-$HOME/.local/state}/triad/current-session.json`. If
+`nimble liveReload` finds an older shell-managed session, it installs the
+compatibility wrapper, writes a restart-required marker in `$XDG_RUNTIME_DIR`,
+and aborts. Restart the River/Triad session so River runs the native
+supervisor, then retry `nimble liveReload`.
 
 `nimble liveReload` also writes a one-shot runtime marker so the replacement
 daemon starts in dev mode and behavior JSONL logging is available immediately

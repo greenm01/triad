@@ -130,7 +130,7 @@ nimble installSession
 Before you log out, test Triad from your current desktop:
 
 ```bash
-WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
+WLR_BACKENDS=wayland ~/.local/bin/triad session
 ```
 
 This catches missing River, Triad, and config setup before you switch login
@@ -248,7 +248,7 @@ work if your current compositor and wlroots backend support it.
 3. Start River with Triad:
 
 ```bash
-~/.local/bin/river-triad-session
+~/.local/bin/triad session
 ```
 
 Return to your main desktop with `Ctrl+Alt+F1` or `Ctrl+Alt+F2`, depending on
@@ -257,7 +257,7 @@ your distribution and display manager.
 To start River directly with a custom init, use the native River binary:
 
 ```bash
-river -c ~/.local/bin/triad-manager-loop
+river -c 'exec ~/.local/bin/triad supervise'
 ```
 
 ### Nested Wayland Smoke Test
@@ -265,7 +265,7 @@ river -c ~/.local/bin/triad-manager-loop
 From an existing Wayland desktop:
 
 ```bash
-WLR_BACKENDS=wayland river -c ~/.local/bin/triad-manager-loop
+WLR_BACKENDS=wayland ~/.local/bin/triad session
 ```
 
 This is useful for quick smoke testing. For daily use, prefer a real login
@@ -277,7 +277,7 @@ Normal sessions keep behavior JSON logs off. For diagnostics, enable dev mode
 before starting River:
 
 ```bash
-TRIAD_SESSION_DEV_MODE=1 ~/.local/bin/river-triad-session
+TRIAD_SESSION_DEV_MODE=1 ~/.local/bin/triad session
 ```
 
 Installed display-manager sessions clear inherited `TRIAD_DEV_MODE` and
@@ -329,10 +329,10 @@ Logs are written under:
 ~/.local/state/triad/
 ```
 
-Two symlinks point to the newest logs. The session wrapper writes
-`river-triad-session-latest.log` first; the manager loop writes
-`triad-latest.log` once it starts. If startup fails, check the session wrapper
-log first.
+Use `triad logs` to print the active session and daemon log paths. Compatibility
+symlinks still point at the latest logs: `triad-session-latest.log` captures
+the login session, and `triad-latest.log` captures the supervised Triad daemon.
+If startup fails, check the session log first.
 
 ## Shell Profiles
 
@@ -432,7 +432,8 @@ If Triad starts but the shell does not, inspect the session and behavior logs:
 
 ```bash
 ls -la ~/.local/state/triad/
-tail -n 200 ~/.local/state/triad/river-triad-session-latest.log
+triad logs
+tail -n 200 ~/.local/state/triad/triad-session-latest.log
 tail -n 200 ~/.local/state/triad/triad-latest.log
 ```
 

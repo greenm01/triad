@@ -67,8 +67,7 @@ config_source="$repo_dir/config.default.kdl"
 desktop_dir="${TRIAD_WAYLAND_SESSION_DIR:-/usr/share/wayland-sessions}"
 desktop_path="$desktop_dir/river-triad.desktop"
 desktop_tmp="$(mktemp)"
-session_tmp="$(mktemp)"
-trap 'rm -f "$desktop_tmp" "$session_tmp"' EXIT
+trap 'rm -f "$desktop_tmp"' EXIT
 
 [ -f "$config_source" ] || fail "missing config: $config_source"
 
@@ -97,114 +96,7 @@ mkdir -p "$bin_dir" "$config_dir"
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 atomic_install "$repo_dir/tools/triad-manager-loop.sh" "$bin_dir/triad-manager-loop" 755
-
-cat >"$session_tmp" <<EOF
-#!/bin/sh
-set -eu
-
-state_dir="\${XDG_STATE_HOME:-\$HOME/.local/state}/triad"
-mkdir -p "\$state_dir"
-stamp="\$(date +%Y%m%d-%H%M%S)"
-session_log="\$state_dir/river-triad-session-\$stamp.log"
-latest_log="\$state_dir/river-triad-session-latest.log"
-ln -sfn "\$session_log" "\$latest_log" 2>/dev/null || true
-exec >>"\$session_log" 2>&1
-
-export XDG_CURRENT_DESKTOP=river
-export XDG_SESSION_DESKTOP=river-triad
-export XDG_SESSION_TYPE=wayland
-export PATH="\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:\$PATH"
-
-find_dbus_run_session() {
-  for candidate in \\
-    /usr/bin/dbus-run-session \\
-    /bin/dbus-run-session \\
-    /usr/sbin/dbus-run-session \\
-    /sbin/dbus-run-session; do
-    if [ -x "\$candidate" ]; then
-      printf '%s\\n' "\$candidate"
-      return 0
-    fi
-  done
-
-  command -v dbus-run-session 2>/dev/null || true
-}
-
-find_dbus_session_config() {
-  for candidate in \\
-    /usr/share/dbus-1/session.conf \\
-    /etc/dbus-1/session.conf; do
-    if [ -r "\$candidate" ] && grep -q '<listen>' "\$candidate" 2>/dev/null; then
-      printf '%s\\n' "\$candidate"
-      return 0
-    fi
-  done
-
-  printf '%s\\n' ""
-}
-
-case "\${TRIAD_SESSION_DEV_MODE:-}" in
-  1|true|TRUE|yes|YES|on|ON)
-    export TRIAD_DEV_MODE=1
-    ;;
-  *)
-    unset TRIAD_DEV_MODE
-    unset TRIAD_BEHAVIOR_LOG
-    ;;
-esac
-
-river_bin="\${TRIAD_RIVER_BIN:-$river_bin}"
-manager_loop="\${TRIAD_MANAGER_LOOP:-\$HOME/.local/bin/triad-manager-loop}"
-dbus_runner="\$(find_dbus_run_session)"
-dbus_config="\$(find_dbus_session_config)"
-
-printf '%s\\n' "river-triad-session: starting at \$(date -Is 2>/dev/null || date)"
-printf '%s\\n' "river-triad-session: HOME=\$HOME"
-printf '%s\\n' "river-triad-session: XDG_RUNTIME_DIR=\${XDG_RUNTIME_DIR:-}"
-printf '%s\\n' "river-triad-session: WAYLAND_DISPLAY=\${WAYLAND_DISPLAY:-}"
-printf '%s\\n' "river-triad-session: river=\$river_bin"
-printf '%s\\n' "river-triad-session: manager=\$manager_loop"
-
-start_river() {
-  if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "\$dbus_runner" ]; then
-    if [ -n "\$dbus_config" ]; then
-      printf '%s\\n' "river-triad-session: starting River through \$dbus_runner --config-file=\$dbus_config"
-      "\$dbus_runner" --config-file="\$dbus_config" -- "\$river_bin" -c "\$manager_loop"
-      return \$?
-    fi
-
-    printf '%s\\n' "river-triad-session: starting River through \$dbus_runner"
-    "\$dbus_runner" -- "\$river_bin" -c "\$manager_loop"
-    return \$?
-  fi
-
-  printf '%s\\n' "river-triad-session: starting River directly"
-  "\$river_bin" -c "\$manager_loop"
-}
-
-if [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "\$dbus_runner" ]; then
-  :
-fi
-
-set +e
-start_river
-status="\$?"
-set -e
-
-if [ "\$status" -ne 0 ] &&
-  [ -z "\${WLR_RENDERER:-}" ] &&
-  grep -q 'RendererCreateFailed' "\$session_log" 2>/dev/null; then
-  printf '%s\\n' "river-triad-session: hardware renderer failed; retrying with WLR_RENDERER=pixman"
-  export WLR_RENDERER=pixman
-  set +e
-  start_river
-  status="\$?"
-  set -e
-fi
-
-exit "\$status"
-EOF
-atomic_install "$session_tmp" "$bin_dir/river-triad-session" 755
+atomic_install "$repo_dir/tools/river-triad-session.sh" "$bin_dir/river-triad-session" 755
 
 if [ ! -e "$config_path" ] && [ ! -L "$config_path" ]; then
   install -Dm644 "$config_source" "$config_path"
@@ -217,7 +109,7 @@ cat >"$desktop_tmp" <<EOF
 [Desktop Entry]
 Name=River (Triad)
 Comment=River Wayland compositor with the Triad window manager
-Exec=$bin_dir/river-triad-session
+Exec=$bin_dir/triad session
 Type=Application
 DesktopNames=river
 EOF

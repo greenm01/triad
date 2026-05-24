@@ -54,6 +54,40 @@ manager_loop_restart_marker() {
   echo "$runtime_dir/triad-manager-loop-restart-required"
 }
 
+current_session_metadata() {
+  state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+  echo "$state_home/triad/current-session.json"
+}
+
+supervisor_protocol_is_current() {
+  metadata="$(current_session_metadata)"
+  [ -f "$metadata" ] || return 1
+
+  python3 - "$metadata" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    sys.exit(1)
+
+protocol = data.get("supervisor_protocol", 0)
+supervisor_pid = data.get("supervisor_pid", 0)
+if not isinstance(protocol, int) or protocol < 1:
+    sys.exit(1)
+if not isinstance(supervisor_pid, int) or supervisor_pid <= 0:
+    sys.exit(1)
+if not os.path.isdir(f"/proc/{supervisor_pid}"):
+    sys.exit(1)
+
+sys.exit(0)
+PY
+}
+
 latest_manager_loop_pid() {
   manager_loop="$1"
   latest=""
@@ -269,6 +303,16 @@ if isinstance(pid, int) and pid > 0:
 require_hardened_runtime() {
   live_manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
 
+  if supervisor_protocol_is_current; then
+    if ! old_pid="$(running_triad_pid)"; then
+      log_error "running Triad daemon does not expose perf-status pid"
+      log_error "restart the River/Triad session, then retry liveReload"
+      fail "refusing live reload with stale running Triad daemon"
+    fi
+    log_info "native supervisor runtime confirmed with daemon pid $old_pid"
+    return 0
+  fi
+
   require_manager_loop_restart_if_pending
   sync_live_manager_loop
   require_running_manager_loop_current
@@ -279,7 +323,7 @@ require_hardened_runtime() {
     fail "refusing live reload with stale running Triad daemon"
   fi
 
-  log_info "hardened live runtime confirmed with manager pid $old_pid"
+  log_info "hardened live runtime confirmed with daemon pid $old_pid"
 }
 
 validate_live_config() {

@@ -2,6 +2,7 @@ import wayland/native/client
 import ../core/[defaults, effects, msg, restore_state, shell_profiles]
 import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
+import ../session/[logs as session_logs, session_runner, supervisor]
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
@@ -837,6 +838,21 @@ proc main*() =
       else:
         @[]
     validateConfigFromArgs(validateArgs)
+
+  if args.len >= 1 and args[0] == "session":
+    quit runSession()
+
+  if args.len >= 1 and args[0] == "supervise":
+    quit runSupervisor()
+
+  if args.len >= 1 and args[0] == "logs":
+    if args.len > 2 or (args.len == 2 and args[1] != "--json"):
+      failCli("usage: triad logs [--json]")
+    if args.len == 2:
+      stdout.writeLine($session_logs.logsJson())
+    else:
+      stdout.writeLine(session_logs.renderLogs())
+    return
 
   if args.len >= 1 and args[0] == "msg":
     if args.len < 2:

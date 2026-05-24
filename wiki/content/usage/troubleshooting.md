@@ -7,15 +7,21 @@ weight = 50
 
 ## Check the Session Log
 
-Two symlinks point to the newest logs. Check the session wrapper log first —
-it's written earliest in the startup chain and captures failures before the
-manager loop starts:
+Start with Triad's log summary:
 
 ```bash
-tail -n 200 ~/.local/state/triad/river-triad-session-latest.log
+triad logs
 ```
 
-The manager loop log has daemon output after startup succeeds:
+Compatibility symlinks point to the live logs. Check the session log first; it
+is written earliest in the startup chain and captures River, Triad, and shell
+output:
+
+```bash
+tail -n 200 ~/.local/state/triad/triad-session-latest.log
+```
+
+The daemon log points to the active supervised Triad process:
 
 ```bash
 tail -n 200 ~/.local/state/triad/triad-latest.log
@@ -110,7 +116,7 @@ config on first run if none exists.
 Normal sessions keep behavior logs off. Enable them for a diagnostic session:
 
 ```bash
-TRIAD_SESSION_DEV_MODE=1 ~/.local/bin/river-triad-session
+TRIAD_SESSION_DEV_MODE=1 ~/.local/bin/triad session
 ```
 
 Logs are written to:
