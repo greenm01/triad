@@ -10,6 +10,8 @@ Triad is the window-management client.
 
 ## Recommended Local Install
 
+### River
+
 Install River 0.4+ using the upstream River instructions:
 
 [https://codeberg.org/river/river](https://codeberg.org/river/river)
@@ -22,28 +24,28 @@ development binary.
 
 Install River's source-build dependencies:
 
-### Void Linux
+#### Void Linux
 
 ```bash
 sudo xbps-install -S git zig pkg-config wayland-devel wayland-protocols \
   wlroots-devel libxkbcommon-devel libevdev-devel pixman-devel scdoc
 ```
 
-### Arch Linux
+#### Arch Linux
 
 ```bash
 sudo pacman -S git zig pkgconf wayland wayland-protocols wlroots \
   libxkbcommon libevdev pixman scdoc
 ```
 
-### Debian / Ubuntu
+#### Debian / Ubuntu
 
 ```bash
 sudo apt install git zig pkg-config libwayland-dev wayland-protocols \
   libwlroots-dev libxkbcommon-dev libevdev-dev libpixman-1-dev scdoc
 ```
 
-### Fedora
+#### Fedora
 
 ```bash
 sudo dnf install git zig pkgconf wayland-devel wayland-protocols-devel \
@@ -69,6 +71,8 @@ building an optimized binary. `-Dcpu=baseline` avoids a host-specific
 recommendations. `-Dxwayland` enables support for X11 applications through
 Xwayland.
 
+### Nim and Triad
+
 Install Triad's local build dependencies:
 
 - Nim 2.2.4 or newer
@@ -78,25 +82,25 @@ Install Triad's local build dependencies:
 - `libxkbcommon`
 - `pixman`
 
-### Void Linux
+#### Void Linux
 
 ```bash
 sudo xbps-install -S nim nimble pkg-config wayland-devel libxkbcommon-devel pixman-devel
 ```
 
-### Arch Linux
+#### Arch Linux
 
 ```bash
 sudo pacman -S nim nimble pkgconf wayland libxkbcommon pixman
 ```
 
-### Debian / Ubuntu
+#### Debian / Ubuntu
 
 ```bash
 sudo apt install nim nimble pkg-config libwayland-dev libxkbcommon-dev libpixman-1-dev
 ```
 
-### Fedora
+#### Fedora
 
 ```bash
 sudo dnf install nim nimble pkgconf wayland-devel libxkbcommon-devel pixman-devel
