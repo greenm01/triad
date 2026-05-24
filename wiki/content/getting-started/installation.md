@@ -116,7 +116,7 @@ reference for a fuller personal setup with shell profiles, browser bindings,
 and app-specific window rules.
 
 Before switching your login session, do a quick nested Wayland test from your
-current desktop — see [Try Triad From An Existing Desktop](#try-triad-from-an-existing-desktop)
+current desktop — see [Nested Wayland Smoke Test](#nested-wayland-smoke-test)
 below.
 
 ## Optional Nix Dev Shell
