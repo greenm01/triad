@@ -21,7 +21,8 @@ triad validate-config
 ```
 
 Validation rejects malformed includes, recursive includes, unknown top-level
-configuration blocks, strict output-rule errors, and invalid window-rule regexes.
+configuration blocks, malformed fields inside known blocks, strict output-rule
+errors, and invalid window-rule regexes.
 
 ### Hot Reloading
 Triad watches your configuration and reloads instantly when you save, including any files added via the `include` directive.

@@ -1,7 +1,9 @@
-import std/[editdistance, options, os, re, strutils]
+import std/[options, re, strutils]
 import chronicles, kdl
 import defaults
 import keysyms
+import loading
+import validation
 import ../core/layout_descriptor_codec
 import ../core/layout_mode_codec
 import ../core/native_layout_codec
@@ -11,18 +13,7 @@ import ../types/config_values
 import ../types/runtime_values
 
 export config_values
-
-const
-  MaxConfigIncludeDepth* = 10
-  MaxTopLevelConfigSuggestionDistance = 2
-  KnownTopLevelConfigNodes = [
-    "layout", "workspaces", "output", "workspace-rules", "window-rule",
-    "spawn-at-startup", "environment", "window-menu-command", "bindings",
-    "switch-events", "shells", "janet", "terminal", "screen-lock", "scratchpad",
-    "overview", "recent-windows", "layout-switch-toast", "floating", "screenshot",
-    "input", "cursor", "hotkey-overlay", "config-notification", "presentation-mode",
-    "allow-exit-session", "protocol-surfaces",
-  ]
+export loading
 
 proc clamp32(value, lo, hi: int32): int32 =
   min(hi, max(lo, value))
@@ -1077,38 +1068,6 @@ proc validateOutputRuleNodes(doc: KdlDoc): string =
         return
       inc outputIndex
 
-proc knownTopLevelConfigNode(name: string): bool =
-  for known in KnownTopLevelConfigNodes:
-    if name == known:
-      return true
-  false
-
-proc nearestTopLevelConfigNode(name: string): string =
-  var bestDistance = MaxTopLevelConfigSuggestionDistance + 1
-  let normalized = name.toLowerAscii()
-  for candidate in KnownTopLevelConfigNodes:
-    let distance = editDistanceAscii(normalized, candidate)
-    if distance < bestDistance:
-      bestDistance = distance
-      result = candidate
-  let includeDistance = editDistanceAscii(normalized, "include")
-  if includeDistance < bestDistance:
-    bestDistance = includeDistance
-    result = "include"
-  if bestDistance > MaxTopLevelConfigSuggestionDistance:
-    result = ""
-
-proc topLevelConfigNodeError(name: string): string =
-  result = "unknown top-level config node \"" & name & "\""
-  let suggestion = nearestTopLevelConfigNode(name)
-  if suggestion.len > 0:
-    result.add("; did you mean \"" & suggestion & "\"?")
-
-proc validateTopLevelConfigNodes(doc: KdlDoc): string =
-  for node in doc:
-    if not node.name.knownTopLevelConfigNode():
-      return topLevelConfigNodeError(node.name)
-
 proc parsePointerOp(value: string): PointerOpKind =
   case value
   of "move", "Move": PointerOpKind.OpMove
@@ -1567,67 +1526,6 @@ proc defaultPointerBindings*(): seq[PointerBindingConfig] =
       command: "resize",
     ),
   ]
-
-proc defaultConfigPath*(): string =
-  let configHome = getEnv("XDG_CONFIG_HOME", getHomeDir() / ".config")
-  return configHome / "triad" / "config.kdl"
-
-proc expandConfigPath*(path: string): string =
-  let stripped = path.strip()
-  if stripped == "~":
-    getHomeDir()
-  elif stripped.startsWith("~/"):
-    getHomeDir() / stripped[2 ..^ 1]
-  else:
-    stripped
-
-proc absoluteConfigPath*(path: string, baseDir = ""): string =
-  let expanded = path.expandConfigPath()
-  let candidate =
-    if expanded.isAbsolute():
-      expanded
-    elif baseDir.len > 0:
-      baseDir / expanded
-    else:
-      expanded
-  candidate.absolutePath().normalizedPath()
-
-proc addUnique(paths: var seq[string], path: string) =
-  if paths.find(path) < 0:
-    paths.add(path)
-
-proc includeOptional(node: KdlNode): bool =
-  node.props.hasKey("optional") and node.props["optional"].kBool()
-
-proc appendConfigNodes(
-    path: string, nodes: var KdlDoc, paths: var seq[string], stack: var seq[string]
-) =
-  let configPath = path.absoluteConfigPath()
-  if stack.find(configPath) >= 0:
-    raise newException(ValueError, "recursive config include: " & configPath)
-  if stack.len >= MaxConfigIncludeDepth:
-    raise newException(ValueError, "config include depth exceeded: " & configPath)
-
-  stack.add(configPath)
-  paths.addUnique(configPath)
-  let doc = parseKdlFile(configPath)
-  let baseDir = configPath.splitFile().dir
-  for node in doc:
-    if node.name == "include":
-      if node.args.len == 0:
-        raise newException(ValueError, "include requires a path: " & configPath)
-      let includePath = node.args[0].kString().absoluteConfigPath(baseDir)
-      if fileExists(includePath):
-        appendConfigNodes(includePath, nodes, paths, stack)
-      elif not node.includeOptional():
-        raise newException(IOError, "included config not found: " & includePath)
-    else:
-      nodes.add(node)
-  stack.setLen(stack.len - 1)
-
-proc loadConfigDocument*(path: string): ConfigDocument =
-  var stack: seq[string] = @[]
-  appendConfigNodes(path, result.nodes, result.paths, stack)
 
 proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   var recentWindowBindings = defaultRecentWindowBindings()
@@ -2662,9 +2560,9 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
   except CatchableError as e:
     return ConfigLoadResult(ok: false, error: e.msg)
 
-  let topLevelError = validateTopLevelConfigNodes(document.nodes)
-  if topLevelError.len > 0:
-    return ConfigLoadResult(ok: false, error: topLevelError)
+  let configError = validateConfigDocument(document.nodes)
+  if configError.len > 0:
+    return ConfigLoadResult(ok: false, error: configError)
 
   let outputError = validateOutputRuleNodes(document.nodes)
   if outputError.len > 0:

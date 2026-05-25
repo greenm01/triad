@@ -604,6 +604,13 @@ window-rule {
     check not loaded.ok
     check loaded.error.contains("window-rule[0].match[0] app-id")
 
+  test "Strict config load accepts shipped and fallback configs":
+    let shipped = loadConfigStrict(getCurrentDir() / "config.default.kdl")
+    check shipped.ok
+
+    let fallback = loadStrictConfigContent(FallbackConfigContent, "fallback-config")
+    check fallback.ok
+
   test "Startup config load uses built-in fallback after strict validation failure":
     let path =
       getTempDir() / ("triad-startup-invalid-" & $getCurrentProcessId() & ".kdl")
@@ -858,6 +865,119 @@ totally-custom {
 
     check not loaded.ok
     check loaded.error == "unknown top-level config node \"totally-custom\""
+
+  test "Strict config load rejects malformed fields inside known blocks":
+    let cases =
+      @[
+        (
+          name: "layout-child-typo",
+          content:
+            """
+layout {
+  gap 8
+}
+""",
+          needle: "layout: unknown field \"gap\"; did you mean \"gaps\"?",
+        ),
+        (
+          name: "binding-child-typo",
+          content:
+            """
+bindings {
+  bnd "Super+Return" "spawn foot"
+}
+""",
+          needle: "bindings: unknown field \"bnd\"; did you mean \"bind\"?",
+        ),
+        (
+          name: "binding-missing-command",
+          content:
+            """
+bindings {
+  bind "Super+Return"
+}
+""",
+          needle: "bindings.bind[0]: expected 2 argument(s)",
+        ),
+        (
+          name: "input-child-typo",
+          content:
+            """
+input {
+  keybord {
+    repeat-rate 40
+  }
+}
+""",
+          needle: "input: unknown field \"keybord\"; did you mean \"keyboard\"?",
+        ),
+        (
+          name: "input-nested-child-typo",
+          content:
+            """
+input {
+  keyboard {
+    repeet-rate 40
+  }
+}
+""",
+          needle:
+            "input.keyboard: unknown field \"repeet-rate\"; did you mean \"repeat-rate\"?",
+        ),
+        (
+          name: "window-rule-nested-child-typo",
+          content:
+            """
+window-rule {
+  floating {
+    widht 800
+  }
+}
+""",
+          needle:
+            "window-rule[0].floating: unknown field \"widht\"; did you mean \"width\"?",
+        ),
+        (
+          name: "recent-windows-nested-child-typo",
+          content:
+            """
+recent-windows {
+  binds {
+    bnd "Alt+Tab" "recent-window-next"
+  }
+}
+""",
+          needle: "recent-windows.binds: unknown field \"bnd\"; did you mean \"bind\"?",
+        ),
+        (
+          name: "shell-profile-child-typo",
+          content:
+            """
+shells {
+  profile "demo" {
+    lanuch "waybar"
+  }
+}
+""",
+          needle: "shells.profile: unknown field \"lanuch\"; did you mean \"launch\"?",
+        ),
+        (
+          name: "notification-child-typo",
+          content:
+            """
+config-notification {
+  reload-succeded "notify-send" "ok"
+}
+""",
+          needle:
+            "config-notification: unknown field \"reload-succeded\"; did you mean \"reload-succeeded\"?",
+        ),
+      ]
+
+    for testCase in cases:
+      let loaded = loadStrictConfigContent(testCase.content, testCase.name)
+      check not loaded.ok
+      check loaded.error == testCase.needle
 
   test "Optional missing config include is accepted":
     let dir = getTempDir() / ("triad-config-optional-include-" & $getCurrentProcessId())
