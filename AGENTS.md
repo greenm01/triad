@@ -27,11 +27,13 @@ this file adds the operational details an agent needs to act safely.
    `tests/nimcache` or other build outputs and corrupt/link against stale
    artifacts when run concurrently. Run these verification/build commands
    serially.
-7. **DRY First Principles**: Minimize duplication of logic. Centralize common patterns.
-8. **Data-Oriented Design (DOD)**: Prioritize data layout and transformations (following Yehonathan Sharvit's principles). Keep data separate from logic. Refer to `docs/dod-architecture.md`.
-9. **Lean & Mean Source Files**: Keep files small and focused. If a file grows too large, split it by domain.
-10. **Manageable Submodules**: Organize code into submodules by domain (e.g., `core`, `layouts`, `config`) to maintain a clean architecture.
-11. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md`, `docs/dod-architecture.md`, and `docs/configuration.md` when touching config or command surfaces. Keep `docs/comp/config-command-matrix.md` updated alongside config or command changes. These are foundational mandates. To maintain perfect consistency, you must re-read the style and DOD documents upon every context compaction or session initialization.
+7. Before committing, run `nim check --hints:off --nimcache:tests/nimcache
+   src/triad.nim` after formatting and other targeted verification.
+8. **DRY First Principles**: Minimize duplication of logic. Centralize common patterns.
+9. **Data-Oriented Design (DOD)**: Prioritize data layout and transformations (following Yehonathan Sharvit's principles). Keep data separate from logic. Refer to `docs/dod-architecture.md`.
+10. **Lean & Mean Source Files**: Keep files small and focused. If a file grows too large, split it by domain.
+11. **Manageable Submodules**: Organize code into submodules by domain (e.g., `core`, `layouts`, `config`) to maintain a clean architecture.
+12. **Strict Style & Architecture Adherence**: You MUST strictly adhere to `docs/triad-style-guide.md`, `docs/dod-architecture.md`, and `docs/configuration.md` when touching config or command surfaces. Keep `docs/comp/config-command-matrix.md` updated alongside config or command changes. These are foundational mandates. To maintain perfect consistency, you must re-read the style and DOD documents upon every context compaction or session initialization.
 
 ## DOD runtime direction
 

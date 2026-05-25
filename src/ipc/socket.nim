@@ -359,11 +359,14 @@ proc startIpcServer*(
     getPerfStatusJson: proc(): string {.gcsafe.} = nil,
     getMemStatusJson: proc(): string {.gcsafe.} = nil,
     dispatchBinding: proc(request: BindingDispatchRequest): string {.gcsafe.} = nil,
+    listenReady: Future[bool] = nil,
     requestTimeoutMs = IpcRequestTimeoutMs,
 ) {.async.} =
   let server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   try:
     if not await prepareUnixSocketPath(path):
+      if listenReady != nil and not listenReady.finished:
+        listenReady.complete(false)
       if not server.isClosed:
         server.close()
       return
@@ -373,11 +376,15 @@ proc startIpcServer*(
     server.listen()
   except CatchableError as e:
     error "IPC server failed to start", path = path, error = e.msg
+    if listenReady != nil and not listenReady.finished:
+      listenReady.complete(false)
     if not server.isClosed:
       server.close()
     return
 
   info "IPC server listening", path = path
+  if listenReady != nil and not listenReady.finished:
+    listenReady.complete(true)
 
   while true:
     var client: AsyncSocket

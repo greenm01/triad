@@ -150,6 +150,18 @@ proc triadSubscriberCountAfterClientClose(path: string): Future[int] {.async.} =
   result = socket.triadSubscribers.len
   socket.triadSubscribers.setLen(0)
 
+proc ipcListenReadyAcceptsConnections(path: string): Future[bool] {.async.} =
+  let ready = newFuture[bool]("test ipc listener ready")
+  asyncCheck socket.startIpcServer(
+    path, discardIpcMsg, hardeningIpcSnapshot, listenReady = ready
+  )
+
+  if not await ready.withTimeout(1_000):
+    return false
+  if ready.failed or not ready.read:
+    return false
+  result = await socket.unixSocketAcceptsConnections(path)
+
 suite "Crash hardening":
   test "output layout row resolves left-to-right physical coordinates":
     var model = Model(
@@ -1436,6 +1448,13 @@ config-notification {
       removeFile(path)
 
     check (waitFor triadSubscriberCountAfterClientClose(path)) == 0
+
+  test "IPC listen readiness fires after socket accepts connections":
+    let path = getTempDir() / ("triad-ipc-ready-" & $getCurrentProcessId() & ".sock")
+    if fileExists(path):
+      removeFile(path)
+
+    check waitFor ipcListenReadyAcceptsConnections(path)
 
   test "text command parser tolerates malformed commands":
     check parseTextCommand("").isNone
