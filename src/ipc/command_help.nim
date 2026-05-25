@@ -309,7 +309,7 @@ Commands:
   session            Start a managed River/Triad login session.
   supervise          Supervise the live Triad daemon inside River.
   logs               Print the current session and daemon log paths.
-  validate-config    Validate config without starting the daemon.
+  validate-config    Validate config and Janet scripts without starting the daemon.
   msg                Send commands or requests to the running daemon.
 
 Try:

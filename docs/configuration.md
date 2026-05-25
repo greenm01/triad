@@ -22,7 +22,8 @@ triad validate-config
 
 Validation rejects malformed includes, recursive includes, unknown top-level
 configuration blocks, malformed fields inside known blocks, strict output-rule
-errors, and invalid window-rule regexes.
+errors, invalid window-rule regexes, and configured Janet script or layout
+registration errors.
 
 ### Hot Reloading
 Triad watches your configuration and reloads instantly when you save, including any files added via the `include` directive.
@@ -542,7 +543,10 @@ This lets Noctalia, DankMaterialShell, Waylee, and Waybar's `niri/workspaces`
 module run without Triad-specific patches.
 
 ### Janet Scripting
-Triad embeds Janet for advanced automation. Scripts in `automation-dir` can subscribe to events and emit commands.
+Triad embeds Janet for advanced automation. Scripts in `automation-dir` can
+subscribe to events and emit commands. `triad validate-config` loads configured
+Janet files, validates registered event names, and checks declared layouts are
+registered before the daemon starts.
 
 **Example Janet Configuration:**
 ```kdl

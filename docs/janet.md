@@ -84,6 +84,11 @@ Top-level script code runs at load/reload time, not on every event. Put
 event-time commands inside `triad/on` handlers; commands emitted while loading a
 script are discarded.
 
+Run `triad validate-config` after editing embedded Janet. The validator loads
+configured automation scripts and declared layout files in the sandbox, rejects
+unknown event names registered with `triad/on`, and checks that each declared
+custom layout registers its layout id.
+
 Handlers can suspend until a later event with `triad/wait-event`. The current
 handler yields back to Triad immediately and resumes with the matching event map:
 

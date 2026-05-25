@@ -76,6 +76,10 @@ proc triadJanetScriptHandlerListCount*(
   script: JanetScriptHandle
 ): cint {.importc: "triad_janet_script_handler_list_count".}
 
+proc triadJanetScriptHandlerEventName*(
+  script: JanetScriptHandle, index: cint
+): cstring {.importc: "triad_janet_script_handler_event_name".}
+
 proc triadJanetScriptHandlerListCapacity*(
   script: JanetScriptHandle
 ): cint {.importc: "triad_janet_script_handler_list_capacity".}

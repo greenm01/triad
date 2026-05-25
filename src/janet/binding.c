@@ -1303,6 +1303,13 @@ int triad_janet_script_handler_list_count(void *script_ptr) {
   return script->handler_list_count;
 }
 
+const char *triad_janet_script_handler_event_name(void *script_ptr, int index) {
+  TriadJanetScript *script = (TriadJanetScript *) script_ptr;
+  if (script == NULL || index < 0 || index >= script->handler_list_count) return "";
+  if (script->handler_lists[index].event_name == NULL) return "";
+  return script->handler_lists[index].event_name;
+}
+
 int triad_janet_script_handler_list_capacity(void *script_ptr) {
   TriadJanetScript *script = (TriadJanetScript *) script_ptr;
   if (script == NULL) return 0;

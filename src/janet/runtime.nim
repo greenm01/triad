@@ -1,5 +1,6 @@
-import std/[algorithm, options, os, sequtils, strutils, tables, times]
+import std/[algorithm, editdistance, options, os, sequtils, strutils, tables, times]
 import chronicles
+import ../core/defaults
 import ../core/layout_descriptor_codec
 import ../core/msg
 import ../types/[janet_layouts, janet_manifest, runtime_values, shell_snapshot]
@@ -44,6 +45,19 @@ type
     handle*: JanetHandle
     config*: JanetConfig
     scripts*: Table[string, ScriptCacheEntry]
+
+const
+  MaxJanetEventSuggestionDistance = 3
+  KnownJanetEvents = [
+    "window-ready", "window-opened", "window-admitted", "window-closed",
+    "window-title-changed", "window-app-id-changed", "window-focus-changed",
+    "output-added", "output-changed", "output-removed", "tag-changed", "layout-changed",
+    "session-locked", "session-unlocked", "overview-opened", "overview-closed",
+    "recent-windows-opened", "recent-windows-closed", "hotkey-overlay-opened",
+    "hotkey-overlay-closed", "exit-session-confirm-opened",
+    "exit-session-confirm-closed", "layout-switch-toast-opened",
+    "layout-switch-toast-closed",
+  ]
 
 proc initJanetRuntime*(config: JanetConfig): JanetRuntime =
   result.config = config
@@ -108,6 +122,16 @@ proc diagnosticCounts*(runtime: JanetRuntime): JanetRuntimeDiagnosticCounts =
     result.scriptWaiterCapacity += int(triadJanetScriptWaiterCapacity(entry.script))
     result.scriptEstimatedCBytes += int(triadJanetScriptEstimatedCBytes(entry.script))
 
+proc actionMessages(
+    handle: JanetHandle
+): tuple[ok: bool, messages: seq[Msg], error: string] =
+  for index in 0 ..< int(triadJanetActionCount(handle)):
+    let msg = handle.actionMsg(index)
+    if msg.isNone:
+      return (false, @[], handle.actionError(index))
+    result.messages.add(msg.get())
+  result.ok = true
+
 proc evalSource*(
     runtime: var JanetRuntime,
     snapshot: ShellSnapshot,
@@ -133,10 +157,10 @@ proc evalSource*(
     let error = $triadJanetLastError(runtime.handle)
     return (false, @[], if error.len > 0: error else: "Janet evaluation failed")
 
-  for index in 0 ..< int(triadJanetActionCount(runtime.handle)):
-    let msg = runtime.handle.actionMsg(index)
-    if msg.isSome:
-      result.messages.add(msg.get())
+  let actions = runtime.handle.actionMessages()
+  if not actions.ok:
+    return (false, @[], actions.error)
+  result.messages = actions.messages
   result.ok = true
 
 proc expandJanetDir(path: string): string =
@@ -292,11 +316,20 @@ proc evalScriptsDetailed*(
           runtime.config.fuelLimit,
         ) == 1
       if evaluated:
-        evalResult.outcome = ScriptOutcome.Evaluated
-        for index in 0 ..< int(triadJanetActionCount(runtime.handle)):
-          let msg = runtime.handle.actionMsg(index)
-          if msg.isSome:
-            evalResult.messages.add(msg.get())
+        let actions = runtime.handle.actionMessages()
+        if actions.ok:
+          evalResult.outcome = ScriptOutcome.Evaluated
+          evalResult.messages = actions.messages
+        else:
+          warn "Janet script failed",
+            event = event, path = entry.path, error = actions.error
+          var failedEntry = entry
+          failedEntry.freeScript()
+          failedEntry.failed = true
+          failedEntry.error = actions.error
+          runtime.scripts[failedEntry.path] = failedEntry
+          evalResult.outcome = ScriptOutcome.EvalFailed
+          evalResult.error = failedEntry.error
       else:
         let error = $triadJanetLastError(runtime.handle)
         warn "Janet script failed", event = event, path = entry.path, error = error
@@ -602,3 +635,95 @@ proc evalLayoutMovementDetailed*(
       return runtime.evalLoadedLayoutMovement(context, direction, entry, started)
 
   context.missingMovementResult(started)
+
+proc normalizedValidationConfig(config: JanetConfig): JanetConfig =
+  result = config
+  if result.automationDir.strip().len == 0:
+    if result.scriptDir.strip().len > 0:
+      result.automationDir = result.scriptDir
+    else:
+      result.automationDir = DefaultJanetAutomationDir
+  if result.layoutDir.strip().len == 0:
+    result.layoutDir = DefaultJanetLayoutDir
+  result.fuelLimit = max(1_000'i32, min(result.fuelLimit, 10_000_000'i32))
+
+proc knownJanetEvent(name: string): bool =
+  for known in KnownJanetEvents:
+    if name == known:
+      return true
+  false
+
+proc nearestJanetEvent(name: string): string =
+  var bestDistance = MaxJanetEventSuggestionDistance + 1
+  let normalized = name.toLowerAscii()
+  for candidate in KnownJanetEvents:
+    let distance = editDistanceAscii(normalized, candidate)
+    if distance < bestDistance:
+      bestDistance = distance
+      result = candidate
+  if bestDistance > MaxJanetEventSuggestionDistance:
+    result = ""
+
+proc unknownJanetEventError(path, event: string): string =
+  result = "janet script " & path & ": unknown event \":" & event & "\""
+  let suggestion = event.nearestJanetEvent()
+  if suggestion.len > 0:
+    result.add("; did you mean \":" & suggestion & "\"?")
+
+proc validateScriptEvents(entry: ScriptCacheEntry): string =
+  if entry.script == nil:
+    return
+  for index in 0 ..< int(triadJanetScriptHandlerListCount(entry.script)):
+    let event = $triadJanetScriptHandlerEventName(entry.script, cint(index))
+    if not event.knownJanetEvent():
+      return unknownJanetEventError(entry.path, event)
+
+proc validateLoadedScript(entry: ScriptCacheEntry, context: string): string =
+  if entry.failed:
+    return context & ": " & entry.error
+  entry.validateScriptEvents()
+
+proc validateJanetConfig*(config: JanetConfig): string =
+  let normalized = config.normalizedValidationConfig()
+  if not normalized.enabled:
+    return ""
+
+  var runtime = initJanetRuntime(normalized)
+  defer:
+    runtime.close()
+
+  let snapshot = ShellSnapshot()
+  let paths = runtime.scriptPaths()
+  for path in paths:
+    let loaded = runtime.loadScriptEntry(path, snapshot)
+    result = loaded.entry.validateLoadedScript("janet script " & path)
+    if result.len > 0:
+      return
+
+  for layout in normalized.layouts:
+    let layoutId = layout.id.layoutIdString()
+    let directPath = runtime.layoutScriptPath(layoutId)
+    if directPath.len > 0 and fileExists(directPath):
+      let loaded = runtime.loadScriptEntry(directPath, snapshot)
+      result = loaded.entry.validateLoadedScript("janet layout \"" & layoutId & "\"")
+      if result.len > 0:
+        return
+      if triadJanetScriptHasLayout(loaded.entry.script, cstring(layoutId)) != 1:
+        return
+          "janet layout \"" & layoutId & "\": " & directPath &
+          " did not register layout \"" & layoutId & "\""
+      continue
+
+    var registered = false
+    for path in paths:
+      if not runtime.scripts.hasKey(path):
+        continue
+      let entry = runtime.scripts[path]
+      if entry.script != nil and
+          triadJanetScriptHasLayout(entry.script, cstring(layoutId)) == 1:
+        registered = true
+        break
+    if not registered:
+      return
+        "janet layout \"" & layoutId & "\": no script registered layout \"" & layoutId &
+        "\""

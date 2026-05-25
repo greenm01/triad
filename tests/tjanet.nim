@@ -21,6 +21,13 @@ proc testConfigFuel(dir: string, fuelLimit: int32): JanetConfig =
     enabled: true, automationDir: dir, layoutDir: dir / "layouts", fuelLimit: fuelLimit
   )
 
+proc testJanetLayout(name: string): JanetLayoutConfig =
+  JanetLayoutConfig(
+    id: janetLayoutId(name),
+    fallback:
+      LayoutSelection(kind: LayoutSelectionKind.Builtin, builtin: LayoutMode.Scroller),
+  )
+
 proc restoreEnv(name, value: string) =
   putEnv(name, value)
 
@@ -560,8 +567,9 @@ suite "embedded Janet runtime":
 """,
     )
 
-    check invalid.ok
+    check not invalid.ok
     check invalid.messages.len == 0
+    check invalid.error == "invalid Janet command: not-a-command"
 
   test "prelude media helpers emit spawn commands":
     var runtime = initJanetRuntime(testConfig(getTempDir()))
@@ -1639,6 +1647,67 @@ suite "embedded Janet runtime":
     check results[1].messages.len == 1
     check results[1].messages[0].kind == MsgKind.CmdMoveToTag
     check results[1].messages[0].targetTag == 2
+
+  test "Janet config validation reports script and layout errors":
+    let absentDir =
+      getTempDir() / ("triad-janet-validation-absent-" & $getCurrentProcessId())
+    check validateJanetConfig(testConfig(absentDir)) == ""
+
+    let badSyntaxDir =
+      getTempDir() / ("triad-janet-validation-syntax-" & $getCurrentProcessId())
+    createDir(badSyntaxDir)
+    writeFile(badSyntaxDir / "bad.janet", "(triad/on :window-opened")
+    defer:
+      if dirExists(badSyntaxDir):
+        removeDir(badSyntaxDir)
+
+    let syntaxError = validateJanetConfig(testConfig(badSyntaxDir))
+    check syntaxError.contains("janet script " & (badSyntaxDir / "bad.janet"))
+
+    let badEventDir =
+      getTempDir() / ("triad-janet-validation-event-" & $getCurrentProcessId())
+    createDir(badEventDir)
+    writeFile(
+      badEventDir / "event.janet",
+      """
+(triad/on :window-redy
+  (fn [_] nil))
+""",
+    )
+    defer:
+      if dirExists(badEventDir):
+        removeDir(badEventDir)
+
+    let eventError = validateJanetConfig(testConfig(badEventDir))
+    check eventError ==
+      "janet script " & (badEventDir / "event.janet") &
+      ": unknown event \":window-redy\"; did you mean \":window-ready\"?"
+
+    let layoutDir =
+      getTempDir() / ("triad-janet-validation-layout-" & $getCurrentProcessId())
+    let directLayoutDir = layoutDir / "layouts"
+    createDir(layoutDir)
+    createDir(directLayoutDir)
+    writeFile(directLayoutDir / "halves.janet", "(def x 1)")
+    defer:
+      if dirExists(layoutDir):
+        removeDir(layoutDir)
+
+    var config = testConfig(layoutDir)
+    config.layouts = @[testJanetLayout("halves")]
+    let registrationError = validateJanetConfig(config)
+    check registrationError ==
+      "janet layout \"halves\": " & (directLayoutDir / "halves.janet") &
+      " did not register layout \"halves\""
+
+    writeFile(
+      directLayoutDir / "halves.janet",
+      """
+(triad/def-layout :halves
+  (fn [_] []))
+""",
+    )
+    check validateJanetConfig(config) == ""
 
   test "script hooks keep state across events without top-level commands":
     let dir = getTempDir() / ("triad-persistent-hooks-" & $getCurrentProcessId())

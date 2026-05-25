@@ -67,6 +67,10 @@ proc validateConfigFromArgs(args: seq[string]) =
   if not loaded.ok:
     stderr.writeLine("triad: config invalid: " & loaded.error)
     quit 1
+  let janetError = validateJanetConfig(loaded.config.janet)
+  if janetError.len > 0:
+    stderr.writeLine("triad: config invalid: " & janetError)
+    quit 1
   stdout.writeLine("triad: config valid: " & configPath)
   quit 0
 
