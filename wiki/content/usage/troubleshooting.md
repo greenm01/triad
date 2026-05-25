@@ -133,6 +133,18 @@ triad msg dev-mode status
 triad msg dev-mode off
 ```
 
+## Doctor the Live Session
+
+Run the live-session doctor when you want the checks without doing a reload:
+
+```bash
+nimble doctorLive
+```
+
+This checks your config, Janet assets, live binaries, supervisor metadata, and
+daemon identity. If the session is stale, it tells you to restart River/Triad
+before you reload. `nimble liveReload` runs these checks automatically.
+
 ## Live Reload
 
 To apply a new Triad build without losing your windows:

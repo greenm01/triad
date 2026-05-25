@@ -69,6 +69,9 @@ triad logs
 tail -n 100 ~/.local/state/triad/triad-session-latest.log
 ```
 
+For live-session checks without a reload, `triad doctor-live` is the native
+command. Prefer `nimble doctorLive`; it builds the current CLI first.
+
 ## Set Your First Bindings
 
 Open `~/.config/triad/config.kdl` in your editor. The `bindings` block is

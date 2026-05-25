@@ -412,8 +412,9 @@ git pull
 nimble liveReload
 ```
 
-`nimble liveReload` builds release binaries, installs them into the live binary
-directory, captures restore state, and asks the running manager to restart.
+`nimble liveReload` builds release binaries, checks the live session, installs
+them into the live binary directory, captures restore state, and asks the
+running manager to restart.
 
 ## Troubleshooting
 

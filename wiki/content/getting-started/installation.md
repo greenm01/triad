@@ -140,4 +140,6 @@ Stay current.
 git pull
 nimble liveReload
 ```
-`liveReload` is magic. It builds the new version, saves your state, and restarts the manager while you work.
+`liveReload` builds the new version, checks the running session, saves your
+state, and restarts the manager while you work. If the session is stale, it tells
+you when to restart River/Triad.

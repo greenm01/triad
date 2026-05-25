@@ -90,13 +90,12 @@ Use these tasks while iterating:
 nimble test
 nimble build
 nimble verify
-nimble doctorLive
 nimble liveReload
 ```
 
-`verify` runs tests and builds while ensuring a clean tree. Run `nimble doctorLive`
-after pulling session/runtime changes, and run `nimble liveReload` from within a
-live session to test runtime changes.
+`verify` runs tests and builds while ensuring a clean tree. Run
+`nimble liveReload` from within a live session to test runtime changes; it runs
+the live-session doctor checks before replacing binaries.
 
 ### IPC & Navigation
 
