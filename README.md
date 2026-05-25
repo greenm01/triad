@@ -43,7 +43,17 @@ You can also use Janet to create custom layouts. See [docs/tiling_wm_categories.
 
 ### Shell Support
 
-Triad exposes its own state socket for native integrations and can also launch shell profiles with a compatibility socket for existing bars. That lets **Waybar**'s `niri/workspaces` module and shells like **Noctalia-shell**, **DankMaterialShell**, and **Waylee** run without patches.
+Triad exposes its own state socket for native integrations and can also launch shell profiles with a compatibility socket for shells that consume Niri's workspace IPC.
+
+| Shell | Native IPC | Niri IPC |
+| :--- | :--- | :--- |
+| [Noctalia v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5) | Yes | Yes |
+| [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) | No, fork/PR pending | Yes |
+| [Waybar](https://github.com/Alexays/Waybar) | No, fork/PR pending | Yes |
+| [Wayle](https://github.com/wayle-rs/wayle) | No, fork/PR pending | Yes |
+| [Ironbar](https://github.com/JakeStanger/ironbar) | No, fork/PR pending | Yes |
+
+Set `niri-compat #true` only for profiles using the Niri IPC path. For native IPC profiles, leave `niri-compat #false` so Triad does not start the compatibility socket for that shell.
 
 ### Installation
 
