@@ -1,4 +1,4 @@
-import std/[options, os, re, strutils]
+import std/[editdistance, options, os, re, strutils]
 import chronicles, kdl
 import defaults
 import keysyms
@@ -12,7 +12,17 @@ import ../types/runtime_values
 
 export config_values
 
-const MaxConfigIncludeDepth* = 10
+const
+  MaxConfigIncludeDepth* = 10
+  MaxTopLevelConfigSuggestionDistance = 2
+  KnownTopLevelConfigNodes = [
+    "layout", "workspaces", "output", "workspace-rules", "window-rule",
+    "spawn-at-startup", "environment", "window-menu-command", "bindings",
+    "switch-events", "shells", "janet", "terminal", "screen-lock", "scratchpad",
+    "overview", "recent-windows", "layout-switch-toast", "floating", "screenshot",
+    "input", "cursor", "hotkey-overlay", "config-notification", "presentation-mode",
+    "allow-exit-session", "protocol-surfaces",
+  ]
 
 proc clamp32(value, lo, hi: int32): int32 =
   min(hi, max(lo, value))
@@ -1068,21 +1078,31 @@ proc validateOutputRuleNodes(doc: KdlDoc): string =
       inc outputIndex
 
 proc knownTopLevelConfigNode(name: string): bool =
-  case name
-  of "layout", "workspaces", "output", "workspace-rules", "window-rule",
-      "spawn-at-startup", "environment", "window-menu-command", "bindings",
-      "switch-events", "shells", "janet", "terminal", "screen-lock", "scratchpad",
-      "overview", "recent-windows", "layout-switch-toast", "floating", "screenshot",
-      "input", "cursor", "hotkey-overlay", "config-notification", "presentation-mode",
-      "allow-exit-session", "protocol-surfaces":
-    true
-  else:
-    false
+  for known in KnownTopLevelConfigNodes:
+    if name == known:
+      return true
+  false
+
+proc nearestTopLevelConfigNode(name: string): string =
+  var bestDistance = MaxTopLevelConfigSuggestionDistance + 1
+  let normalized = name.toLowerAscii()
+  for candidate in KnownTopLevelConfigNodes:
+    let distance = editDistanceAscii(normalized, candidate)
+    if distance < bestDistance:
+      bestDistance = distance
+      result = candidate
+  let includeDistance = editDistanceAscii(normalized, "include")
+  if includeDistance < bestDistance:
+    bestDistance = includeDistance
+    result = "include"
+  if bestDistance > MaxTopLevelConfigSuggestionDistance:
+    result = ""
 
 proc topLevelConfigNodeError(name: string): string =
   result = "unknown top-level config node \"" & name & "\""
-  if name == "incude":
-    result.add("; did you mean \"include\"?")
+  let suggestion = nearestTopLevelConfigNode(name)
+  if suggestion.len > 0:
+    result.add("; did you mean \"" & suggestion & "\"?")
 
 proc validateTopLevelConfigNodes(doc: KdlDoc): string =
   for node in doc:

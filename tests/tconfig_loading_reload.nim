@@ -833,6 +833,32 @@ bindings {
     removeDir(configDir)
     removeDir(dir)
 
+  test "Strict config load suggests nearest top-level config node":
+    let loaded = loadStrictConfigContent(
+      """
+bindngs {
+  bind "Super+Return" "spawn foot"
+}
+""",
+      "unknown-top-level-suggestion",
+    )
+
+    check not loaded.ok
+    check loaded.error ==
+      "unknown top-level config node \"bindngs\"; did you mean \"bindings\"?"
+
+  test "Strict config load omits distant top-level config suggestions":
+    let loaded = loadStrictConfigContent(
+      """
+totally-custom {
+  value #true
+}
+""", "unknown-top-level-no-suggestion",
+    )
+
+    check not loaded.ok
+    check loaded.error == "unknown top-level config node \"totally-custom\""
+
   test "Optional missing config include is accepted":
     let dir = getTempDir() / ("triad-config-optional-include-" & $getCurrentProcessId())
     createDir(dir)
