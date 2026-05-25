@@ -19,6 +19,17 @@ import
   output_management_runtime, protocol_surface_runtime, river_manager_runtime,
   river_outputs_runtime, state, wayland_helpers
 
+proc noteAdvertisedProtocol(
+    daemon: var TriadDaemon, interfaceName: string, version: uint32
+) =
+  if version > daemon.advertisedProtocolVersions.getOrDefault(interfaceName, 0'u32):
+    daemon.advertisedProtocolVersions[interfaceName] = version
+
+proc noteBoundProtocol(
+    daemon: var TriadDaemon, interfaceName: string, version: uint32
+) =
+  daemon.boundProtocolVersions[interfaceName] = version
+
 proc handleGlobal*(
     data: pointer,
     registry: ptr Registry,
@@ -32,52 +43,67 @@ proc handleGlobal*(
     return
 
   let interfaceName = $interfaceNameRaw
+  daemon[].noteAdvertisedProtocol(interfaceName, version)
   debug "Wayland global advertised",
     name = name, interfaceName = interfaceName, version = version
   if interfaceName == "river_window_manager_v1":
     if version < 4'u32:
-      fatal "river_window_manager_v1 v4 is required", advertisedVersion = version
-      quit 1
+      return
+    let boundVersion = 4'u32
     daemon.riverManager = cast[ptr RiverWindowManagerV1](registry.`bind`(
-      name, river_window_manager_v1_interface.addr, 4'u32
+      name, river_window_manager_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     discard
       daemon.riverManager.addListener(riverManagerListener.addr, daemonData(daemon[]))
     info "Bound to river_window_manager_v1",
-      name = name, advertisedVersion = version, boundVersion = 4
+      name = name, advertisedVersion = version, boundVersion = boundVersion
     daemon[].ensureOwnedShellSurface()
   elif interfaceName == "wl_compositor":
+    let boundVersion = min(version, 6'u32)
     daemon.compositor = cast[ptr Compositor](registry.`bind`(
-      name, wl_compositor_interface.addr, min(version, 6'u32)
+      name, wl_compositor_interface.addr, boundVersion
     ))
-    info "Bound to wl_compositor", name = name, advertisedVersion = version
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
+    info "Bound to wl_compositor",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
     daemon[].ensureOwnedShellSurface()
     daemon[].applyIdleInhibitDesired()
   elif interfaceName == "wl_shm":
-    daemon.shm = cast[ptr Shm](registry.`bind`(
-      name, wlCore.wl_shm_interface.addr, min(version, 1'u32)
-    ))
-    info "Bound to wl_shm", name = name, advertisedVersion = version
+    let boundVersion = min(version, 1'u32)
+    daemon.shm =
+      cast[ptr Shm](registry.`bind`(name, wlCore.wl_shm_interface.addr, boundVersion))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
+    info "Bound to wl_shm",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "wp_cursor_shape_manager_v1":
+    let boundVersion = min(version, 2'u32)
     daemon.cursorShapeManager = cast[ptr cursorShape.WpCursorShapeManagerV1](registry.`bind`(
-      name, cursorShape.wp_cursor_shape_manager_v1_interface.addr, min(version, 2'u32)
+      name, cursorShape.wp_cursor_shape_manager_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.cursorShapeGlobalName = name
     for pointer in daemon.wlPointerPointers.values:
       daemon[].attachCursorShapePointer(pointer.id())
-    info "Bound to wp_cursor_shape_manager_v1", name = name, advertisedVersion = version
+    info "Bound to wp_cursor_shape_manager_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "zwp_pointer_gestures_v1":
+    let boundVersion = min(version, 3'u32)
     daemon.pointerGestures = cast[ptr pointerGestures.ZwpPointerGesturesV1](registry.`bind`(
-      name, pointerGestures.zwp_pointer_gestures_v1_interface.addr, min(version, 3'u32)
+      name, pointerGestures.zwp_pointer_gestures_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.pointerGesturesGlobalName = name
     for pointer in daemon.wlPointerPointers.values:
       daemon[].attachWlSwipePointer(pointer.id())
-    info "Bound to zwp_pointer_gestures_v1", name = name, advertisedVersion = version
+    info "Bound to zwp_pointer_gestures_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "wl_output":
+    let boundVersion = min(version, 4'u32)
     let wlOutput = cast[ptr Output](registry.`bind`(
-      name, wlCore.wl_output_interface.addr, min(version, 4'u32)
+      name, wlCore.wl_output_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.wlOutputPointers[name] = wlOutput
     let listenerData = WlOutputListenerData(daemon: daemon, globalName: name)
     daemon.wlOutputListenerData[name] = new(WlOutputListenerData)
@@ -86,11 +112,12 @@ proc handleGlobal*(
       wlOutputListener.addr, cast[pointer](daemon.wlOutputListenerData[name])
     )
     debug "Bound to wl_output",
-      name = name, advertisedVersion = version, boundVersion = min(version, 4'u32)
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "wl_seat":
-    let wlSeat = cast[ptr Seat](registry.`bind`(
-      name, wlCore.wl_seat_interface.addr, min(version, 9'u32)
-    ))
+    let boundVersion = min(version, 9'u32)
+    let wlSeat =
+      cast[ptr Seat](registry.`bind`(name, wlCore.wl_seat_interface.addr, boundVersion))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.wlSeatPointers[name] = wlSeat
     let listenerData = WlSeatListenerData(daemon: daemon, globalName: name)
     daemon.wlSeatListenerData[name] = new(WlSeatListenerData)
@@ -99,73 +126,92 @@ proc handleGlobal*(
       wlSeatListener.addr, cast[pointer](daemon.wlSeatListenerData[name])
     )
     debug "Bound to wl_seat",
-      name = name, advertisedVersion = version, boundVersion = min(version, 9'u32)
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "river_layer_shell_v1":
+    let boundVersion = min(version, 1'u32)
     daemon.riverLayerShell = cast[ptr riverLayer.RiverLayerShellV1](registry.`bind`(
-      name, riverLayer.river_layer_shell_v1_interface.addr, min(version, 1'u32)
+      name, riverLayer.river_layer_shell_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     for outputId in daemon.outputPointers.keys:
       daemon[].attachLayerOutput(outputId)
     for seat in daemon.seatPointers:
       daemon[].attachLayerSeat(seat)
-    info "Bound to river_layer_shell_v1", name = name, advertisedVersion = version
+    info "Bound to river_layer_shell_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "river_xkb_bindings_v1":
+    if version < 2'u32:
+      return
     let boundVersion = min(version, 3'u32)
     daemon.riverXkbBindings = cast[ptr riverXkb.RiverXkbBindingsV1](registry.`bind`(
       name, riverXkb.river_xkb_bindings_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.bindingsConfigured = false
     daemon[].requestManage("xkb bindings discovered")
     info "Bound to river_xkb_bindings_v1",
       name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "river_input_manager_v1":
+    let boundVersion = min(version, 2'u32)
     let manager = cast[ptr riverInput.RiverInputManagerV1](registry.`bind`(
-      name, riverInput.river_input_manager_v1_interface.addr, min(version, 2'u32)
+      name, riverInput.river_input_manager_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.riverInputManager = cast[pointer](manager)
     discard manager.addListener(inputManagerListener.addr, daemonData(daemon[]))
-    info "Bound to river_input_manager_v1", name = name, advertisedVersion = version
+    info "Bound to river_input_manager_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "river_xkb_config_v1":
+    let boundVersion = min(version, 2'u32)
     let config = cast[ptr riverXkbConfig.RiverXkbConfigV1](registry.`bind`(
-      name, riverXkbConfig.river_xkb_config_v1_interface.addr, min(version, 2'u32)
+      name, riverXkbConfig.river_xkb_config_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.riverXkbConfig = cast[pointer](config)
     discard config.addListener(xkbConfigListener.addr, daemonData(daemon[]))
     daemon[].configureXkbKeymap("xkb config discovered")
-    info "Bound to river_xkb_config_v1", name = name, advertisedVersion = version
+    info "Bound to river_xkb_config_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "river_libinput_config_v1":
+    let boundVersion = min(version, 2'u32)
     let config = cast[ptr riverLibinput.RiverLibinputConfigV1](registry.`bind`(
-      name, riverLibinput.river_libinput_config_v1_interface.addr, min(version, 2'u32)
+      name, riverLibinput.river_libinput_config_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.riverLibinputConfig = cast[pointer](config)
     discard config.addListener(libinputConfigListener.addr, daemonData(daemon[]))
-    info "Bound to river_libinput_config_v1", name = name, advertisedVersion = version
+    info "Bound to river_libinput_config_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "zwlr_output_manager_v1":
+    let boundVersion = min(version, 4'u32)
     daemon.wlrOutputManager = cast[ptr wlrOutput.ZwlrOutputManagerV1](registry.`bind`(
-      name, wlrOutput.zwlr_output_manager_v1_interface.addr, min(version, 4'u32)
+      name, wlrOutput.zwlr_output_manager_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.wlrOutputManagerGlobalName = name
     discard daemon.wlrOutputManager.addListener(
       wlrOutputManagerListener.addr, daemonData(daemon[])
     )
     info "Bound to zwlr_output_manager_v1",
-      name = name, advertisedVersion = version, boundVersion = min(version, 4'u32)
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "wp_single_pixel_buffer_manager_v1":
+    let boundVersion = min(version, 1'u32)
     daemon.singlePixelManager = cast[ptr singlepixel.WpSinglePixelBufferManagerV1](registry.`bind`(
-      name,
-      singlepixel.wp_single_pixel_buffer_manager_v1_interface.addr,
-      min(version, 1'u32),
+      name, singlepixel.wp_single_pixel_buffer_manager_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     info "Bound to wp_single_pixel_buffer_manager_v1",
-      name = name, advertisedVersion = version
+      name = name, advertisedVersion = version, boundVersion = boundVersion
     daemon[].applyIdleInhibitDesired()
   elif interfaceName == "zwp_idle_inhibit_manager_v1":
+    let boundVersion = min(version, 1'u32)
     daemon.idleInhibitManager = cast[ptr idle.ZwpIdleInhibitManagerV1](registry.`bind`(
-      name, idle.zwp_idle_inhibit_manager_v1_interface.addr, min(version, 1'u32)
+      name, idle.zwp_idle_inhibit_manager_v1_interface.addr, boundVersion
     ))
+    daemon[].noteBoundProtocol(interfaceName, boundVersion)
     daemon.idleInhibitGlobalName = name
     info "Bound to zwp_idle_inhibit_manager_v1",
-      name = name, advertisedVersion = version
+      name = name, advertisedVersion = version, boundVersion = boundVersion
     daemon[].applyIdleInhibitDesired()
 
 proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =

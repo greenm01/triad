@@ -230,6 +230,8 @@ type
     display*: ptr Display
     startUnixMs*: int64
     registry*: ptr Registry
+    advertisedProtocolVersions*: Table[string, uint32]
+    boundProtocolVersions*: Table[string, uint32]
     riverManager*: ptr RiverWindowManagerV1
     riverInputManager*: pointer
     riverLibinputConfig*: pointer

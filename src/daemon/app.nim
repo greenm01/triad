@@ -15,9 +15,9 @@ import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_run
 import
   bindings_runtime, child_process_runtime, effects_runtime, input_runtime,
   ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime, manage_requests,
-  message_queue, memory_status, output_management_runtime, process_runner, shell_runner,
-  registry_runtime, reload_runtime, render_runtime, render_invalidation, spawn_context,
-  state, switch_event_runtime
+  message_queue, memory_status, output_management_runtime, process_runner,
+  protocol_diagnostics, shell_runner, registry_runtime, reload_runtime, render_runtime,
+  render_invalidation, spawn_context, state, switch_event_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -42,6 +42,30 @@ const
 proc failCli(message: string) =
   stderr.writeLine("triad: " & message)
   quit 1
+
+proc validateRiverProtocolCompatibility(daemon: TriadDaemon) =
+  let diagnostics = riverProtocolDiagnostics(daemon.advertisedProtocolVersions)
+  for issue in diagnostics.warningIssues:
+    warn "River optional protocol unavailable",
+      protocol = issue.interfaceName,
+      feature = issue.feature,
+      advertisedVersion = issue.advertisedVersion,
+      requiredVersion = issue.requiredVersion,
+      missing = issue.missing,
+      message = issue.message
+  if diagnostics.fatalIssues.len > 0:
+    for issue in diagnostics.fatalIssues:
+      fatal "River protocol requirement failed",
+        protocol = issue.interfaceName,
+        feature = issue.feature,
+        advertisedVersion = issue.advertisedVersion,
+        requiredVersion = issue.requiredVersion,
+        missing = issue.missing,
+        message = issue.message
+    quit 1
+
+  info "River protocol compatibility",
+    required = "ok", optionalWarnings = diagnostics.warningIssues.len
 
 proc configPathFromArgs(args: seq[string]): string =
   result = getEnv("TRIAD_CONFIG", "")
@@ -994,6 +1018,8 @@ proc main*() =
   let roundtripResult = daemon.display.roundtrip()
   debug "Wayland registry roundtrip finished", result = roundtripResult
   discard roundtripResult
+
+  daemon.validateRiverProtocolCompatibility()
 
   if daemon.riverManager == nil:
     fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"

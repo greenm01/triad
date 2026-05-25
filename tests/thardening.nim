@@ -9,8 +9,8 @@ import
   ../src/daemon/[
     bindings_runtime, child_process_runtime, cursor_shake, effects_runtime,
     input_device_classification, live_restore_runtime, memory_status, message_queue,
-    output_management_runtime, process_runner, reload_runtime, render_invalidation,
-    spawn_context, switch_event_runtime,
+    output_management_runtime, process_runner, protocol_diagnostics, reload_runtime,
+    render_invalidation, spawn_context, switch_event_runtime,
   ]
 from ../src/daemon/state import
   OutputManagementHeadRuntime, consumeMaximizedAck, expectMaximizedAck, initTriadDaemon
@@ -161,6 +161,27 @@ proc ipcListenReadyAcceptsConnections(path: string): Future[bool] {.async.} =
   if ready.failed or not ready.read:
     return false
   result = await socket.unixSocketAcceptsConnections(path)
+
+proc protocolVersions(
+    pairs: openArray[tuple[name: string, version: uint32]]
+): Table[string, uint32] =
+  for pair in pairs:
+    result[pair.name] = pair.version
+
+proc baselineRequiredProtocols(): Table[string, uint32] =
+  protocolVersions(
+    [
+      (name: "river_window_manager_v1", version: 4'u32),
+      (name: "river_xkb_bindings_v1", version: 2'u32),
+      (name: "wl_compositor", version: 6'u32),
+      (name: "wl_shm", version: 1'u32),
+    ]
+  )
+
+proc hasProtocolIssue(issues: openArray[ProtocolIssue], interfaceName: string): bool =
+  for issue in issues:
+    if issue.interfaceName == interfaceName:
+      return true
 
 suite "Crash hardening":
   test "output layout row resolves left-to-right physical coordinates":
@@ -926,6 +947,57 @@ suite "Crash hardening":
   test "River XKB modifier watch is gated to protocol version 3":
     check not xkbBindingsSupportsModifierWatch(2'u32)
     check xkbBindingsSupportsModifierWatch(3'u32)
+
+  test "River protocol diagnostics require window manager":
+    var versions = baselineRequiredProtocols()
+    versions.del("river_window_manager_v1")
+
+    let diagnostics = riverProtocolDiagnostics(versions)
+    check diagnostics.fatalIssues.hasProtocolIssue("river_window_manager_v1")
+
+  test "River protocol diagnostics reject old window manager":
+    var versions = baselineRequiredProtocols()
+    versions["river_window_manager_v1"] = 3'u32
+
+    let diagnostics = riverProtocolDiagnostics(versions)
+    check diagnostics.fatalIssues.hasProtocolIssue("river_window_manager_v1")
+
+  test "River protocol diagnostics require XKB bindings v2":
+    var versions = baselineRequiredProtocols()
+    versions.del("river_xkb_bindings_v1")
+
+    var diagnostics = riverProtocolDiagnostics(versions)
+    check diagnostics.fatalIssues.hasProtocolIssue("river_xkb_bindings_v1")
+
+    versions = baselineRequiredProtocols()
+    versions["river_xkb_bindings_v1"] = 1'u32
+    diagnostics = riverProtocolDiagnostics(versions)
+    check diagnostics.fatalIssues.hasProtocolIssue("river_xkb_bindings_v1")
+
+  test "River protocol diagnostics accept XKB v2 with modifier watch degradation":
+    var versions = baselineRequiredProtocols()
+    versions["river_xkb_bindings_v1"] = 2'u32
+
+    let diagnostics = riverProtocolDiagnostics(versions)
+    check not diagnostics.fatalIssues.hasProtocolIssue("river_xkb_bindings_v1")
+    check not diagnostics.warningIssues.hasProtocolIssue("river_xkb_bindings_v1")
+    check not xkbBindingsSupportsModifierWatch(2'u32)
+
+  test "River protocol diagnostics accept XKB v3 without modifier watch degradation":
+    var versions = baselineRequiredProtocols()
+    versions["river_xkb_bindings_v1"] = 3'u32
+
+    let diagnostics = riverProtocolDiagnostics(versions)
+    check not diagnostics.fatalIssues.hasProtocolIssue("river_xkb_bindings_v1")
+    check not diagnostics.warningIssues.hasProtocolIssue("river_xkb_bindings_v1")
+    check xkbBindingsSupportsModifierWatch(3'u32)
+
+  test "River protocol diagnostics warn for missing optional protocols":
+    let diagnostics = riverProtocolDiagnostics(baselineRequiredProtocols())
+
+    check diagnostics.fatalIssues.len == 0
+    check diagnostics.warningIssues.hasProtocolIssue("river_input_manager_v1")
+    check diagnostics.warningIssues.hasProtocolIssue("zwlr_output_manager_v1")
 
   test "Exit-session confirmation routes Enter to confirm":
     var daemon = initTriadDaemon()
