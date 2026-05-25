@@ -5,11 +5,17 @@ type
     Fatal
     Warning
 
-  ProtocolRequirement = object
-    interfaceName: string
-    minVersion: uint32
-    feature: string
-    kind: ProtocolIssueKind
+  ProtocolSpecKind* {.pure.} = enum
+    BoundOnly
+    Required
+    Optional
+
+  ProtocolSpec* = object
+    interfaceName*: string
+    minVersion*: uint32
+    maxBindVersion*: uint32
+    feature*: string
+    kind*: ProtocolSpecKind
 
   ProtocolIssue* = object
     interfaceName*: string
@@ -26,121 +32,178 @@ type
 
 const UpstreamRiverHint* = "install upstream River 0.4+ or set TRIAD_RIVER_BIN"
 
-const ProtocolRequirements = [
-  ProtocolRequirement(
+const RiverXkbBindingsModifierWatchVersion* = 3'u32
+
+const ProtocolSpecs* = [
+  ProtocolSpec(
     interfaceName: "river_window_manager_v1",
     minVersion: 4'u32,
+    maxBindVersion: 4'u32,
     feature: "window management",
-    kind: ProtocolIssueKind.Fatal,
+    kind: ProtocolSpecKind.Required,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "river_xkb_bindings_v1",
     minVersion: 2'u32,
+    maxBindVersion: 3'u32,
     feature: "keyboard bindings",
-    kind: ProtocolIssueKind.Fatal,
+    kind: ProtocolSpecKind.Required,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "wl_compositor",
     minVersion: 1'u32,
+    maxBindVersion: 6'u32,
     feature: "Wayland surfaces",
-    kind: ProtocolIssueKind.Fatal,
+    kind: ProtocolSpecKind.Required,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "wl_shm",
     minVersion: 1'u32,
+    maxBindVersion: 1'u32,
     feature: "shared-memory buffers",
-    kind: ProtocolIssueKind.Fatal,
+    kind: ProtocolSpecKind.Required,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
+    interfaceName: "wl_output",
+    minVersion: 1'u32,
+    maxBindVersion: 4'u32,
+    feature: "Wayland output state",
+    kind: ProtocolSpecKind.BoundOnly,
+  ),
+  ProtocolSpec(
+    interfaceName: "wl_seat",
+    minVersion: 1'u32,
+    maxBindVersion: 9'u32,
+    feature: "Wayland seats",
+    kind: ProtocolSpecKind.BoundOnly,
+  ),
+  ProtocolSpec(
     interfaceName: "zwp_pointer_gestures_v1",
     minVersion: 3'u32,
+    maxBindVersion: 3'u32,
     feature: "touchpad gesture bindings",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "river_xkb_config_v1",
     minVersion: 2'u32,
+    maxBindVersion: 2'u32,
     feature: "keyboard layout and keymap configuration",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "river_input_manager_v1",
     minVersion: 2'u32,
+    maxBindVersion: 2'u32,
     feature: "input device repeat and assignment configuration",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "river_libinput_config_v1",
     minVersion: 2'u32,
+    maxBindVersion: 2'u32,
     feature: "mouse, touchpad, trackpoint, and trackball configuration",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "zwlr_output_manager_v1",
     minVersion: 4'u32,
+    maxBindVersion: 4'u32,
     feature: "output rules, adaptive sync, and monitor power",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "river_layer_shell_v1",
     minVersion: 1'u32,
+    maxBindVersion: 1'u32,
     feature: "Triad overlay surfaces",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "wp_cursor_shape_manager_v1",
     minVersion: 2'u32,
+    maxBindVersion: 2'u32,
     feature: "cursor shape updates",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "zwp_idle_inhibit_manager_v1",
     minVersion: 1'u32,
+    maxBindVersion: 1'u32,
     feature: "idle inhibit requests",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
-  ProtocolRequirement(
+  ProtocolSpec(
     interfaceName: "wp_single_pixel_buffer_manager_v1",
     minVersion: 1'u32,
+    maxBindVersion: 1'u32,
     feature: "solid-color protocol surfaces",
-    kind: ProtocolIssueKind.Warning,
+    kind: ProtocolSpecKind.Optional,
   ),
 ]
 
-proc issueMessage(req: ProtocolRequirement, version: uint32, missing: bool): string =
+proc protocolSpec*(interfaceName: string): ProtocolSpec =
+  for spec in ProtocolSpecs:
+    if spec.interfaceName == interfaceName:
+      return spec
+
+proc protocolIsKnown*(interfaceName: string): bool =
+  for spec in ProtocolSpecs:
+    if spec.interfaceName == interfaceName:
+      return true
+
+proc protocolIsUsable*(interfaceName: string, advertisedVersion: uint32): bool =
+  let spec = protocolSpec(interfaceName)
+  spec.interfaceName.len > 0 and advertisedVersion >= spec.minVersion
+
+proc protocolBindVersion*(interfaceName: string, advertisedVersion: uint32): uint32 =
+  let spec = protocolSpec(interfaceName)
+  if spec.interfaceName.len == 0 or advertisedVersion < spec.minVersion:
+    return 0'u32
+  min(advertisedVersion, spec.maxBindVersion)
+
+proc issueKind(spec: ProtocolSpec): ProtocolIssueKind =
+  case spec.kind
+  of ProtocolSpecKind.Required: ProtocolIssueKind.Fatal
+  of ProtocolSpecKind.Optional: ProtocolIssueKind.Warning
+  of ProtocolSpecKind.BoundOnly: ProtocolIssueKind.Warning
+
+proc issueMessage(spec: ProtocolSpec, version: uint32, missing: bool): string =
   if missing:
-    result = req.interfaceName & " not advertised; Triad requires " & req.feature
+    result = spec.interfaceName & " not advertised; Triad requires " & spec.feature
   else:
     result =
-      req.interfaceName & " v" & $req.minVersion & " is required for " & req.feature &
+      spec.interfaceName & " v" & $spec.minVersion & " is required for " & spec.feature &
       "; compositor advertised v" & $version
 
-  if req.kind == ProtocolIssueKind.Fatal:
+  if spec.kind == ProtocolSpecKind.Required:
     result.add("; " & UpstreamRiverHint)
 
 proc riverProtocolDiagnostics*(
     advertisedVersions: Table[string, uint32]
 ): ProtocolDiagnostics =
-  for req in ProtocolRequirements:
-    let missing = not advertisedVersions.hasKey(req.interfaceName)
+  for spec in ProtocolSpecs:
+    if spec.kind == ProtocolSpecKind.BoundOnly:
+      continue
+    let missing = not advertisedVersions.hasKey(spec.interfaceName)
     let version =
       if missing:
         0'u32
       else:
-        advertisedVersions[req.interfaceName]
-    if not missing and version >= req.minVersion:
+        advertisedVersions[spec.interfaceName]
+    if not missing and version >= spec.minVersion:
       continue
 
     let issue = ProtocolIssue(
-      interfaceName: req.interfaceName,
-      feature: req.feature,
+      interfaceName: spec.interfaceName,
+      feature: spec.feature,
       advertisedVersion: version,
-      requiredVersion: req.minVersion,
-      kind: req.kind,
+      requiredVersion: spec.minVersion,
+      kind: spec.issueKind(),
       missing: missing,
-      message: req.issueMessage(version, missing),
+      message: spec.issueMessage(version, missing),
     )
-    case req.kind
+    case issue.kind
     of ProtocolIssueKind.Fatal:
       result.fatalIssues.add(issue)
     of ProtocolIssueKind.Warning:

@@ -19,7 +19,8 @@ import
 import ../types/[model, runtime_values]
 import
   cursor_shake, frame_tab_bar_render, manage_requests, message_queue,
-  protocol_surface_runtime, protocol_surfaces, render_runtime, state, wayland_helpers
+  protocol_diagnostics, protocol_surface_runtime, protocol_surfaces, render_runtime,
+  state, wayland_helpers
 import ../utils/behavior_log
 
 const
@@ -28,7 +29,6 @@ const
   RiverAllEdges* = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
   RiverDecorationOnlySupportsCsd = 0'u32
   AllWatchedModifiers = 1'u32 or 4'u32 or 8'u32 or 32'u32 or 64'u32 or 128'u32
-  XkbBindingsModifierWatchVersion* = 3'u32
   WlSeatCapabilityPointer = 1'u32
   WlPointerAxisVertical = 0'u32
   WlPointerAxisHorizontal = 1'u32
@@ -450,7 +450,7 @@ proc handleXkbSeatAteUnboundKey*(daemon: var TriadDaemon, id: uint32) =
     discard daemon.enqueueHotkeyOverlayDismiss()
 
 proc xkbBindingsSupportsModifierWatch*(version: uint32): bool =
-  version >= XkbBindingsModifierWatchVersion
+  version >= RiverXkbBindingsModifierWatchVersion
 
 proc watchXkbSeatModifiers(
     daemon: var TriadDaemon, xkbSeat: ptr riverXkb.RiverXkbBindingsSeatV1
@@ -463,7 +463,7 @@ proc watchXkbSeatModifiers(
   if not daemon.xkbModifierWatchUnavailableLogged:
     daemon.xkbModifierWatchUnavailableLogged = true
     warn "River XKB modifier watch unavailable; continuing without modifier-state updates",
-      boundVersion = version, requiredVersion = XkbBindingsModifierWatchVersion
+      boundVersion = version, requiredVersion = RiverXkbBindingsModifierWatchVersion
 
 proc syncHotkeyOverlayKeyCapture*(daemon: var TriadDaemon) =
   if daemon.currentModel.hotkeyOverlayOpen or daemon.currentModel.exitSessionConfirmOpen:

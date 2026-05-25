@@ -945,6 +945,8 @@ suite "Crash hardening":
     check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
 
   test "River XKB modifier watch is gated to protocol version 3":
+    check RiverXkbBindingsModifierWatchVersion ==
+      protocolSpec("river_xkb_bindings_v1").maxBindVersion
     check not xkbBindingsSupportsModifierWatch(2'u32)
     check xkbBindingsSupportsModifierWatch(3'u32)
 
@@ -998,6 +1000,28 @@ suite "Crash hardening":
     check diagnostics.fatalIssues.len == 0
     check diagnostics.warningIssues.hasProtocolIssue("river_input_manager_v1")
     check diagnostics.warningIssues.hasProtocolIssue("zwlr_output_manager_v1")
+
+  test "River protocol diagnostics warn for old optional protocols":
+    var versions = baselineRequiredProtocols()
+    versions["river_input_manager_v1"] = 1'u32
+    versions["wp_cursor_shape_manager_v1"] = 1'u32
+
+    let diagnostics = riverProtocolDiagnostics(versions)
+    check diagnostics.fatalIssues.len == 0
+    check diagnostics.warningIssues.hasProtocolIssue("river_input_manager_v1")
+    check diagnostics.warningIssues.hasProtocolIssue("wp_cursor_shape_manager_v1")
+
+  test "Protocol binding skips unusable optional protocols":
+    check not protocolIsUsable("river_input_manager_v1", 1'u32)
+    check protocolBindVersion("river_input_manager_v1", 1'u32) == 0'u32
+    check protocolBindVersion("wp_cursor_shape_manager_v1", 1'u32) == 0'u32
+    check protocolBindVersion("river_input_manager_v1", 2'u32) == 2'u32
+
+  test "Protocol binding caps advertised versions":
+    check protocolBindVersion("river_window_manager_v1", 99'u32) == 4'u32
+    check protocolBindVersion("river_xkb_bindings_v1", 99'u32) == 3'u32
+    check protocolBindVersion("wl_compositor", 99'u32) == 6'u32
+    check protocolBindVersion("unknown_protocol_v1", 99'u32) == 0'u32
 
   test "Exit-session confirmation routes Enter to confirm":
     var daemon = initTriadDaemon()
