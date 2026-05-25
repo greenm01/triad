@@ -731,6 +731,108 @@ layout {
     removeFile(included)
     removeDir(dir)
 
+  test "Config includes register bindings from nested files":
+    let dir = getTempDir() / ("triad-config-bind-include-" & $getCurrentProcessId())
+    let configDir = dir / "config"
+    createDir(configDir)
+    let included = configDir / "keybinds.kdl"
+    let root = dir / "root.kdl"
+    writeFile(
+      included,
+      """
+bindings {
+  bind "Super+Return" "spawn foot"
+}
+""",
+    )
+    writeFile(root, "include \"config/keybinds.kdl\"\n")
+
+    let loaded = loadConfigStrict(root)
+    check loaded.ok
+    check loaded.config.commandForBinding("Return", Super) == "spawn foot"
+    check loaded.configPaths ==
+      @[root.absoluteConfigPath(), included.absoluteConfigPath()]
+
+    removeFile(root)
+    removeFile(included)
+    removeDir(configDir)
+    removeDir(dir)
+
+  test "Config includes register bindings from multiple files":
+    let dir =
+      getTempDir() / ("triad-config-multi-bind-include-" & $getCurrentProcessId())
+    let configDir = dir / "config"
+    createDir(configDir)
+    let first = configDir / "base-keybinds.kdl"
+    let second = configDir / "app-keybinds.kdl"
+    let root = dir / "root.kdl"
+    writeFile(
+      first,
+      """
+bindings {
+  bind "Super+Return" "spawn foot"
+}
+""",
+    )
+    writeFile(
+      second,
+      """
+bindings {
+  bind "Super+Space" "spawn fuzzel"
+}
+""",
+    )
+    writeFile(
+      root,
+      """
+include "config/base-keybinds.kdl"
+include "config/app-keybinds.kdl"
+""",
+    )
+
+    let loaded = loadConfigStrict(root)
+    check loaded.ok
+    check loaded.config.commandForBinding("Return", Super) == "spawn foot"
+    check loaded.config.commandForBinding("Space", Super) == "spawn fuzzel"
+    check loaded.configPaths ==
+      @[
+        root.absoluteConfigPath(),
+        first.absoluteConfigPath(),
+        second.absoluteConfigPath(),
+      ]
+
+    removeFile(root)
+    removeFile(first)
+    removeFile(second)
+    removeDir(configDir)
+    removeDir(dir)
+
+  test "Strict config load rejects misspelled include directive":
+    let dir = getTempDir() / ("triad-config-include-typo-" & $getCurrentProcessId())
+    let configDir = dir / "config"
+    createDir(configDir)
+    let included = configDir / "keybinds.kdl"
+    let root = dir / "root.kdl"
+    writeFile(
+      included,
+      """
+bindings {
+  bind "Super+Return" "spawn foot"
+}
+""",
+    )
+    writeFile(root, "incude \"config/keybinds.kdl\"\n")
+
+    let loaded = loadConfigStrict(root)
+    check not loaded.ok
+    check loaded.error ==
+      "unknown top-level config node \"incude\"; did you mean \"include\"?"
+
+    removeFile(root)
+    removeFile(included)
+    removeDir(configDir)
+    removeDir(dir)
+
   test "Optional missing config include is accepted":
     let dir = getTempDir() / ("triad-config-optional-include-" & $getCurrentProcessId())
     createDir(dir)

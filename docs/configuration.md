@@ -20,6 +20,9 @@ Check your configuration syntax without launching the daemon:
 triad validate-config
 ```
 
+Validation rejects malformed includes, recursive includes, unknown top-level
+configuration blocks, strict output-rule errors, and invalid window-rule regexes.
+
 ### Hot Reloading
 Triad watches your configuration and reloads instantly when you save, including any files added via the `include` directive.
 
@@ -32,6 +35,8 @@ include optional=#true "~/.config/triad/local.kdl"
 ```
 
 Paths are relative to the including file. Use `~/` for your home directory.
+The directive name must be spelled `include`; misspelled top-level directives
+are rejected by `triad validate-config`.
 
 ---
 

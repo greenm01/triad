@@ -1067,6 +1067,28 @@ proc validateOutputRuleNodes(doc: KdlDoc): string =
         return
       inc outputIndex
 
+proc knownTopLevelConfigNode(name: string): bool =
+  case name
+  of "layout", "workspaces", "output", "workspace-rules", "window-rule",
+      "spawn-at-startup", "environment", "window-menu-command", "bindings",
+      "switch-events", "shells", "janet", "terminal", "screen-lock", "scratchpad",
+      "overview", "recent-windows", "layout-switch-toast", "floating", "screenshot",
+      "input", "cursor", "hotkey-overlay", "config-notification", "presentation-mode",
+      "allow-exit-session", "protocol-surfaces":
+    true
+  else:
+    false
+
+proc topLevelConfigNodeError(name: string): string =
+  result = "unknown top-level config node \"" & name & "\""
+  if name == "incude":
+    result.add("; did you mean \"include\"?")
+
+proc validateTopLevelConfigNodes(doc: KdlDoc): string =
+  for node in doc:
+    if not node.name.knownTopLevelConfigNode():
+      return topLevelConfigNodeError(node.name)
+
 proc parsePointerOp(value: string): PointerOpKind =
   case value
   of "move", "Move": PointerOpKind.OpMove
@@ -2619,6 +2641,10 @@ proc loadConfigStrict*(path: string): ConfigLoadResult =
     document = loadConfigDocument(path)
   except CatchableError as e:
     return ConfigLoadResult(ok: false, error: e.msg)
+
+  let topLevelError = validateTopLevelConfigNodes(document.nodes)
+  if topLevelError.len > 0:
+    return ConfigLoadResult(ok: false, error: topLevelError)
 
   let outputError = validateOutputRuleNodes(document.nodes)
   if outputError.len > 0:
