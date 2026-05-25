@@ -73,10 +73,12 @@ collapsed runtime is intentionally the state to keep.
 
 Current sessions report their supervisor through
 `${XDG_STATE_HOME:-$HOME/.local/state}/triad/current-session.json`. If
-`nimble liveReload` finds an older shell-managed session, it installs the
-compatibility wrapper, writes a restart-required marker in `$XDG_RUNTIME_DIR`,
-and aborts. Restart the River/Triad session so River runs the native
-supervisor, then retry `nimble liveReload`.
+`nimble liveReload` finds an older or manually recovered session, it aborts
+before installing binaries. Run `nimble doctorLive` after pulling runtime or
+session changes; it syncs packaged launcher scripts when safe, validates config
+and Janet layout assets, checks supervisor metadata, and prints the required
+restart or repair command. Restart the River/Triad session when the doctor says
+the running supervisor is stale, then retry `nimble liveReload`.
 
 `nimble liveReload` also writes a one-shot runtime marker so the replacement
 daemon starts in dev mode and behavior JSONL logging is available immediately

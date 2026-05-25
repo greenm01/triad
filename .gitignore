@@ -6,6 +6,7 @@
 /src/triad_niri
 /tests/t*
 !/tests/*.nim
+!/tests/*.sh
 
 # Nim cache
 /.nimcache/

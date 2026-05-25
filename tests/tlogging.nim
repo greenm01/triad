@@ -19,6 +19,11 @@ proc behaviorLogFiles(dir: string): seq[string] =
       result.add(path)
 
 suite "Runtime logging":
+  test "live doctor matches current supervisor protocol":
+    check SupervisorProtocolVersion == 1
+    let doctorSource = readFile("tools/doctor_live_session.sh")
+    check doctorSource.contains("expected_supervisor_protocol=1")
+
   test "session metadata renders live log paths":
     let dir = getTempDir() / ("triad-session-logs-" & $getCurrentProcessId())
     createDir(dir)

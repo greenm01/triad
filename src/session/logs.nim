@@ -138,12 +138,11 @@ proc readCurrentSession*(stateDir = stateDir()): JsonNode =
 proc logsJson*(stateDir = stateDir()): JsonNode =
   let record = readCurrentSession(stateDir)
   if record.kind == JNull:
-    return
-      %*{
-        "ok": false,
-        "error": "no current Triad session metadata",
-        "path": currentSessionPath(stateDir),
-      }
+    return %*{
+      "ok": false,
+      "error": "no current Triad session metadata",
+      "path": currentSessionPath(stateDir),
+    }
   %*{"ok": true, "session": record}
 
 proc renderLogs*(stateDir = stateDir()): string =

@@ -105,6 +105,9 @@ task debugBuild, "Build optimized Triad binaries with debug symbols":
 task installSession, "Build optimized binaries and install the River login session":
   exec "sh tools/install_live_session.sh"
 
+task doctorLive, "Validate and repair live Triad session prerequisites":
+  exec "sh tools/doctor_live_session.sh"
+
 task testAppIdentity, "Run app identity tests":
   runTestSuite("tests/tapp_identity.nim")
 
@@ -134,6 +137,9 @@ task testLayouts, "Run layout algorithm tests":
 
 task testLogging, "Run runtime logging tests":
   runTestSuite("tests/tlogging.nim")
+
+task testLiveDoctor, "Run live session doctor shell tests":
+  exec "sh tests/tlive_doctor.sh"
 
 task testProtocol, "Run River protocol coverage tests":
   runTestSuite("tests/tprotocol.nim")

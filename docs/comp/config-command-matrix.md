@@ -368,6 +368,10 @@ KDL config nodes and fields:
   Layout-scoped bindings can expose frame commands only while a frame layout is
   active; default configs use `layout "notion"` with `Super+Alt+h/v/x` for split
   horizontal, split vertical, and unsplit.
+- `nimble doctorLive` validates the live session after pulls before
+  `nimble liveReload` installs binaries. It syncs packaged session scripts,
+  requires current supervisor metadata, validates config and declared Janet
+  layout assets, and reports exact repair commands without editing user config.
   `i3` supports `split-tree-split-horizontal`,
   `split-tree-split-vertical`, `split-tree-split-toggle`,
   `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`,

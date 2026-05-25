@@ -315,27 +315,17 @@ if isinstance(pid, int) and pid > 0:
 require_hardened_runtime() {
   live_manager_loop="${TRIAD_MANAGER_LOOP:-$HOME/.local/bin/triad-manager-loop}"
 
-  if supervisor_protocol_is_current; then
-    if ! old_pid="$(running_triad_pid)"; then
-      log_error "running Triad daemon does not expose perf-status pid"
-      log_error "restart the River/Triad session, then retry liveReload"
-      fail "refusing live reload with stale running Triad daemon"
-    fi
-    log_info "native supervisor runtime confirmed with daemon pid $old_pid"
-    return 0
+  if ! sh "$repo_dir/tools/doctor_live_session.sh"; then
+    fail "live session doctor failed; refusing live reload before installing binaries"
   fi
-
-  require_manager_loop_restart_if_pending
-  sync_live_manager_loop
-  require_running_manager_loop_current
 
   if ! old_pid="$(running_triad_pid)"; then
     log_error "running Triad daemon does not expose perf-status pid"
-    log_error "restart the River/Triad session on the hardened binaries, then retry liveReload"
-    fail "refusing live reload with stale running Triad daemon"
+    log_error "restart the River/Triad session, then retry liveReload"
+    fail "refusing live reload without a supervisor-backed daemon"
   fi
 
-  log_info "hardened live runtime confirmed with daemon pid $old_pid"
+  log_info "supervisor-backed live runtime confirmed with daemon pid $old_pid"
 }
 
 validate_live_config() {
@@ -397,6 +387,7 @@ rollback_and_fail() {
       fi
     else
       log_error "restored previous live binaries, but rollback reload IPC failed"
+      log_error "manual recovery: restart the River/Triad session, or run: setsid $bin_dir/triad supervise >/tmp/triad-supervise-recovery.log 2>&1 < /dev/null &"
     fi
   fi
   exit 1
@@ -887,7 +878,7 @@ wait_restore_ready() {
 wait_reload_ready() {
   i=0
   while [ "$i" -lt 50 ]; do
-    current_pid="$(running_triad_pid)"
+    current_pid="$(running_triad_pid || true)"
     if [ -n "$current_pid" ] && [ "$current_pid" != "$old_pid" ]; then
       wait_restore_ready || return 1
       ready_pid="$(running_triad_pid)"
