@@ -8,30 +8,30 @@ Triad is a programmable Wayland window manager for River. River handles Wayland;
 
 [Documentation](https://triadwm.org/)
 
-Triad treats your session as data. Windows carry tags rather than living in a fixed tree, allowing rules and scripts to make placement decisions from the current state. If Triad restarts, your windows stay in place.
+Triad treats your session as data. Windows carry tags; they don't live in a fixed tree. Rules and scripts make placement decisions based on the current state. If Triad restarts, your windows stay put.
 
 Need a screen lock? See [LockMe](https://github.com/greenm01/lockme).
 
-### Multi-Paradigm Layouts
+### Layouts
 
-Triad includes `scroller`, `dwindle`, `bsp`, `i3`, `notion`, `tile`, `grid`, `monocle`, `deck`, `spiral`, `tgmix`, and [many other built-in layouts](docs/tiling_wm_categories.md#layout-index). Each workspace can use a different layout.
+Triad includes `scroller`, `dwindle`, `bsp`, `i3`, `notion`, `tile`, `grid`, `monocle`, `deck`, `spiral`, `tgmix`, and [many others](docs/tiling_wm_categories.md#layout-index). Every workspace runs its own layout independently.
 
-The layout model supports algorithmic tiling, scrollable strips, BSP trees, and floating placement. You can also set layout-specific key bindings.
+The layout model supports algorithmic tiling, scrollable strips, BSP trees, and floating placement. You can also bind keys specific to a layout.
 
 ### Features
 
-* **Crash resilience:** Layout errors do not affect the compositor session.
-* **Shell ready:** Native IPC plus an optional compatibility facade work with popular shell bars.
-* **Dynamic workspaces:** Triad spawns workspaces when needed and prunes them when empty.
-* **Smooth motion:** Configurable frame pacing and exponential easing for window movement.
-* **Scratchpad:** Utility windows manage as centered overlays.
-* **Stable identity:** Stable tag and window IDs for long-running scripts.
+* **Crash-resilient:** Layout errors never reach the compositor.
+* **Shell-ready:** We provide native IPC and a compatibility facade for popular shell bars.
+* **Dynamic Workspaces:** Triad spawns workspaces when you need them and prunes them when you don't.
+* **Smooth Motion:** Configurable frame pacing and exponential easing for window movement.
+* **Scratchpads:** Utility windows manage as centered overlays.
+* **Stable IDs:** Tag and window IDs stay the same, allowing scripts to survive reloads.
 
 ### Tags, Rules, and IPC
 
 Triad relies on tags, rules, and IPC.
 
-Tags are stable labels for windows. Rules, written in KDL, provide declarative defaults. IPC exposes the session state over a Unix socket, letting scripts query the number of windows on a tag or the current layout before placing a new application.
+Tags are stable labels. Rules provide declarative defaults in KDL. IPC exposes the session state over a Unix socket. This lets scripts ask questions—like how many windows are on a tag—before deciding where to put a new application.
 
 ### Scripting with Janet
 
@@ -39,11 +39,11 @@ Static rules cover the predictable; [Janet](https://janet-lang.org/) handles the
 
 Triad embeds Janet so you can write custom logic directly. Use it to send specific apps to dedicated workspaces, float dialogs based on parent state, or switch layouts dynamically. Janet scripts live in `~/.config/triad/janet/` and react to session events.
 
-You can also use Janet to create custom layouts. See [docs/tiling_wm_categories.md](docs/tiling_wm_categories.md) for the taxonomy.
+You can also use Janet to write custom layouts. See [docs/tiling_wm_categories.md](docs/tiling_wm_categories.md) for the taxonomy.
 
 ### Shell Support
 
-Triad exposes its own state socket for native integrations and can also launch shell profiles with a compatibility socket for shells that consume Niri's workspace IPC.
+Triad exposes its own state socket for native integrations. It can also launch shell profiles with a compatibility socket for shells that consume Niri's workspace IPC.
 
 | Shell | Native IPC | Niri IPC |
 | :--- | :--- | :--- |
@@ -53,12 +53,12 @@ Triad exposes its own state socket for native integrations and can also launch s
 | [Wayle](https://github.com/wayle-rs/wayle) | No, fork/PR pending | Yes |
 | [Ironbar](https://github.com/JakeStanger/ironbar) | No, fork/PR pending | Yes |
 
-Set `niri-compat #true` only for profiles using the Niri IPC path. For native IPC profiles, leave `niri-compat #false` so Triad does not start the compatibility socket for that shell.
+Set `niri-compat #true` only for profiles using the Niri IPC path. For native IPC profiles, leave `niri-compat #false` so Triad does not start the compatibility socket.
 
 ### Installation
 
-Use the [installation guide](https://triadwm.org/getting-started/installation/).
-It covers River, distro packages, Nim, first-run setup, and the default config.
+Follow the [installation guide](https://triadwm.org/getting-started/installation/). It covers River, distro packages, Nim, first-run setup, and the default config.
+
 For the best River protocol coverage, build upstream River from source:
 
 ```bash
@@ -69,8 +69,7 @@ zig build -Doptimize=ReleaseSafe -Dcpu=baseline -Dstrip -Dpie \
 river -version
 ```
 
-Triad supports River 0.4+, while upstream `main` may report a development
-version such as `0.5.0-dev`.
+Triad supports River 0.4+, while upstream `main` may report a development version such as `0.5.0-dev`.
 
 ### Toolchain
 
@@ -106,7 +105,7 @@ triad msg toggle-overview
 triad msg tile
 ```
 
-See `docs/ipc.md` for the full command guide.
+See `docs/ipc.md` for the full command list.
 
 ### License
 

@@ -1,292 +1,77 @@
-# Triad Data-Oriented Design Architecture
+# Triad: The Data-Oriented Machine
 
-This document is the hard spec for Triad's Data-Oriented Design runtime.
-It follows the same architectural split used in `~/dev/ec4x/src/engine`: pure
-types, indexed state access, index-aware entity mutations, and behavior systems
-layered above the data.
+This is the hard spec for Triad’s Data-Oriented Design (DOD) runtime. It mirrors the engine split in `ec4x`: pure types, indexed state, and systems that act on data.
 
-Triad's user-facing model is DWM/River-style tagged window management. The
-storage and transformation model is data-oriented; tags remain the canonical
-user workflow instead of a desktop/workspace hierarchy.
+Users manage windows with tags. We ignore desktop hierarchies. In our world, the table is king.
 
-## Goals
+## The Mission
 
-- Strictly separate data from code.
-- Make Triad-owned logical IDs the canonical IDs for runtime entities.
-- Make bitmask tag membership canonical.
-- Store relationships in indexed tables instead of nested object graphs.
-- Generate shell and IPC from canonical snapshots.
-- Keep production runtime state data-oriented.
+Keep data and code apart. Triad IDs govern every entity. Tags live in bitmasks. We store relationships in indexed tables, never nested graphs. Everything—IPC, shell snapshots, runtime state—flows from these tables.
 
-## Module Boundaries
+## The Layers
 
-The runtime uses four primary layers.
+We split the runtime into four territories.
 
-### `types`
+### Types
 
-`types` modules define pure data:
+`types` modules define pure data. No logic lives here. We define IDs, enums, masks, and objects. `types/core.nim` owns IDs and rectangles. `types/model.nim` owns the records for windows, tags, and outputs. If it involves layout projection or live restores, it lives in its own type file.
 
-- distinct ID types, null ID constants, enums, masks, and plain objects
-- collection objects such as `EntityManager[ID, T]`
-- aggregate state containers
-- IPC, restore, config, and layout input/output shapes
+Minimal interop—hashing or string conversion—is the only exception. Nim needs it. We allow it.
 
-Type ownership is explicit:
+### State
 
-- `types/core.nim` owns canonical logical IDs, external ID wrappers, masks,
-  null constants, `EntityManager`, and `Rect`.
-- `types/model.nim` owns canonical runtime entity records such as
-  `WindowData`, `TagData`, `ColumnData`, `OutputData`, and `GroupData`.
-- `types/projection_values.nim` owns render/layout projection records such as
-  `ProjectedWindow`, `ProjectedTag`, `ProjectedColumn`, `ProjectedOutput`,
-  `ProjectedGroup`, and `RenderInstruction`.
-- `types/live_restore.nim` owns live-restore wire records.
-- `types/runtime_values.nim` is limited to runtime/config enums and config
-  value objects. It must not define canonical IDs, `Rect`, model entity
-  records, projection records, or live-restore records.
+`state` is the database. It handles ID generation, CRUD, and queries. Only this layer touches the raw entity manager.
 
-`types` modules must not contain business logic. Minimal ID interop such as
-hashing, equality, ordering, and string conversion is allowed because Nim needs
-it for tables, sorting, and diagnostics.
+New systems use `state/engine.nim`. It’s the facade. It provides typed accessors and relationship queries. Implementation details like `queries.nim` or `iterators.nim` hide behind it. We check our code to ensure no system reaches past this wall.
 
-### `state`
+We separate traversal from business questions. Iterators handle the hash-table lookups. Queries answer the "why." Systems consume both. They never loop over raw data arrays.
 
-`state` modules are the database layer:
+### Entities
 
-- monotonic logical ID generation
-- generic entity manager CRUD
-- read-only iterators
-- derived queries
-- invariant checks
+`entities` modules are the only ones allowed to change the indexes. They create and destroy windows, tags, and columns. They don't decide policy; they just apply the math.
 
-Only this layer may directly access `EntityManager.data` and
-`EntityManager.index`.
+Mutating state directly in business logic is a sin. Closing a window touches arrays, tags, and focus. Manual updates invite desync. Every mutation goes through an Operation. `window_ops.nim` handles the atomic transaction. It cleans up, reassigns focus, and pops the data array. One call. Zero leaks.
 
-#### The State Facade
+### Systems
 
-`state/engine.nim` is the public state API for runtime systems. It mirrors the
-facade pattern used by `~/dev/ec4x/src/engine/state/engine.nim`: systems import
-one module and get typed entity accessors, relation queries, iterators,
-invariant checks, snapshots, ID helpers, and entity operations.
+`systems` hold the behavior. They manage focus history, workspace pruning, and window rules. They read through queries and mutate through entity helpers. They never touch tables or indexes directly.
 
-Rules:
+## IDs
 
-- New systems should import `state/engine.nim`.
-- `entity_manager.nim` is internal plumbing for `state` and `entities`.
-- `queries.nim`, `iterators.nim`, and entity op modules stay focused
-  implementation modules behind the facade.
-- Tests may import `entity_manager.nim` directly when testing the generic
-  entity manager itself.
-- Systems must not import `entity_manager.nim` directly or reach into
-  `model.windows.entity(...)`; add a typed query or entity operation instead.
-- System source is checked by tests for facade-only state imports and no
-  direct entity manager storage access.
+Triad uses logical IDs. We don't care about River or Wayland identifiers.
 
-#### The Read Layer: Iterators and Queries
+ID `0` is null. Generators increment before they issue. Zero is never an answer. External compositor handles are just fields in our records. They aren't the authority.
 
-Because runtime data is flattened across multiple tables, we strictly separate the
-mechanics of traversing data from the business logic that asks questions about
-it.
+## Storage
 
-1.  **Iterators (`iterators.nim`):** Handle the raw hash-table lookups and
-    sequence traversals. They yield strongly-typed entities.
-2.  **Queries (`queries.nim`):** Consume iterators to answer business
-    questions without exposing the underlying data structures.
-
-Systems consume Queries and Iterators. They never manually loop over
-`model.windows.data`.
-
-### `entities`
-
-`entities` modules are the only index-aware mutation layer:
-
-- create, update, and delete windows, tags, columns, outputs, groups, and
-  scratchpad records
-- maintain secondary indexes and relationship tables
-- preserve dense entity storage and placement consistency
-
-Entity helpers do not decide policy. They apply validated mutations and keep
-indexes correct.
-
-#### The Write Layer: Operations (Ops)
-
-Directly mutating state arrays or relation tables within business logic is
-strictly forbidden. Because a single logical action like closing a window
-requires updating the entity array, the tag relationships, and the focus state,
-manual mutations lead to desync bugs.
-
-All mutations must go through the **Operations Layer**, such as
-`window_ops.nim` and `tag_ops.nim`.
-
-An Operation acts as an atomic transaction for runtime state. For example,
-`model.destroyWindow(winId)` handles removing the window from `windowTags`,
-cleaning up `windowColumns`, reassigning focus, and finally calling `delete`
-to swap-and-pop the data array.
-
-### `systems`
-
-`systems` modules contain behavior:
-
-- focus and focus history
-- workspace projection and dynamic workspace pruning
-- tag movement and retagging
-- layout state transitions
-- restore application
-- scratchpad behavior
-- overview behavior
-- window rules
-
-Systems read through `state` queries and mutate through `entities` helpers.
-They must not write entity tables, indexes, or placement relations directly.
-
-## Canonical IDs
-
-Triad uses logical IDs that are independent of River, Wayland, or shell IPC
-identifiers.
-
-```nim
-type
-  WindowId* = distinct uint32
-  TagId* = distinct uint32
-  ColumnId* = distinct uint32
-  OutputId* = distinct uint32
-  GroupId* = distinct uint32
-
-  ExternalWindowId* = distinct uint32
-  ExternalOutputId* = distinct uint32
-```
-
-ID `0` is always null. ID generators increment before issuing an ID and must
-never return zero. External compositor handles live in entity data and lookup
-indexes; they are not canonical entity IDs.
-
-## Entity Storage
-
-Every primary entity collection uses dense storage:
-
-```nim
-type
-  EntityManager*[ID, T] = object
-    data*: seq[T]
-    index*: Table[ID, int]
-```
-
-Deletion uses swap-and-pop:
-
-1. Find the entity's physical index.
-2. Move the last entity into that slot when deleting a non-tail entity.
-3. Update the moved entity's index entry.
-4. Shorten the dense array and delete the removed ID from the index.
-
-No caller outside `state` should depend on physical array position.
+We use dense storage. The `EntityManager` holds a data sequence and an index table. Deletion uses swap-and-pop. We find the index, move the tail, and update the table. Physical position means nothing to the caller.
 
 ## Tags and Placement
 
-Tag membership is canonical as a bitmask. Tag projection and workspace UI are
-derived views.
+Tag membership is a bitmask. Everything else is a view.
 
-Core relationship tables:
+Windows, columns, and placements live in relationship tables. A window can have multiple tags. A tag owns its columns. Placements are tracked per tag and window. This keeps windows stable across multiple tags. Remove a tag bit, and the placement dies. Destroy the window, and every row vanishes.
 
-- `windowTags: Table[WindowId, TagMask]`
-- `externalWindowIds: Table[ExternalWindowId, WindowId]`
-- `columnsByTag: Table[TagId, seq[ColumnId]]`
-- `windowsByTag: Table[TagId, seq[WindowId]]`
-- `windowsByColumn: Table[ColumnId, seq[WindowId]]`
-- `placementByTagWindow: Table[(TagId, WindowId), WindowPlacement]`
+## Outputs
 
-`WindowPlacement` is per `(tag, window)`, not just per window. This lets a
-multi-tagged window keep stable placement on each visible tag.
+Each monitor is an output. Each output has a workspace. We track coordinates globally, but layout stays output-aware. If a monitor disappears, the workspace moves to a connected output. When the monitor returns, the workspace moves back. We use pinning to keep focus where it belongs.
 
-Rules:
+## IPC and Snapshots
 
-- A window may have multiple tag bits.
-- A tag owns its columns.
-- A column belongs to exactly one tag.
-- A window may appear once per tag.
-- A window may have different placement on different tags.
-- Removing a tag bit removes that tag's placement for the window.
-- Destroying a window removes all of its tag membership and placement rows.
-
-## Outputs and Workspaces
-
-Triad treats each monitor as a distinct output with its own visible workspace. While output positions use global coordinates (per Wayland output-management), workspace placement and window layout are output-aware.
-
-- **Output State:** Each `OutputData` record tracks its active workspace and reserved area.
-- **Workspace Mapping:** Each workspace (tag) remembers its assigned output. If an output disappears, the workspace remains occupied but falls back to a connected output until the target output returns.
-- **Hotplug Logic:** When an output is removed, Triad updates the live output list and reassigns affected workspaces. Reconnecting an output re-applies configuration and moves remembered workspaces back.
-- **Pinning:** `placementByTagWindow` and output-pinning rules ensure workspaces prefer their configured outputs. Focusing a pinned workspace shifts focus to that output rather than moving the workspace.
-
-## Snapshots and IPC
-
-Shell integrations must serialize snapshots, not internal storage.
-
-Production runtime state is data-oriented. `TriadRuntimeState` stores one
-`Model`, and daemon reads use snapshots, live-restore JSON, layout projection,
-and daemon-view helpers directly.
-
-IPC, shell snapshots, live restore, and compositor adapters expose numeric
-external IDs on the wire. The model converts those numeric IDs to canonical
-`ExternalWindowId`/`ExternalOutputId` wrappers at the reducer/state boundary.
-
-Window groups are modeled as entities. `GroupData` stores the dense member
-list and active window, while `groupByWindow` keeps one-window-to-one-group
-membership lookups cheap. External River IDs are stored as entity fields and
-resolved through lookup indexes.
+Shells get snapshots, not our internal guts. Production state is data-oriented. The daemon reads snapshots or JSON. Numeric IDs go over the wire; we wrap them in canonical types at the boundary.
 
 ## Layout Projection
 
-Layout computation is split into pure projection and explicit writes:
+We split layout into projection and writes. Projection builders are pure; they never touch the model. They return instructions. The facade applies viewport targets back to the model and tells River where to put windows.
 
-- `LayoutProjection.instructions` is the River-facing placement output.
-- `LayoutProjection.viewportTargets` records scroller viewport target updates.
-- projection builders must not mutate their input models.
-- runtime helpers apply viewport targets and return instructions.
+## Updates
 
-Runtime manage/render layout is state-authoritative. The layout
-facade computes `Model.layoutProjection()`, applies viewport targets back to
-the model, and sends layout instructions to River.
+Updates are direct transformations. The daemon calls `Model.update(msg)`. Config reloads and live restores hit the model directly. Tests exercise these paths without ceremony.
 
-## Runtime Updates
+## Config
 
-Runtime updates are direct model transformations:
+The `Model` handles its own config. It writes to flattened data. It materializes default workspaces and re-evaluates window rules. Everything—focus, history, scratchpads—must survive a reload. Startup is simple: create a model, apply config, and run.
 
-- daemon update helpers call `Model.update(msg)` directly
-- returned effects are production effects
-- config reload applies through `Model.applyConfig(config)`
-- live restore applies through `Model.applyLiveRestore(...)`
-- shell snapshots and live-restore reads are serialized from the model
+## Boundaries
 
-Tests exercise the reducer, runtime facade, shell snapshots, layout projection,
-and live-restore serialization directly.
-
-## Config Application
-
-`Model` has a native config application path that writes into flattened data:
-
-- config-owned runtime fields live directly on `Model`
-- default workspaces are materialized through workspace/entity operations
-- non-default tag rules remain lazy unless the tag already exists
-- existing windows re-evaluate keyboard-shortcuts inhibition after window rules
-  change
-- live entities, placements, focus history, workspace history, restore buffers,
-  and scratchpad state must be preserved
-
-Runtime config reload applies the parsed config directly to `Model`. Shell
-restarts, binding rebuilds, manage requests, and broadcasts stay in the daemon
-loop because they are side effects of accepting a config reload, not state
-transformation rules.
-
-Initial daemon startup creates an empty `Model`, applies config through the
-native config path, ensures the active workspace, and stores that model as
-production runtime state.
-
-Live-restore application converts the parsed restore payload to
-`PendingRestoreState` and applies it directly to the model before
-manage/render resumes.
-
-## Runtime Boundaries
-
-Production code must keep one daemon state: `TriadRuntimeState.model`.
-Runtime reads are snapshots or live-restore JSON derived from that model. If a
-test needs a daemon read surface, build it from `Model.shellSnapshot()` or
-`Model.liveRestoreJson()`.
+One state: `TriadRuntimeState.model`. If a test needs to see what’s inside, it uses a snapshot.

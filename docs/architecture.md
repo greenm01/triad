@@ -1,105 +1,63 @@
-# Triad Window Manager Architecture
+# Triad Architecture
 
-## Overview
-Triad is a dynamic window management client built for **River 0.4+**, leveraging the `river-window-management-v1` Wayland protocol. It is written in **Nim** for performance and safety, configured via **KDL**, and built around one canonical data model with explicit runtime transformations.
+Triad is a window manager client for River 0.4+. It speaks the `river-window-management-v1` Wayland protocol. We wrote it in Nim for speed, configure it with KDL, and run the entire system on a single, explicit data model.
 
-Triad owns a tag-first runtime with per-workspace layouts, programmable policy,
-native IPC, and optional shell compatibility. It is designed to stand on its own
-while still integrating cleanly with existing River and desktop-shell tooling.
+Triad uses a tag-first runtime with per-workspace layouts and programmable policy. It stands on its own but integrates cleanly with existing River and desktop-shell tooling.
 
 ## Core Technologies
 *   **Compositor:** River 0.4+
-*   **Language:** Nim (using `nayland` or `wayland-nim` for `libwayland-client` bindings)
+*   **Language:** Nim
 *   **Protocol:** `river-window-management-v1`
-*   **Configuration:** KDL 2.0 (`nimkdl`)
-*   **State Management:** Data-oriented model transformations
+*   **Configuration:** KDL 2.0
+*   **State:** Data-oriented transformations
 
 ## Implementation Principles
 
-### 1. Data-Oriented Design
-Following the principles of Yehonathan Sharvit, Triad prioritizes the shape and flow of data over object-oriented hierarchies. 
-*   **State as Data:** The `Model` is a pure data structure (predominantly value types and flat collections).
-*   **Logic as Transformations:** Submodules provide functions that transform data from one state to another without maintaining hidden internal state.
+### Data-Oriented Design
+Triad runs on Data-Oriented Design. We care about the shape and flow of data, discarding object-oriented hierarchies entirely.
+*   **State as Data:** The `Model` is a pure data structure.
+*   **Logic as Transformations:** Submodules provide functions that transform the `Model` from one state to another. They do not maintain hidden internal state.
 
-### 2. DRY (Don't Repeat Yourself)
-Common patterns, especially in Wayland protocol handling and coordinate math, are centralized into shared utility modules.
-
-### 3. Lean Submodules by Domain
-Source files are kept small and focused. The project is organized into clear domain boundaries:
-
+### Domain Boundaries
+Source files are small and focused. We organize the project into clear boundaries:
 *   `src/triad.nim`: Entry point and main event loop orchestration.
-*   `src/types/`: Pure runtime, IPC, restore, config, and layout data.
-*   `src/state/`: Entity storage, queries, iterators, invariants, snapshots,
-    and restore serialization.
-*   `src/entities/`: Index-aware mutation operations.
-*   `src/systems/`: Behavior systems that transform the runtime model.
-*   `src/layouts/`: Pure mathematical layout algorithms.
-*   `src/protocols/`: Generated Wayland protocol bindings.
-*   `src/config/`: KDL parsing and configuration management.
-*   `src/ipc/`: Unix socket communication for external control and shell projections.
-*   `src/utils/`: Generic helpers and coordinate math.
+*   `src/types/`: Pure runtime, IPC, and layout data.
+*   `src/state/`: Entity storage, queries, and snapshots.
+*   `src/entities/`: Mutation operations.
+*   `src/systems/`: Behavior systems that transform the model.
+*   `src/layouts/`: Mathematical layout algorithms.
+*   `src/config/`: KDL parsing and management.
+*   `src/ipc/`: Unix socket communication for control and shell projections.
 
-## Architectural Design
-...
+## The Event Loop
+Wayland is asynchronous. To prevent tearing and race conditions, Triad uses a unidirectional data flow.
 
-### 1. Runtime Event Loop
-Wayland is inherently asynchronous. To prevent tearing and race conditions, Triad uses a strict unidirectional data flow.
+1.  **Model:** A single source of truth for the entire state (Outputs, Tags, Windows).
+2.  **Update:** A function that takes the current `Model` and an incoming `Msg` (Wayland event or IPC command), returning a new `Model` and side effects.
+3.  **Projection:** A layout projection takes the finalized `Model` and calculates the physical screen coordinates.
 
-*   **Model:** A single source of truth representing the entire window manager state (Outputs, Tags, Windows, current Layout Modes, and Scroller offsets).
-*   **Update:** A function that takes the current `Model` and an incoming `Msg` (Wayland event or IPC command), and returns a new `Model` alongside side effects (e.g., commands to send to River).
-*   **Projection (Render Phase):** A layout projection takes the finalized `Model` and executes the math for the active layout (Scroller, Master-Stack, etc.), translating abstract logical coordinates into physical Wayland screen coordinates.
+### Sequence Mapping
+River's `window-management-v1` protocol uses a double-buffered sequence. Triad maps directly to this:
+*   **Manage Sequence:** The **Update** loop processes all accumulated messages.
+*   **Render Sequence:** The **View** function runs, executes layout math, and pushes position instructions to River.
 
-### 2. Double-Buffered Sequence Mapping
-River's `window-management-v1` requires a double-buffered sequence. The runtime model maps directly to this:
+## Hybrid Layout Engine
+Layouts are decoupled from the core event loop. They are mathematical functions called during the View phase based on the current `TagState`.
 
-1.  **Manage Sequence (`manage_start` -> `manage_finish`):** 
-    *   This is where the **Update** loop processes all accumulated `Msg` types (new windows, focus shifts). The `Model` is updated.
-2.  **Render Sequence (`render_start` -> `render_finish`):** 
-    *   This is where the **View** function runs. It reads the `Model`, executes the layout algorithms, and pushes `set_position` / `set_dimensions` instructions to River.
+*   **Scroller:** A proportion-based scrolling workflow. Windows occupy a fraction of the screen width (e.g., 0.5, 0.8). If they exceed 1.0, they slide into a virtual overflow area.
+*   **Tiling:** Algorithmic layouts like master-stack and grid.
+*   **Janet Layouts:** You can define custom layouts in Janet with native fallbacks like `frame-tree` or `bsp-tree`.
 
-### 3. Hybrid Layout Engine
-Layouts are decoupled from the core Wayland event loop. They are simply mathematical functions called during the View phase based on the current `TagState`.
+## Configuration (KDL)
+Triad uses KDL for hot-reloadable configuration.
+*   **Validation:** We check configuration shapes strictly. Unknown fields or invalid scales are rejected before they touch the runtime.
+*   **Rules:** Global settings for gaps, borders, and ratios. Gaps in `frame-tree` layouts fill the output usable rect; `bsp-tree` and `i3` use traditional margins.
+*   **Workspaces:** `workspaces.default-count` sets the floor for empty workspaces. We prune stale, empty workspaces automatically.
 
-*   **Tag State:** Each Tag (Workspace) maintains its own layout configuration (e.g., Tag 1 is a Scroller, Tag 2 is a Master-Stack).
-*   **Scroller Layout:** Implements a proportion-based scrolling workflow. Triad's scroller treats scrolling as a swappable policy based on window and column proportions.
-    *   **Proportion-Based:** Windows (or Columns) occupy a fraction of the screen width (e.g., 0.5, 0.8). If total proportions exceed 1.0, windows slide into a virtual overflow area.
-    *   **Viewport Centering:** Triad supports an optional `center-focused-column` mode. When enabled, the `viewport_x_offset` is automatically adjusted to center the focused window.
-*   **Tiling Layouts:** Algorithmic layouts such as master-stack and grid execute geometric subdivisions based on configured ratios.
+## IPC and Shell Projection
+Triad separates its native IPC from shell compatibility.
 
-### 4. Configuration (KDL)
-Triad uses KDL for robust, hot-reloadable configuration.
+*   **Native IPC (`$TRIAD_SOCKET`):** The primary protocol for shells designed for Triad. It exposes JSON requests and events.
+*   **Compatibility Projection (`$NIRI_SOCKET`):** A projection of the internal snapshot into the JSON schema used by Niri-aware shells. This allows you to use existing Niri shell bars without modification.
 
-*   **Validation Logic:** Configuration validation checks strict output-rule shapes. Unknown or unsupported `output` fields, invalid transforms, malformed modes, non-positive workspace IDs, and out-of-range scales are rejected before startup or reload.
-*   **Layout Rules:** Global settings for gaps, borders, default column widths, and master ratios.
-    *   **Gaps:** In native `frame-tree` layouts, gaps represent the split gap between frames; the frame tree fills the output usable rect with no extra outer margin. Native `bsp-tree` and `i3` use traditional outer and inner gaps.
-*   **Workspace Rules:** `workspaces.default-count` controls the minimum empty workspace floor; extra workspaces appear while active or occupied, a trailing empty creation workspace remains available only when no earlier empty dynamic workspace can be reused, and stale empty workspaces are pruned. Shell compatibility views and overview previews hide inactive empty workspaces.
-*   **Workspace Rule Templates:** Provides lazy name/layout templates for workspace slots when internal tags are created (e.g., `workspace 1 default-layout="scroller"`).
-*   **Window Rules:** Matches `app-id` or titles to dictate floating behavior or specific workspace assignments.
-
-*   **Janet Layouts:** User-defined Janet layouts can be declared with a native fallback (e.g., `scroller`, `frame-tree`, `bsp-tree`, `i3`).
-    *   **Frame-tree Fallback:** When a layout uses `fallback="frame-tree"`, it can return frame geometry via `:frame-id`. Triad maps these to the active visible tab and preserves empty frame rects for native chrome.
-    *   **BSP-tree Fallback:** Layouts using `fallback="bsp-tree"` can return geometry via `:bsp-node-id`. Triad maps these to tiled windows and exposes preselection state (`:preselect-direction`, `:preselect-ratio`).
-    *   **Split-tree (i3) Fallback:** Layouts using `fallback="i3"` receive immutable `:split-nodes` and return geometry via `:split-node-id`. Mutation (insertion, resize, etc.) remains a native state operation.
-
-Config names follow the policy in `docs/configuration.md`: explicit
-kebab-case names, positive booleans, and command names that describe Triad
-behavior directly.
-
-### 5. Shell IPC and Compatibility Projection
-Triad separates Triad-native IPC from shell projection IPC to support both native and legacy shell ecosystems.
-
-*   **Canonical Shell Snapshot:** Triad derives all shell-facing state from a single internal model snapshot. This snapshot contains stable tag IDs, compact workspace indices, windows, outputs, focus history, and layout modes.
-*   **Native Triad IPC (`$TRIAD_SOCKET`):** The primary, long-term protocol for shells that integrate with Triad directly. It exposes versioned JSON requests and events including the full shell state and per-tag layout details.
-*   **Compatibility Projection IPC (`$NIRI_SOCKET`):** A projection of the same snapshot into the JSON schema consumed by existing Niri-aware shells (Noctalia, DankMaterialShell, Waylee) and Waybar's `niri/workspaces` module.
-*   **Command Flow:** Both native Triad requests and Niri-compatible actions translate into core `Msg` values. The protocols do not call through each other's JSON shapes.
-
-IPC window and output IDs are numeric external compositor IDs, stable for the lifetime of the compositor object but distinct from Triad's internal logical IDs.
-
-### Compatibility Projection IPC
-Triad implements an optional JSON IPC stream for shells that consume the Niri
-workspace schema.
-
-*   **Socket Path:** `$NIRI_SOCKET` points at a Triad-owned compatibility socket when Triad launches a Niri-compatible shell profile.
-*   **Protocol:** Triad implements the Niri request and event shapes used by shell code, including workspaces, windows, outputs, overview state, keyboard layouts, and event streams.
-*   **Event Mapping:** Triad maps its internal shell snapshot to Niri-standard JSON payloads. Workspace `id` values stay as stable Triad tag IDs, while workspace `idx` values are compacted for Niri-style shell bars.
-*   **Focus MRU:** Window and workspace focus history is kept in the model and included in live restore snapshots so close behavior and hot reloads can return to the last useful focus target.
+We map internal state to standard JSON payloads. Stable Tag IDs become Workspace IDs, and focus history ensures that hot reloads return you to where you left off.

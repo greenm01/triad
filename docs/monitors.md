@@ -1,31 +1,18 @@
-# Monitors and Workspaces
+# Monitors: The Output Map
 
-Triad treats each monitor as a distinct output with its own visible workspace. Windows are laid out within individual monitors rather than a single large desktop canvas.
+Triad treats every monitor as its own world. Windows live in their output. We don't believe in one giant canvas.
 
-## Core Model
+## The Model
 
-Triad presents tags as workspaces. In a multi-monitor setup:
+Each monitor shows one workspace. That workspace remembers where it belongs. Focus a workspace, and Triad takes you to its assigned monitor. Every connected screen must show something. If you leave an empty workspace, we prune it.
 
-- Each monitor shows one active workspace.
-- Each workspace remembers its assigned output.
-- Focusing a workspace shows it on its remembered output.
-- Every connected output maintains at least one assigned, visible workspace.
-- Empty dynamic workspaces are pruned when you leave them.
+Workspaces stay put. Unplug a monitor, and its windows move to a connected screen. Plug it back in, and they return home.
 
-Workspaces stay on their assigned monitors unless moved or pinned elsewhere. If a monitor is disconnected, its workspaces fall back to a connected monitor and return once the original monitor reconnects.
+Triad always finds a place for your workspaces. Even if you don't configure enough, we’ll spread them across your screens. We start at workspace 1 on your primary monitor and fill the rest. We prefer left over right.
 
-Triad keeps enough reserved default workspaces to cover the connected monitors,
-even when `workspaces.default-count` is lower than the monitor count. The
-startup-focused monitor gets workspace 1, or the primary monitor does when no
-startup focus is configured. Remaining monitors are assigned by geometry around
-that anchor; side monitors at the same distance prefer left before right. Extra
-default workspaces cycle through that same order. You only need `workspaces` in
-an output rule when you want to pin specific workspace IDs to a specific
-monitor.
+## Configure Your Outputs
 
-## Configuring Outputs
-
-Use the `output` block to configure your monitors. Identify targets using the connector names shown by tools like `wlr-randr`.
+Use the `output` block to map your world. Find your connector names with `wlr-randr`.
 
 ```kdl
 output {
@@ -49,11 +36,9 @@ output {
 }
 ```
 
-For monitors not listed in `layout`, `position` defines the monitor
-arrangement; it does not tile windows across combined rectangles. Each output
-tiles windows within its own resolution and usable area.
+Layout defines your physical space. It doesn't stretch windows across screens. Every output tiles its own windows.
 
-For stacked or mixed physical arrangements, use a matrix layout:
+For complex stacks, use a matrix:
 
 ```kdl
 output {
@@ -64,43 +49,29 @@ output {
 }
 ```
 
-Rows are top-to-bottom and monitors within a row are left-to-right. Missing
-monitors are skipped, and remaining monitors close the gap.
+Rows go top-to-bottom. Monitors in a row go left-to-right. We skip the gaps.
 
-### Output Settings
+### The Rules
 
-| Field | Format | Purpose |
-| :--- | :--- | :--- |
-| `layout` | `String...` or `row String...` children | Arrange listed monitors physically through output-management. |
-| `focus-at-startup` | Flag or bool | Select the startup-focused output. |
-| `workspaces` | Positive integers | Pin workspace IDs to this output. |
-| `mode` | `W H Hz`, `"WxH"`, `"WxH@Hz"`, `"preferred"`, `"highres"`, `"highrr"`, `"maxwidth"` | Request an advertised mode or a custom string mode. |
-| `scale` | Float or `"auto"` | Set the output scale (0.01..64.0). `"auto"` uses the compositor's current scale. |
-| `position` | `X Y`, `"XxY"`, `"auto"`, `"auto-right"`, `"auto-left"`, `"auto-up"`, `"auto-down"`, `"auto-center-*"` | Set or auto-arrange global output coordinates. |
-| `transform` | String or `0..7` | Rotation: `normal`, `90`, `180`, `270`, or `flipped` variants (e.g., `flipped-90`). Integers follow Wayland transform order. |
-| `adaptive-sync` | Bool | Request VRR/Adaptive Sync. |
-| `vrr` | `0..3` | alias for `adaptive-sync`. `0` disables; nonzero enables. |
-| `enabled` / `disabled` | Bool | Enable or disable the output. |
-| `reserved_area` | Ints or properties | Add a top/right/bottom/left inset on top of bar reservations. |
+You have power over your pixels. Set the `mode` for resolution and refresh rate. Use `scale` for clarity. `position` handles global coordinates. `transform` rotates the view. `adaptive-sync` (or `vrr`) kills the tear.
 
-Use `default` for fallback rules. Fallback rules apply to connected monitors that do not match a specific rule.
+Use `default` for the strangers. Any monitor we don't recognize gets these rules.
 
-**Note on Validation:** Triad strictly validates output fields. Unsupported properties (such as mirroring, bit depth, or HDR) are rejected to prevent configuration errors.
+We validate everything. If a property isn't supported, we reject it. We don't guess.
 
 ## Hotplugging
 
-Triad keeps workspaces and windows managed when monitors are connected or disconnected. When a monitor disappears, its workspaces move to a connected monitor. When the monitor returns, Triad restores the original workspaces.
+Connect or disconnect at will. Triad manages the chaos. Windows move when screens die and return when they live again.
 
-Verify your setup with:
-
+Check your work:
 ```sh
 wlr-randr
 triad msg state
 ```
 
-## Pinning Workspaces
+## Pinning
 
-Pin workspaces in an `output` block:
+Force a workspace to stay on a monitor.
 
 ```kdl
 output {
@@ -110,7 +81,7 @@ output {
 }
 ```
 
-Or via `workspace-rules`:
+Or use rules:
 
 ```kdl
 workspace-rules {
@@ -118,35 +89,15 @@ workspace-rules {
 }
 ```
 
-Focusing a pinned workspace moves focus to its assigned output.
-
-Pins override the automatic default workspace distribution. Unpinned default
-workspaces still fill any connected monitors that do not have a pinned
-workspace.
-
-Workspace rules above `workspaces.default-count` are stable configured
-workspaces. They stay materialized and visible in shell workspace projections,
-and dynamic workspace allocation starts after the highest configured workspace
-ID.
+Focusing a pinned workspace moves your eyes to that monitor. Pins override our automatic distribution.
 
 ## Dynamic Workspaces
 
-`new-workspace` reuses the lowest inactive empty dynamic workspace on the active
-output. If none is available, it creates the next dynamic workspace after the
-reserved and configured workspace range on that output:
+`new-workspace` is efficient. It reuses the first empty workspace it finds. If none exist, it creates a fresh one. Leave it empty, and we kill it.
 
-```kdl
-bindings {
-  bind "Super+Shift+n" "new-workspace"
-}
-```
+## Movement
 
-If you leave a transient dynamic workspace without opening a window, Triad prunes
-it.
-
-## Moving Workspaces
-
-Use `move-workspace-to-output` to move the active workspace to another monitor:
+Move your active workspace with `move-workspace-to-output`. Use directions or names.
 
 ```kdl
 bindings {
@@ -155,10 +106,8 @@ bindings {
 }
 ```
 
-Targets can be directions (`left`, `right`, `up`, `down`) or output names (`DP-2`).
-Moving a workspace does not swap workspaces. If the source monitor would be left
-without a visible workspace, Triad assigns that monitor another workspace.
+Moving a workspace isn't a swap. If a monitor is left empty, we give it a new workspace immediately.
 
-## Windows and Launchers
+## Launching
 
-New windows open on the active monitor's workspace. Triad sets the default layer-shell output to the active monitor, ensuring launchers and shell bars appear where focus is.
+New windows open where you are. Launchers and bars appear on the active monitor. Focus is the anchor.

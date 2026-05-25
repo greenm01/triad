@@ -1,144 +1,71 @@
-# Triad Coding Style and Conventions
+# Triad: The Style Guide
 
-This document outlines the strict coding standards and stylistic conventions for the `triad` window manager. Our goal is to maintain a highly readable, maintainable, and idiomatic Nim codebase.
+We write clean code. This guide ensures every line of Triad is readable and maintainable. We don't settle for less. We follow the patterns established in `ec4x`.
 
-These conventions are drawn directly from the successful practices established in the `ec4x` engine.
+## NEP-1: The Nim Way
 
-## 1. NEP-1 Compliance (Nim Standard)
+Triad follows [NEP-1](https://nim-lang.org/docs/nep1.html) to the letter. 
 
-`triad` strictly adheres to [NEP-1 (Nim Enhancement Proposal 1)](https://nim-lang.org/docs/nep1.html). 
+### The Rules
+- **Indents:** Use 2 spaces. No tabs.
+- **Lines:** Use `nph` to wrap your code. Don't fight the formatter.
+- **Naming:**
+    - Types: `PascalCase`.
+    - Variables and Procs: `camelCase`.
+    - Constants: Use `camelCase`. Nim does not use `UPPER_SNAKE_CASE`.
+- **Enums:** Make them pure. Use `{.pure.}`.
+- **Getters:** Drop the `get`. `entity(...)` is better than `getEntity(...)`.
+- **Setters:** Use the property name with a setter signature: `entity=`.
 
-### Key NEP-1 Rules:
-*   **Indentation:** Exactly **2 spaces**. No tabs.
-*   **Line Wrapping:** Let `nph` decide mechanical line wrapping. Prefer
-    readable short expressions where practical, but do not hand-wrap code in a
-    way that fights the formatter.
-*   **Naming Conventions:**
-    *   Types and Macros: `PascalCase` (e.g., `WindowId`, `TagState`).
-    *   Variables, Procs, and Constants: `camelCase` (e.g., `activeWindow`, `focusWindow`, `defaultMasterCount`). *Note: Constants do NOT use `UPPER_SNAKE_CASE` in Nim.*
-*   **Enums:** All enums **MUST** be pure: `type LayoutMode {.pure.} = enum`.
-*   **Getters:** Do **NOT** use the `get` prefix for getter functions.
-    *   *Bad:* `proc getEntity(...)`
-    *   *Good:* `proc entity(...)`
-*   **Setters:** Setters should use the property name with a setter signature.
-    *   `proc `entity=`(...)`
+### The Tool
+`nph` is our formatter. Run it on every file. Use `nph --check` to validate without writing. The style guide is the law; `nph` is the enforcer.
 
-### Formatting Tool
+## DOD: Data and Dot Syntax
 
-`nph` is the required mechanical formatter for Nim-family files in this
-repository. Run it on every touched `.nim`, `.nims`, and `.nimble` file before
-the normal verification pass.
+We separate data from logic. Data is passive. Logic is active. 
 
-```sh
-nph src/path/to/file.nim
-nph --check src/path/to/file.nim
-```
+In Triad, we use **Pragmatic DOD**. Nim compiles `model.focusWindow(id)` into `focusWindow(model, id)`. It’s the same machine code, but it’s easier to read. 
 
-Use `nph --check` when validating formatting without writing changes. The style
-guide remains the semantic source of truth; `nph` handles mechanical layout,
-line wrapping, and import formatting. Do not hand-format code in a way that
-fights the formatter.
+### The Rule
+Always use Nim’s dot syntax (UFCS). 
 
----
+1. **State First:** Define your primary state (e.g., `Model`) as the first parameter.
+2. **Dot Syntax:** Invoke procs with a dot.
 
-## 2. Pragmatic DOD and Uniform Function Call Syntax (UFCS)
+### Why?
+`model.windows.entity(winId)` reads naturally. It flows from left to right. It chains well: `model.findWindow(id).get().title` beats nested calls every time. Plus, your editor will actually help you.
 
-Data-Oriented Design (DOD) strictly separates data (structs/entities) from logic (systems/functions). Philosophically, strict DOD practitioners often prefer functional call syntax (`system(data)`) to visually emphasize that data is passive and does not "own" behavior.
+## Performance: The Single Lookup
 
-However, in `triad` (following the exact conventions established in `ec4x`), we adopt a **Pragmatic DOD** approach. Because Nim compiles `model.focusWindow(id)` into `focusWindow(model, id)` with zero memory or structural difference, we retain 100% of the DOD cache-locality and performance benefits while gaining significant developer ergonomics.
+Never look up the same entity twice. It’s a waste of time.
 
-Therefore, **we strictly use Nim's UFCS (dot syntax) for system logic.**
-
-### The Convention:
-1.  **First Parameter:** Systems and helper procs that operate on state must define the primary state struct (e.g., `Model`, `EntityManager`) as their **first parameter**.
-2.  **Dot Syntax:** Always invoke these procs using the dot (`.`) syntax.
-
-### Examples:
-
-**Defining Logic (System Layer):**
-```nim
-# The model/state is always the first parameter
-proc focusWindow*(model: var Model, winId: WindowId) =
-  # implementation...
-
-proc shellOutputName*(model: Model, outputId: OutputId): string =
-  # implementation...
-```
-
-**Invoking Logic:**
-```nim
-# BAD: Breaks left-to-right reading flow
-focusWindow(model, winId)
-let name = shellOutputName(model, outputId)
-
-# GOOD: Strict UFCS usage
-model.focusWindow(winId)
-let name = model.shellOutputName(outputId)
-```
-
-### Why We Use UFCS:
-*   **Readability:** `model.windows.entity(winId)` reads naturally left-to-right (State -> Sub-Collection -> Action).
-*   **Chaining:** Enables fluent API design without deep nesting: `model.findWindow(id).get().title` vs `get(findWindow(model, id)).title`.
-*   **Discoverability:** Typing `model.` in an LSP-enabled editor instantly lists all applicable systems and queries that can act upon the state.
-
----
-
-## 3. EntityManager Access and Performance
-
-When querying the `EntityManager`, we must prioritize single-lookup performance. Using a "double lookup" pattern is strictly forbidden.
-
-### The Double Lookup Anti-Pattern
-Checking for existence and then retrieving the entity results in two separate hash table operations.
+### The Sin
+Checking if an entity exists and then fetching it. That’s two hash table hits.
 
 ```nim
-# BAD: Double lookup, non-NEP-1 naming
-if model.outputs.hasEntity(outputId):             # Lookup 1
-  let output = model.outputs.getEntity(outputId)  # Lookup 2
+# BAD
+if model.outputs.hasEntity(outputId):
+  let output = model.outputs.getEntity(outputId)
 ```
 
-### The `Option[T]` Standard
-To prevent double lookups, the primary retrieval function must be named `entity` (NEP-1 compliant) and return an `Option[T]`.
+### The Standard
+Return an `Option[T]`. Do it once.
 
 ```nim
-# GOOD: Single lookup, NEP-1 compliant
+# GOOD
 import std/options
 
-let outputOpt = model.outputs.entity(outputId)    # Single lookup
+let outputOpt = model.outputs.entity(outputId)
 if outputOpt.isSome():
   let output = outputOpt.get()
-  # ...
 ```
 
-### Mutating Entities (Var Fetching)
-If you are certain an entity exists and need to mutate it in place without extracting the `Option`, use the mutating prefix `m` (e.g., `mEntity`) to return a `var` reference directly from the known index.
+If you need to mutate in place, use the `m` prefix. `mEntity` gives you a `var` reference directly.
 
-```nim
-# For guaranteed in-place mutation:
-proc mEntity*[ID, T](manager: var EntityManager[ID, T]; id: ID): var T =
-  manager.data[manager.index[id]]
-```
+## Overlays: Protect the Heap
 
----
+Don't kill the heap with full-screen buffers. A screen-sized ARGB buffer eats tens of MiB and spikes the allocator.
 
-## 4. Full-Screen Overlay Buffers
+Use mapped shm for full-screen surfaces. Render into a memfd-backed `PixelBuffer` view. Create the Wayland buffer from that file descriptor. 
 
-Triad must not render full-screen overlays through Nim heap-backed
-`PixelBuffer` values in production paths. A screen-sized ARGB buffer can raise
-the Nim allocator high-water mark by tens of MiB, especially when the buffer is
-then copied into a string before creating a Wayland shm buffer.
-
-Use mapped shm rendering for any full-screen protocol surface:
-
-*   Render directly into a memfd-backed `PixelBuffer` view created with
-    `initPixelBufferView`.
-*   Create the Wayland buffer from the same fd after drawing.
-*   Keep heap-backed `render...Buffer` helpers only for tests, small bounded UI,
-    or non-Linux fallback paths.
-
-This rule applies to screen-sized overlays such as overview and recent-windows
-backdrops/chrome. Regular workspaces do not need this path because Triad does
-not render client window contents into a workspace-sized buffer; it computes
-placements and lets the compositor manage client buffers. Small or bounded
-surfaces such as frame tabs, empty-frame chrome, hotkey overlays, layout toasts,
-and dialogs may continue using normal `PixelBuffer` rendering unless their size
-becomes screen-scale.
+Keep heap-backed buffers for tests or small UI like tabs and toasts. If it's screen-scale, keep it off the heap.
