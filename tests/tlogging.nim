@@ -3,7 +3,7 @@ import chronicles
 import ../src/config/parser
 import ../src/core/msg
 import ../src/ipc/[niri_compat, socket]
-import ../src/session/logs as session_logs
+import ../src/session/[doctor_live, live_paths, logs as session_logs]
 import ../src/systems/[runtime_facade, update]
 import ../src/types/runtime_values
 import ../src/utils/[behavior_log, runtime_log]
@@ -18,11 +18,79 @@ proc behaviorLogFiles(dir: string): seq[string] =
     if kind == pcFile and path.extractFilename().startsWith("triad-behavior-"):
       result.add(path)
 
+proc writeFakeTriad(path, body: string) =
+  writeFile(path, "#!/bin/sh\nset -eu\n" & body)
+  setFilePermissions(
+    path,
+    {
+      fpUserExec, fpUserWrite, fpUserRead, fpGroupExec, fpGroupRead, fpOthersExec,
+      fpOthersRead,
+    },
+  )
+
 suite "Runtime logging":
   test "live doctor matches current supervisor protocol":
     check SupervisorProtocolVersion == 1
-    let doctorSource = readFile("tools/doctor_live_session.sh")
-    check doctorSource.contains("expected_supervisor_protocol=1")
+    let doctorSource = readFile("src/session/doctor_live.nim")
+    check doctorSource.contains("SupervisorProtocolVersion")
+
+  test "native live doctor reads perf-status pid when available":
+    let dir = getTempDir() / ("triad-native-doctor-pid-" & $getCurrentProcessId())
+    createDir(dir)
+    let fakeTriad = dir / "triad"
+    let oldDoctor = getEnv("TRIAD_DOCTOR_TRIAD_BIN", "")
+    defer:
+      restoreEnv("TRIAD_DOCTOR_TRIAD_BIN", oldDoctor)
+      if dirExists(dir):
+        removeDir(dir)
+
+    writeFakeTriad(
+      fakeTriad,
+      """
+if [ "$1" = "msg" ] && [ "$2" = "perf-status" ]; then
+  printf '{"ok":true,"type":"perf-status","pid":%s}\n' "$TRIAD_FAKE_PID"
+  exit 0
+fi
+exit 1
+""",
+    )
+    putEnv("TRIAD_DOCTOR_TRIAD_BIN", fakeTriad)
+    putEnv("TRIAD_FAKE_PID", $getCurrentProcessId())
+
+    let daemon = livePaths().runningTriadPid()
+    check daemon.perfStatusCompatible
+    check daemon.pidFromPerfStatus
+    check daemon.pid == getCurrentProcessId()
+
+  test "native live doctor bootstraps compatible perf-status without pid":
+    let dir = getTempDir() / ("triad-native-doctor-bootstrap-" & $getCurrentProcessId())
+    createDir(dir)
+    let fakeTriad = dir / "triad"
+    let oldDoctor = getEnv("TRIAD_DOCTOR_TRIAD_BIN", "")
+    let oldLive = getEnv("TRIAD_LIVE_TRIAD_BIN", "")
+    defer:
+      restoreEnv("TRIAD_DOCTOR_TRIAD_BIN", oldDoctor)
+      restoreEnv("TRIAD_LIVE_TRIAD_BIN", oldLive)
+      if dirExists(dir):
+        removeDir(dir)
+
+    writeFakeTriad(
+      fakeTriad,
+      """
+if [ "$1" = "msg" ] && [ "$2" = "perf-status" ]; then
+  printf '{"ok":true,"type":"perf-status"}\n'
+  exit 0
+fi
+exit 1
+""",
+    )
+    putEnv("TRIAD_DOCTOR_TRIAD_BIN", fakeTriad)
+    putEnv("TRIAD_LIVE_TRIAD_BIN", getAppFilename())
+
+    let daemon = livePaths().runningTriadPid()
+    check daemon.perfStatusCompatible
+    check not daemon.pidFromPerfStatus
+    check daemon.pid == getCurrentProcessId()
 
   test "session metadata renders live log paths":
     let dir = getTempDir() / ("triad-session-logs-" & $getCurrentProcessId())

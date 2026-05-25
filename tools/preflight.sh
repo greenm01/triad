@@ -28,6 +28,7 @@ if [ -n "$status" ]; then
 fi
 
 nimble test
+nimble testLiveDoctor
 nimble build
 
 if [ "${TRIAD_DAILY_GATE_QEMU:-0}" = "1" ]; then

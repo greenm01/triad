@@ -106,7 +106,8 @@ task installSession, "Build optimized binaries and install the River login sessi
   exec "sh tools/install_live_session.sh"
 
 task doctorLive, "Validate and repair live Triad session prerequisites":
-  exec "sh tools/doctor_live_session.sh"
+  buildReleaseBinaries()
+  exec "./triad doctor-live"
 
 task testAppIdentity, "Run app identity tests":
   runTestSuite("tests/tapp_identity.nim")
@@ -139,6 +140,7 @@ task testLogging, "Run runtime logging tests":
   runTestSuite("tests/tlogging.nim")
 
 task testLiveDoctor, "Run live session doctor shell tests":
+  buildReleaseBinaries()
   exec "sh tests/tlive_doctor.sh"
 
 task testProtocol, "Run River protocol coverage tests":
@@ -152,14 +154,16 @@ task testUnit, "Run all non-stress test suites":
 
 task testAll, "Run all explicit test suites":
   runUnitSuites()
+  buildReleaseBinaries()
+  exec "sh tests/tlive_doctor.sh"
   runTestSuite("tests/tstress.nim")
 
 task liveReload,
   "Build release binaries, install them, and restart the live Triad manager":
   buildReleaseBinaries()
-  exec "sh tools/live_reload.sh"
+  exec "./triad live-reload"
 
 task debugLiveReload,
   "Build debug-symbolized binaries, install them, and restart the live Triad manager":
   buildDebugBinaries()
-  exec "sh tools/live_reload.sh"
+  exec "./triad live-reload"

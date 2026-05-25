@@ -60,7 +60,7 @@ resolve_river_bin() {
 }
 
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-bin_dir="$HOME/.local/bin"
+bin_dir="${TRIAD_LIVE_BIN_DIR:-$HOME/.local/bin}"
 config_dir="$HOME/.config/triad"
 config_path="$config_dir/config.kdl"
 config_source="$repo_dir/config.default.kdl"

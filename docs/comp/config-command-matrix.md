@@ -368,11 +368,12 @@ KDL config nodes and fields:
   Layout-scoped bindings can expose frame commands only while a frame layout is
   active; default configs use `layout "notion"` with `Super+Alt+h/v/x` for split
   horizontal, split vertical, and unsplit.
-- `nimble doctorLive` validates the live session after pulls before
-  `nimble liveReload` installs binaries. It syncs packaged session scripts,
-  checks the installed live binary for native session support, requires current
-  supervisor metadata, validates config and declared Janet layout assets, and
-  reports exact repair commands without editing user config.
+- `nimble doctorLive` builds the current native CLI and validates the live
+  session after pulls before `nimble liveReload` installs binaries. It syncs
+  packaged session scripts, checks the installed live binary for native session
+  support, requires current supervisor metadata and daemon executable identity,
+  validates config and declared Janet layout assets, and reports exact repair
+  commands without editing user config.
   `i3` supports `split-tree-split-horizontal`,
   `split-tree-split-vertical`, `split-tree-split-toggle`,
   `split-tree-layout-split-horizontal`, `split-tree-layout-split-vertical`,
@@ -497,9 +498,11 @@ CLI and environment:
 - `triad --dev-mode` and `TRIAD_DEV_MODE=1` enable developer-session defaults
   such as behavior JSONL logs. `TRIAD_BEHAVIOR_LOG=0` still forces those logs
   off, and `TRIAD_BEHAVIOR_LOG=1` enables them without the full dev mode.
-- `triad session`, `triad supervise`, and `triad logs [--json]` own the live
-  session entrypoint, daemon supervision, and log discovery.
-- `nimble liveReload` starts the replacement daemon in dev mode through a
+- `triad session`, `triad supervise`, `triad doctor-live`, `triad live-reload`,
+  and `triad logs [--json]` own the live session entrypoint, daemon supervision,
+  live-session preflight, manager replacement, and log discovery.
+- `nimble liveReload` builds release binaries, then delegates to
+  `triad live-reload`, which starts the replacement daemon in dev mode through a
   one-shot runtime marker. Native supervised sessions are detected through
   `current-session.json`; older shell-managed sessions must restart once before
   live reload continues. Direct `triad-reload` preserves dev mode only when the

@@ -215,12 +215,11 @@ proc specialCommand*(name: string): Option[SpecialMsgCommand] =
   none(SpecialMsgCommand)
 
 proc commandSpecJson*(spec: CommandSpec): JsonNode =
-  result =
-    %*{
-      "name": spec.name,
-      "usage": spec.commandUsage(),
-      "arg_shape": spec.argShape.argShapeId(),
-    }
+  result = %*{
+    "name": spec.name,
+    "usage": spec.commandUsage(),
+    "arg_shape": spec.argShape.argShapeId(),
+  }
   let aliases = newJArray()
   for alias in spec.aliasesSeq():
     aliases.add(%alias)
@@ -273,8 +272,7 @@ proc renderMsgHelp*(name = ""): string =
       return
     return "Unknown triad msg command: " & name & "\n"
 
-  result =
-    """
+  result = """
 Usage:
   triad msg <command> [arguments]
   triad msg help [command]
@@ -301,6 +299,8 @@ Usage:
   triad [--config <path>] [--dev-mode]
   triad session
   triad supervise
+  triad doctor-live
+  triad live-reload
   triad logs [--json]
   triad validate-config [--config <path>]
   triad msg <command> [arguments]
@@ -308,6 +308,8 @@ Usage:
 Commands:
   session            Start a managed River/Triad login session.
   supervise          Supervise the live Triad daemon inside River.
+  doctor-live        Validate and repair live-session prerequisites.
+  live-reload        Install built binaries and restart the live manager.
   logs               Print the current session and daemon log paths.
   validate-config    Validate config and Janet scripts without starting the daemon.
   msg                Send commands or requests to the running daemon.

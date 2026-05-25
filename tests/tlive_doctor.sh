@@ -3,7 +3,8 @@ set -eu
 
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 tmp="${TMPDIR:-/tmp}/triad-live-doctor-test.$$"
-trap 'rm -rf "$tmp"' EXIT
+daemon_pid=""
+trap 'if [ -n "$daemon_pid" ]; then kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true; fi; rm -rf "$tmp"' EXIT
 
 home="$tmp/home"
 state="$tmp/state"
@@ -67,9 +68,13 @@ chmod +x "$stale_triad"
 
 write_metadata() {
   cat > "$state/triad/current-session.json" <<EOF
-{"version":1,"claim_id":"test","session_id":"test","session_pid":$$,"supervisor_pid":$$,"daemon_pid":$$,"state_dir":"$state/triad","session_log":"$tmp/session.log","daemon_log":"$tmp/daemon.log","started_at":"2026-05-25T00:00:00-04:00","supervisor_protocol":1}
+{"version":1,"claim_id":"test","session_id":"test","session_pid":$$,"supervisor_pid":$$,"daemon_pid":$daemon_pid,"state_dir":"$state/triad","session_log":"$tmp/session.log","daemon_log":"$tmp/daemon.log","started_at":"2026-05-25T00:00:00-04:00","supervisor_protocol":1}
 EOF
 }
+
+sleep 60 &
+daemon_pid="$!"
+daemon_exe="$(readlink "/proc/$daemon_pid/exe")"
 
 doctor_env() {
   live_triad="${TRIAD_TEST_LIVE_TRIAD_BIN:-$fake_triad}"
@@ -79,8 +84,9 @@ doctor_env() {
     TRIAD_LIVE_BIN_DIR="$bin" \
     TRIAD_LIVE_TRIAD_BIN="$live_triad" \
     TRIAD_DOCTOR_TRIAD_BIN="$fake_triad" \
-    TRIAD_FAKE_DAEMON_PID="$$" \
-    sh "$repo_dir/tools/doctor_live_session.sh"
+    TRIAD_DOCTOR_EXPECT_DAEMON_EXE="$daemon_exe" \
+    TRIAD_FAKE_DAEMON_PID="$daemon_pid" \
+    "$repo_dir/triad" doctor-live
 }
 
 write_metadata

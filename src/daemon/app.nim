@@ -2,7 +2,9 @@ import wayland/native/client
 import ../core/[defaults, effects, msg, restore_state, shell_profiles]
 import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
-import ../session/[logs as session_logs, session_runner, supervisor]
+import
+  ../session/
+    [doctor_live, live_reload, logs as session_logs, session_runner, supervisor]
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
@@ -869,6 +871,12 @@ proc main*() =
 
   if args.len >= 1 and args[0] == "supervise":
     quit runSupervisor()
+
+  if args.len >= 1 and args[0] == "doctor-live":
+    quit runDoctorLive()
+
+  if args.len >= 1 and args[0] == "live-reload":
+    quit runLiveReload()
 
   if args.len >= 1 and args[0] == "logs":
     if args.len > 2 or (args.len == 2 and args[1] != "--json"):
