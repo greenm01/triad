@@ -166,6 +166,21 @@ write_manager_loop_restart_marker() {
   log_info "marked manager loop restart required via $marker"
 }
 
+fail_manager_loop_restart_required() {
+  reason="$1"
+  marker="$(manager_loop_restart_marker)"
+  metadata="$(current_session_metadata)"
+
+  log_error "$reason"
+  log_error "this is a one-time live-reload bootstrap after updating the Triad manager loop"
+  log_error "the current River session has not picked up the updated manager loop yet"
+  log_error "restart the River/Triad session so River execs: $live_manager_loop"
+  log_error "then retry: nimble liveReload"
+  log_error "restart marker: $marker"
+  log_error "expected supervisor metadata after restart: $metadata"
+  fail "updated manager loop requires a River/Triad session restart before live reload"
+}
+
 require_manager_loop_restart_if_pending() {
   marker="$(manager_loop_restart_marker)"
   [ -e "$marker" ] || return 0
@@ -199,8 +214,7 @@ require_manager_loop_restart_if_pending() {
   else
     log_error "manager loop was updated, but no running manager loop was found"
   fi
-  log_error "restart the River/Triad session, then retry liveReload"
-  fail "refusing live reload until updated manager loop is running"
+  fail_manager_loop_restart_required "refusing live reload until updated manager loop is running"
 }
 
 sync_live_manager_loop() {
@@ -222,8 +236,7 @@ sync_live_manager_loop() {
 
   write_manager_loop_restart_marker
   log_error "installed updated manager loop: $live_manager_loop"
-  log_error "restart the River/Triad session, then retry liveReload"
-  fail "updated live manager loop; restart required before live reload"
+  fail_manager_loop_restart_required "updated live manager loop; restart required before live reload"
 }
 
 require_running_manager_loop_current() {
@@ -236,8 +249,7 @@ require_running_manager_loop_current() {
 
   write_manager_loop_restart_marker
   log_error "installed manager loop is newer than running manager pid $manager_pid"
-  log_error "restart the River/Triad session, then retry liveReload"
-  fail "refusing live reload until updated manager loop is running"
+  fail_manager_loop_restart_required "refusing live reload until updated manager loop is running"
 }
 
 latest_live_triad_pid() {
