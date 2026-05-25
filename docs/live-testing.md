@@ -76,9 +76,10 @@ Current sessions report their supervisor through
 `nimble liveReload` finds an older or manually recovered session, it aborts
 before installing binaries. Run `nimble doctorLive` after pulling runtime or
 session changes; it syncs packaged launcher scripts when safe, validates config
-and Janet layout assets, checks supervisor metadata, and prints the required
-restart or repair command. Restart the River/Triad session when the doctor says
-the running supervisor is stale, then retry `nimble liveReload`.
+and Janet layout assets, checks the installed live binary for native session
+support, checks supervisor metadata, and prints the required restart or repair
+command. Restart the River/Triad session when the doctor says the running
+supervisor is stale, then retry `nimble liveReload`.
 
 `nimble liveReload` also writes a one-shot runtime marker so the replacement
 daemon starts in dev mode and behavior JSONL logging is available immediately

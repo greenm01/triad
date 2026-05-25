@@ -28,6 +28,7 @@ runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
 state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
 state_dir="$state_home/triad"
 metadata="$state_dir/current-session.json"
+live_triad="${TRIAD_LIVE_TRIAD_BIN:-$bin_dir/triad}"
 live_manager_loop="${TRIAD_MANAGER_LOOP:-$bin_dir/triad-manager-loop}"
 live_session_runner="${TRIAD_SESSION_RUNNER:-$bin_dir/river-triad-session}"
 config_path="${TRIAD_CONFIG:-$HOME/.config/triad/config.kdl}"
@@ -144,6 +145,47 @@ triad_cli() {
   else
     fail "no triad binary found; build or install Triad first"
   fi
+}
+
+check_live_triad_binary() {
+  [ -x "$live_triad" ] ||
+    fail "installed live triad is missing or not executable: $live_triad; run nimble installSession"
+
+  report="$(mktemp "${TMPDIR:-/tmp}/triad-doctor-live-binary.XXXXXX")"
+  if ! "$live_triad" logs --json >"$report" 2>&1; then
+    while IFS= read -r line; do
+      printf '%s\n' "doctor-live: live triad logs check $line" >&2
+    done < "$report"
+    rm -f "$report"
+    fail "installed live triad is stale or incompatible: $live_triad; it must support offline 'triad logs --json'; run nimble installSession"
+  fi
+  if ! grep -q '"ok":' "$report"; then
+    rm -f "$report"
+    fail "installed live triad returned malformed logs JSON: $live_triad; run nimble installSession"
+  fi
+  rm -f "$report"
+
+  help="$("$live_triad" --help 2>/dev/null || true)"
+  case "$help" in
+    *"triad session"*|*" session "*) ;;
+    *)
+      fail "installed live triad is stale: $live_triad; help is missing the session command; run nimble installSession"
+      ;;
+  esac
+  case "$help" in
+    *"triad supervise"*|*" supervise "*) ;;
+    *)
+      fail "installed live triad is stale: $live_triad; help is missing the supervise command; run nimble installSession"
+      ;;
+  esac
+  case "$help" in
+    *"triad logs"*|*" logs "*) ;;
+    *)
+      fail "installed live triad is stale: $live_triad; help is missing the logs command; run nimble installSession"
+      ;;
+  esac
+
+  info "live triad binary supports native session commands: $live_triad"
 }
 
 diagnose_config_failure() {
@@ -331,6 +373,7 @@ check_supervisor_metadata() {
 sync_packaged_script "$repo_dir/tools/triad-manager-loop.sh" "$live_manager_loop" "manager loop"
 sync_packaged_script "$repo_dir/tools/river-triad-session.sh" "$live_session_runner" "session runner"
 check_restart_marker
+check_live_triad_binary
 validate_config
 check_supervisor_metadata
 
