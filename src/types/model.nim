@@ -12,9 +12,8 @@ from runtime_values import
   ShellsConfig, RecentWindowFilter, RecentWindowScope, RecentWindowsConfig,
   ScreenshotConfig, SwitchEventConfig, TerminalConfig, WindowRuleBorderConfig,
   WindowRuleFloatingConfig, WindowRuleFloatingPositionConfig, WindowRuleFocusRingConfig,
-  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy, SplitTreeNodeMode
-from runtime_values import
-  Direction, FrameNodeKind, FrameSplitOrientation, NativeLayoutId
+  WindowRuleIdleInhibitMode, WindowRuleMaximizePolicy, SplitTreeNodeMode, Direction,
+  FrameNodeKind, FrameSplitOrientation, NativeLayoutId
 
 type
   WindowAdmissionState* {.pure.} = enum

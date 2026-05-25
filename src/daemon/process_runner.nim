@@ -132,8 +132,9 @@ proc spawnTerminal*(model: Model): Process =
       )
       info "Spawned terminal", terminal = command[0], pid = p.processID
       return p
-    except CatchableError as e:
-      trace "Terminal candidate failed", terminal = command[0], error = e.msg
+    except CatchableError:
+      trace "Terminal candidate failed",
+        terminal = command[0], error = getCurrentExceptionMsg()
 
   warn "No terminal command could be spawned"
 

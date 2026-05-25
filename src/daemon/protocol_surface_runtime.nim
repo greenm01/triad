@@ -895,9 +895,8 @@ proc ensureDecorationSurface*(
     daemon.windowDecorationAbove[windowId] = id
   elif kind == ProtocolSurfaceKind.PskDecorationBelow:
     daemon.windowDecorationBelow[windowId] = id
-  let kindText = $kind
   debug "Created protocol decoration surface",
-    windowId = windowId, decorationId = id, kind = kindText
+    windowId = windowId, decorationId = id, kind = $kind
   id
 
 proc clearDecorationSurface(daemon: var TriadDaemon, id: uint32) =

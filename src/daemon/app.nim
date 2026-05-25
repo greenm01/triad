@@ -138,9 +138,6 @@ proc cursorVisibilityTickNeeded(daemon: TriadDaemon, nowMs: int64): bool =
           daemon.wlPointerPointers.hasKey(daemon.wlPointerGlobalNames[pointerId]):
         return true
 
-proc cursorVisibilityTickNeeded(daemon: TriadDaemon): bool =
-  daemon.cursorVisibilityTickNeeded(unixMs())
-
 proc frameTickNeeded(daemon: TriadDaemon, nowMs: int64): bool =
   daemon.runtimeState.model.needsFrameTick() or daemon.cursorShakeTickNeeded() or
     daemon.cursorVisibilityTickNeeded(nowMs)
@@ -992,6 +989,7 @@ proc main*() =
 
   let roundtripResult = daemon.display.roundtrip()
   debug "Wayland registry roundtrip finished", result = roundtripResult
+  discard roundtripResult
 
   if daemon.riverManager == nil:
     fatal "river_window_manager_v1 not advertised; Triad must run inside River 0.4+"

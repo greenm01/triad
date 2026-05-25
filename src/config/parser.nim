@@ -421,22 +421,6 @@ proc validEnvironmentName(name: string): bool =
       return false
   true
 
-proc parseLayoutName(name: string, fallback: LayoutMode): LayoutMode =
-  case name
-  of "scroller": LayoutMode.Scroller
-  of "vertical-scroller": LayoutMode.VerticalScroller
-  of "tile": LayoutMode.MasterStack
-  of "grid": LayoutMode.Grid
-  of "monocle": LayoutMode.Monocle
-  of "deck": LayoutMode.Deck
-  of "center-tile", "center_tile": LayoutMode.CenterTile
-  of "right-tile", "right_tile": LayoutMode.RightTile
-  of "vertical-tile", "vertical_tile": LayoutMode.VerticalTile
-  of "vertical-grid", "vertical_grid": LayoutMode.VerticalGrid
-  of "vertical-deck", "vertical_deck": LayoutMode.VerticalDeck
-  of "tgmix", "tg_mix": LayoutMode.TGMix
-  else: fallback
-
 proc builtinLayoutSelection(mode: LayoutMode): LayoutSelection =
   LayoutSelection(kind: LayoutSelectionKind.Builtin, builtin: mode)
 

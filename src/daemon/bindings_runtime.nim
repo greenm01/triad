@@ -38,9 +38,6 @@ const
 template currentModel(daemon: TriadDaemon): untyped =
   daemon.runtimeState.model
 
-template ownedShellSurfaceId(daemon: TriadDaemon): untyped =
-  daemon.protocolSurfaceRuntime.ownedShellSurfaceId
-
 proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
   result = daemonFromData(data)
   if result == nil:
@@ -1290,6 +1287,7 @@ proc onWlSwipeEnd(
   let dispatched = daemon[].endSwipeGesture(pointerId, cancelled != 0)
   trace "Pointer swipe end",
     pointerId = pointerId, cancelled = cancelled != 0, dispatched = dispatched
+  discard dispatched
 
 var wlSwipeListener* = pointerGestures.ZwpPointerGestureSwipeV1Listener(
   begin: onWlSwipeBegin, update: onWlSwipeUpdate, `end`: onWlSwipeEnd
