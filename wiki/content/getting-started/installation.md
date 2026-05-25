@@ -14,10 +14,22 @@ Triad doesn't install River for you. Get River 0.4 or newer. River owns the GPU 
 ### Dependencies
 Install what you need for your distribution.
 
+**Void Linux**
+```bash
+sudo xbps-install -S git zig pkg-config wayland-devel wayland-protocols \
+  wlroots-devel libxkbcommon-devel libevdev-devel pixman-devel scdoc
+```
+
 **Arch Linux**
 ```bash
 sudo pacman -S git zig pkgconf wayland wayland-protocols wlroots \
   libxkbcommon libevdev pixman scdoc
+```
+
+**Debian / Ubuntu**
+```bash
+sudo apt install git zig pkg-config libwayland-dev wayland-protocols \
+  libwlroots-dev libxkbcommon-dev libevdev-dev libpixman-1-dev scdoc
 ```
 
 **Fedora**
@@ -40,9 +52,19 @@ zig build -Doptimize=ReleaseSafe -Dcpu=baseline -Dstrip -Dpie \
 Triad is written in Nim. You need Nim 2.2.4 or newer.
 
 ### Dependencies
+**Void Linux**
+```bash
+sudo xbps-install -S nim nimble pkg-config wayland-devel libxkbcommon-devel pixman-devel
+```
+
 **Arch Linux**
 ```bash
 sudo pacman -S nim nimble pkgconf wayland libxkbcommon pixman
+```
+
+**Debian / Ubuntu**
+```bash
+sudo apt install nim nimble pkg-config libwayland-dev libxkbcommon-dev libpixman-1-dev
 ```
 
 **Fedora**
