@@ -84,7 +84,7 @@ proc runSession*(): int =
 
   let river = riverBin()
   if river.len == 0:
-    echo "triad-session: river not found; install River 0.4+ or set TRIAD_RIVER_BIN"
+    echo "triad-session: river not found; install upstream River or set TRIAD_RIVER_BIN"
     return 1
 
   let triadBin = getAppFilename()

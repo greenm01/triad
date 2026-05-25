@@ -45,7 +45,7 @@ validate_river() {
 resolve_river_bin() {
   if [ -n "${TRIAD_RIVER_BIN:-}" ]; then
     validate_river "$TRIAD_RIVER_BIN" >/dev/null ||
-      fail "TRIAD_RIVER_BIN must point at executable River 0.4+: $TRIAD_RIVER_BIN"
+      fail "TRIAD_RIVER_BIN must point at executable upstream River 0.4+: $TRIAD_RIVER_BIN"
     printf '%s\n' "$TRIAD_RIVER_BIN"
     return 0
   fi
@@ -56,7 +56,7 @@ resolve_river_bin() {
     return 0
   fi
 
-  fail "River 0.4+ not found; install River from upstream and ensure river is on PATH, or set TRIAD_RIVER_BIN=/path/to/river"
+  fail "upstream River 0.4+ not found; install River from upstream and ensure river is on PATH, or set TRIAD_RIVER_BIN=/path/to/river"
 }
 
 repo_dir="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"

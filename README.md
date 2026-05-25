@@ -59,6 +59,18 @@ Set `niri-compat #true` only for profiles using the Niri IPC path. For native IP
 
 Use the [installation guide](https://triadwm.org/getting-started/installation/).
 It covers River, distro packages, Nim, first-run setup, and the default config.
+For the best River protocol coverage, build upstream River from source:
+
+```bash
+git clone https://codeberg.org/river/river.git
+cd river
+zig build -Doptimize=ReleaseSafe -Dcpu=baseline -Dstrip -Dpie \
+  -Dxwayland --prefix "$HOME/.local" install
+river -version
+```
+
+Triad supports River 0.4+, while upstream `main` may report a development
+version such as `0.5.0-dev`.
 
 ### Toolchain
 

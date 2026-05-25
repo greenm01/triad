@@ -28,6 +28,7 @@ const
   RiverAllEdges* = RiverEdgeTop or RiverEdgeBottom or RiverEdgeLeft or RiverEdgeRight
   RiverDecorationOnlySupportsCsd = 0'u32
   AllWatchedModifiers = 1'u32 or 4'u32 or 8'u32 or 32'u32 or 64'u32 or 128'u32
+  XkbBindingsModifierWatchVersion* = 3'u32
   WlSeatCapabilityPointer = 1'u32
   WlPointerAxisVertical = 0'u32
   WlPointerAxisHorizontal = 1'u32
@@ -447,6 +448,22 @@ proc handleXkbSeatAteUnboundKey*(daemon: var TriadDaemon, id: uint32) =
   trace "XKB seat ate unbound key", xkbSeatId = id, count = daemon.xkbSeatAteUnbound[id]
   if not daemon.enqueueExitSessionConfirmDismiss():
     discard daemon.enqueueHotkeyOverlayDismiss()
+
+proc xkbBindingsSupportsModifierWatch*(version: uint32): bool =
+  version >= XkbBindingsModifierWatchVersion
+
+proc watchXkbSeatModifiers(
+    daemon: var TriadDaemon, xkbSeat: ptr riverXkb.RiverXkbBindingsSeatV1
+) =
+  let version = xkbSeat.getVersion()
+  if version.xkbBindingsSupportsModifierWatch():
+    xkbSeat.modifiersWatch(AllWatchedModifiers)
+    return
+
+  if not daemon.xkbModifierWatchUnavailableLogged:
+    daemon.xkbModifierWatchUnavailableLogged = true
+    warn "River XKB modifier watch unavailable; continuing without modifier-state updates",
+      boundVersion = version, requiredVersion = XkbBindingsModifierWatchVersion
 
 proc syncHotkeyOverlayKeyCapture*(daemon: var TriadDaemon) =
   if daemon.currentModel.hotkeyOverlayOpen or daemon.currentModel.exitSessionConfirmOpen:
@@ -1889,7 +1906,7 @@ proc attachXkbSeat*(daemon: var TriadDaemon, seat: ptr RiverSeatV1) =
   let xkbSeat = daemon.riverXkbBindings.getSeat(seat)
   daemon.xkbSeatPointers[seatId] = xkbSeat
   discard xkbSeat.addListener(xkbSeatListener.addr, daemonData(daemon))
-  xkbSeat.modifiersWatch(AllWatchedModifiers)
+  daemon.watchXkbSeatModifiers(xkbSeat)
   if daemon.hotkeyOverlayKeyEatArmed and
       (
         daemon.currentModel.hotkeyOverlayOpen or

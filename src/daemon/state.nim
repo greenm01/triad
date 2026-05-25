@@ -328,6 +328,7 @@ type
     xkbBindingPointers*: seq[ptr riverXkb.RiverXkbBindingV1]
     xkbSeatPointers*: Table[uint32, ptr riverXkb.RiverXkbBindingsSeatV1]
     xkbSeatAteUnbound*: Table[uint32, uint32]
+    xkbModifierWatchUnavailableLogged*: bool
     xkbBindingPressed*: Table[uint32, bool]
     xkbBindingOnRelease*: Table[uint32, bool]
     xkbBindingReleaseArmed*: Table[uint32, bool]

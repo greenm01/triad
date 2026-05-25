@@ -923,6 +923,10 @@ suite "Crash hardening":
     let dismissMsg = daemon.popQueuedMessage()
     check dismissMsg.kind == MsgKind.CmdHideHotkeyOverlay
 
+  test "River XKB modifier watch is gated to protocol version 3":
+    check not xkbBindingsSupportsModifierWatch(2'u32)
+    check xkbBindingsSupportsModifierWatch(3'u32)
+
   test "Exit-session confirmation routes Enter to confirm":
     var daemon = initTriadDaemon()
     daemon.runtimeState = initRuntimeStateFromConfig(

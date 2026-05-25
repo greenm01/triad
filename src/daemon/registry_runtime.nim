@@ -110,12 +110,14 @@ proc handleGlobal*(
       daemon[].attachLayerSeat(seat)
     info "Bound to river_layer_shell_v1", name = name, advertisedVersion = version
   elif interfaceName == "river_xkb_bindings_v1":
+    let boundVersion = min(version, 3'u32)
     daemon.riverXkbBindings = cast[ptr riverXkb.RiverXkbBindingsV1](registry.`bind`(
-      name, riverXkb.river_xkb_bindings_v1_interface.addr, min(version, 3'u32)
+      name, riverXkb.river_xkb_bindings_v1_interface.addr, boundVersion
     ))
     daemon.bindingsConfigured = false
     daemon[].requestManage("xkb bindings discovered")
-    info "Bound to river_xkb_bindings_v1", name = name, advertisedVersion = version
+    info "Bound to river_xkb_bindings_v1",
+      name = name, advertisedVersion = version, boundVersion = boundVersion
   elif interfaceName == "river_input_manager_v1":
     let manager = cast[ptr riverInput.RiverInputManagerV1](registry.`bind`(
       name, riverInput.river_input_manager_v1_interface.addr, min(version, 2'u32)
