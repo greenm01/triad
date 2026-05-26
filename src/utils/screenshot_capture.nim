@@ -194,25 +194,13 @@ proc runShellCommandAsync*(
         discard
 
 proc runShellCommandCaptureAsync*(
-    command: string,
-    env: StringTableRef = nil,
-    pollMs = 50,
-    timeoutMs = 0,
-    detachedSession = false,
+    command: string, env: StringTableRef = nil, pollMs = 50, timeoutMs = 0
 ): Future[ShellCommandResult] {.async.} =
   var process: Process
   var finished = false
   try:
-    let launchCommand =
-      if detachedSession:
-        "setsid sh -lc " & shellQuote(command)
-      else:
-        command
     process = startProcess(
-      "sh",
-      args = @["-c", launchCommand],
-      env = env,
-      options = {poUsePath, poStdErrToStdOut},
+      "sh", args = @["-c", command], env = env, options = {poUsePath, poStdErrToStdOut}
     )
     let commandResult = await waitShellCommand(process, timeoutMs, pollMs)
     result.exitCode = commandResult.exitCode
@@ -233,3 +221,63 @@ proc runShellCommandCaptureAsync*(
         process.close()
       except CatchableError:
         discard
+
+proc parseExitCodeFile(path: string): int =
+  try:
+    parseInt(readFile(path).strip())
+  except CatchableError:
+    ShellTimeoutExitCode
+
+proc runDetachedShellCommandCaptureAsync*(
+    command: string, env: StringTableRef = nil, pollMs = 50, timeoutMs = 0
+): Future[ShellCommandResult] {.async.} =
+  let timeoutSeconds = max(1, (max(timeoutMs, 1000) + 999) div 1000)
+  let stamp = $(int(epochTime() * 1000))
+  let base =
+    getTempDir() / ("triad-shell-capture-" & $getCurrentProcessId() & "-" & stamp)
+  let outPath = base & ".out"
+  let errPath = base & ".err"
+  let codePath = base & ".code"
+  try:
+    let inner =
+      "timeout " & $timeoutSeconds & " env LANG=C.UTF-8 LC_ALL=C.UTF-8 TERM=dumb sh -lc " &
+      shellQuote(command) & " > " & shellQuote(outPath) & " 2> " & shellQuote(errPath) &
+      "; code=$?; printf '%s\\n' \"$code\" > " & shellQuote(codePath)
+    let launch = "setsid -f sh -lc " & shellQuote(inner)
+    let launchCode = await runShellCommandAsync(launch, env, pollMs, timeoutMs = 5000)
+    if launchCode != 0:
+      result.exitCode = launchCode
+      result.timedOut = launchCode == ShellTimeoutExitCode
+      return
+
+    let deadline =
+      if timeoutMs > 0:
+        epochTime() + float(timeoutMs + 2000) / 1000.0
+      else:
+        epochTime() + float(DefaultShellCommandTimeoutMs + 2000) / 1000.0
+    while not fileExists(codePath) and epochTime() < deadline:
+      await sleepAsync(pollMs)
+
+    if not fileExists(codePath):
+      result.exitCode = ShellTimeoutExitCode
+      result.timedOut = true
+      return
+
+    result.exitCode = parseExitCodeFile(codePath)
+    result.timedOut = result.exitCode == ShellTimeoutExitCode
+    try:
+      result.output = readFile(outPath)
+    except CatchableError:
+      result.output = ""
+    if result.output.len == 0 and result.exitCode != 0:
+      try:
+        result.output = readFile(errPath)
+      except CatchableError:
+        result.output = ""
+  finally:
+    for path in [outPath, errPath, codePath]:
+      if fileExists(path):
+        try:
+          removeFile(path)
+        except CatchableError:
+          discard

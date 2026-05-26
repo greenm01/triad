@@ -57,11 +57,8 @@ proc runScreenshotCapture*(
       if kind == ScreenshotKind.ShotRegion:
         let selector = screenshotRegionSelectorCommand(screenshotConfig)
         info "Screenshot region selection started", path = path
-        let selected = await runShellCommandCaptureAsync(
-          selector,
-          env,
-          timeoutMs = DefaultShellCommandTimeoutMs,
-          detachedSession = true,
+        let selected = await runDetachedShellCommandCaptureAsync(
+          selector, env, timeoutMs = DefaultShellCommandTimeoutMs
         )
         if selected.exitCode != 0:
           if selected.timedOut:
