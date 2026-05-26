@@ -194,13 +194,25 @@ proc runShellCommandAsync*(
         discard
 
 proc runShellCommandCaptureAsync*(
-    command: string, env: StringTableRef = nil, pollMs = 50, timeoutMs = 0
+    command: string,
+    env: StringTableRef = nil,
+    pollMs = 50,
+    timeoutMs = 0,
+    detachedSession = false,
 ): Future[ShellCommandResult] {.async.} =
   var process: Process
   var finished = false
   try:
+    let launchCommand =
+      if detachedSession:
+        "setsid sh -lc " & shellQuote(command)
+      else:
+        command
     process = startProcess(
-      "sh", args = @["-c", command], env = env, options = {poUsePath, poStdErrToStdOut}
+      "sh",
+      args = @["-c", launchCommand],
+      env = env,
+      options = {poUsePath, poStdErrToStdOut},
     )
     let commandResult = await waitShellCommand(process, timeoutMs, pollMs)
     result.exitCode = commandResult.exitCode

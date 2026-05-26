@@ -198,6 +198,12 @@ suite "Core Runtime Logic: smoke":
     check not captured.timedOut
     check captured.output == "10,20 300x400"
 
+    let detached =
+      waitFor(runShellCommandCaptureAsync("printf detached", detachedSession = true))
+    check detached.exitCode == 0
+    check not detached.timedOut
+    check detached.output == "detached"
+
     let timedOut = waitFor(
       runShellCommandCaptureAsync("sleep 2; printf late", pollMs = 10, timeoutMs = 30)
     )
