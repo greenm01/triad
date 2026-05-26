@@ -12,6 +12,10 @@
 // For a complete real-world setup with shells, launchers, screenshots, window
 // rules, and custom cursor settings, see examples/config/niltempus_config.kdl.
 
+// theme {
+//     accent-color "#7fc8ff"
+// }
+
 layout {
     gaps 8
     center-focused-column "on-overflow"

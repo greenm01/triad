@@ -11,6 +11,9 @@ suite "KDL Configuration Parser: parser defaults":
     writeFile(
       path,
       """
+theme {
+  accent-color "#778899"
+}
 layout {
   gaps 32
   center-focused-column "always"
@@ -306,9 +309,12 @@ switch-events {
     let config = loadConfig(path)
     removeFile(path)
 
+    check config.theme.accentColorSet
+    check config.theme.accentColor == 0x778899ff'u32
     check config.layout.gaps == 32
     check config.mirrorHjklArrows
     check config.layout.borderWidth == 3
+    check config.layout.focusedBorderColor == 0x112233ff'u32
     check config.layout.frameTabs.activeColor == 0x010203ff'u32
     check config.layout.frameTabs.activeUnfocusedColor == 0x040506ff'u32
     check config.layout.frameTabs.inactiveColor == 0x07080980'u32
@@ -1209,3 +1215,120 @@ janet {
     check config.layout.layoutSelections[2].kind == LayoutSelectionKind.Custom
     check config.layout.layoutSelections[2].customId.layoutIdString() == "spiral"
     check config.layout.layoutSelections[2].builtin == LayoutMode.Scroller
+
+  test "Theme accent fills active chrome colors":
+    let config = loadConfigNodes(
+      parseKdl(
+        """
+theme {
+  accent-color "#445566"
+}
+"""
+      )
+    )
+
+    check config.theme.accentColorSet
+    check config.theme.accentColor == 0x445566ff'u32
+    check config.layout.focusedBorderColor == 0x445566ff'u32
+    check config.layout.frameTabs.activeColor == 0x445566ff'u32
+    check config.layout.frameTabs.activeLineColor == 0x445566ff'u32
+    check config.layoutSwitchToast.ringColor == 0x445566ff'u32
+    check config.recentWindows.highlight.activeColor == 0x445566ff'u32
+    check config.layout.unfocusedBorderColor == DefaultUnfocusedBorderColor
+    check config.layout.frameTabs.inactiveColor == DefaultFrameTabInactiveColor
+    check config.recentWindows.highlight.urgentColor ==
+      DefaultRecentWindowsHighlightUrgentColor
+
+  test "Explicit active colors override theme accent":
+    let config = loadConfigNodes(
+      parseKdl(
+        """
+theme {
+  accent-color "#445566"
+}
+layout {
+  border {
+    active-color "#010203"
+  }
+  frame-tabs {
+    active-color "#040506"
+    active-line-color "#070809"
+  }
+}
+layout-switch-toast {
+  ring-color "#0a0b0c"
+}
+recent-windows {
+  highlight {
+    active-color "#0d0e0f"
+  }
+}
+"""
+      )
+    )
+
+    check config.layout.focusedBorderColor == 0x010203ff'u32
+    check config.layout.frameTabs.activeColor == 0x040506ff'u32
+    check config.layout.frameTabs.activeLineColor == 0x070809ff'u32
+    check config.layoutSwitchToast.ringColor == 0x0a0b0cff'u32
+    check config.recentWindows.highlight.activeColor == 0x0d0e0fff'u32
+
+  test "Theme accent accepts alpha and invalid values keep defaults":
+    let alphaConfig = loadConfigNodes(
+      parseKdl(
+        """
+theme {
+  accent-color "#44556680"
+}
+"""
+      )
+    )
+    let invalidConfig = loadConfigNodes(
+      parseKdl(
+        """
+theme {
+  accent-color "not-a-color"
+}
+"""
+      )
+    )
+
+    check alphaConfig.theme.accentColorSet
+    check alphaConfig.theme.accentColor == 0x44556680'u32
+    check alphaConfig.layout.focusedBorderColor == 0x44556680'u32
+    check not invalidConfig.theme.accentColorSet
+    check invalidConfig.layout.focusedBorderColor == DefaultFocusedBorderColor
+
+  test "Invalid explicit active colors do not block theme accent":
+    let config = loadConfigNodes(
+      parseKdl(
+        """
+theme {
+  accent-color "#445566"
+}
+layout {
+  border {
+    active-color "bad"
+  }
+  frame-tabs {
+    active-color "bad"
+    active-line-color "bad"
+  }
+}
+layout-switch-toast {
+  ring-color "bad"
+}
+recent-windows {
+  highlight {
+    active-color "bad"
+  }
+}
+"""
+      )
+    )
+
+    check config.layout.focusedBorderColor == 0x445566ff'u32
+    check config.layout.frameTabs.activeColor == 0x445566ff'u32
+    check config.layout.frameTabs.activeLineColor == 0x445566ff'u32
+    check config.layoutSwitchToast.ringColor == 0x445566ff'u32
+    check config.recentWindows.highlight.activeColor == 0x445566ff'u32

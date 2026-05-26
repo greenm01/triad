@@ -79,6 +79,22 @@ niri-compat — see [Shell Setup](@/configuration/shell-setup.md).
 
 ---
 
+## Theme
+
+Set one active chrome color with `theme.accent-color`:
+
+```kdl
+theme {
+  accent-color "#7fc8ff"
+}
+```
+
+Triad uses the accent for active border, active frame-tab, active tab-line,
+layout-toast ring, and recent-window highlight colors when those fields are not
+set directly. Specific color settings still win.
+
+---
+
 ## Layout
 
 ### The Layout Block

@@ -4,7 +4,7 @@ import kdl
 const
   MaxSuggestionDistance = 2
   KnownTopLevelConfigNodes = [
-    "layout", "workspaces", "output", "workspace-rules", "window-rule",
+    "theme", "layout", "workspaces", "output", "workspace-rules", "window-rule",
     "spawn-at-startup", "environment", "window-menu-command", "bindings",
     "switch-events", "shells", "janet", "terminal", "screen-lock", "scratchpad",
     "overview", "recent-windows", "layout-switch-toast", "floating", "screenshot",
@@ -142,6 +142,24 @@ proc validateColorNode(node: KdlNode, context: string): string =
   if result.len > 0:
     return
   result = node.expectNoChildren(context)
+
+proc validateThemeNode(node: KdlNode, context: string): string =
+  result = node.expectNoArgs(context)
+  if result.len > 0:
+    return
+  result = node.expectNoProps(context)
+  if result.len > 0:
+    return
+  let allowed = ["accent-color"]
+  for child in node.children:
+    let childContext = context & "." & child.name
+    case child.name
+    of "accent-color":
+      result = child.validateColorNode(childContext)
+    else:
+      result = unknownField(context, child.name, allowed)
+    if result.len > 0:
+      return
 
 proc validateSimpleBoolNode(node: KdlNode, context: string): string =
   result = node.expectArgs(context, 1)
@@ -591,6 +609,8 @@ proc validateConfigNode(node: KdlNode, index: int): string =
     else:
       node.name
   case node.name
+  of "theme":
+    result = node.validateThemeNode(context)
   of "layout":
     result = node.validateLayoutNode(context)
   of "workspaces":

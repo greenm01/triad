@@ -75,6 +75,19 @@ shells {
 
 ## Layout & Workspaces
 
+### Theme
+Use `theme.accent-color` when you want one active chrome color across Triad:
+
+```kdl
+theme {
+  accent-color "#7fc8ff"
+}
+```
+
+The accent color fills active border, active frame-tab, active tab-line, layout
+toast ring, and recent-window highlight colors when those fields are not set
+directly. Specific color fields still win.
+
 ### The Layout Block
 Control window geometry.
 

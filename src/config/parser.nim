@@ -398,19 +398,46 @@ proc validateOutputReservedAreaField(target: string, child: KdlNode): string =
         target, child.name, "reserved area values must be non-negative integers"
       )
 
-proc parseColor(value: string, fallback: uint32): uint32 =
+proc parseColorOpt(value: string): Option[uint32] =
   var hex = value.strip()
   if hex.startsWith("#"):
     hex = hex[1 ..^ 1]
   if hex.len == 6:
     hex.add("ff")
   if hex.len != 8:
-    return fallback
+    return none(uint32)
 
   try:
-    result = uint32(parseHexInt(hex))
+    result = some(uint32(parseHexInt(hex)))
   except CatchableError:
-    result = fallback
+    result = none(uint32)
+
+proc parseColor(value: string, fallback: uint32): uint32 =
+  let parsed = value.parseColorOpt()
+  if parsed.isSome:
+    parsed.get()
+  else:
+    fallback
+
+proc applyThemeAccent(
+    config: var Config,
+    focusedBorderSet, frameTabActiveSet, frameTabActiveLineSet,
+      layoutSwitchToastRingSet, recentWindowsHighlightActiveSet: bool,
+) =
+  if not config.theme.accentColorSet:
+    return
+
+  let accent = config.theme.accentColor
+  if not focusedBorderSet:
+    config.layout.focusedBorderColor = accent
+  if not frameTabActiveSet:
+    config.layout.frameTabs.activeColor = accent
+  if not frameTabActiveLineSet:
+    config.layout.frameTabs.activeLineColor = accent
+  if not layoutSwitchToastRingSet:
+    config.layoutSwitchToast.ringColor = accent
+  if not recentWindowsHighlightActiveSet:
+    config.recentWindows.highlight.activeColor = accent
 
 proc validEnvironmentName(name: string): bool =
   if name.len == 0:
@@ -1621,10 +1648,27 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   result.screenshot.regionSelectorCommand = DefaultScreenshotRegionSelectorCommand
   result.screenshot.clipboardCommand = DefaultScreenshotClipboardCommand
   result.protocolSurfaces.enabled = true
+  var focusedBorderColorSet = false
+  var frameTabActiveColorSet = false
+  var frameTabActiveLineColorSet = false
+  var layoutSwitchToastRingColorSet = false
+  var recentWindowsHighlightActiveColorSet = false
 
   try:
     for node in doc:
-      if node.name == "layout":
+      if node.name == "theme":
+        for child in node.children:
+          try:
+            if child.name == "accent-color" and child.args.len > 0:
+              let parsed = child.args[0].kString().parseColorOpt()
+              if parsed.isSome:
+                result.theme.accentColorSet = true
+                result.theme.accentColor = parsed.get()
+              else:
+                warn "Ignoring invalid theme color", field = child.name
+          except CatchableError as e:
+            warn "Ignoring invalid theme field", field = child.name, error = e.msg
+      elif node.name == "layout":
         for child in node.children:
           try:
             if child.name == "gaps" and child.args.len > 0:
@@ -1683,9 +1727,10 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                     result.layout.borderWidth =
                       clamp32(int32(borderChild.args[0].kInt()), 0, 64)
                   elif borderChild.name == "active-color" and borderChild.args.len > 0:
-                    result.layout.focusedBorderColor = parseColor(
-                      borderChild.args[0].kString(), result.layout.focusedBorderColor
-                    )
+                    let parsed = borderChild.args[0].kString().parseColorOpt()
+                    if parsed.isSome:
+                      focusedBorderColorSet = true
+                      result.layout.focusedBorderColor = parsed.get()
                   elif borderChild.name == "inactive-color" and borderChild.args.len > 0:
                     result.layout.unfocusedBorderColor = parseColor(
                       borderChild.args[0].kString(), result.layout.unfocusedBorderColor
@@ -1700,9 +1745,10 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
               for tabChild in child.children:
                 try:
                   if tabChild.name == "active-color" and tabChild.args.len > 0:
-                    result.layout.frameTabs.activeColor = parseColor(
-                      tabChild.args[0].kString(), result.layout.frameTabs.activeColor
-                    )
+                    let parsed = tabChild.args[0].kString().parseColorOpt()
+                    if parsed.isSome:
+                      frameTabActiveColorSet = true
+                      result.layout.frameTabs.activeColor = parsed.get()
                   elif tabChild.name == "active-unfocused-color" and
                       tabChild.args.len > 0:
                     result.layout.frameTabs.activeUnfocusedColor = parseColor(
@@ -1714,10 +1760,10 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                       tabChild.args[0].kString(), result.layout.frameTabs.inactiveColor
                     )
                   elif tabChild.name == "active-line-color" and tabChild.args.len > 0:
-                    result.layout.frameTabs.activeLineColor = parseColor(
-                      tabChild.args[0].kString(),
-                      result.layout.frameTabs.activeLineColor,
-                    )
+                    let parsed = tabChild.args[0].kString().parseColorOpt()
+                    if parsed.isSome:
+                      frameTabActiveLineColorSet = true
+                      result.layout.frameTabs.activeLineColor = parsed.get()
                   elif tabChild.name == "active-unfocused-line-color" and
                       tabChild.args.len > 0:
                     result.layout.frameTabs.activeUnfocusedLineColor = parseColor(
@@ -2339,10 +2385,10 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
                 try:
                   if highlightChild.name == "active-color" and
                       highlightChild.args.len > 0:
-                    result.recentWindows.highlight.activeColor = parseColor(
-                      highlightChild.args[0].kString(),
-                      result.recentWindows.highlight.activeColor,
-                    )
+                    let parsed = highlightChild.args[0].kString().parseColorOpt()
+                    if parsed.isSome:
+                      recentWindowsHighlightActiveColorSet = true
+                      result.recentWindows.highlight.activeColor = parsed.get()
                   elif highlightChild.name == "urgent-color" and
                       highlightChild.args.len > 0:
                     result.recentWindows.highlight.urgentColor = parseColor(
@@ -2394,8 +2440,10 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
               result.layoutSwitchToast.timeoutMs =
                 clamp32(int32(child.args[0].kInt()), 0, 60000)
             elif child.name == "ring-color" and child.args.len > 0:
-              result.layoutSwitchToast.ringColor =
-                parseColor(child.args[0].kString(), result.layoutSwitchToast.ringColor)
+              let parsed = child.args[0].kString().parseColorOpt()
+              if parsed.isSome:
+                layoutSwitchToastRingColorSet = true
+                result.layoutSwitchToast.ringColor = parsed.get()
           except CatchableError as e:
             warn "Ignoring invalid layout-switch-toast field",
               field = child.name, error = e.msg
@@ -2532,6 +2580,11 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   except:
     let e = getCurrentException()
     warn "Could not load config, using defaults", path = path, error = e.msg
+
+  result.applyThemeAccent(
+    focusedBorderColorSet, frameTabActiveColorSet, frameTabActiveLineColorSet,
+    layoutSwitchToastRingColorSet, recentWindowsHighlightActiveColorSet,
+  )
 
   if result.keyBindings.len == 0:
     result.keyBindings = defaultKeyBindings()

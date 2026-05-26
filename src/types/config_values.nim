@@ -3,6 +3,7 @@ import runtime_values
 
 type
   Config* = object
+    theme*: ThemeConfig
     layout*: LayoutConfig
     workspaces*: WorkspaceConfig
     outputRules*: seq[OutputRule]
@@ -60,6 +61,10 @@ type
     spiral*: SpiralLayoutConfig
     layoutCycle*: seq[LayoutMode]
     layoutSelections*: seq[LayoutSelection]
+
+  ThemeConfig* = object
+    accentColorSet*: bool
+    accentColor*: uint32
 
   ConfigLoadResult* = object
     ok*: bool

@@ -297,6 +297,32 @@ output {
     check shorthand.config.outputLayoutRows.len == 1
     check shorthand.config.outputLayoutRows[0].targets == @["DP-3", "DP-2", "DP-1"]
 
+  test "Strict config load accepts theme accent":
+    let loaded = loadStrictConfigContent(
+      """
+theme {
+  accent-color "#112233"
+}
+""", "theme-accent",
+    )
+
+    check loaded.ok
+    check loaded.config.theme.accentColorSet
+    check loaded.config.theme.accentColor == 0x112233ff'u32
+    check loaded.config.layout.focusedBorderColor == 0x112233ff'u32
+
+  test "Strict config load rejects unknown theme fields":
+    let loaded = loadStrictConfigContent(
+      """
+theme {
+  accent "#112233"
+}
+""", "theme-unknown",
+    )
+
+    check not loaded.ok
+    check loaded.error.contains("unknown field")
+
   test "Strict config load rejects invalid output rule fields":
     let cases =
       @[

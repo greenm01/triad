@@ -4,6 +4,10 @@ export core_defaults
 const FallbackConfigContent* =
   """// Triad Configuration (KDL 2.0)
 
+// theme {
+//     accent-color "#ffffff"
+// }
+
 layout {
     gaps 16
     center-focused-column "on-overflow"
