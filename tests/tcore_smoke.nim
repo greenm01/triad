@@ -125,19 +125,20 @@ suite "Core Runtime Logic: smoke":
         it.jsonPayload.contains("KeyboardLayoutSwitched")
     )
 
-  test "Screenshot command builder preserves shell snippets and quotes data":
+  test "Screenshot command builder separates selector and quotes geometry data":
     let config = ScreenshotConfig(
       captureCommand: "grim -t png",
-      regionSelectorCommand: "slurp -d",
+      regionSelectorCommand: "slurp -d -b '#00000088'",
       clipboardCommand: "wl-copy --type image/png",
     )
     let screen = Rect(x: 0, y: 0, w: 1920, h: 1080)
     let win = Rect(x: 40, y: 50, w: 800, h: 600)
 
+    check screenshotRegionSelectorCommand(config) == "slurp -d -b '#00000088'"
     check screenshotCaptureCommand(
       ScreenshotKind.ShotRegion, "/tmp/region shot.png", config, screen, win,
-      ScreenshotPointerMode.PointerDefault,
-    ) == "grim -t png -g \"$(slurp -d)\" '/tmp/region shot.png'"
+      ScreenshotPointerMode.PointerDefault, "10,20 300x400",
+    ) == "grim -t png -g '10,20 300x400' '/tmp/region shot.png'"
     check screenshotCaptureCommand(
       ScreenshotKind.ShotScreen, "/tmp/screen.png", config, screen, win,
       ScreenshotPointerMode.PointerShow,
@@ -188,6 +189,20 @@ suite "Core Runtime Logic: smoke":
     check waitFor(runSlow()) == 0
     check ticked
     check waitFor(runShellCommandAsync("exit 7", pollMs = 10)) == 7
+    check waitFor(runShellCommandAsync("sleep 2", pollMs = 10, timeoutMs = 30)) ==
+      ShellTimeoutExitCode
+
+  test "Async shell command capture returns output and timeout state":
+    let captured = waitFor(runShellCommandCaptureAsync("printf '10,20 300x400'"))
+    check captured.exitCode == 0
+    check not captured.timedOut
+    check captured.output == "10,20 300x400"
+
+    let timedOut = waitFor(
+      runShellCommandCaptureAsync("sleep 2; printf late", pollMs = 10, timeoutMs = 30)
+    )
+    check timedOut.exitCode == ShellTimeoutExitCode
+    check timedOut.timedOut
 
   test "Targeted layout command updates requested slot only":
     var model = configuredModel()

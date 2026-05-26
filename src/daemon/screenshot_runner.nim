@@ -1,4 +1,4 @@
-import std/[asyncdispatch, json, options, os, tables]
+import std/[asyncdispatch, json, options, os, strutils, tables]
 import chronicles
 import ../core/msg
 import ../ipc/socket
@@ -52,29 +52,66 @@ proc runScreenshotCapture*(
         warn "Failed to create screenshot directory", path = dir, error = e.msg
         return
 
-    let command = screenshotCaptureCommand(
-      kind,
-      path,
-      screenshotConfig,
-      daemon[].currentModel.primaryScreen(),
-      daemon[].focusedWindowGeometry(),
-      pointerMode,
-    )
+    let env = daemon[].currentModel.configuredProcessEnv()
+    let command =
+      if kind == ScreenshotKind.ShotRegion:
+        let selector = screenshotRegionSelectorCommand(screenshotConfig)
+        info "Screenshot region selection started", path = path
+        let selected = await runShellCommandCaptureAsync(
+          selector, env, timeoutMs = DefaultShellCommandTimeoutMs
+        )
+        if selected.exitCode != 0:
+          if selected.timedOut:
+            warn "Screenshot region selection timed out", path = path
+          else:
+            warn "Screenshot region selection failed",
+              path = path, exitCode = selected.exitCode
+          return
+        let geometry = selected.output.strip()
+        if geometry.len == 0:
+          warn "Screenshot region selection returned empty geometry", path = path
+          return
+        screenshotCaptureCommand(
+          kind,
+          path,
+          screenshotConfig,
+          daemon[].currentModel.primaryScreen(),
+          daemon[].focusedWindowGeometry(),
+          pointerMode,
+          geometry,
+        )
+      else:
+        screenshotCaptureCommand(
+          kind,
+          path,
+          screenshotConfig,
+          daemon[].currentModel.primaryScreen(),
+          daemon[].focusedWindowGeometry(),
+          pointerMode,
+        )
     info "Screenshot capture started", path = path, screenshotKind = $kind
 
-    let env = daemon[].currentModel.configuredProcessEnv()
-    let code = await runShellCommandAsync(command, env)
+    let code =
+      await runShellCommandAsync(command, env, timeoutMs = DefaultShellCommandTimeoutMs)
     if code != 0:
-      warn "Screenshot capture failed", path = path, exitCode = code
+      if code == ShellTimeoutExitCode:
+        warn "Screenshot capture timed out", path = path
+      else:
+        warn "Screenshot capture failed", path = path, exitCode = code
       return
 
     var clipboardOk = true
     if copyToClipboard:
       let copyCode = await runShellCommandAsync(
-        screenshotClipboardCommand(path, screenshotConfig), env
+        screenshotClipboardCommand(path, screenshotConfig),
+        env,
+        timeoutMs = DefaultShellCommandTimeoutMs,
       )
       if copyCode != 0:
-        warn "Screenshot clipboard copy failed", path = path, exitCode = copyCode
+        if copyCode == ShellTimeoutExitCode:
+          warn "Screenshot clipboard copy timed out", path = path
+        else:
+          warn "Screenshot clipboard copy failed", path = path, exitCode = copyCode
         clipboardOk = false
     if not writeToDisk and not clipboardOk:
       return
