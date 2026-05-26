@@ -263,6 +263,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
         Effect(kind: EffectKind.EffFocusShellSurface, focusShellSurfaceId: surfaceId)
       )
   of EffectKind.EffScreenshot:
+    daemon.setLayerShellDefaultOutputForSpawn(OutputId(0))
     asyncCheck runScreenshotCapture(
       addr daemon,
       eff.screenshotKind,
