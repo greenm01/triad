@@ -20,6 +20,12 @@ Triad workspace state
 The shell does not need to speak Triad IPC. Triad does not need a private
 adapter for every shell.
 
+River is moving the same way. In issue 1402, the plan is to expose a
+`river-workspace-v1` protocol that proxies `ext-workspace-v1` through to the
+window manager. The useful lesson is not the River-specific wrapper. It is the
+direction: stop inventing one workspace IPC per shell, and use the protocol
+Waybar already understands.
+
 ## Shells and Bars
 
 This table starts from the shell list in `README.md`. The last column records
@@ -53,6 +59,8 @@ only carry the workspace state shells already know how to consume.
 
 - `README.md`, Shell Support table
 - <https://wayland.app/protocols/ext-workspace-v1>
+- <https://codeberg.org/river/river/issues/1402#issuecomment-11282755>
+- <https://codeberg.org/river/river/issues/1402#issuecomment-15930749>
 - <https://github.com/Alexays/Waybar/wiki/Module:-Workspaces>
 - <https://pkg.go.dev/github.com/AvengeMedia/DankMaterialShell/core>
 - <https://isaacfreund.com/docs/wayland/river-window-management-v1/>
