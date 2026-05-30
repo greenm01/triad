@@ -97,6 +97,8 @@ nimble liveReload
 `nimble liveReload` from within a live session to test runtime changes; it runs
 the live-session doctor checks before replacing binaries.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) before sending patches.
+
 ### IPC & Navigation
 
 Interact with Triad's IPC socket via the CLI:
