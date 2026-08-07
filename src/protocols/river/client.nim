@@ -725,7 +725,8 @@ proc fullscreen*(
   ## 
   ## Make the window fullscreen on the given output. If multiple windows are
   ## fullscreen on the same output at the same time only the "top" window in
-  ## rendering order shall be displayed.
+  ## rendering order shall be displayed. If the window is already fullscreen
+  ## on a different output, the window is switched to the new output.
   ## 
   ## All river_shell_surface_v1 objects above the top fullscreen window in
   ## the rendering order will continue to be rendered.
@@ -1407,6 +1408,10 @@ proc pointerWarp*(riverSeatV1: ptr RiverSeatV1, x: int32, y: int32) {.inline.} =
   ## If the given position is outside the bounds of all outputs, the pointer
   ## will be warped to the closest point inside an output instead.
   ## 
+  ## If an op_start_pointer request is made during the same manage sequence
+  ## as a pointer_warp request, the warp is applied first by the server
+  ## regardless of the relative ordering of the two requests.
+  ##
   ## This request modifies window management state and may only be made as
   ## part of a manage sequence, see the river_window_manager_v1 description.
   ## 
