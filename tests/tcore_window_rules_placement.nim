@@ -214,7 +214,7 @@ suite "Core Runtime Logic: window rules placement":
     check model.snapshotWindow(21).widthProportion == 0.05'f32
     check model.snapshotWindow(21).heightProportion == 0.05'f32
 
-  test "Window rule min and max bounds do not rewrite default proportions":
+  test "Window rule min and max bounds clamp layout without rewriting default proportions":
     var model = initRuntimeStateFromConfig(
       Config(
         layout: LayoutConfig(defaultWindowWidth: 0.5, defaultWindowHeight: 1.0),
@@ -257,8 +257,8 @@ suite "Core Runtime Logic: window rules placement":
     let maxGeom = model.instructionGeom(23)
     check model.snapshotWindow(22).heightProportion == 0.5'f32
     check model.snapshotWindow(23).heightProportion == 1.0'f32
-    check minGeom.h < 600
-    check maxGeom.h > 400
+    check minGeom.h == 600
+    check maxGeom.h == 400
     check model.proposalDimensionsForRiverId(
       22, minGeom.w, minGeom.h, honorMinimums = true, honorMaximums = false
     ).h == 600

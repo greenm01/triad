@@ -623,7 +623,12 @@ suite "Core Runtime Logic: floating rules":
   test "Dialog rule size preserves parent centered anchoring":
     var model = initRuntimeStateFromConfig(
       Config(
-        layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
+        layout: LayoutConfig(
+          gaps: 10,
+          defaultColumnWidth: 0.7,
+          defaultWindowWidth: 0.5,
+          defaultWindowHeight: 1.0,
+        ),
         workspaces: WorkspaceConfig(defaultCount: 3),
         windowRules:
           @[
