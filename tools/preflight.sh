@@ -30,6 +30,7 @@ fi
 nimble test
 nimble testLiveDoctor
 nimble build
+sh tools/check_deps.sh triad triad_niri triad_mirror
 
 if [ "${TRIAD_DAILY_GATE_QEMU:-0}" = "1" ]; then
   sh tools/qemu_vt_smoke.sh

@@ -10,11 +10,12 @@ bin = @["triad", "triad_niri", "triad_mirror"]
 # Dependencies
 
 requires "nim >= 2.2.4"
-requires "nimkdl >= 2.1.0"
+requires "nimkdl >= 2.1.1"
 requires "https://github.com/panno8M/wayland-nim == 0.1.0"
 requires "https://github.com/Nimaoth/fsnotify >= 0.1.6"
 requires "chronicles >= 0.10.3"
 requires "pixie >= 5.1.0"
+requires "regex >= 0.26.3"
 
 proc runTestSuite(path: string) =
   exec "nimble c -r --hints:off --nimcache:tests/nimcache " & path

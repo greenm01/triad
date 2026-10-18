@@ -1,4 +1,5 @@
-import std/[options, re, sets, strutils]
+import std/[options, sets, strutils]
+import regex
 import chronicles
 import parser
 import defaults
@@ -82,16 +83,16 @@ proc windowRuleMatcherData(
         appIdPattern: matcher.appId,
         appIdRegex:
           if matcher.appIdSet:
-            re(matcher.appId)
+            re2(matcher.appId)
           else:
-            nil,
+            default(Regex2),
         titleSet: matcher.titleSet,
         titlePattern: matcher.title,
         titleRegex:
           if matcher.titleSet:
-            re(matcher.title)
+            re2(matcher.title)
           else:
-            nil,
+            default(Regex2),
         isActiveSet: matcher.isActiveSet,
         isActive: matcher.isActive,
         isFocusedSet: matcher.isFocusedSet,

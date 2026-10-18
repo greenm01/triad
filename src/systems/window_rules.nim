@@ -1,4 +1,5 @@
-import std/[options, re]
+import std/options
+import regex
 import ../state/engine
 from ../types/runtime_values import
   ParentedRole, PresentationMode, WindowRuleBorderConfig, WindowRuleFloatingConfig,

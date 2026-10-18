@@ -1,4 +1,5 @@
-import std/[options, re, strutils]
+import std/[options, strutils]
+import regex
 import chronicles, kdl
 import defaults
 import keysyms
@@ -927,7 +928,7 @@ proc windowRuleMatcher(node: KdlNode): WindowRuleMatcher =
 
 proc validateWindowRuleRegex(pattern, context: string): string =
   try:
-    discard re(pattern)
+    discard re2(pattern)
   except RegexError as e:
     return context & ": " & e.msg
   ""

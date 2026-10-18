@@ -122,9 +122,9 @@
     },
     {
       "method": "fetchzip",
-      "url": "https://github.com/nitely/nim-unicodedb/archive/15c5e25e2a49a924bc97647481ff50125bba2c76.tar.gz",
-      "rev": "15c5e25e2a49a924bc97647481ff50125bba2c76",
-      "sha256": "13s6mmsy5ah4sjpcl53x0qd8szc040s4nd47kszqyj1qxy340j6j",
+      "url": "https://github.com/nitely/nim-unicodedb/archive/66f2458710dc641dd4640368f9483c8a0ec70561.tar.gz",
+      "rev": "66f2458710dc641dd4640368f9483c8a0ec70561",
+      "sha256": "092z3glgdb7rmwajm7dmqzvralkm7ixighixk8ycf8sf17zm72ck",
       "srcDir": "src",
       "packages": [
         "unicodedb"
@@ -152,9 +152,9 @@
     },
     {
       "method": "fetchzip",
-      "url": "https://github.com/greenm01/nimkdl/archive/4755e537a848e5f91465ccb314013fc0a7ce7c2f.tar.gz",
-      "rev": "4755e537a848e5f91465ccb314013fc0a7ce7c2f",
-      "sha256": "00ig2rhk82z6c00vcpk4gh4m6bq1wmyqm2yfwfgyg9465p83gs7a",
+      "url": "https://github.com/greenm01/nimkdl/archive/2158d8ae2fd1eaa4985e874c1aa628e8a456369c.tar.gz",
+      "rev": "2158d8ae2fd1eaa4985e874c1aa628e8a456369c",
+      "sha256": "07zian1zp25j30k6ddmnjaab889wibhis4y4lcnzbv8lm5fkf8db",
       "srcDir": "src",
       "packages": [
         "nimkdl"
@@ -218,6 +218,16 @@
       "srcDir": "",
       "packages": [
         "json_serialization"
+      ]
+    },
+    {
+      "method": "fetchzip",
+      "url": "https://github.com/nitely/nim-regex/archive/4593305ed1e49731fc75af1dc572dd2559aad19c.tar.gz",
+      "rev": "4593305ed1e49731fc75af1dc572dd2559aad19c",
+      "sha256": "1b666qws5sva3n5allin0ycvnqlzdjd7xzprpdvv632ccqddzcl9",
+      "srcDir": "src",
+      "packages": [
+        "regex"
       ]
     }
   ]

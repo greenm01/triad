@@ -1,4 +1,5 @@
-import std/[re, sets, tables]
+import std/[sets, tables]
+import regex
 from core import
   BspNodeId, ColumnId, EmptyTagMask, EntityManager, ExternalOutputId, ExternalWindowId,
   FrameId, GroupId, IdCounters, OutputId, Rect, SplitNodeId, TagId, TagMask, WindowId
@@ -156,10 +157,10 @@ type
   WindowRuleMatcherData* = object
     appIdSet*: bool
     appIdPattern*: string
-    appIdRegex*: Regex
+    appIdRegex*: Regex2
     titleSet*: bool
     titlePattern*: string
-    titleRegex*: Regex
+    titleRegex*: Regex2
     isActiveSet*: bool
     isActive*: bool
     isFocusedSet*: bool
