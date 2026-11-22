@@ -255,7 +255,7 @@ proc asyncSelectorFd(): int =
   asyncdispatch.getGlobalDispatcher().getIoHandler().getFd()
 
 proc waitForRuntimeEvents(
-    daemon: var TriadDaemon, timeoutMs: int, runtimeFd: int
+    daemon: var TriadDaemon, timeoutMs: int, runtimeFd: int, timerFd: int
 ): RuntimeEventPollResult =
   let waylandFd =
     if daemon.display == nil:
@@ -270,7 +270,7 @@ proc waitForRuntimeEvents(
   let asyncFd = asyncSelectorFd()
   daemon.waitBackend = if asyncFd >= 0: "fd-aware" else: "timeout"
   result = daemon.eventPollFds.waitForRuntimeEventFds(
-    waylandFd, asyncFd, daemon.eventSwitchFds, runtimeFd, timeoutMs
+    waylandFd, asyncFd, daemon.eventSwitchFds, runtimeFd, timerFd, timeoutMs
   )
   if result.failed:
     warn "Runtime event poll failed", error = osErrorMsg(result.errorCode)
@@ -284,6 +284,7 @@ proc loopCountersJson(counters: RuntimeLoopCounters): JsonNode =
     "child_reaped_processes": counters.childReapedProcesses,
     "child_signal_wakeups": counters.childSignalWakeups,
     "child_signal_drains": counters.childSignalDrains,
+    "timer_wakeups": counters.timerWakeups,
     "memory_sample_checks": counters.memorySampleChecks,
     "memory_compaction_checks": counters.memoryCompactionChecks,
     "async_polls": counters.asyncPolls,
@@ -441,6 +442,7 @@ proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
     childReapedProcesses: after.childReapedProcesses - before.childReapedProcesses,
     childSignalWakeups: after.childSignalWakeups - before.childSignalWakeups,
     childSignalDrains: after.childSignalDrains - before.childSignalDrains,
+    timerWakeups: after.timerWakeups - before.timerWakeups,
     memorySampleChecks: after.memorySampleChecks - before.memorySampleChecks,
     memoryCompactionChecks: after.memoryCompactionChecks - before.memoryCompactionChecks,
     asyncPolls: after.asyncPolls - before.asyncPolls,
@@ -1329,7 +1331,7 @@ proc main*(): int =
       break
 
     discard daemon.display.flush()
-    let waitResult = daemon.waitForRuntimeEvents(waitTimeout, runtimeEvents.fd())
+    let waitResult = daemon.waitForRuntimeEvents(waitTimeout, runtimeEvents.fd(), runtimeEvents.timerFd())
     if waitResult.waylandReady:
       inc daemon.loopCounters.waylandWakeups
       if daemon.display.read_events() == -1:
@@ -1342,6 +1344,9 @@ proc main*(): int =
       inc daemon.loopCounters.childSignalDrains
       discard runtimeEvents.drain()
       daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
+    if waitResult.timerReady:
+      inc daemon.loopCounters.timerWakeups
+      discard runtimeEvents.drain()
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

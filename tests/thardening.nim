@@ -29,6 +29,7 @@ import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
 import ../src/utils/[process_options, process_memory, screenshot_capture, session_env]
+import ../src/utils/event_poll
 import ../src/session/supervisor
 
 proc mirrorTestDaemon(): TriadDaemon =
@@ -2237,3 +2238,22 @@ suite "detached process options":
 
     let fields = readFile("/proc/" & $child.processID & "/stat").split()
     check parseInt(fields[4]) != parentGroup
+
+  test "runtime event source reports and drains timer readiness":
+    var source = openRuntimeEventSource()
+    defer:
+      closeRuntimeEventSource(source)
+
+    source.setTimer(10'i64)
+    var fds: seq[TPollfd]
+    let ready = fds.waitForRuntimeEventFds(
+      -1, -1, [], source.fd(), source.timerFd(), 100
+    )
+    check ready.timerReady
+    let events = source.drain()
+    check events.timerReady
+
+    let again = fds.waitForRuntimeEventFds(
+      -1, -1, [], source.fd(), source.timerFd(), 0
+    )
+    check not again.timerReady
