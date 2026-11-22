@@ -47,6 +47,7 @@ type
     pendingLaunchActive*: bool
     pendingLaunch*: PendingShellLaunch
     releasedPids*: seq[int32]
+    overlayProcesses*: seq[Process]
 
 proc setTrackedProcessHandle*(
     runner: var ShellRunner, handle: ProcessHandle, name: string
@@ -75,6 +76,10 @@ proc queueFakeShellLaunch*(
     retryAllowed: retryAllowed,
   )
   runner.pendingLaunchActive = true
+
+proc takeOverlayProcesses*(runner: var ShellRunner): seq[Process] =
+  result = runner.overlayProcesses
+  runner.overlayProcesses = @[]
 
 const
   MaxShellRecoveryAttempts* = 3
@@ -430,6 +435,7 @@ proc spawnShellProfile(
     let env =
       if profile.niriCompat:
         compat = prepareNiriShellCompatEnv(niriSocketPath, baseEnv = baseEnv)
+        runner.overlayProcesses.add(compat.pendingProcesses)
         spawnInfo = shellCompatBehaviorPayload(profile, niriSocketPath, compat)
         let niriSocketAccepting = niriCompatSocketReady(compat.niriSocketPath)
         spawnInfo["niri_socket_accepting"] = %niriSocketAccepting
@@ -456,7 +462,10 @@ proc spawnShellProfile(
       options = InheritedProcessOptions,
     )
     if runner.pendingLaunchActive:
-      runner.pendingLaunch.process.closeProcessHandle()
+      let nowMs = currentUnixMs()
+      var stale = initTrackedChild(runner.pendingLaunch.process, nowMs, 250'i64)
+      stale.beginTermination(nowMs, 250'i64)
+      runner.terminatingShells.add(stale)
       runner.pendingLaunchActive = false
     runner.pendingLaunch = PendingShellLaunch(
       process: newProcessHandle(p),

@@ -1380,6 +1380,7 @@ proc main*(): int =
     daemon.shellRunner.advanceShellLifecycle(
       daemon.runtimeState.model, niriSocketPath, nowMs
     )
+    daemon.trackChildProcesses(daemon.shellRunner.takeOverlayProcesses())
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

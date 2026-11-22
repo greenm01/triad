@@ -1721,9 +1721,27 @@ Categories=System;TerminalEmulator;
       putEnv("XDG_DATA_HOME", oldDataHome)
       putEnv("XDG_DATA_DIRS", oldDataDirs)
 
+    let binDir = tmp / "bin"
+    createDir(binDir)
+    let fakeRsvg = binDir / "rsvg-convert"
+    writeFile(fakeRsvg, "#!/bin/sh\nsleep 30\n")
+    setFilePermissions(fakeRsvg, {fpUserRead, fpUserWrite, fpUserExec})
+    let oldPath = getEnv("PATH", "")
+    putEnv("PATH", binDir & PathSep & oldPath)
+    var overlayProcesses: seq[Process] = @[]
+    defer:
+      putEnv("PATH", oldPath)
+      for process in overlayProcesses:
+        process.kill()
+        process.close()
+
     let index = buildAppIdentityIndex([appRoot])
+    let overlayStart = epochTime()
     let overlay = installShellOverlay(tmp / "runtime", index)
+    check (epochTime() - overlayStart) * 1000.0 < 500.0
     check overlay.ok
+    check overlay.pendingProcesses.len >= 1
+    overlayProcesses = overlay.pendingProcesses
     let generatedApp = overlay.sharePath / "applications" / "triad-demoterm.desktop"
     check fileExists(generatedApp)
     check readFile(generatedApp).contains("Exec=demo-term --new-window")

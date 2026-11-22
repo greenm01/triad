@@ -1,4 +1,4 @@
-import std/[os, posix, strtabs, strutils]
+import std/[os, osproc, posix, strtabs, strutils]
 import shell_overlay, socket
 
 type NiriShellCompatEnv* = object
@@ -11,6 +11,7 @@ type NiriShellCompatEnv* = object
   triadNiriPath*: string
   shimReady*: bool
   overlayReady*: bool
+  pendingProcesses*: seq[Process]
   warning*: string
 
 proc shellQuote(value: string): string =
@@ -231,6 +232,7 @@ proc prepareNiriShellCompatEnv*(
   result.overlayReady = overlay.ok
   result.xdgOverlayPath = overlay.rootPath
   result.xdgSharePath = overlay.sharePath
+  result.pendingProcesses = overlay.pendingProcesses
   result.warning = result.warning.appendWarning(overlay.warning)
 
   if result.shimReady:
