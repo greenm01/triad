@@ -129,6 +129,17 @@ proc writeClaimedSessionRecord*(claim: SessionClaim, record: SessionLogRecord): 
   writeAtomic(claim.path, $record.recordJson())
   true
 
+proc sessionClaimHeld*(claim: SessionClaim): bool =
+  if claim.path.len == 0 or claim.claimId.len == 0 or not fileExists(claim.path):
+    return false
+  let current =
+    try:
+      parseFile(claim.path)
+    except CatchableError:
+      return false
+  current{"claim_id"}.getStr() == claim.claimId
+
+
 proc restoreSessionRecord*(claim: SessionClaim) =
   if claim.path.len == 0 or not fileExists(claim.path):
     return

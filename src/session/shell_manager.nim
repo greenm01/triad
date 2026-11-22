@@ -1,4 +1,4 @@
-import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, strutils, times]
+import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, strutils]
 import session_control
 import ../core/shell_profiles
 import ../daemon/shell_runner
@@ -9,6 +9,7 @@ import ../types/model
 import ../utils/process_options
 from posix import chmod, getuid, onSignal, SIGTERM, SIGINT, SIGHUP, Mode
 import logs
+import ../utils/runtime_deadlines
 
 const
   SolSocket = cint(1)
@@ -166,8 +167,7 @@ proc handleClient(client: AsyncSocket, state: ShellManagerState) {.async.} =
         )
       )
     of SessionControlKind.ManagerStopping:
-      if state.ownsShell:
-        state.runner.releaseTrackedShell("manager stopping")
+      discard
     of SessionControlKind.Shutdown:
       if state.ownsShell:
         state.runner.stopTrackedShell("shutdown")
@@ -201,53 +201,54 @@ proc runShellManagerAsync() {.async.} =
   let state = ShellManagerState(children: @[])
   asyncCheck acceptClients(listener, state)
 
-  while shutdownSignal == 0:
-    let nowMs = int64(epochTime() * 1000.0)
-    state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
-    if state.ownsShell:
-      let fallback = state.runner.pollShellWatchdog(state.model, nowMs)
-      if fallback.isSome and fallback.get() != state.model.shells.active:
-        var next = state.model
-        next.shells.active = fallback.get()
-        state.runner.switchShell(
-          state.model, next, state.niriSocketPath, "shell watchdog fallback"
-        )
-        state.model = next
-      else:
-        discard state.runner.pollShellRecovery(
-          state.model, state.niriSocketPath, nowMs
-        )
-    state.runner.advanceTerminatingShells(nowMs)
-    state.runner.advanceReleasedShells()
-    for process in state.runner.takeOverlayProcesses():
-      state.children.add(process)
-    state.reapChildren()
-    poll(50)
+  try:
+    while shutdownSignal == 0:
+      let nowMs = monotonicMs()
+      state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
+      if state.ownsShell:
+        let fallback = state.runner.pollShellWatchdog(state.model, nowMs)
+        if fallback.isSome and fallback.get() != state.model.shells.active:
+          var next = state.model
+          next.shells.active = fallback.get()
+          state.runner.switchShell(
+            state.model, next, state.niriSocketPath, "shell watchdog fallback"
+          )
+          state.model = next
+        else:
+          discard state.runner.pollShellRecovery(
+            state.model, state.niriSocketPath, nowMs
+          )
+      state.runner.advanceTerminatingShells(nowMs)
+      state.runner.advanceReleasedShells()
+      for process in state.runner.takeOverlayProcesses():
+        state.children.add(process)
+      state.reapChildren()
+      poll(50)
+  finally:
+    if state.ownsShell and state.runner.trackedProcess != nil:
+      state.runner.stopTrackedShell("shutdown")
 
-  if state.ownsShell and state.runner.trackedProcess != nil:
-    state.runner.stopTrackedShell("shutdown")
+    let drainDeadlineMs = monotonicMs() + 2000'i64
+    while (state.runner.pendingLaunchActive or state.runner.terminatingShells.len > 0) and
+        monotonicMs() < drainDeadlineMs:
+      let nowMs = monotonicMs()
+      state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
+      state.runner.advanceTerminatingShells(nowMs)
+      state.runner.advanceReleasedShells()
+      poll(20)
 
-  let drainDeadline = epochTime() * 1000.0 + 2000.0
-  while (state.runner.pendingLaunchActive or state.runner.terminatingShells.len > 0) and
-      epochTime() * 1000.0 < drainDeadline:
-    let nowMs = int64(epochTime() * 1000.0)
-    state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
-    state.runner.advanceTerminatingShells(nowMs)
-    state.runner.advanceReleasedShells()
-    poll(20)
-
-  if state.runner.pendingLaunchActive:
-    state.runner.pendingLaunch.process.terminateProcess()
-    state.runner.pendingLaunch.process.closeProcessHandle()
-    state.runner.pendingLaunchActive = false
-  for child in state.children:
-    try:
-      child.terminate()
-      discard child.waitForExit(1000)
-      child.close()
-    except CatchableError:
-      discard
-  listener.close()
+    if state.runner.pendingLaunchActive:
+      state.runner.pendingLaunch.process.terminateProcess()
+      state.runner.pendingLaunch.process.closeProcessHandle()
+      state.runner.pendingLaunchActive = false
+    for child in state.children:
+      try:
+        child.terminate()
+        discard child.waitForExit(1000)
+        child.close()
+      except CatchableError:
+        discard
+    listener.close()
 
 proc runShellManager*(): int =
   installShellManagerSignals()

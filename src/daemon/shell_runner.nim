@@ -1,4 +1,4 @@
-import std/[json, options, os, osproc, sequtils, strtabs, strutils, times]
+import std/[json, options, os, osproc, strtabs, strutils]
 import chronicles
 import process_runner
 import process_handle
@@ -7,8 +7,7 @@ import ../core/shell_profiles
 import ../ipc/[niri_shell_compat, socket]
 import ../types/model
 from ../types/runtime_values import ShellProfileConfig, ShellsConfig
-import ../utils/behavior_log
-import ../utils/process_options
+import ../utils/[behavior_log, process_options, runtime_deadlines]
 
 type
   ShellRecoveryDelay* = array[3, int64]
@@ -46,6 +45,8 @@ type
     terminatingShells*: seq[TrackedChild]
     pendingLaunchActive*: bool
     pendingLaunch*: PendingShellLaunch
+    staleLaunchDetected*: bool
+    staleCleanupAttempted*: bool
     releasedPids*: seq[int32]
     overlayProcesses*: seq[Process]
 
@@ -54,6 +55,8 @@ proc setTrackedProcessHandle*(
 ) =
   runner.trackedProcess = handle
   runner.trackedShellName = name
+  runner.staleLaunchDetected = false
+  runner.staleCleanupAttempted = false
 
 proc queueFakeShellLaunch*(
     runner: var ShellRunner,
@@ -88,8 +91,8 @@ const
 proc succeeded*(status: ShellSpawnStatus): bool =
   status == ShellSpawnStatus.Running
 
-proc currentUnixMs(): int64 =
-  int64(epochTime() * 1000.0)
+proc currentRuntimeMs(): int64 =
+  monotonicMs()
 
 proc commandArgs(command: seq[string]): seq[string] =
   if command.len > 1:
@@ -233,7 +236,7 @@ proc scheduleShellRecovery*(
     model: Model,
     reason: string,
     status: ShellSpawnStatus,
-    nowMs = currentUnixMs(),
+    nowMs = currentRuntimeMs(),
     preserveAttempts = false,
 ) =
   let active = model.activeShellProfile()
@@ -271,14 +274,14 @@ proc stopTrackedShell*(runner: var ShellRunner, reason: string) =
   writeBehaviorEvent(
     "shell_tracked_stop_requested", %*{"reason": reason, "tracked_pid": pid}
   )
-  let nowMs = currentUnixMs()
+  let nowMs = currentRuntimeMs()
   var child = initTrackedChild(runner.trackedProcess, nowMs, 250'i64)
   child.beginTermination(nowMs, 250'i64)
   runner.terminatingShells.add(child)
   runner.trackedProcess = nil
   runner.trackedShellName = ""
 
-proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentUnixMs()) =
+proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentRuntimeMs()) =
   var index = runner.terminatingShells.high
   while index >= 0:
     var child = runner.terminatingShells[index]
@@ -482,7 +485,7 @@ proc spawnShellProfile(
       options = InheritedProcessOptions,
     )
     if runner.pendingLaunchActive:
-      let nowMs = currentUnixMs()
+      let nowMs = currentRuntimeMs()
       var stale = initTrackedChild(runner.pendingLaunch.process, nowMs, 250'i64)
       stale.beginTermination(nowMs, 250'i64)
       runner.terminatingShells.add(stale)
@@ -494,7 +497,7 @@ proc spawnShellProfile(
       niriSocketPath: niriSocketPath,
       reason: reason,
       spawnInfo: spawnInfo,
-      startedAtMs: currentUnixMs(),
+      startedAtMs: currentRuntimeMs(),
       retryAllowed: retryAllowed,
     )
     runner.pendingLaunchActive = true
@@ -517,12 +520,13 @@ proc advanceShellLifecycle*(
     runner: var ShellRunner,
     model: Model,
     niriSocketPath: string,
-    nowMs = currentUnixMs(),
+    nowMs = currentRuntimeMs(),
 ) =
   if not runner.pendingLaunchActive:
     return
 
   let launch = runner.pendingLaunch
+  let childPid = launch.process.processID()
   let code = launch.process.peekExitCode()
   if code != -1:
     runner.pendingLaunchActive = false
@@ -534,28 +538,19 @@ proc advanceShellLifecycle*(
       launch.profile,
       launch.reason,
       shellSpawnEventPayload(
-        launch.spawnInfo, childPid = launch.process.processID(), exitCode = some(code)
+        launch.spawnInfo, childPid = childPid, exitCode = some(code)
       ),
     )
     launch.process.closeProcessHandle()
-    if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
-      if runner.recoveryPending and code != 0:
-        writeShellBehaviorEvent(
-          "shell_recovery_exhausted",
-          launch.shells,
-          launch.profile,
-          runner.recoveryReason,
-          %*{"attempts": runner.recoveryAttempts},
-        )
-      runner.clearShellRecovery()
-      return
+    if not runner.staleCleanupAttempted:
+      runner.staleLaunchDetected = true
     if launch.retryAllowed:
-      runner.stopShellProfile(
-        model,
+      writeShellBehaviorEvent(
+        "shell_stale_launch_preserved",
         launch.shells,
         launch.profile,
-        launch.reason & " stale instance",
-        stopTracked = false,
+        launch.reason,
+        %*{"child_pid": childPid, "exit_code": code},
       )
       let restartStatus = runner.spawnShellProfile(
         model,
@@ -585,6 +580,8 @@ proc advanceShellLifecycle*(
     runner.pendingLaunchActive = false
     runner.trackedProcess = launch.process
     runner.trackedShellName = launch.profile.name
+    runner.staleLaunchDetected = false
+    runner.staleCleanupAttempted = false
     writeShellBehaviorEvent(
       "shell_spawned",
       launch.shells,
@@ -599,26 +596,8 @@ proc activeShellProfile(
   result.shells = model.effectiveShells()
   result.profile = result.shells.activeShellProfile()
 
-proc stopStaleShellProfiles*(runner: var ShellRunner, model: Model, reason: string) =
-  let active = model.activeShellProfile()
-  if active.profile.isNone:
-    return
-
-  writeBehaviorEvent(
-    "shell_startup_stale_cleanup_requested",
-    %*{
-      "reason": reason,
-      "active": active.shells.active,
-      "profiles": active.shells.profiles.mapIt(it.name),
-    },
-  )
-  for profile in active.shells.profiles:
-    runner.stopShellProfile(
-      model, active.shells, profile, reason & " stale cleanup", stopTracked = false
-    )
-
 proc pollShellWatchdog*(
-    runner: var ShellRunner, model: Model, nowMs = currentUnixMs()
+    runner: var ShellRunner, model: Model, nowMs = currentRuntimeMs()
 ): Option[string] =
   let active = model.activeShellProfile()
   if active.profile.isNone or not active.shells.shouldWatchShells():
@@ -690,6 +669,47 @@ proc pollShellWatchdog*(
   )
   some(fallback)
 
+proc finishRecoveryAttempt(
+    runner: var ShellRunner,
+    model: Model,
+    niriSocketPath: string,
+    nowMs: int64,
+): bool =
+  let active = model.activeShellProfile()
+  if active.profile.isNone:
+    runner.clearShellRecovery()
+    return false
+  if runner.staleLaunchDetected and not runner.staleCleanupAttempted:
+    runner.staleLaunchDetected = false
+    runner.staleCleanupAttempted = true
+    runner.recoveryAttempts = 0
+    runner.nextRecoveryMs = nowMs
+    runner.stopShellProfile(
+      model, active.shells, active.profile.get(), "stale instance cleanup"
+    )
+    writeShellBehaviorEvent(
+      "shell_stale_instance_cleanup",
+      active.shells,
+      active.profile.get(),
+      runner.recoveryReason,
+      %*{"attempts": runner.recoveryAttempts},
+    )
+    let status = runner.spawnShellProfile(
+      model,
+      active.shells,
+      active.profile.get(),
+      niriSocketPath,
+      "stale instance cleanup",
+      retryAllowed = false,
+    )
+    if status.succeeded():
+      runner.clearShellRecovery()
+    else:
+      runner.scheduleShellRecovery(model, "stale instance cleanup", status, nowMs)
+    return true
+  runner.clearShellRecovery()
+  false
+
 proc switchShell*(
     runner: var ShellRunner,
     previousModel: Model,
@@ -697,6 +717,8 @@ proc switchShell*(
     niriSocketPath: string,
     reason: string,
 ) =
+  runner.staleLaunchDetected = false
+  runner.staleCleanupAttempted = false
   let previous = previousModel.activeShellProfile()
   let current = currentModel.activeShellProfile()
   if previous.profile.isSome:
@@ -719,7 +741,7 @@ proc pollShellRecovery*(
     runner: var ShellRunner,
     model: Model,
     niriSocketPath: string,
-    nowMs = currentUnixMs(),
+    nowMs = currentRuntimeMs(),
 ): bool =
   let active = model.activeShellProfile()
   if active.profile.isNone:
@@ -740,17 +762,8 @@ proc pollShellRecovery*(
     return false
   if not runner.recoveryPending or nowMs < runner.nextRecoveryMs:
     return false
-
   if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
-    writeShellBehaviorEvent(
-      "shell_recovery_exhausted",
-      active.shells,
-      active.profile.get(),
-      runner.recoveryReason,
-      %*{"attempts": runner.recoveryAttempts},
-    )
-    runner.clearShellRecovery()
-    return false
+    return runner.finishRecoveryAttempt(model, niriSocketPath, nowMs)
 
   inc runner.recoveryAttempts
   let attemptReason =
@@ -762,11 +775,14 @@ proc pollShellRecovery*(
     runner.recoveryReason,
     %*{"attempt": runner.recoveryAttempts, "attempt_reason": attemptReason},
   )
-  runner.stopShellProfile(model, active.shells, active.profile.get(), attemptReason)
   let status = runner.spawnShellProfile(
     model, active.shells, active.profile.get(), niriSocketPath, attemptReason
   )
   result = true
+
+  if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
+    discard runner.finishRecoveryAttempt(model, niriSocketPath, nowMs)
+    return
 
   let delayMs = runner.recoveryAttempts.recoveryDelayMs()
   runner.nextRecoveryMs = nowMs + delayMs
@@ -784,6 +800,8 @@ proc pollShellRecovery*(
   )
 
 proc scheduleShellSpawn*(runner: var ShellRunner, model: Model) =
+  runner.staleLaunchDetected = false
+  runner.staleCleanupAttempted = false
   runner.spawnPending = model.activeShellProfile().profile.isSome
 
 proc spawnPendingShell*(
@@ -795,7 +813,6 @@ proc spawnPendingShell*(
   let active = model.activeShellProfile()
   if active.profile.isNone:
     return
-  runner.stopStaleShellProfiles(model, reason)
   writeShellBehaviorEvent(
     "shell_startup_decision",
     active.shells,
@@ -807,11 +824,4 @@ proc spawnPendingShell*(
     model, active.shells, active.profile.get(), niriSocketPath, reason
   )
   if not status.succeeded():
-    runner.stopShellProfile(
-      model, active.shells, active.profile.get(), reason & " stale instance"
-    )
-    let restartStatus = runner.spawnShellProfile(
-      model, active.shells, active.profile.get(), niriSocketPath, reason & " restart"
-    )
-    if not restartStatus.succeeded():
-      runner.scheduleShellRecovery(model, reason & " restart", restartStatus)
+    runner.scheduleShellRecovery(model, reason, status)

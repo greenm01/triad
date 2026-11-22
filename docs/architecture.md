@@ -38,6 +38,9 @@ Wayland is asynchronous. To prevent tearing and race conditions, Triad uses a un
 
 4.  **Runtime Events:** Child-exit notification from `SIGCHLD` is delivered through a dedicated file descriptor and polled alongside the Wayland socket. Reaping runs on that readiness event; a low-frequency sweep remains as a fallback.
 
+Runtime deadlines use a monotonic clock. Suspend/resume does not advance shell
+watchdog, recovery, or child-termination timers.
+
 ### Sequence Mapping
 River's `window-management-v1` protocol uses a double-buffered sequence. Triad maps directly to this:
 *   **Manage Sequence:** The **Update** loop processes all accumulated messages.
@@ -72,3 +75,7 @@ IPC projection, and Wayland-derived helpers. A versioned private control
 socket carries session-ready, config, spawn, fallback, and shutdown events.
 Shell-manager ownership requires a full River/Triad session restart so both
 processes use the same supervisor protocol.
+
+The current session record is a live claim. A supervisor that loses the claim
+relinquishes its shell-manager immediately, including while waiting to restart
+a failed daemon, so an old shell manager cannot stop a newer session's shell.

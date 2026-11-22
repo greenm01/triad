@@ -1,4 +1,4 @@
-import std/[json, options, os, osproc, sequtils, strtabs, strutils, tables, times, unittest]
+import std/[json, options, os, osproc, sequtils, strtabs, strutils, tables, unittest]
 import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec, triad_state]
 import ../src/core/msg
@@ -11,11 +11,12 @@ import
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 import ../src/utils/behavior_log
+import ../src/utils/runtime_deadlines
 
 proc settleShellLifecycle(runner: var ShellRunner, model: Model, socketPath: string) =
-  let deadline = epochTime() * 1000.0 + 1000.0
-  while runner.pendingLaunchActive and epochTime() * 1000.0 < deadline:
-    runner.advanceShellLifecycle(model, socketPath, int64(epochTime() * 1000.0))
+  let deadline = monotonicMs() + 1000'i64
+  while runner.pendingLaunchActive and monotonicMs() < deadline:
+    runner.advanceShellLifecycle(model, socketPath, monotonicMs())
     sleep(5)
 
 
@@ -1426,7 +1427,7 @@ sleep 5
     check fallback.isSome
     check fallback.get() == "waybar"
 
-  test "Shell startup stops stale configured profiles before active launch":
+  test "Shell startup leaves stale configured profiles untouched":
     let tmp = getTempDir() / ("triad-shell-startup-cleanup-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1481,7 +1482,7 @@ exit 0
     runner.settleShellLifecycle(model, tmp / "niri.sock")
 
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
-    check calls == @["stop-noctalia", "stop-waybar", "stop-dank", "launch-noctalia"]
+    check calls == @["launch-noctalia"]
 
   test "Shell unchanged reload can recover untracked active profile":
     var runner = ShellRunner()
@@ -1527,7 +1528,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
 
     let calls = readFile(logPath)
     check calls.count("launch") >= 2
-    check calls.count("stop") >= 2
+    check calls.count("stop") == 0
 
   test "Shell double handoff schedules recovery until tracked":
     let tmp = getTempDir() / ("triad-shell-recovery-" & $getCurrentProcessId())
@@ -1574,9 +1575,9 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     check parseInt(readFile(fake.statePath).strip()) >= 3
 
     let calls = readFile(fake.logPath)
-    check calls.count("stop") >= 2
+    check calls.count("stop") == 0
 
-  test "Shell recovery exhausts repeated handoffs":
+  test "Shell recovery cleans up a stale instance once after repeated handoffs":
     let tmp = getTempDir() / ("triad-shell-recovery-exhaust-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1611,9 +1612,9 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
       discard runner.pollShellRecovery(model, tmp / "niri.sock", 0)
       runner.settleShellLifecycle(model, tmp / "niri.sock")
       inc recoveryLoops
-    check not runner.recoveryPending
+    check runner.recoveryPending
     let calls = readFile(fake.logPath)
-    check calls.count("stop") >= 4
+    check calls.count("stop") == 1
 
 
   test "Final recovery attempt keeps a healthy shell tracked":
@@ -1688,7 +1689,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     check runner.trackedShellRunning()
     check readFile(fake.statePath).strip() == "2"
 
-  test "Shell failed spawn kills stale configured profile":
+  test "Shell failed spawn preserves stale configured profile":
     let tmp = getTempDir() / ("triad-shell-failed-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1728,7 +1729,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-9}"
 
     let calls = readFile(logPath)
     check calls.contains("launch")
-    check calls.contains("stop")
+    check not calls.contains("stop")
 
   test "shell overlay is generated from terminal desktop metadata":
     let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())
@@ -1783,9 +1784,9 @@ Categories=System;TerminalEmulator;
         process.close()
 
     let index = buildAppIdentityIndex([appRoot])
-    let overlayStart = epochTime()
+    let overlayStart = monotonicMs()
     let overlay = installShellOverlay(tmp / "runtime", index)
-    check (epochTime() - overlayStart) * 1000.0 < 500.0
+    check monotonicMs() - overlayStart < 500'i64
     check overlay.ok
     check overlay.pendingProcesses.len >= 1
     overlayProcesses = overlay.pendingProcesses
@@ -1843,12 +1844,12 @@ Categories=System;TerminalEmulator;
     defer:
       runner.stopTrackedShell("test cleanup")
 
-    let started = epochTime()
+    let started = monotonicMs()
     runner.spawnPendingShell(model, staleSocket, "test")
     runner.settleShellLifecycle(model, staleSocket)
-    let elapsedMs = (epochTime() - started) * 1000.0
+    let elapsedMs = monotonicMs() - started
 
-    check elapsedMs < 1000.0
+    check elapsedMs < 1000'i64
     check runner.trackedShellRunning()
 
 suite "injectable shell lifecycle":

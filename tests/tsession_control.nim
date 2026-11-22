@@ -1,5 +1,5 @@
-import std/[json, strutils, unittest]
-import ../src/session/session_control
+import std/[json, os, strutils, unittest]
+import ../src/session/[logs, session_control]
 
 suite "session control protocol":
   test "round-trips a versioned message":
@@ -40,3 +40,21 @@ suite "session control protocol":
     let decoded = decodeSessionControl(line)
     check not decoded.ok
     check decoded.error.contains("payload")
+
+suite "session claim records":
+  test "claim is held only while its claim id remains current":
+    let dir = getTempDir() / ("triad-session-claim-" & $getCurrentProcessId())
+    if dirExists(dir):
+      removeDir(dir)
+    createDir(dir)
+    defer:
+      if dirExists(dir):
+        removeDir(dir)
+
+    let path = dir / "current-session.json"
+    writeFile(path, """{"claim_id":"claim-a"}""")
+    let claim = SessionClaim(path: path, claimId: "claim-a")
+    check sessionClaimHeld(claim)
+
+    writeFile(path, """{"claim_id":"claim-b"}""")
+    check not sessionClaimHeld(claim)

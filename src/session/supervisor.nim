@@ -1,7 +1,27 @@
 import std/[os, osproc, posix, strutils, times]
 import logs, process_io
+import ../utils/runtime_deadlines
 
 var shutdownSignal {.volatile.}: cint
+
+const ClaimLostStatus = -2
+
+proc sleepClaimAware(claim: SessionClaim, delayMs: int64): bool =
+  let deadline = monotonicMs() + delayMs
+  while monotonicMs() < deadline:
+    if shutdownSignal != 0:
+      return false
+    if not sessionClaimHeld(claim):
+      echo "triad-supervise: current session metadata claimed by another supervisor; stopping"
+      return false
+    let remaining = deadline - monotonicMs()
+    if remaining <= 0:
+      break
+    sleep(int(min(100'i64, remaining)))
+  if not sessionClaimHeld(claim):
+    echo "triad-supervise: current session metadata claimed by another supervisor; stopping"
+    return false
+  shutdownSignal == 0
 
 proc devModeEnabled(value: string): bool =
   value in ["1", "true", "TRUE", "yes", "YES", "on", "ON"]
@@ -17,7 +37,7 @@ proc daemonArgs(): seq[string] =
       putEnv("TRIAD_BEHAVIOR_LOG", "1")
     result.add("--dev-mode")
 
-proc waitForChild(process: Process): int =
+proc waitForChild(process: Process, claim: SessionClaim): int =
   while true:
     let code = process.peekExitCode()
     if code != -1:
@@ -26,6 +46,8 @@ proc waitForChild(process: Process): int =
       process.terminate()
       discard process.waitForExit(3000)
       return 128 + int(shutdownSignal)
+    if not sessionClaimHeld(claim):
+      return ClaimLostStatus
     sleep(100)
 
 proc terminateChild(process: Process) =
@@ -104,10 +126,20 @@ proc runSupervisor*(): int =
         recordClaim = claimSessionRecord(currentSessionPath(dir), record)
       elif not writeClaimedSessionRecord(recordClaim, record):
         echo "triad-supervise: current session metadata claimed by another supervisor; stopping"
+        if not shellManager.isNil:
+          terminateChild(shellManager)
+          shellManager = nil
         terminateChild(process)
         return 0
 
-      let status = waitForChild(process)
+      let status = waitForChild(process, recordClaim)
+      if status == ClaimLostStatus:
+        echo "triad-supervise: current session metadata claimed by another supervisor; stopping"
+        if not shellManager.isNil:
+          terminateChild(shellManager)
+          shellManager = nil
+        terminateChild(process)
+        return 0
       try:
         process.close()
       except CatchableError:
@@ -128,7 +160,8 @@ proc runSupervisor*(): int =
       else:
         echo "triad-supervise: triad exited with status ",
           status, " after ", runtimeSec, "s; restarting"
-      sleep(restartDelay)
+      if not sleepClaimAware(recordClaim, restartDelay):
+        return 0
   finally:
     if not shellManager.isNil:
       terminateChild(shellManager)
