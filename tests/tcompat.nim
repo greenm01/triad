@@ -1,4 +1,4 @@
-import std/[json, options, os, sequtils, strtabs, strutils, tables, times, unittest]
+import std/[json, options, os, osproc, sequtils, strtabs, strutils, tables, times, unittest]
 import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec, triad_state]
 import ../src/core/msg
@@ -1823,3 +1823,38 @@ suite "injectable shell lifecycle":
     runner.terminatingShells[0].process.setFakeExitCode(0)
     runner.advanceTerminatingShells(1'i64)
     check runner.terminatingShells.len == 0
+
+  test "released shell pid is reaped":
+    var runner = ShellRunner()
+    let process = startProcess("/bin/true", options = {poParentStreams})
+    runner.setTrackedProcessHandle(newProcessHandle(process), "test-shell")
+    runner.releaseTrackedShell("test cleanup")
+    check runner.releasedPids.len == 1
+    sleep(50)
+    runner.advanceReleasedShells()
+    check runner.releasedPids.len == 0
+
+  test "fake launch promotes to tracked shell at deadline":
+    var runner = ShellRunner()
+    let model = singleShellModel(@["fake-shell", "launch"], @[])
+    let handle = newFakeProcessHandle(1001)
+    runner.queueFakeShellLaunch(
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
+      nowMs = 0'i64,
+    )
+    runner.advanceShellLifecycle(model, "niri.sock", 300'i64)
+    check runner.trackedProcess == handle
+    check runner.trackedShellName == "test-shell"
+
+  test "fake launch exit schedules recovery":
+    var runner = ShellRunner()
+    let model = singleShellModel(@["fake-shell", "launch"], @[])
+    let handle = newFakeProcessHandle(1002)
+    handle.setFakeExitCode(7)
+    runner.queueFakeShellLaunch(
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
+      nowMs = 0'i64,
+    )
+    runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
+    check runner.recoveryPending
+    check not runner.pendingLaunchActive

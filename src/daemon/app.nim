@@ -1376,6 +1376,10 @@ proc main*(): int =
       if runtimeReadyEvents.timerReady:
         daemon.syncScreenMirrors()
     daemon.shellRunner.advanceTerminatingShells(nowMs)
+    daemon.shellRunner.advanceReleasedShells()
+    daemon.shellRunner.advanceShellLifecycle(
+      daemon.runtimeState.model, niriSocketPath, nowMs
+    )
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

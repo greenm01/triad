@@ -24,6 +24,16 @@ type
     pid*: int
     exitCode*: int
 
+  PendingShellLaunch* = object
+    process*: ProcessHandle
+    profile*: ShellProfileConfig
+    shells*: ShellsConfig
+    spawnInfo*: JsonNode
+    niriSocketPath*: string
+    reason*: string
+    startedAtMs*: int64
+    retryAllowed*: bool
+
   ShellRunner* = object
     trackedProcess*: ProcessHandle
     trackedShellName*: string
@@ -34,12 +44,37 @@ type
     recoveryReason*: string
     exclusiveFocusSinceMs*: int64
     terminatingShells*: seq[TrackedChild]
+    pendingLaunchActive*: bool
+    pendingLaunch*: PendingShellLaunch
+    releasedPids*: seq[int32]
 
 proc setTrackedProcessHandle*(
     runner: var ShellRunner, handle: ProcessHandle, name: string
 ) =
   runner.trackedProcess = handle
   runner.trackedShellName = name
+
+proc queueFakeShellLaunch*(
+    runner: var ShellRunner,
+    handle: ProcessHandle,
+    profile: ShellProfileConfig,
+    shells: ShellsConfig,
+    niriSocketPath: string,
+    reason: string,
+    nowMs = 0'i64,
+    retryAllowed = false,
+) =
+  runner.pendingLaunch = PendingShellLaunch(
+    process: handle,
+    profile: profile,
+    shells: shells,
+    niriSocketPath: niriSocketPath,
+    spawnInfo: nil,
+    reason: reason,
+    startedAtMs: nowMs,
+    retryAllowed: retryAllowed,
+  )
+  runner.pendingLaunchActive = true
 
 const
   MaxShellRecoveryAttempts* = 3
@@ -276,7 +311,18 @@ proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
       "shell_release_failed", %*{"reason": reason, "tracked_pid": pid, "error": e.msg}
     )
   runner.trackedProcess = nil
+  runner.releasedPids.add(int32(pid))
   runner.trackedShellName = ""
+
+
+proc advanceReleasedShells*(runner: var ShellRunner) =
+  var index = 0
+  while index < runner.releasedPids.len:
+    if reapReleasedPid(runner.releasedPids[index]):
+      runner.releasedPids.delete(index)
+    else:
+      inc index
+
 
 proc stopShellProfile(
     runner: var ShellRunner,
@@ -436,6 +482,68 @@ proc spawnShellProfile(
       profile,
       reason,
       spawnInfo.shellSpawnEventPayload(error = e.msg),
+    )
+
+proc advanceShellLifecycle*(
+    runner: var ShellRunner,
+    model: Model,
+    niriSocketPath: string,
+    nowMs = currentUnixMs(),
+) =
+  if not runner.pendingLaunchActive:
+    return
+
+  let launch = runner.pendingLaunch
+  let code = launch.process.peekExitCode()
+  if code != -1:
+    runner.pendingLaunchActive = false
+    let eventName =
+      if code == 0: "shell_spawn_handoff" else: "shell_spawn_exited"
+    writeShellBehaviorEvent(
+      eventName,
+      launch.shells,
+      launch.profile,
+      launch.reason,
+      shellSpawnEventPayload(
+        launch.spawnInfo, childPid = launch.process.processID(), exitCode = some(code)
+      ),
+    )
+    launch.process.closeProcessHandle()
+    if launch.retryAllowed:
+      runner.stopShellProfile(
+        model,
+        launch.shells,
+        launch.profile,
+        launch.reason & " stale instance",
+        stopTracked = false,
+      )
+      discard runner.spawnShellProfile(
+        model,
+        launch.shells,
+        launch.profile,
+        launch.niriSocketPath,
+        launch.reason & " restart",
+      )
+    else:
+      let attemptsBefore = runner.recoveryAttempts
+      runner.scheduleShellRecovery(
+        model,
+        launch.reason & " restart",
+        if code == 0: ShellSpawnStatus.Handoff else: ShellSpawnStatus.Failed,
+        nowMs,
+      )
+      runner.recoveryAttempts = attemptsBefore
+      runner.nextRecoveryMs = nowMs + attemptsBefore.recoveryDelayMs()
+  elif nowMs - launch.startedAtMs >= 250'i64:
+    runner.pendingLaunchActive = false
+    runner.trackedProcess = launch.process
+    runner.trackedShellName = launch.profile.name
+    writeShellBehaviorEvent(
+      "shell_spawned",
+      launch.shells,
+      launch.profile,
+      launch.reason,
+      shellSpawnEventPayload(launch.spawnInfo, childPid = launch.process.processID()),
     )
 
 proc activeShellProfile(
