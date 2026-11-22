@@ -4,7 +4,7 @@ import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
 import
   ../session/
-    [doctor_live, live_reload, logs as session_logs, session_runner, supervisor]
+    [doctor_live, live_reload, logs as session_logs, session_runner, shell_manager, supervisor]
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
@@ -883,6 +883,8 @@ proc main*(): int =
   if args.len >= 1 and args[0] == "supervise":
     quit runSupervisor()
 
+  if args.len >= 1 and args[0] == "shell-manager":
+    quit runShellManager()
   if args.len >= 1 and args[0] == "doctor-live":
     quit runDoctorLive()
 

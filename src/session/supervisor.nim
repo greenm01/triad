@@ -28,6 +28,14 @@ proc waitForChild(process: Process): int =
       return 128 + int(shutdownSignal)
     sleep(100)
 
+proc terminateChild(process: Process) =
+  try:
+    process.terminate()
+    discard process.waitForExit(3000)
+    process.close()
+  except CatchableError:
+    discard
+
 const SupervisorRestartDelaysMs* = [200'i64, 1000, 2000, 5000, 15000, 30000]
 
 proc restartDelayMs*(status: int, runtimeSec: int64, rapidRestarts: int): int64 =
@@ -48,16 +56,27 @@ proc runSupervisor*(): int =
       newSessionId()
   let sessionLog = getEnv("TRIAD_SESSION_LOG", "")
   let daemonLog = daemonLogPath(dir, sessionId)
+  let shellManagerLog = shellManagerLogPath(dir, sessionId)
   let triadBin = getEnv("TRIAD_BIN", getAppFilename())
   let claimId = sessionId & "-supervisor-" & $getCurrentProcessId()
   let startedAt = isoNow()
 
   var daemonLink = claimSymlink(daemonLog, dir / DaemonLatestName)
+  var shellManagerLink = claimSymlink(shellManagerLog, dir / ShellManagerLatestName)
   var recordClaim: SessionClaim
   var rapidRestarts = 0
+  var shellManager: Process
 
   try:
+    echo "triad-supervise: starting shell manager, log=", shellManagerLog
+    shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
+
     while shutdownSignal == 0:
+      if shellManager.peekExitCode() != -1:
+        echo "triad-supervise: restarting shell manager, log=", shellManagerLog
+        shellManager.close()
+        shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
+
       let startSec = epochTime().int64
       echo "triad-supervise: starting triad, log=", daemonLog
 
@@ -73,6 +92,7 @@ proc runSupervisor*(): int =
         sessionId: sessionId,
         sessionPid: parseInt(getEnv("TRIAD_SESSION_PID", $getCurrentProcessId())),
         supervisorPid: getCurrentProcessId(),
+        shellManagerPid: shellManager.processID,
         daemonPid: process.processID,
         stateDir: dir,
         sessionLog: sessionLog,
@@ -84,8 +104,7 @@ proc runSupervisor*(): int =
         recordClaim = claimSessionRecord(currentSessionPath(dir), record)
       elif not writeClaimedSessionRecord(recordClaim, record):
         echo "triad-supervise: current session metadata claimed by another supervisor; stopping"
-        process.terminate()
-        discard process.waitForExit(3000)
+        terminateChild(process)
         return 0
 
       let status = waitForChild(process)
@@ -98,7 +117,6 @@ proc runSupervisor*(): int =
         return status
 
       let runtimeSec = epochTime().int64 - startSec
-
       let restartDelay = restartDelayMs(status, runtimeSec, rapidRestarts)
       if runtimeSec < 30:
         inc rapidRestarts
@@ -112,7 +130,10 @@ proc runSupervisor*(): int =
           status, " after ", runtimeSec, "s; restarting"
       sleep(restartDelay)
   finally:
+    if not shellManager.isNil:
+      terminateChild(shellManager)
     restoreSessionRecord(recordClaim)
+    restoreSymlink(shellManagerLink)
     restoreSymlink(daemonLink)
 
   0

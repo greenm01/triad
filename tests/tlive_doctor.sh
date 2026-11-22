@@ -68,7 +68,7 @@ chmod +x "$stale_triad"
 
 write_metadata() {
   cat > "$state/triad/current-session.json" <<EOF
-{"version":1,"claim_id":"test","session_id":"test","session_pid":$$,"supervisor_pid":$$,"daemon_pid":$daemon_pid,"state_dir":"$state/triad","session_log":"$tmp/session.log","daemon_log":"$tmp/daemon.log","started_at":"2026-05-25T00:00:00-04:00","supervisor_protocol":1}
+{"version":1,"claim_id":"test","session_id":"test","session_pid":$$,"supervisor_pid":$$,"shell_manager_pid":$$,"daemon_pid":$daemon_pid,"state_dir":"$state/triad","session_log":"$tmp/session.log","daemon_log":"$tmp/daemon.log","started_at":"2026-05-25T00:00:00-04:00","supervisor_protocol":2}
 EOF
 }
 
