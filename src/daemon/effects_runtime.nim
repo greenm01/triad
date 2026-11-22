@@ -1,4 +1,4 @@
-import std/[asyncdispatch, json, options, osproc, tables]
+import std/[asyncdispatch, json, options, os, osproc, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -7,6 +7,7 @@ import protocols/river_xkb_config/client as riverXkbConfig
 import ../core/[effects, niri_state, triad_state]
 import ../ipc/socket
 import ../systems/daemon_view
+import ../session/[logs as session_logs, session_control, session_control_client]
 from ../types/core import OutputId
 import ../types/projection_values
 import ../utils/behavior_log
@@ -15,6 +16,29 @@ import
   ipc_broadcast_runtime, live_restore_runtime, manage_requests,
   output_management_runtime, process_runner, protocol_surface_runtime, shell_runner,
   render_runtime, screenshot_runner, spawn_context, state, render_invalidation
+
+proc applyManagedSpawnPlacement(daemon: ptr TriadDaemon, eff: Effect) {.async.} =
+  let client = newSessionControlClient(session_logs.stateDir() / "shell-manager.sock")
+  let payload = %*{
+    "argv": eff.spawnCommand,
+    "output_id": eff.spawnContextOutputId,
+    "slot": eff.spawnContextSlot,
+  }
+  let reply = await client.requestSessionControl(
+    SessionControlKind.Spawn, SessionControlKind.SpawnStarted, payload
+  )
+  if reply == nil:
+    return
+  let pid = reply{"pid"}.getInt()
+  if pid <= 0:
+    return
+  daemon[].rememberSpawnPlacementForPid(
+    int32(pid),
+    eff.spawnContextOutputId,
+    eff.spawnContextSlot,
+    $eff.spawnContextOutputId,
+    if eff.spawnCommand.len > 0: eff.spawnCommand[0] else: "",
+  )
 
 proc executeWindowChangedBroadcast(daemon: var TriadDaemon, eff: Effect) =
   let winId = eff.broadcastWindowId
@@ -212,19 +236,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
     )
   of EffectKind.EffSpawn:
     daemon.setLayerShellDefaultOutputForSpawn(OutputId(eff.spawnContextOutputId))
-    let process = spawnCommand(daemon.runtimeState.model, eff.spawnCommand)
-    if process != nil:
-      daemon.rememberSpawnPlacementForPid(
-        int32(process.processID),
-        eff.spawnContextOutputId,
-        eff.spawnContextSlot,
-        $eff.spawnContextOutputId,
-        if eff.spawnCommand.len > 0:
-          eff.spawnCommand[0]
-        else:
-          "",
-      )
-    daemon.trackChildProcess(process)
+    asyncCheck applyManagedSpawnPlacement(addr daemon, eff)
   of EffectKind.EffPointerWarp:
     for seat in daemon.seatPointers:
       seat.pointerWarp(eff.warpX, eff.warpY)
@@ -238,8 +250,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
   of EffectKind.EffEnsureNextKeyEaten, EffectKind.EffCancelEnsureNextKeyEaten:
     daemon.queueManageEffect(eff)
   of EffectKind.EffStopManager:
-    daemon.shellRunner.spawnPending = false
-    daemon.shellRunner.releaseTrackedShell("manager stop")
+
     if daemon.riverManager != nil:
       daemon.riverManager.stop()
   of EffectKind.EffTriadReload:
@@ -250,8 +261,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       return
     if devModeEnabled() and not markLiveReloadDevMode():
       warn "Triad reload could not preserve dev mode"
-    daemon.shellRunner.spawnPending = false
-    daemon.shellRunner.releaseTrackedShell("triad reload")
+
     if daemon.riverManager != nil:
       daemon.riverManager.stop()
   of EffectKind.EffExitSession:

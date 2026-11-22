@@ -63,3 +63,12 @@ Triad separates its native IPC from shell compatibility.
 *   **Compatibility Projection (`$NIRI_SOCKET`):** A projection of the internal snapshot into the JSON schema used by Niri-aware shells. This allows you to use existing Niri shell bars without modification.
 
 We map internal state to standard JSON payloads. Stable Tag IDs become Workspace IDs, and focus history ensures that hot reloads return you to where you left off.
+
+## Session Process Boundary
+The supervisor owns two child processes: the River-facing WM daemon and
+`triad shell-manager`. Shell profiles, startup commands, and ordinary spawned
+apps are owned by the shell manager. The WM owns River protocol state, layout,
+IPC projection, and Wayland-derived helpers. A versioned private control
+socket carries session-ready, config, spawn, fallback, and shutdown events.
+Shell-manager ownership requires a full River/Triad session restart so both
+processes use the same supervisor protocol.

@@ -217,7 +217,6 @@ proc applyConfigReload*(
     )
     return false
 
-  daemon.shellRunner.spawnPending = false
   if daemon.inputConfigReloadHook != nil:
     daemon.inputConfigReloadHook(addr daemon, "config reload")
   daemon.syncIdleInhibitFromRuntime()
@@ -245,20 +244,6 @@ proc applyConfigReload*(
     },
   )
 
-  if not shellChanged:
-    if daemon.shellRunner.needsShellRecovery(daemon.runtimeState.model):
-      writeBehaviorEvent(
-        "shell_config_reload_recovery",
-        %*{"reason": "config reload", "active": daemon.runtimeState.model.shells.active},
-      )
-      daemon.shellRunner.switchShell(
-        previousModel, daemon.runtimeState.model, niriSocketPath,
-        "config reload recovery",
-      )
-  else:
-    daemon.shellRunner.switchShell(
-      previousModel, daemon.runtimeState.model, niriSocketPath, "config reload"
-    )
 
   daemon.requestBindingReconfigure("config reload")
   daemon.configWatchPaths = loaded.configPaths
