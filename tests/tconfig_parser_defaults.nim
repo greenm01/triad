@@ -766,6 +766,15 @@ bindings {
     check keySymForBinding("!", Super) == 0x21'u32
     check keySymForBinding("~", Super) == 0x7e'u32
 
+  test "XF86 multimedia key names map to keysyms":
+    check keySymForBinding("XF86AudioRaiseVolume", Super) == 0x1008ff13'u32
+    check keySymForBinding("XF86AudioLowerVolume", Super) == 0x1008ff11'u32
+    check keySymForBinding("XF86AudioMute", Super) == 0x1008ff12'u32
+    check keySymForBinding("XF86MonBrightnessUp", Super) == 0x1008ff02'u32
+    check keySymForBinding("XF86MonBrightnessDown", Super) == 0x1008ff03'u32
+    check keySymForBinding("XF86Display", Super) == 0x1008ff59'u32
+    check keySymForBinding("XF86PowerOff", Super) == 0x1008ff2a'u32
+
   test "Config clamps hotkey overlay columns and ignores invalid position":
     let path = getCurrentDir() / "test_config_hotkey_overlay_layout.kdl"
     writeFile(
