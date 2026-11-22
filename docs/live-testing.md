@@ -127,6 +127,13 @@ commands and the configured shell are launched by the manager after that
 acknowledgement. A full session restart is required when changing between WM
 and manager ownership.
 
+Check the manager path in a live River session:
+
+- `Super+t` opens one terminal; pointer clicks and drags open none.
+- `switch-shell` changes the visible shell. An unrelated config reload leaves it running; a reload with changed shell profiles applies those profiles.
+- Killing `triad shell-manager` restarts the manager and daemon together, and the shell launches once.
+- Suspend and resume the session; the live supervisor keeps ownership of the shell.
+
 If `river_window_manager_v1` is not advertised, Triad exits with a fatal log.
 That means it is not running in a compatible River 0.4+ session.
 
