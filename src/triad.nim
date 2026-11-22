@@ -1,4 +1,4 @@
 import daemon/app
 
 when isMainModule:
-  main()
+  quit main()

@@ -28,6 +28,14 @@ proc waitForChild(process: Process): int =
       return 128 + int(shutdownSignal)
     sleep(100)
 
+const SupervisorRestartDelaysMs* = [200'i64, 1000, 2000, 5000, 15000, 30000]
+
+proc restartDelayMs*(status: int, runtimeSec: int64, rapidRestarts: int): int64 =
+  if runtimeSec >= 30:
+    return if status == 0: SupervisorRestartDelaysMs[0] else: SupervisorRestartDelaysMs[1]
+  let index = min(max(rapidRestarts + 1, 1), SupervisorRestartDelaysMs.high)
+  SupervisorRestartDelaysMs[index]
+
 proc runSupervisor*(): int =
   let dir = stateDir()
   createDir(dir)
@@ -90,18 +98,12 @@ proc runSupervisor*(): int =
         return status
 
       let runtimeSec = epochTime().int64 - startSec
-      if runtimeSec < 5:
+
+      let restartDelay = restartDelayMs(status, runtimeSec, rapidRestarts)
+      if runtimeSec < 30:
         inc rapidRestarts
       else:
         rapidRestarts = 0
-
-      let restartDelay =
-        if rapidRestarts >= 3:
-          5000
-        elif status == 0:
-          200
-        else:
-          1000
 
       if status == 0:
         echo "triad-supervise: triad exited cleanly after ", runtimeSec, "s; restarting"

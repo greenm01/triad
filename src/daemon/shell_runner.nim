@@ -222,11 +222,11 @@ proc stopTrackedShell*(runner: var ShellRunner, reason: string) =
   )
   try:
     runner.trackedProcess.terminate()
-    var code = runner.trackedProcess.pollProcessExitCode(1000)
+    var code = runner.trackedProcess.pollProcessExitCode(250)
     var killed = false
     if code == -1:
       runner.trackedProcess.kill()
-      code = runner.trackedProcess.waitForExit()
+      code = runner.trackedProcess.waitForExit(250)
       killed = true
     info "Stopped shell", pid = pid, reason = reason
     writeBehaviorEvent(
@@ -301,10 +301,13 @@ proc stopShellProfile(
           env = model.configuredProcessEnv(),
           options = InheritedProcessOptions,
         )
-        let code = p.pollProcessExitCode(1000)
+        var code = p.pollProcessExitCode(250)
+        var killed = false
         if code == -1:
           p.kill()
-          discard p.waitForExit()
+          code = p.waitForExit(250)
+          killed = true
+        if killed:
           writeShellBehaviorEvent(
             "shell_stop_timed_out", shells, profile, reason, %*{"command": profile.stop}
           )
@@ -369,7 +372,7 @@ proc spawnShellProfile(
       if profile.niriCompat:
         compat = prepareNiriShellCompatEnv(niriSocketPath, baseEnv = baseEnv)
         spawnInfo = shellCompatBehaviorPayload(profile, niriSocketPath, compat)
-        let niriSocketAccepting = waitForNiriCompatSocket(compat.niriSocketPath)
+        let niriSocketAccepting = niriCompatSocketReady(compat.niriSocketPath)
         spawnInfo["niri_socket_accepting"] = %niriSocketAccepting
         if not niriSocketAccepting:
           warn "Niri compatibility socket is not accepting connections before shell launch",

@@ -855,11 +855,11 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 
 # --- Main Loop ---
 
-proc main*() =
+proc main*(): int =
   let args = commandLineParams()
   if args.len > 0 and args[0] in ["--help", "-h", "help"]:
     stdout.writeLine(renderTriadHelp())
-    return
+    return 0
 
   if args.len > 0 and args[0] in ["validate-config", "check-config"]:
     let validateArgs =
@@ -1238,10 +1238,12 @@ proc main*() =
   var lastMemoryMaintenanceMs = 0'i64
   var lastShellPollMs = 0'i64
 
+  var exitStatus = 0
   var running = true
   while running:
     inc daemon.loopCounters.loopIterations
     if not dispatchPendingWayland(daemon.display):
+      exitStatus = 1
       break
 
     let nowMs = unixMs()
@@ -1317,6 +1319,7 @@ proc main*() =
       daemon.flushManageRequest()
 
     if not prepareWaylandRead(daemon.display):
+      exitStatus = 1
       break
 
     discard daemon.display.flush()
@@ -1324,6 +1327,7 @@ proc main*() =
     if waitResult.waylandReady:
       inc daemon.loopCounters.waylandWakeups
       if daemon.display.read_events() == -1:
+        exitStatus = 1
         running = false
     else:
       daemon.display.cancel_read()
@@ -1339,6 +1343,7 @@ proc main*() =
 
   daemon.closeSwitchEventDevices()
   daemon.janetRuntime.close()
+  exitStatus
 
 if isMainModule:
-  main()
+  quit main()

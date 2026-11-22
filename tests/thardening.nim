@@ -25,6 +25,7 @@ import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
 import ../src/utils/[process_memory, session_env]
+import ../src/session/supervisor
 
 var observedConfigNotificationEvent: ConfigNotificationEvent
 var observedConfigNotificationCommand: seq[string]
@@ -2032,3 +2033,14 @@ suite "libinput request tracking":
     daemon.libinputResultDevices[20'u32] = 3'u32
     clearLibinputResult(addr daemon, 20'u32)
     check not daemon.libinputDevices[3'u32].dragLockRequestedSet
+
+suite "supervisor restart backoff":
+  test "long-running exits use short delay":
+    check restartDelayMs(0, 120, 0) == 200'i64
+    check restartDelayMs(1, 120, 3) == 1000'i64
+
+  test "rapid exits escalate and cap":
+    check restartDelayMs(1, 2, 0) == 1000'i64
+    check restartDelayMs(1, 2, 1) == 2000'i64
+    check restartDelayMs(0, 2, 2) == 5000'i64
+    check restartDelayMs(1, 2, 9) == 30000'i64

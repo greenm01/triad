@@ -1,4 +1,4 @@
-import std/[json, options, os, sequtils, strtabs, strutils, tables, unittest]
+import std/[json, options, os, sequtils, strtabs, strutils, tables, times, unittest]
 import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec, triad_state]
 import ../src/core/msg
@@ -261,14 +261,15 @@ sleep 30
   setFilePermissions(result.fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
 
 proc singleShellModel(
-    launch: seq[string], stop: seq[string] = @[], enabled = true
+    launch: seq[string], stop: seq[string] = @[], enabled = true, niriCompat = false
 ): Model =
   Model(
     shells: ShellsConfig(
       configured: true,
       enabled: enabled,
       active: "test-shell",
-      profiles: @[ShellProfileConfig(name: "test-shell", launch: launch, stop: stop)],
+      profiles:
+        @[ShellProfileConfig(name: "test-shell", launch: launch, stop: stop, niriCompat: niriCompat)],
     )
   )
 
@@ -1726,3 +1727,44 @@ Categories=System;TerminalEmulator;
     check powerOnMonitor.kind == MsgKind.CmdPowerOnMonitor
     check powerOnMonitor.outputTarget == "DP-3"
     check parseTextCommand("mmsg -g -A").isNone
+
+  test "Niri compat shell launch does not wait for a stale socket":
+    let tmp = getTempDir() / ("triad-niri-ready-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let staleSocket = tmp / "niri.sock"
+    writeFile(staleSocket, "stale")
+    let fake = writeFakeRecoveringShell(tmp)
+
+    let oldRuntimeDir = getEnv("XDG_RUNTIME_DIR", "")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_SHELL_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
+    putEnv("XDG_RUNTIME_DIR", tmp)
+    putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "0")
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
+      putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
+      putEnv("XDG_RUNTIME_DIR", oldRuntimeDir)
+
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(
+      @[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"], niriCompat = true
+    )
+    defer:
+      runner.stopTrackedShell("test cleanup")
+
+    let started = epochTime()
+    runner.spawnPendingShell(model, staleSocket, "test")
+    let elapsedMs = (epochTime() - started) * 1000.0
+
+    check elapsedMs < 1000.0
+    check runner.trackedShellRunning()
