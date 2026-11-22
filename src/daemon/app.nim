@@ -22,6 +22,7 @@ import
   render_runtime, render_invalidation, screen_mirror_runtime, spawn_context, state,
   switch_event_runtime
 import runtime_events
+import ipc_startup_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -1156,37 +1157,17 @@ proc main*(): int =
   let triadSocket = triadSocketPath()
   let niriSocketPath = chooseNiriCompatSocketPath(triadSocket)
   var ipcStarted = false
-  var ipcStartupGateOpen = false
-
-  proc waitForIpcListenersReady(listeners: openArray[Future[bool]]): bool =
-    let deadline = epochTime() + float(IpcListenReadyTimeoutMs) / 1000.0
-    while true:
-      var pending = false
-      for listener in listeners:
-        if not listener.finished:
-          pending = true
-          break
-      if not pending:
-        break
-      if epochTime() >= deadline:
-        return false
-      asyncdispatch.poll(10)
-
-    result = true
-    for listener in listeners:
-      if listener.failed or not listener.read:
-        result = false
-
+  var ipcStartupGate = initIpcStartupGate(unixMs())
   proc startIpcServers(): bool =
-    if ipcStartupGateOpen:
+    if ipcStartupGate.open:
       return true
     if ipcStarted:
       return false
     ipcStarted = true
-    var listeners: seq[Future[bool]] = @[]
+    ipcStartupGate.startedAtMs = unixMs()
 
     let triadListenReady = newFuture[bool]("triad ipc listener ready")
-    listeners.add(triadListenReady)
+    ipcStartupGate.addListener(triadListenReady)
     info "Starting Triad IPC server", path = triadSocket
     writeBehaviorEvent("triad_ipc_server_starting", %*{"path": triadSocket})
     asyncCheck startIpcServer(
@@ -1204,7 +1185,7 @@ proc main*(): int =
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
       let niriListenReady = newFuture[bool]("niri compat ipc listener ready")
-      listeners.add(niriListenReady)
+      ipcStartupGate.addListener(niriListenReady)
       info "Starting Niri-compatible IPC server", path = niriSocketPath
       writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
@@ -1221,15 +1202,6 @@ proc main*(): int =
         requestTimeoutMs = IpcNoRequestTimeoutMs,
       )
 
-    let ready = waitForIpcListenersReady(listeners)
-    ipcStartupGateOpen = true
-    writeBehaviorEvent(
-      "ipc_startup_listeners_ready",
-      %*{"ready": ready, "timeout_ms": IpcListenReadyTimeoutMs},
-    )
-    if not ready:
-      error "IPC listeners were not ready before startup commands",
-        timeout_ms = IpcListenReadyTimeoutMs
     true
 
   asyncCheck startStartupWindowRulesExpiry()
@@ -1299,14 +1271,35 @@ proc main*(): int =
       running = false
       continue
 
-    if daemon.initialManageComplete:
-      if startIpcServers():
-        daemon.spawnPendingStartupCommands(
-          daemon.runtimeState.model, "initial manage ipc ready"
+    if daemon.initialManageComplete and not ipcStarted:
+      discard startIpcServers()
+    if ipcStarted and not ipcStartupGate.open:
+      case ipcStartupGate.pollIpcStartupGate(nowMs, IpcListenReadyTimeoutMs)
+      of IpcStartupGateStatus.Ready:
+        writeBehaviorEvent(
+          "ipc_startup_listeners_ready",
+          %*{"ready": true, "timeout_ms": IpcListenReadyTimeoutMs},
         )
-        daemon.shellRunner.spawnPendingShell(
-          daemon.runtimeState.model, niriSocketPath, "initial manage ipc ready"
-        )
+      of IpcStartupGateStatus.Timeout:
+        if not ipcStartupGate.timeoutLogged:
+          ipcStartupGate.timeoutLogged = true
+          error "IPC listeners were not ready before startup commands",
+            timeout_ms = IpcListenReadyTimeoutMs
+          writeBehaviorEvent(
+            "ipc_startup_listeners_ready",
+            %*{"ready": false, "timeout_ms": IpcListenReadyTimeoutMs},
+          )
+      else:
+        discard
+
+
+    if daemon.initialManageComplete and ipcStartupGate.open:
+      daemon.spawnPendingStartupCommands(
+        daemon.runtimeState.model, "initial manage ipc ready"
+      )
+      daemon.shellRunner.spawnPendingShell(
+        daemon.runtimeState.model, niriSocketPath, "initial manage ipc ready"
+      )
       let shellPollMs = nowMs
       let recoveryMs = daemon.nextShellRecoveryMs()
       let shellPollDue =

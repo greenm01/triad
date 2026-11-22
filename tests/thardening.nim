@@ -15,6 +15,7 @@ import
     screen_mirror_runtime, spawn_context, switch_event_runtime,
   ]
 import ../src/daemon/runtime_events
+import ../src/daemon/ipc_startup_runtime
 from ../src/daemon/state import
   LibinputDeviceRuntime, OutputManagementHeadRuntime, clearOutputCaptureSessions,
   consumeMaximizedAck, expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
@@ -2072,3 +2073,29 @@ suite "runtime child-exit events":
     check child.waitForExit(1000) == 0
     check daemon.reapChildProcesses() == 1
     check daemon.fireAndForgetProcesses.len == 0
+
+suite "IPC startup gate":
+  test "pending listener keeps the gate closed":
+    var gate = initIpcStartupGate(0)
+    gate.addListener(newFuture[bool]("pending listener"))
+    check gate.pollIpcStartupGate(10, 100) == IpcStartupGateStatus.Pending
+    check not gate.open
+
+  test "all successful listeners open the gate early":
+    var gate = initIpcStartupGate(0)
+    let listener = newFuture[bool]("ready listener")
+    listener.complete(true)
+    gate.addListener(listener)
+    check gate.pollIpcStartupGate(1, 100) == IpcStartupGateStatus.Ready
+    check gate.open
+    check gate.ready
+
+  test "failed listener opens the gate only at timeout":
+    var gate = initIpcStartupGate(0)
+    let listener = newFuture[bool]("failed listener")
+    listener.complete(false)
+    gate.addListener(listener)
+    check gate.pollIpcStartupGate(10, 100) == IpcStartupGateStatus.Pending
+    check gate.pollIpcStartupGate(100, 100) == IpcStartupGateStatus.Timeout
+    check gate.open
+    check not gate.ready

@@ -152,7 +152,7 @@ proc appendWarning(existing, warning: string): string =
   existing & "; " & warning
 
 proc niriCompatSocketReady*(path: string): bool =
-  path.len > 0 and unixPathExists(path)
+  path.len > 0 and unixPathIsSocket(path)
 
 proc installNiriShim(
     compatBinPath, triadNiriPath: string
