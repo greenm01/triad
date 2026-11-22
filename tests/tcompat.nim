@@ -3,6 +3,7 @@ import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec, triad_state]
 import ../src/core/msg
 import ../src/daemon/shell_runner
+import ../src/daemon/process_handle
 import
   ../src/ipc/[
     binding_dispatch, command_help, command_registry, commands, niri_cli, niri_compat,
@@ -1809,3 +1810,16 @@ Categories=System;TerminalEmulator;
 
     check elapsedMs < 1000.0
     check runner.trackedShellRunning()
+
+suite "injectable shell lifecycle":
+  test "tracked shell stops are reaped with an injectable handle":
+    var runner = ShellRunner()
+    runner.setTrackedProcessHandle(newFakeProcessHandle(999), "test-shell")
+    check runner.trackedShellRunning()
+
+    runner.stopTrackedShell("test cleanup")
+    check runner.trackedProcess == nil
+    check runner.terminatingShells.len == 1
+    runner.terminatingShells[0].process.setFakeExitCode(0)
+    runner.advanceTerminatingShells(1'i64)
+    check runner.terminatingShells.len == 0

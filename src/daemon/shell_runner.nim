@@ -1,6 +1,8 @@
 import std/[json, options, os, osproc, sequtils, strtabs, strutils, times]
 import chronicles
 import process_runner
+import process_handle
+import tracked_child
 import ../core/shell_profiles
 import ../ipc/[niri_shell_compat, socket]
 import ../types/model
@@ -23,7 +25,7 @@ type
     exitCode*: int
 
   ShellRunner* = object
-    trackedProcess*: Process
+    trackedProcess*: ProcessHandle
     trackedShellName*: string
     spawnPending*: bool
     recoveryPending*: bool
@@ -31,6 +33,13 @@ type
     nextRecoveryMs*: int64
     recoveryReason*: string
     exclusiveFocusSinceMs*: int64
+    terminatingShells*: seq[TrackedChild]
+
+proc setTrackedProcessHandle*(
+    runner: var ShellRunner, handle: ProcessHandle, name: string
+) =
+  runner.trackedProcess = handle
+  runner.trackedShellName = name
 
 const
   MaxShellRecoveryAttempts* = 3
@@ -67,13 +76,13 @@ proc clearShellRecovery*(runner: var ShellRunner) =
 proc pollTrackedShellExit(runner: var ShellRunner): Option[ShellTrackedExit] =
   if runner.trackedProcess == nil:
     return none(ShellTrackedExit)
-  let code = runner.trackedProcess.pollProcessExitCode(0)
+  let code = runner.trackedProcess.peekExitCode()
   if code == -1:
     return none(ShellTrackedExit)
   result = some(
     ShellTrackedExit(
       shellName: runner.trackedShellName,
-      pid: runner.trackedProcess.processID,
+      pid: runner.trackedProcess.processID(),
       exitCode: code,
     )
   )
@@ -86,7 +95,7 @@ proc pollTrackedShellExit(runner: var ShellRunner): Option[ShellTrackedExit] =
     },
   )
   try:
-    runner.trackedProcess.close()
+    runner.trackedProcess.closeProcessHandle()
   except CatchableError:
     discard
   runner.trackedProcess = nil
@@ -216,35 +225,38 @@ proc stopTrackedShell*(runner: var ShellRunner, reason: string) =
     )
     return
 
-  let pid = runner.trackedProcess.processID
+  let pid = runner.trackedProcess.processID()
   writeBehaviorEvent(
     "shell_tracked_stop_requested", %*{"reason": reason, "tracked_pid": pid}
   )
-  try:
-    runner.trackedProcess.terminate()
-    var code = runner.trackedProcess.pollProcessExitCode(250)
-    var killed = false
-    if code == -1:
-      runner.trackedProcess.kill()
-      code = runner.trackedProcess.waitForExit(250)
-      killed = true
-    info "Stopped shell", pid = pid, reason = reason
-    writeBehaviorEvent(
-      "shell_tracked_stop_completed",
-      %*{"reason": reason, "tracked_pid": pid, "exit_code": code, "killed": killed},
-    )
-  except CatchableError as e:
-    warn "Failed to stop shell", pid = pid, reason = reason, error = e.msg
-    writeBehaviorEvent(
-      "shell_tracked_stop_failed",
-      %*{"reason": reason, "tracked_pid": pid, "error": e.msg},
-    )
-
-  try:
-    runner.trackedProcess.close()
-  except CatchableError:
-    discard
+  let nowMs = currentUnixMs()
+  var child = initTrackedChild(runner.trackedProcess, nowMs, 250'i64)
+  child.beginTermination(nowMs, 250'i64)
+  runner.terminatingShells.add(child)
   runner.trackedProcess = nil
+  runner.trackedShellName = ""
+
+proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentUnixMs()) =
+  var index = runner.terminatingShells.high
+  while index >= 0:
+    var child = runner.terminatingShells[index]
+    if child.advanceTrackedChild(nowMs, 250'i64):
+      let pid = child.process.processID()
+      info "Stopped shell", pid = pid, reason = "tracked shell"
+      writeBehaviorEvent(
+        "shell_tracked_stop_completed",
+        %*{
+          "reason": "tracked shell",
+          "tracked_pid": pid,
+          "exit_code": child.exitCode,
+          "killed": child.killSent,
+        },
+      )
+      child.process.closeProcessHandle()
+      runner.terminatingShells.delete(index)
+    else:
+      runner.terminatingShells[index] = child
+    dec index
 
 proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
   runner.exclusiveFocusSinceMs = 0
@@ -252,9 +264,9 @@ proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
     writeBehaviorEvent("shell_release_skipped", %*{"reason": reason, "tracked": false})
     return
 
-  let pid = runner.trackedProcess.processID
+  let pid = runner.trackedProcess.processID()
   try:
-    runner.trackedProcess.close()
+    runner.trackedProcess.closeProcessHandle()
     info "Released shell for manager handoff", pid = pid, reason = reason
     writeBehaviorEvent("shell_released", %*{"reason": reason, "tracked_pid": pid})
   except CatchableError as e:
@@ -397,7 +409,7 @@ proc spawnShellProfile(
       options = InheritedProcessOptions,
     )
     let childPid = p.processID
-    runner.trackedProcess = p
+    runner.trackedProcess = newProcessHandle(p)
     runner.trackedShellName = profile.name
     info "Spawned shell",
       profile = profile.name,
