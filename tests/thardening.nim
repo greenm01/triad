@@ -16,6 +16,7 @@ import
   ]
 import ../src/daemon/runtime_events
 import ../src/daemon/ipc_startup_runtime
+import ../src/daemon/tracked_child
 from ../src/daemon/state import
   LibinputDeviceRuntime, OutputManagementHeadRuntime, clearOutputCaptureSessions,
   consumeMaximizedAck, expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
@@ -2099,3 +2100,43 @@ suite "IPC startup gate":
     check gate.pollIpcStartupGate(100, 100) == IpcStartupGateStatus.Timeout
     check gate.open
     check not gate.ready
+
+suite "tracked child state machine":
+  test "starting child promotes to running at deadline":
+    let child = startProcess(
+      "/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams}
+    )
+    var tracked = initTrackedChild(child, 0'i64, 250'i64)
+    defer:
+      if not tracked.process.isNil:
+        tracked.process.kill()
+        tracked.process.close()
+    check not tracked.advanceTrackedChild(249'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Starting
+    check not tracked.advanceTrackedChild(250'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Running
+
+  test "reaped child reports its exit code":
+    let child = startProcess("/bin/true", options = {poParentStreams})
+    check child.waitForExit(1000) == 0
+    var tracked = initTrackedChild(child, 0'i64, 250'i64)
+    check tracked.advanceTrackedChild(1'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Reaped
+    check tracked.exitCode == 0
+
+  test "terminating child escalates to kill at deadline":
+    let child = startProcess(
+      "/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams}
+    )
+    var tracked = initTrackedChild(child, 0'i64, 250'i64)
+    defer:
+      if not tracked.process.isNil:
+        tracked.process.kill()
+        tracked.process.close()
+    tracked.beginTermination(100'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Terminating
+    check not tracked.advanceTrackedChild(349'i64, 250'i64)
+    check not tracked.killSent
+    check not tracked.advanceTrackedChild(350'i64, 250'i64)
+    check tracked.killSent
+    check tracked.phase == TrackedChildPhase.Killing
