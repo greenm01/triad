@@ -7,34 +7,46 @@ type ProcessHandle* = ref object
   fakeExitCode*: int
 
 proc newProcessHandle*(process: Process): ProcessHandle =
-  ProcessHandle(process: process)
+  if process == nil: nil else: ProcessHandle(process: process)
 
 proc newFakeProcessHandle*(pid: int): ProcessHandle =
   ProcessHandle(pid: pid, fake: true, fakeExitCode: -1)
 
 proc processID*(handle: ProcessHandle): int =
+  if handle == nil:
+    return -1
   if handle.fake:
     handle.pid
-  else:
+  elif handle.process != nil:
     handle.process.processID
+  else:
+    -1
 
 proc peekExitCode*(handle: ProcessHandle): int =
+  if handle == nil:
+    return -1
   if handle.fake:
     handle.fakeExitCode
-  else:
+  elif handle.process != nil:
     handle.process.peekExitCode()
+  else:
+    -1
 
 proc setFakeExitCode*(handle: ProcessHandle, code: int) =
-  handle.fakeExitCode = code
+  if handle != nil:
+    handle.fakeExitCode = code
 
 proc terminateProcess*(handle: ProcessHandle) =
-  if not handle.fake:
-    handle.process.terminate()
+  if handle == nil or handle.fake or handle.process == nil:
+    return
+  handle.process.terminate()
 
 proc killProcess*(handle: ProcessHandle) =
-  if not handle.fake:
-    handle.process.kill()
+  if handle == nil or handle.fake or handle.process == nil:
+    return
+  handle.process.kill()
 
 proc closeProcessHandle*(handle: ProcessHandle) =
-  if not handle.fake and handle.process != nil:
-    handle.process.close()
+  if handle == nil or handle.fake or handle.process == nil:
+    return
+  handle.process.close()

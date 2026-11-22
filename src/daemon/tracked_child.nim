@@ -1,4 +1,5 @@
 import std/[osproc, posix]
+import process_handle
 
 type
   TrackedChildPhase* {.pure.} = enum
@@ -9,26 +10,29 @@ type
     Reaped
 
   TrackedChild* = object
-    process*: Process
+    process*: ProcessHandle
     phase*: TrackedChildPhase
     deadlineMs*: int64
     termSent*: bool
     killSent*: bool
     exitCode*: int
 
-proc initTrackedChild*(process: Process, nowMs, timeoutMs: int64): TrackedChild =
+proc initTrackedChild*(handle: ProcessHandle, nowMs, timeoutMs: int64): TrackedChild =
   TrackedChild(
-    process: process,
+    process: handle,
     phase: TrackedChildPhase.Starting,
     deadlineMs: nowMs + timeoutMs,
   )
+
+proc initTrackedChild*(process: Process, nowMs, timeoutMs: int64): TrackedChild =
+  initTrackedChild(newProcessHandle(process), nowMs, timeoutMs)
 
 proc beginTermination*(child: var TrackedChild, nowMs, timeoutMs: int64) =
   if child.process == nil or child.phase == TrackedChildPhase.Reaped:
     return
   if not child.termSent:
     try:
-      child.process.terminate()
+      child.process.terminateProcess()
     except CatchableError:
       discard
     child.termSent = true
@@ -52,7 +56,7 @@ proc advanceTrackedChild*(child: var TrackedChild, nowMs, killTimeoutMs: int64):
   of TrackedChildPhase.Terminating:
     if nowMs >= child.deadlineMs and not child.killSent:
       try:
-        child.process.kill()
+        child.process.killProcess()
       except CatchableError:
         discard
       child.killSent = true

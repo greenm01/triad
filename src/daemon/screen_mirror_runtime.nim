@@ -4,7 +4,7 @@ import ../state/engine
 import ../systems/outputs
 import ../types/core
 import ../utils/process_options
-import process_runner, state, tracked_child
+import process_handle, process_runner, state, tracked_child
 
 type MirrorSpec = object
   sourceOutput: OutputId
@@ -47,7 +47,7 @@ proc closeMirrorChild(runtime: var ScreenMirrorRuntime) =
   if not runtime.hasChild:
     return
   try:
-    runtime.child.process.close()
+    runtime.child.process.closeProcessHandle()
   except CatchableError:
     discard
   runtime.hasChild = false
@@ -59,7 +59,7 @@ proc stopMirror(runtime: var ScreenMirrorRuntime, reason: string) =
   runtime.stopReason = reason
   runtime.child.beginTermination(unixMs(), 250'i64)
   info "Stopping screen mirror",
-    pid = runtime.child.process.processID, target = runtime.targetName, reason = reason
+    pid = runtime.child.process.processID(), target = runtime.targetName, reason = reason
 
 proc startMirror(model: Model, spec: MirrorSpec): ScreenMirrorRuntime =
   result = ScreenMirrorRuntime(
@@ -127,7 +127,7 @@ proc syncScreenMirrors*(daemon: var TriadDaemon) =
       if reaped:
         if runtime.stopping:
           info "Stopped screen mirror",
-            pid = runtime.child.process.processID,
+            pid = runtime.child.process.processID(),
             target = runtime.targetName,
             reason = runtime.stopReason,
             exitCode = runtime.child.exitCode
