@@ -3,7 +3,7 @@ import
     asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
     strtabs, strutils, tables, times, unittest,
   ]
-from posix import TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, pipe, read, write
+from posix import TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, getpgrp, pipe, read, write
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
@@ -28,7 +28,7 @@ import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
-import ../src/utils/[process_memory, screenshot_capture, session_env]
+import ../src/utils/[process_options, process_memory, screenshot_capture, session_env]
 import ../src/session/supervisor
 
 proc mirrorTestDaemon(): TriadDaemon =
@@ -2224,3 +2224,16 @@ suite "tracked child state machine":
     check not tracked.advanceTrackedChild(350'i64, 250'i64)
     check tracked.killSent
     check tracked.phase == TrackedChildPhase.Killing
+
+suite "detached process options":
+  test "ordinary child runs in a separate process group":
+    let parentGroup = int(getpgrp())
+    let child = startProcess(
+      "/bin/sh", args = @["-c", "sleep 30"], options = DetachedProcessOptions
+    )
+    defer:
+      child.kill()
+      child.close()
+
+    let fields = readFile("/proc/" & $child.processID & "/stat").split()
+    check parseInt(fields[4]) != parentGroup
