@@ -199,6 +199,16 @@ Expected log events include discovered windows, titles/app-ids, output
 dimensions, IPC client connections, and closed windows. Debug logging may be
 verbose; use `TRIAD_LOG_LEVEL=info` for normal sessions.
 
+## Exercise Input
+
+Toggle tap-to-click, drag, drag lock, and two-finger scrolling in River config
+while Triad runs. The touchpad should settle at the configured values without
+repeated set requests or flipping between states.
+
+Set `input.keyboard.xkb.layout` in the config, then switch keyboard groups in
+River. The shell should receive the layout change. Without a configured layout
+list Triad has no layout name to broadcast.
+
 ## Failure Signals
 
 Treat these as hardening bugs to investigate:

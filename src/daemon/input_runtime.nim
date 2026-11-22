@@ -326,24 +326,42 @@ proc applyTouchpadExtras(
     daemon.addResultListener(
       device.setSendEvents(mode), "input disabled-on-external-mouse"
     )
-  if config.tapSet and runtime.tapFingerCount > 0:
-    daemon.addResultListener(device.setTap(config.tap.boolState()), "input tap")
+  var state = runtime
+  let desiredTap = config.tap.boolState()
+  if config.tapSet and runtime.tapFingerCount > 0 and
+      not (state.tapCurrentSet and state.tapCurrent == desiredTap) and
+      not (state.tapRequestedSet and state.tapRequested == desiredTap):
+    state.tapRequested = desiredTap
+    state.tapRequestedSet = true
+    daemon.addResultListener(device.setTap(desiredTap), "input tap")
   if config.tapButtonMapSet and runtime.tapFingerCount > 0:
     daemon.addResultListener(
       device.setTapButtonMap(config.tapButtonMap.buttonMapValue()),
       "input tap-button-map",
     )
-  if config.dragSet and runtime.tapFingerCount > 0:
-    daemon.addResultListener(device.setDrag(config.drag.boolState()), "input drag")
-  if config.dragLockSet and runtime.tapFingerCount > 0:
-    daemon.addResultListener(
-      device.setDragLock(
-        if config.dragLock: LibinputDragLockEnabledTimeout else: LibinputDragLockDisabled
-      ),
-      "input drag-lock",
-    )
-  if config.dwtSet and runtime.dwtSupport:
-    daemon.addResultListener(device.setDwt(config.dwt.boolState()), "input dwt")
+  let desiredDrag = config.drag.boolState()
+  if config.dragSet and runtime.tapFingerCount > 0 and
+      not (state.dragCurrentSet and state.dragCurrent == desiredDrag) and
+      not (state.dragRequestedSet and state.dragRequested == desiredDrag):
+    state.dragRequested = desiredDrag
+    state.dragRequestedSet = true
+    daemon.addResultListener(device.setDrag(desiredDrag), "input drag")
+  let desiredDragLock =
+    if config.dragLock: LibinputDragLockEnabledTimeout else: LibinputDragLockDisabled
+  if config.dragLockSet and runtime.tapFingerCount > 0 and
+      not (state.dragLockCurrentSet and state.dragLockCurrent == desiredDragLock) and
+      not (state.dragLockRequestedSet and state.dragLockRequested == desiredDragLock):
+    state.dragLockRequested = desiredDragLock
+    state.dragLockRequestedSet = true
+    daemon.addResultListener(device.setDragLock(desiredDragLock), "input drag-lock")
+  let desiredDwt = config.dwt.boolState()
+  if config.dwtSet and runtime.dwtSupport and
+      not (state.dwtCurrentSet and state.dwtCurrent == desiredDwt) and
+      not (state.dwtRequestedSet and state.dwtRequested == desiredDwt):
+    state.dwtRequested = desiredDwt
+    state.dwtRequestedSet = true
+    daemon.addResultListener(device.setDwt(desiredDwt), "input dwt")
+  daemon.libinputDevices[device.id()] = state
   if config.dwtpSet and runtime.dwtpSupport:
     daemon.addResultListener(device.setDwtp(config.dwtp.boolState()), "input dwtp")
   if config.clickMethodSet:
@@ -699,6 +717,54 @@ proc onLibinputTapSupport(
       runtime.tapFingerCount = fingerCount,
   )
 
+proc onLibinputTapCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, state: uint32
+) =
+  callbackDaemon(data, "libinput tap current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.tapCurrent = state
+      runtime.tapCurrentSet = true
+      if runtime.tapRequestedSet and runtime.tapRequested == state:
+        runtime.tapRequestedSet = false,
+  )
+
+proc onLibinputDragCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, state: uint32
+) =
+  callbackDaemon(data, "libinput drag current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.dragCurrent = state
+      runtime.dragCurrentSet = true
+      if runtime.dragRequestedSet and runtime.dragRequested == state:
+        runtime.dragRequestedSet = false,
+  )
+
+proc onLibinputDragLockCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, state: uint32
+) =
+  callbackDaemon(data, "libinput drag-lock current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.dragLockCurrent = state
+      runtime.dragLockCurrentSet = true
+      if runtime.dragLockRequestedSet and runtime.dragLockRequested == state:
+        runtime.dragLockRequestedSet = false,
+  )
+
+proc onLibinputDwtCurrent(
+    data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, state: uint32
+) =
+  callbackDaemon(data, "libinput dwt current").setLibinputRuntime(
+    device,
+    proc(runtime: var LibinputDeviceRuntime) =
+      runtime.dwtCurrent = state
+      runtime.dwtCurrentSet = true
+      if runtime.dwtRequestedSet and runtime.dwtRequested == state:
+        runtime.dwtRequestedSet = false,
+  )
+
 proc onLibinputAccelSupport(
     data: pointer, device: ptr riverLibinput.RiverLibinputDeviceV1, profiles: uint32
 ) =
@@ -857,13 +923,13 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   sendEventsCurrent: onLibinputSendEventsCurrent,
   tapSupport: onLibinputTapSupport,
   tapDefault: ignoreLibinputUint,
-  tapCurrent: ignoreLibinputUint,
+  tapCurrent: onLibinputTapCurrent,
   tapButtonMapDefault: ignoreLibinputUint,
   tapButtonMapCurrent: ignoreLibinputUint,
   dragDefault: ignoreLibinputUint,
-  dragCurrent: ignoreLibinputUint,
+  dragCurrent: onLibinputDragCurrent,
   dragLockDefault: ignoreLibinputUint,
-  dragLockCurrent: ignoreLibinputUint,
+  dragLockCurrent: onLibinputDragLockCurrent,
   threeFingerDragSupport: ignoreLibinputInt,
   threeFingerDragDefault: ignoreLibinputUint,
   threeFingerDragCurrent: ignoreLibinputUint,
@@ -898,7 +964,7 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   scrollButtonLockCurrent: ignoreLibinputUint,
   dwtSupport: onLibinputDwtSupport,
   dwtDefault: ignoreLibinputUint,
-  dwtCurrent: ignoreLibinputUint,
+  dwtCurrent: onLibinputDwtCurrent,
   dwtpSupport: onLibinputDwtpSupport,
   dwtpDefault: ignoreLibinputUint,
   dwtpCurrent: ignoreLibinputUint,
@@ -907,6 +973,24 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   rotationCurrent: ignoreLibinputUint,
   done: onLibinputDone,
 )
+
+proc clearRequestedLibinputSetting(daemon: ptr TriadDaemon, setting: string) =
+  if daemon == nil:
+    return
+  for id, runtime in daemon.libinputDevices.pairs:
+    var state = runtime
+    case setting
+    of "input tap":
+      state.tapRequestedSet = false
+    of "input drag":
+      state.dragRequestedSet = false
+    of "input drag-lock":
+      state.dragLockRequestedSet = false
+    of "input dwt":
+      state.dwtRequestedSet = false
+    else:
+      continue
+    daemon.libinputDevices[id] = state
 
 proc onLibinputResultSuccess(
     data: pointer, result: ptr riverLibinput.RiverLibinputResultV1
@@ -922,8 +1006,9 @@ proc onLibinputResultUnsupported(
   let daemon = callbackDaemon(data, "libinput result unsupported")
   if daemon == nil:
     return
-  warn "Libinput setting unsupported",
-    setting = daemon.libinputResultDescriptions.getOrDefault(result.id(), "")
+  let setting = daemon.libinputResultDescriptions.getOrDefault(result.id(), "")
+  warn "Libinput setting unsupported", setting = setting
+  daemon.clearRequestedLibinputSetting(setting)
   daemon.libinputResultDescriptions.del(result.id())
 
 proc onLibinputResultInvalid(
@@ -932,8 +1017,9 @@ proc onLibinputResultInvalid(
   let daemon = callbackDaemon(data, "libinput result invalid")
   if daemon == nil:
     return
-  warn "Libinput setting invalid",
-    setting = daemon.libinputResultDescriptions.getOrDefault(result.id(), "")
+  let setting = daemon.libinputResultDescriptions.getOrDefault(result.id(), "")
+  warn "Libinput setting invalid", setting = setting
+  daemon.clearRequestedLibinputSetting(setting)
   daemon.libinputResultDescriptions.del(result.id())
 
 libinputResultListener = riverLibinput.RiverLibinputResultV1Listener(

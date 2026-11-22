@@ -127,6 +127,18 @@ type
     sendEventsCurrent*: uint32
     sendEventsCurrentSet*: bool
     tapFingerCount*: int32
+    tapCurrent*: uint32
+    tapCurrentSet*: bool
+    tapRequested*: uint32
+    tapRequestedSet*: bool
+    dragCurrent*: uint32
+    dragCurrentSet*: bool
+    dragRequested*: uint32
+    dragRequestedSet*: bool
+    dragLockCurrent*: uint32
+    dragLockCurrentSet*: bool
+    dragLockRequested*: uint32
+    dragLockRequestedSet*: bool
     accelProfilesSupport*: uint32
     accelProfileCurrent*: uint32
     accelProfileCurrentSet*: bool
@@ -144,6 +156,10 @@ type
     middleEmulationCurrentSet*: bool
     scrollMethodsSupport*: uint32
     dwtSupport*: bool
+    dwtCurrent*: uint32
+    dwtCurrentSet*: bool
+    dwtRequested*: uint32
+    dwtRequestedSet*: bool
     dwtpSupport*: bool
 
   XkbKeyboardRuntime* = object
