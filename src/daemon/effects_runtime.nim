@@ -1,4 +1,4 @@
-import std/[asyncdispatch, json, options, os, osproc, tables]
+import std/[asyncdispatch, json, options, os, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -14,7 +14,7 @@ import ../utils/behavior_log
 import
   capture_sessions_runtime, child_process_runtime, idle_inhibit_runtime,
   ipc_broadcast_runtime, live_restore_runtime, manage_requests,
-  output_management_runtime, process_runner, protocol_surface_runtime, shell_runner,
+  output_management_runtime, process_runner, protocol_surface_runtime,
   render_runtime, screenshot_runner, spawn_context, state, render_invalidation
 
 proc applyManagedSpawnPlacement(daemon: ptr TriadDaemon, eff: Effect) {.async.} =

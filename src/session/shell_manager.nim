@@ -75,20 +75,20 @@ proc modelFromControlPayload(payload: JsonNode): Model =
     fallback: payload{"watchdog", "fallback"}.getStr(),
     exclusiveFocusTimeoutMs: int32(payload{"watchdog", "exclusiveFocusTimeoutMs"}.getInt()),
   )
-  var result = Model(shells: shells)
-  result.sessionLocked = payload{"session_locked"}.getBool()
-  result.layerFocusExclusive = payload{"layer_focus_exclusive"}.getBool()
+  var model = Model(shells: shells)
+  model.sessionLocked = payload{"session_locked"}.getBool()
+  model.layerFocusExclusive = payload{"layer_focus_exclusive"}.getBool()
   let envNode = payload{"environment"}
   if envNode != nil and envNode.kind == JArray:
     for item in envNode:
-      result.environment.add(
+      model.environment.add(
         EnvironmentEntryConfig(
           name: item{"name"}.getStr(),
           value: item{"value"}.getStr(),
           unset: item{"unset"}.getBool(),
         )
       )
-  result
+  model
 
 proc reapChildren(state: ShellManagerState) =
   var index = 0

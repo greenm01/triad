@@ -20,7 +20,7 @@ import
   bindings_runtime, capture_sessions_runtime, child_process_runtime, effects_runtime,
   input_runtime, ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime,
   manage_requests, message_queue, memory_status, output_management_runtime,
-  process_runner, protocol_diagnostics, shell_runner, registry_runtime, reload_runtime,
+  protocol_diagnostics, registry_runtime, reload_runtime,
   render_runtime, render_invalidation, screen_mirror_runtime, spawn_context, state,
   switch_event_runtime
 import runtime_events

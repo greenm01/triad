@@ -10,7 +10,7 @@ import ../utils/behavior_log
 import
   bindings_runtime, child_process_runtime, idle_inhibit_runtime, live_restore_runtime,
   output_management_runtime, process_runner, render_invalidation, screen_mirror_runtime,
-  shell_runner, state
+  state
 
 type StartupConfigLoadResult* = object
   config*: Config
