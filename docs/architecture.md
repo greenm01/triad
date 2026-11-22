@@ -76,6 +76,9 @@ socket carries session-ready, config, spawn, fallback, and shutdown events.
 Shell-manager ownership requires a full River/Triad session restart so both
 processes use the same supervisor protocol.
 
+If the shell manager exits while the daemon runs, the supervisor stops the
+daemon and restarts both processes so the new manager receives session-ready.
+
 The current session record is a live claim. A supervisor that loses the claim
 relinquishes its shell-manager immediately, including while waiting to restart
 a failed daemon, so an old shell manager cannot stop a newer session's shell.

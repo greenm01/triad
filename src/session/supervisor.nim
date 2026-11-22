@@ -4,7 +4,9 @@ import ../utils/runtime_deadlines
 
 var shutdownSignal {.volatile.}: cint
 
-const ClaimLostStatus = -2
+const
+  ClaimLostStatus = -2
+  ManagerLostStatus = -3
 
 proc sleepClaimAware(claim: SessionClaim, delayMs: int64): bool =
   let deadline = monotonicMs() + delayMs
@@ -37,11 +39,15 @@ proc daemonArgs(): seq[string] =
       putEnv("TRIAD_BEHAVIOR_LOG", "1")
     result.add("--dev-mode")
 
-proc waitForChild(process: Process, claim: SessionClaim): int =
+proc waitForChild(process, shellManager: Process, claim: SessionClaim): int =
   while true:
     let code = process.peekExitCode()
     if code != -1:
       return code
+    if shellManager != nil and shellManager.peekExitCode() != -1:
+      process.terminate()
+      discard process.waitForExit(3000)
+      return ManagerLostStatus
     if shutdownSignal != 0:
       process.terminate()
       discard process.waitForExit(3000)
@@ -132,7 +138,7 @@ proc runSupervisor*(): int =
         terminateChild(process)
         return 0
 
-      let status = waitForChild(process, recordClaim)
+      let status = waitForChild(process, shellManager, recordClaim)
       if status == ClaimLostStatus:
         echo "triad-supervise: current session metadata claimed by another supervisor; stopping"
         if not shellManager.isNil:
@@ -144,6 +150,15 @@ proc runSupervisor*(): int =
         process.close()
       except CatchableError:
         discard
+
+      if status == ManagerLostStatus:
+        echo "triad-supervise: shell manager exited; restarting session components"
+        if not shellManager.isNil:
+          shellManager.close()
+        shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
+        if not sleepClaimAware(recordClaim, SupervisorRestartDelaysMs[0]):
+          return 0
+        continue
 
       if shutdownSignal != 0:
         return status
