@@ -617,6 +617,7 @@ type
 
   KeyBindingConfig* = object
     key*: string
+    keySym*: uint32
     modifiers*: uint32
     command*: string
     mode*: BindingMode

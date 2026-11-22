@@ -771,15 +771,24 @@ proc normalizeKeySpec(
     result.key = shifted
     result.modifiers = modifiers and not ShiftModifier
 
-proc parseKeySpec*(value: string): tuple[key: string, modifiers: uint32] =
+proc parseKeySpec*(value: string): KeySpec =
   let parts = value.split("+")
   if parts.len == 0:
-    return ("", 0'u32)
+    return KeySpec()
   let rawKey = parts[^1].strip()
   var modifiers = 0'u32
   if parts.len > 1:
     modifiers = parseModifiers(parts[0 .. ^2].join("+"))
-  result = normalizeKeySpec(rawKey, modifiers)
+  let spec = normalizeKeySpec(rawKey, modifiers)
+  result = KeySpec(
+    key: spec.key,
+    modifiers: spec.modifiers,
+    keySym: keySymForBinding(spec.key, spec.modifiers),
+  )
+
+proc resolveKeyBindingSyms*(bindings: var seq[KeyBindingConfig]) =
+  for i in 0 ..< bindings.len:
+    bindings[i].keySym = keySymForBinding(bindings[i].key, bindings[i].modifiers)
 
 proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
   if value.kind == KNull:
@@ -1187,6 +1196,7 @@ proc mirrorHjklArrowBindings(bindings: var seq[KeyBindingConfig]) =
 proc hotkeyOverlayFallbackBinding(): KeyBindingConfig =
   KeyBindingConfig(
     key: "Question",
+    keySym: keySymForBinding("Question", 64'u32),
     modifiers: 64'u32,
     command: "toggle-hotkey-overlay",
     bypassShortcutsInhibit: true,
@@ -1195,7 +1205,7 @@ proc hotkeyOverlayFallbackBinding(): KeyBindingConfig =
   )
 
 proc defaultRecentWindowBindings*(): seq[KeyBindingConfig] =
-  @[
+  result = @[
     KeyBindingConfig(
       key: "Tab",
       modifiers: 8'u32,
@@ -1221,9 +1231,10 @@ proc defaultRecentWindowBindings*(): seq[KeyBindingConfig] =
       mode: BindingMode.BindRecent,
     ),
   ]
+  result.resolveKeyBindingSyms()
 
 proc recentWindowFallbackBindings*(): seq[KeyBindingConfig] =
-  @[
+  result = @[
     KeyBindingConfig(
       key: "Escape", command: "recent-window-cancel", mode: BindingMode.BindRecent
     ),
@@ -1258,6 +1269,7 @@ proc recentWindowFallbackBindings*(): seq[KeyBindingConfig] =
       key: "q", command: "recent-window-close-current", mode: BindingMode.BindRecent
     ),
   ]
+  result.resolveKeyBindingSyms()
 
 proc isRecentWindowCommand(command: string): bool =
   let parts = command.strip().splitWhitespace()
@@ -1291,6 +1303,7 @@ proc keyBindingFromNode(
     return none(KeyBindingConfig)
   var binding = KeyBindingConfig(
     key: spec.key,
+    keySym: spec.keySym,
     modifiers: spec.modifiers,
     command: node.args[1].kString(),
     mode: defaultMode,
@@ -1523,7 +1536,7 @@ proc parseIdleInhibitMode(
     (false, WindowRuleIdleInhibitMode.IdleInhibitNone)
 
 proc defaultKeyBindings*(): seq[KeyBindingConfig] =
-  @[
+  result = @[
     hotkeyOverlayFallbackBinding(),
     KeyBindingConfig(key: "q", modifiers: 64'u32, command: "close-window"),
     KeyBindingConfig(key: "f", modifiers: 64'u32, command: "maximize-window-to-edges"),
@@ -1557,6 +1570,7 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "3", modifiers: 64'u32, command: "focus-workspace 3"),
     KeyBindingConfig(key: "4", modifiers: 64'u32, command: "focus-workspace 4"),
   ]
+  result.resolveKeyBindingSyms()
 
 proc defaultPointerBindings*(): seq[PointerBindingConfig] =
   @[
@@ -2622,6 +2636,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
     result.keyBindings.ensureHotkeyOverlayFallback()
   if result.recentWindows.enabled:
     result.keyBindings.addRecentWindowBindings(recentWindowBindings)
+  result.keyBindings.resolveKeyBindingSyms()
   if result.pointerBindings.len == 0:
     result.pointerBindings = defaultPointerBindings()
 

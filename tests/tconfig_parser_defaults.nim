@@ -765,6 +765,9 @@ bindings {
     check keySymForBinding("Question", Super) == 0x3f'u32
     check keySymForBinding("!", Super) == 0x21'u32
     check keySymForBinding("~", Super) == 0x7e'u32
+    check keySymForBinding("Slash", Super + Shift) == 0x3f'u32
+    check parseKeySpec("Super+Shift+/").keySym == 0x3f'u32
+    check config.keyBindings.anyIt(it.key == "Question" and it.keySym == 0x3f'u32)
 
   test "XF86 multimedia key names map to keysyms":
     check keySymForBinding("XF86AudioRaiseVolume", Super) == 0x1008ff13'u32
@@ -774,6 +777,15 @@ bindings {
     check keySymForBinding("XF86MonBrightnessDown", Super) == 0x1008ff03'u32
     check keySymForBinding("XF86Display", Super) == 0x1008ff59'u32
     check keySymForBinding("XF86PowerOff", Super) == 0x1008ff2a'u32
+
+  test "Key name aliases map to canonical keysyms":
+    check keySymForBinding("Enter", Super) == 0xff0d'u32
+    check keySymForBinding("esc", Super) == 0xff1b'u32
+    check keySymForBinding("page-up", Super) == 0xff55'u32
+    check keySymForBinding("PRIOR", Super) == 0xff55'u32
+    check keySymForBinding("next", Super) == 0xff56'u32
+    check keySymForBinding("unknown", Super) == 0'u32
+    check parseKeySpec("Super+enter").keySym == 0xff0d'u32
 
   test "Config clamps hotkey overlay columns and ignores invalid position":
     let path = getCurrentDir() / "test_config_hotkey_overlay_layout.kdl"

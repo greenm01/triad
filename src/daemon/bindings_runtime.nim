@@ -560,10 +560,11 @@ proc dispatchKeyBinding*(
     daemon: var TriadDaemon, request: BindingDispatchRequest
 ): BindingDispatchResult =
   let spec = parseKeySpec(request.binding)
-  if spec.key.len == 0 or keySymForBinding(spec.key, spec.modifiers) == 0:
+  if spec.keySym == 0'u32:
     return request.bindingDispatchFailure("invalid key binding: " & request.binding)
 
-  let candidate = KeyBindingConfig(key: spec.key, modifiers: spec.modifiers)
+  let candidate =
+    KeyBindingConfig(key: spec.key, keySym: spec.keySym, modifiers: spec.modifiers)
   for binding in daemon.currentModel.resolvedKeyBindings():
     if not binding.samePhysicalKeySlot(candidate):
       continue
@@ -788,7 +789,7 @@ proc overviewScrollPointerBinding(): PointerBindingConfig =
   )
 
 proc overviewKeyBindingFallbacks*(): seq[KeyBindingConfig] =
-  @[
+  result = @[
     KeyBindingConfig(
       key: "Escape",
       modifiers: 0'u32,
@@ -838,20 +839,19 @@ proc overviewKeyBindingFallbacks*(): seq[KeyBindingConfig] =
       mode: BindingMode.BindOverview,
     ),
   ]
+  result.resolveKeyBindingSyms()
 
 proc sameOverviewKeySlot(binding, candidate: KeyBindingConfig): bool =
   if binding.mode notin {BindingMode.BindAlways, BindingMode.BindOverview}:
     return false
-  binding.modifiers == candidate.modifiers and
-    keySymForBinding(binding.key, binding.modifiers) != 0 and
-    keySymForBinding(binding.key, binding.modifiers) ==
-    keySymForBinding(candidate.key, candidate.modifiers)
+  let bindingSym = binding.resolvedKeySym()
+  binding.modifiers == candidate.modifiers and bindingSym != 0'u32 and
+    bindingSym == candidate.resolvedKeySym()
 
 proc sameModalKeySlot(binding, candidate: KeyBindingConfig): bool =
-  binding.modifiers == candidate.modifiers and
-    keySymForBinding(binding.key, binding.modifiers) != 0 and
-    keySymForBinding(binding.key, binding.modifiers) ==
-    keySymForBinding(candidate.key, candidate.modifiers)
+  let bindingSym = binding.resolvedKeySym()
+  binding.modifiers == candidate.modifiers and bindingSym != 0'u32 and
+    bindingSym == candidate.resolvedKeySym()
 
 proc hasModalKeyBinding(
     bindings: seq[KeyBindingConfig], candidate: KeyBindingConfig
@@ -910,6 +910,7 @@ proc modalFallbackKeyBindings(
   for binding in presets:
     var candidate = binding
     candidate.modifiers = targetModifiers
+    candidate.keySym = keySymForBinding(candidate.key, candidate.modifiers)
     model.addModalFallback(result, candidate, targetMode, includeAlwaysExplicit)
   for binding in model.resolvedKeyBindings():
     if binding.mode notin sourceModes:
@@ -918,7 +919,11 @@ proc modalFallbackKeyBindings(
     if command.len == 0:
       continue
     let candidate = KeyBindingConfig(
-      key: binding.key, modifiers: targetModifiers, command: command, mode: targetMode
+      key: binding.key,
+      keySym: keySymForBinding(binding.key, targetModifiers),
+      modifiers: targetModifiers,
+      command: command,
+      mode: targetMode,
     )
     model.addModalFallback(result, candidate, targetMode, includeAlwaysExplicit)
 
@@ -2015,7 +2020,12 @@ proc addPointerBinding(
   binding.enable()
 
 proc exitSessionConfirmKeyBinding(): KeyBindingConfig =
-  KeyBindingConfig(key: "Return", modifiers: 0'u32, mode: BindingMode.BindAlways)
+  KeyBindingConfig(
+    key: "Return",
+    keySym: keySymForBinding("Return", 0'u32),
+    modifiers: 0'u32,
+    mode: BindingMode.BindAlways,
+  )
 
 proc setupDefaultBindings*(daemon: var TriadDaemon) =
   if daemon.bindingsConfigured:
@@ -2031,7 +2041,7 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
       daemon.addXkbBinding(
         seat,
         binding,
-        keySymForBinding(binding.key, binding.modifiers),
+        binding.keySym,
         binding.modifiers,
         Msg(kind: MsgKind.CmdConfirmExitSession),
       )
@@ -2041,20 +2051,20 @@ proc setupDefaultBindings*(daemon: var TriadDaemon) =
       if not daemon.keyBindingActive(binding):
         continue
       let parsed = parseTextCommand(binding.command)
-      let sym = keySymForBinding(binding.key, binding.modifiers)
+      let sym = binding.keySym
       if parsed.isSome and sym != 0:
         daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
     if not daemon.currentModel.sessionLocked and
         daemon.currentModel.overviewUsesWorkspacePreviews():
       for binding in daemon.currentModel.overviewFallbackKeyBindings():
         let parsed = parseTextCommand(binding.command)
-        let sym = keySymForBinding(binding.key, binding.modifiers)
+        let sym = binding.keySym
         if parsed.isSome and sym != 0:
           daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
     if not daemon.currentModel.sessionLocked and daemon.currentModel.recentWindowsActive:
       for binding in daemon.currentModel.recentOpenFallbackKeyBindings():
         let parsed = parseTextCommand(binding.command)
-        let sym = keySymForBinding(binding.key, binding.modifiers)
+        let sym = binding.keySym
         if parsed.isSome and sym != 0:
           daemon.addXkbBinding(seat, binding, sym, binding.modifiers, parsed.get())
 
