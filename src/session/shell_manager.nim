@@ -1,5 +1,6 @@
 import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, strutils]
 import session_control
+import ../ipc/socket
 import ../core/shell_profiles
 import ../daemon/shell_runner
 import ../daemon/process_handle
@@ -7,7 +8,7 @@ import ../daemon/process_runner
 import ../types/runtime_values
 import ../types/model
 import ../utils/process_options
-from posix import chmod, getuid, onSignal, SIGTERM, SIGINT, SIGHUP, Mode
+from posix import chmod, getuid, lstat, onSignal, SIGTERM, SIGINT, SIGHUP, Mode, Stat
 import logs
 import ../utils/runtime_deadlines
 
@@ -187,12 +188,22 @@ proc acceptClients(listener: AsyncSocket, state: ShellManagerState) {.async.} =
     let client = await listener.accept()
     asyncCheck handleClientSafely(client, state)
 
+proc socketPathExists(path: string): bool =
+  var st: Stat
+  lstat(path.cstring, st) == 0
+
+proc staleManagerSocket(path: string): Future[bool] {.async.} =
+  if not socketPathExists(path):
+    return false
+  if not unixPathIsSocket(path):
+    return true
+  not await unixSocketAcceptsConnections(path)
+
 proc runShellManagerAsync() {.async.} =
   createDir(stateDir())
   let path = stateDir() / "shell-manager.sock"
-  if fileExists(path):
+  if await staleManagerSocket(path):
     removeFile(path)
-
   let listener = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
   listener.bindUnix(path)
   listener.listen()
