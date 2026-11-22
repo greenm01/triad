@@ -5,6 +5,7 @@ import defaults
 import keysyms
 import loading
 import validation
+import ../ipc/command_registry
 import ../core/layout_descriptor_codec
 import ../core/layout_mode_codec
 import ../core/native_layout_codec
@@ -790,6 +791,10 @@ proc resolveKeyBindingSyms*(bindings: var seq[KeyBindingConfig]) =
   for i in 0 ..< bindings.len:
     bindings[i].keySym = keySymForBinding(bindings[i].key, bindings[i].modifiers)
 
+proc resolveKeyBindingCommands*(bindings: var seq[KeyBindingConfig]) =
+  for i in 0 ..< bindings.len:
+    bindings[i].commandId = resolveCommandLine(bindings[i].command)
+
 proc applyHotkeyOverlayTitle(binding: var KeyBindingConfig, value: KdlVal) =
   if value.kind == KNull:
     binding.hotkeyOverlayTitleKind = HotkeyOverlayTitleKind.HotkeyTitleHidden
@@ -1232,6 +1237,7 @@ proc defaultRecentWindowBindings*(): seq[KeyBindingConfig] =
     ),
   ]
   result.resolveKeyBindingSyms()
+  result.resolveKeyBindingCommands()
 
 proc recentWindowFallbackBindings*(): seq[KeyBindingConfig] =
   result = @[
@@ -1270,6 +1276,7 @@ proc recentWindowFallbackBindings*(): seq[KeyBindingConfig] =
     ),
   ]
   result.resolveKeyBindingSyms()
+  result.resolveKeyBindingCommands()
 
 proc isRecentWindowCommand(command: string): bool =
   let parts = command.strip().splitWhitespace()
@@ -1301,11 +1308,13 @@ proc keyBindingFromNode(
   let spec = parseKeySpec(node.args[0].kString())
   if spec.key.len == 0:
     return none(KeyBindingConfig)
+  let command = node.args[1].kString()
   var binding = KeyBindingConfig(
     key: spec.key,
     keySym: spec.keySym,
     modifiers: spec.modifiers,
-    command: node.args[1].kString(),
+    command: command,
+    commandId: resolveCommandLine(command),
     mode: defaultMode,
     layoutScope: layoutScope,
   )
@@ -1326,15 +1335,17 @@ proc keyBindingFromNode(
     binding.applyHotkeyOverlayTitle(node.props["hotkey-overlay-title"])
   some(binding)
 
-proc isHotkeyOverlayCommand(command: string): bool =
-  let parts = command.strip().splitWhitespace()
-  if parts.len == 0:
-    return false
-  parts[0] in ["show-hotkey-overlay", "hide-hotkey-overlay", "toggle-hotkey-overlay"]
+proc isHotkeyOverlayCommand(binding: KeyBindingConfig): bool =
+  let id = binding.resolvedCommandId()
+  id.isSome and id.unsafeGet() in {
+    CommandId.ShowHotkeyOverlay,
+    CommandId.HideHotkeyOverlay,
+    CommandId.ToggleHotkeyOverlay,
+  }
 
 proc hasHotkeyOverlayCommand(bindings: seq[KeyBindingConfig]): bool =
   for binding in bindings:
-    if binding.command.isHotkeyOverlayCommand():
+    if binding.isHotkeyOverlayCommand():
       return true
   false
 
@@ -1571,6 +1582,7 @@ proc defaultKeyBindings*(): seq[KeyBindingConfig] =
     KeyBindingConfig(key: "4", modifiers: 64'u32, command: "focus-workspace 4"),
   ]
   result.resolveKeyBindingSyms()
+  result.resolveKeyBindingCommands()
 
 proc defaultPointerBindings*(): seq[PointerBindingConfig] =
   @[
@@ -2637,6 +2649,7 @@ proc loadConfigNodes*(doc: KdlDoc, path = ""): Config =
   if result.recentWindows.enabled:
     result.keyBindings.addRecentWindowBindings(recentWindowBindings)
   result.keyBindings.resolveKeyBindingSyms()
+  result.keyBindings.resolveKeyBindingCommands()
   if result.pointerBindings.len == 0:
     result.pointerBindings = defaultPointerBindings()
 

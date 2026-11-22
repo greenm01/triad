@@ -76,37 +76,37 @@ proc commandBase(command: string): string =
   else:
     parts[0]
 
-
-proc resolvedCommandName(command: string): string =
-  let base = command.commandBase()
-  let spec = resolveCommandSpec(base)
-  if spec.isSome: spec.get().name else: base
-
-proc defaultCommandLabel(command: string): string =
-  case command.commandBase()
-  of "show-hotkey-overlay", "toggle-hotkey-overlay":
+proc defaultCommandLabel(binding: KeyBindingConfig): string =
+  let id = binding.resolvedCommandId()
+  if id.isNone:
+    return binding.command.commandBase().replace("-", " ").capitalizeAscii()
+  case id.unsafeGet()
+  of CommandId.ShowHotkeyOverlay, CommandId.ToggleHotkeyOverlay:
     "Show Important Hotkeys"
-  of "hide-hotkey-overlay":
+  of CommandId.HideHotkeyOverlay:
     "Hide Important Hotkeys"
-  of "spawn-terminal":
+  of CommandId.SpawnTerminal:
     "Open Terminal"
-  of "spawn":
-    let parts = command.strip().splitWhitespace()
+  of CommandId.Spawn:
+    let parts = binding.command.strip().splitWhitespace()
     if parts.len >= 2:
       "Spawn " & parts[1]
     else:
       "Spawn Command"
   else:
-    command.commandBase().replace("-", " ").capitalizeAscii()
+    commandName(id.unsafeGet()).replace("-", " ").capitalizeAscii()
 
 proc findBindingForCommand(
     bindings: seq[KeyBindingConfig], command: string
 ): Option[KeyBindingConfig] =
-  let target = command.resolvedCommandName()
+  let target = resolveCommandId(command)
+  if target.isNone:
+    return none(KeyBindingConfig)
   for binding in bindings:
     if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleHidden:
       continue
-    if binding.command.resolvedCommandName() == target:
+    let id = binding.resolvedCommandId()
+    if id.isSome and id.unsafeGet() == target.unsafeGet():
       return some(binding)
   none(KeyBindingConfig)
 
@@ -115,7 +115,7 @@ proc rowForBinding(binding: KeyBindingConfig): HotkeyOverlayRow =
     if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleCustom:
       binding.hotkeyOverlayTitle
     else:
-      binding.command.defaultCommandLabel()
+      binding.defaultCommandLabel()
   HotkeyOverlayRow(key: binding.prettyBinding(), label: label)
 
 proc rowExists(rows: seq[HotkeyOverlayRow], row: HotkeyOverlayRow): bool =
@@ -144,6 +144,7 @@ proc hotkeyOverlayRows*(model: Model): seq[HotkeyOverlayRow] =
       result.addRow(binding.rowForBinding())
 
   for binding in bindings:
-    if binding.command.commandBase() in ["spawn", "spawn-terminal"] and
+    let id = binding.resolvedCommandId()
+    if id.isSome and id.unsafeGet() in {CommandId.Spawn, CommandId.SpawnTerminal} and
         (binding.modifiers and 64'u32) != 0:
       result.addRow(binding.rowForBinding())

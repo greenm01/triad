@@ -1,4 +1,4 @@
-import std/[json, options, sequtils, strutils, tables, times]
+import std/[json, options, sequtils, tables, times]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -7,6 +7,7 @@ import wayland/native/client
 import wayland/protocols/staging/cursorshape/v1/client as cursorShape
 import wayland/protocols/unstable/pointergesturesunstable/v1/client as pointerGestures
 import ../config/[keysyms, parser]
+import ../ipc/command_registry
 import ../core/msg
 import ../ipc/binding_dispatch
 from ../types/core import Rect
@@ -303,9 +304,12 @@ proc bindingModeActive(daemon: TriadDaemon, mode: BindingMode): bool =
   of BindingMode.BindRecent:
     daemon.currentModel.recentWindowsActive
 
-proc isRecentAdvanceCommand(command: string): bool =
-  let parts = command.strip().splitWhitespace()
-  parts.len > 0 and parts[0] in ["recent-window-next", "recent-window-prev"]
+proc isRecentAdvanceBinding(binding: KeyBindingConfig): bool =
+  let id = binding.resolvedCommandId()
+  id.isSome and id.unsafeGet() in {
+    CommandId.RecentWindowNext,
+    CommandId.RecentWindowPrev,
+  }
 
 proc recentBindingCanOpen(model: Model, mode: BindingMode, msg: Msg): bool =
   mode == BindingMode.BindRecent and not model.recentWindowsActive and
@@ -319,23 +323,24 @@ proc overviewTabBindingCanCycle(model: Model, binding: KeyBindingConfig): bool =
   if not model.overviewTabMode or not model.overviewTabModeActive or
       binding.modifiers == 0'u32 or binding.modifiers != model.overviewTabModeModifiers:
     return false
-  let parsed = parseTextCommand(binding.command)
-  parsed.isSome and parsed.get().isOverviewTabOpenCommand()
+  let id = binding.resolvedCommandId()
+  id.isSome and id.unsafeGet() in {
+    CommandId.ToggleOverview,
+    CommandId.OpenOverview,
+  }
 
 proc recentOpenCommandForBinding(binding: KeyBindingConfig): string =
-  let parsed = parseTextCommand(binding.command)
-  if parsed.isNone:
+  let id = binding.resolvedCommandId()
+  if id.isNone:
     return ""
-  let msg = parsed.get()
-  case msg.kind
-  of MsgKind.CmdFocusDirection:
-    case msg.direction
-    of Direction.DirLeft: "recent-window-prev"
-    of Direction.DirRight: "recent-window-next"
-    of Direction.DirUp, Direction.DirDown: ""
-  of MsgKind.CmdFocusColumnFirst:
+  case id.unsafeGet()
+  of CommandId.FocusLeft:
+    "recent-window-prev"
+  of CommandId.FocusRight:
+    "recent-window-next"
+  of CommandId.FocusColumnFirst:
     "recent-window-first"
-  of MsgKind.CmdFocusColumnLast:
+  of CommandId.FocusColumnLast:
     "recent-window-last"
   else:
     ""
@@ -350,7 +355,7 @@ proc keyBindingActive(daemon: TriadDaemon, binding: KeyBindingConfig): bool =
     return false
   if binding.mode == BindingMode.BindRecent and
       not daemon.currentModel.recentWindowsActive and
-      binding.command.isRecentAdvanceCommand() and not daemon.currentModel.overviewActive:
+      binding.isRecentAdvanceBinding() and not daemon.currentModel.overviewActive:
     discard
   elif daemon.currentModel.overviewTabBindingCanCycle(binding):
     discard
@@ -840,6 +845,7 @@ proc overviewKeyBindingFallbacks*(): seq[KeyBindingConfig] =
     ),
   ]
   result.resolveKeyBindingSyms()
+  result.resolveKeyBindingCommands()
 
 proc sameOverviewKeySlot(binding, candidate: KeyBindingConfig): bool =
   if binding.mode notin {BindingMode.BindAlways, BindingMode.BindOverview}:
@@ -923,6 +929,7 @@ proc modalFallbackKeyBindings(
       keySym: keySymForBinding(binding.key, targetModifiers),
       modifiers: targetModifiers,
       command: command,
+      commandId: resolveCommandLine(command),
       mode: targetMode,
     )
     model.addModalFallback(result, candidate, targetMode, includeAlwaysExplicit)

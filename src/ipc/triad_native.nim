@@ -147,13 +147,13 @@ proc argvFromField(node: JsonNode, field: string): Option[seq[string]] =
   some(argv)
 
 proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string]] =
-  let specOpt = resolveCommandSpec(action)
-  if specOpt.isNone:
+  let idOpt = resolveCommandId(action)
+  if idOpt.isNone:
     return none(seq[string])
 
-  let spec = specOpt.get()
-  var parts = @[spec.name]
-  case spec.argShape
+  let id = idOpt.unsafeGet()
+  var parts = @[commandName(id)]
+  case commandArgShape(id)
   of CommandArgShape.NoArgs:
     some(parts)
   of CommandArgShape.OptionalWindowId:
@@ -247,7 +247,7 @@ proc commandPartsForAction(action: string, payload: JsonNode): Option[seq[string
       none(seq[string])
   of CommandArgShape.RequiredFloatValue:
     var value = numberStringFromField(payload, "value")
-    if spec.id == CommandId.CidSetColumnWidth and value.isNone:
+    if id == CommandId.SetColumnWidth and value.isNone:
       value = numberStringFromField(payload, "width")
     if value.isSome:
       parts.add(value.get())

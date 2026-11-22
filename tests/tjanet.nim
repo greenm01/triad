@@ -2,6 +2,7 @@ import std/[json, options, os, sequtils, strutils, tables, unittest]
 import ../src/core/msg
 import ../src/daemon/janet_script_runtime
 from ../src/daemon/state import QueuedMsgOrigin, TriadDaemon, initTriadDaemon
+import ../src/ipc/command_registry
 import ../src/ipc/commands
 import ../src/janet/[bundled_layouts, layout_api, runtime, snapshot_api]
 import
@@ -70,7 +71,7 @@ proc testSnapshot(): ShellSnapshot =
       ],
   )
 
-proc sampleCommandParts(spec: CommandSpec): seq[string] =
+proc sampleCommandParts(spec: CommandView): seq[string] =
   result = @[spec.name]
   case spec.argShape
   of CommandArgShape.NoArgs:
@@ -508,7 +509,8 @@ suite "embedded Janet runtime":
     defer:
       runtime.close()
 
-    for spec in CommandSpecs:
+    for id in CommandId:
+      let spec = commandSpec(id)
       let parts = sampleCommandParts(spec)
       let expected = parseCommandParts(parts)
       check expected.isSome
@@ -517,17 +519,16 @@ suite "embedded Janet runtime":
       check evaluated.messages.len == 1
       check repr(evaluated.messages[0]) == repr(expected.get())
 
-      if spec.aliases.len > 0:
-        for alias in spec.aliases.split('|'):
-          var aliasParts = parts
-          aliasParts[0] = alias
-          let aliasExpected = parseCommandParts(aliasParts)
-          check aliasExpected.isSome
-          let aliasEvaluated =
-            runtime.evalSource(testSnapshot(), janetCommandSource(aliasParts))
-          check aliasEvaluated.ok
-          check aliasEvaluated.messages.len == 1
-          check repr(aliasEvaluated.messages[0]) == repr(aliasExpected.get())
+      for alias in spec.aliasesFor():
+        var aliasParts = parts
+        aliasParts[0] = alias
+        let aliasExpected = parseCommandParts(aliasParts)
+        check aliasExpected.isSome
+        let aliasEvaluated =
+          runtime.evalSource(testSnapshot(), janetCommandSource(aliasParts))
+        check aliasEvaluated.ok
+        check aliasEvaluated.messages.len == 1
+        check repr(aliasEvaluated.messages[0]) == repr(aliasExpected.get())
 
   test "generic command dispatcher accepts numeric args and rejects bad commands":
     var runtime = initJanetRuntime(testConfig(getTempDir()))

@@ -137,7 +137,7 @@ proc checkTriadActionMatchesText(action, textCommand: string, payload = newJObje
   check repr(actual.messages[0]) == repr(expected.get())
 
 proc sampleCommand(
-    spec: CommandSpec
+    spec: CommandView
 ): tuple[action: string, textCommand: string, payload: JsonNode] =
   result.action = spec.name
   result.payload = newJObject()
@@ -787,23 +787,29 @@ suite "Shell compatibility contracts":
     var seen: seq[string] = @[]
     for name in allCommandNames():
       check name.len > 0
-    for spec in CommandSpecs:
+    for id in CommandId:
+      let spec = commandSpec(id)
       check spec.name notin seen
       seen.add(spec.name)
-      let canonical = resolveCommandSpec(spec.name)
-      check canonical.isSome
-      check canonical.get().id == spec.id
-      if spec.aliases.len > 0:
-        for alias in spec.aliases.split('|'):
-          check alias notin seen
-          seen.add(alias)
-          let resolved = resolveCommandSpec(alias)
-          check resolved.isSome
-          check resolved.get().id == spec.id
+      let canonical = resolveCommandId(spec.name)
+      check canonical == some(id)
+      for alias in spec.aliasesFor():
+        check alias notin seen
+        seen.add(alias)
+        let resolved = resolveCommandId(alias)
+        check resolved == some(id)
 
-    check resolveCommandSpec("minimized").get().id == CommandId.CidMinimize
-    check resolveCommandSpec("restore_minimized").get().id ==
-      CommandId.CidRestoreMinimized
+    check resolveCommandId("minimized") == some(CommandId.Minimize)
+    check resolveCommandId("restore_minimized") ==
+      some(CommandId.RestoreMinimized)
+
+  test "binding command identity ignores arguments":
+    let recent = KeyBindingConfig(
+      key: "grave", command: "recent-window-next --filter app-id"
+    )
+    check recent.resolvedCommandId() == some(CommandId.RecentWindowNext)
+    let spawn = KeyBindingConfig(key: "t", command: "spawn foot")
+    check spawn.resolvedCommandId() == some(CommandId.Spawn)
 
   test "Triad msg help and catalog are generated from command registry":
     let help = renderMsgHelp()
@@ -838,7 +844,7 @@ suite "Shell compatibility contracts":
     check aliasHelp.contains("toggle-fullscreen")
 
     let catalog = commandCatalogJson()
-    check catalog["commands"].len == CommandSpecs.len
+    check catalog["commands"].len == CommandId.high.ord + 1
     check catalog["commands"].getElems().anyIt(
       it["name"].getStr() == "focus-next" and it["arg_shape"].getStr() == "none"
     )
@@ -891,16 +897,17 @@ suite "Shell compatibility contracts":
     let docs =
       readFile("docs/ipc.md") & "\n" & readFile("docs/comp/config-command-matrix.md")
     let commandList = renderCommandList()
-    for spec in CommandSpecs:
+    for id in CommandId:
+      let spec = commandSpec(id)
       check commandList.contains(spec.name) or docs.contains(spec.name)
 
   test "Triad native actions mirror text IPC commands":
-    for spec in CommandSpecs:
+    for id in CommandId:
+      let spec = commandSpec(id)
       let sample = sampleCommand(spec)
       checkTriadActionMatchesText(sample.action, sample.textCommand, sample.payload)
-      if spec.aliases.len > 0:
-        for alias in spec.aliases.split('|'):
-          checkTriadActionMatchesText(alias, sample.textCommand, sample.payload)
+      for alias in spec.aliasesFor():
+        checkTriadActionMatchesText(alias, sample.textCommand, sample.payload)
 
     let badAction = handleTriadAction("spawn", %*{"argv": []})
     check not parseJson(badAction.reply)["ok"].getBool()
