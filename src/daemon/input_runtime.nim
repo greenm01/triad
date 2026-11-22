@@ -6,6 +6,8 @@ import protocols/river_input_management/client as riverInput
 import protocols/river_libinput_config/client as riverLibinput
 import protocols/river_xkb_config/client as riverXkbConfig
 import ../types/runtime_values
+import ../types/runtime_messages
+import message_queue
 import input_device_classification, state, wayland_helpers
 
 const
@@ -623,7 +625,14 @@ proc onXkbKeyboardLayout(
     index: uint32,
     name: cstring,
 ) =
-  discard
+  let daemon = callbackDaemon(data, "xkb keyboard layout")
+  if daemon == nil:
+    return
+  discard keyboard
+  discard name
+  daemon.enqueue(
+    Msg(kind: MsgKind.CmdSwitchKeyboardLayout, keyboardLayoutIndex: int32(index))
+  )
 
 proc onXkbKeyboardLock(data: pointer, keyboard: ptr riverXkbConfig.RiverXkbKeyboardV1) =
   discard
