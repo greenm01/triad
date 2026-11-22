@@ -1,5 +1,9 @@
-import std/[asyncdispatch, asyncnet, json, nativesockets, os, osproc, strutils]
+import std/[asyncdispatch, asyncnet, json, nativesockets, os, osproc, strutils, times]
 import session_control
+import ../daemon/shell_runner
+import ../daemon/process_handle
+import ../types/runtime_values
+import ../types/model
 import ../utils/process_options
 from posix import chmod, getuid, onSignal, SIGTERM, SIGINT, SIGHUP, Mode
 import logs
@@ -16,6 +20,10 @@ type
 
   ShellManagerState* = ref object
     children*: seq[Process]
+    runner*: ShellRunner
+    model*: Model
+    niriSocketPath*: string
+    ownsShell*: bool
 
 proc getsockopt(
     fd: cint, level, option: cint, value: pointer, length: ptr cint
@@ -33,6 +41,36 @@ proc peerUid(socket: AsyncSocket): int =
   if getsockopt(cint(socket.getFd()), SolSocket, SoPeerCred, addr cred, addr length) != 0:
     return -1
   int(cred.uid)
+
+proc stringSeq(node: JsonNode): seq[string] =
+  if node == nil or node.kind != JArray:
+    return @[]
+  for item in node:
+    result.add(item.getStr())
+
+proc profileFromJson(node: JsonNode): ShellProfileConfig =
+  ShellProfileConfig(
+    name: node{"name"}.getStr(),
+    launch: stringSeq(node{"launch"}),
+    stop: stringSeq(node{"stop"}),
+    niriCompat: node{"niriCompat"}.getBool(),
+  )
+
+proc modelFromControlPayload(payload: JsonNode): Model =
+  var shells = ShellsConfig(
+    configured: true,
+    enabled: payload{"enabled"}.getBool(true),
+    active: payload{"active"}.getStr(),
+  )
+  if payload{"profiles"} != nil and payload{"profiles"}.kind == JArray:
+    for item in payload{"profiles"}:
+      shells.profiles.add(profileFromJson(item))
+  shells.watchdog = ShellWatchdogConfig(
+    enabled: payload{"watchdog", "enabled"}.getBool(),
+    fallback: payload{"watchdog", "fallback"}.getStr(),
+    exclusiveFocusTimeoutMs: int32(payload{"watchdog", "exclusiveFocusTimeoutMs"}.getInt()),
+  )
+  Model(shells: shells)
 
 proc reapChildren(state: ShellManagerState) =
   var index = 0
@@ -60,6 +98,27 @@ proc handleClient(client: AsyncSocket, state: ShellManagerState) {.async.} =
       continue
 
     case decoded.message.kind
+    of SessionControlKind.SessionReady:
+      state.niriSocketPath = decoded.message.payload{"niri_socket"}.getStr()
+      state.model = modelFromControlPayload(decoded.message.payload)
+      state.ownsShell = decoded.message.payload{"own_shell"}.getBool(false)
+      if state.ownsShell:
+        state.runner.scheduleShellSpawn(state.model)
+        state.runner.spawnPendingShell(
+          state.model, state.niriSocketPath, "shell manager session-ready"
+        )
+    of SessionControlKind.ConfigChanged:
+      let next = modelFromControlPayload(decoded.message.payload)
+      if state.ownsShell:
+        state.runner.switchShell(state.model, next, state.niriSocketPath, "config changed")
+      state.model = next
+    of SessionControlKind.FallbackRequest:
+      let target = decoded.message.payload{"shell"}.getStr()
+      if state.ownsShell and target.len > 0 and target != state.model.shells.active:
+        var next = state.model
+        next.shells.active = target
+        state.runner.switchShell(state.model, next, state.niriSocketPath, "fallback request")
+        state.model = next
     of SessionControlKind.Spawn:
       let argvNode = decoded.message.payload{"argv"}
       if argvNode == nil or argvNode.kind != JArray or argvNode.len == 0:
@@ -78,7 +137,12 @@ proc handleClient(client: AsyncSocket, state: ShellManagerState) {.async.} =
           SessionControlKind.SpawnStarted, %*{"pid": process.processID}
         )
       )
+    of SessionControlKind.ManagerStopping:
+      if state.ownsShell:
+        state.runner.stopTrackedShell("manager stopping")
     of SessionControlKind.Shutdown:
+      if state.ownsShell:
+        state.runner.stopTrackedShell("shutdown")
       shutdownSignal = 1
       return
     else:
@@ -99,13 +163,36 @@ proc runShellManagerAsync() {.async.} =
   listener.bindUnix(path)
   listener.listen()
   discard chmod(path.cstring, Mode(0o600))
+
   let state = ShellManagerState(children: @[])
   asyncCheck acceptClients(listener, state)
 
   while shutdownSignal == 0:
+    let nowMs = int64(epochTime() * 1000.0)
+    state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
+    state.runner.advanceTerminatingShells(nowMs)
+    state.runner.advanceReleasedShells()
+    for process in state.runner.takeOverlayProcesses():
+      state.children.add(process)
     state.reapChildren()
     poll(50)
 
+  if state.ownsShell and state.runner.trackedProcess != nil:
+    state.runner.stopTrackedShell("shutdown")
+
+  let drainDeadline = epochTime() * 1000.0 + 2000.0
+  while (state.runner.pendingLaunchActive or state.runner.terminatingShells.len > 0) and
+      epochTime() * 1000.0 < drainDeadline:
+    let nowMs = int64(epochTime() * 1000.0)
+    state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
+    state.runner.advanceTerminatingShells(nowMs)
+    state.runner.advanceReleasedShells()
+    poll(20)
+
+  if state.runner.pendingLaunchActive:
+    state.runner.pendingLaunch.process.terminateProcess()
+    state.runner.pendingLaunch.process.closeProcessHandle()
+    state.runner.pendingLaunchActive = false
   for child in state.children:
     try:
       child.terminate()

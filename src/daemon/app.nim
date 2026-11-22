@@ -866,6 +866,31 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 
 # --- Main Loop ---
 
+proc shellControlPayload(model: Model, niriSocketPath: string): JsonNode =
+  let shells = model.shells
+  var profiles = newJArray()
+  for profile in shells.profiles:
+    profiles.add(
+      %*{
+        "name": profile.name,
+        "launch": profile.launch,
+        "stop": profile.stop,
+        "niriCompat": profile.niriCompat,
+      }
+    )
+  %*{
+    "active": shells.active,
+    "enabled": shells.enabled,
+    "watchdog":
+      %*{
+        "enabled": shells.watchdog.enabled,
+        "fallback": shells.watchdog.fallback,
+        "exclusiveFocusTimeoutMs": shells.watchdog.exclusiveFocusTimeoutMs,
+      },
+    "profiles": profiles,
+    "niri_socket": niriSocketPath,
+  }
+
 proc main*(): int =
   let args = commandLineParams()
   if args.len > 0 and args[0] in ["--help", "-h", "help"]:
@@ -1294,7 +1319,10 @@ proc main*(): int =
         daemon.configReloadDebouncer.takeDue(nowMs):
       inc daemon.loopCounters.configReloadsDue
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
-      asyncCheck wmSessionControl.sendSessionControl(SessionControlKind.ConfigChanged)
+      asyncCheck wmSessionControl.sendSessionControl(
+        SessionControlKind.ConfigChanged,
+        shellControlPayload(daemon.runtimeState.model, niriSocketPath),
+      )
 
     # Process Message Queue
     if processQueuedMessages(daemon.configPath, niriSocketPath):
@@ -1328,7 +1356,7 @@ proc main*(): int =
       sessionReadySent = true
       asyncCheck wmSessionControl.sendSessionControl(
         SessionControlKind.SessionReady,
-        %*{"triad_socket": triadSocket, "niri_socket": niriSocketPath},
+        shellControlPayload(daemon.runtimeState.model, niriSocketPath),
       )
 
     if daemon.initialManageComplete and ipcStartupGate.open:
