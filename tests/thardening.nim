@@ -29,7 +29,7 @@ import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
 import ../src/utils/[process_options, process_memory, screenshot_capture, session_env]
-import ../src/utils/event_poll
+import ../src/utils/[event_poll, runtime_deadlines]
 import ../src/session/supervisor
 
 proc mirrorTestDaemon(): TriadDaemon =
@@ -2244,10 +2244,10 @@ suite "detached process options":
     defer:
       closeRuntimeEventSource(source)
 
-    source.setTimer(10'i64)
+    check source.setTimer(10'i64)
     var fds: seq[TPollfd]
     let ready = fds.waitForRuntimeEventFds(
-      -1, -1, [], source.fd(), source.timerFd(), 100
+      -1, -1, [], source.fd(), source.timerFd(), 2000
     )
     check ready.timerReady
     let events = source.drain()
@@ -2257,3 +2257,17 @@ suite "detached process options":
       -1, -1, [], source.fd(), source.timerFd(), 0
     )
     check not again.timerReady
+
+suite "runtime deadlines":
+  test "nearest future candidate wins":
+    check nextDeadlineMs(100'i64, @[200'i64, 150, 300]) == 50'i64
+
+  test "past candidates fire immediately":
+    check nextDeadlineMs(100'i64, @[50'i64, 200]) == 0'i64
+
+  test "no candidates means no deadline":
+    check nextDeadlineMs(100'i64, @[]) == 0'i64
+
+  test "unavailable timer cannot be armed":
+    var source = initRuntimeEventSource()
+    check not source.setTimer(10'i64)

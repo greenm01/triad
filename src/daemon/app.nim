@@ -13,7 +13,7 @@ from ../ipc/niri_shell_compat import chooseNiriCompatSocketPath
 import ../ipc/[binding_dispatch, command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
-import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
+import ../utils/[behavior_log, event_poll, runtime_deadlines, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, capture_sessions_runtime, child_process_runtime, effects_runtime,
   input_runtime, ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime,
@@ -1227,6 +1227,7 @@ proc main*(): int =
   defer:
     closeRuntimeEventSource(runtimeEvents)
 
+  var timerArmed = false
   while running:
     inc daemon.loopCounters.loopIterations
     if not dispatchPendingWayland(daemon.display):
@@ -1238,13 +1239,15 @@ proc main*(): int =
       lastWatcherPollMs = nowMs
       inc daemon.loopCounters.watcherPolls
       daemon.watcher.poll(0)
+      if not timerArmed:
+        daemon.syncScreenMirrors()
 
-    if lastChildReapPollMs.pollDue(nowMs, ChildReapPollIntervalMs):
+
+    if runtimeEvents.fd() < 0 and
+        lastChildReapPollMs.pollDue(nowMs, ChildReapPollIntervalMs):
       lastChildReapPollMs = nowMs
       inc daemon.loopCounters.childReapPolls
       daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
-      daemon.syncScreenMirrors()
-
     daemon.enqueueFrameTickIfDue(nowMs)
     if daemon.memoryMaintenanceDue(lastMemoryMaintenanceMs, nowMs):
       lastMemoryMaintenanceMs = nowMs
@@ -1253,7 +1256,28 @@ proc main*(): int =
       inc daemon.loopCounters.memoryCompactionChecks
       daemon.maybeRunMemoryPressureCompaction(nowMs)
 
-    let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
+    var deadlineCandidates: seq[int64] = @[]
+    if ipcStarted and not ipcStartupGate.open:
+      deadlineCandidates.add(ipcStartupGate.startedAtMs + int64(IpcListenReadyTimeoutMs))
+    if lastMemoryMaintenanceMs > 0:
+      deadlineCandidates.add(lastMemoryMaintenanceMs + MemoryMaintenanceIntervalMs)
+    if daemon.lastRuntimeLoopSampleMs > 0:
+      deadlineCandidates.add(daemon.lastRuntimeLoopSampleMs + RuntimeLoopSampleIntervalMs)
+    deadlineCandidates.add(nowMs + MaintenancePollIntervalMs)
+    deadlineCandidates.add(nowMs + int64(daemon.loopWaitTimeoutMs(nowMs)))
+    let nextDeadline = nextDeadlineMs(nowMs, deadlineCandidates)
+    timerArmed =
+      if runtimeEvents.timerFd() >= 0:
+        runtimeEvents.setTimer(if nextDeadline > 0: nextDeadline else: 1'i64)
+      else:
+        false
+    let waitTimeout =
+      if timerArmed:
+        -1
+      elif nextDeadline > 0:
+        int(nextDeadline)
+      else:
+        1
 
     # Poll async IPC without sleeping before Wayland events are serviced.
     inc daemon.loopCounters.asyncPolls
@@ -1339,14 +1363,18 @@ proc main*(): int =
         running = false
     else:
       daemon.display.cancel_read()
-    if waitResult.runtimeReady:
-      inc daemon.loopCounters.childSignalWakeups
+    var runtimeReadyEvents: RuntimeEvents
+    if waitResult.runtimeReady or waitResult.timerReady:
+      if waitResult.runtimeReady:
+        inc daemon.loopCounters.childSignalWakeups
+      if waitResult.timerReady:
+        inc daemon.loopCounters.timerWakeups
       inc daemon.loopCounters.childSignalDrains
-      discard runtimeEvents.drain()
-      daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
-    if waitResult.timerReady:
-      inc daemon.loopCounters.timerWakeups
-      discard runtimeEvents.drain()
+      runtimeReadyEvents = runtimeEvents.drain()
+      if runtimeReadyEvents.childReady:
+        daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
+      if runtimeReadyEvents.timerReady:
+        daemon.syncScreenMirrors()
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

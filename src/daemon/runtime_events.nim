@@ -38,14 +38,14 @@ proc openRuntimeEventSource*(): RuntimeEventSource =
   result.signalFd = result.selector.registerSignal(SIGCHLD, 0)
   result.timerFd = timerfdCreate(ClockMonotonic, TimerFdCloExec or TimerFdNonBlock)
 
-proc setTimer*(source: var RuntimeEventSource, delayMs: int64) =
+proc setTimer*(source: var RuntimeEventSource, delayMs: int64): bool =
   if source.timerFd < 0:
-    return
+    return false
   var value: Itimerspec
   if delayMs > 0:
     value.it_value.tv_sec = delayMs div 1000'i64
     value.it_value.tv_nsec = (delayMs mod 1000'i64) * 1_000_000'i64
-  discard timerfdSetTime(cint(source.timerFd), 0, addr value, nil)
+  timerfdSetTime(cint(source.timerFd), 0, addr value, nil) == 0
 
 proc fd*(source: RuntimeEventSource): int =
   source.signalFd
