@@ -302,7 +302,7 @@ suite "Runtime state primitives":
     var fds: seq[TPollfd]
     var marker = 'x'
     check write(pipeFds[1], addr marker, 1) == 1
-    let asyncReady = fds.waitForRuntimeEventFds(-1, int(pipeFds[0]), [], 10)
+    let asyncReady = fds.waitForRuntimeEventFds(-1, int(pipeFds[0]), [], -1, 10)
     check asyncReady.asyncReady
     check not asyncReady.waylandReady
     check not asyncReady.switchReady
@@ -310,7 +310,7 @@ suite "Runtime state primitives":
     var drained: char
     discard read(pipeFds[0], addr drained, 1)
     check write(pipeFds[1], addr marker, 1) == 1
-    let switchReady = fds.waitForRuntimeEventFds(-1, -1, [int32(pipeFds[0])], 10)
+    let switchReady = fds.waitForRuntimeEventFds(-1, -1, [int32(pipeFds[0])], -1, 10)
     check switchReady.switchReady
     check not switchReady.asyncReady
     check not switchReady.waylandReady

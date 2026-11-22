@@ -21,6 +21,7 @@ import
   process_runner, protocol_diagnostics, shell_runner, registry_runtime, reload_runtime,
   render_runtime, render_invalidation, screen_mirror_runtime, spawn_context, state,
   switch_event_runtime
+import runtime_events
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -253,7 +254,7 @@ proc asyncSelectorFd(): int =
   asyncdispatch.getGlobalDispatcher().getIoHandler().getFd()
 
 proc waitForRuntimeEvents(
-    daemon: var TriadDaemon, timeoutMs: int
+    daemon: var TriadDaemon, timeoutMs: int, runtimeFd: int
 ): RuntimeEventPollResult =
   let waylandFd =
     if daemon.display == nil:
@@ -268,7 +269,7 @@ proc waitForRuntimeEvents(
   let asyncFd = asyncSelectorFd()
   daemon.waitBackend = if asyncFd >= 0: "fd-aware" else: "timeout"
   result = daemon.eventPollFds.waitForRuntimeEventFds(
-    waylandFd, asyncFd, daemon.eventSwitchFds, timeoutMs
+    waylandFd, asyncFd, daemon.eventSwitchFds, runtimeFd, timeoutMs
   )
   if result.failed:
     warn "Runtime event poll failed", error = osErrorMsg(result.errorCode)
@@ -280,6 +281,8 @@ proc loopCountersJson(counters: RuntimeLoopCounters): JsonNode =
     "switch_polls": counters.switchPolls,
     "child_reap_polls": counters.childReapPolls,
     "child_reaped_processes": counters.childReapedProcesses,
+    "child_signal_wakeups": counters.childSignalWakeups,
+    "child_signal_drains": counters.childSignalDrains,
     "memory_sample_checks": counters.memorySampleChecks,
     "memory_compaction_checks": counters.memoryCompactionChecks,
     "async_polls": counters.asyncPolls,
@@ -435,6 +438,8 @@ proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
     switchPolls: after.switchPolls - before.switchPolls,
     childReapPolls: after.childReapPolls - before.childReapPolls,
     childReapedProcesses: after.childReapedProcesses - before.childReapedProcesses,
+    childSignalWakeups: after.childSignalWakeups - before.childSignalWakeups,
+    childSignalDrains: after.childSignalDrains - before.childSignalDrains,
     memorySampleChecks: after.memorySampleChecks - before.memorySampleChecks,
     memoryCompactionChecks: after.memoryCompactionChecks - before.memoryCompactionChecks,
     asyncPolls: after.asyncPolls - before.asyncPolls,
@@ -1240,6 +1245,14 @@ proc main*(): int =
 
   var exitStatus = 0
   var running = true
+  var runtimeEvents = initRuntimeEventSource()
+  try:
+    runtimeEvents = openRuntimeEventSource()
+  except CatchableError as e:
+    warn "Runtime child-exit events unavailable; using reap fallback", error = e.msg
+  defer:
+    closeRuntimeEventSource(runtimeEvents)
+
   while running:
     inc daemon.loopCounters.loopIterations
     if not dispatchPendingWayland(daemon.display):
@@ -1323,7 +1336,7 @@ proc main*(): int =
       break
 
     discard daemon.display.flush()
-    let waitResult = daemon.waitForRuntimeEvents(waitTimeout)
+    let waitResult = daemon.waitForRuntimeEvents(waitTimeout, runtimeEvents.fd())
     if waitResult.waylandReady:
       inc daemon.loopCounters.waylandWakeups
       if daemon.display.read_events() == -1:
@@ -1331,6 +1344,11 @@ proc main*(): int =
         running = false
     else:
       daemon.display.cancel_read()
+    if waitResult.runtimeReady:
+      inc daemon.loopCounters.childSignalWakeups
+      inc daemon.loopCounters.childSignalDrains
+      discard runtimeEvents.drain()
+      daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

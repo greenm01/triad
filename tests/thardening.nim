@@ -1,8 +1,9 @@
 import
   std/[
-    asyncdispatch, asyncnet, json, nativesockets, options, os, sequtils, strtabs,
-    strutils, tables, unittest,
+    asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
+    strtabs, strutils, tables, unittest,
   ]
+from posix import TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, pipe, read, write
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
@@ -13,6 +14,7 @@ import
     protocol_diagnostics, reload_runtime, render_invalidation, river_windows,
     screen_mirror_runtime, spawn_context, switch_event_runtime,
   ]
+import ../src/daemon/runtime_events
 from ../src/daemon/state import
   LibinputDeviceRuntime, OutputManagementHeadRuntime, clearOutputCaptureSessions,
   consumeMaximizedAck, expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
@@ -2044,3 +2046,29 @@ suite "supervisor restart backoff":
     check restartDelayMs(1, 2, 1) == 2000'i64
     check restartDelayMs(0, 2, 2) == 5000'i64
     check restartDelayMs(1, 2, 9) == 30000'i64
+
+suite "runtime child-exit events":
+  test "runtime event source reports and drains descriptor readiness":
+    var pipeFds: array[2, cint]
+    check pipe(pipeFds) == 0
+    defer:
+      discard close(pipeFds[0])
+      discard close(pipeFds[1])
+    discard fcntl(pipeFds[0], F_SETFL, fcntl(pipeFds[0], F_GETFL) or O_NONBLOCK)
+
+    var source = initRuntimeEventSource()
+    source.signalFd = int(pipeFds[0])
+    check source.fd() == int(pipeFds[0])
+
+    var marker = 'x'
+    check write(pipeFds[1], addr marker, 1) == 1
+    check source.drain().childReady
+    check not source.drain().childReady
+
+  test "tracked short-lived child is reaped":
+    var daemon = initTriadDaemon()
+    let child = startProcess("/bin/true", options = {poParentStreams})
+    daemon.trackChildProcess(child, "true")
+    check child.waitForExit(1000) == 0
+    check daemon.reapChildProcesses() == 1
+    check daemon.fireAndForgetProcesses.len == 0

@@ -219,6 +219,8 @@ type
     switchPolls*: uint64
     childReapPolls*: uint64
     childReapedProcesses*: uint64
+    childSignalWakeups*: uint64
+    childSignalDrains*: uint64
     memorySampleChecks*: uint64
     memoryCompactionChecks*: uint64
     asyncPolls*: uint64

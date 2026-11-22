@@ -6,6 +6,7 @@ type RuntimeEventPollResult* = object
   waylandReady*: bool
   asyncReady*: bool
   switchReady*: bool
+  runtimeReady*: bool
   interrupted*: bool
   failed*: bool
   errorCode*: OSErrorCode
@@ -26,6 +27,7 @@ proc waitForRuntimeEventFds*(
     waylandFd: int,
     asyncFd: int,
     switchFds: openArray[int32],
+    runtimeFd: int,
     timeoutMs: int,
 ): RuntimeEventPollResult =
   fds.setLen(0)
@@ -34,6 +36,7 @@ proc waitForRuntimeEventFds*(
   let switchStart = fds.len
   for fd in switchFds:
     discard fds.addPollFd(fd)
+  let runtimeIdx = fds.addPollFd(runtimeFd)
 
   if fds.len == 0:
     return
@@ -49,6 +52,7 @@ proc waitForRuntimeEventFds*(
 
   result.waylandReady = fds.fdReady(waylandIdx)
   result.asyncReady = fds.fdReady(asyncIdx)
+  result.runtimeReady = fds.fdReady(runtimeIdx)
   for idx in switchStart ..< fds.len:
     if fds.fdReady(idx):
       result.switchReady = true
