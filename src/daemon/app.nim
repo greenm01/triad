@@ -4,7 +4,8 @@ import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
 import
   ../session/
-    [doctor_live, live_reload, logs as session_logs, session_runner, shell_manager, supervisor]
+    [doctor_live, live_reload, logs as session_logs, session_runner, session_control,
+    session_control_client, shell_manager, supervisor]
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
@@ -33,6 +34,8 @@ import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
 var lastRuntimeLoopSampleIpcCounters: IpcPerfCounters
+var wmSessionControl = newSessionControlClient(stateDir() / "shell-manager.sock")
+var sessionReadySent = false
 
 const
   IdleWakeIntervalMs = 250
@@ -1291,13 +1294,14 @@ proc main*(): int =
         daemon.configReloadDebouncer.takeDue(nowMs):
       inc daemon.loopCounters.configReloadsDue
       daemon.enqueue(Msg(kind: MsgKind.CmdConfigReload))
+      asyncCheck wmSessionControl.sendSessionControl(SessionControlKind.ConfigChanged)
 
     # Process Message Queue
     if processQueuedMessages(daemon.configPath, niriSocketPath):
       configureConfigWatcher()
     if daemon.shouldExit:
+      asyncCheck wmSessionControl.sendSessionControl(SessionControlKind.ManagerStopping)
       running = false
-      continue
 
     if daemon.initialManageComplete and not ipcStarted:
       discard startIpcServers()
@@ -1320,6 +1324,12 @@ proc main*(): int =
       else:
         discard
 
+    if ipcStartupGate.open and not sessionReadySent:
+      sessionReadySent = true
+      asyncCheck wmSessionControl.sendSessionControl(
+        SessionControlKind.SessionReady,
+        %*{"triad_socket": triadSocket, "niri_socket": niriSocketPath},
+      )
 
     if daemon.initialManageComplete and ipcStartupGate.open:
       daemon.spawnPendingStartupCommands(
@@ -1341,6 +1351,10 @@ proc main*(): int =
         if watchdogFallback.isSome:
           daemon.enqueue(
             Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
+          )
+          asyncCheck wmSessionControl.sendSessionControl(
+            SessionControlKind.FallbackRequest,
+            %*{"shell": watchdogFallback.get()},
           )
         else:
           inc daemon.loopCounters.shellRecoveryPolls
