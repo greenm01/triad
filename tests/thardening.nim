@@ -1,7 +1,7 @@
 import
   std/[
     asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
-    strtabs, strutils, tables, unittest,
+    strtabs, strutils, tables, times, unittest,
   ]
 from posix import TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, pipe, read, write
 import ../src/config/parser
@@ -18,9 +18,9 @@ import ../src/daemon/runtime_events
 import ../src/daemon/ipc_startup_runtime
 import ../src/daemon/tracked_child
 from ../src/daemon/state import
-  LibinputDeviceRuntime, OutputManagementHeadRuntime, clearOutputCaptureSessions,
-  consumeMaximizedAck, expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
-  setWindowCaptureSessions
+  LibinputDeviceRuntime, OutputManagementHeadRuntime, TriadDaemon,
+  clearOutputCaptureSessions, consumeMaximizedAck, expectMaximizedAck,
+  initTriadDaemon, setOutputCaptureSessions, setWindowCaptureSessions
 from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[binding_dispatch, commands, niri_compat, socket]
 import ../src/layouts/scroller
@@ -28,8 +28,30 @@ import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
-import ../src/utils/[process_memory, session_env]
+import ../src/utils/[process_memory, screenshot_capture, session_env]
 import ../src/session/supervisor
+
+proc mirrorTestDaemon(): TriadDaemon =
+  result = initTriadDaemon()
+  result.runtimeState = initRuntimeStateFromConfig(
+    Config(
+      outputRules:
+        @[OutputRule(target: "DP-2", mirrorSet: true, mirrorSource: "eDP-1")]
+    )
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1200)
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "eDP-1")
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1920, height: 1080)
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2")
+  )
+
 
 var observedConfigNotificationEvent: ConfigNotificationEvent
 var observedConfigNotificationCommand: seq[string]
@@ -338,12 +360,74 @@ suite "Crash hardening":
     for runtime in daemon.screenMirrors.values:
       check runtime.sourceName == "eDP-1"
       check runtime.targetName == "DP-2"
-      check runtime.process != nil
+      check runtime.hasChild
       check not runtime.failed
 
     discard daemon.runtimeState.applyRuntimeConfig(Config())
     daemon.syncScreenMirrors()
+    sleep(50)
+    daemon.syncScreenMirrors()
     check daemon.screenMirrors.len == 0
+
+  test "screen mirror early exit marks failed and schedules retry":
+    let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
+    let tempDir = getTempDir() / ("triad-mirror-exit-" & $getCurrentProcessId())
+    let fakeMirror = tempDir / "triad_mirror"
+    createDir(tempDir)
+    writeFile(fakeMirror, "#!/bin/sh\nexit 7\n")
+    setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
+    putEnv("TRIAD_MIRROR_BIN", fakeMirror)
+
+    var daemon = mirrorTestDaemon()
+    defer:
+      daemon.stopScreenMirrors("test cleanup")
+      putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(fakeMirror)
+      removeDir(tempDir)
+
+    daemon.syncScreenMirrors()
+    sleep(50)
+    daemon.syncScreenMirrors()
+    check daemon.screenMirrors.len == 1
+    for runtime in daemon.screenMirrors.values:
+      check runtime.failed
+      check not runtime.hasChild
+      check runtime.retryAfterMs > int64(epochTime() * 1000.0)
+
+  test "screen mirror TERM-ignoring child escalates to KILL and reaps":
+    let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
+    let tempDir = getTempDir() / ("triad-mirror-kill-" & $getCurrentProcessId())
+    let fakeMirror = tempDir / "triad_mirror"
+    createDir(tempDir)
+    writeFile(
+      fakeMirror,
+      "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n",
+    )
+    setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
+    putEnv("TRIAD_MIRROR_BIN", fakeMirror)
+
+    var daemon = mirrorTestDaemon()
+    defer:
+      daemon.stopScreenMirrors("test cleanup")
+      putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(fakeMirror)
+      removeDir(tempDir)
+
+    daemon.syncScreenMirrors()
+    discard daemon.runtimeState.applyRuntimeConfig(Config())
+    daemon.syncScreenMirrors()
+    sleep(300)
+    daemon.syncScreenMirrors()
+    sleep(50)
+    daemon.syncScreenMirrors()
+    check daemon.screenMirrors.len == 0
+
+  test "screenshot helper timeout returns after child reap":
+    let result = waitFor(
+      runShellCommandCaptureAsync("sleep 30", pollMs = 10, timeoutMs = 100)
+    )
+    check result.timedOut
+    check result.exitCode == ShellTimeoutExitCode
 
   test "message queue preserves Janet hook origin":
     var daemon = initTriadDaemon()

@@ -4,7 +4,7 @@ import ../state/engine
 import ../systems/outputs
 import ../types/core
 import ../utils/process_options
-import process_runner, state
+import process_runner, state, tracked_child
 
 type MirrorSpec = object
   sourceOutput: OutputId
@@ -43,26 +43,23 @@ proc desiredScreenMirrors(model: Model): Table[OutputId, MirrorSpec] =
       targetName: targetName,
     )
 
-proc stopMirror(runtime: var ScreenMirrorRuntime, reason: string) =
-  if runtime.process == nil:
+proc closeMirrorChild(runtime: var ScreenMirrorRuntime) =
+  if not runtime.hasChild:
     return
-  let pid = runtime.process.processID
   try:
-    runtime.process.terminate()
-    var code = runtime.process.pollProcessExitCode(1000)
-    if code == -1:
-      runtime.process.kill()
-      code = runtime.process.waitForExit()
-    info "Stopped screen mirror",
-      pid = pid, target = runtime.targetName, reason = reason, exitCode = code
-  except CatchableError as e:
-    warn "Failed to stop screen mirror",
-      pid = pid, target = runtime.targetName, reason = reason, error = e.msg
-  try:
-    runtime.process.close()
+    runtime.child.process.close()
   except CatchableError:
     discard
-  runtime.process = nil
+  runtime.hasChild = false
+
+proc stopMirror(runtime: var ScreenMirrorRuntime, reason: string) =
+  if not runtime.hasChild or runtime.stopping:
+    return
+  runtime.stopping = true
+  runtime.stopReason = reason
+  runtime.child.beginTermination(unixMs(), 250'i64)
+  info "Stopping screen mirror",
+    pid = runtime.child.process.processID, target = runtime.targetName, reason = reason
 
 proc startMirror(model: Model, spec: MirrorSpec): ScreenMirrorRuntime =
   result = ScreenMirrorRuntime(
@@ -91,17 +88,10 @@ proc startMirror(model: Model, spec: MirrorSpec): ScreenMirrorRuntime =
       env = model.configuredProcessEnv(),
       options = InheritedProcessOptions,
     )
-    let code = process.pollProcessExitCode(250)
-    if code == -1:
-      result.process = process
-      info "Started screen mirror",
-        pid = process.processID, source = spec.sourceName, target = spec.targetName
-    else:
-      result.failed = true
-      result.retryAfterMs = unixMs() + 2_000
-      warn "Screen mirror exited during startup",
-        source = spec.sourceName, target = spec.targetName, exitCode = code
-      process.close()
+    result.child = initTrackedChild(process, unixMs(), 250'i64)
+    result.hasChild = true
+    info "Started screen mirror",
+      pid = process.processID, source = spec.sourceName, target = spec.targetName
   except CatchableError as e:
     result.failed = true
     result.retryAfterMs = unixMs() + 2_000
@@ -115,41 +105,63 @@ proc sameMirror(runtime: ScreenMirrorRuntime, spec: MirrorSpec): bool =
 proc syncScreenMirrors*(daemon: var TriadDaemon) =
   let desired = daemon.runtimeState.model.desiredScreenMirrors()
   let nowMs = unixMs()
-  var staleTargets: seq[OutputId]
-  for targetOutput, runtime in daemon.screenMirrors.pairs:
-    if not desired.hasKey(targetOutput) or not runtime.sameMirror(desired[targetOutput]):
-      staleTargets.add(targetOutput)
-  for targetOutput in staleTargets:
-    var runtime = daemon.screenMirrors[targetOutput]
-    runtime.stopMirror("configuration or outputs changed")
-    daemon.screenMirrors.del(targetOutput)
-
-  for targetOutput, spec in desired.pairs:
-    if daemon.screenMirrors.hasKey(targetOutput):
-      var runtime = daemon.screenMirrors[targetOutput]
-      if runtime.process != nil:
-        let code = runtime.process.pollProcessExitCode(0)
-        if code != -1:
-          warn "Screen mirror exited",
-            source = runtime.sourceName, target = runtime.targetName, exitCode = code
-          try:
-            runtime.process.close()
-          except CatchableError:
-            discard
-          runtime.process = nil
-          runtime.failed = true
-          runtime.retryAfterMs = nowMs + 1_000
-          daemon.screenMirrors[targetOutput] = runtime
-      elif nowMs >= runtime.retryAfterMs:
-        daemon.screenMirrors[targetOutput] = daemon.runtimeState.model.startMirror(spec)
-      continue
-    daemon.screenMirrors[targetOutput] = daemon.runtimeState.model.startMirror(spec)
-
-proc stopScreenMirrors*(daemon: var TriadDaemon, reason: string) =
-  var targets: seq[OutputId]
+  var targets: seq[OutputId] = @[]
   for targetOutput in daemon.screenMirrors.keys:
     targets.add(targetOutput)
+
   for targetOutput in targets:
+    if not daemon.screenMirrors.hasKey(targetOutput):
+      continue
+    let runtime = daemon.screenMirrors[targetOutput]
+    if not desired.hasKey(targetOutput) or not runtime.sameMirror(desired[targetOutput]):
+      var stale = daemon.screenMirrors[targetOutput]
+      stale.stopMirror("configuration or outputs changed")
+      daemon.screenMirrors[targetOutput] = stale
+
+  for targetOutput in targets:
+    if not daemon.screenMirrors.hasKey(targetOutput):
+      continue
+    var runtime = daemon.screenMirrors[targetOutput]
+    if runtime.hasChild:
+      let reaped = runtime.child.advanceTrackedChild(nowMs, 250'i64)
+      if reaped:
+        if runtime.stopping:
+          info "Stopped screen mirror",
+            pid = runtime.child.process.processID,
+            target = runtime.targetName,
+            reason = runtime.stopReason,
+            exitCode = runtime.child.exitCode
+          runtime.closeMirrorChild()
+          daemon.screenMirrors.del(targetOutput)
+        else:
+          warn "Screen mirror exited",
+            source = runtime.sourceName,
+            target = runtime.targetName,
+            exitCode = runtime.child.exitCode
+          runtime.failed = true
+          runtime.retryAfterMs = nowMs + 1_000
+          runtime.closeMirrorChild()
+          daemon.screenMirrors[targetOutput] = runtime
+      else:
+        daemon.screenMirrors[targetOutput] = runtime
+    elif runtime.stopping:
+      daemon.screenMirrors.del(targetOutput)
+    elif not desired.hasKey(targetOutput) or
+        not runtime.sameMirror(desired[targetOutput]):
+      daemon.screenMirrors.del(targetOutput)
+    elif runtime.failed and nowMs >= runtime.retryAfterMs and
+        desired.hasKey(targetOutput):
+      daemon.screenMirrors.del(targetOutput)
+      daemon.screenMirrors[targetOutput] =
+        daemon.runtimeState.model.startMirror(desired[targetOutput])
+
+  for targetOutput, spec in desired.pairs:
+    if not daemon.screenMirrors.hasKey(targetOutput):
+      daemon.screenMirrors[targetOutput] =
+        daemon.runtimeState.model.startMirror(spec)
+
+proc stopScreenMirrors*(daemon: var TriadDaemon, reason: string) =
+  for targetOutput in daemon.screenMirrors.keys:
     var runtime = daemon.screenMirrors[targetOutput]
     runtime.stopMirror(reason)
-  daemon.screenMirrors.clear()
+    daemon.screenMirrors[targetOutput] = runtime
