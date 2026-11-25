@@ -205,10 +205,6 @@ Toggle tap-to-click, drag, drag lock, and disable-while-typing in River config
 while Triad runs. The touchpad should settle at the configured values without
 repeated set requests or flipping between states.
 
-Set `input.keyboard.xkb.layout` in the config, then switch keyboard groups in
-River. The shell should receive the layout change. Without a configured layout
-list Triad has no layout name to broadcast.
-
 ## Failure Signals
 
 Treat these as hardening bugs to investigate:
