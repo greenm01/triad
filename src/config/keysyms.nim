@@ -61,5 +61,19 @@ proc keySymForBinding*(key: string, modifiers: uint32 = 0): uint32 =
     0xff57'u32
   of "print":
     0xff61'u32
+  of "xf86audioraisevolume":
+    0x1008ff13'u32
+  of "xf86audiolowervolume":
+    0x1008ff11'u32
+  of "xf86audiomute":
+    0x1008ff12'u32
+  of "xf86monbrightnessup":
+    0x1008ff02'u32
+  of "xf86monbrightnessdown":
+    0x1008ff03'u32
+  of "xf86display":
+    0x1008ff59'u32
+  of "xf86poweroff":
+    0x1008ff2a'u32
   else:
     0'u32
