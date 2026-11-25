@@ -2240,15 +2240,25 @@ suite "detached process options":
     check parseInt(fields[4]) != parentGroup
 
   test "runtime event source reports and drains timer readiness":
+    const timerDeadlineMs = 10'i64
+    const readinessBudgetMs = 2000
     var source = openRuntimeEventSource()
     defer:
       closeRuntimeEventSource(source)
 
-    check source.setTimer(10'i64)
+    check source.setTimer(timerDeadlineMs)
     var fds: seq[TPollfd]
-    let ready = fds.waitForRuntimeEventFds(
-      -1, -1, [], source.fd(), source.timerFd(), 2000
+    let started = now()
+    var ready = fds.waitForRuntimeEventFds(
+      -1, -1, [], source.fd(), source.timerFd(), readinessBudgetMs
     )
+    while ready.interrupted:
+      let elapsedMs = (now() - started).inMilliseconds
+      if elapsedMs >= readinessBudgetMs:
+        break
+      ready = fds.waitForRuntimeEventFds(
+        -1, -1, [], source.fd(), source.timerFd(), readinessBudgetMs - int(elapsedMs)
+      )
     check ready.timerReady
     let events = source.drain()
     check events.timerReady

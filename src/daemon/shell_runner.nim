@@ -397,46 +397,21 @@ proc spawnShellProfile(
       options = InheritedProcessOptions,
     )
     let childPid = p.processID
-    let earlyExitCode = p.pollProcessExitCode(250)
-    if earlyExitCode == -1:
-      runner.trackedProcess = p
-      runner.trackedShellName = profile.name
-      info "Spawned shell",
-        profile = profile.name,
-        command = profile.launch[0],
-        pid = childPid,
-        niriCompat = profile.niriCompat
-      writeShellBehaviorEvent(
-        "shell_spawned",
-        shells,
-        profile,
-        reason,
-        spawnInfo.shellSpawnEventPayload(childPid = childPid),
-      )
-      result = ShellSpawnStatus.Running
-    elif earlyExitCode == 0:
-      p.close()
-      writeShellBehaviorEvent(
-        "shell_spawn_handoff",
-        shells,
-        profile,
-        reason,
-        spawnInfo.shellSpawnEventPayload(
-          childPid = childPid, exitCode = some(earlyExitCode)
-        ),
-      )
-      result = ShellSpawnStatus.Handoff
-    else:
-      p.close()
-      writeShellBehaviorEvent(
-        "shell_spawn_exited",
-        shells,
-        profile,
-        reason,
-        spawnInfo.shellSpawnEventPayload(
-          childPid = childPid, exitCode = some(earlyExitCode)
-        ),
-      )
+    runner.trackedProcess = p
+    runner.trackedShellName = profile.name
+    info "Spawned shell",
+      profile = profile.name,
+      command = profile.launch[0],
+      pid = childPid,
+      niriCompat = profile.niriCompat
+    writeShellBehaviorEvent(
+      "shell_spawned",
+      shells,
+      profile,
+      reason,
+      spawnInfo.shellSpawnEventPayload(childPid = childPid),
+    )
+    result = ShellSpawnStatus.Running
   except CatchableError as e:
     warn "Failed to spawn shell",
       profile = profile.name,
