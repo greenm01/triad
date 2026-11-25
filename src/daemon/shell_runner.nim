@@ -518,6 +518,9 @@ proc advanceShellLifecycle*(
       ),
     )
     launch.process.closeProcessHandle()
+    if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
+      runner.clearShellRecovery()
+      return
     if launch.retryAllowed:
       runner.stopShellProfile(
         model,
@@ -737,10 +740,6 @@ proc pollShellRecovery*(
       runner.recoveryReason,
       %*{"attempts": runner.recoveryAttempts, "status": $status},
     )
-    if runner.pendingLaunchActive:
-      runner.pendingLaunch.process.closeProcessHandle()
-      runner.pendingLaunchActive = false
-    runner.clearShellRecovery()
     return
 
   let delayMs = runner.recoveryAttempts.recoveryDelayMs()

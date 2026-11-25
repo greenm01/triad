@@ -1608,6 +1608,46 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     let calls = readFile(fake.logPath)
     check calls.count("stop") >= 4
 
+
+  test "Final recovery attempt keeps a healthy shell tracked":
+    let tmp = getTempDir() / ("triad-shell-recovery-final-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = writeFakeRecoveringShell(tmp)
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_SHELL_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "0")
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
+      putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
+
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    defer:
+      runner.stopTrackedShell("test cleanup")
+      if runner.pendingLaunchActive:
+        runner.pendingLaunch.process.closeProcessHandle()
+        runner.pendingLaunchActive = false
+
+    runner.recoveryPending = true
+    runner.recoveryAttempts = MaxShellRecoveryAttempts - 1
+    runner.recoveryReason = "test"
+    runner.nextRecoveryMs = 0
+
+    discard runner.pollShellRecovery(model, tmp / "niri.sock", 0)
+    check runner.pendingLaunchActive
+    runner.settleShellLifecycle(model, tmp / "niri.sock")
+    check runner.trackedShellRunning()
+
   test "Shell config reload handoff schedules recovery":
     let tmp = getTempDir() / ("triad-shell-config-recovery-" & $getCurrentProcessId())
     if dirExists(tmp):
