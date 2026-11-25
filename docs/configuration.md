@@ -244,6 +244,10 @@ bindings {
 }
 ```
 
+The `bind` directive also accepts these XF86 key names, with or without modifiers:
+`XF86AudioRaiseVolume`, `XF86AudioLowerVolume`, `XF86AudioMute`,
+`XF86MonBrightnessUp`, `XF86MonBrightnessDown`, `XF86Display`, and `XF86PowerOff`.
+
 Pointer move/resize works for floating windows and for tiled windows in Triad's
 built-in/native layouts. Tiled scroller windows can be dragged between columns
 or into another column stack using the nearest insertion gap, including visible
