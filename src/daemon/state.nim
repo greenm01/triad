@@ -418,6 +418,7 @@ type
     xkbConfigKeyboards*: Table[uint32, XkbKeyboardRuntime]
     xkbConfigKeymap*: XkbKeymapRuntime
     libinputResultDescriptions*: Table[uint32, string]
+    libinputResultDevices*: Table[uint32, uint32]
     switchEventDevices*: seq[SwitchEventDeviceRuntime]
     windowUnreliablePids*: Table[uint32, int32]
     pendingWindows*: Table[uint32, ProjectedWindow]

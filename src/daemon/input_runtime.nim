@@ -228,6 +228,7 @@ proc addResultListener(
   daemon: var TriadDaemon,
   result: ptr riverLibinput.RiverLibinputResultV1,
   description: string,
+  libinputId: int = -1,
 )
 
 proc applyPointerCommon(
@@ -333,7 +334,7 @@ proc applyTouchpadExtras(
       not (state.tapRequestedSet and state.tapRequested == desiredTap):
     state.tapRequested = desiredTap
     state.tapRequestedSet = true
-    daemon.addResultListener(device.setTap(desiredTap), "input tap")
+    daemon.addResultListener(device.setTap(desiredTap), "input tap", int(device.id()))
   if config.tapButtonMapSet and runtime.tapFingerCount > 0:
     daemon.addResultListener(
       device.setTapButtonMap(config.tapButtonMap.buttonMapValue()),
@@ -345,7 +346,7 @@ proc applyTouchpadExtras(
       not (state.dragRequestedSet and state.dragRequested == desiredDrag):
     state.dragRequested = desiredDrag
     state.dragRequestedSet = true
-    daemon.addResultListener(device.setDrag(desiredDrag), "input drag")
+    daemon.addResultListener(device.setDrag(desiredDrag), "input drag", int(device.id()))
   let desiredDragLock =
     if config.dragLock: LibinputDragLockEnabledTimeout else: LibinputDragLockDisabled
   if config.dragLockSet and runtime.tapFingerCount > 0 and
@@ -353,14 +354,16 @@ proc applyTouchpadExtras(
       not (state.dragLockRequestedSet and state.dragLockRequested == desiredDragLock):
     state.dragLockRequested = desiredDragLock
     state.dragLockRequestedSet = true
-    daemon.addResultListener(device.setDragLock(desiredDragLock), "input drag-lock")
+    daemon.addResultListener(
+      device.setDragLock(desiredDragLock), "input drag-lock", int(device.id())
+    )
   let desiredDwt = config.dwt.boolState()
   if config.dwtSet and runtime.dwtSupport and
       not (state.dwtCurrentSet and state.dwtCurrent == desiredDwt) and
       not (state.dwtRequestedSet and state.dwtRequested == desiredDwt):
     state.dwtRequested = desiredDwt
     state.dwtRequestedSet = true
-    daemon.addResultListener(device.setDwt(desiredDwt), "input dwt")
+    daemon.addResultListener(device.setDwt(desiredDwt), "input dwt", int(device.id()))
   daemon.libinputDevices[device.id()] = state
   if config.dwtpSet and runtime.dwtpSupport:
     daemon.addResultListener(device.setDwtp(config.dwtp.boolState()), "input dwtp")
@@ -974,23 +977,39 @@ libinputDeviceListener = riverLibinput.RiverLibinputDeviceV1Listener(
   done: onLibinputDone,
 )
 
-proc clearRequestedLibinputSetting(daemon: ptr TriadDaemon, setting: string) =
+proc forgetLibinputResult*(daemon: ptr TriadDaemon, resultId: uint32) =
   if daemon == nil:
     return
-  for id, runtime in daemon.libinputDevices.pairs:
-    var state = runtime
-    case setting
-    of "input tap":
-      state.tapRequestedSet = false
-    of "input drag":
-      state.dragRequestedSet = false
-    of "input drag-lock":
-      state.dragLockRequestedSet = false
-    of "input dwt":
-      state.dwtRequestedSet = false
-    else:
-      continue
-    daemon.libinputDevices[id] = state
+  daemon.libinputResultDescriptions.del(resultId)
+  daemon.libinputResultDevices.del(resultId)
+
+proc clearRequestedLibinputSetting*(
+    daemon: ptr TriadDaemon, libinputId: uint32, setting: string
+) =
+  if daemon == nil or not daemon.libinputDevices.hasKey(libinputId):
+    return
+  var state = daemon.libinputDevices[libinputId]
+  case setting
+  of "input tap":
+    state.tapRequestedSet = false
+  of "input drag":
+    state.dragRequestedSet = false
+  of "input drag-lock":
+    state.dragLockRequestedSet = false
+  of "input dwt":
+    state.dwtRequestedSet = false
+  else:
+    return
+  daemon.libinputDevices[libinputId] = state
+
+proc clearLibinputResult*(daemon: ptr TriadDaemon, resultId: uint32) =
+  if daemon == nil:
+    return
+  let setting = daemon.libinputResultDescriptions.getOrDefault(resultId, "")
+  let deviceId = daemon.libinputResultDevices.getOrDefault(resultId, uint32.high)
+  if setting.len > 0 and deviceId != uint32.high:
+    daemon.clearRequestedLibinputSetting(deviceId, setting)
+  daemon.forgetLibinputResult(resultId)
 
 proc onLibinputResultSuccess(
     data: pointer, result: ptr riverLibinput.RiverLibinputResultV1
@@ -998,7 +1017,7 @@ proc onLibinputResultSuccess(
   let daemon = callbackDaemon(data, "libinput result success")
   if daemon == nil:
     return
-  daemon.libinputResultDescriptions.del(result.id())
+  daemon.forgetLibinputResult(result.id())
 
 proc onLibinputResultUnsupported(
     data: pointer, result: ptr riverLibinput.RiverLibinputResultV1
@@ -1008,8 +1027,7 @@ proc onLibinputResultUnsupported(
     return
   let setting = daemon.libinputResultDescriptions.getOrDefault(result.id(), "")
   warn "Libinput setting unsupported", setting = setting
-  daemon.clearRequestedLibinputSetting(setting)
-  daemon.libinputResultDescriptions.del(result.id())
+  daemon.clearLibinputResult(result.id())
 
 proc onLibinputResultInvalid(
     data: pointer, result: ptr riverLibinput.RiverLibinputResultV1
@@ -1019,8 +1037,7 @@ proc onLibinputResultInvalid(
     return
   let setting = daemon.libinputResultDescriptions.getOrDefault(result.id(), "")
   warn "Libinput setting invalid", setting = setting
-  daemon.clearRequestedLibinputSetting(setting)
-  daemon.libinputResultDescriptions.del(result.id())
+  daemon.clearLibinputResult(result.id())
 
 libinputResultListener = riverLibinput.RiverLibinputResultV1Listener(
   success: onLibinputResultSuccess,
@@ -1032,10 +1049,13 @@ proc addResultListener(
     daemon: var TriadDaemon,
     result: ptr riverLibinput.RiverLibinputResultV1,
     description: string,
+    libinputId: int = -1,
 ) =
   if result == nil:
     return
   daemon.libinputResultDescriptions[result.id()] = description
+  if libinputId >= 0:
+    daemon.libinputResultDevices[result.id()] = uint32(libinputId)
   discard result.addListener(libinputResultListener.addr, daemonData(daemon))
 
 proc destroyInputRuntime*(daemon: var TriadDaemon) =
@@ -1053,6 +1073,7 @@ proc destroyInputRuntime*(daemon: var TriadDaemon) =
       runtime.inputDevicePtr().destroy()
   daemon.inputDevices.clear()
   daemon.libinputResultDescriptions.clear()
+  daemon.libinputResultDevices.clear()
   if daemon.riverLibinputConfig != nil:
     daemon.riverLibinputConfigPtr().stop()
     daemon.riverLibinputConfig = nil
