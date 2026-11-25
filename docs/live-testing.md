@@ -201,7 +201,7 @@ verbose; use `TRIAD_LOG_LEVEL=info` for normal sessions.
 
 ## Exercise Input
 
-Toggle tap-to-click, drag, drag lock, and two-finger scrolling in River config
+Toggle tap-to-click, drag, drag lock, and disable-while-typing in River config
 while Triad runs. The touchpad should settle at the configured values without
 repeated set requests or flipping between states.
 
