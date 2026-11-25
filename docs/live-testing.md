@@ -13,10 +13,11 @@ nimble build
 
 ## Start In River
 
-Run Triad from inside the River session and capture stderr:
+Start Triad under the supervisor from inside the River session and capture
+stderr:
 
 ```bash
-TRIAD_LOG_LEVEL=debug ./triad 2>triad.log
+TRIAD_LOG_LEVEL=debug ./triad supervise 2>triad.log
 ```
 
 For the scripted smoke check, run:

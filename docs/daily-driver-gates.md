@@ -92,6 +92,7 @@ nimble liveReload
 Run `nimble liveReload` last so daily-driver readiness includes the live-manager
 replacement path after the clean-tree preflight and QEMU VT checks pass.
 
-Then run one manual River session with `TRIAD_LOG_LEVEL=debug ./triad
-2>triad.log`, launch and close several clients, and confirm there are no Nim
-tracebacks, fatal logs, protocol errors, or lost IPC responses.
+Then run one manual River session under the supervisor with
+`TRIAD_LOG_LEVEL=debug ./triad supervise 2>triad.log`, launch and close several
+clients, and confirm there are no Nim tracebacks, fatal logs, protocol errors,
+or lost IPC responses.
