@@ -149,6 +149,10 @@ uses `tools/triad-capture-status.sh` to format the capture payload when `jq` is
 available. It also runs `tools/triad-capture-hook.sh` against a static
 `TRIAD_CAPTURE_*` environment to keep hook formatting covered.
 
+Set `input.keyboard.xkb.layout` in the config, then switch keyboard groups in
+River. The shell should receive the layout change over Triad IPC. Without a
+configured layout list Triad has no layout name to broadcast.
+
 ## Exercise Niri Shell Compatibility
 
 When `shells { enabled #true }` is configured, Triad starts the active shell
