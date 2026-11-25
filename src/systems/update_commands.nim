@@ -633,12 +633,13 @@ proc applyCommand*(
     if switched.changed:
       result.dirty = true
       let snapshot = shellSnapshot(model)
-      result.effects.add(
-        Effect(
-          kind: EffectKind.EffSetKeyboardLayout,
-          keyboardLayoutIndex: switched.activeIndex,
+      if not msg.observedLayout:
+        result.effects.add(
+          Effect(
+            kind: EffectKind.EffSetKeyboardLayout,
+            keyboardLayoutIndex: switched.activeIndex,
+          )
         )
-      )
       result.effects.add(broadcastKeyboardLayoutsChanged(snapshot))
       result.effects.add(broadcastKeyboardLayoutSwitched(switched.activeIndex))
   of MsgKind.CmdStopManager:

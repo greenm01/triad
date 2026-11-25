@@ -631,7 +631,11 @@ proc onXkbKeyboardLayout(
   discard keyboard
   discard name
   daemon.enqueue(
-    Msg(kind: MsgKind.CmdSwitchKeyboardLayout, keyboardLayoutIndex: int32(index))
+    Msg(
+      kind: MsgKind.CmdSwitchKeyboardLayout,
+      keyboardLayoutIndex: int32(index),
+      observedLayout: true,
+    )
   )
 
 proc onXkbKeyboardLock(data: pointer, keyboard: ptr riverXkbConfig.RiverXkbKeyboardV1) =

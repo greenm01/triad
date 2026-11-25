@@ -125,6 +125,45 @@ suite "Core Runtime Logic: smoke":
         it.jsonPayload.contains("KeyboardLayoutSwitched")
     )
 
+  test "Observed XKB layout change broadcasts without setting keyboards":
+    var model = initRuntimeStateFromConfig(
+      Config(
+        input: InputConfig(
+          keyboard:
+            InputKeyboardConfig(xkb: InputXkbConfig(layoutSet: true, layout: "us,de"))
+        )
+      )
+    ).model
+
+    let observed = model.updateModel(
+      Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutIndex: 1,
+        observedLayout: true,
+      )
+    )
+    check model.shellSnapshot().keyboardLayoutIndex == 1
+    check not observed.anyIt(it.kind == EffectKind.EffSetKeyboardLayout)
+    check observed.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("KeyboardLayoutsChanged")
+    )
+    check observed.anyIt(
+      it.kind == EffectKind.EffBroadcastJson and
+        it.jsonPayload.contains("KeyboardLayoutSwitched")
+    )
+
+    let explicit = model.updateModel(
+      Msg(
+        kind: MsgKind.CmdSwitchKeyboardLayout,
+        keyboardLayoutDelta: -1,
+        keyboardLayoutIndex: -1,
+      )
+    )
+    check explicit.anyIt(
+      it.kind == EffectKind.EffSetKeyboardLayout and it.keyboardLayoutIndex == 0
+    )
+
   test "Screenshot command builder separates selector and quotes geometry data":
     let config = ScreenshotConfig(
       captureCommand: "grim -t png",
