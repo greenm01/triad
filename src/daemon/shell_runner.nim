@@ -536,17 +536,14 @@ proc advanceShellLifecycle*(
       ),
     )
     launch.process.closeProcessHandle()
-    let outcome =
-      if code == 0: ShellSpawnStatus.Handoff
-      else: ShellSpawnStatus.Failed
     if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
-      if runner.recoveryPending:
+      if runner.recoveryPending and code != 0:
         writeShellBehaviorEvent(
           "shell_recovery_exhausted",
           launch.shells,
           launch.profile,
           runner.recoveryReason,
-          %*{"attempts": runner.recoveryAttempts, "status": $outcome},
+          %*{"attempts": runner.recoveryAttempts},
         )
       runner.clearShellRecovery()
       return
