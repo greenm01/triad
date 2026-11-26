@@ -1,6 +1,7 @@
 import std/[options, sequtils, strutils]
 import ../state/engine
 import ../types/runtime_values
+import ../ipc/command_registry
 import binding_profiles
 
 type ImportantHotkey = object
@@ -75,6 +76,12 @@ proc commandBase(command: string): string =
   else:
     parts[0]
 
+
+proc resolvedCommandName(command: string): string =
+  let base = command.commandBase()
+  let spec = resolveCommandSpec(base)
+  if spec.isSome: spec.get().name else: base
+
 proc defaultCommandLabel(command: string): string =
   case command.commandBase()
   of "show-hotkey-overlay", "toggle-hotkey-overlay":
@@ -95,11 +102,11 @@ proc defaultCommandLabel(command: string): string =
 proc findBindingForCommand(
     bindings: seq[KeyBindingConfig], command: string
 ): Option[KeyBindingConfig] =
-  let target = command.commandBase()
+  let target = command.resolvedCommandName()
   for binding in bindings:
     if binding.hotkeyOverlayTitleKind == HotkeyOverlayTitleKind.HotkeyTitleHidden:
       continue
-    if binding.command.commandBase() == target:
+    if binding.command.resolvedCommandName() == target:
       return some(binding)
   none(KeyBindingConfig)
 

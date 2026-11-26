@@ -313,6 +313,9 @@ suite "Core Runtime Logic: smoke":
             KeyBindingConfig(
               key: "Return", modifiers: 64'u32, command: "spawn-terminal"
             ),
+            KeyBindingConfig(
+              key: "f", modifiers: 64'u32, command: "toggle-fullscreen"
+            ),
           ],
       )
     ).model
@@ -323,4 +326,7 @@ suite "Core Runtime Logic: smoke":
     )
     check not rows.anyIt(it.label == "Close Focused Window")
     check rows.anyIt(it.key == "Super + Enter" and it.label == "Open Terminal")
+    check rows.anyIt(
+      it.key == "Super + F" and it.label == "Fullscreen Window"
+    )
     check not rows.anyIt(it.key == "(not bound)")
