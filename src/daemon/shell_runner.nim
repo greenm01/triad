@@ -330,7 +330,10 @@ proc advanceStopCommands*(runner: var ShellRunner, nowMs = currentRuntimeMs()) =
       command.process.closeProcessHandle()
       runner.stopCommands.delete(index)
     elif nowMs >= command.deadlineMs and not command.killSent:
-      command.process.killProcess()
+      try:
+        command.process.killProcess()
+      except CatchableError:
+        discard
       command.killSent = true
       command.deadlineMs = nowMs + 250'i64
       runner.stopCommands[index] = command

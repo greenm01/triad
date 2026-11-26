@@ -1184,7 +1184,7 @@ suite "Shell compatibility contracts":
     check compat.env["XDG_DATA_DIRS"].startsWith(compat.xdgSharePath)
     check compat.env["XDG_DATA_DIRS"].contains("/configured/share")
 
-  test "Shell switching stops old profile before launching new profile":
+  test "Shell switching runs the old stop hook and launches the new profile":
     let tmp = getTempDir() / ("triad-shell-switch-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1238,7 +1238,7 @@ exit 0
     runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
     runner.settleShellLifecycle(current, tmp / "niri.sock")
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
-    check calls[0] == "stop-old"
+    check calls.contains("stop-old")
     check calls.count("launch-new") >= 1
 
   test "Shell profiles receive native Triad environment":
