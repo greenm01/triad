@@ -334,7 +334,10 @@ proc applyTouchpadExtras(
       not (state.tapRequestedSet and state.tapRequested == desiredTap):
     state.tapRequested = desiredTap
     state.tapRequestedSet = true
-    daemon.addResultListener(device.setTap(desiredTap), "input tap", int(device.id()))
+    let req = device.setTap(desiredTap)
+    if req != nil:
+      state.tapResultId = req.id()
+    daemon.addResultListener(req, "input tap", int(device.id()))
   if config.tapButtonMapSet and runtime.tapFingerCount > 0:
     daemon.addResultListener(
       device.setTapButtonMap(config.tapButtonMap.buttonMapValue()),
@@ -346,7 +349,10 @@ proc applyTouchpadExtras(
       not (state.dragRequestedSet and state.dragRequested == desiredDrag):
     state.dragRequested = desiredDrag
     state.dragRequestedSet = true
-    daemon.addResultListener(device.setDrag(desiredDrag), "input drag", int(device.id()))
+    let req = device.setDrag(desiredDrag)
+    if req != nil:
+      state.dragResultId = req.id()
+    daemon.addResultListener(req, "input drag", int(device.id()))
   let desiredDragLock =
     if config.dragLock: LibinputDragLockEnabledTimeout else: LibinputDragLockDisabled
   if config.dragLockSet and runtime.tapFingerCount > 0 and
@@ -354,16 +360,20 @@ proc applyTouchpadExtras(
       not (state.dragLockRequestedSet and state.dragLockRequested == desiredDragLock):
     state.dragLockRequested = desiredDragLock
     state.dragLockRequestedSet = true
-    daemon.addResultListener(
-      device.setDragLock(desiredDragLock), "input drag-lock", int(device.id())
-    )
+    let req = device.setDragLock(desiredDragLock)
+    if req != nil:
+      state.dragLockResultId = req.id()
+    daemon.addResultListener(req, "input drag-lock", int(device.id()))
   let desiredDwt = config.dwt.boolState()
   if config.dwtSet and runtime.dwtSupport and
       not (state.dwtCurrentSet and state.dwtCurrent == desiredDwt) and
       not (state.dwtRequestedSet and state.dwtRequested == desiredDwt):
     state.dwtRequested = desiredDwt
     state.dwtRequestedSet = true
-    daemon.addResultListener(device.setDwt(desiredDwt), "input dwt", int(device.id()))
+    let req = device.setDwt(desiredDwt)
+    if req != nil:
+      state.dwtResultId = req.id()
+    daemon.addResultListener(req, "input dwt", int(device.id()))
   daemon.libinputDevices[device.id()] = state
   if config.dwtpSet and runtime.dwtpSupport:
     daemon.addResultListener(device.setDwtp(config.dwtp.boolState()), "input dwtp")
@@ -984,20 +994,24 @@ proc forgetLibinputResult*(daemon: ptr TriadDaemon, resultId: uint32) =
   daemon.libinputResultDevices.del(resultId)
 
 proc clearRequestedLibinputSetting*(
-    daemon: ptr TriadDaemon, libinputId: uint32, setting: string
+    daemon: ptr TriadDaemon, libinputId: uint32, setting: string, resultId: uint32
 ) =
   if daemon == nil or not daemon.libinputDevices.hasKey(libinputId):
     return
   var state = daemon.libinputDevices[libinputId]
   case setting
   of "input tap":
-    state.tapRequestedSet = false
+    if state.tapRequestedSet and state.tapResultId == resultId:
+      state.tapRequestedSet = false
   of "input drag":
-    state.dragRequestedSet = false
+    if state.dragRequestedSet and state.dragResultId == resultId:
+      state.dragRequestedSet = false
   of "input drag-lock":
-    state.dragLockRequestedSet = false
+    if state.dragLockRequestedSet and state.dragLockResultId == resultId:
+      state.dragLockRequestedSet = false
   of "input dwt":
-    state.dwtRequestedSet = false
+    if state.dwtRequestedSet and state.dwtResultId == resultId:
+      state.dwtRequestedSet = false
   else:
     return
   daemon.libinputDevices[libinputId] = state
@@ -1008,7 +1022,7 @@ proc clearLibinputResult*(daemon: ptr TriadDaemon, resultId: uint32) =
   let setting = daemon.libinputResultDescriptions.getOrDefault(resultId, "")
   let deviceId = daemon.libinputResultDevices.getOrDefault(resultId, uint32.high)
   if setting.len > 0 and deviceId != uint32.high:
-    daemon.clearRequestedLibinputSetting(deviceId, setting)
+    daemon.clearRequestedLibinputSetting(deviceId, setting, resultId)
   daemon.forgetLibinputResult(resultId)
 
 proc onLibinputResultSuccess(

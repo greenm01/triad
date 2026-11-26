@@ -131,14 +131,17 @@ type
     tapCurrentSet*: bool
     tapRequested*: uint32
     tapRequestedSet*: bool
+    tapResultId*: uint32
     dragCurrent*: uint32
     dragCurrentSet*: bool
     dragRequested*: uint32
     dragRequestedSet*: bool
+    dragResultId*: uint32
     dragLockCurrent*: uint32
     dragLockCurrentSet*: bool
     dragLockRequested*: uint32
     dragLockRequestedSet*: bool
+    dragLockResultId*: uint32
     accelProfilesSupport*: uint32
     accelProfileCurrent*: uint32
     accelProfileCurrentSet*: bool
@@ -160,6 +163,7 @@ type
     dwtCurrentSet*: bool
     dwtRequested*: uint32
     dwtRequestedSet*: bool
+    dwtResultId*: uint32
     dwtpSupport*: bool
 
   XkbKeyboardRuntime* = object

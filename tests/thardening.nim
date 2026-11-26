@@ -1997,10 +1997,10 @@ suite "libinput request tracking":
   test "rejection clears only the originating device's pending setting":
     var daemon = initTriadDaemon()
     daemon.libinputDevices[1'u32] = LibinputDeviceRuntime(
-      tapRequested: 1'u32, tapRequestedSet: true
+      tapRequested: 1'u32, tapRequestedSet: true, tapResultId: 7'u32
     )
     daemon.libinputDevices[2'u32] = LibinputDeviceRuntime(
-      tapRequested: 1'u32, tapRequestedSet: true
+      tapRequested: 1'u32, tapRequestedSet: true, tapResultId: 8'u32
     )
     daemon.libinputResultDescriptions[7'u32] = "input tap"
     daemon.libinputResultDevices[7'u32] = 1'u32
@@ -2017,3 +2017,18 @@ suite "libinput request tracking":
     clearLibinputResult(addr daemon, 8'u32)
 
     check not daemon.libinputDevices[2'u32].tapRequestedSet
+
+  test "older rejection leaves a newer drag-lock request pending":
+    var daemon = initTriadDaemon()
+    daemon.libinputDevices[3'u32] = LibinputDeviceRuntime(
+      dragLockRequested: 0'u32, dragLockRequestedSet: true, dragLockResultId: 20'u32
+    )
+    daemon.libinputResultDescriptions[7'u32] = "input drag-lock"
+    daemon.libinputResultDevices[7'u32] = 3'u32
+    clearLibinputResult(addr daemon, 7'u32)
+    check daemon.libinputDevices[3'u32].dragLockRequestedSet
+
+    daemon.libinputResultDescriptions[20'u32] = "input drag-lock"
+    daemon.libinputResultDevices[20'u32] = 3'u32
+    clearLibinputResult(addr daemon, 20'u32)
+    check not daemon.libinputDevices[3'u32].dragLockRequestedSet
