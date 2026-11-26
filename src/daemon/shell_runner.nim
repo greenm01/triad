@@ -732,6 +732,14 @@ proc finishRecoveryAttempt(
     else:
       runner.scheduleShellRecovery(model, "stale instance cleanup", status, nowMs)
     return true
+  if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
+    writeShellBehaviorEvent(
+      "shell_recovery_exhausted",
+      active.shells,
+      active.profile.get(),
+      runner.recoveryReason,
+      %*{"attempts": runner.recoveryAttempts},
+    )
   runner.clearShellRecovery()
   false
 
@@ -805,9 +813,6 @@ proc pollShellRecovery*(
   )
   result = true
 
-  if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
-    discard runner.finishRecoveryAttempt(model, niriSocketPath, nowMs)
-    return
 
   let delayMs = runner.recoveryAttempts.recoveryDelayMs()
   runner.nextRecoveryMs = nowMs + delayMs

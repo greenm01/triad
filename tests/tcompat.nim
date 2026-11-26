@@ -1968,6 +1968,15 @@ suite "injectable shell lifecycle":
     check runner.pendingLaunchActive
     check runner.recoveryPending
     check runner.recoveryAttempts == MaxShellRecoveryAttempts
+    handle.setFakeExitCode(7)
+    runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
+    check runner.staleLaunchDetected
+    check runner.recoveryPending
+    check runner.recoveryAttempts == MaxShellRecoveryAttempts
+    runner.nextRecoveryMs = 0
+    discard runner.pollShellRecovery(model, "niri.sock", 2'i64)
+    check runner.staleCleanupAttempted
+    check runner.recoveryAttempts == 0
 
   test "shell stop commands are reaped without blocking":
     let tmp = getTempDir() / ("triad-stop-command-" & $getCurrentProcessId())
