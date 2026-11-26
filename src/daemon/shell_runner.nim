@@ -298,6 +298,23 @@ proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentUnixMs())
       runner.terminatingShells[index] = child
     dec index
 
+proc cancelPendingLaunch(runner: var ShellRunner, profile: ShellProfileConfig, reason: string) =
+  if not runner.pendingLaunchActive or runner.pendingLaunch.profile.name != profile.name:
+    return
+  let launch = runner.pendingLaunch
+  let nowMs = currentUnixMs()
+  var child = initTrackedChild(launch.process, nowMs, 250'i64)
+  child.beginTermination(nowMs, 250'i64)
+  runner.terminatingShells.add(child)
+  runner.pendingLaunchActive = false
+  writeShellBehaviorEvent(
+    "shell_pending_launch_cancelled",
+    launch.shells,
+    profile,
+    reason,
+    %*{"child_pid": launch.process.processID()},
+  )
+
 proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
   runner.exclusiveFocusSinceMs = 0
   if runner.trackedProcess == nil:
@@ -345,6 +362,7 @@ proc stopShellProfile(
     %*{"tracked_profile": runner.trackedShellName},
   )
 
+  runner.cancelPendingLaunch(profile, reason)
   if profile.stop.len > 0:
     if not profile.stop[0].commandAvailable():
       warn "Shell stop command is not available",
@@ -518,7 +536,18 @@ proc advanceShellLifecycle*(
       ),
     )
     launch.process.closeProcessHandle()
+    let outcome =
+      if code == 0: ShellSpawnStatus.Handoff
+      else: ShellSpawnStatus.Failed
     if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
+      if runner.recoveryPending:
+        writeShellBehaviorEvent(
+          "shell_recovery_exhausted",
+          launch.shells,
+          launch.profile,
+          runner.recoveryReason,
+          %*{"attempts": runner.recoveryAttempts, "status": $outcome},
+        )
       runner.clearShellRecovery()
       return
     if launch.retryAllowed:
@@ -691,6 +720,8 @@ proc pollShellRecovery*(
   if active.profile.isNone:
     runner.clearShellRecovery()
     return false
+  if runner.pendingLaunchActive:
+    return false
   if runner.trackedShellRunning():
     if runner.recoveryPending:
       writeShellBehaviorEvent(
@@ -731,16 +762,6 @@ proc pollShellRecovery*(
     model, active.shells, active.profile.get(), niriSocketPath, attemptReason
   )
   result = true
-
-  if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
-    writeShellBehaviorEvent(
-      "shell_recovery_exhausted",
-      active.shells,
-      active.profile.get(),
-      runner.recoveryReason,
-      %*{"attempts": runner.recoveryAttempts, "status": $status},
-    )
-    return
 
   let delayMs = runner.recoveryAttempts.recoveryDelayMs()
   runner.nextRecoveryMs = nowMs + delayMs

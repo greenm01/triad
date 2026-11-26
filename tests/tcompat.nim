@@ -1891,3 +1891,40 @@ suite "injectable shell lifecycle":
     runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
     check runner.recoveryPending
     check not runner.pendingLaunchActive
+
+  test "stopping a profile cancels its pending launch":
+    var runner = ShellRunner()
+    let model = singleShellModel(@["fake-shell", "launch"], @[])
+    let handle = newFakeProcessHandle(1003)
+    runner.queueFakeShellLaunch(
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
+      nowMs = 0'i64,
+    )
+    var disabled = model
+    disabled.shells.enabled = false
+    runner.switchShell(model, disabled, "niri.sock", "disable shell")
+    check not runner.pendingLaunchActive
+    check runner.terminatingShells.len == 1
+    check runner.terminatingShells[0].process == handle
+    runner.advanceShellLifecycle(model, "niri.sock", 300'i64)
+    check runner.trackedProcess == nil
+
+  test "final recovery outcome stays with the pending launch":
+    var runner = ShellRunner()
+    let model = singleShellModel(@["fake-shell", "launch"], @[])
+    let handle = newFakeProcessHandle(1004)
+    runner.queueFakeShellLaunch(
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
+      nowMs = 0'i64,
+    )
+    runner.recoveryPending = true
+    runner.recoveryAttempts = MaxShellRecoveryAttempts
+    runner.nextRecoveryMs = 0
+    check not runner.pollShellRecovery(model, "niri.sock", 0)
+    check runner.pendingLaunchActive
+    check runner.recoveryPending
+    check runner.recoveryAttempts == MaxShellRecoveryAttempts
+    handle.setFakeExitCode(7)
+    runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
+    check not runner.pendingLaunchActive
+    check not runner.recoveryPending
