@@ -199,6 +199,12 @@ Expected log events include discovered windows, titles/app-ids, output
 dimensions, IPC client connections, and closed windows. Debug logging may be
 verbose; use `TRIAD_LOG_LEVEL=info` for normal sessions.
 
+## Exercise Input
+
+Toggle tap-to-click, drag, drag lock, and disable-while-typing in River config
+while Triad runs. The touchpad should settle at the configured values without
+repeated set requests or flipping between states.
+
 ## Failure Signals
 
 Treat these as hardening bugs to investigate:

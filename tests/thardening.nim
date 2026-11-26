@@ -8,14 +8,14 @@ import ../src/core/[effects, msg, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, capture_sessions_runtime, child_process_runtime, cursor_shake,
-    effects_runtime, input_device_classification, live_restore_runtime, memory_status,
-    message_queue, output_management_runtime, process_runner, protocol_diagnostics,
-    reload_runtime, render_invalidation, river_windows, screen_mirror_runtime,
-    spawn_context, switch_event_runtime,
+    effects_runtime, input_device_classification, input_runtime, live_restore_runtime,
+    memory_status, message_queue, output_management_runtime, process_runner,
+    protocol_diagnostics, reload_runtime, render_invalidation, river_windows,
+    screen_mirror_runtime, spawn_context, switch_event_runtime,
   ]
 from ../src/daemon/state import
-  OutputManagementHeadRuntime, clearOutputCaptureSessions, consumeMaximizedAck,
-  expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
+  LibinputDeviceRuntime, OutputManagementHeadRuntime, clearOutputCaptureSessions,
+  consumeMaximizedAck, expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
   setWindowCaptureSessions
 from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[binding_dispatch, commands, niri_compat, socket]
@@ -1992,3 +1992,43 @@ VmSwap:        0 kB
     for instruction in scroller:
       check instruction.geom.w >= 0
       check instruction.geom.h >= 0
+
+suite "libinput request tracking":
+  test "rejection clears only the originating device's pending setting":
+    var daemon = initTriadDaemon()
+    daemon.libinputDevices[1'u32] = LibinputDeviceRuntime(
+      tapRequested: 1'u32, tapRequestedSet: true, tapResultId: 7'u32
+    )
+    daemon.libinputDevices[2'u32] = LibinputDeviceRuntime(
+      tapRequested: 1'u32, tapRequestedSet: true, tapResultId: 8'u32
+    )
+    daemon.libinputResultDescriptions[7'u32] = "input tap"
+    daemon.libinputResultDevices[7'u32] = 1'u32
+
+    clearLibinputResult(addr daemon, 7'u32)
+
+    check not daemon.libinputDevices[1'u32].tapRequestedSet
+    check daemon.libinputDevices[2'u32].tapRequestedSet
+    check not daemon.libinputResultDescriptions.hasKey(7'u32)
+    check not daemon.libinputResultDevices.hasKey(7'u32)
+
+    daemon.libinputResultDescriptions[8'u32] = "input tap"
+    daemon.libinputResultDevices[8'u32] = 2'u32
+    clearLibinputResult(addr daemon, 8'u32)
+
+    check not daemon.libinputDevices[2'u32].tapRequestedSet
+
+  test "older rejection leaves a newer drag-lock request pending":
+    var daemon = initTriadDaemon()
+    daemon.libinputDevices[3'u32] = LibinputDeviceRuntime(
+      dragLockRequested: 0'u32, dragLockRequestedSet: true, dragLockResultId: 20'u32
+    )
+    daemon.libinputResultDescriptions[7'u32] = "input drag-lock"
+    daemon.libinputResultDevices[7'u32] = 3'u32
+    clearLibinputResult(addr daemon, 7'u32)
+    check daemon.libinputDevices[3'u32].dragLockRequestedSet
+
+    daemon.libinputResultDescriptions[20'u32] = "input drag-lock"
+    daemon.libinputResultDevices[20'u32] = 3'u32
+    clearLibinputResult(addr daemon, 20'u32)
+    check not daemon.libinputDevices[3'u32].dragLockRequestedSet

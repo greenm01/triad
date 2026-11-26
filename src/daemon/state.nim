@@ -127,6 +127,21 @@ type
     sendEventsCurrent*: uint32
     sendEventsCurrentSet*: bool
     tapFingerCount*: int32
+    tapCurrent*: uint32
+    tapCurrentSet*: bool
+    tapRequested*: uint32
+    tapRequestedSet*: bool
+    tapResultId*: uint32
+    dragCurrent*: uint32
+    dragCurrentSet*: bool
+    dragRequested*: uint32
+    dragRequestedSet*: bool
+    dragResultId*: uint32
+    dragLockCurrent*: uint32
+    dragLockCurrentSet*: bool
+    dragLockRequested*: uint32
+    dragLockRequestedSet*: bool
+    dragLockResultId*: uint32
     accelProfilesSupport*: uint32
     accelProfileCurrent*: uint32
     accelProfileCurrentSet*: bool
@@ -144,6 +159,11 @@ type
     middleEmulationCurrentSet*: bool
     scrollMethodsSupport*: uint32
     dwtSupport*: bool
+    dwtCurrent*: uint32
+    dwtCurrentSet*: bool
+    dwtRequested*: uint32
+    dwtRequestedSet*: bool
+    dwtResultId*: uint32
     dwtpSupport*: bool
 
   XkbKeyboardRuntime* = object
@@ -402,6 +422,7 @@ type
     xkbConfigKeyboards*: Table[uint32, XkbKeyboardRuntime]
     xkbConfigKeymap*: XkbKeymapRuntime
     libinputResultDescriptions*: Table[uint32, string]
+    libinputResultDevices*: Table[uint32, uint32]
     switchEventDevices*: seq[SwitchEventDeviceRuntime]
     windowUnreliablePids*: Table[uint32, int32]
     pendingWindows*: Table[uint32, ProjectedWindow]
