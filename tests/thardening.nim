@@ -2252,10 +2252,12 @@ suite "detached process options":
     var ready = fds.waitForRuntimeEventFds(
       -1, -1, [], source.fd(), source.timerFd(), readinessBudgetMs
     )
-    while ready.interrupted:
+    while not ready.timerReady:
       let elapsedMs = (now() - started).inMilliseconds
-      if elapsedMs >= readinessBudgetMs:
+      if elapsedMs >= readinessBudgetMs or ready.failed:
         break
+      if ready.runtimeReady or ready.interrupted:
+        discard source.drain()
       ready = fds.waitForRuntimeEventFds(
         -1, -1, [], source.fd(), source.timerFd(), readinessBudgetMs - int(elapsedMs)
       )

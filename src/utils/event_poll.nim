@@ -38,6 +38,7 @@ proc waitForRuntimeEventFds*(
   let switchStart = fds.len
   for fd in switchFds:
     discard fds.addPollFd(fd)
+  let switchEnd = fds.len
   let runtimeIdx = fds.addPollFd(runtimeFd)
   let timerIdx = fds.addPollFd(timerFd)
   if fds.len == 0:
@@ -56,7 +57,7 @@ proc waitForRuntimeEventFds*(
   result.asyncReady = fds.fdReady(asyncIdx)
   result.runtimeReady = fds.fdReady(runtimeIdx)
   result.timerReady = fds.fdReady(timerIdx)
-  for idx in switchStart ..< fds.len:
+  for idx in switchStart ..< switchEnd:
     if fds.fdReady(idx):
       result.switchReady = true
       break
