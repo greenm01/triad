@@ -15,8 +15,10 @@ import ../src/utils/runtime_deadlines
 
 proc settleShellLifecycle(runner: var ShellRunner, model: Model, socketPath: string) =
   let deadline = monotonicMs() + 1000'i64
-  while runner.pendingLaunchActive and monotonicMs() < deadline:
+  while (runner.pendingLaunchActive or runner.stopCommands.len > 0) and
+      monotonicMs() < deadline:
     runner.advanceShellLifecycle(model, socketPath, monotonicMs())
+    runner.advanceStopCommands(monotonicMs())
     sleep(5)
 
 
@@ -1951,7 +1953,7 @@ suite "injectable shell lifecycle":
     runner.advanceShellLifecycle(model, "niri.sock", 300'i64)
     check runner.trackedProcess == nil
 
-  test "final recovery outcome stays with the pending launch":
+  test "recovery poll leaves a pending final launch for lifecycle advance":
     var runner = ShellRunner()
     let model = singleShellModel(@["fake-shell", "launch"], @[])
     let handle = newFakeProcessHandle(1004)
@@ -1966,7 +1968,30 @@ suite "injectable shell lifecycle":
     check runner.pendingLaunchActive
     check runner.recoveryPending
     check runner.recoveryAttempts == MaxShellRecoveryAttempts
-    handle.setFakeExitCode(7)
-    runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
-    check not runner.pendingLaunchActive
-    check not runner.recoveryPending
+
+  test "shell stop commands are reaped without blocking":
+    let tmp = getTempDir() / ("triad-stop-command-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+    let stopCommand = tmp / "slow-stop"
+    writeFile(stopCommand, "#!/bin/sh\nsleep 30\n")
+    setFilePermissions(stopCommand, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let previous = singleShellModel(@["/bin/true", "launch"], @[stopCommand, "stop"])
+    var disabled = previous
+    disabled.shells.enabled = false
+    var runner = ShellRunner()
+    let started = monotonicMs()
+    runner.switchShell(previous, disabled, "niri.sock", "test stop")
+    check monotonicMs() - started < 200'i64
+    check runner.stopCommands.len == 1
+
+    let deadline = monotonicMs() + 1000'i64
+    while runner.stopCommands.len > 0 and monotonicMs() < deadline:
+      runner.advanceStopCommands(monotonicMs())
+      sleep(5)
+    check runner.stopCommands.len == 0

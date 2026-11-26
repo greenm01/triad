@@ -33,6 +33,14 @@ type
     startedAtMs*: int64
     retryAllowed*: bool
 
+  PendingStopCommand* = object
+    process*: ProcessHandle
+    shells*: ShellsConfig
+    profile*: ShellProfileConfig
+    reason*: string
+    command*: seq[string]
+    deadlineMs*: int64
+    killSent*: bool
   ShellRunner* = object
     trackedProcess*: ProcessHandle
     trackedShellName*: string
@@ -49,6 +57,7 @@ type
     staleCleanupAttempted*: bool
     releasedPids*: seq[int32]
     overlayProcesses*: seq[Process]
+    stopCommands*: seq[PendingStopCommand]
 
 proc setTrackedProcessHandle*(
     runner: var ShellRunner, handle: ProcessHandle, name: string
@@ -303,11 +312,35 @@ proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentRuntimeMs
       runner.terminatingShells[index] = child
     dec index
 
+proc advanceStopCommands*(runner: var ShellRunner, nowMs = currentRuntimeMs()) =
+  var index = runner.stopCommands.high
+  while index >= 0:
+    var command = runner.stopCommands[index]
+    let code = command.process.peekExitCode()
+    if code != -1:
+      let eventName =
+        if command.killSent: "shell_stop_timed_out" else: "shell_stop_completed"
+      writeShellBehaviorEvent(
+        eventName,
+        command.shells,
+        command.profile,
+        command.reason,
+        %*{"command": command.command, "exit_code": code, "killed": command.killSent},
+      )
+      command.process.closeProcessHandle()
+      runner.stopCommands.delete(index)
+    elif nowMs >= command.deadlineMs and not command.killSent:
+      command.process.killProcess()
+      command.killSent = true
+      command.deadlineMs = nowMs + 250'i64
+      runner.stopCommands[index] = command
+    dec index
+
 proc cancelPendingLaunch(runner: var ShellRunner, profile: ShellProfileConfig, reason: string) =
   if not runner.pendingLaunchActive or runner.pendingLaunch.profile.name != profile.name:
     return
   let launch = runner.pendingLaunch
-  let nowMs = currentUnixMs()
+  let nowMs = currentRuntimeMs()
   var child = initTrackedChild(launch.process, nowMs, 250'i64)
   child.beginTermination(nowMs, 250'i64)
   runner.terminatingShells.add(child)
@@ -381,31 +414,23 @@ proc stopShellProfile(
       )
     else:
       try:
-        let p = startProcess(
+        let process = startProcess(
           profile.stop[0],
           args = profile.stop.commandArgs(),
           env = model.configuredProcessEnv(),
           options = InheritedProcessOptions,
         )
-        var code = p.pollProcessExitCode(250)
-        var killed = false
-        if code == -1:
-          p.kill()
-          code = p.waitForExit(250)
-          killed = true
-        if killed:
-          writeShellBehaviorEvent(
-            "shell_stop_timed_out", shells, profile, reason, %*{"command": profile.stop}
+        let handle = newProcessHandle(process)
+        runner.stopCommands.add(
+          PendingStopCommand(
+            process: handle,
+            shells: shells,
+            profile: profile,
+            reason: reason,
+            command: profile.stop,
+            deadlineMs: currentRuntimeMs() + 250'i64,
           )
-        else:
-          writeShellBehaviorEvent(
-            "shell_stop_completed",
-            shells,
-            profile,
-            reason,
-            %*{"command": profile.stop, "exit_code": code},
-          )
-        p.close()
+        )
       except CatchableError as e:
         warn "Shell stop command failed",
           profile = profile.name,

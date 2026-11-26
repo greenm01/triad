@@ -231,6 +231,7 @@ proc runShellManagerAsync() {.async.} =
           )
       state.runner.advanceTerminatingShells(nowMs)
       state.runner.advanceReleasedShells()
+      state.runner.advanceStopCommands(nowMs)
       for process in state.runner.takeOverlayProcesses():
         state.children.add(process)
       state.reapChildren()
@@ -246,12 +247,17 @@ proc runShellManagerAsync() {.async.} =
       state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
       state.runner.advanceTerminatingShells(nowMs)
       state.runner.advanceReleasedShells()
+      state.runner.advanceStopCommands(nowMs)
       poll(20)
 
     if state.runner.pendingLaunchActive:
       state.runner.pendingLaunch.process.terminateProcess()
       state.runner.pendingLaunch.process.closeProcessHandle()
       state.runner.pendingLaunchActive = false
+    for command in state.runner.stopCommands:
+      command.process.killProcess()
+      command.process.closeProcessHandle()
+    state.runner.stopCommands = @[]
     for child in state.children:
       try:
         child.terminate()
