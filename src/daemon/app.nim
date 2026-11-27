@@ -1,5 +1,5 @@
 import wayland/native/client
-import ../core/[defaults, effects, msg, restore_state, shell_profiles]
+import ../core/[defaults, effects, msg, restore_state]
 import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
 import
@@ -691,6 +691,14 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       asyncCheck spawnManagedTerminal()
       continue
 
+    if msg.kind == MsgKind.CmdSwitchShell:
+      asyncCheck wmSessionControl.sendSessionControl(
+        SessionControlKind.SwitchShell, %*{"shell": msg.shellName}
+      )
+      continue
+    if msg.kind == MsgKind.CmdCycleShell:
+      asyncCheck wmSessionControl.sendSessionControl(SessionControlKind.CycleShell)
+      continue
     if msg.kind == MsgKind.CmdConfigReload:
       if daemon.applyConfigReload(configPath, niriSocketPath):
         daemon.janetRuntime.configure(daemon.runtimeState.model.janet)
@@ -734,11 +742,6 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.tickCursorShake()
       daemon.tickCursorVisibility()
 
-    let previousModelForShell =
-      if msg.kind in {MsgKind.CmdSwitchShell, MsgKind.CmdCycleShell}:
-        some(daemon.runtimeState.model)
-      else:
-        none(Model)
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
@@ -778,15 +781,6 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     if msg.kind == MsgKind.CmdTick and
         effects.anyIt(it.kind == EffectKind.EffManageDirty):
       inc daemon.perfCounters.dirtyFrameTicks
-    if msg.kind in {MsgKind.CmdSwitchShell, MsgKind.CmdCycleShell} and
-        previousModelForShell.isSome and
-        not sameShellsConfig(
-          previousModelForShell.get().shells, daemon.runtimeState.model.shells
-        ):
-      asyncCheck wmSessionControl.sendSessionControl(
-        SessionControlKind.ConfigChanged,
-        shellControlPayload(daemon.runtimeState.model, niriSocketPath),
-      )
     if msg.kind == MsgKind.WlWindowDestroyed:
       daemon.lastFullscreenRequests.del(msg.destroyedId)
       daemon.lastMaximizedRequests.del(msg.destroyedId)
@@ -935,11 +929,11 @@ proc sendSessionReadyOnce() {.async.} =
 proc sendStartupCommandsOnce() {.async.} =
   let commands = daemon.runtimeState.model.startupCommands
   while startupCommandIndex < commands.len:
-    if not await wmSessionControl.sendSessionControlExpect(
-      SessionControlKind.Spawn,
-      SessionControlKind.SpawnStarted,
-      %*{"argv": commands[startupCommandIndex]},
-    ):
+    let reply = await wmSessionControl.requestSessionControl(
+      SessionControlKind.Spawn, SessionControlKind.SpawnStarted,
+      %*{"argv": commands[startupCommandIndex]}, acceptError = true,
+    )
+    if reply == nil:
       break
     inc startupCommandIndex
   if startupCommandIndex >= commands.len:

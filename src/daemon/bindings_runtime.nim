@@ -1833,7 +1833,6 @@ proc onLayerOutputNonExclusive(
   let layerId = layerOutput.id()
   if daemon.layerOutputOwners.hasKey(layerId):
     let outputId = daemon.layerOutputOwners[layerId]
-    let activeShell = daemon[].currentModel.shells.active
     writeBehaviorEvent(
       "layer_output_non_exclusive_area_changed",
       %*{
@@ -1842,7 +1841,6 @@ proc onLayerOutputNonExclusive(
         "y": y,
         "width": width,
         "height": height,
-        "active_shell": activeShell,
       },
     )
     daemon.enqueue(

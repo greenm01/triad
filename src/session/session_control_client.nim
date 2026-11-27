@@ -30,6 +30,7 @@ proc requestSessionControl*(
     payload: JsonNode = nil,
     attempts = 20,
     retryDelayMs = 100,
+    acceptError = false,
 ): Future[JsonNode] {.async.} =
   if client == nil or client.path.len == 0:
     return nil
@@ -44,6 +45,8 @@ proc requestSessionControl*(
       sent = true
       let line = await socket.recvLine()
       let decoded = decodeSessionControl(line & "\n")
+      if decoded.ok and decoded.message.kind == SessionControlKind.Error:
+        return if acceptError: decoded.message.payload else: nil
       if decoded.ok and decoded.message.kind == expected:
         reply = decoded.message.payload
     except CatchableError:

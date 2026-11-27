@@ -1,4 +1,5 @@
 import std/[asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, strutils]
+import chronicles
 import session_control
 import ../ipc/socket
 import ../core/shell_profiles
@@ -24,7 +25,9 @@ type
     gid: cuint
 
   ShellManagerState* = ref object
-    children*: seq[Process]
+    apps*: seq[Process]
+    overlays*: seq[Process]
+    configuredShell: string
     runner*: ShellRunner
     model*: Model
     niriSocketPath*: string
@@ -115,14 +118,34 @@ proc modelFromControlPayload(payload: JsonNode): Model =
       )
   model
 
-proc reapChildren(state: ShellManagerState) =
+proc reapChildren(children: var seq[Process]) =
   var index = 0
-  while index < state.children.len:
-    if state.children[index].peekExitCode() == -1:
+  while index < children.len:
+    if children[index].peekExitCode() == -1:
       inc index
       continue
-    state.children[index].close()
-    state.children.delete(index)
+    children[index].close()
+    children.delete(index)
+
+proc applyShellConfig(state: ShellManagerState, payload: JsonNode) =
+  var next = modelFromControlPayload(payload)
+  let configuredShell = next.shells.active
+  if state.ownsShell and configuredShell == state.configuredShell and
+      next.shells.hasShellProfile(state.model.shells.active):
+    next.shells.active = state.model.shells.active
+  if state.ownsShell and not sameShellsConfig(state.model.shells, next.shells):
+    state.runner.switchShell(state.model, next, state.niriSocketPath, "config changed")
+  state.configuredShell = configuredShell
+  state.model = next
+
+proc selectShell(state: ShellManagerState, target, reason: string) =
+  if not state.ownsShell or target == state.model.shells.active or
+      not state.model.shells.hasShellProfile(target):
+    return
+  var next = state.model
+  next.shells.active = target
+  state.runner.switchShell(state.model, next, state.niriSocketPath, reason)
+  state.model = next
 
 proc handleClient(client: AsyncSocket, state: ShellManagerState) {.async.} =
   defer:
@@ -143,7 +166,7 @@ proc handleClient(client: AsyncSocket, state: ShellManagerState) {.async.} =
     case decoded.message.kind
     of SessionControlKind.SessionReady:
       state.niriSocketPath = decoded.message.payload{"niri_socket"}.getStr()
-      state.model = modelFromControlPayload(decoded.message.payload)
+      state.applyShellConfig(decoded.message.payload)
       state.ownsShell = decoded.message.payload{"own_shell"}.getBool(false)
       if state.ownsShell and state.runner.trackedProcess == nil and
           not state.runner.pendingLaunchActive:
@@ -157,41 +180,38 @@ proc handleClient(client: AsyncSocket, state: ShellManagerState) {.async.} =
         )
       )
     of SessionControlKind.ConfigChanged:
-      let next = modelFromControlPayload(decoded.message.payload)
-      if state.ownsShell and
-          not sameShellsConfig(state.model.shells, next.shells):
-        state.runner.switchShell(state.model, next, state.niriSocketPath, "config changed")
-      state.model = next
+      state.applyShellConfig(decoded.message.payload)
     of SessionControlKind.WmState:
       state.model.sessionLocked = decoded.message.payload{"session_locked"}.getBool()
       state.model.layerFocusExclusive =
         decoded.message.payload{"layer_focus_exclusive"}.getBool()
-    of SessionControlKind.FallbackRequest:
+    of SessionControlKind.SwitchShell:
       let target = decoded.message.payload{"shell"}.getStr()
-      if state.ownsShell and target.len > 0 and target != state.model.shells.active:
-        var next = state.model
-        next.shells.active = target
-        state.runner.switchShell(state.model, next, state.niriSocketPath, "fallback request")
-        state.model = next
+      if not state.model.shells.hasShellProfile(target):
+        warn "Shell profile not found", profile = target
+      else:
+        state.selectShell(target, "switch-shell")
+    of SessionControlKind.CycleShell:
+      state.selectShell(state.model.shells.nextShellName(), "cycle-shell")
     of SessionControlKind.Spawn:
-      let argvNode = decoded.message.payload{"argv"}
-      if argvNode == nil or argvNode.kind != JArray or argvNode.len == 0:
-        continue
-      var argv: seq[string] = @[]
-      for item in argvNode:
-        argv.add(item.getStr())
-      let process = startProcess(
-        argv[0],
-        args = if argv.len > 1: argv[1 .. ^1] else: @[],
-        options = DetachedProcessOptions,
-        env = state.model.configuredProcessEnv(),
-      )
-      state.children.add(process)
-      await client.send(
-        encodeSessionControl(
+      let argv = stringSeq(decoded.message.payload{"argv"})
+      var reply: string
+      try:
+        if argv.len == 0 or argv[0].len == 0:
+          raise newException(ValueError, "spawn requires a command")
+        let process = startProcess(
+          argv[0], args = argv[1 .. ^1], options = DetachedProcessOptions,
+          env = state.model.configuredProcessEnv(),
+        )
+        state.apps.add(process)
+        reply = encodeSessionControl(
           SessionControlKind.SpawnStarted, %*{"pid": process.processID}
         )
-      )
+      except CatchableError as e:
+        let command = if argv.len > 0: argv[0] else: ""
+        warn "Failed to spawn command", command = command, error = e.msg
+        reply = encodeSessionControl(SessionControlKind.Error, %*{"error": e.msg})
+      await client.send(reply)
     of SessionControlKind.ManagerStopping:
       discard
     of SessionControlKind.Shutdown:
@@ -243,13 +263,8 @@ proc runShellManagerAsync() {.async.} =
       state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
       if state.ownsShell:
         let fallback = state.runner.pollShellWatchdog(state.model, nowMs)
-        if fallback.isSome and fallback.get() != state.model.shells.active:
-          var next = state.model
-          next.shells.active = fallback.get()
-          state.runner.switchShell(
-            state.model, next, state.niriSocketPath, "shell watchdog fallback"
-          )
-          state.model = next
+        if fallback.isSome:
+          state.selectShell(fallback.get(), "shell watchdog fallback")
         else:
           discard state.runner.pollShellRecovery(
             state.model, state.niriSocketPath, nowMs
@@ -257,9 +272,9 @@ proc runShellManagerAsync() {.async.} =
       state.runner.advanceTerminatingShells(nowMs)
       state.runner.advanceReleasedShells()
       state.runner.advanceStopCommands(nowMs)
-      for process in state.runner.takeOverlayProcesses():
-        state.children.add(process)
-      state.reapChildren()
+      state.overlays.add(state.runner.takeOverlayProcesses())
+      state.apps.reapChildren()
+      state.overlays.reapChildren()
       poll(50)
   finally:
     state.runner.stopShellsForShutdown()
@@ -275,7 +290,9 @@ proc runShellManagerAsync() {.async.} =
       command.process.killProcess()
       command.process.closeProcessHandle()
     state.runner.stopCommands = @[]
-    for child in state.children:
+    for app in state.apps:
+      app.close()
+    for child in state.overlays:
       try:
         child.terminate()
         discard child.waitForExit(1000)

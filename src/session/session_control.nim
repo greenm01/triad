@@ -15,7 +15,8 @@ type
     ShellManagerReady
     SpawnStarted
     ShellState
-    FallbackRequest
+    SwitchShell
+    CycleShell
     Error
 
   SessionControlMessage* = object

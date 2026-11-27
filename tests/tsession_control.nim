@@ -1,9 +1,15 @@
-import std/[json, os, osproc, streams, strtabs, strutils, tempfiles, unittest]
+import std/[asyncdispatch, json, os, osproc, streams, strtabs, strutils, tempfiles, unittest]
+from posix import kill, Pid, SIGTERM
 import ../src/utils/runtime_deadlines
-import ../src/session/[logs, session_control, supervisor]
+import ../src/session/[
+  logs, session_control, session_control_client, shell_manager, supervisor
+]
 
-if paramCount() == 1 and paramStr(1) == "--test-supervisor":
-  quit runSupervisor()
+if paramCount() == 1:
+  case paramStr(1)
+  of "--test-supervisor": quit runSupervisor()
+  of "--test-shell-manager": quit runShellManager()
+  else: discard
 
 suite "session control protocol":
   test "round-trips a versioned message":
@@ -109,3 +115,46 @@ exec sleep 30
     check launches >= 3
     check output.contains("restarting session components in 1000 ms")
     check output.contains("restarting session components in 2000 ms")
+
+
+  test "the manager acknowledges failed spawns and lets launched apps survive":
+    let dir = createTempDir("triad-shell-app-", "")
+    defer: removeDir(dir)
+    let env = newStringTable(modeCaseSensitive)
+    for key, value in envPairs():
+      env[key] = value
+    env["XDG_STATE_HOME"] = dir
+    let manager = startProcess(
+      getAppFilename(), args = ["--test-shell-manager"], env = env,
+      options = {poParentStreams},
+    )
+    defer:
+      if manager.peekExitCode() == -1:
+        manager.terminate()
+        if manager.waitForExit(3000) == -1:
+          manager.kill()
+          discard manager.waitForExit()
+      manager.close()
+
+    let client = newSessionControlClient(dir / "triad" / "shell-manager.sock")
+    let failed = waitFor client.requestSessionControl(
+      SessionControlKind.Spawn, SessionControlKind.SpawnStarted,
+      %*{"argv": [dir / "missing"]}, acceptError = true,
+    )
+    require failed != nil
+    check failed.hasKey("error")
+
+    let ack = waitFor client.requestSessionControl(
+      SessionControlKind.Spawn, SessionControlKind.SpawnStarted,
+      %*{"argv": ["/bin/sleep", "15"]},
+    )
+    require ack != nil
+    let pid = Pid(ack{"pid"}.getInt())
+    require pid > 0
+    defer: discard kill(pid, SIGTERM)
+
+    manager.terminate()
+    check manager.waitForExit(3000) == 0
+    let processStat = readFile("/proc" / $pid / "stat")
+    let processState = processStat[processStat.rfind(')') + 2]
+    check processState notin {'Z', 'X'}

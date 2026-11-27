@@ -137,12 +137,15 @@ and manager ownership.
 
 Check the manager path in a live River session:
 
-- `Super+t` opens one terminal; pointer clicks and drags open none.
-- `switch-shell` changes the visible shell. An unrelated config reload leaves it running; a reload with changed shell profiles applies those profiles.
+- `Super+t` opens one terminal. Pointer clicks and drags open none.
+- After a watchdog fallback, `switch-shell` can select the original shell and
+  `cycle-shell` advances from the fallback. An unrelated config reload preserves
+  the current selection. A changed active profile in the config takes effect.
+- A failed startup command is logged, and later startup commands still run.
 - Killing `triad shell-manager` restarts the manager and daemon together using the
-  supervisor's restart backoff. Check that the foreground shell exits and a
-  single replacement launches. Use a foreground command in shell profiles so
-  the manager can track its lifecycle.
+  supervisor's restart backoff. The foreground shell exits and a single
+  replacement launches. Apps launched through Triad survive manager recovery.
+  Use a foreground command in shell profiles so the manager can track it.
 - Suspend and resume the session; the live supervisor keeps ownership of the shell.
 
 If `river_window_manager_v1` is not advertised, Triad exits with a fatal log.
