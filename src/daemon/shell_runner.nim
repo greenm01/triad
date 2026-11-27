@@ -41,6 +41,13 @@ type
     command*: seq[string]
     deadlineMs*: int64
     killSent*: bool
+
+  PendingShellSwitch* = object
+    active*: bool
+    model*: Model
+    niriSocketPath*: string
+    reason*: string
+    waitProfile*: string
   ShellRunner* = object
     trackedProcess*: ProcessHandle
     trackedShellName*: string
@@ -58,6 +65,7 @@ type
     releasedPids*: seq[int32]
     overlayProcesses*: seq[Process]
     stopCommands*: seq[PendingStopCommand]
+    pendingSwitch*: PendingShellSwitch
 
 proc setTrackedProcessHandle*(
     runner: var ShellRunner, handle: ProcessHandle, name: string
@@ -312,6 +320,8 @@ proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentRuntimeMs
       runner.terminatingShells[index] = child
     dec index
 
+proc flushPendingShellSwitch*(runner: var ShellRunner)
+
 proc advanceStopCommands*(runner: var ShellRunner, nowMs = currentRuntimeMs()) =
   var index = runner.stopCommands.high
   while index >= 0:
@@ -338,6 +348,7 @@ proc advanceStopCommands*(runner: var ShellRunner, nowMs = currentRuntimeMs()) =
       command.deadlineMs = nowMs + 250'i64
       runner.stopCommands[index] = command
     dec index
+  runner.flushPendingShellSwitch()
 
 proc cancelPendingLaunch(runner: var ShellRunner, profile: ShellProfileConfig, reason: string) =
   if not runner.pendingLaunchActive or runner.pendingLaunch.profile.name != profile.name:
@@ -543,6 +554,45 @@ proc spawnShellProfile(
       reason,
       spawnInfo.shellSpawnEventPayload(error = e.msg),
     )
+
+proc hasPendingStopCommand(runner: ShellRunner, profileName: string): bool =
+  for command in runner.stopCommands:
+    if command.profile.name == profileName:
+      return true
+  false
+
+proc spawnActiveShell(
+    runner: var ShellRunner, model: Model, niriSocketPath, reason: string
+) =
+  let active = model.activeShellProfile()
+  if active.profile.isNone:
+    runner.clearShellRecovery()
+    return
+  let status = runner.spawnShellProfile(
+    model, active.shells, active.profile.get(), niriSocketPath, reason
+  )
+  if not status.succeeded():
+    runner.scheduleShellRecovery(model, reason, status)
+
+proc flushPendingShellSwitch*(runner: var ShellRunner) =
+  if not runner.pendingSwitch.active:
+    return
+  if runner.hasPendingStopCommand(runner.pendingSwitch.waitProfile):
+    return
+  let pending = runner.pendingSwitch
+  runner.pendingSwitch.active = false
+  let active = pending.model.activeShellProfile()
+  if active.profile.isNone:
+    runner.clearShellRecovery()
+    return
+  if runner.pendingLaunchActive and
+      runner.pendingLaunch.profile.name == active.profile.get().name:
+    return
+  if runner.trackedShellRunning() and
+      runner.trackedShellName == active.profile.get().name:
+    runner.clearShellRecovery()
+    return
+  runner.spawnActiveShell(pending.model, pending.niriSocketPath, pending.reason)
 
 proc advanceShellLifecycle*(
     runner: var ShellRunner,
@@ -757,7 +807,9 @@ proc switchShell*(
   runner.staleCleanupAttempted = false
   let previous = previousModel.activeShellProfile()
   let current = currentModel.activeShellProfile()
+  var previousName = ""
   if previous.profile.isSome:
+    previousName = previous.profile.get().name
     runner.stopShellProfile(
       previousModel, previous.shells, previous.profile.get(), reason & " stop"
     )
@@ -765,12 +817,18 @@ proc switchShell*(
     runner.stopTrackedShell(reason & " stop")
 
   if current.profile.isSome:
-    let status = runner.spawnShellProfile(
-      currentModel, current.shells, current.profile.get(), niriSocketPath, reason
-    )
-    if not status.succeeded():
-      runner.scheduleShellRecovery(currentModel, reason, status)
+    if previousName.len > 0 and runner.hasPendingStopCommand(previousName):
+      runner.pendingSwitch = PendingShellSwitch(
+        active: true,
+        model: currentModel,
+        niriSocketPath: niriSocketPath,
+        reason: reason,
+        waitProfile: previousName,
+      )
+      return
+    runner.spawnActiveShell(currentModel, niriSocketPath, reason)
   else:
+    runner.pendingSwitch.active = false
     runner.clearShellRecovery()
 
 proc pollShellRecovery*(
@@ -783,7 +841,7 @@ proc pollShellRecovery*(
   if active.profile.isNone:
     runner.clearShellRecovery()
     return false
-  if runner.pendingLaunchActive:
+  if runner.pendingLaunchActive or runner.pendingSwitch.active:
     return false
   if runner.trackedShellRunning():
     if runner.recoveryPending:

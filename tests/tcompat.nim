@@ -1241,6 +1241,83 @@ exit 0
     check calls.contains("stop-old")
     check calls.count("launch-new") >= 1
 
+  test "Shell switch waits for the old stop hook before launching":
+    let tmp = getTempDir() / ("triad-shell-stop-hook-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = tmp / "fake-shell"
+    let logPath = tmp / "calls.log"
+    writeFile(
+      fake,
+      """
+#!/bin/sh
+printf 'start %s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+if [ "$1" = "stop-old" ]; then
+  sleep 0.2
+fi
+printf 'end %s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+exit 0
+""",
+    )
+    setFilePermissions(fake, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+
+    let previous = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "old",
+        profiles: @[
+          ShellProfileConfig(
+            name: "old", launch: @[fake, "launch-old"], stop: @[fake, "stop-old"]
+          ),
+          ShellProfileConfig(
+            name: "new", launch: @[fake, "launch-new"], stop: @[fake, "stop-new"]
+          ),
+        ],
+      )
+    )
+    let current = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "new",
+        profiles: previous.shells.profiles,
+      )
+    )
+
+    var runner = ShellRunner()
+    runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
+    check runner.pendingSwitch.active
+    let hookStartDeadline = monotonicMs() + 500'i64
+    while not fileExists(logPath) and monotonicMs() < hookStartDeadline:
+      sleep(10)
+    check fileExists(logPath)
+    check not readFile(logPath).contains("start launch-new")
+
+    let deadline = monotonicMs() + 2000'i64
+    while runner.pendingSwitch.active and monotonicMs() < deadline:
+      runner.advanceStopCommands()
+      sleep(10)
+    check not runner.pendingSwitch.active
+    runner.settleShellLifecycle(current, tmp / "niri.sock")
+    runner.stopTrackedShell("test cleanup")
+
+    let calls = readFile(logPath).splitLines()
+    let stopEnd = calls.find("end stop-old")
+    let launchStart = calls.find("start launch-new")
+    check stopEnd >= 0
+    check launchStart > stopEnd
+
   test "Shell profiles receive native Triad environment":
     let tmp = getTempDir() / ("triad-shell-native-env-" & $getCurrentProcessId())
     if dirExists(tmp):

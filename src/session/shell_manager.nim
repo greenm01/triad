@@ -240,6 +240,7 @@ proc runShellManagerAsync() {.async.} =
     if state.ownsShell and state.runner.trackedProcess != nil:
       state.runner.stopTrackedShell("shutdown")
 
+    state.runner.pendingSwitch.active = false
     let drainDeadlineMs = monotonicMs() + 2000'i64
     while (state.runner.pendingLaunchActive or state.runner.terminatingShells.len > 0) and
         monotonicMs() < drainDeadlineMs:
