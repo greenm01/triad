@@ -457,6 +457,7 @@ type
     of MsgKind.CmdSwitchKeyboardLayout:
       keyboardLayoutDelta*: int32
       keyboardLayoutIndex*: int32
+      observedLayout*: bool
     of MsgKind.CmdTick:
       tickElapsedMs*: int32
     of MsgKind.CmdScreenshot:

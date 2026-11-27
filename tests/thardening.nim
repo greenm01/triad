@@ -22,8 +22,9 @@ import ../src/daemon/tracked_child
 import ../src/daemon/process_handle
 from ../src/daemon/state import
   LibinputDeviceRuntime, OutputManagementHeadRuntime, TriadDaemon,
-  clearOutputCaptureSessions, consumeMaximizedAck, expectMaximizedAck,
-  initTriadDaemon, setOutputCaptureSessions, setWindowCaptureSessions
+  XkbKeyboardRuntime, clearOutputCaptureSessions, consumeMaximizedAck,
+  expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
+  setWindowCaptureSessions
 from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[binding_dispatch, commands, niri_compat, socket]
 import ../src/layouts/scroller
@@ -61,6 +62,7 @@ var observedConfigNotificationEvent: ConfigNotificationEvent
 var observedConfigNotificationCommand: seq[string]
 var observedCaptureSessionEvent: CaptureSessionEvent
 var observedCaptureSessionCommand: seq[string]
+var observedXkbConfigApplies: seq[uint32]
 
 proc recordConfigNotification(
     daemon: pointer, event: ConfigNotificationEvent, command: seq[string]
@@ -75,6 +77,12 @@ proc recordCaptureSessionHook(
   discard daemon
   observedCaptureSessionEvent = event
   observedCaptureSessionCommand = command
+
+proc recordXkbConfigApply(
+    daemon: var TriadDaemon, keyboardId: uint32
+) {.nimcall.} =
+  discard daemon
+  observedXkbConfigApplies.add(keyboardId)
 
 proc proposedOutput(
     name: string, width, height: int32, rule = OutputRuleData()
@@ -502,6 +510,30 @@ suite "Crash hardening":
     check hook.msg.targetTag == 3
     check hook.origin == QueuedMsgOrigin.JanetHook
     check not daemon.hasQueuedMessages()
+
+  test "XKB done applies config only after the keyboard config changes":
+    var daemon = initTriadDaemon()
+    observedXkbConfigApplies = @[]
+    daemon.xkbConfigKeyboards[7'u32] =
+      XkbKeyboardRuntime(needsConfigApply: true)
+
+    daemon.observeXkbKeyboardLayout(1'u32)
+    let initialLayout = daemon.popQueuedMessage()
+    check initialLayout.kind == MsgKind.CmdSwitchKeyboardLayout
+    check initialLayout.observedLayout
+    daemon.handleXkbKeyboardDone(7'u32, recordXkbConfigApply)
+    check observedXkbConfigApplies == @[7'u32]
+
+    daemon.observeXkbKeyboardLayout(0'u32)
+    let observedLayout = daemon.popQueuedMessage()
+    check observedLayout.kind == MsgKind.CmdSwitchKeyboardLayout
+    check observedLayout.observedLayout
+    daemon.handleXkbKeyboardDone(7'u32, recordXkbConfigApply)
+    check observedXkbConfigApplies == @[7'u32]
+
+    daemon.xkbConfigKeyboards[7'u32].needsConfigApply = true
+    daemon.handleXkbKeyboardDone(7'u32, recordXkbConfigApply)
+    check observedXkbConfigApplies == @[7'u32, 7'u32]
 
   test "render start skip requires clean render state":
     var daemon = initTriadDaemon()

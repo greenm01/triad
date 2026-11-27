@@ -6,6 +6,8 @@ import protocols/river_input_management/client as riverInput
 import protocols/river_libinput_config/client as riverLibinput
 import protocols/river_xkb_config/client as riverXkbConfig
 import ../types/runtime_values
+import ../types/runtime_messages
+import message_queue
 import input_device_classification, state, wayland_helpers
 
 const
@@ -435,6 +437,30 @@ proc applyXkbKeyboard(daemon: var TriadDaemon, keyboardId: uint32) =
       keyboard.capslockEnable()
     else:
       keyboard.capslockDisable()
+  daemon.xkbConfigKeyboards[keyboardId].needsConfigApply = false
+
+type XkbKeyboardConfigApplier* = proc(
+  daemon: var TriadDaemon, keyboardId: uint32
+) {.nimcall.}
+
+proc handleXkbKeyboardDone*(
+    daemon: var TriadDaemon, keyboardId: uint32, apply: XkbKeyboardConfigApplier
+) =
+  if not daemon.xkbConfigKeyboards.hasKey(keyboardId):
+    return
+  if not daemon.xkbConfigKeyboards[keyboardId].needsConfigApply:
+    return
+  apply(daemon, keyboardId)
+  daemon.xkbConfigKeyboards[keyboardId].needsConfigApply = false
+
+proc observeXkbKeyboardLayout*(daemon: var TriadDaemon, index: uint32) =
+  daemon.enqueue(
+    Msg(
+      kind: MsgKind.CmdSwitchKeyboardLayout,
+      keyboardLayoutIndex: int32(index),
+      observedLayout: true,
+    )
+  )
 
 proc applyAllInputConfig*(daemon: var TriadDaemon, reason: string) =
   debug "Applying input config", reason = reason
@@ -567,7 +593,7 @@ proc onXkbKeyboard(
   if daemon == nil:
     return
   daemon.xkbConfigKeyboards[keyboard.id()] =
-    XkbKeyboardRuntime(pointer: cast[pointer](keyboard))
+    XkbKeyboardRuntime(pointer: cast[pointer](keyboard), needsConfigApply: true)
   discard keyboard.addListener(xkbKeyboardListener.addr, daemonData(daemon[]))
 
 var xkbConfigListener* = riverXkbConfig.RiverXkbConfigV1Listener(
@@ -623,7 +649,12 @@ proc onXkbKeyboardLayout(
     index: uint32,
     name: cstring,
 ) =
-  discard
+  let daemon = callbackDaemon(data, "xkb keyboard layout")
+  if daemon == nil:
+    return
+  discard keyboard
+  discard name
+  daemon[].observeXkbKeyboardLayout(index)
 
 proc onXkbKeyboardLock(data: pointer, keyboard: ptr riverXkbConfig.RiverXkbKeyboardV1) =
   discard
@@ -632,7 +663,7 @@ proc onXkbKeyboardDone(data: pointer, keyboard: ptr riverXkbConfig.RiverXkbKeybo
   let daemon = callbackDaemon(data, "xkb keyboard done")
   if daemon == nil:
     return
-  daemon[].applyXkbKeyboard(keyboard.id())
+  daemon[].handleXkbKeyboardDone(keyboard.id(), applyXkbKeyboard)
 
 xkbKeyboardListener = riverXkbConfig.RiverXkbKeyboardV1Listener(
   removed: onXkbKeyboardRemoved,

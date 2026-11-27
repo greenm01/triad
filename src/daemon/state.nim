@@ -170,6 +170,7 @@ type
   XkbKeyboardRuntime* = object
     pointer*: pointer
     inputDeviceId*: uint32
+    needsConfigApply*: bool
 
   XkbKeymapRuntime* = object
     pointer*: pointer

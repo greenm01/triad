@@ -628,19 +628,30 @@ proc applyCommand*(
   of MsgKind.CmdCancelEatNextKey:
     result.effects.add(Effect(kind: EffectKind.EffCancelEnsureNextKeyEaten))
   of MsgKind.CmdSwitchKeyboardLayout:
-    let switched =
-      model.switchKeyboardLayout(msg.keyboardLayoutDelta, msg.keyboardLayoutIndex)
-    if switched.changed:
-      result.dirty = true
-      let snapshot = shellSnapshot(model)
-      result.effects.add(
-        Effect(
-          kind: EffectKind.EffSetKeyboardLayout,
-          keyboardLayoutIndex: switched.activeIndex,
+    let count = model.configuredKeyboardLayoutCount()
+    if count > 0:
+      if msg.observedLayout:
+        if msg.keyboardLayoutIndex >= 0 and uint32(msg.keyboardLayoutIndex) < count:
+          let switched = model.switchKeyboardLayout(0, msg.keyboardLayoutIndex)
+          if switched.changed:
+            result.dirty = true
+            let snapshot = shellSnapshot(model)
+            result.effects.add(broadcastKeyboardLayoutsChanged(snapshot))
+            result.effects.add(broadcastKeyboardLayoutSwitched(switched.activeIndex))
+      else:
+        let switched =
+          model.switchKeyboardLayout(msg.keyboardLayoutDelta, msg.keyboardLayoutIndex)
+        let snapshot = shellSnapshot(model)
+        result.effects.add(
+          Effect(
+            kind: EffectKind.EffSetKeyboardLayout,
+            keyboardLayoutIndex: switched.activeIndex,
+          )
         )
-      )
-      result.effects.add(broadcastKeyboardLayoutsChanged(snapshot))
-      result.effects.add(broadcastKeyboardLayoutSwitched(switched.activeIndex))
+        if switched.changed:
+          result.dirty = true
+          result.effects.add(broadcastKeyboardLayoutsChanged(snapshot))
+          result.effects.add(broadcastKeyboardLayoutSwitched(switched.activeIndex))
   of MsgKind.CmdStopManager:
     result.effects.add(Effect(kind: EffectKind.EffStopManager))
   of MsgKind.CmdTriadReload:
