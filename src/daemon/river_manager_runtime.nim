@@ -48,6 +48,7 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
     output.destroy()
 
   daemon.outputWlNames.clear()
+  daemon.deferredOutputRemovals.setLen(0)
 
   for seat in daemon.layerSeatPointers:
     seat.destroy()
@@ -162,6 +163,7 @@ proc onManageStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
   if daemon == nil:
     return
   debug "River manage start", pendingWindows = daemon.pendingWindows.len
+  daemon[].flushDeferredOutputRemovals()
   daemon[].applyPendingLiveRestore("manage start")
   daemon[].expireSpawnPlacementContexts()
   for id, data in daemon.pendingWindows:

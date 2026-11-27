@@ -22,15 +22,19 @@ proc enqueue*(daemon: ptr TriadDaemon, msg: Msg) =
 proc hasQueuedMessages*(daemon: TriadDaemon): bool =
   daemon.msgQueue.len > 0
 
-proc dropQueuedOutputRemovals*(daemon: var TriadDaemon): int =
+proc deferOutputRemovals*(daemon: var TriadDaemon, removedId: uint32) =
   var kept: Deque[QueuedMsg]
   while daemon.msgQueue.len > 0:
     let queued = daemon.msgQueue.popFirst()
     if queued.msg.kind == MsgKind.WlOutputRemoved:
-      inc result
+      let id = queued.msg.removedOutputId
+      if id notin daemon.deferredOutputRemovals:
+        daemon.deferredOutputRemovals.add(id)
     else:
       kept.addLast(queued)
   daemon.msgQueue = kept
+  if removedId notin daemon.deferredOutputRemovals:
+    daemon.deferredOutputRemovals.add(removedId)
 
 proc popQueuedMessageWithOrigin*(daemon: var TriadDaemon): QueuedMsg =
   daemon.msgQueue.popFirst()

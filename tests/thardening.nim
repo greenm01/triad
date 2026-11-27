@@ -7,7 +7,7 @@ from posix import
   TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe,
   read, write
 import ../src/config/parser
-import ../src/core/[effects, msg, restore_state]
+import ../src/core/[effects, msg, niri_state, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, capture_sessions_runtime, child_process_runtime, cursor_shake,
@@ -15,7 +15,8 @@ import
     manage_requests,
     memory_status, message_queue, output_management_runtime, process_runner,
     protocol_diagnostics, reload_runtime, render_invalidation, river_manager_runtime,
-    river_windows, screen_mirror_runtime, spawn_context, switch_event_runtime,
+    river_outputs_runtime, river_windows, screen_mirror_runtime, spawn_context,
+    switch_event_runtime,
   ]
 import ../src/daemon/runtime_events
 import ../src/daemon/ipc_startup_runtime
@@ -23,7 +24,7 @@ import ../src/daemon/tracked_child
 import ../src/daemon/process_handle
 from ../src/daemon/state import
   CursorHideReason, LibinputDeviceRuntime, OutputManagementHeadRuntime, TriadDaemon,
-  XkbKeyboardRuntime, clearOutputCaptureSessions, consumeMaximizedAck,
+  XkbKeyboardRuntime, clearOutputCaptureSessions, consumeMaximizedAck, daemonData,
   expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
   setWindowCaptureSessions
 from ../src/daemon/state import QueuedMsgOrigin
@@ -516,17 +517,19 @@ suite "Crash hardening":
     check hook.origin == QueuedMsgOrigin.JanetHook
     check hook.msg.targetTag == 3
 
-  test "message queue can drop pending output removals":
+  test "output removals wait for a live output and skip a reused ID":
     var daemon = initTriadDaemon()
 
+    daemon.outputPointers[2'u32] = nil
     daemon.enqueue(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
-    daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 1))
-    daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: 2))
+    daemon.queueOutputRemoval(1)
     daemon.enqueue(
       Msg(kind: MsgKind.CmdMoveToTag, targetTag: 3), QueuedMsgOrigin.JanetHook
     )
+    daemon.outputPointers.clear()
+    daemon.queueOutputRemoval(2)
+    daemon.queueOutputRemoval(2)
 
-    check daemon.dropQueuedOutputRemovals() == 2
     let normal = daemon.popQueuedMessageWithOrigin()
     let hook = daemon.popQueuedMessageWithOrigin()
     check normal.msg.kind == MsgKind.CmdFocusTag
@@ -536,6 +539,90 @@ suite "Crash hardening":
     check hook.msg.targetTag == 3
     check hook.origin == QueuedMsgOrigin.JanetHook
     check not daemon.hasQueuedMessages()
+    check daemon.deferredOutputRemovals == @[1'u32, 2'u32]
+
+    for _ in 1 .. 2:
+      riverManagerListener.manageStart(daemonData(daemon), nil)
+      check daemon.popQueuedMessage().kind == MsgKind.WlManageStart
+      check not daemon.hasQueuedMessages()
+
+    daemon.outputPointers[2'u32] = nil
+    daemon.enqueue(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600)
+    )
+    riverManagerListener.manageStart(daemonData(daemon), nil)
+    check daemon.popQueuedMessage().kind == MsgKind.WlOutputDimensions
+    let removal = daemon.popQueuedMessage()
+    check removal.kind == MsgKind.WlOutputRemoved
+    check removal.removedOutputId == 1
+    check daemon.popQueuedMessage().kind == MsgKind.WlManageStart
+    check not daemon.hasQueuedMessages()
+    check daemon.deferredOutputRemovals.len == 0
+
+  test "returning display recovers workspaces and publishes the corrected topology":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState = initRuntimeStateFromConfig(
+      Config(workspaces: WorkspaceConfig(defaultCount: 3))
+    )
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700),
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"),
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 800, height: 600),
+      Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 10, appId: "browser"),
+      Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2),
+      Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: "DP-2"),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 20, appId: "term"),
+    ]:
+      discard daemon.runtimeState.applyRuntimeUpdate(msg)
+    let before = daemon.runtimeState.readRuntimeSnapshot()
+    check before.windows.mapIt(it.workspaceIdx) == @[1'u32, 2'u32]
+
+    daemon.outputPointers[2'u32] = nil
+    daemon.queueOutputRemoval(1)
+    daemon.outputPointers.clear()
+    daemon.queueOutputRemoval(2)
+    check daemon.runtimeState.readRuntimeSnapshot() == before
+
+    for returningId in [3'u32, 4'u32]:
+      daemon.outputPointers[returningId] = nil
+      daemon.enqueue(Msg(kind: MsgKind.WlOutputDimensions, outputId: returningId,
+        width: 1000, height: 700))
+      daemon.enqueue(Msg(kind: MsgKind.WlOutputName, nameOutputId: returningId,
+        outputName: "DP-1"))
+      riverManagerListener.manageStart(daemonData(daemon), nil)
+
+      var removalEffects: seq[Effect]
+      while daemon.hasQueuedMessages():
+        let msg = daemon.popQueuedMessage()
+        let effects = daemon.runtimeState.applyRuntimeUpdate(msg)
+        if msg.kind == MsgKind.WlOutputRemoved:
+          removalEffects = effects
+
+      let after = daemon.runtimeState.readRuntimeSnapshot()
+      check after.outputs.mapIt(it.id) == @[returningId]
+      check after.activeWorkspaceIdx == 2
+      check after.workspaces.mapIt(it.tagId) == before.workspaces.mapIt(it.tagId)
+      check after.windows.mapIt(it.id) == before.windows.mapIt(it.id)
+      check after.windows.mapIt(it.workspaceIdx) == before.windows.mapIt(it.workspaceIdx)
+      check after.workspaces.allIt(it.outputName == "DP-1")
+      check daemon.runtimeState.model.validateInvariants().ok
+      check removalEffects.anyIt(it.kind == EffectKind.EffManageDirty)
+      let broadcasts = removalEffects.filterIt(it.kind == EffectKind.EffBroadcastJson)
+        .mapIt(parseJson(it.jsonPayload))
+      check (%*{"OutputsChanged": {"outputs": after.niriOutputsJson()}}) in broadcasts
+      check (%*{"WorkspacesChanged": {"workspaces": after.niriWorkspacesJson()}}) in broadcasts
+
+      for index in [1'u32, 2'u32]:
+        discard daemon.runtimeState.applyRuntimeUpdate(
+          Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: index)
+        )
+        let focused = daemon.runtimeState.readRuntimeSnapshot()
+        check focused.activeWorkspaceIdx == index
+        check focused.windows.filterIt(it.isFocused).mapIt(it.id) == @[index * 10]
+
+      daemon.outputPointers.clear()
+      daemon.queueOutputRemoval(returningId)
 
   test "XKB done applies config only after the keyboard config changes":
     var daemon = initTriadDaemon()

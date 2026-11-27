@@ -29,6 +29,24 @@ proc onOutputDimensions(
     )
   )
 
+proc queueOutputRemoval*(daemon: var TriadDaemon, id: uint32) =
+  if daemon.outputPointers.len == 0:
+    daemon.deferOutputRemovals(id)
+    warn "All River outputs disappeared; deferring model output removals",
+      outputId = id, deferredRemovals = daemon.deferredOutputRemovals.len
+  elif id notin daemon.deferredOutputRemovals:
+    daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
+
+proc flushDeferredOutputRemovals*(daemon: var TriadDaemon) =
+  if daemon.outputPointers.len == 0 or daemon.deferredOutputRemovals.len == 0:
+    return
+  # River has sent the returning outputs' state before manage_start. Let the
+  # model add those outputs first so removed workspaces have a fallback.
+  for id in daemon.deferredOutputRemovals:
+    if not daemon.outputPointers.hasKey(id):
+      daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
+  daemon.deferredOutputRemovals.setLen(0)
+
 proc onOutputRemoved(data: pointer, output: ptr RiverOutputV1) =
   let daemon = callbackDaemon(data, "output removed")
   if daemon == nil:
@@ -56,13 +74,7 @@ proc onOutputRemoved(data: pointer, output: ptr RiverOutputV1) =
     daemon.outputGlobalPhysicalMetadata.del(globalName)
     daemon.outputGlobalScales.del(globalName)
     daemon.outputWlNames.del(id)
-  if daemon.outputPointers.len == 0:
-    let dropped = daemon[].dropQueuedOutputRemovals()
-    warn "All River outputs disappeared; preserving model outputs until outputs return",
-      outputId = id, droppedQueuedRemovals = dropped
-    output.destroy()
-    return
-  daemon.enqueue(Msg(kind: MsgKind.WlOutputRemoved, removedOutputId: id))
+  daemon[].queueOutputRemoval(id)
   output.destroy()
 
 proc onOutputWlOutput(data: pointer, output: ptr RiverOutputV1, name: uint32) =

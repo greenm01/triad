@@ -188,8 +188,7 @@ proc applyEvent*(model: var Model, msg: Msg): UpdateStep =
       msg.usableH,
     )
   of MsgKind.WlOutputRemoved:
-    for winId in model.removeOutputForExternal(msg.removedOutputId.externalOutputId()):
-      result.dirty = true
+    result.dirty = model.removeOutputForExternal(msg.removedOutputId.externalOutputId())
   of MsgKind.WlWindowCreated:
     let winId = model.createWindowForExternal(
       msg.windowId.externalWindowId(),

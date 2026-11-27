@@ -375,6 +375,7 @@ type
     windowPointers*: Table[uint32, ptr RiverWindowV1]
     windowNodes*: Table[uint32, ptr RiverNodeV1]
     outputPointers*: Table[uint32, ptr RiverOutputV1]
+    deferredOutputRemovals*: seq[uint32]
     windowCaptureSessions*: Table[uint32, uint32]
     outputCaptureSessions*: Table[uint32, uint32]
     layerOutputPointers*: Table[uint32, ptr riverLayer.RiverLayerShellOutputV1]

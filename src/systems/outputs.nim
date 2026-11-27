@@ -303,7 +303,7 @@ proc setOutputUsableForExternal*(
 
 proc removeOutputForExternal*(
     model: var Model, externalId: ExternalOutputId
-): seq[WindowId] =
+): bool =
   if externalId == NullExternalOutputId:
     return
   let outputId = model.outputForExternal(externalId)
@@ -323,7 +323,7 @@ proc removeOutputForExternal*(
     if mappedOutput == outputId:
       affectedTags.add(tagId)
 
-  discard model.destroyOutput(outputId)
+  result = model.destroyOutput(outputId)
   model.syncPrimaryOutput()
   for tagId in affectedTags:
     if model.primaryOutput != NullOutputId:
@@ -333,7 +333,6 @@ proc removeOutputForExternal*(
   for winId, win in model.windowsWithId():
     if win.isFullscreen and win.fullscreenOutput == externalId:
       discard model.setWindowFullscreen(winId, false)
-      result.add(winId)
 
 proc sortedOutputsByGeometry*(model: Model): seq[OutputId] =
   var entries: seq[tuple[id: OutputId, y, x: int32, externalId: uint32]] = @[]
