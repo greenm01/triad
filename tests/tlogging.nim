@@ -65,7 +65,7 @@ suite "Runtime logging":
     check daemon.takeSlowManageRenderSample(slow).isNil
 
   test "live doctor matches current supervisor protocol":
-    check SupervisorProtocolVersion == 1
+    check SupervisorProtocolVersion == 2
     let doctorSource = readFile("src/session/doctor_live.nim")
     check doctorSource.contains("SupervisorProtocolVersion")
 
@@ -139,6 +139,7 @@ exit 1
       sessionId: "session-1",
       sessionPid: 11,
       supervisorPid: 12,
+      shellManagerPid: 14,
       daemonPid: 13,
       stateDir: dir,
       sessionLog: dir / "triad-session-session-1.log",
@@ -152,6 +153,8 @@ exit 1
     check payload["ok"].getBool()
     check payload["session"]["session_id"].getStr() == "session-1"
     check renderLogs(dir).contains("daemon log: " & record.daemonLog)
+    check payload["session"]["shell_manager_pid"].getInt() == 14
+    check renderLogs(dir).contains("shell manager pid: 14")
 
     restoreSessionRecord(claim)
     check not session_logs.logsJson(dir)["ok"].getBool()
@@ -169,6 +172,7 @@ exit 1
       sessionPid: 11,
       supervisorPid: 12,
       daemonPid: 13,
+      shellManagerPid: 14,
       stateDir: dir,
       sessionLog: dir / "old-session.log",
       daemonLog: dir / "old-daemon.log",
@@ -184,6 +188,7 @@ exit 1
       supervisorPid: 22,
       daemonPid: 23,
       stateDir: dir,
+      shellManagerPid: 24,
       sessionLog: dir / "new-session.log",
       daemonLog: dir / "new-daemon.log",
       startedAt: "2026-05-23T12:01:00-04:00",

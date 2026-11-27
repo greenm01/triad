@@ -4,7 +4,8 @@ import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
 import
   ../session/
-    [doctor_live, live_reload, logs as session_logs, session_runner, supervisor]
+    [doctor_live, live_reload, logs as session_logs, session_runner, session_control,
+    session_control_client, shell_manager, supervisor]
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
@@ -14,11 +15,12 @@ import ../ipc/[binding_dispatch, command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
 import ../utils/[behavior_log, event_poll, runtime_deadlines, runtime_log, session_env, wayland_runtime]
+import ../utils/terminal
 import
   bindings_runtime, capture_sessions_runtime, child_process_runtime, effects_runtime,
   input_runtime, ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime,
   manage_requests, message_queue, memory_status, output_management_runtime,
-  process_runner, protocol_diagnostics, shell_runner, registry_runtime, reload_runtime,
+  protocol_diagnostics, registry_runtime, reload_runtime,
   render_runtime, render_invalidation, screen_mirror_runtime, spawn_context, state,
   switch_event_runtime
 import runtime_events
@@ -33,6 +35,12 @@ import fsnotify, chronicles
 
 var daemon = initTriadDaemon()
 var lastRuntimeLoopSampleIpcCounters: IpcPerfCounters
+var wmSessionControl = newSessionControlClient(stateDir() / "shell-manager.sock")
+var sessionReadySent = false
+var sessionReadySending = false
+var startupCommandsSending = false
+var startupCommandsSent = false
+var startupCommandIndex = 0
 
 const
   IdleWakeIntervalMs = 250
@@ -220,8 +228,6 @@ proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
     )
   )
 
-proc nextShellRecoveryMs(daemon: TriadDaemon): int64 =
-  if daemon.shellRunner.recoveryPending: daemon.shellRunner.nextRecoveryMs else: 0'i64
 
 proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
   result = IdleWakeIntervalMs
@@ -236,9 +242,6 @@ proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
     result = max(1, int(max(1'i64, tickInterval - elapsedMs)))
   if daemon.configReloadDebouncer.pending:
     result = min(result, max(1, int(daemon.configReloadDebouncer.deadlineMs - nowMs)))
-  let recoveryMs = daemon.nextShellRecoveryMs()
-  if recoveryMs > 0:
-    result = min(result, max(1, int(recoveryMs - nowMs)))
   let cursorSampleMs = daemon.nextCursorPositionSampleMs()
   if cursorSampleMs > 0:
     result = min(result, max(1, int(cursorSampleMs - nowMs)))
@@ -621,6 +624,55 @@ proc startStartupWindowRulesExpiry() {.async.} =
   {.cast(gcsafe).}:
     daemon.enqueue(Msg(kind: MsgKind.CmdExpireStartupWindowRules))
 
+proc spawnManagedTerminal() {.async.} =
+  let model = daemon.runtimeState.model
+  let argv = resolveTerminalCommand(model.terminal.command)
+  if argv.len == 0:
+    return
+  let reply = await wmSessionControl.requestSessionControl(
+    SessionControlKind.Spawn, SessionControlKind.SpawnStarted, %*{"argv": argv}
+  )
+  if reply == nil:
+    return
+  let pid = reply{"pid"}.getInt()
+  if pid > 0:
+    daemon.rememberSpawnPlacementForPid(int32(pid), model, "spawn-terminal")
+
+proc shellControlPayload(model: Model, niriSocketPath: string): JsonNode =
+  let shells = model.shells
+  var profiles = newJArray()
+  for profile in shells.profiles:
+    profiles.add(
+      %*{
+        "name": profile.name,
+        "launch": profile.launch,
+        "stop": profile.stop,
+        "niriCompat": profile.niriCompat,
+      }
+    )
+  var environment = newJArray()
+  for entry in model.environment:
+    environment.add(
+      %*{"name": entry.name, "value": entry.value, "unset": entry.unset}
+    )
+  %*{
+    "active": shells.active,
+    "cycle": shells.cycle,
+    "session_locked": model.sessionLocked,
+    "layer_focus_exclusive": model.layerFocusExclusive,
+    "enabled": shells.enabled,
+    "watchdog":
+      %*{
+        "enabled": shells.watchdog.enabled,
+        "fallback": shells.watchdog.fallback,
+        "exclusiveFocusTimeoutMs": shells.watchdog.exclusiveFocusTimeoutMs,
+      },
+    "profiles": profiles,
+    "niri_socket": niriSocketPath,
+    "environment": environment,
+    "own_shell": true,
+  }
+
 proc processQueuedMessages(configPath, niriSocketPath: string): bool =
   while daemon.hasQueuedMessages():
     let queued = daemon.popQueuedMessageWithOrigin()
@@ -633,19 +685,20 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           daemon.executeEffect(
             Effect(kind: EffectKind.EffOpEnd, endSeat: daemon.lastPointerOpSeat)
           )
+      continue
 
     if msg.kind == MsgKind.CmdSpawnTerminal:
-      let process = spawnTerminal(daemon.runtimeState.model)
-      daemon.rememberSpawnPlacement(
-        process, daemon.runtimeState.model, "spawn-terminal"
-      )
-      daemon.trackChildProcess(process)
+      asyncCheck spawnManagedTerminal()
       continue
 
     if msg.kind == MsgKind.CmdConfigReload:
       if daemon.applyConfigReload(configPath, niriSocketPath):
         daemon.janetRuntime.configure(daemon.runtimeState.model.janet)
         daemon.configureSwitchEventRuntime("config reload")
+        asyncCheck wmSessionControl.sendSessionControl(
+          SessionControlKind.ConfigChanged,
+          shellControlPayload(daemon.runtimeState.model, niriSocketPath),
+        )
         result = true
       continue
 
@@ -689,6 +742,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousOverview = daemon.runtimeState.model.overviewActive
     let previousRecentWindows = daemon.runtimeState.model.recentWindowsActive
     let previousSessionLocked = daemon.runtimeState.model.sessionLocked
+    let previousLayerFocusExclusive = daemon.runtimeState.model.layerFocusExclusive
     let previousExitSessionConfirm = daemon.runtimeState.model.exitSessionConfirmOpen
     let previousActiveModifiers = daemon.runtimeState.model.activeModifiers
     let previousLayoutBindingId = daemon.runtimeState.model.activeLayoutBindingId()
@@ -729,11 +783,9 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         not sameShellsConfig(
           previousModelForShell.get().shells, daemon.runtimeState.model.shells
         ):
-      daemon.shellRunner.switchShell(
-        previousModelForShell.get(),
-        daemon.runtimeState.model,
-        niriSocketPath,
-        "command " & $msg.kind,
+      asyncCheck wmSessionControl.sendSessionControl(
+        SessionControlKind.ConfigChanged,
+        shellControlPayload(daemon.runtimeState.model, niriSocketPath),
       )
     if msg.kind == MsgKind.WlWindowDestroyed:
       daemon.lastFullscreenRequests.del(msg.destroyedId)
@@ -772,6 +824,16 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         previousShortcutsInhibited !=
         daemon.runtimeState.model.keyboardShortcutsInhibited():
       daemon.requestBindingReconfigure("binding profile changed")
+
+    if previousSessionLocked != daemon.runtimeState.model.sessionLocked or
+        previousLayerFocusExclusive != daemon.runtimeState.model.layerFocusExclusive:
+      asyncCheck wmSessionControl.sendSessionControl(
+        SessionControlKind.WmState,
+        %*{
+          "session_locked": daemon.runtimeState.model.sessionLocked,
+          "layer_focus_exclusive": daemon.runtimeState.model.layerFocusExclusive,
+        },
+      )
 
     if msg.kind == MsgKind.WlManageStart:
       daemon.riverPhase = RiverPhase.RiverManage
@@ -858,6 +920,32 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 
 # --- Main Loop ---
 
+
+proc sendSessionReadyOnce() {.async.} =
+  if await wmSessionControl.sendSessionControlExpect(
+    SessionControlKind.SessionReady,
+    SessionControlKind.ShellManagerReady,
+    shellControlPayload(
+      daemon.runtimeState.model, chooseNiriCompatSocketPath(triadSocketPath())
+    ),
+  ):
+    sessionReadySent = true
+  sessionReadySending = false
+
+proc sendStartupCommandsOnce() {.async.} =
+  let commands = daemon.runtimeState.model.startupCommands
+  while startupCommandIndex < commands.len:
+    if not await wmSessionControl.sendSessionControlExpect(
+      SessionControlKind.Spawn,
+      SessionControlKind.SpawnStarted,
+      %*{"argv": commands[startupCommandIndex]},
+    ):
+      break
+    inc startupCommandIndex
+  if startupCommandIndex >= commands.len:
+    startupCommandsSent = true
+  startupCommandsSending = false
+
 proc main*(): int =
   let args = commandLineParams()
   if args.len > 0 and args[0] in ["--help", "-h", "help"]:
@@ -878,6 +966,8 @@ proc main*(): int =
   if args.len >= 1 and args[0] == "supervise":
     quit runSupervisor()
 
+  if args.len >= 1 and args[0] == "shell-manager":
+    quit runShellManager()
   if args.len >= 1 and args[0] == "doctor-live":
     quit runDoctorLive()
 
@@ -1204,8 +1294,7 @@ proc main*(): int =
   asyncCheck startStartupWindowRulesExpiry()
 
   # Spawn startup commands after River accepts the initial manage pass and IPC is ready.
-  daemon.scheduleStartupCommands(daemon.runtimeState.model)
-  daemon.shellRunner.scheduleShellSpawn(daemon.runtimeState.model)
+
 
   var lastWatcherPollMs = 0'i64
   var lastChildReapPollMs = 0'i64
@@ -1289,8 +1378,8 @@ proc main*(): int =
     if processQueuedMessages(daemon.configPath, niriSocketPath):
       configureConfigWatcher()
     if daemon.shouldExit:
+      asyncCheck wmSessionControl.sendSessionControl(SessionControlKind.ManagerStopping)
       running = false
-      continue
 
     if daemon.initialManageComplete and not ipcStarted:
       discard startIpcServers()
@@ -1313,33 +1402,13 @@ proc main*(): int =
       else:
         discard
 
+    if ipcStartupGate.open and not sessionReadySent and not sessionReadySending:
+      sessionReadySending = true
+      asyncCheck sendSessionReadyOnce()
 
-    if daemon.initialManageComplete and ipcStartupGate.open:
-      daemon.spawnPendingStartupCommands(
-        daemon.runtimeState.model, "initial manage ipc ready"
-      )
-      daemon.shellRunner.spawnPendingShell(
-        daemon.runtimeState.model, niriSocketPath, "initial manage ipc ready"
-      )
-      let shellPollMs = nowMs
-      let recoveryMs = daemon.nextShellRecoveryMs()
-      let shellPollDue =
-        lastShellPollMs.pollDue(shellPollMs, MaintenancePollIntervalMs) or
-        (recoveryMs > 0 and shellPollMs >= recoveryMs)
-      if shellPollDue:
-        lastShellPollMs = shellPollMs
-        inc daemon.loopCounters.shellWatchdogPolls
-        let watchdogFallback =
-          daemon.shellRunner.pollShellWatchdog(daemon.runtimeState.model, shellPollMs)
-        if watchdogFallback.isSome:
-          daemon.enqueue(
-            Msg(kind: MsgKind.CmdSwitchShell, shellName: watchdogFallback.get())
-          )
-        else:
-          inc daemon.loopCounters.shellRecoveryPolls
-          discard daemon.shellRunner.pollShellRecovery(
-            daemon.runtimeState.model, niriSocketPath, shellPollMs
-          )
+    if daemon.initialManageComplete and sessionReadySent and not startupCommandsSent and not startupCommandsSending:
+      startupCommandsSending = true
+      asyncCheck sendStartupCommandsOnce()
 
     if daemon.manageRequestPending:
       inc daemon.loopCounters.manageFlushChecks
@@ -1372,12 +1441,7 @@ proc main*(): int =
         daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
       if runtimeReadyEvents.timerReady:
         daemon.syncScreenMirrors()
-    daemon.shellRunner.advanceTerminatingShells(nowMs)
-    daemon.shellRunner.advanceReleasedShells()
-    daemon.shellRunner.advanceShellLifecycle(
-      daemon.runtimeState.model, niriSocketPath, nowMs
-    )
-    daemon.trackChildProcesses(daemon.shellRunner.takeOverlayProcesses())
+
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

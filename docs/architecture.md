@@ -38,6 +38,9 @@ Wayland is asynchronous. To prevent tearing and race conditions, Triad uses a un
 
 4.  **Runtime Events:** Child-exit notification from `SIGCHLD` is delivered through a dedicated file descriptor and polled alongside the Wayland socket. Reaping runs on that readiness event; a low-frequency sweep remains as a fallback.
 
+Runtime deadlines use a monotonic clock. Suspend/resume does not advance shell
+watchdog, recovery, or child-termination timers.
+
 ### Sequence Mapping
 River's `window-management-v1` protocol uses a double-buffered sequence. Triad maps directly to this:
 *   **Manage Sequence:** The **Update** loop processes all accumulated messages.
@@ -63,3 +66,19 @@ Triad separates its native IPC from shell compatibility.
 *   **Compatibility Projection (`$NIRI_SOCKET`):** A projection of the internal snapshot into the JSON schema used by Niri-aware shells. This allows you to use existing Niri shell bars without modification.
 
 We map internal state to standard JSON payloads. Stable Tag IDs become Workspace IDs, and focus history ensures that hot reloads return you to where you left off.
+
+## Session Process Boundary
+The supervisor owns two child processes: the River-facing WM daemon and
+`triad shell-manager`. Shell profiles, startup commands, and ordinary spawned
+apps are owned by the shell manager. The WM owns River protocol state, layout,
+IPC projection, and Wayland-derived helpers. A versioned private control
+socket carries session-ready, config, spawn, fallback, and shutdown events.
+Shell-manager ownership requires a full River/Triad session restart so both
+processes use the same supervisor protocol.
+
+If the shell manager exits while the daemon runs, the supervisor stops the
+daemon and restarts both processes so the new manager receives session-ready.
+
+The current session record is a live claim. A supervisor that loses the claim
+relinquishes its shell-manager immediately, including while waiting to restart
+a failed daemon, so an old shell manager cannot stop a newer session's shell.

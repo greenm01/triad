@@ -1,10 +1,11 @@
 import std/[json, os, posix, times]
 
 const
-  SupervisorProtocolVersion* = 1
+  SupervisorProtocolVersion* = 2
   SessionLatestName* = "triad-session-latest.log"
   LegacySessionLatestName* = "river-triad-session-latest.log"
   DaemonLatestName* = "triad-latest.log"
+  ShellManagerLatestName* = "triad-shell-manager-latest.log"
   CurrentSessionName* = "current-session.json"
 
 type
@@ -24,6 +25,7 @@ type
     sessionId*: string
     sessionPid*: int
     supervisorPid*: int
+    shellManagerPid*: int
     daemonPid*: int
     stateDir*: string
     sessionLog*: string
@@ -52,6 +54,8 @@ proc sessionLogPath*(stateDir, sessionId: string): string =
 
 proc daemonLogPath*(stateDir, sessionId: string): string =
   stateDir / ("triad-" & sessionId & ".log")
+proc shellManagerLogPath*(stateDir, sessionId: string): string =
+  stateDir / ("triad-shell-manager-" & sessionId & ".log")
 
 proc currentSessionPath*(stateDir: string): string =
   stateDir / CurrentSessionName
@@ -91,6 +95,7 @@ proc recordJson*(record: SessionLogRecord): JsonNode =
     "session_id": record.sessionId,
     "session_pid": record.sessionPid,
     "supervisor_pid": record.supervisorPid,
+    "shell_manager_pid": record.shellManagerPid,
     "daemon_pid": record.daemonPid,
     "state_dir": record.stateDir,
     "session_log": record.sessionLog,
@@ -123,6 +128,17 @@ proc writeClaimedSessionRecord*(claim: SessionClaim, record: SessionLogRecord): 
     return false
   writeAtomic(claim.path, $record.recordJson())
   true
+
+proc sessionClaimHeld*(claim: SessionClaim): bool =
+  if claim.path.len == 0 or claim.claimId.len == 0 or not fileExists(claim.path):
+    return false
+  let current =
+    try:
+      parseFile(claim.path)
+    except CatchableError:
+      return false
+  current{"claim_id"}.getStr() == claim.claimId
+
 
 proc restoreSessionRecord*(claim: SessionClaim) =
   if claim.path.len == 0 or not fileExists(claim.path):
@@ -169,4 +185,4 @@ proc renderLogs*(stateDir = stateDir()): string =
   result.add("daemon log: " & session{"daemon_log"}.getStr() & "\n")
   result.add("session pid: " & $session{"session_pid"}.getInt() & "\n")
   result.add("supervisor pid: " & $session{"supervisor_pid"}.getInt() & "\n")
-  result.add("daemon pid: " & $session{"daemon_pid"}.getInt())
+  result.add("shell manager pid: " & $session{"shell_manager_pid"}.getInt() & "\n")

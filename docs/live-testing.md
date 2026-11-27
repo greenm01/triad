@@ -13,10 +13,11 @@ nimble build
 
 ## Start In River
 
-Run Triad from inside the River session and capture stderr:
+Start Triad under the supervisor from inside the River session and capture
+stderr:
 
 ```bash
-TRIAD_LOG_LEVEL=debug ./triad 2>triad.log
+TRIAD_LOG_LEVEL=debug ./triad supervise 2>triad.log
 ```
 
 For the scripted smoke check, run:
@@ -128,9 +129,18 @@ Triad starts IPC only after River accepts the first manage pass. That makes live
 reload readiness mean restored windows have been managed and decoration policy
 has been re-applied, not just that a replacement process exists.
 
-Listener readiness is tracked without blocking the Wayland loop. Startup
-commands and the configured shell launch after `ipc_startup_listeners_ready`,
-or after the existing readiness timeout with a one-shot error event.
+Listener readiness is tracked without blocking the Wayland loop. Once the IPC
+gate opens, the WM sends `session-ready` to `triad shell-manager`; startup
+commands and the configured shell are launched by the manager after that
+acknowledgement. A full session restart is required when changing between WM
+and manager ownership.
+
+Check the manager path in a live River session:
+
+- `Super+t` opens one terminal; pointer clicks and drags open none.
+- `switch-shell` changes the visible shell. An unrelated config reload leaves it running; a reload with changed shell profiles applies those profiles.
+- Killing `triad shell-manager` restarts the manager and daemon together, and the shell launches once.
+- Suspend and resume the session; the live supervisor keeps ownership of the shell.
 
 If `river_window_manager_v1` is not advertised, Triad exits with a fatal log.
 That means it is not running in a compatible River 0.4+ session.

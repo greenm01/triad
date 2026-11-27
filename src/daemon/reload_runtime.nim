@@ -10,7 +10,7 @@ import ../utils/behavior_log
 import
   bindings_runtime, child_process_runtime, idle_inhibit_runtime, live_restore_runtime,
   output_management_runtime, process_runner, render_invalidation, screen_mirror_runtime,
-  shell_runner, state
+  state
 
 type StartupConfigLoadResult* = object
   config*: Config
@@ -217,7 +217,6 @@ proc applyConfigReload*(
     )
     return false
 
-  daemon.shellRunner.spawnPending = false
   if daemon.inputConfigReloadHook != nil:
     daemon.inputConfigReloadHook(addr daemon, "config reload")
   daemon.syncIdleInhibitFromRuntime()
@@ -245,20 +244,6 @@ proc applyConfigReload*(
     },
   )
 
-  if not shellChanged:
-    if daemon.shellRunner.needsShellRecovery(daemon.runtimeState.model):
-      writeBehaviorEvent(
-        "shell_config_reload_recovery",
-        %*{"reason": "config reload", "active": daemon.runtimeState.model.shells.active},
-      )
-      daemon.shellRunner.switchShell(
-        previousModel, daemon.runtimeState.model, niriSocketPath,
-        "config reload recovery",
-      )
-  else:
-    daemon.shellRunner.switchShell(
-      previousModel, daemon.runtimeState.model, niriSocketPath, "config reload"
-    )
 
   daemon.tickCursorVisibility()
   daemon.requestBindingReconfigure("config reload")

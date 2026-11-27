@@ -1,3 +1,8 @@
+import std/monotimes
+
+proc monotonicMs*(): int64 =
+  getMonoTime().ticks div 1_000_000
+
 proc nextDeadlineMs*(nowMs: int64, candidates: openArray[int64]): int64 =
   var best = high(int64)
   for candidate in candidates:

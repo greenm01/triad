@@ -1,4 +1,4 @@
-import std/[json, options, os, osproc, sequtils, strtabs, strutils, tables, times, unittest]
+import std/[json, options, os, osproc, sequtils, strtabs, strutils, tables, unittest]
 import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec, triad_state]
 import ../src/core/msg
@@ -11,11 +11,14 @@ import
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 import ../src/utils/behavior_log
+import ../src/utils/runtime_deadlines
 
 proc settleShellLifecycle(runner: var ShellRunner, model: Model, socketPath: string) =
-  let deadline = epochTime() * 1000.0 + 1000.0
-  while runner.pendingLaunchActive and epochTime() * 1000.0 < deadline:
-    runner.advanceShellLifecycle(model, socketPath, int64(epochTime() * 1000.0))
+  let deadline = monotonicMs() + 1000'i64
+  while (runner.pendingLaunchActive or runner.stopCommands.len > 0) and
+      monotonicMs() < deadline:
+    runner.advanceShellLifecycle(model, socketPath, monotonicMs())
+    runner.advanceStopCommands(monotonicMs())
     sleep(5)
 
 
@@ -1181,7 +1184,7 @@ suite "Shell compatibility contracts":
     check compat.env["XDG_DATA_DIRS"].startsWith(compat.xdgSharePath)
     check compat.env["XDG_DATA_DIRS"].contains("/configured/share")
 
-  test "Shell switching stops old profile before launching new profile":
+  test "Shell switching runs the old stop hook and launches the new profile":
     let tmp = getTempDir() / ("triad-shell-switch-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1235,8 +1238,85 @@ exit 0
     runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
     runner.settleShellLifecycle(current, tmp / "niri.sock")
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
-    check calls[0] == "stop-old"
+    check calls.contains("stop-old")
     check calls.count("launch-new") >= 1
+
+  test "Shell switch waits for the old stop hook before launching":
+    let tmp = getTempDir() / ("triad-shell-stop-hook-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let fake = tmp / "fake-shell"
+    let logPath = tmp / "calls.log"
+    writeFile(
+      fake,
+      """
+#!/bin/sh
+printf 'start %s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+if [ "$1" = "stop-old" ]; then
+  sleep 0.2
+fi
+printf 'end %s\n' "$*" >> "$TRIAD_FAKE_SHELL_LOG"
+exit 0
+""",
+    )
+    setFilePermissions(fake, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    putEnv("TRIAD_FAKE_SHELL_LOG", logPath)
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+
+    let previous = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "old",
+        profiles: @[
+          ShellProfileConfig(
+            name: "old", launch: @[fake, "launch-old"], stop: @[fake, "stop-old"]
+          ),
+          ShellProfileConfig(
+            name: "new", launch: @[fake, "launch-new"], stop: @[fake, "stop-new"]
+          ),
+        ],
+      )
+    )
+    let current = Model(
+      shells: ShellsConfig(
+        configured: true,
+        enabled: true,
+        active: "new",
+        profiles: previous.shells.profiles,
+      )
+    )
+
+    var runner = ShellRunner()
+    runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
+    check runner.pendingSwitch.active
+    let hookStartDeadline = monotonicMs() + 500'i64
+    while not fileExists(logPath) and monotonicMs() < hookStartDeadline:
+      sleep(10)
+    check fileExists(logPath)
+    check not readFile(logPath).contains("start launch-new")
+
+    let deadline = monotonicMs() + 2000'i64
+    while runner.pendingSwitch.active and monotonicMs() < deadline:
+      runner.advanceStopCommands()
+      sleep(10)
+    check not runner.pendingSwitch.active
+    runner.settleShellLifecycle(current, tmp / "niri.sock")
+    runner.stopTrackedShell("test cleanup")
+
+    let calls = readFile(logPath).splitLines()
+    let stopEnd = calls.find("end stop-old")
+    let launchStart = calls.find("start launch-new")
+    check stopEnd >= 0
+    check launchStart > stopEnd
 
   test "Shell profiles receive native Triad environment":
     let tmp = getTempDir() / ("triad-shell-native-env-" & $getCurrentProcessId())
@@ -1426,7 +1506,7 @@ sleep 5
     check fallback.isSome
     check fallback.get() == "waybar"
 
-  test "Shell startup stops stale configured profiles before active launch":
+  test "Shell startup leaves stale configured profiles untouched":
     let tmp = getTempDir() / ("triad-shell-startup-cleanup-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1481,7 +1561,7 @@ exit 0
     runner.settleShellLifecycle(model, tmp / "niri.sock")
 
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
-    check calls == @["stop-noctalia", "stop-waybar", "stop-dank", "launch-noctalia"]
+    check calls == @["launch-noctalia"]
 
   test "Shell unchanged reload can recover untracked active profile":
     var runner = ShellRunner()
@@ -1527,7 +1607,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
 
     let calls = readFile(logPath)
     check calls.count("launch") >= 2
-    check calls.count("stop") >= 2
+    check calls.count("stop") == 0
 
   test "Shell double handoff schedules recovery until tracked":
     let tmp = getTempDir() / ("triad-shell-recovery-" & $getCurrentProcessId())
@@ -1574,9 +1654,9 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     check parseInt(readFile(fake.statePath).strip()) >= 3
 
     let calls = readFile(fake.logPath)
-    check calls.count("stop") >= 2
+    check calls.count("stop") == 0
 
-  test "Shell recovery exhausts repeated handoffs":
+  test "Shell recovery cleans up a stale instance once after repeated handoffs":
     let tmp = getTempDir() / ("triad-shell-recovery-exhaust-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1611,9 +1691,9 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
       discard runner.pollShellRecovery(model, tmp / "niri.sock", 0)
       runner.settleShellLifecycle(model, tmp / "niri.sock")
       inc recoveryLoops
-    check not runner.recoveryPending
+    check runner.recoveryPending
     let calls = readFile(fake.logPath)
-    check calls.count("stop") >= 4
+    check calls.count("stop") == 1
 
 
   test "Final recovery attempt keeps a healthy shell tracked":
@@ -1688,7 +1768,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     check runner.trackedShellRunning()
     check readFile(fake.statePath).strip() == "2"
 
-  test "Shell failed spawn kills stale configured profile":
+  test "Shell failed spawn preserves stale configured profile":
     let tmp = getTempDir() / ("triad-shell-failed-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1728,7 +1808,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-9}"
 
     let calls = readFile(logPath)
     check calls.contains("launch")
-    check calls.contains("stop")
+    check not calls.contains("stop")
 
   test "shell overlay is generated from terminal desktop metadata":
     let tmp = getTempDir() / ("triad-shell-overlay-" & $getCurrentProcessId())
@@ -1783,9 +1863,9 @@ Categories=System;TerminalEmulator;
         process.close()
 
     let index = buildAppIdentityIndex([appRoot])
-    let overlayStart = epochTime()
+    let overlayStart = monotonicMs()
     let overlay = installShellOverlay(tmp / "runtime", index)
-    check (epochTime() - overlayStart) * 1000.0 < 500.0
+    check monotonicMs() - overlayStart < 500'i64
     check overlay.ok
     check overlay.pendingProcesses.len >= 1
     overlayProcesses = overlay.pendingProcesses
@@ -1843,12 +1923,12 @@ Categories=System;TerminalEmulator;
     defer:
       runner.stopTrackedShell("test cleanup")
 
-    let started = epochTime()
+    let started = monotonicMs()
     runner.spawnPendingShell(model, staleSocket, "test")
     runner.settleShellLifecycle(model, staleSocket)
-    let elapsedMs = (epochTime() - started) * 1000.0
+    let elapsedMs = monotonicMs() - started
 
-    check elapsedMs < 1000.0
+    check elapsedMs < 1000'i64
     check runner.trackedShellRunning()
 
 suite "injectable shell lifecycle":
@@ -1950,7 +2030,7 @@ suite "injectable shell lifecycle":
     runner.advanceShellLifecycle(model, "niri.sock", 300'i64)
     check runner.trackedProcess == nil
 
-  test "final recovery outcome stays with the pending launch":
+  test "recovery poll leaves a pending final launch for lifecycle advance":
     var runner = ShellRunner()
     let model = singleShellModel(@["fake-shell", "launch"], @[])
     let handle = newFakeProcessHandle(1004)
@@ -1967,5 +2047,37 @@ suite "injectable shell lifecycle":
     check runner.recoveryAttempts == MaxShellRecoveryAttempts
     handle.setFakeExitCode(7)
     runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
-    check not runner.pendingLaunchActive
-    check not runner.recoveryPending
+    check runner.staleLaunchDetected
+    check runner.recoveryPending
+    check runner.recoveryAttempts == MaxShellRecoveryAttempts
+    runner.nextRecoveryMs = 0
+    discard runner.pollShellRecovery(model, "niri.sock", 2'i64)
+    check runner.staleCleanupAttempted
+    check runner.recoveryAttempts == 0
+
+  test "shell stop commands are reaped without blocking":
+    let tmp = getTempDir() / ("triad-stop-command-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+    let stopCommand = tmp / "slow-stop"
+    writeFile(stopCommand, "#!/bin/sh\nsleep 30\n")
+    setFilePermissions(stopCommand, {fpUserRead, fpUserWrite, fpUserExec})
+
+    let previous = singleShellModel(@["/bin/true", "launch"], @[stopCommand, "stop"])
+    var disabled = previous
+    disabled.shells.enabled = false
+    var runner = ShellRunner()
+    let started = monotonicMs()
+    runner.switchShell(previous, disabled, "niri.sock", "test stop")
+    check monotonicMs() - started < 200'i64
+    check runner.stopCommands.len == 1
+
+    let deadline = monotonicMs() + 1000'i64
+    while runner.stopCommands.len > 0 and monotonicMs() < deadline:
+      runner.advanceStopCommands(monotonicMs())
+      sleep(5)
+    check runner.stopCommands.len == 0
