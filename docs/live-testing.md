@@ -139,7 +139,10 @@ Check the manager path in a live River session:
 
 - `Super+t` opens one terminal; pointer clicks and drags open none.
 - `switch-shell` changes the visible shell. An unrelated config reload leaves it running; a reload with changed shell profiles applies those profiles.
-- Killing `triad shell-manager` restarts the manager and daemon together, and the shell launches once.
+- Killing `triad shell-manager` restarts the manager and daemon together using the
+  supervisor's restart backoff. Check that the foreground shell exits and a
+  single replacement launches. Use a foreground command in shell profiles so
+  the manager can track its lifecycle.
 - Suspend and resume the session; the live supervisor keeps ownership of the shell.
 
 If `river_window_manager_v1` is not advertised, Triad exits with a fatal log.

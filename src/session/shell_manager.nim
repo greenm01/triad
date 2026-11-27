@@ -8,7 +8,8 @@ import ../daemon/process_runner
 import ../types/runtime_values
 import ../types/model
 import ../utils/process_options
-from posix import chmod, getuid, lstat, onSignal, SIGTERM, SIGINT, SIGHUP, Mode, Stat
+from posix import chmod, execvp, getppid, getuid, lstat, onSignal,
+  SIGTERM, SIGINT, SIGHUP, SIGKILL, Mode, Stat
 import logs
 import ../utils/runtime_deadlines
 
@@ -29,9 +30,33 @@ type
     niriSocketPath*: string
     ownsShell*: bool
 
-proc getsockopt(
+proc readSocketOption(
     fd: cint, level, option: cint, value: pointer, length: ptr cint
-): cint {.importc, header: "<sys/socket.h>".}
+): cint {.importc: "getsockopt", header: "<sys/socket.h>".}
+
+when defined(linux):
+  const PrSetParentDeathSignal {.importc: "PR_SET_PDEATHSIG", header: "<sys/prctl.h>".}: cint = 1
+  proc setParentDeathSignal(option: cint, signal, arg3, arg4, arg5: culong): cint {.
+    importc: "prctl", header: "<sys/prctl.h>".}
+
+proc runManagedShell*(args: openArray[string]): int =
+  if args.len < 2:
+    return 1
+  let owner = parseInt(args[0])
+  if int(getppid()) != owner:
+    return 1
+  when defined(linux):
+    if setParentDeathSignal(PrSetParentDeathSignal, culong(SIGKILL), 0, 0, 0) != 0:
+      stderr.writeLine("triad: failed to watch shell manager: " & osErrorMsg(osLastError()))
+      return 1
+  # The owner may have exited before the kernel registered the signal.
+  if int(getppid()) != owner:
+    return 1
+  let argv = allocCStringArray(args[1 .. ^1])
+  defer: deallocCStringArray(argv)
+  discard execvp(argv[0], argv)
+  stderr.writeLine("triad: failed to execute shell " & args[1] & ": " & osErrorMsg(osLastError()))
+  1
 
 var shutdownSignal {.volatile.}: cint
 
@@ -42,7 +67,7 @@ proc installShellManagerSignals() =
 proc peerUid(socket: AsyncSocket): int =
   var cred: Ucred
   var length = cint(sizeof(cred))
-  if getsockopt(cint(socket.getFd()), SolSocket, SoPeerCred, addr cred, addr length) != 0:
+  if readSocketOption(cint(socket.getFd()), SolSocket, SoPeerCred, addr cred, addr length) != 0:
     return -1
   int(cred.uid)
 
@@ -209,7 +234,7 @@ proc runShellManagerAsync() {.async.} =
   listener.listen()
   discard chmod(path.cstring, Mode(0o600))
 
-  let state = ShellManagerState(children: @[])
+  let state = ShellManagerState(runner: ShellRunner(ownerPid: getCurrentProcessId()))
   asyncCheck acceptClients(listener, state)
 
   try:
@@ -237,24 +262,15 @@ proc runShellManagerAsync() {.async.} =
       state.reapChildren()
       poll(50)
   finally:
-    if state.ownsShell and state.runner.trackedProcess != nil:
-      state.runner.stopTrackedShell("shutdown")
-
-    state.runner.pendingSwitch.active = false
+    state.runner.stopShellsForShutdown()
     let drainDeadlineMs = monotonicMs() + 2000'i64
-    while (state.runner.pendingLaunchActive or state.runner.terminatingShells.len > 0) and
-        monotonicMs() < drainDeadlineMs:
+    while state.runner.terminatingShells.len > 0 and monotonicMs() < drainDeadlineMs:
       let nowMs = monotonicMs()
-      state.runner.advanceShellLifecycle(state.model, state.niriSocketPath, nowMs)
       state.runner.advanceTerminatingShells(nowMs)
       state.runner.advanceReleasedShells()
       state.runner.advanceStopCommands(nowMs)
       poll(20)
 
-    if state.runner.pendingLaunchActive:
-      state.runner.pendingLaunch.process.terminateProcess()
-      state.runner.pendingLaunch.process.closeProcessHandle()
-      state.runner.pendingLaunchActive = false
     for command in state.runner.stopCommands:
       command.process.killProcess()
       command.process.closeProcessHandle()

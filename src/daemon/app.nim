@@ -968,6 +968,9 @@ proc main*(): int =
 
   if args.len >= 1 and args[0] == "shell-manager":
     quit runShellManager()
+  if args.len >= 1 and args[0] == "run-managed-shell":
+    quit runManagedShell(args[1 .. ^1])
+
   if args.len >= 1 and args[0] == "doctor-live":
     quit runDoctorLive()
 

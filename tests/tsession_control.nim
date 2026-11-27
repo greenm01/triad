@@ -1,5 +1,9 @@
-import std/[json, os, strutils, unittest]
-import ../src/session/[logs, session_control]
+import std/[json, os, osproc, streams, strtabs, strutils, tempfiles, unittest]
+import ../src/utils/runtime_deadlines
+import ../src/session/[logs, session_control, supervisor]
+
+if paramCount() == 1 and paramStr(1) == "--test-supervisor":
+  quit runSupervisor()
 
 suite "session control protocol":
   test "round-trips a versioned message":
@@ -58,3 +62,50 @@ suite "session claim records":
 
     writeFile(path, """{"claim_id":"claim-b"}""")
     check not sessionClaimHeld(claim)
+
+
+suite "supervised shell recovery":
+  test "rapid shell-manager failures share the supervisor restart backoff":
+    let dir = createTempDir("triad-shell-recovery-", "")
+    defer: removeDir(dir)
+    let fakeTriad = dir / "fake-triad"
+    let restarts = dir / "restarts"
+    writeFile(fakeTriad, """#!/bin/sh
+if [ "$1" = shell-manager ]; then
+    printf 'start\n' >> "$TRIAD_TEST_RESTARTS"
+    exit 1
+fi
+exec sleep 30
+""")
+    setFilePermissions(fakeTriad, {fpUserRead, fpUserWrite, fpUserExec})
+    let env = newStringTable(modeCaseSensitive)
+    for key, value in envPairs():
+      env[key] = value
+    env["XDG_STATE_HOME"] = dir
+    env["TRIAD_BIN"] = fakeTriad
+    env["TRIAD_TEST_RESTARTS"] = restarts
+
+    let process = startProcess(
+      getAppFilename(), args = ["--test-supervisor"], env = env,
+      options = {poStdErrToStdOut},
+    )
+    defer: process.close()
+    var launches = 0
+    let deadline = monotonicMs() + 10_000
+    try:
+      while monotonicMs() < deadline and process.peekExitCode() == -1:
+        if fileExists(restarts):
+          launches = readFile(restarts).count("start")
+          if launches >= 3:
+            break
+        sleep(25)
+    finally:
+      if process.peekExitCode() == -1:
+        process.terminate()
+        if process.waitForExit(4000) == -1:
+          process.kill()
+          discard process.waitForExit()
+    let output = process.outputStream().readAll()
+    check launches >= 3
+    check output.contains("restarting session components in 1000 ms")
+    check output.contains("restarting session components in 2000 ms")

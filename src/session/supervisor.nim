@@ -1,4 +1,4 @@
-import std/[os, osproc, posix, strutils, times]
+import std/[os, osproc, posix, strutils]
 import logs, process_io
 import ../utils/runtime_deadlines
 
@@ -41,19 +41,22 @@ proc daemonArgs(): seq[string] =
 
 proc waitForChild(process, shellManager: Process, claim: SessionClaim): int =
   while true:
-    let code = process.peekExitCode()
-    if code != -1:
-      return code
-    if shellManager != nil and shellManager.peekExitCode() != -1:
-      process.terminate()
-      discard process.waitForExit(3000)
-      return ManagerLostStatus
     if shutdownSignal != 0:
       process.terminate()
       discard process.waitForExit(3000)
       return 128 + int(shutdownSignal)
     if not sessionClaimHeld(claim):
       return ClaimLostStatus
+    let code = process.peekExitCode()
+    if shellManager.peekExitCode() != -1:
+      if code == -1:
+        process.terminate()
+        if process.waitForExit(3000) == -1:
+          process.kill()
+          discard process.waitForExit()
+      return ManagerLostStatus
+    if code != -1:
+      return code
     sleep(100)
 
 proc terminateChild(process: Process) =
@@ -96,16 +99,16 @@ proc runSupervisor*(): int =
   var shellManager: Process
 
   try:
-    echo "triad-supervise: starting shell manager, log=", shellManagerLog
-    shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
-
     while shutdownSignal == 0:
-      if shellManager.peekExitCode() != -1:
-        echo "triad-supervise: restarting shell manager, log=", shellManagerLog
-        shellManager.close()
-        shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
+      if shellManager.isNil:
+        echo "triad-supervise: starting shell manager, log=", shellManagerLog
+        try:
+          shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
+        except CatchableError as e:
+          echo "triad-supervise: failed to start shell manager: ", e.msg
+          return 1
 
-      let startSec = epochTime().int64
+      let startMs = monotonicMs()
       echo "triad-supervise: starting triad, log=", daemonLog
 
       var process: Process
@@ -152,25 +155,23 @@ proc runSupervisor*(): int =
         discard
 
       if status == ManagerLostStatus:
-        echo "triad-supervise: shell manager exited; restarting session components"
-        if not shellManager.isNil:
-          shellManager.close()
-        shellManager = startWithLog(triadBin, @["shell-manager"], shellManagerLog)
-        if not sleepClaimAware(recordClaim, SupervisorRestartDelaysMs[0]):
-          return 0
-        continue
+        shellManager.close()
+        shellManager = nil
 
       if shutdownSignal != 0:
         return status
 
-      let runtimeSec = epochTime().int64 - startSec
+      let runtimeSec = (monotonicMs() - startMs) div 1000
       let restartDelay = restartDelayMs(status, runtimeSec, rapidRestarts)
       if runtimeSec < 30:
         inc rapidRestarts
       else:
         rapidRestarts = 0
 
-      if status == 0:
+      if status == ManagerLostStatus:
+        echo "triad-supervise: shell manager exited; restarting session components in ",
+          restartDelay, " ms"
+      elif status == 0:
         echo "triad-supervise: triad exited cleanly after ", runtimeSec, "s; restarting"
       else:
         echo "triad-supervise: triad exited with status ",

@@ -49,6 +49,7 @@ type
     reason*: string
     waitProfile*: string
   ShellRunner* = object
+    ownerPid*: int
     trackedProcess*: ProcessHandle
     trackedShellName*: string
     spawnPending*: bool
@@ -367,6 +368,14 @@ proc cancelPendingLaunch(runner: var ShellRunner, profile: ShellProfileConfig, r
     %*{"child_pid": launch.process.processID()},
   )
 
+proc stopShellsForShutdown*(runner: var ShellRunner) =
+  runner.pendingSwitch.active = false
+  if runner.pendingLaunchActive:
+    let profile = runner.pendingLaunch.profile
+    runner.cancelPendingLaunch(profile, "shutdown")
+  if runner.trackedProcess != nil:
+    runner.stopTrackedShell("shutdown")
+
 proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
   runner.exclusiveFocusSinceMs = 0
   if runner.trackedProcess == nil:
@@ -517,12 +526,21 @@ proc spawnShellProfile(
       else:
         baseEnv
     writeShellBehaviorEvent("shell_spawn_requested", shells, profile, reason, spawnInfo)
-    let p = startProcess(
-      profile.launch[0],
-      args = profile.launch.commandArgs(),
-      env = env,
-      options = InheritedProcessOptions,
-    )
+    let p =
+      if runner.ownerPid > 0:
+        # Keep using the running manager's executable across a live binary replacement.
+        let launcher = when defined(linux): "/proc/self/exe" else: getAppFilename()
+        startProcess(
+          launcher,
+          args = @["run-managed-shell", $runner.ownerPid] & profile.launch,
+          env = env,
+          options = InheritedProcessOptions,
+        )
+      else:
+        startProcess(
+          profile.launch[0], args = profile.launch.commandArgs(),
+          env = env, options = InheritedProcessOptions,
+        )
     if runner.pendingLaunchActive:
       let nowMs = currentRuntimeMs()
       var stale = initTrackedChild(runner.pendingLaunch.process, nowMs, 250'i64)

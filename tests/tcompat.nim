@@ -2030,6 +2030,22 @@ suite "injectable shell lifecycle":
     runner.advanceShellLifecycle(model, "niri.sock", 300'i64)
     check runner.trackedProcess == nil
 
+  test "shell manager shutdown cancels a launch that is still pending":
+    var runner = ShellRunner()
+    let model = singleShellModel(@["fake-shell", "launch"], @[])
+    let handle = newFakeProcessHandle(1004)
+    runner.queueFakeShellLaunch(
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
+      nowMs = 0'i64,
+    )
+
+    runner.stopShellsForShutdown()
+
+    check not runner.pendingLaunchActive
+    check runner.terminatingShells.len == 1
+    check runner.terminatingShells[0].process == handle
+    check runner.trackedProcess == nil
+
   test "recovery poll leaves a pending final launch for lifecycle advance":
     var runner = ShellRunner()
     let model = singleShellModel(@["fake-shell", "launch"], @[])
