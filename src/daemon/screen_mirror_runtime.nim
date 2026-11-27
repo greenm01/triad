@@ -208,7 +208,7 @@ proc shutdownScreenMirrors*(daemon: var TriadDaemon, reason: string) =
         var runtime = daemon.screenMirrors[targetOutput]
         if runtime.hasChild and runtime.child.process != nil:
           try:
-            runtime.child.process.kill()
+            runtime.child.process.killProcess()
             discard runtime.child.process.waitForExit(250)
           except CatchableError:
             discard

@@ -1892,6 +1892,40 @@ suite "injectable shell lifecycle":
     check runner.recoveryPending
     check not runner.pendingLaunchActive
 
+  test "failed immediate restart keeps bounded recovery":
+    let tmp = getTempDir() / ("triad-shell-restart-recovery-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let launcher = tmp / "fake-shell"
+    let model = singleShellModel(@[launcher], @[])
+    var runner = ShellRunner()
+    let handle = newFakeProcessHandle(1005)
+    handle.setFakeExitCode(7)
+    runner.queueFakeShellLaunch(
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
+      nowMs = 0'i64, retryAllowed = true,
+    )
+    runner.recoveryAttempts = 2
+
+    runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
+    check not runner.pendingLaunchActive
+    check runner.recoveryPending
+    check runner.recoveryAttempts == 2
+    check runner.nextRecoveryMs > 1'i64
+
+    writeFile(launcher, "#!/bin/sh\nexec /bin/sleep 2\n")
+    setFilePermissions(launcher, {fpUserRead, fpUserWrite, fpUserExec})
+    runner.nextRecoveryMs = 0
+    check runner.pollShellRecovery(model, "niri.sock", 0)
+    runner.settleShellLifecycle(model, "niri.sock")
+    check runner.trackedShellRunning()
+    runner.stopTrackedShell("test cleanup")
+
   test "stopping a profile cancels its pending launch":
     var runner = ShellRunner()
     let model = singleShellModel(@["fake-shell", "launch"], @[])

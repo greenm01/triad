@@ -50,3 +50,8 @@ proc closeProcessHandle*(handle: ProcessHandle) =
   if handle == nil or handle.fake or handle.process == nil:
     return
   handle.process.close()
+
+proc waitForExit*(handle: ProcessHandle, timeoutMs = -1): int =
+  if handle == nil or handle.fake or handle.process == nil:
+    return -1
+  handle.process.waitForExit(timeoutMs)

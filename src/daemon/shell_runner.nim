@@ -234,6 +234,7 @@ proc scheduleShellRecovery*(
     reason: string,
     status: ShellSpawnStatus,
     nowMs = currentUnixMs(),
+    preserveAttempts = false,
 ) =
   let active = model.activeShellProfile()
   if active.profile.isNone:
@@ -241,7 +242,8 @@ proc scheduleShellRecovery*(
     return
 
   runner.recoveryPending = true
-  runner.recoveryAttempts = 0
+  if not preserveAttempts:
+    runner.recoveryAttempts = 0
   runner.nextRecoveryMs = nowMs + runner.recoveryAttempts.recoveryDelayMs()
   runner.recoveryReason = reason
   writeShellBehaviorEvent(
@@ -555,7 +557,7 @@ proc advanceShellLifecycle*(
         launch.reason & " stale instance",
         stopTracked = false,
       )
-      discard runner.spawnShellProfile(
+      let restartStatus = runner.spawnShellProfile(
         model,
         launch.shells,
         launch.profile,
@@ -563,16 +565,22 @@ proc advanceShellLifecycle*(
         launch.reason & " restart",
         retryAllowed = false,
       )
+      if not restartStatus.succeeded():
+        runner.scheduleShellRecovery(
+          model,
+          launch.reason & " restart",
+          restartStatus,
+          nowMs,
+          preserveAttempts = true,
+        )
     else:
-      let attemptsBefore = runner.recoveryAttempts
       runner.scheduleShellRecovery(
         model,
         launch.reason & " restart",
         if code == 0: ShellSpawnStatus.Handoff else: ShellSpawnStatus.Failed,
         nowMs,
+        preserveAttempts = true,
       )
-      runner.recoveryAttempts = attemptsBefore
-      runner.nextRecoveryMs = nowMs + attemptsBefore.recoveryDelayMs()
   elif nowMs - launch.startedAtMs >= 250'i64:
     runner.pendingLaunchActive = false
     runner.trackedProcess = launch.process
