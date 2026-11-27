@@ -3,7 +3,9 @@ import
     asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
     strtabs, strutils, tables, times, unittest,
   ]
-from posix import TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, getpgrp, pipe, read, write
+from posix import
+  TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe,
+  read, write
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
@@ -422,6 +424,34 @@ suite "Crash hardening":
     sleep(50)
     daemon.syncScreenMirrors()
     check daemon.screenMirrors.len == 0
+
+  test "screen mirror shutdown reaps TERM-ignoring child":
+    let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
+    let tempDir = getTempDir() / ("triad-mirror-shutdown-" & $getCurrentProcessId())
+    let fakeMirror = tempDir / "triad_mirror"
+    createDir(tempDir)
+    writeFile(fakeMirror, "#!/bin/sh\ntrap '' TERM\nexec /bin/sleep 30\n")
+    setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
+    putEnv("TRIAD_MIRROR_BIN", fakeMirror)
+
+    var daemon = mirrorTestDaemon()
+    defer:
+      daemon.stopScreenMirrors("test cleanup")
+      putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(fakeMirror)
+      removeDir(tempDir)
+
+    daemon.syncScreenMirrors()
+    check daemon.screenMirrors.len == 1
+    var mirrorPid = 0
+    for runtime in daemon.screenMirrors.values:
+      check runtime.hasChild
+      mirrorPid = runtime.child.process.processID
+    check mirrorPid > 0
+
+    daemon.shutdownScreenMirrors("test shutdown")
+    check daemon.screenMirrors.len == 0
+    check kill(Pid(mirrorPid), 0) == -1
 
   test "screenshot helper timeout returns after child reap":
     let result = waitFor(

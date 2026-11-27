@@ -1385,6 +1385,7 @@ proc main*(): int =
       daemon.pollSwitchEventDevices()
     daemon.maybeWriteRuntimeLoopSample(unixMs())
 
+  daemon.shutdownScreenMirrors("daemon shutdown")
   daemon.closeSwitchEventDevices()
   daemon.janetRuntime.close()
   exitStatus

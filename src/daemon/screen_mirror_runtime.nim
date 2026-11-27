@@ -165,3 +165,54 @@ proc stopScreenMirrors*(daemon: var TriadDaemon, reason: string) =
     var runtime = daemon.screenMirrors[targetOutput]
     runtime.stopMirror(reason)
     daemon.screenMirrors[targetOutput] = runtime
+
+proc shutdownScreenMirrors*(daemon: var TriadDaemon, reason: string) =
+  if daemon.screenMirrors.len == 0:
+    return
+
+  var targets: seq[OutputId] = @[]
+  for targetOutput in daemon.screenMirrors.keys:
+    targets.add(targetOutput)
+  for targetOutput in targets:
+    var runtime = daemon.screenMirrors[targetOutput]
+    runtime.stopMirror(reason)
+    daemon.screenMirrors[targetOutput] = runtime
+
+  let deadlineMs = unixMs() + 750'i64
+  while daemon.screenMirrors.len > 0:
+    let nowMs = unixMs()
+    for targetOutput in targets:
+      if not daemon.screenMirrors.hasKey(targetOutput):
+        continue
+      var runtime = daemon.screenMirrors[targetOutput]
+      if not runtime.hasChild:
+        daemon.screenMirrors.del(targetOutput)
+        continue
+      if runtime.child.advanceTrackedChild(nowMs, 250'i64):
+        info "Stopped screen mirror",
+          pid = runtime.child.process.processID,
+          target = runtime.targetName,
+          reason = runtime.stopReason,
+          exitCode = runtime.child.exitCode
+        runtime.closeMirrorChild()
+        daemon.screenMirrors.del(targetOutput)
+      else:
+        daemon.screenMirrors[targetOutput] = runtime
+
+    if daemon.screenMirrors.len == 0:
+      break
+    if nowMs >= deadlineMs:
+      for targetOutput in targets:
+        if not daemon.screenMirrors.hasKey(targetOutput):
+          continue
+        var runtime = daemon.screenMirrors[targetOutput]
+        if runtime.hasChild and runtime.child.process != nil:
+          try:
+            runtime.child.process.kill()
+            discard runtime.child.process.waitForExit(250)
+          except CatchableError:
+            discard
+          runtime.closeMirrorChild()
+        daemon.screenMirrors.del(targetOutput)
+      break
+    sleep(10)
