@@ -1,7 +1,7 @@
 import
   std/[
     asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
-    strtabs, strutils, tables, times, unittest,
+    strtabs, strutils, tables, tempfiles, times, unittest,
   ]
 from posix import
   TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe,
@@ -427,10 +427,10 @@ suite "Crash hardening":
 
   test "screen mirror shutdown reaps TERM-ignoring child":
     let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
-    let tempDir = getTempDir() / ("triad-mirror-shutdown-" & $getCurrentProcessId())
+    let tempDir = createTempDir("triad-mirror-shutdown-", "")
     let fakeMirror = tempDir / "triad_mirror"
-    createDir(tempDir)
-    writeFile(fakeMirror, "#!/bin/sh\ntrap '' TERM\nexec /bin/sleep 30\n")
+    let ready = fakeMirror & ".ready"
+    writeFile(fakeMirror, "#!/bin/sh\ntrap '' TERM\n: > \"$0.ready\"\nexec /bin/sleep 30\n")
     setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
     putEnv("TRIAD_MIRROR_BIN", fakeMirror)
 
@@ -438,6 +438,7 @@ suite "Crash hardening":
     defer:
       daemon.stopScreenMirrors("test cleanup")
       putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(ready)
       removeFile(fakeMirror)
       removeDir(tempDir)
 
@@ -449,6 +450,11 @@ suite "Crash hardening":
       mirrorPid = runtime.child.process.processID
     check mirrorPid > 0
 
+    for _ in 0 ..< 200:
+      if fileExists(ready):
+        break
+      sleep(5)
+    require fileExists(ready)
     daemon.shutdownScreenMirrors("test shutdown")
     check daemon.screenMirrors.len == 0
     check kill(Pid(mirrorPid), 0) == -1
