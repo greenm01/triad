@@ -1375,6 +1375,12 @@ proc main*(): int =
         daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
       if runtimeReadyEvents.timerReady:
         daemon.syncScreenMirrors()
+    daemon.shellRunner.advanceTerminatingShells(nowMs)
+    daemon.shellRunner.advanceReleasedShells()
+    daemon.shellRunner.advanceShellLifecycle(
+      daemon.runtimeState.model, niriSocketPath, nowMs
+    )
+    daemon.trackChildProcesses(daemon.shellRunner.takeOverlayProcesses())
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls

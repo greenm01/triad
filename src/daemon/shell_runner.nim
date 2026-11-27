@@ -1,6 +1,8 @@
 import std/[json, options, os, osproc, sequtils, strtabs, strutils, times]
 import chronicles
 import process_runner
+import process_handle
+import tracked_child
 import ../core/shell_profiles
 import ../ipc/[niri_shell_compat, socket]
 import ../types/model
@@ -22,8 +24,18 @@ type
     pid*: int
     exitCode*: int
 
+  PendingShellLaunch* = object
+    process*: ProcessHandle
+    profile*: ShellProfileConfig
+    shells*: ShellsConfig
+    spawnInfo*: JsonNode
+    niriSocketPath*: string
+    reason*: string
+    startedAtMs*: int64
+    retryAllowed*: bool
+
   ShellRunner* = object
-    trackedProcess*: Process
+    trackedProcess*: ProcessHandle
     trackedShellName*: string
     spawnPending*: bool
     recoveryPending*: bool
@@ -31,6 +43,43 @@ type
     nextRecoveryMs*: int64
     recoveryReason*: string
     exclusiveFocusSinceMs*: int64
+    terminatingShells*: seq[TrackedChild]
+    pendingLaunchActive*: bool
+    pendingLaunch*: PendingShellLaunch
+    releasedPids*: seq[int32]
+    overlayProcesses*: seq[Process]
+
+proc setTrackedProcessHandle*(
+    runner: var ShellRunner, handle: ProcessHandle, name: string
+) =
+  runner.trackedProcess = handle
+  runner.trackedShellName = name
+
+proc queueFakeShellLaunch*(
+    runner: var ShellRunner,
+    handle: ProcessHandle,
+    profile: ShellProfileConfig,
+    shells: ShellsConfig,
+    niriSocketPath: string,
+    reason: string,
+    nowMs = 0'i64,
+    retryAllowed = false,
+) =
+  runner.pendingLaunch = PendingShellLaunch(
+    process: handle,
+    profile: profile,
+    shells: shells,
+    niriSocketPath: niriSocketPath,
+    spawnInfo: nil,
+    reason: reason,
+    startedAtMs: nowMs,
+    retryAllowed: retryAllowed,
+  )
+  runner.pendingLaunchActive = true
+
+proc takeOverlayProcesses*(runner: var ShellRunner): seq[Process] =
+  result = runner.overlayProcesses
+  runner.overlayProcesses = @[]
 
 const
   MaxShellRecoveryAttempts* = 3
@@ -67,13 +116,13 @@ proc clearShellRecovery*(runner: var ShellRunner) =
 proc pollTrackedShellExit(runner: var ShellRunner): Option[ShellTrackedExit] =
   if runner.trackedProcess == nil:
     return none(ShellTrackedExit)
-  let code = runner.trackedProcess.pollProcessExitCode(0)
+  let code = runner.trackedProcess.peekExitCode()
   if code == -1:
     return none(ShellTrackedExit)
   result = some(
     ShellTrackedExit(
       shellName: runner.trackedShellName,
-      pid: runner.trackedProcess.processID,
+      pid: runner.trackedProcess.processID(),
       exitCode: code,
     )
   )
@@ -86,7 +135,7 @@ proc pollTrackedShellExit(runner: var ShellRunner): Option[ShellTrackedExit] =
     },
   )
   try:
-    runner.trackedProcess.close()
+    runner.trackedProcess.closeProcessHandle()
   except CatchableError:
     discard
   runner.trackedProcess = nil
@@ -185,6 +234,7 @@ proc scheduleShellRecovery*(
     reason: string,
     status: ShellSpawnStatus,
     nowMs = currentUnixMs(),
+    preserveAttempts = false,
 ) =
   let active = model.activeShellProfile()
   if active.profile.isNone:
@@ -192,7 +242,8 @@ proc scheduleShellRecovery*(
     return
 
   runner.recoveryPending = true
-  runner.recoveryAttempts = 0
+  if not preserveAttempts:
+    runner.recoveryAttempts = 0
   runner.nextRecoveryMs = nowMs + runner.recoveryAttempts.recoveryDelayMs()
   runner.recoveryReason = reason
   writeShellBehaviorEvent(
@@ -216,35 +267,55 @@ proc stopTrackedShell*(runner: var ShellRunner, reason: string) =
     )
     return
 
-  let pid = runner.trackedProcess.processID
+  let pid = runner.trackedProcess.processID()
   writeBehaviorEvent(
     "shell_tracked_stop_requested", %*{"reason": reason, "tracked_pid": pid}
   )
-  try:
-    runner.trackedProcess.terminate()
-    var code = runner.trackedProcess.pollProcessExitCode(250)
-    var killed = false
-    if code == -1:
-      runner.trackedProcess.kill()
-      code = runner.trackedProcess.waitForExit(250)
-      killed = true
-    info "Stopped shell", pid = pid, reason = reason
-    writeBehaviorEvent(
-      "shell_tracked_stop_completed",
-      %*{"reason": reason, "tracked_pid": pid, "exit_code": code, "killed": killed},
-    )
-  except CatchableError as e:
-    warn "Failed to stop shell", pid = pid, reason = reason, error = e.msg
-    writeBehaviorEvent(
-      "shell_tracked_stop_failed",
-      %*{"reason": reason, "tracked_pid": pid, "error": e.msg},
-    )
-
-  try:
-    runner.trackedProcess.close()
-  except CatchableError:
-    discard
+  let nowMs = currentUnixMs()
+  var child = initTrackedChild(runner.trackedProcess, nowMs, 250'i64)
+  child.beginTermination(nowMs, 250'i64)
+  runner.terminatingShells.add(child)
   runner.trackedProcess = nil
+  runner.trackedShellName = ""
+
+proc advanceTerminatingShells*(runner: var ShellRunner, nowMs = currentUnixMs()) =
+  var index = runner.terminatingShells.high
+  while index >= 0:
+    var child = runner.terminatingShells[index]
+    if child.advanceTrackedChild(nowMs, 250'i64):
+      let pid = child.process.processID()
+      info "Stopped shell", pid = pid, reason = "tracked shell"
+      writeBehaviorEvent(
+        "shell_tracked_stop_completed",
+        %*{
+          "reason": "tracked shell",
+          "tracked_pid": pid,
+          "exit_code": child.exitCode,
+          "killed": child.killSent,
+        },
+      )
+      child.process.closeProcessHandle()
+      runner.terminatingShells.delete(index)
+    else:
+      runner.terminatingShells[index] = child
+    dec index
+
+proc cancelPendingLaunch(runner: var ShellRunner, profile: ShellProfileConfig, reason: string) =
+  if not runner.pendingLaunchActive or runner.pendingLaunch.profile.name != profile.name:
+    return
+  let launch = runner.pendingLaunch
+  let nowMs = currentUnixMs()
+  var child = initTrackedChild(launch.process, nowMs, 250'i64)
+  child.beginTermination(nowMs, 250'i64)
+  runner.terminatingShells.add(child)
+  runner.pendingLaunchActive = false
+  writeShellBehaviorEvent(
+    "shell_pending_launch_cancelled",
+    launch.shells,
+    profile,
+    reason,
+    %*{"child_pid": launch.process.processID()},
+  )
 
 proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
   runner.exclusiveFocusSinceMs = 0
@@ -252,9 +323,9 @@ proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
     writeBehaviorEvent("shell_release_skipped", %*{"reason": reason, "tracked": false})
     return
 
-  let pid = runner.trackedProcess.processID
+  let pid = runner.trackedProcess.processID()
   try:
-    runner.trackedProcess.close()
+    runner.trackedProcess.closeProcessHandle()
     info "Released shell for manager handoff", pid = pid, reason = reason
     writeBehaviorEvent("shell_released", %*{"reason": reason, "tracked_pid": pid})
   except CatchableError as e:
@@ -264,7 +335,18 @@ proc releaseTrackedShell*(runner: var ShellRunner, reason: string) =
       "shell_release_failed", %*{"reason": reason, "tracked_pid": pid, "error": e.msg}
     )
   runner.trackedProcess = nil
+  runner.releasedPids.add(int32(pid))
   runner.trackedShellName = ""
+
+
+proc advanceReleasedShells*(runner: var ShellRunner) =
+  var index = 0
+  while index < runner.releasedPids.len:
+    if reapReleasedPid(runner.releasedPids[index]):
+      runner.releasedPids.delete(index)
+    else:
+      inc index
+
 
 proc stopShellProfile(
     runner: var ShellRunner,
@@ -282,6 +364,7 @@ proc stopShellProfile(
     %*{"tracked_profile": runner.trackedShellName},
   )
 
+  runner.cancelPendingLaunch(profile, reason)
   if profile.stop.len > 0:
     if not profile.stop[0].commandAvailable():
       warn "Shell stop command is not available",
@@ -345,6 +428,7 @@ proc spawnShellProfile(
     profile: ShellProfileConfig,
     niriSocketPath: string,
     reason: string,
+    retryAllowed = true,
 ): ShellSpawnStatus =
   if not shells.enabled or profile.launch.len == 0:
     writeShellBehaviorEvent("shell_spawn_skipped", shells, profile, reason)
@@ -371,6 +455,7 @@ proc spawnShellProfile(
     let env =
       if profile.niriCompat:
         compat = prepareNiriShellCompatEnv(niriSocketPath, baseEnv = baseEnv)
+        runner.overlayProcesses.add(compat.pendingProcesses)
         spawnInfo = shellCompatBehaviorPayload(profile, niriSocketPath, compat)
         let niriSocketAccepting = niriCompatSocketReady(compat.niriSocketPath)
         spawnInfo["niri_socket_accepting"] = %niriSocketAccepting
@@ -396,21 +481,23 @@ proc spawnShellProfile(
       env = env,
       options = InheritedProcessOptions,
     )
-    let childPid = p.processID
-    runner.trackedProcess = p
-    runner.trackedShellName = profile.name
-    info "Spawned shell",
-      profile = profile.name,
-      command = profile.launch[0],
-      pid = childPid,
-      niriCompat = profile.niriCompat
-    writeShellBehaviorEvent(
-      "shell_spawned",
-      shells,
-      profile,
-      reason,
-      spawnInfo.shellSpawnEventPayload(childPid = childPid),
+    if runner.pendingLaunchActive:
+      let nowMs = currentUnixMs()
+      var stale = initTrackedChild(runner.pendingLaunch.process, nowMs, 250'i64)
+      stale.beginTermination(nowMs, 250'i64)
+      runner.terminatingShells.add(stale)
+      runner.pendingLaunchActive = false
+    runner.pendingLaunch = PendingShellLaunch(
+      process: newProcessHandle(p),
+      profile: profile,
+      shells: shells,
+      niriSocketPath: niriSocketPath,
+      reason: reason,
+      spawnInfo: spawnInfo,
+      startedAtMs: currentUnixMs(),
+      retryAllowed: retryAllowed,
     )
+    runner.pendingLaunchActive = true
     result = ShellSpawnStatus.Running
   except CatchableError as e:
     warn "Failed to spawn shell",
@@ -424,6 +511,86 @@ proc spawnShellProfile(
       profile,
       reason,
       spawnInfo.shellSpawnEventPayload(error = e.msg),
+    )
+
+proc advanceShellLifecycle*(
+    runner: var ShellRunner,
+    model: Model,
+    niriSocketPath: string,
+    nowMs = currentUnixMs(),
+) =
+  if not runner.pendingLaunchActive:
+    return
+
+  let launch = runner.pendingLaunch
+  let code = launch.process.peekExitCode()
+  if code != -1:
+    runner.pendingLaunchActive = false
+    let eventName =
+      if code == 0: "shell_spawn_handoff" else: "shell_spawn_exited"
+    writeShellBehaviorEvent(
+      eventName,
+      launch.shells,
+      launch.profile,
+      launch.reason,
+      shellSpawnEventPayload(
+        launch.spawnInfo, childPid = launch.process.processID(), exitCode = some(code)
+      ),
+    )
+    launch.process.closeProcessHandle()
+    if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
+      if runner.recoveryPending and code != 0:
+        writeShellBehaviorEvent(
+          "shell_recovery_exhausted",
+          launch.shells,
+          launch.profile,
+          runner.recoveryReason,
+          %*{"attempts": runner.recoveryAttempts},
+        )
+      runner.clearShellRecovery()
+      return
+    if launch.retryAllowed:
+      runner.stopShellProfile(
+        model,
+        launch.shells,
+        launch.profile,
+        launch.reason & " stale instance",
+        stopTracked = false,
+      )
+      let restartStatus = runner.spawnShellProfile(
+        model,
+        launch.shells,
+        launch.profile,
+        launch.niriSocketPath,
+        launch.reason & " restart",
+        retryAllowed = false,
+      )
+      if not restartStatus.succeeded():
+        runner.scheduleShellRecovery(
+          model,
+          launch.reason & " restart",
+          restartStatus,
+          nowMs,
+          preserveAttempts = true,
+        )
+    else:
+      runner.scheduleShellRecovery(
+        model,
+        launch.reason & " restart",
+        if code == 0: ShellSpawnStatus.Handoff else: ShellSpawnStatus.Failed,
+        nowMs,
+        preserveAttempts = true,
+      )
+  elif nowMs - launch.startedAtMs >= 250'i64:
+    runner.pendingLaunchActive = false
+    runner.trackedProcess = launch.process
+    runner.trackedShellName = launch.profile.name
+    writeShellBehaviorEvent(
+      "shell_spawned",
+      launch.shells,
+      launch.profile,
+      launch.reason,
+      shellSpawnEventPayload(launch.spawnInfo, childPid = launch.process.processID()),
     )
 
 proc activeShellProfile(
@@ -558,6 +725,8 @@ proc pollShellRecovery*(
   if active.profile.isNone:
     runner.clearShellRecovery()
     return false
+  if runner.pendingLaunchActive:
+    return false
   if runner.trackedShellRunning():
     if runner.recoveryPending:
       writeShellBehaviorEvent(
@@ -598,27 +767,6 @@ proc pollShellRecovery*(
     model, active.shells, active.profile.get(), niriSocketPath, attemptReason
   )
   result = true
-  if status.succeeded():
-    writeShellBehaviorEvent(
-      "shell_recovery_succeeded",
-      active.shells,
-      active.profile.get(),
-      runner.recoveryReason,
-      %*{"attempt": runner.recoveryAttempts, "status": $status},
-    )
-    runner.clearShellRecovery()
-    return
-
-  if runner.recoveryAttempts >= MaxShellRecoveryAttempts:
-    writeShellBehaviorEvent(
-      "shell_recovery_exhausted",
-      active.shells,
-      active.profile.get(),
-      runner.recoveryReason,
-      %*{"attempts": runner.recoveryAttempts, "status": $status},
-    )
-    runner.clearShellRecovery()
-    return
 
   let delayMs = runner.recoveryAttempts.recoveryDelayMs()
   runner.nextRecoveryMs = nowMs + delayMs
