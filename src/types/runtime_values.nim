@@ -1,3 +1,5 @@
+import std/options
+import ipc_commands
 import core
 
 type
@@ -617,8 +619,10 @@ type
 
   KeyBindingConfig* = object
     key*: string
+    keySym*: uint32
     modifiers*: uint32
     command*: string
+    commandId*: Option[CommandId]
     mode*: BindingMode
     layoutScope*: string
     hasLayoutOverride*: bool

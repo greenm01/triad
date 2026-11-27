@@ -201,17 +201,12 @@ proc argShapeUsage*(shape: CommandArgShape): string =
   of CommandArgShape.KeyboardLayoutTarget:
     "[next|prev|index]"
 
-proc aliasesSeq*(spec: CommandSpec): seq[string] =
-  if spec.aliases.len == 0:
-    return @[]
-  spec.aliases.split('|')
-
-proc commandUsage*(spec: CommandSpec): string =
-  let args = spec.argShape.argShapeUsage()
+proc commandUsage*(id: CommandId): string =
+  let args = commandArgShape(id).argShapeUsage()
   if args.len == 0:
-    spec.name
+    commandName(id)
   else:
-    spec.name & " " & args
+    commandName(id) & " " & args
 
 proc specialCommand*(name: string): Option[SpecialMsgCommand] =
   for command in SpecialMsgCommands:
@@ -219,23 +214,23 @@ proc specialCommand*(name: string): Option[SpecialMsgCommand] =
       return some(command)
   none(SpecialMsgCommand)
 
-proc commandSpecJson*(spec: CommandSpec): JsonNode =
+proc commandSpecJson*(id: CommandId): JsonNode =
   result =
     %*{
-      "name": spec.name,
-      "usage": spec.commandUsage(),
-      "arg_shape": spec.argShape.argShapeId(),
+      "name": commandName(id),
+      "usage": commandUsage(id),
+      "arg_shape": commandArgShape(id).argShapeId(),
     }
   let aliases = newJArray()
-  for alias in spec.aliasesSeq():
+  for alias in commandAliases(id):
     aliases.add(%alias)
   result["aliases"] = aliases
 
 proc commandCatalogJson*(): JsonNode =
   result = %*{"version": 1}
   let commands = newJArray()
-  for spec in CommandSpecs:
-    commands.add(spec.commandSpecJson())
+  for id in CommandId:
+    commands.add(commandSpecJson(id))
   result["commands"] = commands
   let special = newJArray()
   for command in SpecialMsgCommands:
@@ -248,10 +243,12 @@ proc commandCatalogJson*(): JsonNode =
 
 proc renderCommandList*(): string =
   result = "Triad msg commands:\n"
-  for spec in CommandSpecs:
+  for id in CommandId:
     result.add("  ")
-    result.add(spec.commandUsage())
-    let aliases = spec.aliasesSeq()
+    result.add(commandUsage(id))
+    var aliases: seq[string] = @[]
+    for alias in commandAliases(id):
+      aliases.add(alias)
     if aliases.len > 0:
       result.add("  (aliases: " & aliases.join(", ") & ")")
     result.add("\n")
@@ -263,18 +260,24 @@ proc renderCommandList*(): string =
 
 proc renderMsgHelp*(name = ""): string =
   if name.len > 0:
-    let spec = resolveCommandSpec(name)
-    if spec.isSome:
-      result = "Usage: triad msg " & spec.get().commandUsage() & "\n"
-      let aliases = spec.get().aliasesSeq()
+    let resolved = resolveCommandId(name)
+    if resolved.isSome:
+      let commandId = resolved.unsafeGet()
+      result = "Usage: triad msg " & commandUsage(commandId) & "\n"
+      var aliases: seq[string] = @[]
+      for alias in commandAliases(commandId):
+        aliases.add(alias)
       if aliases.len > 0:
         result.add("Aliases: " & aliases.join(", ") & "\n")
-      result.add("Argument shape: " & spec.get().argShape.argShapeId() & "\n")
+      result.add(
+        "Argument shape: " & commandArgShape(commandId).argShapeId() & "\n"
+      )
       return
     let special = specialCommand(name)
     if special.isSome:
-      result = "Usage: " & special.get().usage & "\n"
-      result.add(special.get().description & "\n")
+      let specialInfo = special.unsafeGet()
+      result = "Usage: " & specialInfo.usage & "\n"
+      result.add(specialInfo.description & "\n")
       return
     return "Unknown triad msg command: " & name & "\n"
 

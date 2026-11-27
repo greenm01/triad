@@ -24,13 +24,19 @@ proc activeLayoutBindingId*(model: Model): string =
   else:
     ""
 
+proc resolvedKeySym*(binding: KeyBindingConfig): uint32 =
+  if binding.keySym != 0'u32:
+    binding.keySym
+  else:
+    keySymForBinding(binding.key, binding.modifiers)
+
 proc samePhysicalKeySlot*(a, b: KeyBindingConfig): bool =
   if a.modifiers != b.modifiers:
     return false
 
-  let aSym = keySymForBinding(a.key, a.modifiers)
-  let bSym = keySymForBinding(b.key, b.modifiers)
-  if aSym != 0 and bSym != 0:
+  let aSym = a.resolvedKeySym()
+  let bSym = b.resolvedKeySym()
+  if aSym != 0'u32 and bSym != 0'u32:
     aSym == bSym
   else:
     a.key.toLowerAscii() == b.key.toLowerAscii()

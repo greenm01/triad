@@ -1,22 +1,53 @@
 import std/[options, strutils]
 import ../types/ipc_commands
+import ../types/runtime_values
 
 export ipc_commands
 
-proc aliasMatches(aliases, action: string): bool =
-  if aliases.len == 0:
-    return false
-  ("|" & aliases & "|").contains("|" & action & "|")
+type CommandView* = object
+  id*: CommandId
+  name*: string
+  argShape*: CommandArgShape
 
-proc resolveCommandSpec*(action: string): Option[CommandSpec] =
-  for spec in CommandSpecs:
-    if action == spec.name or spec.aliases.aliasMatches(action):
-      return some(spec)
-  none(CommandSpec)
+proc resolveCommandId*(text: string): Option[CommandId] =
+  for row in CommandSpellings:
+    if text == row.text:
+      return some row.id
+  none CommandId
+
+proc resolveCommandLine*(text: string): Option[CommandId] =
+  let parts = text.strip().splitWhitespace()
+  if parts.len == 0:
+    return none CommandId
+  resolveCommandId(parts[0])
+
+proc resolvedCommandId*(binding: KeyBindingConfig): Option[CommandId] =
+  if binding.commandId.isSome:
+    binding.commandId
+  else:
+    resolveCommandLine(binding.command)
+
+proc commandName*(id: CommandId): string =
+  for row in CommandSpellings:
+    if row.canonical and row.id == id:
+      return row.text
+  ""
+
+proc commandArgShape*(id: CommandId): CommandArgShape =
+  CommandMetas[id].argShape
+
+iterator commandAliases*(id: CommandId): string =
+  for row in CommandSpellings:
+    if not row.canonical and row.id == id:
+      yield row.text
+
+proc commandSpec*(id: CommandId): CommandView =
+  CommandView(id: id, name: commandName(id), argShape: commandArgShape(id))
+
+proc aliasesFor*(spec: CommandView): seq[string] =
+  for alias in commandAliases(spec.id):
+    result.add(alias)
 
 proc allCommandNames*(): seq[string] =
-  for spec in CommandSpecs:
-    result.add(spec.name)
-    if spec.aliases.len > 0:
-      for alias in spec.aliases.split('|'):
-        result.add(alias)
+  for row in CommandSpellings:
+    result.add(row.text)
