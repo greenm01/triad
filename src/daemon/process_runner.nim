@@ -53,7 +53,7 @@ proc spawnStartupCommands*(model: Model): seq[Process] =
     if cmd.len > 0:
       try:
         let p = startProcess(
-          cmd[0], args = cmd.commandArgs(), env = env, options = InheritedProcessOptions
+          cmd[0], args = cmd.commandArgs(), env = env, options = DetachedProcessOptions
         )
         info "Spawned startup command", cmd = cmd[0], pid = p.processID
         result.add(p)
@@ -70,7 +70,7 @@ proc spawnScreenLock*(model: Model, command: seq[string]): Process =
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = InheritedProcessOptions,
+      options = DetachedProcessOptions,
     )
     info "Spawned screen lock", cmd = command[0], pid = p.processID
     result = p
@@ -89,7 +89,7 @@ proc spawnWindowMenu*(
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = InheritedProcessOptions,
+      options = DetachedProcessOptions,
     )
     info "Spawned window menu",
       cmd = command[0], pid = p.processID, windowId = windowId, x = x, y = y
@@ -109,7 +109,7 @@ proc spawnConfigNotification*(
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = InheritedProcessOptions,
+      options = DetachedProcessOptions,
     )
     info "Spawned config notification",
       event = $event, cmd = command[0], pid = p.processID
@@ -170,7 +170,7 @@ proc spawnCaptureSessionHook*(
       command[0],
       args = command.commandArgs(),
       env = model.captureSessionHookEnv(event, captureSessions),
-      options = InheritedProcessOptions,
+      options = DetachedProcessOptions,
     )
     info "Spawned capture-session hook",
       event = $event, cmd = command[0], pid = p.processID
@@ -189,7 +189,7 @@ proc spawnTerminal*(model: Model): Process =
         command[0],
         args = command.commandArgs(),
         env = env,
-        options = InheritedProcessOptions,
+        options = DetachedProcessOptions,
       )
       info "Spawned terminal", terminal = command[0], pid = p.processID
       return p
@@ -209,7 +209,7 @@ proc spawnCommand*(model: Model, command: seq[string]): Process =
       command[0],
       args = command.commandArgs(),
       env = model.configuredProcessEnv(),
-      options = InheritedProcessOptions,
+      options = DetachedProcessOptions,
     )
     info "Spawned command", cmd = command[0], pid = p.processID
     result = p

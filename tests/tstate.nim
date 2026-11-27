@@ -5,6 +5,7 @@ import ../src/config/parser
 import
   ../src/core/[effects, layout_selection_codec, msg, native_layout_codec, restore_state]
 import ../src/daemon/hotkey_overlay_render
+import ../src/daemon/runtime_events
 import ../src/daemon/exit_session_dialog_render
 import ../src/daemon/frame_tab_bar_render
 import ../src/daemon/layout_switch_toast_render
@@ -302,7 +303,7 @@ suite "Runtime state primitives":
     var fds: seq[TPollfd]
     var marker = 'x'
     check write(pipeFds[1], addr marker, 1) == 1
-    let asyncReady = fds.waitForRuntimeEventFds(-1, int(pipeFds[0]), [], 10)
+    let asyncReady = fds.waitForRuntimeEventFds(-1, int(pipeFds[0]), [], -1, -1, 10)
     check asyncReady.asyncReady
     check not asyncReady.waylandReady
     check not asyncReady.switchReady
@@ -310,10 +311,21 @@ suite "Runtime state primitives":
     var drained: char
     discard read(pipeFds[0], addr drained, 1)
     check write(pipeFds[1], addr marker, 1) == 1
-    let switchReady = fds.waitForRuntimeEventFds(-1, -1, [int32(pipeFds[0])], 10)
+    let switchReady = fds.waitForRuntimeEventFds(-1, -1, [int32(pipeFds[0])], -1, -1, 10)
     check switchReady.switchReady
     check not switchReady.asyncReady
     check not switchReady.waylandReady
+
+  test "signal and timer descriptors do not count as switch descriptors":
+    var source = openRuntimeEventSource()
+    defer:
+      closeRuntimeEventSource(source)
+    check source.setTimer(10'i64)
+    var fds: seq[TPollfd]
+    let ready = fds.waitForRuntimeEventFds(
+      -1, -1, [], source.fd(), source.timerFd(), 1000
+    )
+    check (ready.runtimeReady or ready.timerReady) and not ready.switchReady
 
   test "types modules stay data-only":
     for path in typeFiles():

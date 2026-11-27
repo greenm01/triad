@@ -24,7 +24,7 @@ when isMainModule:
     if request.stream:
       try:
         var firstLine = true
-        waitFor streamIpcRequest(
+        waitFor streamIpcRequestWithRetry(
           path,
           request.socketPayload,
           proc(line: string) =
@@ -41,7 +41,7 @@ when isMainModule:
 
     var reply = ""
     try:
-      reply = waitFor sendIpcRequest(path, request.socketPayload)
+      reply = waitFor sendIpcRequestWithRetry(path, request.socketPayload)
     except CatchableError as e:
       fail("socket request failed: " & e.msg)
 

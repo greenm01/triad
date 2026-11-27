@@ -36,6 +36,8 @@ Wayland is asynchronous. To prevent tearing and race conditions, Triad uses a un
 2.  **Update:** A function that takes the current `Model` and an incoming `Msg` (Wayland event or IPC command), returning a new `Model` and side effects.
 3.  **Projection:** A layout projection takes the finalized `Model` and calculates the physical screen coordinates.
 
+4.  **Runtime Events:** Child-exit notification from `SIGCHLD` is delivered through a dedicated file descriptor and polled alongside the Wayland socket. Reaping runs on that readiness event; a low-frequency sweep remains as a fallback.
+
 ### Sequence Mapping
 River's `window-management-v1` protocol uses a double-buffered sequence. Triad maps directly to this:
 *   **Manage Sequence:** The **Update** loop processes all accumulated messages.

@@ -6,6 +6,7 @@ type ShellOverlayResult* = object
   rootPath*: string
   sharePath*: string
   ok*: bool
+  pendingProcesses*: seq[Process]
   warning*: string
 
 const GenericTerminalSvg =
@@ -67,28 +68,19 @@ proc replaceWithCopy(sourcePath, destPath: string) =
     removeFile(destPath)
   copyFile(sourcePath, destPath)
 
-proc renderSvgToPng(sourcePath, destPath: string): bool =
+proc startSvgToPng(sourcePath, destPath: string): Process =
   let rsvg = findExe("rsvg-convert")
   if rsvg.len == 0:
-    return false
-
-  let process = startProcess(
+    return nil
+  startProcess(
     rsvg,
     args = @["-w", "48", "-h", "48", "-o", destPath, sourcePath],
     options = InheritedProcessOptions,
   )
-  let code = process.waitForExit()
-  process.close()
-
-  if code != 0:
-    if fileExists(destPath) or symlinkExists(destPath):
-      removeFile(destPath)
-    return false
-
-  fileExists(destPath)
 
 proc writeResolvedIconAlias(
-    rootPath, aliasName: string, iconNames: openArray[string], fallbackSvg = ""
+    rootPath, aliasName: string, iconNames: openArray[string],
+    pending: var seq[Process], fallbackSvg = "",
 ): bool =
   if not aliasName.validIconAliasName:
     return false
@@ -104,12 +96,12 @@ proc writeResolvedIconAlias(
     if ext == ".svg":
       let pngDir = rootPath / "share" / "icons" / "hicolor" / "48x48" / "apps"
       createDir(pngDir)
-      if renderSvgToPng(source, pngDir / (aliasName & ".png")):
-        return true
-
       let destDir = rootPath / "share" / "icons" / "hicolor" / "scalable" / "apps"
       createDir(destDir)
       replaceWithCopy(source, destDir / (aliasName & ".svg"))
+      let converterProcess = startSvgToPng(source, pngDir / (aliasName & ".png"))
+      if converterProcess != nil:
+        pending.add(converterProcess)
       return true
 
   if fallbackSvg.len == 0:
@@ -120,7 +112,9 @@ proc writeResolvedIconAlias(
   writeFile(destDir / (aliasName & ".svg"), fallbackSvg)
   true
 
-proc writeTerminalIconAlias(rootPath: string, entry: DesktopEntry) =
+proc writeTerminalIconAlias(
+    rootPath: string, entry: DesktopEntry, pending: var seq[Process]
+) =
   discard writeResolvedIconAlias(
     rootPath,
     entry.shellOverlayIconName(),
@@ -129,11 +123,13 @@ proc writeTerminalIconAlias(rootPath: string, entry: DesktopEntry) =
       entry.id.stripDesktopSuffix(),
       entry.id.stripDesktopSuffix().toLowerAscii(),
     ],
+    pending,
     GenericTerminalSvg,
   )
 
 proc writeDesktopIconAlias(
-    rootPath: string, entry: DesktopEntry, seen: var Table[string, bool]
+    rootPath: string, entry: DesktopEntry, seen: var Table[string, bool],
+    pending: var seq[Process],
 ) =
   let iconName = entry.icon.strip()
   if not iconName.validIconAliasName:
@@ -151,6 +147,7 @@ proc writeDesktopIconAlias(
       entry.id.stripDesktopSuffix(),
       entry.id.stripDesktopSuffix().toLowerAscii(),
     ],
+    pending,
   )
 
 func desktopEntryText(entry: DesktopEntry): string =
@@ -221,12 +218,13 @@ proc installShellOverlay*(
     let applicationsDir = result.sharePath / "applications"
     createDir(applicationsDir)
     writeIconThemeIndex(result.rootPath)
+    var pending: seq[Process] = @[]
 
     var seenDesktopIcons = initTable[string, bool]()
     for entry in index.desktopEntries:
       if entry.sourcePath.startsWith(result.sharePath):
         continue
-      writeDesktopIconAlias(result.rootPath, entry, seenDesktopIcons)
+      writeDesktopIconAlias(result.rootPath, entry, seenDesktopIcons, pending)
 
     for entry in terminalEntries(index):
       if entry.sourcePath.startsWith(result.sharePath):
@@ -234,8 +232,9 @@ proc installShellOverlay*(
       writeFile(
         applicationsDir / entry.shellOverlayDesktopId(), desktopEntryText(entry)
       )
-      writeTerminalIconAlias(result.rootPath, entry)
+      writeTerminalIconAlias(result.rootPath, entry, pending)
 
+    result.pendingProcesses = pending
     result.ok = true
   except CatchableError as e:
     result.ok = false

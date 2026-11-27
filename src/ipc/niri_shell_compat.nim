@@ -1,4 +1,4 @@
-import std/[asyncdispatch, os, posix, strtabs, strutils]
+import std/[os, osproc, posix, strtabs, strutils]
 import shell_overlay, socket
 
 type NiriShellCompatEnv* = object
@@ -11,6 +11,7 @@ type NiriShellCompatEnv* = object
   triadNiriPath*: string
   shimReady*: bool
   overlayReady*: bool
+  pendingProcesses*: seq[Process]
   warning*: string
 
 proc shellQuote(value: string): string =
@@ -151,24 +152,8 @@ proc appendWarning(existing, warning: string): string =
     return warning
   existing & "; " & warning
 
-proc niriCompatSocketAcceptsWithin(
-    path: string, timeoutMs = 1500, pollMs = 25
-): Future[bool] {.async.} =
-  if path.len == 0:
-    return false
-  if not unixPathExists(path):
-    return false
-
-  var elapsed = 0
-  while elapsed <= timeoutMs:
-    if await unixSocketAcceptsConnections(path):
-      return true
-    await sleepAsync(pollMs)
-    elapsed += pollMs
-  false
-
-proc waitForNiriCompatSocket*(path: string, timeoutMs = 1500, pollMs = 25): bool =
-  waitFor niriCompatSocketAcceptsWithin(path, timeoutMs, pollMs)
+proc niriCompatSocketReady*(path: string): bool =
+  path.len > 0 and unixPathIsSocket(path)
 
 proc installNiriShim(
     compatBinPath, triadNiriPath: string
@@ -247,6 +232,7 @@ proc prepareNiriShellCompatEnv*(
   result.overlayReady = overlay.ok
   result.xdgOverlayPath = overlay.rootPath
   result.xdgSharePath = overlay.sharePath
+  result.pendingProcesses = overlay.pendingProcesses
   result.warning = result.warning.appendWarning(overlay.warning)
 
   if result.shimReady:

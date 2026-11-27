@@ -16,9 +16,13 @@ proc prepareWaylandRead*(display: ptr Display): bool =
   if display == nil:
     return false
 
+  var attempts = 0
   while display.prepare_read() != 0:
+    inc attempts
+    if attempts > 64:
+      return false
     let dispatched = display.dispatch_pending()
-    if dispatched == -1:
+    if dispatched in [-1'i32, 0'i32]:
       return false
   true
 

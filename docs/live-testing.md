@@ -121,6 +121,10 @@ Triad starts IPC only after River accepts the first manage pass. That makes live
 reload readiness mean restored windows have been managed and decoration policy
 has been re-applied, not just that a replacement process exists.
 
+Listener readiness is tracked without blocking the Wayland loop. Startup
+commands and the configured shell launch after `ipc_startup_listeners_ready`,
+or after the existing readiness timeout with a one-shot error event.
+
 If `river_window_manager_v1` is not advertised, Triad exits with a fatal log.
 That means it is not running in a compatible River 0.4+ session.
 
