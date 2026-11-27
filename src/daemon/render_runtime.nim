@@ -1,11 +1,11 @@
-import std/[options, tables]
+import std/[json, monotimes, options, tables, times]
 import protocols/river/client as river
 import ../core/render_visibility
 import ../state/engine
 import ../systems/[daemon_view, layout_projection, recent_windows, window_rules]
 import ../types/projection_values
 import ../types/runtime_values
-import ../utils/overview_hit_test
+import ../utils/[behavior_log, overview_hit_test]
 import
   protocol_surface_runtime, protocol_surfaces, screen_mirror_runtime, state,
   wayland_helpers
@@ -16,6 +16,8 @@ const
   RiverEdgeRight* = 8'u32
   RiverPresentationVsync = 0'u32
   RiverPresentationAsync = 1'u32
+  SlowManageRenderMs = 100
+  MaxLoggedDimensionProposals = 16
 
 template currentModel(daemon: TriadDaemon): untyped =
   daemon.runtimeState.model
@@ -260,6 +262,44 @@ proc recordDesiredPlacements*(
   for instr in instructions:
     daemon.recordDesiredPlacement(instr)
 
+proc beginManageRenderSample*(daemon: var TriadDaemon, reason: string) =
+  daemon.manageRenderSample =
+    if behaviorLogEnabled(): some(ManageRenderSample(reason: reason))
+    else: none(ManageRenderSample)
+
+proc recordManageRenderProposal*(
+    daemon: var TriadDaemon, windowId: uint32, dimensions: ProposedDimensions
+) =
+  if daemon.manageRenderSample.isSome:
+    var sample = addr daemon.manageRenderSample.get()
+    inc sample.proposalCount
+    if sample.proposals.len < MaxLoggedDimensionProposals:
+      sample.proposals.add((windowId: windowId, dimensions: dimensions))
+
+proc takeSlowManageRenderSample*(daemon: var TriadDaemon, now: MonoTime): JsonNode =
+  let pending = move(daemon.manageRenderSample)
+  if pending.isNone or pending.get().startedAt.isNone:
+    return
+  let sample = pending.get()
+  let elapsedMs = (now - sample.startedAt.get()).inMilliseconds()
+  if elapsedMs < SlowManageRenderMs:
+    return
+  var proposals = newJArray()
+  for proposal in sample.proposals:
+    proposals.add(
+      %*{
+        "window_id": proposal.windowId,
+        "width": proposal.dimensions.w,
+        "height": proposal.dimensions.h,
+      }
+    )
+  %*{
+    "elapsed_ms": elapsedMs,
+    "manage_reason": sample.reason,
+    "proposal_count": sample.proposalCount,
+    "proposals": proposals,
+  }
+
 proc proposeDesiredDimensions*(
     daemon: var TriadDaemon, instructions: seq[RenderInstruction]
 ) =
@@ -282,9 +322,9 @@ proc proposeDesiredDimensions*(
         inc daemon.perfCounters.skippedDimensionProposals
         continue
       daemon.lastProposedDimensions[instr.windowId] = next
-      daemon.windowPointers[instr.windowId].proposeDimensions(
-        max(0'i32, proposal.w), max(0'i32, proposal.h)
-      )
+      let sent = ProposedDimensions(w: max(0'i32, next.w), h: max(0'i32, next.h))
+      daemon.windowPointers[instr.windowId].proposeDimensions(sent.w, sent.h)
+      daemon.recordManageRenderProposal(instr.windowId, sent)
       inc daemon.perfCounters.dimensionProposals
 
   var staleIds: seq[uint32]

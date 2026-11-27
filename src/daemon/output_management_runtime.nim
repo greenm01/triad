@@ -1,4 +1,4 @@
-import std/[algorithm, strutils, tables]
+import std/[algorithm, sequtils, sets, strutils, tables]
 import chronicles
 import wayland/native/client
 import protocols/wlr_output_management/client as wlrOutput
@@ -54,14 +54,12 @@ proc outputTransformValue(transform: OutputConfigTransform): int32 =
 proc floatChanged(a, b: float32): bool =
   abs(a - b) > 0.0001'f32
 
+proc configuresOutputManagement(rule: OutputRuleData): bool =
+  rule.modeSet or rule.scaleSet or rule.positionSet or rule.transformSet or
+    rule.adaptiveSyncSet or rule.enabledSet
+
 proc hasOutputManagementConfig(model: Model): bool =
-  if model.outputLayoutRows.len > 0:
-    return true
-  for rule in model.outputRules:
-    if rule.modeSet or rule.scaleSet or rule.positionSet or rule.transformSet or
-        rule.adaptiveSyncSet or rule.enabledSet:
-      return true
-  false
+  model.outputLayoutRows.len > 0 or model.outputRules.anyIt(it.configuresOutputManagement())
 
 proc headMatchesTarget(head: OutputManagementHeadRuntime, target: string): bool =
   let wanted = target.strip()
@@ -95,6 +93,26 @@ proc headMatchesTarget(head: OutputManagementHeadRuntime, target: string): bool 
       return true
 
   false
+
+proc updateMissingOutputTargets*(
+    daemon: var TriadDaemon, model: Model, heads: openArray[ProposedHead]
+): seq[string] =
+  var targets: HashSet[string]
+  for row in model.outputLayoutRows:
+    for target in row.targets:
+      targets.incl(target)
+  for rule in model.outputRules:
+    if rule.target.len > 0 and rule.configuresOutputManagement():
+      targets.incl(rule.target)
+
+  var missing: seq[string]
+  for target in targets:
+    if not heads.anyIt(it.head.headMatchesTarget(target)):
+      missing.add(target)
+  missing.sort()
+  if missing != daemon.missingOutputTargets:
+    daemon.missingOutputTargets = missing
+    result = missing
 
 proc outputRuleForHead(
     model: Model, head: OutputManagementHeadRuntime
@@ -547,7 +565,6 @@ proc resolveLayoutPositions*(model: Model, heads: var seq[ProposedHead]) =
     for target in row.targets:
       let idx = heads.findLayoutHead(target, used)
       if idx < 0:
-        warn "Configured output layout target is not available", target = target
         continue
       used[idx] = true
       indices.add(idx)
@@ -680,16 +697,14 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
   if daemon.monitorPowerOffActive:
     return
   if not daemon.runtimeState.model.hasOutputManagementConfig():
+    daemon.missingOutputTargets.setLen(0)
     return
 
   var proposedHeads: seq[ProposedHead] = @[]
-  var matchedTargets: Table[string, bool]
   for headId, head in daemon.wlrOutputHeads.pairs:
     if head.finished:
       continue
     let ruleOpt = daemon.runtimeState.model.outputRuleForHead(head)
-    if ruleOpt.found and ruleOpt.rule.target.len > 0:
-      matchedTargets[ruleOpt.rule.target] = true
     let mode = daemon.selectedModeId(head, ruleOpt)
     let size = daemon.logicalHeadSize(head, ruleOpt, mode)
     let enabled =
@@ -715,6 +730,9 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
       if result == 0:
         result = cmp(a.headId, b.headId)
   )
+  let missing = daemon.updateMissingOutputTargets(daemon.runtimeState.model, proposedHeads)
+  if missing.len > 0:
+    debug "Configured output targets are absent", targets = missing
   daemon.runtimeState.model.resolveLayoutPositions(proposedHeads)
   proposedHeads.resolveAutoPositions()
 
@@ -733,13 +751,6 @@ proc applyOutputManagementConfig*(daemon: var TriadDaemon, reason: string) =
     warn "Output-management config ignored; it would disable every output",
       reason = reason
     return
-
-  for rule in daemon.runtimeState.model.outputRules:
-    if (
-      rule.modeSet or rule.scaleSet or rule.positionSet or rule.transformSet or
-      rule.adaptiveSyncSet or rule.enabledSet
-    ) and rule.target.len > 0 and not matchedTargets.getOrDefault(rule.target, false):
-      warn "Configured output target is not available", target = rule.target
 
   if not anyChange:
     daemon.wlrOutputRetryPending = false
@@ -816,6 +827,7 @@ proc onOutputManagerFinished(
   warn "Output-management manager finished"
   daemon.wlrOutputManager = nil
   daemon.wlrOutputReady = false
+  daemon.missingOutputTargets.setLen(0)
 
 proc onHeadName(data: pointer, head: ptr wlrOutput.ZwlrOutputHeadV1, name: cstring) =
   let listenerData = cast[ptr WlrOutputHeadListenerData](data)

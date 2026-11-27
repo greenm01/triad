@@ -47,7 +47,7 @@ Triad exposes its own state socket for native integrations. It can also launch s
 
 | Shell | Native IPC | Niri IPC |
 | :--- | :--- | :--- |
-| [Noctalia v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5) | Yes | Yes |
+| [Noctalia v5](https://github.com/noctalia-dev/noctalia) | [Triad fork](https://github.com/greenm01/noctalia-shell/tree/triad-native-ipc-v5) | Upstream 5.6 detects the socket. Workspace buttons use `ext-workspace-v1`. |
 | [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) | No, fork/PR pending | Yes |
 | [Waybar](https://github.com/Alexays/Waybar) | No, fork/PR pending | Yes |
 | [Wayle](https://github.com/wayle-rs/wayle) | No, fork/PR pending | Yes |

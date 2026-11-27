@@ -1,4 +1,4 @@
-import std/[asyncdispatch, json, options, osproc, tables]
+import std/[asyncdispatch, json, monotimes, options, osproc, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -178,6 +178,8 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
     info "log", msg = eff.msg
   of EffectKind.EffManageFinish:
     if daemon.riverManager != nil and daemon.riverPhase == RiverPhase.RiverManage:
+      if daemon.manageRenderSample.isSome:
+        daemon.manageRenderSample.get().startedAt = some(getMonoTime())
       daemon.riverManager.manageFinish()
       daemon.commitPendingLiveRestore()
   of EffectKind.EffRenderFinish:

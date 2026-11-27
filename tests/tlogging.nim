@@ -1,7 +1,8 @@
-import std/[asyncdispatch, json, options, os, strutils, times, unittest]
+import std/[asyncdispatch, json, monotimes, options, os, strutils, times, unittest]
 import chronicles
 import ../src/config/parser
 import ../src/core/msg
+import ../src/daemon/[render_runtime, state]
 import ../src/ipc/[niri_compat, socket]
 import ../src/session/[doctor_live, live_paths, logs as session_logs]
 import ../src/systems/[runtime_facade, update]
@@ -29,6 +30,40 @@ proc writeFakeTriad(path, body: string) =
   )
 
 suite "Runtime logging":
+  test "manage to render samples respect opt-in and the slow threshold":
+    let previous = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    defer: restoreEnv("TRIAD_BEHAVIOR_LOG", previous)
+    var daemon: TriadDaemon
+    let start = getMonoTime()
+    let slow = start + initDuration(milliseconds = 100)
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "0")
+    daemon.beginManageRenderSample("resize")
+    check daemon.manageRenderSample.isNone
+    check daemon.takeSlowManageRenderSample(slow).isNil
+
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    daemon.beginManageRenderSample("resize")
+    check daemon.takeSlowManageRenderSample(slow).isNil
+
+    daemon.beginManageRenderSample("resize")
+    daemon.manageRenderSample.get().startedAt = some(start)
+    check daemon.takeSlowManageRenderSample(start + initDuration(milliseconds = 99)).isNil
+    check daemon.takeSlowManageRenderSample(slow).isNil
+
+    daemon.beginManageRenderSample("resize")
+    daemon.manageRenderSample.get().startedAt = some(start)
+    for id in 1'u32 .. 20'u32:
+      daemon.recordManageRenderProposal(id, ProposedDimensions(w: 800, h: 600))
+    let event = daemon.takeSlowManageRenderSample(slow)
+    check event["elapsed_ms"].getInt() == 100
+    check event["manage_reason"].getStr() == "resize"
+    check event["proposal_count"].getInt() == 20
+    check event["proposals"].len == 16
+    check event["proposals"][0] == %*{"window_id": 1, "width": 800, "height": 600}
+    check event["proposals"][15]["window_id"].getInt() == 16
+    check daemon.takeSlowManageRenderSample(slow).isNil
+
   test "live doctor matches current supervisor protocol":
     check SupervisorProtocolVersion == 1
     let doctorSource = readFile("src/session/doctor_live.nim")
@@ -247,7 +282,7 @@ exit 1
     check source.count("\"runtime_loop_sample\"") == 1
     check source.contains("\"frame_tick_reason_counts\"")
     check source.contains("incrementFrameTickReasonCounts")
-    check source.contains("nowMs - lastMotion >= delay")
+    check source.contains("daemon.tickCursorVisibility()")
     check source.contains("reason != \"recent-focus\"")
     check source.contains("AnimationTickIntervalMs = int64(DefaultFrameIntervalMs)")
     check source.contains("manageReason == AnimationManageReason")

@@ -33,7 +33,7 @@ what matters for an `ext-workspace-v1` integration.
 
 | Shell or bar | Current README path | ext-workspace-v1 status | Triad note |
 | :--- | :--- | :--- | :--- |
-| [Noctalia v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5) | Native IPC and Niri IPC | Not confirmed in public docs | Keep the current path until Noctalia exposes or documents an `ext-workspace-v1` workspace source. |
+| [Noctalia v5](https://github.com/noctalia-dev/noctalia) | Native IPC in the [Triad fork](https://github.com/greenm01/noctalia-shell/tree/triad-native-ipc-v5). Upstream 5.6 detects the Niri socket. | Upstream 5.6 has an `ext-workspace-v1` backend. | Triad workspace buttons in upstream Noctalia depend on the River workspace proxy. The River v7 build tested with 5.6 did not expose it. |
 | [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) | Niri IPC; native IPC fork/PR pending | Documented for workspace integration | Good target for the standard workspace path. |
 | [Waybar](https://github.com/Alexays/Waybar) | Niri IPC; native IPC fork/PR pending | Documented through `ext/workspaces` | Best first bar target. It may require an experimental Waybar build. |
 | [Wayle](https://github.com/wayle-rs/wayle) | Niri IPC; native IPC fork/PR pending | Not confirmed in public docs | Track as a later shell target. Current public docs describe compositor-specific workspace modules. |

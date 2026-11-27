@@ -293,6 +293,31 @@ suite "Crash hardening":
         ("DP-2", 1000'i32, 500'i32), ("DP-3", 0'i32, 500'i32), ("DP-4", 1000'i32, 0'i32)
       ]
 
+  test "absent output diagnostics are deduplicated and rearmed by reconnect":
+    let model = Model(
+      outputLayoutRows: @[
+        OutputLayoutRow(targets: @["DP-2", "DP-1", "desc:Laptop panel"])
+      ],
+      outputRules: @[
+        OutputRuleData(target: "DP-1", scaleSet: true),
+        OutputRuleData(target: "workspace-only"),
+      ],
+    )
+    var daemon = initTriadDaemon()
+    var panel = proposedOutput("eDP-1", 1920, 1200)
+    panel.head.description = "Laptop panel"
+    panel.enabled = false
+
+    check daemon.updateMissingOutputTargets(model, [panel]) == @["DP-1", "DP-2"]
+    check daemon.updateMissingOutputTargets(model, [panel]).len == 0
+    check daemon.updateMissingOutputTargets(
+      model, [panel, proposedOutput("DP-1", 1920, 1080)]
+    ) == @["DP-2"]
+    check daemon.updateMissingOutputTargets(
+      model, [panel, proposedOutput("DP-1", 1920, 1080), proposedOutput("DP-2", 1920, 1080)]
+    ).len == 0
+    check daemon.updateMissingOutputTargets(model, [panel]) == @["DP-1", "DP-2"]
+
   test "output layout seeds existing auto placement for unlisted outputs":
     var model = Model(
       outputLayoutRows: @[

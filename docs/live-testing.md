@@ -102,6 +102,13 @@ projection logs are suppressed and reported on the next emitted projection with
 quiet-time managed-state compaction and emits a `memory_trim` event with before
 and after process/Nim heap counters.
 
+For render timing investigations, look for `slow_manage_to_render` events.
+Triad records intervals of at least 100 ms between sending `manage_finish` and
+receiving `render_start`. Each event includes the manage reason, the total
+number of size proposals sent, and the first 16 proposals with window IDs and
+dimensions. These windows are candidates for correlation with River's
+configure timeout messages.
+
 For an already-running session, use `triad msg dev-mode on`,
 `triad msg dev-mode off`, `triad msg dev-mode toggle`, or
 `triad msg dev-mode status`. The live `off` command disables both

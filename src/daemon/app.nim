@@ -778,6 +778,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       daemon.lastCursorPositionSampleMs = unixMs()
       let manageReason = daemon.activeManageReason
       daemon.activeManageReason = ""
+      daemon.beginManageRenderSample(manageReason)
       let animationOnlyManage =
         manageReason == AnimationManageReason and daemon.pendingManageEffects.len == 0
       let noopManage =

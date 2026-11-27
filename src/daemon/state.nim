@@ -1,4 +1,4 @@
-import std/[deques, options, osproc, sets, tables, times]
+import std/[deques, monotimes, options, osproc, sets, tables, times]
 import fsnotify
 from posix import TPollfd
 import wayland/native/client
@@ -219,6 +219,12 @@ type
     dimensionProposals*: uint64
     skippedDimensionProposals*: uint64
 
+  ManageRenderSample* = object
+    reason*: string
+    startedAt*: Option[MonoTime]
+    proposalCount*: int
+    proposals*: seq[tuple[windowId: uint32, dimensions: ProposedDimensions]]
+
   RuntimeLoopCounters* = object
     loopIterations*: uint64
     watcherPolls*: uint64
@@ -289,6 +295,7 @@ type
     wlrOutputApplyInFlight*: bool
     wlrOutputRetryPending*: bool
     wlrOutputRetryCount*: int
+    missingOutputTargets*: seq[string]
     wlrOutputHeads*: Table[uint32, OutputManagementHeadRuntime]
     wlrOutputModes*: Table[uint32, OutputManagementModeRuntime]
     wlrOutputHeadListenerData*: Table[uint32, ref WlrOutputHeadListenerData]
@@ -331,6 +338,7 @@ type
     desiredPlacementClips*: Table[uint32, Rect]
     desiredPlacementOrder*: seq[uint32]
     lastProposedDimensions*: Table[uint32, ProposedDimensions]
+    manageRenderSample*: Option[ManageRenderSample]
     currentFrameTabBars*: seq[ProjectedFrameTabBar]
     currentFrameTabBarsBySurface*: Table[uint32, ProjectedFrameTabBar]
     currentFrameEmptyChrome*: seq[ProjectedFrameEmptyChrome]

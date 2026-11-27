@@ -1,4 +1,4 @@
-import std/[options, sets, tables]
+import std/[monotimes, options, sets, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -7,10 +7,10 @@ import ../core/msg
 import ../state/[iterators, queries]
 import ../systems/window_rules
 import ../types/projection_values as projection_values
-import ../utils/process_tree
+import ../utils/[behavior_log, process_tree]
 import
   bindings_runtime, input_runtime, live_restore_runtime, manage_requests, message_queue,
-  protocol_surface_runtime, render_invalidation, river_outputs_runtime, river_windows,
+  protocol_surface_runtime, render_invalidation, render_runtime, river_outputs_runtime, river_windows,
   screen_mirror_runtime, spawn_context, state, wayland_helpers
 
 proc callbackDaemon(data: pointer, context: string): ptr TriadDaemon =
@@ -22,6 +22,7 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
   daemon.manageRequestPending = false
   daemon.manageRequestReason = ""
   daemon.activeManageReason = ""
+  daemon.manageRenderSample.reset()
 
   daemon.stopScreenMirrors("River runtime cleanup")
 
@@ -250,6 +251,10 @@ proc onRenderStart(data: pointer, mgr: ptr RiverWindowManagerV1) =
   if daemon == nil:
     return
   trace "River render start"
+  if daemon.manageRenderSample.isSome:
+    let sample = daemon[].takeSlowManageRenderSample(getMonoTime())
+    if sample != nil:
+      writeBehaviorEvent("slow_manage_to_render", sample)
   if daemon[].riverPhase == RiverPhase.RiverIdle and daemon[].canSkipRenderStart():
     inc daemon[].perfCounters.renderStarts
     inc daemon[].perfCounters.skippedRenderStarts

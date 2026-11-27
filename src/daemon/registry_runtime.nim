@@ -268,6 +268,7 @@ proc handleGlobalRemove*(data: pointer, registry: ptr Registry, name: uint32) =
     daemon.wlrOutputReady = false
     daemon.wlrOutputApplyInFlight = false
     daemon.wlrOutputRetryPending = false
+    daemon.missingOutputTargets.setLen(0)
   if daemon.wlOutputPointers.hasKey(name):
     daemon.wlOutputPointers[name].release()
     daemon.wlOutputPointers.del(name)
