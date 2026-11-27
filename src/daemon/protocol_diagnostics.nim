@@ -34,12 +34,13 @@ const UpstreamRiverHint* = "install upstream River 0.4+ or set TRIAD_RIVER_BIN"
 
 const RiverXkbBindingsModifierWatchVersion* = 3'u32
 const RiverWindowManagerCaptureSessionsVersion* = 5'u32
+const RiverKeyboardInputVersion* = 7'u32
 
 const ProtocolSpecs* = [
   ProtocolSpec(
     interfaceName: "river_window_manager_v1",
     minVersion: 4'u32,
-    maxBindVersion: 5'u32,
+    maxBindVersion: RiverKeyboardInputVersion,
     feature: "window management",
     kind: ProtocolSpecKind.Required,
   ),

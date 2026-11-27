@@ -24,6 +24,10 @@ type
     RiverManage
     RiverRender
 
+  CursorHideReason* {.pure.} = enum
+    Typing
+    Inactivity
+
   QueuedMsgOrigin* {.pure.} = enum
     Normal
     JanetHook
@@ -415,8 +419,10 @@ type
     wlSwipePointerIds*: Table[uint32, uint32]
     wlSwipeStates*: Table[uint32, WlSwipeState]
     cursorShapeDevices*: Table[uint32, ptr cursorShape.WpCursorShapeDeviceV1]
-    cursorHiddenPointers*: Table[uint32, bool]
+    cursorHiddenPointers*: Table[uint32, set[CursorHideReason]]
     cursorLastMotionMsByPointer*: Table[uint32, int64]
+    lastCursorPositionSampleMs*: int64
+    keyboardInputArmedSeats*: HashSet[uint32]
     frameTabClickSuppressWindowId*: uint32
     frameTabClickTargetWindowId*: uint32
     frameTabClickSuppressUntilMs*: int64

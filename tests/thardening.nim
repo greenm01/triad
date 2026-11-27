@@ -1,6 +1,6 @@
 import
   std/[
-    asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
+    asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils, sets,
     strtabs, strutils, tables, tempfiles, times, unittest,
   ]
 from posix import
@@ -12,16 +12,17 @@ import
   ../src/daemon/[
     bindings_runtime, capture_sessions_runtime, child_process_runtime, cursor_shake,
     effects_runtime, input_device_classification, input_runtime, live_restore_runtime,
+    manage_requests,
     memory_status, message_queue, output_management_runtime, process_runner,
-    protocol_diagnostics, reload_runtime, render_invalidation, river_windows,
-    screen_mirror_runtime, spawn_context, switch_event_runtime,
+    protocol_diagnostics, reload_runtime, render_invalidation, river_manager_runtime,
+    river_windows, screen_mirror_runtime, spawn_context, switch_event_runtime,
   ]
 import ../src/daemon/runtime_events
 import ../src/daemon/ipc_startup_runtime
 import ../src/daemon/tracked_child
 import ../src/daemon/process_handle
 from ../src/daemon/state import
-  LibinputDeviceRuntime, OutputManagementHeadRuntime, TriadDaemon,
+  CursorHideReason, LibinputDeviceRuntime, OutputManagementHeadRuntime, TriadDaemon,
   XkbKeyboardRuntime, clearOutputCaptureSessions, consumeMaximizedAck,
   expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
   setWindowCaptureSessions
@@ -1035,6 +1036,102 @@ suite "Crash hardening":
     check not CursorConfig(hideAfterInactiveMs: 0).cursorHideInactiveEnabled()
     check CursorConfig(hideAfterInactiveMs: 1).cursorHideInactiveEnabled()
 
+  test "River v7 arms keyboard input once per seat and rearms after delivery":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(cursor: CursorConfig(hideWhenTyping: true)))
+    for version in 4'u32 .. 6'u32:
+      check not daemon.armKeyboardInputForSeat(1, version)
+    check daemon.armKeyboardInputForSeat(1, 7)
+    check not daemon.armKeyboardInputForSeat(1, 7)
+    check daemon.armKeyboardInputForSeat(2, 7)
+    daemon.handleSeatKeyboardInput(1)
+    check daemon.armKeyboardInputForSeat(1, 7)
+    check not daemon.armKeyboardInputForSeat(2, 7)
+    daemon.wlPointerRiverSeats[11] = 1
+    daemon.cursorHiddenPointers[11] = {CursorHideReason.Typing}
+    daemon.forgetSeatCursor(1)
+    check 1'u32 notin daemon.keyboardInputArmedSeats
+    check 2'u32 in daemon.keyboardInputArmedSeats
+    check not daemon.cursorHiddenPointers.hasKey(11)
+    check not daemon.wlPointerRiverSeats.hasKey(11)
+    daemon.cleanupRiverObjects()
+    check daemon.keyboardInputArmedSeats.len == 0
+
+  test "keyboard input affects only the reporting seat on v7":
+    var daemon = initTriadDaemon()
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(cursor: CursorConfig(hideWhenTyping: true)))
+    daemon.wlPointerRiverSeats[11] = 1
+    daemon.wlPointerRiverSeats[22] = 2
+    daemon.cursorHiddenPointers[11] = {CursorHideReason.Inactivity}
+    daemon.cursorHiddenPointers[22] = {CursorHideReason.Inactivity}
+
+    daemon.boundProtocolVersions["river_window_manager_v1"] = 7
+    daemon.hideCursorForShortcut()
+    check daemon.cursorHiddenPointers[11] == {CursorHideReason.Inactivity}
+    daemon.handleSeatKeyboardInput(1)
+    check daemon.cursorHiddenPointers[11] ==
+      {CursorHideReason.Typing, CursorHideReason.Inactivity}
+    check daemon.cursorHiddenPointers[22] == {CursorHideReason.Inactivity}
+
+    daemon.boundProtocolVersions["river_window_manager_v1"] = 6
+    daemon.hideCursorForShortcut()
+    check daemon.cursorHiddenPointers[22] ==
+      {CursorHideReason.Typing, CursorHideReason.Inactivity}
+
+  test "typing and inactivity hide reasons survive independently":
+    var daemon = initTriadDaemon()
+    daemon.wlPointerRiverSeats[11] = 1
+    daemon.cursorLastMotionMsByPointer[11] = 10
+    daemon.cursorHiddenPointers[11] =
+      {CursorHideReason.Typing, CursorHideReason.Inactivity}
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(cursor: CursorConfig(hideWhenTyping: true)))
+    check daemon.armKeyboardInputForSeat(1, 7)
+    daemon.tickCursorVisibility(110)
+    check daemon.cursorHiddenPointers[11] == {CursorHideReason.Typing}
+    check not daemon.cursorVisibilityTickNeeded(110)
+
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(cursor: CursorConfig(hideAfterInactiveMs: 100)))
+    daemon.tickCursorVisibility(110)
+    daemon.handleSeatKeyboardInput(1)
+    check daemon.cursorHiddenPointers[11] == {CursorHideReason.Inactivity}
+    check 1'u32 notin daemon.keyboardInputArmedSeats
+    check not daemon.armKeyboardInputForSeat(1, 7)
+
+  test "River v7 window and seat listeners handle the new events":
+    check riverWindowListener.touchMoveRequested != nil
+    check riverWindowListener.touchResizeRequested != nil
+    check riverSeatListener.opDeltaTouch != nil
+    check riverSeatListener.opReleaseTouch != nil
+    check riverSeatListener.opCancelTouch != nil
+    check riverSeatListener.keyboardInput != nil
+    riverWindowListener.touchMoveRequested(nil, nil, nil, 1)
+    riverWindowListener.touchResizeRequested(nil, nil, nil, 1, 1)
+    riverSeatListener.opDeltaTouch(nil, nil, 1, 10, 10)
+    riverSeatListener.opReleaseTouch(nil, nil, 1)
+    riverSeatListener.opCancelTouch(nil, nil, 1)
+
+  test "pointer position sampling is scheduled only while a cursor is hidden":
+    var daemon = initTriadDaemon()
+    daemon.lastCursorPositionSampleMs = 1_000
+    check daemon.nextCursorPositionSampleMs() == 0
+    daemon.wlPointerRiverSeats[11] = 1
+    daemon.cursorHiddenPointers[11] = {CursorHideReason.Typing}
+    check daemon.nextCursorPositionSampleMs() == 1_100
+    daemon.forgetSeatCursor(1)
+    check daemon.nextCursorPositionSampleMs() == 0
+
+  test "pointer warp waits for a River manage sequence":
+    var daemon = initTriadDaemon()
+    daemon.executeEffect(Effect(kind: EffectKind.EffPointerWarp, warpX: 55, warpY: 65))
+    check daemon.pendingManageEffects.len == 1
+    check daemon.pendingManageEffects[0].kind == EffectKind.EffPointerWarp
+    check daemon.pendingManageEffects[0].warpX == 55
+    check daemon.pendingManageEffects[0].warpY == 65
+
   test "input pointer classification prefers explicit names and touchpad support":
     check pointerClassFor("Kensington Expert Trackball", 0, false, false) ==
       PointerDeviceClass.Trackball
@@ -1212,7 +1309,10 @@ suite "Crash hardening":
     check protocolBindVersion("river_input_manager_v1", 2'u32) == 2'u32
 
   test "Protocol binding caps advertised versions":
-    check protocolBindVersion("river_window_manager_v1", 99'u32) == 5'u32
+    check protocolBindVersion("river_window_manager_v1", 3'u32) == 0'u32
+    for version in 4'u32 .. 7'u32:
+      check protocolBindVersion("river_window_manager_v1", version) == version
+    check protocolBindVersion("river_window_manager_v1", 99'u32) == 7'u32
     check protocolBindVersion("river_xkb_bindings_v1", 99'u32) == 3'u32
     check protocolBindVersion("wl_compositor", 99'u32) == 6'u32
     check protocolBindVersion("unknown_protocol_v1", 99'u32) == 0'u32

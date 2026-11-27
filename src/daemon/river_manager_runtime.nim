@@ -1,4 +1,4 @@
-import std/[options, tables]
+import std/[options, sets, tables]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -59,6 +59,7 @@ proc cleanupRiverObjects*(daemon: var TriadDaemon) =
 
   let seats = daemon.seatPointers
   daemon.seatPointers = @[]
+  daemon.keyboardInputArmedSeats.clear()
   for seat in seats:
     seat.destroy()
   daemon.seatWlNames.clear()

@@ -34,7 +34,16 @@ suite "River protocol coverage":
     for request in KnownRiverClientRequests:
       check coverageFor(request).state == ProtocolCoverageState.pcsImplemented
     for event in ActiveRiverListenerEvents:
-      check coverageFor(event).state == ProtocolCoverageState.pcsImplemented
+      let expected =
+        if event in [
+          "river_window_v1.touch_move_requested",
+          "river_window_v1.touch_resize_requested", "river_seat_v1.op_delta_touch",
+          "river_seat_v1.op_release_touch", "river_seat_v1.op_cancel_touch",
+        ]:
+          ProtocolCoverageState.pcsUnsupported
+        else:
+          ProtocolCoverageState.pcsImplemented
+      check coverageFor(event).state == expected
 
   test "implemented hardening paths are tracked":
     check coverageFor("river_window_v1.app_id").state ==

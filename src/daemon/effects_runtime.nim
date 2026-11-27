@@ -51,6 +51,9 @@ proc setLayerShellDefaultOutputForSpawn(daemon: var TriadDaemon, outputId: Outpu
 
 proc executeManageEffect*(daemon: var TriadDaemon, eff: Effect) =
   case eff.kind
+  of EffectKind.EffPointerWarp:
+    for seat in daemon.seatPointers:
+      seat.pointerWarp(eff.warpX, eff.warpY)
   of EffectKind.EffOpStartPointer:
     if eff.opSeat != nil:
       daemon.lastPointerOpSeat = eff.opSeat
@@ -226,8 +229,7 @@ proc executeEffect*(daemon: var TriadDaemon, eff: Effect) =
       )
     daemon.trackChildProcess(process)
   of EffectKind.EffPointerWarp:
-    for seat in daemon.seatPointers:
-      seat.pointerWarp(eff.warpX, eff.warpY)
+    daemon.queueManageEffect(eff)
   of EffectKind.EffSetKeyboardLayout:
     for runtime in daemon.xkbConfigKeyboards.values:
       let keyboard = cast[ptr riverXkbConfig.RiverXkbKeyboardV1](runtime.pointer)

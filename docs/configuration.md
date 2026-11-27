@@ -231,6 +231,15 @@ input {
 }
 ```
 
+### Cursor visibility
+
+Set `cursor { hide-when-typing #true }` to hide Triad's cursor while typing.
+With River window-management protocol v7, a physical non-modifier key hides the
+cursor for that seat. With v4 through v6, Triad shortcuts trigger hiding. River
+displays Triad's cursor when no application owns pointer focus. Pointer motion
+restores it. `hide-after-inactive-ms` also hides the cursor after the configured
+period of inactivity.
+
 ## Bindings
 Triad supports keyboard, pointer, wheel, and gesture bindings.
 

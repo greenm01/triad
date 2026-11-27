@@ -161,17 +161,6 @@ proc cursorShakeTickNeeded(daemon: TriadDaemon): bool =
     if state.enlarged:
       return true
 
-proc cursorVisibilityTickNeeded(daemon: TriadDaemon, nowMs: int64): bool =
-  if daemon.runtimeState.model.cursor.hideAfterInactiveMs <= 0:
-    return daemon.cursorHiddenPointers.len > 0
-  let delay = int64(daemon.runtimeState.model.cursor.hideAfterInactiveMs)
-  for pointerId, lastMotion in daemon.cursorLastMotionMsByPointer.pairs:
-    if not daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
-      if nowMs - lastMotion >= delay and daemon.cursorShapeDevices.hasKey(pointerId) and
-          daemon.wlPointerGlobalNames.hasKey(pointerId) and
-          daemon.wlPointerPointers.hasKey(daemon.wlPointerGlobalNames[pointerId]):
-        return true
-
 proc frameTickNeeded(daemon: TriadDaemon, nowMs: int64): bool =
   daemon.runtimeState.model.needsFrameTick() or daemon.cursorShakeTickNeeded() or
     daemon.cursorVisibilityTickNeeded(nowMs)
@@ -250,6 +239,9 @@ proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
   let recoveryMs = daemon.nextShellRecoveryMs()
   if recoveryMs > 0:
     result = min(result, max(1, int(recoveryMs - nowMs)))
+  let cursorSampleMs = daemon.nextCursorPositionSampleMs()
+  if cursorSampleMs > 0:
+    result = min(result, max(1, int(cursorSampleMs - nowMs)))
 
 proc asyncSelectorFd(): int =
   asyncdispatch.getGlobalDispatcher().getIoHandler().getFd()
@@ -783,6 +775,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
 
     if msg.kind == MsgKind.WlManageStart:
       daemon.riverPhase = RiverPhase.RiverManage
+      daemon.lastCursorPositionSampleMs = unixMs()
       let manageReason = daemon.activeManageReason
       daemon.activeManageReason = ""
       let animationOnlyManage =
@@ -806,6 +799,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
       for eff in effects:
         if eff.kind != EffectKind.EffManageDirty:
           daemon.executeEffect(eff)
+      daemon.armKeyboardInput()
       daemon.executeEffect(Effect(kind: EffectKind.EffManageFinish))
       daemon.riverPhase = RiverPhase.RiverIdle
       if not daemon.initialManageComplete:
@@ -1349,6 +1343,8 @@ proc main*(): int =
     if daemon.manageRequestPending:
       inc daemon.loopCounters.manageFlushChecks
       daemon.flushManageRequest()
+    else:
+      daemon.sampleHiddenCursorPosition(nowMs)
 
     if not prepareWaylandRead(daemon.display):
       exitStatus = 1

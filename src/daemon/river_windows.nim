@@ -363,6 +363,20 @@ proc onWindowCaptureSessions(data: pointer, win: ptr RiverWindowV1, count: uint3
   daemon[].setWindowCaptureSessions(id, count)
   daemon[].handleCaptureSessionsChanged(wasActive)
 
+proc ignoreTouchMoveRequested(
+    data: pointer, window: ptr RiverWindowV1, seat: ptr RiverSeatV1, touchPoint: int32
+) =
+  discard
+
+proc ignoreTouchResizeRequested(
+    data: pointer,
+    window: ptr RiverWindowV1,
+    seat: ptr RiverSeatV1,
+    touchPoint: int32,
+    edges: uint32,
+) =
+  discard
+
 var riverWindowListener* = RiverWindowV1Listener(
   closed: onWindowClosed,
   dimensionsHint: onWindowDimensionsHint,
@@ -373,6 +387,8 @@ var riverWindowListener* = RiverWindowV1Listener(
   decorationHint: onWindowDecorationHint,
   pointerMoveRequested: onWindowPointerMoveRequested,
   pointerResizeRequested: onWindowPointerResizeRequested,
+  touchMoveRequested: ignoreTouchMoveRequested,
+  touchResizeRequested: ignoreTouchResizeRequested,
   showWindowMenuRequested: onWindowShowMenuRequested,
   maximizeRequested: onWindowMaximizeRequested,
   unmaximizeRequested: onWindowUnmaximizeRequested,

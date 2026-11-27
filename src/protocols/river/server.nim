@@ -2,6 +2,7 @@
 {.warning[UnusedImport]: off.}
 import wayland/native/server
 import wayland/native/common
+import wayland/protocols/wayland/server as wayland_server
 import code
 export code
 
@@ -396,6 +397,31 @@ proc riverWindowV1SendCaptureSessions*(
   ## * *count*: count of screen capture sessions
   resource.post_event(RiverWindowV1Event_capture_sessions.ord, count)
 
+proc riverWindowV1SendTouchMoveRequested*(
+    resource: ptr Resource, seat: ptr Resource, touchPoint: int32
+) {.inline, exportc: "river_window_v1_send_touch_move_requested".} =
+  ## Sends an touch_move_requested event to the client owning the resource.
+  ##
+  ## **params**:
+  ## * *resource*: The client's resource
+  ## * *seat*: requested seat
+  ## * *touch_point*: transient touch point ID
+  resource.post_event(RiverWindowV1Event_touch_move_requested.ord, seat, touchPoint)
+
+proc riverWindowV1SendTouchResizeRequested*(
+    resource: ptr Resource, seat: ptr Resource, touchPoint: int32, edges: uint32
+) {.inline, exportc: "river_window_v1_send_touch_resize_requested".} =
+  ## Sends an touch_resize_requested event to the client owning the resource.
+  ##
+  ## **params**:
+  ## * *resource*: The client's resource
+  ## * *seat*: requested seat
+  ## * *touch_point*: transient touch point ID
+  ## * *edges*: requested edges
+  resource.post_event(
+    RiverWindowV1Event_touch_resize_requested.ord, seat, touchPoint, edges
+  )
+
 type RiverDecorationV1Interface* = object
   destroy*: proc(client: ptr Client, resource: ptr Resource) {.nimcall.}
   setOffset*:
@@ -496,6 +522,11 @@ type RiverSeatV1Interface* = object
   ) {.nimcall.}
   pointerWarp*:
     proc(client: ptr Client, resource: ptr Resource, x: int32, y: int32) {.nimcall.}
+  opStartTouch*:
+    proc(client: ptr Client, resource: ptr Resource, touchPoint: int32) {.nimcall.}
+  opEndTouch*:
+    proc(client: ptr Client, resource: ptr Resource, touchPoint: int32) {.nimcall.}
+  notifyNextKeyboardInput*: proc(client: ptr Client, resource: ptr Resource) {.nimcall.}
 
 proc riverSeatV1SendRemoved*(
     resource: ptr Resource
@@ -585,6 +616,47 @@ proc riverSeatV1SendPointerPosition*(
   ## * *x*: global x coordinate
   ## * *y*: global y coordinate
   resource.post_event(RiverSeatV1Event_pointer_position.ord, x, y)
+
+proc riverSeatV1SendOpDeltaTouch*(
+    resource: ptr Resource, touchPoint: int32, dx: int32, dy: int32
+) {.inline, exportc: "river_seat_v1_send_op_delta_touch".} =
+  ## Sends an op_delta_touch event to the client owning the resource.
+  ##
+  ## **params**:
+  ## * *resource*: The client's resource
+  ## * *touch_point*: transient touch point ID
+  ## * *dx*: total change in x
+  ## * *dy*: total change in y
+  resource.post_event(RiverSeatV1Event_op_delta_touch.ord, touchPoint, dx, dy)
+
+proc riverSeatV1SendOpReleaseTouch*(
+    resource: ptr Resource, touchPoint: int32
+) {.inline, exportc: "river_seat_v1_send_op_release_touch".} =
+  ## Sends an op_release_touch event to the client owning the resource.
+  ##
+  ## **params**:
+  ## * *resource*: The client's resource
+  ## * *touch_point*: transient touch point ID
+  resource.post_event(RiverSeatV1Event_op_release_touch.ord, touchPoint)
+
+proc riverSeatV1SendOpCancelTouch*(
+    resource: ptr Resource, touchPoint: int32
+) {.inline, exportc: "river_seat_v1_send_op_cancel_touch".} =
+  ## Sends an op_cancel_touch event to the client owning the resource.
+  ##
+  ## **params**:
+  ## * *resource*: The client's resource
+  ## * *touch_point*: transient touch point ID
+  resource.post_event(RiverSeatV1Event_op_cancel_touch.ord, touchPoint)
+
+proc riverSeatV1SendKeyboardInput*(
+    resource: ptr Resource
+) {.inline, exportc: "river_seat_v1_send_keyboard_input".} =
+  ## Sends an keyboard_input event to the client owning the resource.
+  ##
+  ## **params**:
+  ## * *resource*: The client's resource
+  resource.post_event(RiverSeatV1Event_keyboard_input.ord)
 
 type RiverPointerBindingV1Interface* = object
   destroy*: proc(client: ptr Client, resource: ptr Resource) {.nimcall.}

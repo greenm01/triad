@@ -260,6 +260,7 @@ proc applyConfigReload*(
       previousModel, daemon.runtimeState.model, niriSocketPath, "config reload"
     )
 
+  daemon.tickCursorVisibility()
   daemon.requestBindingReconfigure("config reload")
   daemon.configWatchPaths = loaded.configPaths
   info "Config reloaded", path = configPath

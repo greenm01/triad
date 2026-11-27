@@ -4,6 +4,21 @@ import protocols/river/client as river
 import render_invalidation, state
 
 const AnimationManageReason* = "effect:CmdTick"
+const HiddenCursorPositionSampleIntervalMs = 100'i64
+
+proc nextCursorPositionSampleMs*(daemon: TriadDaemon): int64 =
+  if daemon.cursorHiddenPointers.len > 0:
+    return daemon.lastCursorPositionSampleMs + HiddenCursorPositionSampleIntervalMs
+
+proc sampleHiddenCursorPosition*(daemon: var TriadDaemon, nowMs: int64) =
+  let due = daemon.nextCursorPositionSampleMs()
+  if due == 0 or nowMs < due or daemon.riverManager == nil or
+      daemon.riverPhase != RiverPhase.RiverIdle:
+    return
+  # River reports pointer position in manage sequences, but motion alone
+  # does not start one. Sample only while Triad's cursor is hidden.
+  daemon.lastCursorPositionSampleMs = nowMs
+  daemon.riverManager.manageDirty()
 
 proc shouldReplacePendingManageReason(current, next: string): bool =
   current.len == 0 or

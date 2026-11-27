@@ -2,8 +2,9 @@
 {.warning[UnusedImport]: off.}
 import wayland/native/common
 import wayland/protocols/wayland/code as wayland_code
+import wayland/protocols/wayland/code as wayland_code
 
-var riverWindowManagementV1_types: array[33, ptr Interface]
+var riverWindowManagementV1_types: array[38, ptr Interface]
 type RiverDecorationV1* = object
 type RiverNodeV1* = object
 type RiverOutputV1* = object
@@ -90,7 +91,7 @@ let
 
   river_window_manager_v1_interface* {.exportc.} = Interface(
     name: "river_window_manager_v1",
-    version: 5,
+    version: 7,
     method_count: 7,
     methods: addr river_window_manager_v1_requests[0],
     event_count: 9,
@@ -292,14 +293,24 @@ let
       signature: "5u",
       types: addr river_window_management_v1_types[0],
     ),
+    Message(
+      name: "touch_move_requested",
+      signature: "6oi",
+      types: addr river_window_management_v1_types[22],
+    ),
+    Message(
+      name: "touch_resize_requested",
+      signature: "6oiu",
+      types: addr river_window_management_v1_types[24],
+    ),
   ]
 
   river_window_v1_interface* {.exportc.} = Interface(
     name: "river_window_v1",
-    version: 5,
+    version: 7,
     method_count: 24,
     methods: addr river_window_v1_requests[0],
-    event_count: 19,
+    event_count: 21,
     events: addr river_window_v1_events[0],
   )
 
@@ -321,7 +332,7 @@ let
 
   river_decoration_v1_interface* {.exportc.} = Interface(
     name: "river_decoration_v1",
-    version: 5,
+    version: 7,
     method_count: 3,
     methods: addr river_decoration_v1_requests[0],
   )
@@ -331,7 +342,7 @@ let
       name: "destroy", signature: "", types: addr river_window_management_v1_types[0]
     ),
     Message(
-      name: "get_node", signature: "n", types: addr river_window_management_v1_types[22]
+      name: "get_node", signature: "n", types: addr river_window_management_v1_types[27]
     ),
     Message(
       name: "sync_next_commit",
@@ -342,7 +353,7 @@ let
 
   river_shell_surface_v1_interface* {.exportc.} = Interface(
     name: "river_shell_surface_v1",
-    version: 5,
+    version: 7,
     method_count: 3,
     methods: addr river_shell_surface_v1_requests[0],
   )
@@ -367,18 +378,18 @@ let
     Message(
       name: "place_above",
       signature: "o",
-      types: addr river_window_management_v1_types[23],
+      types: addr river_window_management_v1_types[28],
     ),
     Message(
       name: "place_below",
       signature: "o",
-      types: addr river_window_management_v1_types[24],
+      types: addr river_window_management_v1_types[29],
     ),
   ]
 
   river_node_v1_interface* {.exportc.} = Interface(
     name: "river_node_v1",
-    version: 5,
+    version: 7,
     method_count: 6,
     methods: addr river_node_v1_requests[0],
   )
@@ -418,7 +429,7 @@ let
 
   river_output_v1_interface* {.exportc.} = Interface(
     name: "river_output_v1",
-    version: 5,
+    version: 7,
     method_count: 2,
     methods: addr river_output_v1_requests[0],
     event_count: 5,
@@ -432,12 +443,12 @@ let
     Message(
       name: "focus_window",
       signature: "o",
-      types: addr river_window_management_v1_types[25],
+      types: addr river_window_management_v1_types[30],
     ),
     Message(
       name: "focus_shell_surface",
       signature: "o",
-      types: addr river_window_management_v1_types[26],
+      types: addr river_window_management_v1_types[31],
     ),
     Message(
       name: "clear_focus",
@@ -455,7 +466,7 @@ let
     Message(
       name: "get_pointer_binding",
       signature: "nuu",
-      types: addr river_window_management_v1_types[27],
+      types: addr river_window_management_v1_types[32],
     ),
     Message(
       name: "set_xcursor_theme",
@@ -465,6 +476,21 @@ let
     Message(
       name: "pointer_warp",
       signature: "3ii",
+      types: addr river_window_management_v1_types[0],
+    ),
+    Message(
+      name: "op_start_touch",
+      signature: "6i",
+      types: addr river_window_management_v1_types[0],
+    ),
+    Message(
+      name: "op_end_touch",
+      signature: "6i",
+      types: addr river_window_management_v1_types[0],
+    ),
+    Message(
+      name: "notify_next_keyboard_input",
+      signature: "7",
       types: addr river_window_management_v1_types[0],
     ),
   ]
@@ -479,7 +505,7 @@ let
     Message(
       name: "pointer_enter",
       signature: "o",
-      types: addr river_window_management_v1_types[30],
+      types: addr river_window_management_v1_types[35],
     ),
     Message(
       name: "pointer_leave",
@@ -489,12 +515,12 @@ let
     Message(
       name: "window_interaction",
       signature: "o",
-      types: addr river_window_management_v1_types[31],
+      types: addr river_window_management_v1_types[36],
     ),
     Message(
       name: "shell_surface_interaction",
       signature: "o",
-      types: addr river_window_management_v1_types[32],
+      types: addr river_window_management_v1_types[37],
     ),
     Message(
       name: "op_delta", signature: "ii", types: addr river_window_management_v1_types[0]
@@ -507,14 +533,34 @@ let
       signature: "2ii",
       types: addr river_window_management_v1_types[0],
     ),
+    Message(
+      name: "op_delta_touch",
+      signature: "6iii",
+      types: addr river_window_management_v1_types[0],
+    ),
+    Message(
+      name: "op_release_touch",
+      signature: "6i",
+      types: addr river_window_management_v1_types[0],
+    ),
+    Message(
+      name: "op_cancel_touch",
+      signature: "6i",
+      types: addr river_window_management_v1_types[0],
+    ),
+    Message(
+      name: "keyboard_input",
+      signature: "7",
+      types: addr river_window_management_v1_types[0],
+    ),
   ]
 
   river_seat_v1_interface* {.exportc.} = Interface(
     name: "river_seat_v1",
-    version: 5,
-    method_count: 9,
+    version: 7,
+    method_count: 12,
     methods: addr river_seat_v1_requests[0],
-    event_count: 9,
+    event_count: 13,
     events: addr river_seat_v1_events[0],
   )
 
@@ -541,7 +587,7 @@ let
 
   river_pointer_binding_v1_interface* {.exportc.} = Interface(
     name: "river_pointer_binding_v1",
-    version: 5,
+    version: 7,
     method_count: 3,
     methods: addr river_pointer_binding_v1_requests[0],
     event_count: 2,
@@ -746,6 +792,8 @@ type RiverWindowV1Event* {.size: sizeof(uint32).} = enum
   RiverWindowV1Event_presentation_hint
   RiverWindowV1Event_identifier
   RiverWindowV1Event_capture_sessions
+  RiverWindowV1Event_touch_move_requested
+  RiverWindowV1Event_touch_resize_requested
 
 proc since*(e: RiverWindowV1Event): int =
   case e
@@ -768,6 +816,8 @@ proc since*(e: RiverWindowV1Event): int =
   of RiverWindowV1Event_presentation_hint: 4
   of RiverWindowV1Event_identifier: 4
   of RiverWindowV1Event_capture_sessions: 5
+  of RiverWindowV1Event_touch_move_requested: 6
+  of RiverWindowV1Event_touch_resize_requested: 6
 
 type RiverWindowV1Request* {.size: sizeof(uint32).} = enum
   RiverWindowV1Request_destroy
@@ -895,6 +945,10 @@ type RiverSeatV1Event* {.size: sizeof(uint32).} = enum
   RiverSeatV1Event_op_delta
   RiverSeatV1Event_op_release
   RiverSeatV1Event_pointer_position
+  RiverSeatV1Event_op_delta_touch
+  RiverSeatV1Event_op_release_touch
+  RiverSeatV1Event_op_cancel_touch
+  RiverSeatV1Event_keyboard_input
 
 proc since*(e: RiverSeatV1Event): int =
   case e
@@ -907,6 +961,10 @@ proc since*(e: RiverSeatV1Event): int =
   of RiverSeatV1Event_op_delta: 1
   of RiverSeatV1Event_op_release: 1
   of RiverSeatV1Event_pointer_position: 2
+  of RiverSeatV1Event_op_delta_touch: 6
+  of RiverSeatV1Event_op_release_touch: 6
+  of RiverSeatV1Event_op_cancel_touch: 6
+  of RiverSeatV1Event_keyboard_input: 7
 
 type RiverSeatV1Request* {.size: sizeof(uint32).} = enum
   RiverSeatV1Request_destroy
@@ -918,6 +976,9 @@ type RiverSeatV1Request* {.size: sizeof(uint32).} = enum
   RiverSeatV1Request_get_pointer_binding
   RiverSeatV1Request_set_xcursor_theme
   RiverSeatV1Request_pointer_warp
+  RiverSeatV1Request_op_start_touch
+  RiverSeatV1Request_op_end_touch
+  RiverSeatV1Request_notify_next_keyboard_input
 
 proc since*(e: RiverSeatV1Request): int =
   case e
@@ -930,6 +991,9 @@ proc since*(e: RiverSeatV1Request): int =
   of RiverSeatV1Request_get_pointer_binding: 1
   of RiverSeatV1Request_set_xcursor_theme: 2
   of RiverSeatV1Request_pointer_warp: 3
+  of RiverSeatV1Request_op_start_touch: 6
+  of RiverSeatV1Request_op_end_touch: 6
+  of RiverSeatV1Request_notify_next_keyboard_input: 7
 
 type RiverPointerBindingV1Event* {.size: sizeof(uint32).} = enum
   RiverPointerBindingV1Event_pressed
@@ -974,6 +1038,11 @@ riverWindowManagementV1_types = [
   addr river_seat_v1_interface,
   nil,
   addr river_output_v1_interface,
+  addr river_seat_v1_interface,
+  nil,
+  addr river_seat_v1_interface,
+  nil,
+  nil,
   addr river_node_v1_interface,
   addr river_node_v1_interface,
   addr river_node_v1_interface,

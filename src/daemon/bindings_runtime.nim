@@ -1,4 +1,4 @@
-import std/[json, options, sequtils, tables, times]
+import std/[json, options, sequtils, sets, tables, times]
 import chronicles
 import protocols/river/client as river
 import protocols/river_layer_shell/client as riverLayer
@@ -92,14 +92,6 @@ proc mapWlPointerRiverSeat(daemon: var TriadDaemon, globalName: uint32) =
   else:
     daemon.wlPointerRiverSeats[pointerId] = seatId
 
-proc removeWlPointerRiverSeat(daemon: var TriadDaemon, seatId: uint32) =
-  var target = 0'u32
-  for pointerId, mappedSeatId in daemon.wlPointerRiverSeats.pairs:
-    if mappedSeatId == seatId:
-      target = pointerId
-  if target != 0:
-    daemon.wlPointerRiverSeats.del(target)
-
 proc wheelTicks(total120: int32, discrete: int32, remainder: var int32): int32 =
   if discrete != 0:
     remainder = 0
@@ -174,25 +166,26 @@ proc wlPointerById(daemon: TriadDaemon, pointerId: uint32): ptr Pointer =
   let globalName = daemon.wlPointerGlobalNames[pointerId]
   daemon.wlPointerPointers.getOrDefault(globalName)
 
-proc showCursorPointer(daemon: var TriadDaemon, pointerId: uint32) =
-  if not daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
+proc setCursorHideReasons(
+    daemon: var TriadDaemon, pointerId: uint32, reasons: set[CursorHideReason]
+) =
+  let previous = daemon.cursorHiddenPointers.getOrDefault(pointerId)
+  if previous == reasons:
     return
-  if daemon.cursorShapeDevices.hasKey(pointerId):
-    daemon.cursorShapeDevices[pointerId].setShape(
-      0'u32, uint32(cursorShape.shape_default)
-    )
-  daemon.cursorHiddenPointers.del(pointerId)
+  if reasons == {}:
+    if daemon.cursorShapeDevices.hasKey(pointerId):
+      daemon.cursorShapeDevices[pointerId].setShape(
+        0'u32, uint32(cursorShape.shape_default)
+      )
+    daemon.cursorHiddenPointers.del(pointerId)
+    return
 
-proc hideCursorPointer(daemon: var TriadDaemon, pointerId: uint32) =
-  if daemon.cursorHiddenPointers.getOrDefault(pointerId, false):
-    return
-  if not daemon.cursorShapeDevices.hasKey(pointerId):
-    return
-  let pointer = daemon.wlPointerById(pointerId)
-  if pointer == nil:
-    return
-  pointer.setCursor(0'u32, nil, 0, 0)
-  daemon.cursorHiddenPointers[pointerId] = true
+  if previous == {}:
+    let pointer = daemon.wlPointerById(pointerId)
+    if pointer == nil or not daemon.cursorShapeDevices.hasKey(pointerId):
+      return
+    pointer.setCursor(0'u32, nil, 0, 0)
+  daemon.cursorHiddenPointers[pointerId] = reasons
 
 proc pointerIdForRiverSeat(daemon: TriadDaemon, seatId: uint32): uint32 =
   for pointerId, mappedSeatId in daemon.wlPointerRiverSeats.pairs:
@@ -200,27 +193,88 @@ proc pointerIdForRiverSeat(daemon: TriadDaemon, seatId: uint32): uint32 =
       return pointerId
   0'u32
 
+proc forgetSeatCursor*(daemon: var TriadDaemon, seatId: uint32) =
+  daemon.keyboardInputArmedSeats.excl(seatId)
+  let pointerId = daemon.pointerIdForRiverSeat(seatId)
+  if pointerId != 0:
+    daemon.setCursorHideReasons(pointerId, {})
+    daemon.cursorLastMotionMsByPointer.del(pointerId)
+    daemon.wlPointerRiverSeats.del(pointerId)
+
 proc observeCursorActivity(daemon: var TriadDaemon, seatId: uint32, now: int64) =
   let pointerId = daemon.pointerIdForRiverSeat(seatId)
   if pointerId == 0:
     return
   daemon.cursorLastMotionMsByPointer[pointerId] = now
-  daemon.showCursorPointer(pointerId)
+  daemon.setCursorHideReasons(pointerId, {})
 
-proc hideAllCursors(daemon: var TriadDaemon) =
-  for pointerId in daemon.wlPointerRiverSeats.keys:
-    daemon.hideCursorPointer(pointerId)
+proc hideCursorForTyping(daemon: var TriadDaemon, pointerId: uint32) =
+  let reasons = daemon.cursorHiddenPointers.getOrDefault(pointerId)
+  daemon.setCursorHideReasons(pointerId, reasons + {CursorHideReason.Typing})
 
-proc tickCursorVisibility*(daemon: var TriadDaemon) =
-  if not daemon.currentModel.cursor.cursorHideInactiveEnabled():
-    for pointerId in daemon.cursorHiddenPointers.keys.toSeq():
-      daemon.showCursorPointer(pointerId)
+proc hideCursorForShortcut*(daemon: var TriadDaemon) =
+  if not daemon.currentModel.cursor.hideWhenTyping or
+      daemon.boundProtocolVersions.getOrDefault("river_window_manager_v1") >=
+      RiverKeyboardInputVersion:
     return
-  let now = nowMs()
-  let delay = int64(daemon.currentModel.cursor.hideAfterInactiveMs)
-  for pointerId, lastMotion in daemon.cursorLastMotionMsByPointer.pairs:
-    if now - lastMotion >= delay:
-      daemon.hideCursorPointer(pointerId)
+  for pointerId in daemon.wlPointerRiverSeats.keys:
+    daemon.hideCursorForTyping(pointerId)
+
+proc armKeyboardInputForSeat*(
+    daemon: var TriadDaemon, seatId: uint32, version: uint32
+): bool =
+  if version < RiverKeyboardInputVersion or not daemon.currentModel.cursor.hideWhenTyping:
+    return false
+  not daemon.keyboardInputArmedSeats.containsOrIncl(seatId)
+
+proc armKeyboardInput*(daemon: var TriadDaemon) =
+  for seat in daemon.seatPointers:
+    if daemon.armKeyboardInputForSeat(seat.id(), seat.getVersion()):
+      seat.notifyNextKeyboardInput()
+
+proc handleSeatKeyboardInput*(daemon: var TriadDaemon, seatId: uint32) =
+  daemon.keyboardInputArmedSeats.excl(seatId)
+  if daemon.currentModel.cursor.hideWhenTyping:
+    let pointerId = daemon.pointerIdForRiverSeat(seatId)
+    if pointerId != 0:
+      daemon.hideCursorForTyping(pointerId)
+
+proc cursorHideReasonsAt(
+    daemon: TriadDaemon, pointerId: uint32, now: int64
+): set[CursorHideReason] =
+  let config = daemon.currentModel.cursor
+  result = daemon.cursorHiddenPointers.getOrDefault(pointerId)
+  if not config.hideWhenTyping:
+    result.excl(CursorHideReason.Typing)
+  if config.cursorHideInactiveEnabled() and
+      daemon.cursorLastMotionMsByPointer.hasKey(pointerId) and
+      now - daemon.cursorLastMotionMsByPointer[pointerId] >=
+      int64(config.hideAfterInactiveMs):
+    result.incl(CursorHideReason.Inactivity)
+  else:
+    result.excl(CursorHideReason.Inactivity)
+
+proc cursorVisibilityTickNeeded*(daemon: TriadDaemon, now: int64): bool =
+  for pointerId, reasons in daemon.cursorHiddenPointers.pairs:
+    if daemon.cursorHideReasonsAt(pointerId, now) != reasons:
+      return true
+  if daemon.currentModel.cursor.cursorHideInactiveEnabled():
+    for pointerId in daemon.cursorLastMotionMsByPointer.keys:
+      if not daemon.cursorHiddenPointers.hasKey(pointerId) and
+          daemon.cursorShapeDevices.hasKey(pointerId) and
+          daemon.wlPointerById(pointerId) != nil and
+          daemon.cursorHideReasonsAt(pointerId, now) != {}:
+        return true
+
+proc tickCursorVisibility*(daemon: var TriadDaemon, now = nowMs()) =
+  for pointerId in daemon.cursorHiddenPointers.keys.toSeq():
+    daemon.setCursorHideReasons(pointerId, daemon.cursorHideReasonsAt(pointerId, now))
+  if daemon.currentModel.cursor.cursorHideInactiveEnabled():
+    for pointerId in daemon.cursorLastMotionMsByPointer.keys:
+      if not daemon.cursorHiddenPointers.hasKey(pointerId):
+        daemon.setCursorHideReasons(
+          pointerId, daemon.cursorHideReasonsAt(pointerId, now)
+        )
 
 proc applyCursorShakeMotion(
     daemon: var TriadDaemon, seat: ptr RiverSeatV1, x, y: int32
@@ -966,8 +1020,8 @@ proc onSeatRemoved(data: pointer, seat: ptr RiverSeatV1) =
     return
   info "Seat removed"
   let seatId = seat.id()
+  daemon[].forgetSeatCursor(seatId)
   daemon[].removeSeatPointer(seat)
-  daemon[].removeWlPointerRiverSeat(seatId)
   daemon.seatWlNames.del(seatId)
   daemon.pointerWindowBySeat.del(seatId)
   daemon.pointerPositionBySeat.del(seatId)
@@ -1063,6 +1117,19 @@ proc onSeatPointerPosition(data: pointer, seat: ptr RiverSeatV1, x: int32, y: in
     daemon.enqueue(Msg(kind: MsgKind.CmdOpenOverview))
   trace "Seat pointer position", seatId = seat.id(), x = x, y = y
 
+proc ignoreOpDeltaTouch(
+    data: pointer, seat: ptr RiverSeatV1, touchPoint, dx, dy: int32
+) =
+  discard
+
+proc ignoreOpTouchEnd(data: pointer, seat: ptr RiverSeatV1, touchPoint: int32) =
+  discard
+
+proc onSeatKeyboardInput(data: pointer, seat: ptr RiverSeatV1) =
+  let daemon = callbackDaemon(data, "seat keyboard input")
+  if daemon != nil:
+    daemon[].handleSeatKeyboardInput(seat.id())
+
 var riverSeatListener* = RiverSeatV1Listener(
   removed: onSeatRemoved,
   seat: onSeatWlSeat,
@@ -1073,6 +1140,10 @@ var riverSeatListener* = RiverSeatV1Listener(
   opDelta: onOpDelta,
   opRelease: onOpRelease,
   pointerPosition: onSeatPointerPosition,
+  opDeltaTouch: ignoreOpDeltaTouch,
+  opReleaseTouch: ignoreOpTouchEnd,
+  opCancelTouch: ignoreOpTouchEnd,
+  keyboardInput: onSeatKeyboardInput,
 )
 
 proc onWlSeatCapabilities(data: pointer, seat: ptr Seat, capabilities: uint32) =
@@ -1532,8 +1603,7 @@ proc onXkbPressed(data: pointer, binding: ptr riverXkb.RiverXkbBindingV1) =
   let daemon = callbackDaemon(data, "xkb pressed")
   if daemon == nil:
     return
-  if daemon[].currentModel.cursor.hideWhenTyping:
-    daemon[].hideAllCursors()
+  daemon[].hideCursorForShortcut()
   let id = binding.id()
   daemon[].handleXkbBindingPressed(id)
 

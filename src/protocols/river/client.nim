@@ -2,6 +2,7 @@
 {.warning[UnusedImport]: off.}
 import wayland/native/client
 import wayland/native/common
+import wayland/protocols/wayland/client as wayland_client
 import code
 export code
 
@@ -277,6 +278,19 @@ type RiverWindowV1Listener* = object
   ) {.nimcall.}
   captureSessions*:
     proc(data: pointer, riverWindowV1: ptr RiverWindowV1, count: uint32) {.nimcall.}
+  touchMoveRequested*: proc(
+    data: pointer,
+    riverWindowV1: ptr RiverWindowV1,
+    seat: ptr RiverSeatV1,
+    touchPoint: int32,
+  ) {.nimcall.}
+  touchResizeRequested*: proc(
+    data: pointer,
+    riverWindowV1: ptr RiverWindowV1,
+    seat: ptr RiverSeatV1,
+    touchPoint: int32,
+    edges: uint32,
+  ) {.nimcall.}
 
 proc addListener*(
     riverWindowV1: ptr RiverWindowV1, listener: ptr RiverWindowV1Listener, data: pointer
@@ -392,7 +406,7 @@ proc hide*(riverWindowV1: ptr RiverWindowV1) {.inline.} =
   ## the hide request.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverWindowV1).marshal_flags(
     RiverWindowV1Request_hide.ord, nil, cast[ptr Proxy](riverWindowV1).get_version(), 0
@@ -409,7 +423,7 @@ proc show*(riverWindowV1: ptr RiverWindowV1) {.inline.} =
   ## the hide request.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverWindowV1).marshal_flags(
     RiverWindowV1Request_show.ord, nil, cast[ptr Proxy](riverWindowV1).get_version(), 0
@@ -494,7 +508,7 @@ proc setBorders*(
   ## presence of borders or decoration surfaces.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverWindowV1).marshal_flags(
     RiverWindowV1Request_set_borders.ord,
@@ -809,7 +823,7 @@ proc setClipBox*(
   ## Both set_clip_box and set_content_clip_box may be enabled simultaneously.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverWindowV1).marshal_flags(
     RiverWindowV1Request_set_clip_box.ord,
@@ -845,7 +859,7 @@ proc setContentClipBox*(
   ## Both set_clip_box and set_content_clip_box may be enabled simultaneously.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverWindowV1).marshal_flags(
     RiverWindowV1Request_set_content_clip_box.ord,
@@ -923,7 +937,7 @@ proc setOffset*(
   ## protocol and left up to the compositor.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverDecorationV1).marshal_flags(
     RiverDecorationV1Request_set_offset.ord,
@@ -946,7 +960,7 @@ proc syncNextCommit*(riverDecorationV1: ptr RiverDecorationV1) {.inline.} =
   ## to do so is a protocol error.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverDecorationV1).marshal_flags(
     RiverDecorationV1Request_sync_next_commit.ord,
@@ -1009,7 +1023,7 @@ proc syncNextCommit*(riverShellSurfaceV1: ptr RiverShellSurfaceV1) {.inline.} =
   ## so is a protocol error.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverShellSurfaceV1).marshal_flags(
     RiverShellSurfaceV1Request_sync_next_commit.ord,
@@ -1054,7 +1068,7 @@ proc setPosition*(riverNodeV1: ptr RiverNodeV1, x: int32, y: int32) {.inline.} =
   ## this protocol and left up to the compositor.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverNodeV1).marshal_flags(
     RiverNodeV1Request_set_position.ord,
@@ -1072,7 +1086,7 @@ proc placeTop*(riverNodeV1: ptr RiverNodeV1) {.inline.} =
   ## render list.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverNodeV1).marshal_flags(
     RiverNodeV1Request_place_top.ord, nil, cast[ptr Proxy](riverNodeV1).get_version(), 0
@@ -1085,7 +1099,7 @@ proc placeBottom*(riverNodeV1: ptr RiverNodeV1) {.inline.} =
   ## render list.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverNodeV1).marshal_flags(
     RiverNodeV1Request_place_bottom.ord,
@@ -1111,7 +1125,7 @@ proc placeAbove*(riverNodeV1: ptr RiverNodeV1, other: ptr RiverNodeV1) {.inline.
   ## 3. B.place_above(A) -> A, B, C
   ##
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverNodeV1).marshal_flags(
     RiverNodeV1Request_place_above.ord,
@@ -1138,7 +1152,7 @@ proc placeBelow*(riverNodeV1: ptr RiverNodeV1, other: ptr RiverNodeV1) {.inline.
   ## 3. B.place_below(C) -> A, B, C
   ##
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverNodeV1).marshal_flags(
     RiverNodeV1Request_place_below.ord,
@@ -1199,7 +1213,7 @@ proc setPresentationMode*(riverOutputV1: ptr RiverOutputV1, mode: uint32) {.inli
   ## request is never made, the preferred presentation mode is vsync.
   ## 
   ## This request modifies rendering state and may only be made as part of a
-  ## render sequence, see the river_window_manager_v1 description.
+  ## manage or render sequence, see the river_window_manager_v1 description.
   ## 
   cast[ptr Proxy](riverOutputV1).marshal_flags(
     RiverOutputV1Request_set_presentation_mode.ord,
@@ -1227,6 +1241,14 @@ type RiverSeatV1Listener* = object
   opRelease*: proc(data: pointer, riverSeatV1: ptr RiverSeatV1) {.nimcall.}
   pointerPosition*:
     proc(data: pointer, riverSeatV1: ptr RiverSeatV1, x: int32, y: int32) {.nimcall.}
+  opDeltaTouch*: proc(
+    data: pointer, riverSeatV1: ptr RiverSeatV1, touchPoint: int32, dx: int32, dy: int32
+  ) {.nimcall.}
+  opReleaseTouch*:
+    proc(data: pointer, riverSeatV1: ptr RiverSeatV1, touchPoint: int32) {.nimcall.}
+  opCancelTouch*:
+    proc(data: pointer, riverSeatV1: ptr RiverSeatV1, touchPoint: int32) {.nimcall.}
+  keyboardInput*: proc(data: pointer, riverSeatV1: ptr RiverSeatV1) {.nimcall.}
 
 proc addListener*(
     riverSeatV1: ptr RiverSeatV1, listener: ptr RiverSeatV1Listener, data: pointer
@@ -1323,7 +1345,7 @@ proc opStartPointer*(riverSeatV1: ptr RiverSeatV1) {.inline.} =
   ## move/resize of windows by setting the position of windows and proposing
   ## dimensions based off of the op_delta events.
   ## 
-  ## This request is ignored if an operation is already in progress.
+  ## This request is ignored if a pointer operation is already in progress.
   ## 
   ## The compositor must ensure that no client has pointer focus from this
   ## seat during the pointer operation. This means that the window manager
@@ -1341,11 +1363,11 @@ proc opStartPointer*(riverSeatV1: ptr RiverSeatV1) {.inline.} =
   )
 
 proc opEnd*(riverSeatV1: ptr RiverSeatV1) {.inline.} =
-  ## end an interactive operation
+  ## end an interactive pointer operation
   ## 
-  ## End an interactive operation.
+  ## End an interactive pointer operation.
   ## 
-  ## This request is ignored if there is no operation in progress.
+  ## This request is ignored if there is no pointer operation in progress.
   ## 
   ## This request modifies window management state and may only be made as
   ## part of a manage sequence, see the river_window_manager_v1 description.
@@ -1422,6 +1444,83 @@ proc pointerWarp*(riverSeatV1: ptr RiverSeatV1, x: int32, y: int32) {.inline.} =
     0,
     x,
     y,
+  )
+
+proc opStartTouch*(riverSeatV1: ptr RiverSeatV1, touchPoint: int32) {.inline.} =
+  ## start an interactive touch operation
+  ##
+  ## Start an interactive touch operation. During the operation,
+  ## op_delta_touch events will be sent based movement of the given touch
+  ## point.
+  ##
+  ## When the touch point is released, the op_release_touch event is sent and
+  ## the operation is automatically ended.
+  ##
+  ## The window manager may end the operation before the touch point is released
+  ## using the op_end_touch request.
+  ##
+  ## The window manager may use this operation to implement interactive
+  ## move/resize of windows by setting the position of windows and proposing
+  ## dimensions based off of the op_delta_touch events.
+  ##
+  ## This request is ignored if a touch operation is already in progress for
+  ## the given touch point or if the given touch point does not exist.
+  ##
+  ## This request modifies window management state and may only be made as
+  ## part of a manage sequence, see the river_window_manager_v1 description.
+  ##
+  cast[ptr Proxy](riverSeatV1).marshal_flags(
+    RiverSeatV1Request_op_start_touch.ord,
+    nil,
+    cast[ptr Proxy](riverSeatV1).get_version(),
+    0,
+    touchPoint,
+  )
+
+proc opEndTouch*(riverSeatV1: ptr RiverSeatV1, touchPoint: int32) {.inline.} =
+  ## end an touch operation
+  ##
+  ## End a touch operation for the given touch point.
+  ##
+  ## This request is ignored if there is no operation in progress for the
+  ## given touch point or if the operation has already been ended by the
+  ## op_release_touch event.
+  ##
+  ## This request modifies window management state and may only be made as
+  ## part of a manage sequence, see the river_window_manager_v1 description.
+  ##
+  cast[ptr Proxy](riverSeatV1).marshal_flags(
+    RiverSeatV1Request_op_end_touch.ord,
+    nil,
+    cast[ptr Proxy](riverSeatV1).get_version(),
+    0,
+    touchPoint,
+  )
+
+proc notifyNextKeyboardInput*(riverSeatV1: ptr RiverSeatV1) {.inline.} =
+  ## get notified of the next keyboard input
+  ##
+  ## Request that the keyboard_input event be sent when the next non-modifier
+  ## key is pressed on any physical keyboard assigned to the seat. Key presses
+  ## from virtual keyboards (e.g. on-screen keyboards) are ignored.
+  ##
+  ## This request has no effect on keyboard input routing. The next keyboard
+  ## event will be routed to the client with keyboard focus or consumed by a
+  ## keyboard binding created through the river-xkb-bindings-v1 protocol as
+  ## usual.
+  ##
+  ## Rationale: this event is necessary for window managers implementing a
+  ## "hide cursor when typing" feature. This use-case requires a notification
+  ## that the user has started typing to know when to hide the cursor.
+  ##
+  ## This request modifies window management state and may only be made as
+  ## part of a manage sequence, see the river_window_manager_v1 description.
+  ##
+  cast[ptr Proxy](riverSeatV1).marshal_flags(
+    RiverSeatV1Request_notify_next_keyboard_input.ord,
+    nil,
+    cast[ptr Proxy](riverSeatV1).get_version(),
+    0,
   )
 
 type RiverPointerBindingV1Listener* = object
