@@ -222,11 +222,11 @@ proc stopTrackedShell*(runner: var ShellRunner, reason: string) =
   )
   try:
     runner.trackedProcess.terminate()
-    var code = runner.trackedProcess.pollProcessExitCode(1000)
+    var code = runner.trackedProcess.pollProcessExitCode(250)
     var killed = false
     if code == -1:
       runner.trackedProcess.kill()
-      code = runner.trackedProcess.waitForExit()
+      code = runner.trackedProcess.waitForExit(250)
       killed = true
     info "Stopped shell", pid = pid, reason = reason
     writeBehaviorEvent(
@@ -301,10 +301,13 @@ proc stopShellProfile(
           env = model.configuredProcessEnv(),
           options = InheritedProcessOptions,
         )
-        let code = p.pollProcessExitCode(1000)
+        var code = p.pollProcessExitCode(250)
+        var killed = false
         if code == -1:
           p.kill()
-          discard p.waitForExit()
+          code = p.waitForExit(250)
+          killed = true
+        if killed:
           writeShellBehaviorEvent(
             "shell_stop_timed_out", shells, profile, reason, %*{"command": profile.stop}
           )
@@ -369,7 +372,7 @@ proc spawnShellProfile(
       if profile.niriCompat:
         compat = prepareNiriShellCompatEnv(niriSocketPath, baseEnv = baseEnv)
         spawnInfo = shellCompatBehaviorPayload(profile, niriSocketPath, compat)
-        let niriSocketAccepting = waitForNiriCompatSocket(compat.niriSocketPath)
+        let niriSocketAccepting = niriCompatSocketReady(compat.niriSocketPath)
         spawnInfo["niri_socket_accepting"] = %niriSocketAccepting
         if not niriSocketAccepting:
           warn "Niri compatibility socket is not accepting connections before shell launch",
@@ -394,46 +397,21 @@ proc spawnShellProfile(
       options = InheritedProcessOptions,
     )
     let childPid = p.processID
-    let earlyExitCode = p.pollProcessExitCode(250)
-    if earlyExitCode == -1:
-      runner.trackedProcess = p
-      runner.trackedShellName = profile.name
-      info "Spawned shell",
-        profile = profile.name,
-        command = profile.launch[0],
-        pid = childPid,
-        niriCompat = profile.niriCompat
-      writeShellBehaviorEvent(
-        "shell_spawned",
-        shells,
-        profile,
-        reason,
-        spawnInfo.shellSpawnEventPayload(childPid = childPid),
-      )
-      result = ShellSpawnStatus.Running
-    elif earlyExitCode == 0:
-      p.close()
-      writeShellBehaviorEvent(
-        "shell_spawn_handoff",
-        shells,
-        profile,
-        reason,
-        spawnInfo.shellSpawnEventPayload(
-          childPid = childPid, exitCode = some(earlyExitCode)
-        ),
-      )
-      result = ShellSpawnStatus.Handoff
-    else:
-      p.close()
-      writeShellBehaviorEvent(
-        "shell_spawn_exited",
-        shells,
-        profile,
-        reason,
-        spawnInfo.shellSpawnEventPayload(
-          childPid = childPid, exitCode = some(earlyExitCode)
-        ),
-      )
+    runner.trackedProcess = p
+    runner.trackedShellName = profile.name
+    info "Spawned shell",
+      profile = profile.name,
+      command = profile.launch[0],
+      pid = childPid,
+      niriCompat = profile.niriCompat
+    writeShellBehaviorEvent(
+      "shell_spawned",
+      shells,
+      profile,
+      reason,
+      spawnInfo.shellSpawnEventPayload(childPid = childPid),
+    )
+    result = ShellSpawnStatus.Running
   except CatchableError as e:
     warn "Failed to spawn shell",
       profile = profile.name,

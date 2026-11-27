@@ -1,8 +1,11 @@
 import
   std/[
-    asyncdispatch, asyncnet, json, nativesockets, options, os, sequtils, strtabs,
-    strutils, tables, unittest,
+    asyncdispatch, asyncnet, json, nativesockets, options, os, osproc, sequtils,
+    strtabs, strutils, tables, tempfiles, times, unittest,
   ]
+from posix import
+  TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe,
+  read, write
 import ../src/config/parser
 import ../src/core/[effects, msg, restore_state]
 import
@@ -13,10 +16,13 @@ import
     protocol_diagnostics, reload_runtime, render_invalidation, river_windows,
     screen_mirror_runtime, spawn_context, switch_event_runtime,
   ]
+import ../src/daemon/runtime_events
+import ../src/daemon/ipc_startup_runtime
+import ../src/daemon/tracked_child
 from ../src/daemon/state import
-  LibinputDeviceRuntime, OutputManagementHeadRuntime, clearOutputCaptureSessions,
-  consumeMaximizedAck, expectMaximizedAck, initTriadDaemon, setOutputCaptureSessions,
-  setWindowCaptureSessions
+  LibinputDeviceRuntime, OutputManagementHeadRuntime, TriadDaemon,
+  clearOutputCaptureSessions, consumeMaximizedAck, expectMaximizedAck,
+  initTriadDaemon, setOutputCaptureSessions, setWindowCaptureSessions
 from ../src/daemon/state import QueuedMsgOrigin
 import ../src/ipc/[binding_dispatch, commands, niri_compat, socket]
 import ../src/layouts/scroller
@@ -24,7 +30,31 @@ import ../src/state/[invariants, snapshot]
 import ../src/systems/[daemon_view, runtime, runtime_facade, update]
 from ../src/types/model import Model, OutputRuleData
 import ../src/types/[projection_values, runtime_values, shell_snapshot]
-import ../src/utils/[process_memory, session_env]
+import ../src/utils/[process_options, process_memory, screenshot_capture, session_env]
+import ../src/utils/[event_poll, runtime_deadlines]
+import ../src/session/supervisor
+
+proc mirrorTestDaemon(): TriadDaemon =
+  result = initTriadDaemon()
+  result.runtimeState = initRuntimeStateFromConfig(
+    Config(
+      outputRules:
+        @[OutputRule(target: "DP-2", mirrorSet: true, mirrorSource: "eDP-1")]
+    )
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1200)
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "eDP-1")
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputDimensions, outputId: 2, width: 1920, height: 1080)
+  )
+  discard result.runtimeState.applyRuntimeUpdate(
+    Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2")
+  )
+
 
 var observedConfigNotificationEvent: ConfigNotificationEvent
 var observedConfigNotificationCommand: seq[string]
@@ -333,12 +363,108 @@ suite "Crash hardening":
     for runtime in daemon.screenMirrors.values:
       check runtime.sourceName == "eDP-1"
       check runtime.targetName == "DP-2"
-      check runtime.process != nil
+      check runtime.hasChild
       check not runtime.failed
 
     discard daemon.runtimeState.applyRuntimeConfig(Config())
     daemon.syncScreenMirrors()
+    sleep(50)
+    daemon.syncScreenMirrors()
     check daemon.screenMirrors.len == 0
+
+  test "screen mirror early exit marks failed and schedules retry":
+    let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
+    let tempDir = getTempDir() / ("triad-mirror-exit-" & $getCurrentProcessId())
+    let fakeMirror = tempDir / "triad_mirror"
+    createDir(tempDir)
+    writeFile(fakeMirror, "#!/bin/sh\nexit 7\n")
+    setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
+    putEnv("TRIAD_MIRROR_BIN", fakeMirror)
+
+    var daemon = mirrorTestDaemon()
+    defer:
+      daemon.stopScreenMirrors("test cleanup")
+      putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(fakeMirror)
+      removeDir(tempDir)
+
+    daemon.syncScreenMirrors()
+    sleep(50)
+    daemon.syncScreenMirrors()
+    check daemon.screenMirrors.len == 1
+    for runtime in daemon.screenMirrors.values:
+      check runtime.failed
+      check not runtime.hasChild
+      check runtime.retryAfterMs > int64(epochTime() * 1000.0)
+
+  test "screen mirror TERM-ignoring child escalates to KILL and reaps":
+    let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
+    let tempDir = getTempDir() / ("triad-mirror-kill-" & $getCurrentProcessId())
+    let fakeMirror = tempDir / "triad_mirror"
+    createDir(tempDir)
+    writeFile(
+      fakeMirror,
+      "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n",
+    )
+    setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
+    putEnv("TRIAD_MIRROR_BIN", fakeMirror)
+
+    var daemon = mirrorTestDaemon()
+    defer:
+      daemon.stopScreenMirrors("test cleanup")
+      putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(fakeMirror)
+      removeDir(tempDir)
+
+    daemon.syncScreenMirrors()
+    discard daemon.runtimeState.applyRuntimeConfig(Config())
+    daemon.syncScreenMirrors()
+    sleep(300)
+    daemon.syncScreenMirrors()
+    sleep(50)
+    daemon.syncScreenMirrors()
+    check daemon.screenMirrors.len == 0
+
+  test "screen mirror shutdown reaps TERM-ignoring child":
+    let oldMirrorBin = getEnv("TRIAD_MIRROR_BIN", "")
+    let tempDir = createTempDir("triad-mirror-shutdown-", "")
+    let fakeMirror = tempDir / "triad_mirror"
+    let ready = fakeMirror & ".ready"
+    writeFile(fakeMirror, "#!/bin/sh\ntrap '' TERM\n: > \"$0.ready\"\nexec /bin/sleep 30\n")
+    setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
+    putEnv("TRIAD_MIRROR_BIN", fakeMirror)
+
+    var daemon = mirrorTestDaemon()
+    defer:
+      daemon.stopScreenMirrors("test cleanup")
+      putEnv("TRIAD_MIRROR_BIN", oldMirrorBin)
+      removeFile(ready)
+      removeFile(fakeMirror)
+      removeDir(tempDir)
+
+    daemon.syncScreenMirrors()
+    check daemon.screenMirrors.len == 1
+    var mirrorPid = 0
+    for runtime in daemon.screenMirrors.values:
+      check runtime.hasChild
+      mirrorPid = runtime.child.process.processID
+    check mirrorPid > 0
+
+    for _ in 0 ..< 200:
+      if fileExists(ready):
+        break
+      sleep(5)
+    require fileExists(ready)
+    daemon.shutdownScreenMirrors("test shutdown")
+    check daemon.screenMirrors.len == 0
+    check kill(Pid(mirrorPid), 0) == -1
+
+  test "screenshot helper timeout returns after child reap":
+    let result = waitFor(
+      runShellCommandCaptureAsync("sleep 30", pollMs = 10, timeoutMs = 100)
+    )
+    check result.timedOut
+    check result.exitCode == ShellTimeoutExitCode
 
   test "message queue preserves Janet hook origin":
     var daemon = initTriadDaemon()
@@ -2032,3 +2158,164 @@ suite "libinput request tracking":
     daemon.libinputResultDevices[20'u32] = 3'u32
     clearLibinputResult(addr daemon, 20'u32)
     check not daemon.libinputDevices[3'u32].dragLockRequestedSet
+
+suite "supervisor restart backoff":
+  test "long-running exits use short delay":
+    check restartDelayMs(0, 120, 0) == 200'i64
+    check restartDelayMs(1, 120, 3) == 1000'i64
+
+  test "rapid exits escalate and cap":
+    check restartDelayMs(1, 2, 0) == 1000'i64
+    check restartDelayMs(1, 2, 1) == 2000'i64
+    check restartDelayMs(0, 2, 2) == 5000'i64
+    check restartDelayMs(1, 2, 9) == 30000'i64
+
+suite "runtime child-exit events":
+  test "runtime event source reports and drains descriptor readiness":
+    var pipeFds: array[2, cint]
+    check pipe(pipeFds) == 0
+    defer:
+      discard close(pipeFds[0])
+      discard close(pipeFds[1])
+    discard fcntl(pipeFds[0], F_SETFL, fcntl(pipeFds[0], F_GETFL) or O_NONBLOCK)
+
+    var source = initRuntimeEventSource()
+    source.signalFd = int(pipeFds[0])
+    check source.fd() == int(pipeFds[0])
+
+    var marker = 'x'
+    check write(pipeFds[1], addr marker, 1) == 1
+    check source.drain().childReady
+    check not source.drain().childReady
+
+  test "tracked short-lived child is reaped":
+    var daemon = initTriadDaemon()
+    let child = startProcess("/bin/true", options = {poParentStreams})
+    daemon.trackChildProcess(child, "true")
+    check child.waitForExit(1000) == 0
+    check daemon.reapChildProcesses() == 1
+    check daemon.fireAndForgetProcesses.len == 0
+
+suite "IPC startup gate":
+  test "pending listener keeps the gate closed":
+    var gate = initIpcStartupGate(0)
+    gate.addListener(newFuture[bool]("pending listener"))
+    check gate.pollIpcStartupGate(10, 100) == IpcStartupGateStatus.Pending
+    check not gate.open
+
+  test "all successful listeners open the gate early":
+    var gate = initIpcStartupGate(0)
+    let listener = newFuture[bool]("ready listener")
+    listener.complete(true)
+    gate.addListener(listener)
+    check gate.pollIpcStartupGate(1, 100) == IpcStartupGateStatus.Ready
+    check gate.open
+    check gate.ready
+
+  test "failed listener opens the gate only at timeout":
+    var gate = initIpcStartupGate(0)
+    let listener = newFuture[bool]("failed listener")
+    listener.complete(false)
+    gate.addListener(listener)
+    check gate.pollIpcStartupGate(10, 100) == IpcStartupGateStatus.Pending
+    check gate.pollIpcStartupGate(100, 100) == IpcStartupGateStatus.Timeout
+    check gate.open
+    check not gate.ready
+
+suite "tracked child state machine":
+  test "starting child promotes to running at deadline":
+    let child = startProcess(
+      "/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams}
+    )
+    var tracked = initTrackedChild(child, 0'i64, 250'i64)
+    defer:
+      if not tracked.process.isNil:
+        tracked.process.kill()
+        tracked.process.close()
+    check not tracked.advanceTrackedChild(249'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Starting
+    check not tracked.advanceTrackedChild(250'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Running
+
+  test "reaped child reports its exit code":
+    let child = startProcess("/bin/true", options = {poParentStreams})
+    check child.waitForExit(1000) == 0
+    var tracked = initTrackedChild(child, 0'i64, 250'i64)
+    check tracked.advanceTrackedChild(1'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Reaped
+    check tracked.exitCode == 0
+
+  test "terminating child escalates to kill at deadline":
+    let child = startProcess(
+      "/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams}
+    )
+    var tracked = initTrackedChild(child, 0'i64, 250'i64)
+    defer:
+      if not tracked.process.isNil:
+        tracked.process.kill()
+        tracked.process.close()
+    tracked.beginTermination(100'i64, 250'i64)
+    check tracked.phase == TrackedChildPhase.Terminating
+    check not tracked.advanceTrackedChild(349'i64, 250'i64)
+    check not tracked.killSent
+    check not tracked.advanceTrackedChild(350'i64, 250'i64)
+    check tracked.killSent
+    check tracked.phase == TrackedChildPhase.Killing
+
+suite "detached process options":
+  test "ordinary child runs in a separate process group":
+    let parentGroup = int(getpgrp())
+    let child = startProcess(
+      "/bin/sh", args = @["-c", "sleep 30"], options = DetachedProcessOptions
+    )
+    defer:
+      child.kill()
+      child.close()
+
+    let fields = readFile("/proc/" & $child.processID & "/stat").split()
+    check parseInt(fields[4]) != parentGroup
+
+  test "runtime event source reports and drains timer readiness":
+    const timerDeadlineMs = 10'i64
+    const readinessBudgetMs = 2000
+    var source = openRuntimeEventSource()
+    defer:
+      closeRuntimeEventSource(source)
+
+    check source.setTimer(timerDeadlineMs)
+    var fds: seq[TPollfd]
+    let started = now()
+    var ready = fds.waitForRuntimeEventFds(
+      -1, -1, [], source.fd(), source.timerFd(), readinessBudgetMs
+    )
+    while not ready.timerReady:
+      let elapsedMs = (now() - started).inMilliseconds
+      if elapsedMs >= readinessBudgetMs or ready.failed:
+        break
+      if ready.runtimeReady or ready.interrupted:
+        discard source.drain()
+      ready = fds.waitForRuntimeEventFds(
+        -1, -1, [], source.fd(), source.timerFd(), readinessBudgetMs - int(elapsedMs)
+      )
+    check ready.timerReady
+    let events = source.drain()
+    check events.timerReady
+
+    let again = fds.waitForRuntimeEventFds(
+      -1, -1, [], source.fd(), source.timerFd(), 0
+    )
+    check not again.timerReady
+
+suite "runtime deadlines":
+  test "nearest future candidate wins":
+    check nextDeadlineMs(100'i64, @[200'i64, 150, 300]) == 50'i64
+
+  test "past candidates fire immediately":
+    check nextDeadlineMs(100'i64, @[50'i64, 200]) == 0'i64
+
+  test "no candidates means no deadline":
+    check nextDeadlineMs(100'i64, @[]) == 0'i64
+
+  test "unavailable timer cannot be armed":
+    var source = initRuntimeEventSource()
+    check not source.setTimer(10'i64)

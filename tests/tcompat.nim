@@ -1,4 +1,4 @@
-import std/[json, options, os, sequtils, strtabs, strutils, tables, unittest]
+import std/[json, options, os, sequtils, strtabs, strutils, tables, times, unittest]
 import ../src/core/app_identity
 import ../src/core/[layout_selection_codec, native_layout_codec, triad_state]
 import ../src/core/msg
@@ -10,6 +10,21 @@ import
   ]
 import ../src/types/[model, runtime_values, shell_snapshot]
 import ../src/utils/behavior_log
+
+proc waitForFileText(path, needle: string, timeoutMs = 2000) =
+  let deadline = epochTime() * 1000.0 + float(timeoutMs)
+  while epochTime() * 1000.0 < deadline:
+    if fileExists(path) and readFile(path).contains(needle):
+      return
+    sleep(10)
+
+proc pollWatchdogUntilRecovery(
+    runner: var ShellRunner, model: Model, timeoutMs = 2000
+) =
+  let deadline = epochTime() * 1000.0 + float(timeoutMs)
+  while not runner.recoveryPending and epochTime() * 1000.0 < deadline:
+    discard runner.pollShellWatchdog(model, int64(epochTime() * 1000.0))
+    sleep(10)
 
 proc installAppIdentityFixture() =
   let apps =
@@ -261,14 +276,15 @@ sleep 30
   setFilePermissions(result.fakeShell, {fpUserRead, fpUserWrite, fpUserExec})
 
 proc singleShellModel(
-    launch: seq[string], stop: seq[string] = @[], enabled = true
+    launch: seq[string], stop: seq[string] = @[], enabled = true, niriCompat = false
 ): Model =
   Model(
     shells: ShellsConfig(
       configured: true,
       enabled: enabled,
       active: "test-shell",
-      profiles: @[ShellProfileConfig(name: "test-shell", launch: launch, stop: stop)],
+      profiles:
+        @[ShellProfileConfig(name: "test-shell", launch: launch, stop: stop, niriCompat: niriCompat)],
     )
   )
 
@@ -1217,6 +1233,7 @@ exit 0
 
     var runner = ShellRunner()
     runner.switchShell(previous, current, tmp / "niri.sock", "test switch")
+    waitForFileText(logPath, "launch-new")
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-old", "launch-new"]
 
@@ -1260,6 +1277,7 @@ exit 0
     var runner = ShellRunner()
 
     runner.switchShell(Model(), model, tmp / "niri.sock", "test native env")
+    waitForFileText(logPath, "triad")
     check readFile(logPath).strip() == tmp / "triad.sock" & "||triad|triad|triad"
 
   test "Shell profile Niri compatibility logs shim readiness":
@@ -1319,6 +1337,7 @@ sleep 5
       runner.stopTrackedShell("test cleanup")
 
     runner.switchShell(Model(), model, tmp / "niri.sock", "test spawn")
+    waitForFileText(envLogPath, "triad")
 
     let lines = readFile(behaviorLogPath()).strip().splitLines()
     let spawned =
@@ -1457,6 +1476,7 @@ exit 0
       runner.stopTrackedShell("test cleanup")
 
     runner.spawnPendingShell(model, tmp / "niri.sock", "initial manage")
+    waitForFileText(logPath, "launch-noctalia")
 
     let calls = readFile(logPath).splitLines().filterIt(it.len > 0)
     check calls == @["stop-noctalia", "stop-waybar", "stop-dank", "launch-noctalia"]
@@ -1498,9 +1518,14 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
       putEnv("TRIAD_FAKE_SHELL_EXIT", oldExit)
 
     var runner = ShellRunner(spawnPending: true)
-    let model = singleShellModel(@[fakeShell, "launch"], @[fakeShell, "stop"])
+    var model = singleShellModel(@[fakeShell, "launch"], @[fakeShell, "stop"])
+    model.shells.watchdog.enabled = true
 
     runner.spawnPendingShell(model, tmp / "niri.sock", "test")
+    for _ in 0 ..< 2:
+      pollWatchdogUntilRecovery(runner, model)
+      runner.nextRecoveryMs = 0
+      discard runner.pollShellRecovery(model, tmp / "niri.sock", 0)
 
     let calls = readFile(logPath)
     check calls.count("launch") >= 2
@@ -1529,18 +1554,26 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
       putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
 
     var runner = ShellRunner(spawnPending: true)
-    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    var model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    model.shells.watchdog.enabled = true
     defer:
       runner.stopTrackedShell("test cleanup")
 
     runner.spawnPendingShell(model, tmp / "niri.sock", "test")
-
+    pollWatchdogUntilRecovery(runner, model)
     check runner.recoveryPending
     check runner.recoveryAttempts == 0
-    check readFile(fake.statePath).strip() == "2"
+    check readFile(fake.statePath).strip() == "1"
 
     runner.nextRecoveryMs = 0
     check runner.pollShellRecovery(model, tmp / "niri.sock", 0)
+    waitForFileText(fake.statePath, "2")
+    check readFile(fake.statePath).strip() == "2"
+
+    pollWatchdogUntilRecovery(runner, model)
+    runner.nextRecoveryMs = 0
+    check runner.pollShellRecovery(model, tmp / "niri.sock", 0)
+    waitForFileText(fake.statePath, "3")
     check not runner.recoveryPending
     check runner.trackedShellRunning()
     check readFile(fake.statePath).strip() == "3"
@@ -1548,7 +1581,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     let calls = readFile(fake.logPath)
     check calls.count("stop") >= 2
 
-  test "Shell recovery exhausts repeated handoffs":
+  test "Shell recovery exhausts repeated spawn failures":
     let tmp = getTempDir() / ("triad-shell-recovery-exhaust-" & $getCurrentProcessId())
     if dirExists(tmp):
       removeDir(tmp)
@@ -1564,17 +1597,20 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
     putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
     putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
-    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "99")
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "1")
     defer:
       putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
       putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
       putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
 
     var runner = ShellRunner(spawnPending: true)
-    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    var model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    model.shells.watchdog.enabled = true
 
     runner.spawnPendingShell(model, tmp / "niri.sock", "test")
+    pollWatchdogUntilRecovery(runner, model)
     check runner.recoveryPending
+    removeFile(fake.fakeShell)
 
     for attempt in 1 .. MaxShellRecoveryAttempts:
       runner.nextRecoveryMs = 0
@@ -1585,9 +1621,7 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
       else:
         check not runner.recoveryPending
 
-    check readFile(fake.statePath).strip() == "5"
-    let calls = readFile(fake.logPath)
-    check calls.count("stop") >= 4
+    check readFile(fake.statePath).strip() == "1"
 
   test "Shell config reload handoff schedules recovery":
     let tmp = getTempDir() / ("triad-shell-config-recovery-" & $getCurrentProcessId())
@@ -1612,15 +1646,18 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
       putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
 
     var runner = ShellRunner()
-    let model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    var model = singleShellModel(@[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"])
+    model.shells.watchdog.enabled = true
     defer:
       runner.stopTrackedShell("test cleanup")
 
     runner.switchShell(Model(), model, tmp / "niri.sock", "config reload recovery")
+    pollWatchdogUntilRecovery(runner, model)
     check runner.recoveryPending
 
     runner.nextRecoveryMs = 0
     check runner.pollShellRecovery(model, tmp / "niri.sock", 0)
+    waitForFileText(fake.statePath, "2")
     check not runner.recoveryPending
     check runner.trackedShellRunning()
     check readFile(fake.statePath).strip() == "2"
@@ -1658,9 +1695,14 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-9}"
       putEnv("TRIAD_FAKE_SHELL_EXIT", oldExit)
 
     var runner = ShellRunner(spawnPending: true)
-    let model = singleShellModel(@[fakeShell, "launch"], @[fakeShell, "stop"])
+    var model = singleShellModel(@[fakeShell, "launch"], @[fakeShell, "stop"])
+    model.shells.watchdog.enabled = true
 
     runner.spawnPendingShell(model, tmp / "niri.sock", "test")
+    pollWatchdogUntilRecovery(runner, model)
+    runner.nextRecoveryMs = 0
+    discard runner.pollShellRecovery(model, tmp / "niri.sock", 0)
+    waitForFileText(logPath, "stop")
 
     let calls = readFile(logPath)
     check calls.contains("launch")
@@ -1726,3 +1768,44 @@ Categories=System;TerminalEmulator;
     check powerOnMonitor.kind == MsgKind.CmdPowerOnMonitor
     check powerOnMonitor.outputTarget == "DP-3"
     check parseTextCommand("mmsg -g -A").isNone
+
+  test "Niri compat shell launch does not wait for a stale socket":
+    let tmp = getTempDir() / ("triad-niri-ready-" & $getCurrentProcessId())
+    if dirExists(tmp):
+      removeDir(tmp)
+    createDir(tmp)
+    defer:
+      if dirExists(tmp):
+        removeDir(tmp)
+
+    let staleSocket = tmp / "niri.sock"
+    writeFile(staleSocket, "stale")
+    let fake = writeFakeRecoveringShell(tmp)
+
+    let oldRuntimeDir = getEnv("XDG_RUNTIME_DIR", "")
+    let oldLog = getEnv("TRIAD_FAKE_SHELL_LOG", "")
+    let oldState = getEnv("TRIAD_FAKE_SHELL_STATE", "")
+    let oldHandoffs = getEnv("TRIAD_FAKE_SHELL_HANDOFFS", "")
+    putEnv("XDG_RUNTIME_DIR", tmp)
+    putEnv("TRIAD_FAKE_SHELL_LOG", fake.logPath)
+    putEnv("TRIAD_FAKE_SHELL_STATE", fake.statePath)
+    putEnv("TRIAD_FAKE_SHELL_HANDOFFS", "0")
+    defer:
+      putEnv("TRIAD_FAKE_SHELL_LOG", oldLog)
+      putEnv("TRIAD_FAKE_SHELL_STATE", oldState)
+      putEnv("TRIAD_FAKE_SHELL_HANDOFFS", oldHandoffs)
+      putEnv("XDG_RUNTIME_DIR", oldRuntimeDir)
+
+    var runner = ShellRunner(spawnPending: true)
+    let model = singleShellModel(
+      @[fake.fakeShell, "launch"], @[fake.fakeShell, "stop"], niriCompat = true
+    )
+    defer:
+      runner.stopTrackedShell("test cleanup")
+
+    let started = epochTime()
+    runner.spawnPendingShell(model, staleSocket, "test")
+    let elapsedMs = (epochTime() - started) * 1000.0
+
+    check elapsedMs < 1000.0
+    check runner.trackedShellRunning()

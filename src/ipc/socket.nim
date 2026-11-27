@@ -637,6 +637,43 @@ proc streamIpcRequest*(
     if not client.isClosed:
       client.close()
 
+proc isStartupConnectError(error: ref CatchableError): bool =
+  let message = error.msg.toLowerAscii()
+  message.contains("no such file") or message.contains("connection refused")
+
+proc sendIpcRequestWithRetry*(
+    path: string, msg: string, timeoutMs = 3000, attempts = 20, retryDelayMs = 25
+): Future[string] {.async.} =
+  var lastError: ref CatchableError
+  for _ in 0 ..< attempts:
+    try:
+      return await sendIpcRequest(path, msg, timeoutMs)
+    except CatchableError as e:
+      lastError = e
+      if not isStartupConnectError(e):
+        raise
+      await sleepAsync(retryDelayMs)
+  raise lastError
+
+proc streamIpcRequestWithRetry*(
+    path: string,
+    msg: string,
+    onLine: proc(line: string),
+    attempts = 20,
+    retryDelayMs = 25,
+) {.async.} =
+  var lastError: ref CatchableError
+  for _ in 0 ..< attempts:
+    try:
+      await streamIpcRequest(path, msg, onLine)
+      return
+    except CatchableError as e:
+      lastError = e
+      if not isStartupConnectError(e):
+        raise
+      await sleepAsync(retryDelayMs)
+  raise lastError
+
 proc niriBroadcastLogPayload(payload: string, subscriberCount: int): JsonNode =
   try:
     let root = parseJson(payload)

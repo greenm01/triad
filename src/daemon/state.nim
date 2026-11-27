@@ -16,6 +16,7 @@ import ../janet/runtime
 import ../types/core
 import ../types/[projection_values, runtime_state, runtime_values]
 import cursor_shake, protocol_surfaces, shell_runner
+import tracked_child
 
 type
   RiverPhase* {.pure.} = enum
@@ -219,6 +220,9 @@ type
     switchPolls*: uint64
     childReapPolls*: uint64
     childReapedProcesses*: uint64
+    childSignalWakeups*: uint64
+    childSignalDrains*: uint64
+    timerWakeups*: uint64
     memorySampleChecks*: uint64
     memoryCompactionChecks*: uint64
     asyncPolls*: uint64
@@ -247,7 +251,10 @@ type
     targetOutput*: OutputId
     sourceName*: string
     targetName*: string
-    process*: Process
+    child*: TrackedChild
+    hasChild*: bool
+    stopping*: bool
+    stopReason*: string
     failed*: bool
     retryAfterMs*: int64
 

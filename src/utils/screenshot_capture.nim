@@ -130,27 +130,29 @@ proc signalPid(pid: int32, signal: cint) =
   except CatchableError:
     discard
 
-proc terminateProcessTree(process: Process) =
+proc signalProcessTree(process: Process, signal: cint) =
   if process == nil:
     return
   let rootPid = int32(process.processID)
-  let children = descendantPids(rootPid)
-  for pid in children:
-    signalPid(pid, SIGTERM)
-  try:
-    if process.running():
-      process.terminate()
-      discard process.waitForExit(1000)
-  except CatchableError:
-    discard
-  if process.running():
-    for pid in children:
-      signalPid(pid, SIGKILL)
-    try:
-      process.kill()
-      discard process.waitForExit()
-    except CatchableError:
-      discard
+  for pid in descendantPids(rootPid):
+    signalPid(pid, signal)
+  signalPid(rootPid, signal)
+
+proc terminateProcessTree(process: Process) =
+  signalProcessTree(process, SIGTERM)
+
+proc forceKillProcessTree(process: Process) =
+  signalProcessTree(process, SIGKILL)
+
+proc reapProcessTree(process: Process, pollMs: int) {.async.} =
+  let softDeadline = epochTime() + 0.25
+  while process != nil and process.peekExitCode() == -1 and epochTime() < softDeadline:
+    await sleepAsync(pollMs)
+  if process != nil and process.peekExitCode() == -1:
+    forceKillProcessTree(process)
+  let hardDeadline = epochTime() + 0.10
+  while process != nil and process.peekExitCode() == -1 and epochTime() < hardDeadline:
+    await sleepAsync(pollMs)
 
 proc waitShellCommand(
     process: Process, timeoutMs, pollMs: int
@@ -166,6 +168,7 @@ proc waitShellCommand(
       return (code, false)
     if timeoutMs > 0 and epochTime() >= deadline:
       terminateProcessTree(process)
+      await reapProcessTree(process, pollMs)
       return (ShellTimeoutExitCode, true)
     await sleepAsync(pollMs)
 

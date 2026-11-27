@@ -13,7 +13,7 @@ from ../ipc/niri_shell_compat import chooseNiriCompatSocketPath
 import ../ipc/[binding_dispatch, command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
-import ../utils/[behavior_log, event_poll, runtime_log, session_env, wayland_runtime]
+import ../utils/[behavior_log, event_poll, runtime_deadlines, runtime_log, session_env, wayland_runtime]
 import
   bindings_runtime, capture_sessions_runtime, child_process_runtime, effects_runtime,
   input_runtime, ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime,
@@ -21,6 +21,8 @@ import
   process_runner, protocol_diagnostics, shell_runner, registry_runtime, reload_runtime,
   render_runtime, render_invalidation, screen_mirror_runtime, spawn_context, state,
   switch_event_runtime
+import runtime_events
+import ipc_startup_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -253,7 +255,7 @@ proc asyncSelectorFd(): int =
   asyncdispatch.getGlobalDispatcher().getIoHandler().getFd()
 
 proc waitForRuntimeEvents(
-    daemon: var TriadDaemon, timeoutMs: int
+    daemon: var TriadDaemon, timeoutMs: int, runtimeFd: int, timerFd: int
 ): RuntimeEventPollResult =
   let waylandFd =
     if daemon.display == nil:
@@ -268,7 +270,7 @@ proc waitForRuntimeEvents(
   let asyncFd = asyncSelectorFd()
   daemon.waitBackend = if asyncFd >= 0: "fd-aware" else: "timeout"
   result = daemon.eventPollFds.waitForRuntimeEventFds(
-    waylandFd, asyncFd, daemon.eventSwitchFds, timeoutMs
+    waylandFd, asyncFd, daemon.eventSwitchFds, runtimeFd, timerFd, timeoutMs
   )
   if result.failed:
     warn "Runtime event poll failed", error = osErrorMsg(result.errorCode)
@@ -280,6 +282,9 @@ proc loopCountersJson(counters: RuntimeLoopCounters): JsonNode =
     "switch_polls": counters.switchPolls,
     "child_reap_polls": counters.childReapPolls,
     "child_reaped_processes": counters.childReapedProcesses,
+    "child_signal_wakeups": counters.childSignalWakeups,
+    "child_signal_drains": counters.childSignalDrains,
+    "timer_wakeups": counters.timerWakeups,
     "memory_sample_checks": counters.memorySampleChecks,
     "memory_compaction_checks": counters.memoryCompactionChecks,
     "async_polls": counters.asyncPolls,
@@ -435,6 +440,9 @@ proc delta(after, before: RuntimeLoopCounters): RuntimeLoopCounters =
     switchPolls: after.switchPolls - before.switchPolls,
     childReapPolls: after.childReapPolls - before.childReapPolls,
     childReapedProcesses: after.childReapedProcesses - before.childReapedProcesses,
+    childSignalWakeups: after.childSignalWakeups - before.childSignalWakeups,
+    childSignalDrains: after.childSignalDrains - before.childSignalDrains,
+    timerWakeups: after.timerWakeups - before.timerWakeups,
     memorySampleChecks: after.memorySampleChecks - before.memorySampleChecks,
     memoryCompactionChecks: after.memoryCompactionChecks - before.memoryCompactionChecks,
     asyncPolls: after.asyncPolls - before.asyncPolls,
@@ -855,11 +863,11 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 
 # --- Main Loop ---
 
-proc main*() =
+proc main*(): int =
   let args = commandLineParams()
   if args.len > 0 and args[0] in ["--help", "-h", "help"]:
     stdout.writeLine(renderTriadHelp())
-    return
+    return 0
 
   if args.len > 0 and args[0] in ["validate-config", "check-config"]:
     let validateArgs =
@@ -1151,37 +1159,17 @@ proc main*() =
   let triadSocket = triadSocketPath()
   let niriSocketPath = chooseNiriCompatSocketPath(triadSocket)
   var ipcStarted = false
-  var ipcStartupGateOpen = false
-
-  proc waitForIpcListenersReady(listeners: openArray[Future[bool]]): bool =
-    let deadline = epochTime() + float(IpcListenReadyTimeoutMs) / 1000.0
-    while true:
-      var pending = false
-      for listener in listeners:
-        if not listener.finished:
-          pending = true
-          break
-      if not pending:
-        break
-      if epochTime() >= deadline:
-        return false
-      asyncdispatch.poll(10)
-
-    result = true
-    for listener in listeners:
-      if listener.failed or not listener.read:
-        result = false
-
+  var ipcStartupGate = initIpcStartupGate(unixMs())
   proc startIpcServers(): bool =
-    if ipcStartupGateOpen:
+    if ipcStartupGate.open:
       return true
     if ipcStarted:
       return false
     ipcStarted = true
-    var listeners: seq[Future[bool]] = @[]
+    ipcStartupGate.startedAtMs = unixMs()
 
     let triadListenReady = newFuture[bool]("triad ipc listener ready")
-    listeners.add(triadListenReady)
+    ipcStartupGate.addListener(triadListenReady)
     info "Starting Triad IPC server", path = triadSocket
     writeBehaviorEvent("triad_ipc_server_starting", %*{"path": triadSocket})
     asyncCheck startIpcServer(
@@ -1199,7 +1187,7 @@ proc main*() =
 
     if niriSocketPath.len > 0 and niriSocketPath != triadSocket:
       let niriListenReady = newFuture[bool]("niri compat ipc listener ready")
-      listeners.add(niriListenReady)
+      ipcStartupGate.addListener(niriListenReady)
       info "Starting Niri-compatible IPC server", path = niriSocketPath
       writeBehaviorEvent("niri_compat_ipc_server_starting", %*{"path": niriSocketPath})
       asyncCheck startIpcServer(
@@ -1216,15 +1204,6 @@ proc main*() =
         requestTimeoutMs = IpcNoRequestTimeoutMs,
       )
 
-    let ready = waitForIpcListenersReady(listeners)
-    ipcStartupGateOpen = true
-    writeBehaviorEvent(
-      "ipc_startup_listeners_ready",
-      %*{"ready": ready, "timeout_ms": IpcListenReadyTimeoutMs},
-    )
-    if not ready:
-      error "IPC listeners were not ready before startup commands",
-        timeout_ms = IpcListenReadyTimeoutMs
     true
 
   asyncCheck startStartupWindowRulesExpiry()
@@ -1238,10 +1217,21 @@ proc main*() =
   var lastMemoryMaintenanceMs = 0'i64
   var lastShellPollMs = 0'i64
 
+  var exitStatus = 0
   var running = true
+  var runtimeEvents = initRuntimeEventSource()
+  try:
+    runtimeEvents = openRuntimeEventSource()
+  except CatchableError as e:
+    warn "Runtime child-exit events unavailable; using reap fallback", error = e.msg
+  defer:
+    closeRuntimeEventSource(runtimeEvents)
+
+  var timerArmed = false
   while running:
     inc daemon.loopCounters.loopIterations
     if not dispatchPendingWayland(daemon.display):
+      exitStatus = 1
       break
 
     let nowMs = unixMs()
@@ -1249,13 +1239,15 @@ proc main*() =
       lastWatcherPollMs = nowMs
       inc daemon.loopCounters.watcherPolls
       daemon.watcher.poll(0)
+      if not timerArmed:
+        daemon.syncScreenMirrors()
 
-    if lastChildReapPollMs.pollDue(nowMs, ChildReapPollIntervalMs):
+
+    if runtimeEvents.fd() < 0 and
+        lastChildReapPollMs.pollDue(nowMs, ChildReapPollIntervalMs):
       lastChildReapPollMs = nowMs
       inc daemon.loopCounters.childReapPolls
       daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
-      daemon.syncScreenMirrors()
-
     daemon.enqueueFrameTickIfDue(nowMs)
     if daemon.memoryMaintenanceDue(lastMemoryMaintenanceMs, nowMs):
       lastMemoryMaintenanceMs = nowMs
@@ -1264,7 +1256,28 @@ proc main*() =
       inc daemon.loopCounters.memoryCompactionChecks
       daemon.maybeRunMemoryPressureCompaction(nowMs)
 
-    let waitTimeout = daemon.loopWaitTimeoutMs(nowMs)
+    var deadlineCandidates: seq[int64] = @[]
+    if ipcStarted and not ipcStartupGate.open:
+      deadlineCandidates.add(ipcStartupGate.startedAtMs + int64(IpcListenReadyTimeoutMs))
+    if lastMemoryMaintenanceMs > 0:
+      deadlineCandidates.add(lastMemoryMaintenanceMs + MemoryMaintenanceIntervalMs)
+    if daemon.lastRuntimeLoopSampleMs > 0:
+      deadlineCandidates.add(daemon.lastRuntimeLoopSampleMs + RuntimeLoopSampleIntervalMs)
+    deadlineCandidates.add(nowMs + MaintenancePollIntervalMs)
+    deadlineCandidates.add(nowMs + int64(daemon.loopWaitTimeoutMs(nowMs)))
+    let nextDeadline = nextDeadlineMs(nowMs, deadlineCandidates)
+    timerArmed =
+      if runtimeEvents.timerFd() >= 0:
+        runtimeEvents.setTimer(if nextDeadline > 0: nextDeadline else: 1'i64)
+      else:
+        false
+    let waitTimeout =
+      if timerArmed:
+        -1
+      elif nextDeadline > 0:
+        int(nextDeadline)
+      else:
+        1
 
     # Poll async IPC without sleeping before Wayland events are serviced.
     inc daemon.loopCounters.asyncPolls
@@ -1284,14 +1297,35 @@ proc main*() =
       running = false
       continue
 
-    if daemon.initialManageComplete:
-      if startIpcServers():
-        daemon.spawnPendingStartupCommands(
-          daemon.runtimeState.model, "initial manage ipc ready"
+    if daemon.initialManageComplete and not ipcStarted:
+      discard startIpcServers()
+    if ipcStarted and not ipcStartupGate.open:
+      case ipcStartupGate.pollIpcStartupGate(nowMs, IpcListenReadyTimeoutMs)
+      of IpcStartupGateStatus.Ready:
+        writeBehaviorEvent(
+          "ipc_startup_listeners_ready",
+          %*{"ready": true, "timeout_ms": IpcListenReadyTimeoutMs},
         )
-        daemon.shellRunner.spawnPendingShell(
-          daemon.runtimeState.model, niriSocketPath, "initial manage ipc ready"
-        )
+      of IpcStartupGateStatus.Timeout:
+        if not ipcStartupGate.timeoutLogged:
+          ipcStartupGate.timeoutLogged = true
+          error "IPC listeners were not ready before startup commands",
+            timeout_ms = IpcListenReadyTimeoutMs
+          writeBehaviorEvent(
+            "ipc_startup_listeners_ready",
+            %*{"ready": false, "timeout_ms": IpcListenReadyTimeoutMs},
+          )
+      else:
+        discard
+
+
+    if daemon.initialManageComplete and ipcStartupGate.open:
+      daemon.spawnPendingStartupCommands(
+        daemon.runtimeState.model, "initial manage ipc ready"
+      )
+      daemon.shellRunner.spawnPendingShell(
+        daemon.runtimeState.model, niriSocketPath, "initial manage ipc ready"
+      )
       let shellPollMs = nowMs
       let recoveryMs = daemon.nextShellRecoveryMs()
       let shellPollDue =
@@ -1317,16 +1351,30 @@ proc main*() =
       daemon.flushManageRequest()
 
     if not prepareWaylandRead(daemon.display):
+      exitStatus = 1
       break
 
     discard daemon.display.flush()
-    let waitResult = daemon.waitForRuntimeEvents(waitTimeout)
+    let waitResult = daemon.waitForRuntimeEvents(waitTimeout, runtimeEvents.fd(), runtimeEvents.timerFd())
     if waitResult.waylandReady:
       inc daemon.loopCounters.waylandWakeups
       if daemon.display.read_events() == -1:
+        exitStatus = 1
         running = false
     else:
       daemon.display.cancel_read()
+    var runtimeReadyEvents: RuntimeEvents
+    if waitResult.runtimeReady or waitResult.timerReady:
+      if waitResult.runtimeReady:
+        inc daemon.loopCounters.childSignalWakeups
+      if waitResult.timerReady:
+        inc daemon.loopCounters.timerWakeups
+      inc daemon.loopCounters.childSignalDrains
+      runtimeReadyEvents = runtimeEvents.drain()
+      if runtimeReadyEvents.childReady:
+        daemon.loopCounters.childReapedProcesses += uint64(daemon.reapChildProcesses())
+      if runtimeReadyEvents.timerReady:
+        daemon.syncScreenMirrors()
     if waitResult.asyncReady:
       inc daemon.loopCounters.asyncWakeups
       inc daemon.loopCounters.asyncPolls
@@ -1337,8 +1385,10 @@ proc main*() =
       daemon.pollSwitchEventDevices()
     daemon.maybeWriteRuntimeLoopSample(unixMs())
 
+  daemon.shutdownScreenMirrors("daemon shutdown")
   daemon.closeSwitchEventDevices()
   daemon.janetRuntime.close()
+  exitStatus
 
 if isMainModule:
-  main()
+  quit main()
