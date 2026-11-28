@@ -388,6 +388,39 @@ proc ensureFloatingAt*(
     return false
   model.setWindowFloating(winId, true, geom, parentAutoFloating)
 
+proc parentChainRoot(model: Model, winId: WindowId): WindowId =
+  result = winId
+  for _ in 0 ..< 64:
+    let winOpt = model.windowData(result)
+    if winOpt.isNone:
+      return
+    let parent = model.windowForExternal(winOpt.get().parentExternalId)
+    if parent == NullWindowId:
+      return
+    result = parent
+
+proc returnFocusFromBackgroundChild(model: var Model, winId: WindowId): bool =
+  ## A child that turns tiled must not keep focus it took from another app's
+  ## window. Focus goes back to the window that had it before the child opened.
+  if model.activeFocus() != winId:
+    return false
+  let winOpt = model.windowData(winId)
+  if winOpt.isNone:
+    return false
+  let ruleMatch = model.windowRuleFor(winOpt.get())
+  if ruleMatch.found and ruleMatch.rule.openFocusedSet and ruleMatch.rule.openFocused:
+    return false
+  var previous = NullWindowId
+  for id in model.focusHistoryIdsReverse():
+    if id != winId:
+      previous = id
+      break
+  if previous == NullWindowId or
+      model.parentChainRoot(previous) == model.parentChainRoot(winId) or
+      model.tagForWindow(previous) != model.activeTag:
+    return false
+  model.focusWindow(previous, retargetViewport = false)
+
 proc reconcileParentedWindowPolicy*(
     model: var Model, winId: WindowId, allowFloatCreation = false
 ): bool =
@@ -405,7 +438,8 @@ proc reconcileParentedWindowPolicy*(
     false
   of ParentedWindowIntent.Tile:
     if win.isFloating and (win.parentAutoFloating or (rule.set and not rule.value)):
-      model.setWindowFloating(winId, false)
+      let tiled = model.setWindowFloating(winId, false)
+      model.returnFocusFromBackgroundChild(winId) or tiled
     else:
       false
   of ParentedWindowIntent.Float:

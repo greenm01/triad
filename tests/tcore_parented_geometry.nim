@@ -300,6 +300,46 @@ suite "Core Runtime Logic: parented geometry":
     let order = model.layoutProjection().instructions.mapIt(uint32(it.windowId))
     check order.find(3'u32) < order.find(2'u32)
 
+  test "Large child of a background app tiles without taking focus":
+    proc openLargeChild(model: var Model, parent: uint32) =
+      let parentGeom = model.instructionGeom(parent)
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowCreated,
+          windowId: 9,
+          createdParentWindowId: parent,
+          appId: "editor",
+          title: "Detached",
+        )
+      )
+      model.applyMsg(
+        Msg(
+          kind: MsgKind.WlWindowDimensionsHint,
+          hintWindowId: 9,
+          minWidth: int32(float32(parentGeom.w) * 0.95'f32),
+          minHeight: int32(float32(parentGeom.h) * 0.95'f32),
+          maxWidth: 0,
+          maxHeight: 0,
+        )
+      )
+
+    for parentFocused in [false, true]:
+      var model = cameraModel()
+      model.applyMsg(
+        Msg(kind: MsgKind.WlOutputDimensions, outputId: 0, width: 1000, height: 700)
+      )
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "Parent")
+      )
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "work", title: "Work")
+      )
+      model.focusExternal(if parentFocused: 1'u32 else: 2'u32)
+      model.openLargeChild(1)
+
+      check not model.snapshotWindow(9).isFloating
+      check model.focusedWindowId() == (if parentFocused: 9'u32 else: 2'u32)
+
   test "Large parented primary surface tiles after size hint":
     var model = cameraModel()
     model.applyMsg(
