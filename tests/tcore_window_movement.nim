@@ -1213,6 +1213,34 @@ suite "Core Runtime Logic: window movement":
     model.focusExternal(2)
     check model.stackOrder(ids) == @[1'u32, 2'u32]
 
+  test "Fullscreen app stays above floating windows while its dialog has focus":
+    var model = configuredModel()
+    model.setupSideBySideOutputs()
+    for id in 1'u32 .. 2'u32:
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: id, appId: "app", title: $id)
+      )
+    check model.setWindowFloating(
+      model.windowForExternal(ExternalWindowId(2)),
+      true,
+      Rect(x: 100, y: 100, w: 400, h: 300),
+    )
+    model.focusExternal(1)
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFullscreen))
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlWindowCreated,
+        windowId: 3,
+        createdParentWindowId: 1,
+        appId: "pinentry",
+        title: "Passphrase",
+      )
+    )
+    check model.focusedWindowId() == 3
+    var ids = @[1'u32, 2'u32, 3'u32]
+    model.sortStackIds(ids)
+    check model.stackOrder(ids) == @[2'u32, 1'u32, 3'u32]
+
   test "Floating window past the screen edge keeps its on-screen borders":
     var model = configuredModel()
     model.borderWidth = 2

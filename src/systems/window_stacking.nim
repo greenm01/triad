@@ -95,15 +95,17 @@ proc ownStackBand(
     return StackBand.Global
   if layer == 1:
     return StackBand.Overlay
+  # A window holding focus through one of its children counts as focused.
+  let inFocusedTree = id == focused or model.isDescendantRiverWindow(focused, id)
   let winOpt = model.windowDataForRiverId(id)
   let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
-  if isFullscreen and id == focused:
+  if isFullscreen and inFocusedTree:
     return StackBand.FocusedFullscreen
   if id == scratchpad:
     return StackBand.Scratchpad
   if winOpt.isSome and winOpt.get().isFloating:
     return StackBand.Floating
-  if id == focused:
+  if inFocusedTree:
     return StackBand.TiledFocused
   if isFullscreen or model.effectivelyMaximizedForRiverId(id):
     return StackBand.TiledRaised
@@ -112,8 +114,10 @@ proc ownStackBand(
 proc stackOrder*(model: Model, ids: openArray[uint32]): seq[uint32] =
   ## Bottom-to-top stacking for `ids`, which must already be sorted by
   ## `sortStackIds`. Floating windows stay above tiled ones whatever has focus;
-  ## among them the most recently focused is on top. A child window stays above
-  ## its parent and is never placed in a lower band than it.
+  ## among them the most recently focused is on top. A focused child keeps its
+  ## parent focused for stacking, so a fullscreen app stays above other floating
+  ## windows while its dialog has focus. A child window stays above its parent
+  ## and is never placed in a lower band than it.
   let overlayActive = model.overviewActive or model.recentWindowsActive
   let highlighted =
     if overlayActive:
