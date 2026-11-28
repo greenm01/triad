@@ -315,6 +315,8 @@ proc applyCommand*(
     result.dirty = model.focusByDirection(msg.direction)
   of MsgKind.CmdFocusLast:
     result.dirty = model.focusLast()
+  of MsgKind.CmdSwitchFocusFloatingTiling:
+    result.dirty = model.focusBetweenFloatingAndTiling()
   of MsgKind.CmdFocusTagLeft:
     result.dirty =
       if model.overviewActive:

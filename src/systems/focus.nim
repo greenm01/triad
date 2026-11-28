@@ -359,6 +359,28 @@ proc focusableWindowsOnTag(model: Model, tagId: TagId): seq[WindowId] =
     if not win.isUnmanagedGlobal and not win.isMinimized and win.windowAdmitted():
       result.add(winId)
 
+proc focusBetweenFloatingAndTiling*(model: var Model): bool =
+  ## Moves focus from a floating window to a tiled one on the active workspace,
+  ## or the other way, preferring the most recently focused window of that kind.
+  let current = model.focusedOnActiveTag()
+  let currentOpt = model.windowData(current)
+  let wantFloating = currentOpt.isNone or not currentOpt.get().isFloating
+  let candidates = model.focusableWindowsOnTag(model.activeTag)
+
+  proc wanted(model: Model, winId: WindowId): bool =
+    if winId == current or winId notin candidates:
+      return false
+    let winOpt = model.windowData(winId)
+    winOpt.isSome and winOpt.get().isFloating == wantFloating
+
+  for candidate in model.focusHistoryIdsReverse():
+    if model.wanted(candidate):
+      return model.focusWindow(candidate)
+  for candidate in candidates:
+    if model.wanted(candidate):
+      return model.focusWindow(candidate)
+  false
+
 proc focusCycle*(model: var Model, step: int): bool =
   let tagId = model.activeTag
   let tagOpt = model.tagData(tagId)

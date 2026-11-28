@@ -164,7 +164,8 @@ proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
       MsgKind.WlWindowUnmaximizeRequested, MsgKind.WlWindowMinimizeRequested,
       MsgKind.WlWindowIdentifier, MsgKind.WlWindowAppId, MsgKind.WlWindowTitle,
       MsgKind.WlWindowDimensionsHint, MsgKind.CmdFocusNext, MsgKind.CmdFocusPrev,
-      MsgKind.CmdFocusDirection, MsgKind.CmdFocusLast, MsgKind.CmdFocusTagLeft,
+      MsgKind.CmdFocusDirection, MsgKind.CmdFocusLast,
+      MsgKind.CmdSwitchFocusFloatingTiling, MsgKind.CmdFocusTagLeft,
       MsgKind.CmdFocusTagRight, MsgKind.CmdFocusOccupiedTagLeft,
       MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusColumnFirst,
       MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,
@@ -305,7 +306,8 @@ proc workspaceSnapshotChanged*(before, after: ShellSnapshot): bool =
 proc isFocusChangingCommand*(kind: MsgKind): bool =
   kind in {
     MsgKind.WlFocusChanged, MsgKind.CmdFocusNext, MsgKind.CmdFocusPrev,
-    MsgKind.CmdFocusDirection, MsgKind.CmdFocusLast, MsgKind.CmdFocusTagLeft,
+    MsgKind.CmdFocusDirection, MsgKind.CmdFocusLast,
+    MsgKind.CmdSwitchFocusFloatingTiling, MsgKind.CmdFocusTagLeft,
     MsgKind.CmdFocusTagRight, MsgKind.CmdFocusOccupiedTagLeft,
     MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusColumnFirst,
     MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,

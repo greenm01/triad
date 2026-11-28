@@ -7,6 +7,7 @@ type
     FocusUp
     FocusDown
     FocusLast
+    SwitchFocusBetweenFloatingAndTiling
     FocusTagLeft
     FocusTagRight
     FocusOccupiedTagLeft
@@ -217,6 +218,11 @@ const
     (text: "focus-up", id: CommandId.FocusUp, canonical: true),
     (text: "focus-down", id: CommandId.FocusDown, canonical: true),
     (text: "focus-last", id: CommandId.FocusLast, canonical: true),
+    (
+      text: "switch-focus-between-floating-and-tiling",
+      id: CommandId.SwitchFocusBetweenFloatingAndTiling,
+      canonical: true,
+    ),
     (text: "focus-tag-left", id: CommandId.FocusTagLeft, canonical: true),
     (text: "focus-tag-right", id: CommandId.FocusTagRight, canonical: true),
     (
@@ -540,6 +546,8 @@ const
     rows[CommandId.FocusRight] = CommandMeta(argShape: NoArgs, defined: true)
     rows[CommandId.FocusUp] = CommandMeta(argShape: NoArgs, defined: true)
     rows[CommandId.FocusDown] = CommandMeta(argShape: NoArgs, defined: true)
+    rows[CommandId.SwitchFocusBetweenFloatingAndTiling] =
+      CommandMeta(argShape: NoArgs, defined: true)
     rows[CommandId.FocusLast] = CommandMeta(argShape: NoArgs, defined: true)
     rows[CommandId.FocusTagLeft] = CommandMeta(argShape: NoArgs, defined: true)
     rows[CommandId.FocusTagRight] = CommandMeta(argShape: NoArgs, defined: true)

@@ -95,6 +95,7 @@ protocol-dependent or tracked in the feature matrix below.
 | Focus | Directional focus | `focusdir` | `river_seat_v1.focus_window` primitive | `focus-left/right/up/down` | X | Triad maps to model focus commands. |
 | Focus | Stack/next/previous focus | `focusstack` | WM policy | `focus-next`, `focus-prev` | X | |
 | Focus | Last focus | `focuslast` | WM policy | `focus-last` | X | |
+| Focus | Floating/tiled focus switch | | WM policy | `switch-focus-between-floating-and-tiling` | X | Focuses the most recently focused window of the other kind on the active workspace. Also the niri `SwitchFocusBetweenFloatingAndTiling` action. |
 | Focus | Column boundary focus | | WM policy | `focus-column-first/last` | X | Triad-specific column navigation. |
 | Focus | Focus by window id | | WM policy | `focus-window <id>` | X | Used by shell/overview. |
 | Focus | Focus shell UI | | `river_seat_v1.focus_shell_surface` | `focus-shell-ui` | X | Triad shell integration. |
@@ -424,7 +425,8 @@ KDL config nodes and fields:
 Text IPC and bind commands:
 
 - Focus: `focus-next`, `focus-prev`, `focus-left`, `focus-right`,
-  `focus-up`, `focus-down`, `focus-last`, `focus-tag-left`,
+  `focus-up`, `focus-down`, `focus-last`,
+  `switch-focus-between-floating-and-tiling`, `focus-tag-left`,
   `focus-tag-right`, `focus-occupied-tag-left`,
   `focus-occupied-tag-right`, `focus-column-first`,
   `focus-column-last`, `focus-window-or-workspace-up`,

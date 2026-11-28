@@ -395,6 +395,17 @@ suite "Shell compatibility contracts":
     check windows[1]["id"].getInt() == 20
     check windows[1]["workspace_id"].getInt() == 2
 
+  test "Floating and tiling focus switch maps from text and niri commands":
+    let parsed = parseTextCommand("switch-focus-between-floating-and-tiling")
+    check parsed.isSome
+    check parsed.get().kind == MsgKind.CmdSwitchFocusFloatingTiling
+    let niri = handleNiriRequest(
+      """{"Action":{"SwitchFocusBetweenFloatingAndTiling":{}}}""", snapshotForShell()
+    )
+    check niri.messages.len == 1
+    check niri.messages[0].kind == MsgKind.CmdSwitchFocusFloatingTiling
+    check niri.reply == """{"Ok":"Handled"}"""
+
   test "Niri actions map to Triad messages":
     let snapshot = snapshotForShell()
     let focusWs = handleNiriRequest(

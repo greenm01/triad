@@ -117,6 +117,7 @@ type
     CmdFocusPrev
     CmdFocusDirection
     CmdFocusLast
+    CmdSwitchFocusFloatingTiling
     CmdFocusTagLeft
     CmdFocusTagRight
     CmdFocusOccupiedTagLeft

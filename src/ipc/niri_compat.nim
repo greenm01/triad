@@ -296,6 +296,8 @@ proc actionMessages(
     return (true, @[Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirUp)])
   elif action.hasKey("FocusWindowDown"):
     return (true, @[Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown)])
+  elif action.hasKey("SwitchFocusBetweenFloatingAndTiling"):
+    return (true, @[Msg(kind: MsgKind.CmdSwitchFocusFloatingTiling)])
   elif action.hasKey("FocusWindowOrWorkspaceUp"):
     return (true, @[Msg(kind: MsgKind.CmdFocusWindowOrWorkspaceUp)])
   elif action.hasKey("FocusWindowOrWorkspaceDown"):

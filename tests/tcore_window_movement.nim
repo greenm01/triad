@@ -1241,6 +1241,28 @@ suite "Core Runtime Logic: window movement":
     model.sortStackIds(ids)
     check model.stackOrder(ids) == @[2'u32, 1'u32, 3'u32]
 
+  test "Focus switches between floating and tiled windows by recency":
+    var model = configuredModel()
+    model.setupSideBySideOutputs()
+    for id in 1'u32 .. 4'u32:
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: id, appId: "app", title: $id)
+      )
+    for id in [3'u32, 4'u32]:
+      check model.setWindowFloating(
+        model.windowForExternal(ExternalWindowId(id)),
+        true,
+        Rect(x: 100, y: 100, w: 400, h: 300),
+      )
+    model.focusExternal(3)
+    model.focusExternal(1)
+    model.focusExternal(2)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdSwitchFocusFloatingTiling))
+    check model.focusedWindowId() == 3
+    model.applyMsg(Msg(kind: MsgKind.CmdSwitchFocusFloatingTiling))
+    check model.focusedWindowId() == 2
+
   test "Floating window past the screen edge keeps its on-screen borders":
     var model = configuredModel()
     model.borderWidth = 2

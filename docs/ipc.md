@@ -17,7 +17,7 @@ Manage your environment. `config-reload` refreshes your settings. `triad-reload`
 
 ### Navigation
 
-Move through your windows. `focus-next` and `focus-prev` are your bread and butter. Use `focus-left/right/up/down` for spatial moves. `focus-last` takes you back.
+Move through your windows. `focus-next` and `focus-prev` are your bread and butter. Use `focus-left/right/up/down` for spatial moves. `focus-last` takes you back. `switch-focus-between-floating-and-tiling` jumps between the floating windows and the tiled ones on your workspace.
 
 Workspaces follow suit. `focus-workspace <index>` or `focus-tag <id>` jumps you across the tag-scape. `new-workspace` grabs an empty tag or creates a fresh one. `toggle-overview` gives you the bird’s-eye view.
 

@@ -61,7 +61,7 @@ Legend: ✓ conformant · ≈ close with minor divergence · ✗ missing
 | `focus prev sibling` | Move to prev sibling | `split-tree-focus-prev-sibling` → `focusSplitTreeSibling(-1)` | ✓ |
 | `focus parent` | `level_up` (`tree.c:386`): move focus to parent split container | `split-tree-focus-parent` → `focusSplitTreeParent` elevates `focusedSplitNode`; structural directional focus then operates at that container level | ✓ |
 | `focus child` | `level_down` (`tree.c:409`): descend back into last-focused child | `split-tree-focus-child` → `focusSplitTreeChild` descends via `focusedChildOfSplitNode`; clears `focusedSplitNode` and focuses the leaf window when reaching leaf level | ✓ |
-| `focus tiling` / `focus floating` / `focus mode_toggle` | Toggle between tiling and floating focus | Not implemented in split-tree context | ✗ P3 (out of layout-engine scope) |
+| `focus tiling` / `focus floating` / `focus mode_toggle` | Toggle between tiling and floating focus | `switch-focus-between-floating-and-tiling` (toggle only; no one-way `focus tiling` / `focus floating`) | ≈ |
 | Tab cycling (next/prev tab in tabbed/stacking) | i3: `focus next` in tabbed context; also controlled by scrolling | `frame-tab-next`/`frame-tab-prev` → `focusSplitTreeTab(±1)` (`split_tree_ops.nim:196`, `update_commands.nim:108`) | ✓ |
 
 ### `move`

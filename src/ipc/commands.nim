@@ -234,6 +234,8 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdFocusDirection, direction: Direction.DirDown))
   of CommandId.FocusLast:
     some(Msg(kind: MsgKind.CmdFocusLast))
+  of CommandId.SwitchFocusBetweenFloatingAndTiling:
+    some(Msg(kind: MsgKind.CmdSwitchFocusFloatingTiling))
   of CommandId.FocusTagLeft:
     some(Msg(kind: MsgKind.CmdFocusTagLeft))
   of CommandId.FocusTagRight:
