@@ -1162,6 +1162,32 @@ suite "Core Runtime Logic: window movement":
     check visibilityBounds == allOutputBounds
     check state.visible
 
+  test "Floating window past the screen edge keeps its on-screen borders":
+    var model = configuredModel()
+    model.borderWidth = 2
+    model.setupSideBySideOutputs()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    let screen = model.activeWorkspaceScreen()
+    let offLeft = Rect(x: screen.x - 100, y: screen.y + 50, w: 400, h: 300)
+    check model.setWindowFloating(
+      model.windowForExternal(ExternalWindowId(1)), true, offLeft
+    )
+
+    var daemon = initTriadDaemon()
+    daemon.runtimeState.model = model
+    let floating = daemon.desiredRenderWindowState(1, offLeft, screen, false)
+    let tiled = daemon.desiredRenderWindowState(2, offLeft, screen, false)
+
+    check floating.keepVisibleBorders
+    check floating.borderEdges == (RenderAllEdges and not RenderEdgeLeft)
+    check not tiled.keepVisibleBorders
+    check tiled.borderEdges == (RenderEdgeTop or RenderEdgeBottom)
+
   test "Tiled pointer drag at source output seam autoscrolls source scroller":
     var model = configuredModel()
     model.setupSideBySideOutputs()

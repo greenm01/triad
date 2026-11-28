@@ -155,6 +155,24 @@ suite "Core Runtime Logic: navigation layout":
     check not sliver.visible
     check sliver.borderEdges == 0
 
+  test "Render visibility keeps on-screen borders of clipped floating windows":
+    let screen = Rect(x: 0, y: 0, w: 100, h: 80)
+
+    let leftClip = renderVisibility(Rect(x: -20, y: 10, w: 60, h: 30), screen, 4, true)
+    check leftClip.visible
+    check leftClip.clipped
+    check leftClip.borderEdges == (RenderAllEdges and not RenderEdgeLeft)
+    let leftClips = leftClip.renderClipBoxes(3)
+    check leftClips.contentX == 20
+    check leftClips.contentW == 40
+    check leftClips.windowX == 20
+    check leftClips.windowW == 43
+    check leftClips.windowY == -3
+    check leftClips.windowH == 36
+
+    let cornerClip = renderVisibility(Rect(x: 70, y: 60, w: 60, h: 30), screen, 4, true)
+    check cornerClip.borderEdges == (RenderEdgeLeft or RenderEdgeTop)
+
   test "Forced cell clipping preserves border space":
     let screen = Rect(x: 0, y: 0, w: 100, h: 80)
     let cell = renderVisibility(Rect(x: 10, y: 10, w: 40, h: 30), screen, 4)

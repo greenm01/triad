@@ -196,6 +196,7 @@ type
     borderActiveColor*: uint32
     borderInactiveColor*: uint32
     borderEdges*: uint32
+    keepVisibleBorders*: bool
     focused*: bool
 
   ProposedDimensions* = object

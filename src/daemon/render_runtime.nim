@@ -367,8 +367,11 @@ proc desiredRenderWindowState*(
   let logicalId = daemon.currentModel.windowForRiverId(id)
   let focused = daemon.currentModel.windowRenderFocused(id)
   let renderBorder = daemon.currentModel.renderWindowBorder(logicalId, focused)
-  let visibility =
-    renderVisibility(geom, visibilityBounds, max(renderBorder.width * 2, 4'i32))
+  let winOpt = daemon.currentModel.windowData(logicalId)
+  let keepVisibleBorders = winOpt.isSome and winOpt.get().isFloating
+  let visibility = renderVisibility(
+    geom, visibilityBounds, max(renderBorder.width * 2, 4'i32), keepVisibleBorders
+  )
   RenderWindowState(
     visible: visibility.visible,
     geom: geom,
@@ -382,6 +385,7 @@ proc desiredRenderWindowState*(
     borderActiveColor: renderBorder.activeColor,
     borderInactiveColor: renderBorder.inactiveColor,
     borderEdges: if renderBorder.width == 0: 0'u32 else: visibility.borderEdges,
+    keepVisibleBorders: keepVisibleBorders,
     focused: focused,
   )
 
@@ -422,8 +426,9 @@ proc applyRenderWindowState(
     state: RenderWindowState,
 ) =
   node.setPosition(state.geom.x, state.geom.y)
-  let visibility =
-    renderVisibility(state.geom, state.clip, max(state.borderWidth * 2, 4'i32))
+  let visibility = renderVisibility(
+    state.geom, state.clip, max(state.borderWidth * 2, 4'i32), state.keepVisibleBorders
+  )
   win.applyVisibility(visibility, state.forceClip, state.borderWidth)
   win.applyBorder(state)
 

@@ -23,7 +23,7 @@ proc hasRenderEdge(edges, edge: uint32): bool =
   (edges and edge) != 0
 
 proc renderVisibility*(
-    geom, screen: Rect, minVisibleThickness: int32
+    geom, screen: Rect, minVisibleThickness: int32, keepVisibleBorders = false
 ): RenderVisibility =
   let
     left = max(geom.x, screen.x)
@@ -54,15 +54,25 @@ proc renderVisibility*(
     return
 
   result.visible = true
-  result.borderEdges = RenderAllEdges
 
-  let clippedHorizontally = geom.x < screen.x or geom.x + geom.w > screen.x + screen.w
-  let clippedVertically = geom.y < screen.y or geom.y + geom.h > screen.y + screen.h
+  var hiddenEdges = 0'u32
+  if geom.x < screen.x:
+    hiddenEdges = hiddenEdges or RenderEdgeLeft
+  if geom.x + geom.w > screen.x + screen.w:
+    hiddenEdges = hiddenEdges or RenderEdgeRight
+  if geom.y < screen.y:
+    hiddenEdges = hiddenEdges or RenderEdgeTop
+  if geom.y + geom.h > screen.y + screen.h:
+    hiddenEdges = hiddenEdges or RenderEdgeBottom
 
-  if clippedHorizontally:
-    result.borderEdges = result.borderEdges and not (RenderEdgeLeft or RenderEdgeRight)
-  if clippedVertically:
-    result.borderEdges = result.borderEdges and not (RenderEdgeTop or RenderEdgeBottom)
+  if not keepVisibleBorders:
+    # A tiled column cut by the screen edge shows no border rails on either side.
+    if (hiddenEdges and (RenderEdgeLeft or RenderEdgeRight)) != 0:
+      hiddenEdges = hiddenEdges or RenderEdgeLeft or RenderEdgeRight
+    if (hiddenEdges and (RenderEdgeTop or RenderEdgeBottom)) != 0:
+      hiddenEdges = hiddenEdges or RenderEdgeTop or RenderEdgeBottom
+
+  result.borderEdges = RenderAllEdges and not hiddenEdges
 
 proc renderClipBoxes*(
     visibility: RenderVisibility, borderWidth: int32
