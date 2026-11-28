@@ -3,9 +3,16 @@ import ../core/[defaults, effects, msg, restore_state]
 import ../systems/[binding_profiles, runtime, runtime_facade]
 import ../state/engine
 import
-  ../session/
-    [doctor_live, live_reload, logs as session_logs, session_runner, session_control,
-    session_control_client, shell_manager, supervisor]
+  ../session/[
+    doctor_live,
+    live_reload,
+    logs as session_logs,
+    session_runner,
+    session_control,
+    session_control_client,
+    shell_manager,
+    supervisor,
+  ]
 import ../types/[model, shell_snapshot]
 import ../types/layout_projection
 import ../types/projection_values
@@ -14,15 +21,18 @@ from ../ipc/niri_shell_compat import chooseNiriCompatSocketPath
 import ../ipc/[binding_dispatch, command_help, commands, socket]
 import ../janet/runtime as janet_runtime
 import ../types/janet_layouts
-import ../utils/[behavior_log, event_poll, runtime_deadlines, runtime_log, session_env, wayland_runtime]
+import
+  ../utils/[
+    behavior_log, event_poll, runtime_deadlines, runtime_log, session_env,
+    wayland_runtime,
+  ]
 import ../utils/terminal
 import
   bindings_runtime, capture_sessions_runtime, child_process_runtime, effects_runtime,
   input_runtime, ipc_broadcast_runtime, janet_script_runtime, live_restore_runtime,
   manage_requests, message_queue, memory_status, output_management_runtime,
-  protocol_diagnostics, registry_runtime, reload_runtime,
-  render_runtime, render_invalidation, screen_mirror_runtime, spawn_context, state,
-  switch_event_runtime
+  protocol_diagnostics, registry_runtime, reload_runtime, render_runtime,
+  render_invalidation, screen_mirror_runtime, spawn_context, state, switch_event_runtime
 import runtime_events
 import ipc_startup_runtime
 from ../types/runtime_values import Direction, nil, PointerOpKind
@@ -227,7 +237,6 @@ proc enqueueFrameTickIfDue(daemon: var TriadDaemon, nowMs: int64) =
       kind: MsgKind.CmdTick, tickElapsedMs: int32(max(1'i64, min(1000'i64, elapsedMs)))
     )
   )
-
 
 proc loopWaitTimeoutMs(daemon: TriadDaemon, nowMs: int64): int =
   result = IdleWakeIntervalMs
@@ -652,21 +661,18 @@ proc shellControlPayload(model: Model, niriSocketPath: string): JsonNode =
     )
   var environment = newJArray()
   for entry in model.environment:
-    environment.add(
-      %*{"name": entry.name, "value": entry.value, "unset": entry.unset}
-    )
+    environment.add(%*{"name": entry.name, "value": entry.value, "unset": entry.unset})
   %*{
     "active": shells.active,
     "cycle": shells.cycle,
     "session_locked": model.sessionLocked,
     "layer_focus_exclusive": model.layerFocusExclusive,
     "enabled": shells.enabled,
-    "watchdog":
-      %*{
-        "enabled": shells.watchdog.enabled,
-        "fallback": shells.watchdog.fallback,
-        "exclusiveFocusTimeoutMs": shells.watchdog.exclusiveFocusTimeoutMs,
-      },
+    "watchdog": %*{
+      "enabled": shells.watchdog.enabled,
+      "fallback": shells.watchdog.fallback,
+      "exclusiveFocusTimeoutMs": shells.watchdog.exclusiveFocusTimeoutMs,
+    },
     "profiles": profiles,
     "niri_socket": niriSocketPath,
     "environment": environment,
@@ -914,7 +920,6 @@ proc waitForInitialRiverState(timeoutMs: int): bool =
 
 # --- Main Loop ---
 
-
 proc sendSessionReadyOnce() {.async.} =
   if await wmSessionControl.sendSessionControlExpect(
     SessionControlKind.SessionReady,
@@ -930,8 +935,10 @@ proc sendStartupCommandsOnce() {.async.} =
   let commands = daemon.runtimeState.model.startupCommands
   while startupCommandIndex < commands.len:
     let reply = await wmSessionControl.requestSessionControl(
-      SessionControlKind.Spawn, SessionControlKind.SpawnStarted,
-      %*{"argv": commands[startupCommandIndex]}, acceptError = true,
+      SessionControlKind.Spawn,
+      SessionControlKind.SpawnStarted,
+      %*{"argv": commands[startupCommandIndex]},
+      acceptError = true,
     )
     if reply == nil:
       break
@@ -1292,7 +1299,6 @@ proc main*(): int =
 
   # Spawn startup commands after River accepts the initial manage pass and IPC is ready.
 
-
   var lastWatcherPollMs = 0'i64
   var lastChildReapPollMs = 0'i64
   var lastMemoryMaintenanceMs = 0'i64
@@ -1323,7 +1329,6 @@ proc main*(): int =
       if not timerArmed:
         daemon.syncScreenMirrors()
 
-
     if runtimeEvents.fd() < 0 and
         lastChildReapPollMs.pollDue(nowMs, ChildReapPollIntervalMs):
       lastChildReapPollMs = nowMs
@@ -1339,11 +1344,15 @@ proc main*(): int =
 
     var deadlineCandidates: seq[int64] = @[]
     if ipcStarted and not ipcStartupGate.open:
-      deadlineCandidates.add(ipcStartupGate.startedAtMs + int64(IpcListenReadyTimeoutMs))
+      deadlineCandidates.add(
+        ipcStartupGate.startedAtMs + int64(IpcListenReadyTimeoutMs)
+      )
     if lastMemoryMaintenanceMs > 0:
       deadlineCandidates.add(lastMemoryMaintenanceMs + MemoryMaintenanceIntervalMs)
     if daemon.lastRuntimeLoopSampleMs > 0:
-      deadlineCandidates.add(daemon.lastRuntimeLoopSampleMs + RuntimeLoopSampleIntervalMs)
+      deadlineCandidates.add(
+        daemon.lastRuntimeLoopSampleMs + RuntimeLoopSampleIntervalMs
+      )
     deadlineCandidates.add(nowMs + MaintenancePollIntervalMs)
     deadlineCandidates.add(nowMs + int64(daemon.loopWaitTimeoutMs(nowMs)))
     let nextDeadline = nextDeadlineMs(nowMs, deadlineCandidates)
@@ -1403,7 +1412,8 @@ proc main*(): int =
       sessionReadySending = true
       asyncCheck sendSessionReadyOnce()
 
-    if daemon.initialManageComplete and sessionReadySent and not startupCommandsSent and not startupCommandsSending:
+    if daemon.initialManageComplete and sessionReadySent and not startupCommandsSent and
+        not startupCommandsSending:
       startupCommandsSending = true
       asyncCheck sendStartupCommandsOnce()
 
@@ -1418,7 +1428,9 @@ proc main*(): int =
       break
 
     discard daemon.display.flush()
-    let waitResult = daemon.waitForRuntimeEvents(waitTimeout, runtimeEvents.fd(), runtimeEvents.timerFd())
+    let waitResult = daemon.waitForRuntimeEvents(
+      waitTimeout, runtimeEvents.fd(), runtimeEvents.timerFd()
+    )
     if waitResult.waylandReady:
       inc daemon.loopCounters.waylandWakeups
       if daemon.display.read_events() == -1:
