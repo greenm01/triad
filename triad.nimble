@@ -87,7 +87,7 @@ task tidy, "Remove local Nim build outputs and project cache artifacts":
 
   for path in [
     ".nimcache", "nimcache", "src/.nimcache", "src/nimcache", "tests/.nimcache",
-    "tests/nimcache",
+    "tests/nimcache", "wayland-proxy/target",
   ]:
     if dirExists(path):
       rmDir(path)
