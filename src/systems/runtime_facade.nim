@@ -27,11 +27,12 @@ proc applyRuntimeLayoutProjection*(
     context = "",
     msgKind = "",
     layoutEval: CustomLayoutEval = nil,
+    manageReason = "",
 ): LayoutProjection =
   result = state.model.layoutProjection(layoutEval)
   if behaviorLogEnabled():
     let snapshot = state.model.shellSnapshot()
-    snapshot.writeLayoutProjectionBehaviorEvent(result, context, msgKind)
+    snapshot.writeLayoutProjectionBehaviorEvent(result, context, msgKind, manageReason)
   state.model.applyLayoutProjection(result)
 
 proc applyRuntimeConfig*(state: var TriadRuntimeState, config: Config): bool =

@@ -35,6 +35,7 @@ import
   render_invalidation, screen_mirror_runtime, spawn_context, state, switch_event_runtime
 import runtime_events
 import ipc_startup_runtime
+import pointer_op_log
 from ../types/runtime_values import Direction, nil, PointerOpKind
 import
   std/[
@@ -132,13 +133,17 @@ proc syncRuntimeUpdate(context: string, msg: Msg): seq[Effect] =
 
   daemon.runtimeState.applyRuntimeUpdate(msg, evalCustomMovement)
 
-proc syncRuntimeLayoutProjection(context: string, msg: Msg): LayoutProjection =
+proc syncRuntimeLayoutProjection(
+    context: string, msg: Msg, manageReason = ""
+): LayoutProjection =
   proc evalCustomLayout(context: JanetLayoutContext): JanetLayoutEvalResult =
     daemon.janetRuntime.evalLayoutDetailed(
       daemon.runtimeState.readRuntimeSnapshot(), context
     )
 
-  daemon.runtimeState.applyRuntimeLayoutProjection(context, $msg.kind, evalCustomLayout)
+  daemon.runtimeState.applyRuntimeLayoutProjection(
+    context, $msg.kind, evalCustomLayout, manageReason
+  )
 
 proc refreshRateFps(refreshRate: int32): int32 =
   if refreshRate <= 0:
@@ -756,6 +761,11 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let previousLayoutBindingId = daemon.runtimeState.model.activeLayoutBindingId()
     let previousPointerOpActive =
       daemon.runtimeState.model.pointerOp.kind != PointerOpKind.OpNone
+    let previousPointerOp =
+      if previousPointerOpActive:
+        daemon.runtimeState.model.pointerOp
+      else:
+        PointerOpData()
     let previousShortcutsInhibited =
       daemon.runtimeState.model.keyboardShortcutsInhibited()
     let dispatchJanetHooks =
@@ -775,6 +785,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
     let effects = syncRuntimeUpdate("message", msg)
     for eff in effects:
       daemon.effectKindCounts.incCounter($eff.kind)
+    daemon.logPointerOpTransition(previousPointerOp, msg.kind, effects)
     if msg.kind != MsgKind.WlPointerRelease and previousPointerOpActive and
         daemon.runtimeState.model.pointerOp.kind == PointerOpKind.OpNone and
         daemon.lastPointerOpSeat != nil:
@@ -847,7 +858,7 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
         daemon.pendingManageEffects.len == 0 and effects.len == 0 and
         not daemon.renderDirty
       if not animationOnlyManage and not noopManage:
-        let projection = syncRuntimeLayoutProjection("manage layout", msg)
+        let projection = syncRuntimeLayoutProjection("manage layout", msg, manageReason)
         daemon.currentFrameTabBars = projection.frameTabBars
         daemon.currentFrameEmptyChrome = projection.frameEmptyChrome
         daemon.currentBspPreselections = projection.bspPreselections

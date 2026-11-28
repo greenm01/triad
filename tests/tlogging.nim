@@ -1,8 +1,9 @@
-import std/[asyncdispatch, json, monotimes, options, os, strutils, times, unittest]
+import
+  std/[asyncdispatch, json, monotimes, options, os, sequtils, strutils, times, unittest]
 import chronicles
 import ../src/config/parser
 import ../src/core/msg
-import ../src/daemon/[render_runtime, state]
+import ../src/daemon/[pointer_op_log, render_runtime, state]
 import ../src/ipc/[niri_compat, socket]
 import ../src/session/[doctor_live, live_paths, logs as session_logs]
 import ../src/systems/[runtime_facade, update]
@@ -277,6 +278,58 @@ exit 1
     check event["value"].getInt() == 7
     check event.hasKey("ts_unix_ms")
     check event.hasKey("pid")
+
+  test "pointer operations log start and finish events":
+    let dir = getTempDir() / ("triad-behavior-pointer-" & $getCurrentProcessId())
+    let oldEnabled = getEnv("TRIAD_BEHAVIOR_LOG", "")
+    let oldDir = getEnv("TRIAD_BEHAVIOR_LOG_DIR", "")
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", oldEnabled)
+      restoreEnv("TRIAD_BEHAVIOR_LOG_DIR", oldDir)
+      if dirExists(dir):
+        removeDir(dir)
+    putEnv("TRIAD_BEHAVIOR_LOG", "1")
+    putEnv("TRIAD_BEHAVIOR_LOG_DIR", dir)
+
+    var daemon = initTriadDaemon()
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(workspaces: WorkspaceConfig(defaultCount: 1)))
+    for msg in [
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700),
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app"),
+      Msg(kind: MsgKind.CmdToggleFloating),
+    ]:
+      discard daemon.runtimeState.applyRuntimeUpdate(msg)
+
+    let start = Msg(
+      kind: MsgKind.WlPointerMoveRequested,
+      moveWinId: 1,
+      moveStartX: 100,
+      moveStartY: 100,
+    )
+    let idle = daemon.runtimeState.model.pointerOp
+    let startEffects = daemon.runtimeState.applyRuntimeUpdate(start)
+    check daemon.runtimeState.model.pointerOp.kind == PointerOpKind.OpMove
+    daemon.logPointerOpTransition(idle, start.kind, startEffects)
+
+    let active = daemon.runtimeState.model.pointerOp
+    let release = Msg(kind: MsgKind.WlPointerRelease)
+    let releaseEffects = daemon.runtimeState.applyRuntimeUpdate(release)
+    daemon.logPointerOpTransition(active, release.kind, releaseEffects)
+
+    let events = readFile(behaviorLogPath())
+      .strip()
+      .splitLines()
+      .mapIt(parseJson(it))
+      .filterIt(it["event"].getStr().startsWith("pointer_op_"))
+    check events.len == 2
+    check events[0]["event"].getStr() == "pointer_op_started"
+    check events[0]["kind"].getStr() == "OpMove"
+    check events[0]["window_id"].getInt() == 1
+    check events[1]["event"].getStr() == "pointer_op_finished"
+    check events[1]["released"].getBool()
+    check events[1]["is_floating"].getBool()
+    check events[1].hasKey("duration_ms")
 
   test "runtime loop behavior sample is aggregated":
     let source = readFile("src/daemon/app.nim")

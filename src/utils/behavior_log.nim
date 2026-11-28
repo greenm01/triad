@@ -368,7 +368,11 @@ proc snapshotBehaviorPayload*(snapshot: ShellSnapshot): JsonNode =
   payload
 
 proc layoutProjectionBehaviorPayload*(
-    snapshot: ShellSnapshot, projection: LayoutProjection, context = "", msgKind = ""
+    snapshot: ShellSnapshot,
+    projection: LayoutProjection,
+    context = "",
+    msgKind = "",
+    manageReason = "",
 ): JsonNode =
   result = newJObject()
   result["active_tag"] = %snapshot.activeTag
@@ -387,6 +391,8 @@ proc layoutProjectionBehaviorPayload*(
     result["context"] = %context
   if msgKind.len > 0:
     result["msg_kind"] = %msgKind
+  if manageReason.len > 0:
+    result["manage_reason"] = %manageReason
 
 proc mixProjectionHash(hashValue: var Hash, value: Hash) {.inline.} =
   hashValue = hashValue !& value
@@ -420,7 +426,11 @@ proc layoutProjectionSignature(
   result = !$result
 
 proc writeLayoutProjectionBehaviorEvent*(
-    snapshot: ShellSnapshot, projection: LayoutProjection, context = "", msgKind = ""
+    snapshot: ShellSnapshot,
+    projection: LayoutProjection,
+    context = "",
+    msgKind = "",
+    manageReason = "",
 ) =
   if not behaviorLogEnabled():
     return
@@ -436,7 +446,8 @@ proc writeLayoutProjectionBehaviorEvent*(
     inc suppressedLayoutProjectionCount
     return
 
-  let payload = snapshot.layoutProjectionBehaviorPayload(projection, context, msgKind)
+  let payload =
+    snapshot.layoutProjectionBehaviorPayload(projection, context, msgKind, manageReason)
   if suppressedLayoutProjectionCount > 0:
     payload["suppressed_count"] = %suppressedLayoutProjectionCount
     suppressedLayoutProjectionCount = 0

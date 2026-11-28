@@ -370,6 +370,7 @@ type
     lastFullscreenRequests*: Table[uint32, FullscreenRequestState]
     lastMaximizedRequests*: Table[uint32, bool]
     lastPointerOpSeat*: pointer
+    pointerOpStartedMs*: int64
     pendingMaximizedAcks*: Table[uint32, bool]
     windowReadyEmitted*: HashSet[uint32]
 
