@@ -691,7 +691,6 @@ proc processQueuedMessages(configPath, niriSocketPath: string): bool =
           daemon.executeEffect(
             Effect(kind: EffectKind.EffOpEnd, endSeat: daemon.lastPointerOpSeat)
           )
-      continue
 
     if msg.kind == MsgKind.CmdSpawnTerminal:
       asyncCheck spawnManagedTerminal()

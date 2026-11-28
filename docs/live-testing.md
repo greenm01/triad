@@ -138,6 +138,8 @@ and manager ownership.
 Check the manager path in a live River session:
 
 - `Super+t` opens one terminal. Pointer clicks and drags open none.
+- Dragging a tiled window to a new slot and resizing a floating window both
+  commit on button release.
 - After a watchdog fallback, `switch-shell` can select the original shell and
   `cycle-shell` advances from the fallback. An unrelated config reload preserves
   the current selection. A changed active profile in the config takes effect.
