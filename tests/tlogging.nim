@@ -32,7 +32,8 @@ proc writeFakeTriad(path, body: string) =
 suite "Runtime logging":
   test "manage to render samples respect opt-in and the slow threshold":
     let previous = getEnv("TRIAD_BEHAVIOR_LOG", "")
-    defer: restoreEnv("TRIAD_BEHAVIOR_LOG", previous)
+    defer:
+      restoreEnv("TRIAD_BEHAVIOR_LOG", previous)
     var daemon: TriadDaemon
     let start = getMonoTime()
     let slow = start + initDuration(milliseconds = 100)

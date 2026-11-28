@@ -326,19 +326,18 @@ proc compactWorkspaceDistribution*(snapshot: ShellSnapshot): JsonNode =
 proc compactSnapshotWindows*(snapshot: ShellSnapshot): JsonNode =
   result = newJArray()
   for win in snapshot.windows:
-    let node =
-      %*{
-        "id": uint32(win.id),
-        "workspace_idx": win.workspaceIdx,
-        "focused": win.isFocused,
-        "floating": win.isFloating,
-        "fullscreen": win.isFullscreen,
-        "maximized": win.isMaximized,
-        "minimized": win.isMinimized,
-        "overlay": win.isOverlay,
-        "app_id": win.appId,
-        "title": win.title,
-      }
+    let node = %*{
+      "id": uint32(win.id),
+      "workspace_idx": win.workspaceIdx,
+      "focused": win.isFocused,
+      "floating": win.isFloating,
+      "fullscreen": win.isFullscreen,
+      "maximized": win.isMaximized,
+      "minimized": win.isMinimized,
+      "overlay": win.isOverlay,
+      "app_id": win.appId,
+      "title": win.title,
+    }
     node["tag_id"] =
       if win.tagId.isSome:
         %win.tagId.get()
