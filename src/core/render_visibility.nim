@@ -77,10 +77,14 @@ proc renderVisibility*(
 proc renderClipBoxes*(
     visibility: RenderVisibility, borderWidth: int32
 ): RenderClipBoxes =
-  result.contentX = visibility.clipX
-  result.contentY = visibility.clipY
-  result.contentW = visibility.clipW
-  result.contentH = visibility.clipH
+  # River places borders as if the content clip box starts at the window
+  # origin, so a box offset past an off-screen left or top edge pulls the
+  # right and bottom borders inward. Anchor the content box at the origin and
+  # let the window clip box cut away the off-screen part.
+  result.contentX = 0
+  result.contentY = 0
+  result.contentW = visibility.clipX + visibility.clipW
+  result.contentH = visibility.clipY + visibility.clipH
   if not visibility.visible:
     return
 

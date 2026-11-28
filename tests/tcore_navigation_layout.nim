@@ -142,9 +142,9 @@ suite "Core Runtime Logic: navigation layout":
     check (leftClip.borderEdges and RenderEdgeLeft) == 0
     check (leftClip.borderEdges and RenderEdgeRight) == 0
     let leftClips = leftClip.renderClipBoxes(3)
-    check leftClips.contentX == 20
+    check leftClips.contentX == 0
     check leftClips.contentY == 0
-    check leftClips.contentW == 40
+    check leftClips.contentW == 60
     check leftClips.contentH == 30
     check leftClips.windowX == 20
     check leftClips.windowW == 40
@@ -163,8 +163,8 @@ suite "Core Runtime Logic: navigation layout":
     check leftClip.clipped
     check leftClip.borderEdges == (RenderAllEdges and not RenderEdgeLeft)
     let leftClips = leftClip.renderClipBoxes(3)
-    check leftClips.contentX == 20
-    check leftClips.contentW == 40
+    check leftClips.contentX == 0
+    check leftClips.contentW == 60
     check leftClips.windowX == 20
     check leftClips.windowW == 43
     check leftClips.windowY == -3
@@ -189,8 +189,8 @@ suite "Core Runtime Logic: navigation layout":
 
     let clipped = renderVisibility(Rect(x: -20, y: 10, w: 60, h: 30), screen, 4)
     let clippedBoxes = clipped.renderClipBoxes(3)
-    check clippedBoxes.contentX == 20
-    check clippedBoxes.contentW == 40
+    check clippedBoxes.contentX == 0
+    check clippedBoxes.contentW == 60
     check clippedBoxes.windowX == 20
     check clippedBoxes.windowW == 40
     check clippedBoxes.windowY == -3
