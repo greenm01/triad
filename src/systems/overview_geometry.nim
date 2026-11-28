@@ -68,8 +68,17 @@ proc yContains(rect: rv.Rect, y: int32): bool =
   y >= rect.y and y < rect.y + rect.h
 
 proc overviewOutputAt*(model: Model, x, y: int32): OutputId =
+  # Hit-test the whole output: previews extend under bars that reserve space,
+  # and the cursor stops on top of them at the screen edge.
   for outputId in model.sortedOutputIdsByExternal():
-    if model.overviewScreenForOutput(outputId).rectContains(x, y):
+    let outputOpt = model.outputData(outputId)
+    let bounds =
+      if outputOpt.isSome and outputOpt.get().w > 0 and outputOpt.get().h > 0:
+        let output = outputOpt.get()
+        rv.Rect(x: output.x, y: output.y, w: output.w, h: output.h)
+      else:
+        model.overviewScreenForOutput(outputId)
+    if bounds.rectContains(x, y):
       return outputId
   NullOutputId
 

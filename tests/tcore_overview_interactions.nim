@@ -87,6 +87,62 @@ suite "Core Runtime Logic: overview interactions":
     check model.activeWorkspaceFocusId() == 0
     check model.firstWindowPosition(WindowId(1)).tagId == model.tagForSlot(2)
 
+  test "Overview drop over a reserved bar lands on the workspace preview":
+    var model = configuredModel()
+    model.applyMsg(
+      Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1920, height: 1080)
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputPosition, positionOutputId: 1, outputX: 5760, outputY: 0
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlOutputUsable,
+        usableOutputId: 1,
+        usableX: 5760,
+        usableY: 34,
+        usableW: 1920,
+        usableH: 1046,
+      )
+    )
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 1, appId: "app", title: "One")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 2))
+    model.applyMsg(
+      Msg(kind: MsgKind.WlWindowCreated, windowId: 2, appId: "app", title: "Two")
+    )
+    model.applyMsg(Msg(kind: MsgKind.CmdOpenOverview))
+
+    # The cursor stops at the top edge, over the bar, where workspace 1's
+    # preview is still drawn.
+    let start = model.instructionGeom(2).rectCenter()
+    let target = (x: start.x, y: 10'i32)
+    discard model.updateModel(
+      Msg(
+        kind: MsgKind.WlOverviewPointerDragRequested,
+        overviewDragWinId: 2,
+        overviewDragX: start.x,
+        overviewDragY: start.y,
+      )
+    )
+    model.applyMsg(
+      Msg(
+        kind: MsgKind.WlPointerDelta,
+        dx: target.x - start.x,
+        dy: target.y - start.y,
+        pointerX: target.x,
+        pointerY: target.y,
+      )
+    )
+    check model.pointerOp.hoverSlot == 1
+    model.applyMsg(Msg(kind: MsgKind.WlPointerRelease))
+
+    check model.overviewActive
+    check model.firstWindowPosition(WindowId(2)).tagId == model.tagForSlot(1)
+
   test "Right-dragging unified overview pans hovered workspace camera":
     var model = configuredModel()
     model.applyMsg(
