@@ -37,6 +37,8 @@ Move through your windows and tags.
 |---|---|
 | `focus-next` / `focus-prev` | Shift focus. |
 | `focus-left/right/up/down` | Move focus spatially. |
+| `focus-last` | Go back to the previous window. |
+| `switch-focus-between-floating-and-tiling` | Jump between the floating windows and the tiled ones on your workspace. |
 | `focus-workspace <index>` | Jump to a tag. |
 | `new-workspace` | Grab a fresh tag. |
 | `toggle-overview` | See the bird’s-eye view. |
@@ -76,6 +78,38 @@ Use `focus-window <id>` when a shell or dock needs to restore a specific minimiz
 window instead.
 For Mango/DMS compatibility, `minimized` aliases `minimize` and
 `restore_minimized` aliases `restore-minimized`.
+
+### Floating and stacking
+
+Floating windows always sit above tiled ones. Focusing a tiled window gives it
+the keyboard without raising it over your floating windows. Among floating
+windows, the one you focused last is on top. To reach a tiled window covered by
+a floating one, run `switch-focus-between-floating-and-tiling`, or move,
+minimize, or scratchpad the floating window.
+
+From bottom to top:
+
+1. Tiled windows. A maximized window covers the other tiles, and the focused
+   tile sits above the rest.
+2. Floating windows, most recently focused on top.
+3. The visible scratchpad.
+4. A fullscreen window that has focus. It covers floating windows; once it
+   loses focus it drops back to its own layer.
+5. Windows a window rule marks as overlay or unmanaged global.
+6. The overview highlight and the window you are dragging.
+
+Both kinds of maximize, `toggle-maximized` (maximize to edges) and
+`maximize-column` (full-width column), stay in the tiled layer. Only
+fullscreen covers floating windows.
+
+Child windows such as dialogs stay above their parent. While a dialog has
+focus, its parent keeps its place, so a fullscreen app stays on top while you
+answer its dialog. A dialog from another app on your workspace takes focus when
+it opens. A large child window that tiles instead of floating does not take
+focus from the window you are working in.
+
+A floating window pushed partly off the screen keeps the border on its visible
+edges.
 
 ## The System
 
