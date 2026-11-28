@@ -410,8 +410,8 @@ proc parseCommandParts*(parts: seq[string]): Option[Msg] =
     some(Msg(kind: MsgKind.CmdFrameTabNext))
   of CommandId.FrameTabPrev:
     some(Msg(kind: MsgKind.CmdFrameTabPrev))
-  of CommandId.FrameResizeLeft, CommandId.FrameResizeRight,
-      CommandId.FrameResizeUp, CommandId.FrameResizeDown:
+  of CommandId.FrameResizeLeft, CommandId.FrameResizeRight, CommandId.FrameResizeUp,
+      CommandId.FrameResizeDown:
     let delta =
       if parts.len >= 2:
         parseFloat32Arg(parts[1])

@@ -169,12 +169,11 @@ proc shouldBroadcastWindowsChanged*(kind: MsgKind): bool =
       MsgKind.CmdFocusOccupiedTagRight, MsgKind.CmdFocusColumnFirst,
       MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,
       MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdFocusWorkspaceIndex,
-      MsgKind.CmdNewWorkspace, MsgKind.CmdWorkspaceBatch,
-      MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
-      MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
-      MsgKind.CmdMoveWindow, MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight,
-      MsgKind.CmdMoveWindowUp, MsgKind.CmdMoveWindowDown,
-      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.CmdNewWorkspace, MsgKind.CmdWorkspaceBatch, MsgKind.CmdMoveToTagLeft,
+      MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveToWorkspaceIndex,
+      MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWindow,
+      MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp,
+      MsgKind.CmdMoveWindowDown, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
       MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdMoveColumnLeft,
       MsgKind.CmdMoveColumnRight, MsgKind.CmdMoveColumnToFirst,
       MsgKind.CmdMoveColumnToLast, MsgKind.CmdSwapWindowUp, MsgKind.CmdSwapWindowDown,
@@ -198,11 +197,11 @@ proc shouldBroadcastNiriWindowsChanged*(kind: MsgKind): bool =
   of MsgKind.CmdWorkspaceBatch, MsgKind.WlWindowDestroyed, MsgKind.WlWindowParent,
       MsgKind.WlWindowFullscreenRequested, MsgKind.WlWindowExitFullscreenRequested,
       MsgKind.WlWindowMaximizeRequested, MsgKind.WlWindowUnmaximizeRequested,
-      MsgKind.CmdMoveToTagLeft,
-      MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveToWorkspaceIndex,
-      MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWindow,
-      MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp,
-      MsgKind.CmdMoveWindowDown, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight,
+      MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
+      MsgKind.CmdMoveWindow, MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight,
+      MsgKind.CmdMoveWindowUp, MsgKind.CmdMoveWindowDown,
+      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
       MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdMoveColumnLeft,
       MsgKind.CmdMoveColumnRight, MsgKind.CmdMoveColumnToFirst,
       MsgKind.CmdMoveColumnToLast, MsgKind.CmdSwapWindowUp, MsgKind.CmdSwapWindowDown,
@@ -242,12 +241,11 @@ proc shouldBroadcastTriadLayoutChanged*(kind: MsgKind): bool =
       MsgKind.CmdBspPreselect, MsgKind.CmdBspPreselectCancel,
       MsgKind.CmdBspPreselectRatio, MsgKind.CmdFocusWorkspaceIndex,
       MsgKind.CmdNewWorkspace, MsgKind.CmdWorkspaceBatch, MsgKind.CmdMoveToTag,
-      MsgKind.CmdMoveWindowToTag,
-      MsgKind.CmdMoveToWorkspaceIndex, MsgKind.CmdMoveWindowToWorkspaceIndex,
-      MsgKind.CmdMoveWorkspaceToOutput, MsgKind.CmdMoveToTagLeft,
-      MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindow, MsgKind.CmdMoveWindowLeft,
-      MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp, MsgKind.CmdMoveWindowDown,
-      MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
+      MsgKind.CmdMoveWindowToTag, MsgKind.CmdMoveToWorkspaceIndex,
+      MsgKind.CmdMoveWindowToWorkspaceIndex, MsgKind.CmdMoveWorkspaceToOutput,
+      MsgKind.CmdMoveToTagLeft, MsgKind.CmdMoveToTagRight, MsgKind.CmdMoveWindow,
+      MsgKind.CmdMoveWindowLeft, MsgKind.CmdMoveWindowRight, MsgKind.CmdMoveWindowUp,
+      MsgKind.CmdMoveWindowDown, MsgKind.CmdMoveWindowUpOrToWorkspaceUp,
       MsgKind.CmdMoveWindowDownOrToWorkspaceDown, MsgKind.CmdMoveColumnLeft,
       MsgKind.CmdMoveColumnRight, MsgKind.CmdMoveColumnToFirst,
       MsgKind.CmdMoveColumnToLast, MsgKind.CmdSwapWindowUp, MsgKind.CmdSwapWindowDown,
@@ -294,8 +292,8 @@ proc workspaceSnapshotChanged*(before, after: ShellSnapshot): bool =
     let previous = beforeWorkspace.get()
     if previous.runtimeId != workspace.runtimeId or
         previous.canRemove != workspace.canRemove or
-        previous.workspaceIdx != workspace.workspaceIdx or previous.name != workspace.name or
-        previous.outputName != workspace.outputName or
+        previous.workspaceIdx != workspace.workspaceIdx or
+        previous.name != workspace.name or previous.outputName != workspace.outputName or
         previous.isActive != workspace.isActive or
         previous.isOutputVisible != workspace.isOutputVisible or
         previous.isConfigured != workspace.isConfigured or
@@ -313,8 +311,7 @@ proc isFocusChangingCommand*(kind: MsgKind): bool =
     MsgKind.CmdFocusColumnLast, MsgKind.CmdFocusWindowOrWorkspaceUp,
     MsgKind.CmdFocusWindowOrWorkspaceDown, MsgKind.CmdFocusTag,
     MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdNewWorkspace, MsgKind.CmdWorkspaceBatch,
-    MsgKind.CmdFocusWindowById,
-    MsgKind.CmdSelectWindow, MsgKind.CmdRecentWindowConfirm,
+    MsgKind.CmdFocusWindowById, MsgKind.CmdSelectWindow, MsgKind.CmdRecentWindowConfirm,
     MsgKind.CmdRestoreMinimized, MsgKind.CmdToggleScratchpad,
     MsgKind.CmdToggleNamedScratchpad, MsgKind.CmdRestoreScratchpad,
     MsgKind.WlShellSurfaceInteraction,

@@ -136,7 +136,9 @@ proc windowById(snapshot: ShellSnapshot, winId: uint32): Option[ShellWindow] =
       return some(win)
   none(ShellWindow)
 
-proc workspaceById(snapshot: ShellSnapshot, workspaceId: uint32): Option[ShellWorkspace] =
+proc workspaceById(
+    snapshot: ShellSnapshot, workspaceId: uint32
+): Option[ShellWorkspace] =
   for workspace in snapshot.workspaces:
     if workspace.tagId == workspaceId:
       return some(workspace)
@@ -164,7 +166,9 @@ proc activeWorkspace(snapshot: ShellSnapshot): Option[ShellWorkspace] =
       return some(workspace)
   none(ShellWorkspace)
 
-proc workspaceReference(snapshot: ShellSnapshot, reference: JsonNode): Option[ShellWorkspace] =
+proc workspaceReference(
+    snapshot: ShellSnapshot, reference: JsonNode
+): Option[ShellWorkspace] =
   if reference.kind != JObject:
     return none(ShellWorkspace)
   if reference.hasKey("Index"):
@@ -255,11 +259,13 @@ proc actionMessages(
         elif refNode.hasKey("Id"):
           let workspace = snapshot.workspaceReference(refNode)
           if workspace.isSome:
-            return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: workspace.get().tagId)])
+            return
+              (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: workspace.get().tagId)])
         elif refNode.hasKey("Name"):
           let workspace = snapshot.workspaceReference(refNode)
           if workspace.isSome:
-            return (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: workspace.get().tagId)])
+            return
+              (true, @[Msg(kind: MsgKind.CmdFocusTag, focusTag: workspace.get().tagId)])
   elif action.hasKey("FocusWorkspaceDown"):
     return (true, @[Msg(kind: MsgKind.CmdFocusTagRight)])
   elif action.hasKey("FocusWorkspaceUp"):
@@ -357,15 +363,13 @@ proc actionMessages(
     let active = snapshot.activeWorkspace()
     if output.len > 0 and requested.isSome and active.isSome and
         requested.get().tagId == active.get().tagId:
-      return (true, @[Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: output)])
+      return
+        (true, @[Msg(kind: MsgKind.CmdMoveWorkspaceToOutput, outputTarget: output)])
   elif action.hasKey("FocusWindow"):
     let payload = action["FocusWindow"]
     let target = snapshot.requestedWindow(payload)
     if target.specified and target.valid:
-      return (
-        true,
-        @[Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: target.id)],
-      )
+      return (true, @[Msg(kind: MsgKind.CmdFocusWindowById, focusWindowId: target.id)])
   elif action.hasKey("CloseWindow"):
     let payload = action["CloseWindow"]
     let target = snapshot.requestedWindow(payload)
@@ -392,8 +396,8 @@ proc actionMessages(
     return (false, @[])
   elif action.hasKey("SetWorkspaceName"):
     let payload = action["SetWorkspaceName"]
-    if payload.kind != JObject or (payload.hasKey("workspace") and
-        payload["workspace"].kind != JNull):
+    if payload.kind != JObject or
+        (payload.hasKey("workspace") and payload["workspace"].kind != JNull):
       return (false, @[])
     return (
       true,
@@ -401,8 +405,8 @@ proc actionMessages(
     )
   elif action.hasKey("UnsetWorkspaceName"):
     let payload = action["UnsetWorkspaceName"]
-    if payload.kind != JObject or (payload.hasKey("workspace") and
-        payload["workspace"].kind != JNull):
+    if payload.kind != JObject or
+        (payload.hasKey("workspace") and payload["workspace"].kind != JNull):
       return (false, @[])
     return (true, @[Msg(kind: MsgKind.CmdRenameTag, newName: "")])
   elif action.hasKey("MoveWorkspaceToIndex"):
@@ -432,7 +436,10 @@ proc actionMessages(
     if not target.valid:
       return (false, @[])
     if target.specified:
-      return (true, @[Msg(kind: MsgKind.CmdToggleFullscreenById, fullscreenWindowId: target.id)])
+      return (
+        true,
+        @[Msg(kind: MsgKind.CmdToggleFullscreenById, fullscreenWindowId: target.id)],
+      )
     if payload.kind == JObject:
       return (true, @[Msg(kind: MsgKind.CmdToggleFullscreen)])
   elif action.hasKey("MaximizeColumn"):
@@ -499,7 +506,8 @@ proc actionMessages(
           ],
         )
   elif action.hasKey("SwitchPresetColumnWidth"):
-    return (true, @[Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1)])
+    return
+      (true, @[Msg(kind: MsgKind.CmdSwitchProportionPreset, proportionPresetDelta: 1)])
   elif action.hasKey("ShowHotkeyOverlay"):
     return (true, @[Msg(kind: MsgKind.CmdShowHotkeyOverlay)])
   elif action.hasKey("LoadConfigFile"):
