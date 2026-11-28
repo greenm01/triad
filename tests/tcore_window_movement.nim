@@ -2325,13 +2325,10 @@ suite "Core Runtime Logic: window movement":
       Config(
         layout: LayoutConfig(defaultColumnWidth: 0.5),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        tagRules:
-          @[
-            TagRule(
-              tagId: 2, defaultLayoutSet: true, defaultLayout: LayoutMode.Scroller
-            ),
-            TagRule(tagId: 3, defaultLayoutSet: true, defaultLayout: LayoutMode.Grid),
-          ],
+        tagRules: @[
+          TagRule(tagId: 2, defaultLayoutSet: true, defaultLayout: LayoutMode.Scroller),
+          TagRule(tagId: 3, defaultLayoutSet: true, defaultLayout: LayoutMode.Grid),
+        ],
       )
     ).model
     model.applyMsg(
@@ -2361,13 +2358,10 @@ suite "Core Runtime Logic: window movement":
       Config(
         layout: LayoutConfig(defaultColumnWidth: 0.5),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        tagRules:
-          @[
-            TagRule(
-              tagId: 2, defaultLayoutSet: true, defaultLayout: LayoutMode.Scroller
-            ),
-            TagRule(tagId: 3, defaultLayoutSet: true, defaultLayout: LayoutMode.Grid),
-          ],
+        tagRules: @[
+          TagRule(tagId: 2, defaultLayoutSet: true, defaultLayout: LayoutMode.Scroller),
+          TagRule(tagId: 3, defaultLayoutSet: true, defaultLayout: LayoutMode.Grid),
+        ],
       )
     ).model
     model.applyMsg(Msg(kind: MsgKind.CmdFocusWorkspaceIndex, workspaceIndex: 3))
@@ -2586,14 +2580,13 @@ suite "Core Runtime Logic: window movement":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
-        windowRules:
-          @[
-            WindowRule(
-              appIdMatch: "docs",
-              maximizePolicySet: true,
-              maximizePolicy: WindowRuleMaximizePolicy.Ignore,
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            appIdMatch: "docs",
+            maximizePolicySet: true,
+            maximizePolicy: WindowRuleMaximizePolicy.Ignore,
+          )
+        ],
       )
     ).model
     model.applyMsg(
@@ -2631,14 +2624,13 @@ suite "Core Runtime Logic: window movement":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Scroller),
-        windowRules:
-          @[
-            WindowRule(
-              appIdMatch: "docs",
-              maximizePolicySet: true,
-              maximizePolicy: WindowRuleMaximizePolicy.Column,
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            appIdMatch: "docs",
+            maximizePolicySet: true,
+            maximizePolicy: WindowRuleMaximizePolicy.Column,
+          )
+        ],
       )
     ).model
     model.applyMsg(
@@ -2675,14 +2667,13 @@ suite "Core Runtime Logic: window movement":
       Config(
         workspaces:
           WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.VerticalScroller),
-        windowRules:
-          @[
-            WindowRule(
-              appIdMatch: "docs",
-              maximizePolicySet: true,
-              maximizePolicy: WindowRuleMaximizePolicy.Column,
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            appIdMatch: "docs",
+            maximizePolicySet: true,
+            maximizePolicy: WindowRuleMaximizePolicy.Column,
+          )
+        ],
       )
     ).model
     model.applyMsg(
@@ -2709,14 +2700,13 @@ suite "Core Runtime Logic: window movement":
     var model = initRuntimeStateFromConfig(
       Config(
         workspaces: WorkspaceConfig(defaultCount: 3, defaultLayout: LayoutMode.Grid),
-        windowRules:
-          @[
-            WindowRule(
-              appIdMatch: "docs",
-              maximizePolicySet: true,
-              maximizePolicy: WindowRuleMaximizePolicy.Column,
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            appIdMatch: "docs",
+            maximizePolicySet: true,
+            maximizePolicy: WindowRuleMaximizePolicy.Column,
+          )
+        ],
       )
     ).model
     model.applyMsg(

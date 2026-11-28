@@ -264,8 +264,10 @@ proc recordDesiredPlacements*(
 
 proc beginManageRenderSample*(daemon: var TriadDaemon, reason: string) =
   daemon.manageRenderSample =
-    if behaviorLogEnabled(): some(ManageRenderSample(reason: reason))
-    else: none(ManageRenderSample)
+    if behaviorLogEnabled():
+      some(ManageRenderSample(reason: reason))
+    else:
+      none(ManageRenderSample)
 
 proc recordManageRenderProposal*(
     daemon: var TriadDaemon, windowId: uint32, dimensions: ProposedDimensions
