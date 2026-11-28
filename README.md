@@ -21,7 +21,7 @@ The layout model supports algorithmic tiling, scrollable strips, BSP trees, and 
 ### Features
 
 * **Crash-resilient:** Layout errors never reach the compositor.
-* **Shell-ready:** We provide native IPC and a compatibility facade for popular shell bars.
+* **Shell-ready:** Native IPC, Niri-compatible IPC, and an [`ext-workspace-v1` bridge](docs/ext-workspace-v1.md) for workspace buttons on River builds that lack the protocol.
 * **Dynamic Workspaces:** Triad spawns workspaces when you need them and prunes them when you don't.
 * **Smooth Motion:** Configurable frame pacing and exponential easing for window movement.
 * **Scratchpads:** Utility windows manage as centered overlays.
@@ -45,9 +45,11 @@ You can also use Janet to write custom layouts. See [docs/tiling_wm_categories.m
 
 Triad exposes its own state socket for native integrations. It can also launch shell profiles with a compatibility socket for shells that consume Niri's workspace IPC.
 
+Triad supplies `ext-workspace-v1` on River builds that lack it so standard Wayland clients can list and switch workspaces. It works with stock Noctalia and Waybar's `ext/workspaces` module. When the [proxy helper](docs/ext-workspace-v1.md) is installed, Triad starts it automatically for managed shells as needed and uses River's implementation when available.
+
 | Shell | Native IPC | Niri IPC |
 | :--- | :--- | :--- |
-| [Noctalia v5](https://github.com/noctalia-dev/noctalia) | [Triad fork](https://github.com/greenm01/noctalia-shell/tree/triad-native-ipc-v5) | Upstream 5.6 detects the socket. Workspace buttons use `ext-workspace-v1`. |
+| [Noctalia v5](https://github.com/noctalia-dev/noctalia) | [Triad fork](https://github.com/greenm01/noctalia-shell/tree/triad-native-ipc-v5) | Upstream 5.6 detects the socket. |
 | [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) | No, fork/PR pending | Yes |
 | [Waybar](https://github.com/Alexays/Waybar) | No, fork/PR pending | Yes |
 | [Wayle](https://github.com/wayle-rs/wayle) | No, fork/PR pending | Yes |
