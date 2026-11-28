@@ -330,6 +330,8 @@ exit 1
     check events[1]["released"].getBool()
     check events[1]["is_floating"].getBool()
     check events[1].hasKey("duration_ms")
+    check events[1].hasKey("floating_geom")
+    check not events[1].hasKey("drop_kind")
 
   test "runtime loop behavior sample is aggregated":
     let source = readFile("src/daemon/app.nim")

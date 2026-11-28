@@ -40,16 +40,27 @@ proc logPointerOpTransition*(
 
   let payload = model.pointerOpPayload(before, trigger)
   payload["released"] = %(trigger == MsgKind.WlPointerRelease)
-  payload["drag_active"] = %before.dragActive
   payload["total_delta"] = %*{"dx": before.totalDX, "dy": before.totalDY}
-  payload["drop_kind"] = %($before.dropKind)
-  payload["drop_floating"] = %before.dropFloating
-  payload["drop_tag"] = %uint32(before.dropTag)
-  payload["resize_end_sent"] = %effects.anyIt(it.kind == EffectKind.EffInformResizeEnd)
+  # Each operation kind tracks its target in different fields.
+  case before.kind
+  of PointerOpKind.OpMove:
+    if before.tiled:
+      payload["drag_active"] = %before.dragActive
+      payload["drop_kind"] = %($before.dropKind)
+      payload["drop_floating"] = %before.dropFloating
+      payload["drop_tag"] = %uint32(before.dropTag)
+  of PointerOpKind.OpResize:
+    payload["resize_end_sent"] =
+      %effects.anyIt(it.kind == EffectKind.EffInformResizeEnd)
+  of PointerOpKind.OpOverviewDrag:
+    payload["drop_slot"] = %before.hoverSlot
+  of PointerOpKind.OpNone, PointerOpKind.OpOverviewScroll:
+    discard
   if daemon.pointerOpStartedMs > 0:
     payload["duration_ms"] = %(monotonicMs() - daemon.pointerOpStartedMs)
   let winOpt = model.windowData(before.windowId)
   if winOpt.isSome:
     payload["is_floating"] = %winOpt.get().isFloating
-    payload["floating_geom"] = winOpt.get().floatingGeom.rectJson()
+    if winOpt.get().isFloating:
+      payload["floating_geom"] = winOpt.get().floatingGeom.rectJson()
   writeBehaviorEvent("pointer_op_finished", payload)
