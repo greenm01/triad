@@ -4,19 +4,18 @@ import
     strtabs, strutils, tables, tempfiles, times, unittest,
   ]
 from posix import
-  TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe,
-  read, write
+  TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe, read,
+  write
 import ../src/config/parser
 import ../src/core/[effects, msg, niri_state, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, capture_sessions_runtime, child_process_runtime, cursor_shake,
     effects_runtime, input_device_classification, input_runtime, live_restore_runtime,
-    manage_requests,
-    memory_status, message_queue, output_management_runtime, process_runner,
-    protocol_diagnostics, reload_runtime, render_invalidation, river_manager_runtime,
-    river_outputs_runtime, river_windows, screen_mirror_runtime, spawn_context,
-    switch_event_runtime,
+    manage_requests, memory_status, message_queue, output_management_runtime,
+    process_runner, protocol_diagnostics, reload_runtime, render_invalidation,
+    river_manager_runtime, river_outputs_runtime, river_windows, screen_mirror_runtime,
+    spawn_context, switch_event_runtime,
   ]
 import ../src/daemon/runtime_events
 import ../src/daemon/ipc_startup_runtime
@@ -42,8 +41,7 @@ proc mirrorTestDaemon(): TriadDaemon =
   result = initTriadDaemon()
   result.runtimeState = initRuntimeStateFromConfig(
     Config(
-      outputRules:
-        @[OutputRule(target: "DP-2", mirrorSet: true, mirrorSource: "eDP-1")]
+      outputRules: @[OutputRule(target: "DP-2", mirrorSet: true, mirrorSource: "eDP-1")]
     )
   )
   discard result.runtimeState.applyRuntimeUpdate(
@@ -58,7 +56,6 @@ proc mirrorTestDaemon(): TriadDaemon =
   discard result.runtimeState.applyRuntimeUpdate(
     Msg(kind: MsgKind.WlOutputName, nameOutputId: 2, outputName: "DP-2")
   )
-
 
 var observedConfigNotificationEvent: ConfigNotificationEvent
 var observedConfigNotificationCommand: seq[string]
@@ -80,9 +77,7 @@ proc recordCaptureSessionHook(
   observedCaptureSessionEvent = event
   observedCaptureSessionCommand = command
 
-proc recordXkbConfigApply(
-    daemon: var TriadDaemon, keyboardId: uint32
-) {.nimcall.} =
+proc recordXkbConfigApply(daemon: var TriadDaemon, keyboardId: uint32) {.nimcall.} =
   discard daemon
   observedXkbConfigApplies.add(keyboardId)
 
@@ -296,9 +291,8 @@ suite "Crash hardening":
 
   test "absent output diagnostics are deduplicated and rearmed by reconnect":
     let model = Model(
-      outputLayoutRows: @[
-        OutputLayoutRow(targets: @["DP-2", "DP-1", "desc:Laptop panel"])
-      ],
+      outputLayoutRows:
+        @[OutputLayoutRow(targets: @["DP-2", "DP-1", "desc:Laptop panel"])],
       outputRules: @[
         OutputRuleData(target: "DP-1", scaleSet: true),
         OutputRuleData(target: "workspace-only"),
@@ -315,7 +309,8 @@ suite "Crash hardening":
       model, [panel, proposedOutput("DP-1", 1920, 1080)]
     ) == @["DP-2"]
     check daemon.updateMissingOutputTargets(
-      model, [panel, proposedOutput("DP-1", 1920, 1080), proposedOutput("DP-2", 1920, 1080)]
+      model,
+      [panel, proposedOutput("DP-1", 1920, 1080), proposedOutput("DP-2", 1920, 1080)],
     ).len == 0
     check daemon.updateMissingOutputTargets(model, [panel]) == @["DP-1", "DP-2"]
 
@@ -438,10 +433,7 @@ suite "Crash hardening":
     let tempDir = getTempDir() / ("triad-mirror-kill-" & $getCurrentProcessId())
     let fakeMirror = tempDir / "triad_mirror"
     createDir(tempDir)
-    writeFile(
-      fakeMirror,
-      "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n",
-    )
+    writeFile(fakeMirror, "#!/bin/sh\ntrap '' TERM\nwhile :; do sleep 1; done\n")
     setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
     putEnv("TRIAD_MIRROR_BIN", fakeMirror)
 
@@ -466,7 +458,9 @@ suite "Crash hardening":
     let tempDir = createTempDir("triad-mirror-shutdown-", "")
     let fakeMirror = tempDir / "triad_mirror"
     let ready = fakeMirror & ".ready"
-    writeFile(fakeMirror, "#!/bin/sh\ntrap '' TERM\n: > \"$0.ready\"\nexec /bin/sleep 30\n")
+    writeFile(
+      fakeMirror, "#!/bin/sh\ntrap '' TERM\n: > \"$0.ready\"\nexec /bin/sleep 30\n"
+    )
     setFilePermissions(fakeMirror, {fpUserRead, fpUserWrite, fpUserExec})
     putEnv("TRIAD_MIRROR_BIN", fakeMirror)
 
@@ -496,9 +490,8 @@ suite "Crash hardening":
     check kill(Pid(mirrorPid), 0) == -1
 
   test "screenshot helper timeout returns after child reap":
-    let result = waitFor(
-      runShellCommandCaptureAsync("sleep 30", pollMs = 10, timeoutMs = 100)
-    )
+    let result =
+      waitFor(runShellCommandCaptureAsync("sleep 30", pollMs = 10, timeoutMs = 100))
     check result.timedOut
     check result.exitCode == ShellTimeoutExitCode
 
@@ -561,9 +554,8 @@ suite "Crash hardening":
 
   test "returning display recovers workspaces and publishes the corrected topology":
     var daemon = initTriadDaemon()
-    daemon.runtimeState = initRuntimeStateFromConfig(
-      Config(workspaces: WorkspaceConfig(defaultCount: 3))
-    )
+    daemon.runtimeState =
+      initRuntimeStateFromConfig(Config(workspaces: WorkspaceConfig(defaultCount: 3)))
     for msg in [
       Msg(kind: MsgKind.WlOutputDimensions, outputId: 1, width: 1000, height: 700),
       Msg(kind: MsgKind.WlOutputName, nameOutputId: 1, outputName: "DP-1"),
@@ -586,10 +578,17 @@ suite "Crash hardening":
 
     for returningId in [3'u32, 4'u32]:
       daemon.outputPointers[returningId] = nil
-      daemon.enqueue(Msg(kind: MsgKind.WlOutputDimensions, outputId: returningId,
-        width: 1000, height: 700))
-      daemon.enqueue(Msg(kind: MsgKind.WlOutputName, nameOutputId: returningId,
-        outputName: "DP-1"))
+      daemon.enqueue(
+        Msg(
+          kind: MsgKind.WlOutputDimensions,
+          outputId: returningId,
+          width: 1000,
+          height: 700,
+        )
+      )
+      daemon.enqueue(
+        Msg(kind: MsgKind.WlOutputName, nameOutputId: returningId, outputName: "DP-1")
+      )
       riverManagerListener.manageStart(daemonData(daemon), nil)
 
       var removalEffects: seq[Effect]
@@ -604,14 +603,18 @@ suite "Crash hardening":
       check after.activeWorkspaceIdx == 2
       check after.workspaces.mapIt(it.tagId) == before.workspaces.mapIt(it.tagId)
       check after.windows.mapIt(it.id) == before.windows.mapIt(it.id)
-      check after.windows.mapIt(it.workspaceIdx) == before.windows.mapIt(it.workspaceIdx)
+      check after.windows.mapIt(it.workspaceIdx) == before.windows.mapIt(
+        it.workspaceIdx
+      )
       check after.workspaces.allIt(it.outputName == "DP-1")
       check daemon.runtimeState.model.validateInvariants().ok
       check removalEffects.anyIt(it.kind == EffectKind.EffManageDirty)
-      let broadcasts = removalEffects.filterIt(it.kind == EffectKind.EffBroadcastJson)
+      let broadcasts = removalEffects
+        .filterIt(it.kind == EffectKind.EffBroadcastJson)
         .mapIt(parseJson(it.jsonPayload))
       check (%*{"OutputsChanged": {"outputs": after.niriOutputsJson()}}) in broadcasts
-      check (%*{"WorkspacesChanged": {"workspaces": after.niriWorkspacesJson()}}) in broadcasts
+      check (%*{"WorkspacesChanged": {"workspaces": after.niriWorkspacesJson()}}) in
+        broadcasts
 
       for index in [1'u32, 2'u32]:
         discard daemon.runtimeState.applyRuntimeUpdate(
@@ -627,8 +630,7 @@ suite "Crash hardening":
   test "XKB done applies config only after the keyboard config changes":
     var daemon = initTriadDaemon()
     observedXkbConfigApplies = @[]
-    daemon.xkbConfigKeyboards[7'u32] =
-      XkbKeyboardRuntime(needsConfigApply: true)
+    daemon.xkbConfigKeyboards[7'u32] = XkbKeyboardRuntime(needsConfigApply: true)
 
     daemon.observeXkbKeyboardLayout(1'u32)
     let initialLayout = daemon.popQueuedMessage()
@@ -2469,9 +2471,8 @@ suite "IPC startup gate":
 
 suite "tracked child state machine":
   test "starting child promotes to running at deadline":
-    let child = startProcess(
-      "/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams}
-    )
+    let child =
+      startProcess("/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams})
     var tracked = initTrackedChild(child, 0'i64, 250'i64)
     defer:
       if not tracked.process.isNil:
@@ -2491,9 +2492,8 @@ suite "tracked child state machine":
     check tracked.exitCode == 0
 
   test "terminating child escalates to kill at deadline":
-    let child = startProcess(
-      "/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams}
-    )
+    let child =
+      startProcess("/bin/sh", args = @["-c", "sleep 30"], options = {poParentStreams})
     var tracked = initTrackedChild(child, 0'i64, 250'i64)
     defer:
       if not tracked.process.isNil:
@@ -2557,9 +2557,7 @@ suite "detached process options":
     let events = source.drain()
     check events.timerReady
 
-    let again = fds.waitForRuntimeEventFds(
-      -1, -1, [], source.fd(), source.timerFd(), 0
-    )
+    let again = fds.waitForRuntimeEventFds(-1, -1, [], source.fd(), source.timerFd(), 0)
     check not again.timerReady
 
 suite "runtime deadlines":
