@@ -50,6 +50,7 @@ type
     waitProfile*: string
   ShellRunner* = object
     ownerPid*: int
+    workspaceDisplay: string
     trackedProcess*: ProcessHandle
     trackedShellName*: string
     spawnPending*: bool
@@ -234,6 +235,46 @@ proc prepareNativeShellEnv(model: Model): StringTableRef =
   result["XDG_CURRENT_DESKTOP"] = "triad"
   result["XDG_SESSION_DESKTOP"] = "triad"
   result["DESKTOP_SESSION"] = "triad"
+
+proc applyWorkspaceDisplay(env: StringTableRef, display: string) =
+  if display.len > 0:
+    env["WAYLAND_DISPLAY"] = display
+    env.del("WAYLAND_SOCKET")
+
+proc prepareWorkspaceDisplay(env: StringTableRef, niriSocketPath: string): string =
+  if env.getOrDefault("TRIAD_WORKSPACE_PROXY") == "0":
+    return
+  let runtime = env.getOrDefault("XDG_RUNTIME_DIR")
+  let upstream = env.getOrDefault("WAYLAND_DISPLAY")
+  if runtime.len == 0 or upstream.len == 0:
+    return
+  let helper = findExe(getAppFilename().parentDir() / "triad-wayland-proxy")
+  let executable = if helper.len > 0: helper else: findExe("triad-wayland-proxy")
+  if executable.len == 0:
+    return
+
+  let display = "triad-workspaces-" & upstream.extractFilename()
+  let socketPath = runtime / display
+  let proxyEnv = newStringTable(modeCaseSensitive)
+  for key, value in env.pairs:
+    proxyEnv[key] = value
+  if niriSocketPath.len > 0:
+    proxyEnv["TRIAD_NIRI_SOCKET"] = niriSocketPath
+  try:
+    let process = startProcess(executable, args = @["prepare", "--socket", socketPath],
+      env = proxyEnv, options = InheritedProcessOptions)
+    defer: process.close()
+    let status = process.pollProcessExitCode(2000)
+    if status == 0 and unixPathIsSocket(socketPath):
+      return display
+    if status == 2: # River already advertises ext-workspace-v1.
+      return
+    if status == -1:
+      process.kill()
+      discard process.waitForExit(150)
+    warn "Workspace proxy unavailable; launching shell directly", status
+  except CatchableError as e:
+    warn "Workspace proxy unavailable; launching shell directly", error = e.msg
 
 proc shellSpawnEventPayload(
     spawnInfo: JsonNode, childPid = 0, exitCode: Option[int] = none(int), error = ""
@@ -437,10 +478,12 @@ proc stopShellProfile(
       )
     else:
       try:
+        let env = model.configuredProcessEnv()
+        env.applyWorkspaceDisplay(runner.workspaceDisplay)
         let process = startProcess(
           profile.stop[0],
           args = profile.stop.commandArgs(),
-          env = model.configuredProcessEnv(),
+          env = env,
           options = InheritedProcessOptions,
         )
         let handle = newProcessHandle(process)
@@ -502,6 +545,9 @@ proc spawnShellProfile(
     shellCompatBehaviorPayload(profile, niriSocketPath, NiriShellCompatEnv())
   try:
     let baseEnv = model.prepareNativeShellEnv()
+    if runner.ownerPid > 0:
+      runner.workspaceDisplay = baseEnv.prepareWorkspaceDisplay(niriSocketPath)
+      baseEnv.applyWorkspaceDisplay(runner.workspaceDisplay)
     var compat = NiriShellCompatEnv()
     let env =
       if profile.niriCompat:

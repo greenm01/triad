@@ -126,6 +126,9 @@ proc backupLiveBinaries(paths: LivePaths): string =
   copyFile(paths.liveTriadNiri, result / "triad_niri")
   if fileExists(paths.liveTriadMirror):
     copyFile(paths.liveTriadMirror, result / "triad_mirror")
+  let proxy = paths.binDir / "triad-wayland-proxy"
+  if fileExists(proxy):
+    copyFile(proxy, result / "triad-wayland-proxy")
   paths.logInfo("backed up live binaries to " & result)
 
 proc restoreLiveBinaries(paths: LivePaths, backupDir: string): bool =
@@ -139,6 +142,11 @@ proc restoreLiveBinaries(paths: LivePaths, backupDir: string): bool =
   atomicInstall(backupDir / "triad_niri", paths.liveTriadNiri)
   if fileExists(backupDir / "triad_mirror"):
     atomicInstall(backupDir / "triad_mirror", paths.liveTriadMirror)
+  let proxy = paths.binDir / "triad-wayland-proxy"
+  if fileExists(backupDir / "triad-wayland-proxy"):
+    atomicInstall(backupDir / "triad-wayland-proxy", proxy)
+  elif fileExists(proxy):
+    removeFile(proxy)
   paths.logInfo("restored live binaries from " & backupDir)
   true
 
@@ -255,6 +263,9 @@ proc runLiveReload*(paths = livePaths()): int =
     atomicInstall(paths.repoDir / "triad", paths.liveTriad)
     atomicInstall(paths.repoDir / "triad_niri", paths.liveTriadNiri)
     atomicInstall(paths.repoDir / "triad_mirror", paths.liveTriadMirror)
+    let proxy = paths.repoDir / "wayland-proxy/target/release/triad-wayland-proxy"
+    if fileExists(proxy):
+      atomicInstall(proxy, paths.binDir / "triad-wayland-proxy")
 
     let reloadCommand =
       if getEnv("TRIAD_LIVE_RELOAD_USE_RETAINED_RESTORE", "") == "1":

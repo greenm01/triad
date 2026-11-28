@@ -87,6 +87,7 @@ printf '%s\n' "install-live-session: syncing Nim dependencies"
 
 printf '%s\n' "install-live-session: building optimized triad binaries"
 (cd "$repo_dir" && TRIAD_DEV_MODE=0 nimble build -d:release --opt:speed --passL:-s)
+sh "$repo_dir/tools/build_wayland_proxy.sh"
 
 [ -x "$repo_dir/triad" ] || fail "missing built binary: $repo_dir/triad"
 [ -x "$repo_dir/triad_niri" ] || fail "missing built binary: $repo_dir/triad_niri"
@@ -97,6 +98,10 @@ mkdir -p "$bin_dir" "$config_dir"
 atomic_install "$repo_dir/triad" "$bin_dir/triad" 755
 atomic_install "$repo_dir/triad_niri" "$bin_dir/triad_niri" 755
 atomic_install "$repo_dir/triad_mirror" "$bin_dir/triad_mirror" 755
+proxy="$repo_dir/wayland-proxy/target/release/triad-wayland-proxy"
+if [ -x "$proxy" ]; then
+  atomic_install "$proxy" "$bin_dir/triad-wayland-proxy" 755
+fi
 atomic_install "$repo_dir/tools/triad-manager-loop.sh" "$bin_dir/triad-manager-loop" 755
 atomic_install "$repo_dir/tools/river-triad-session.sh" "$bin_dir/river-triad-session" 755
 atomic_install "$repo_dir/tools/triad-capture-hook.sh" "$bin_dir/triad-capture-hook" 755

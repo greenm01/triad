@@ -293,6 +293,8 @@ proc workspaceSnapshotChanged*(before, after: ShellSnapshot): bool =
     if previous.workspaceIdx != workspace.workspaceIdx or previous.name != workspace.name or
         previous.outputName != workspace.outputName or
         previous.isActive != workspace.isActive or
+        previous.isOutputVisible != workspace.isOutputVisible or
+        previous.isConfigured != workspace.isConfigured or
         previous.occupied != workspace.occupied:
       return true
 
@@ -623,6 +625,6 @@ proc addPostUpdateEffects*(
       if msg.kind.shouldBroadcastTriadLayoutChanged() or overviewWorkspaceChanged or
           collapsed or pruned:
         effects.add(after.broadcastTriadLayoutStateChanged())
-      if msg.kind.shouldBroadcastTriadStateChanged() or overviewWorkspaceChanged or
-          collapsed or pruned:
+      if msg.kind.shouldBroadcastTriadStateChanged() or workspaceSnapshotChanged or
+          overviewWorkspaceChanged:
         effects.add(after.broadcastTriadStateChanged())

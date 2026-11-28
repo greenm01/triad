@@ -991,6 +991,17 @@ suite "Core Runtime Logic: shell snapshot ipc":
     check win["workspace_id"].getInt() == 1
     check win["is_focused"].getBool()
 
+  test "Renaming a workspace updates the native state stream":
+    var model = configuredModel()
+    let effects = model.updateModel(Msg(kind: MsgKind.CmdRenameTag, newName: "Web"))
+    let updates = effects.filterIt(
+      it.kind == EffectKind.EffBroadcastTriadJson and
+        it.jsonPayload.contains("\"event\":\"state-changed\"")
+    )
+    check updates.len == 1
+    let state = parseJson(updates[0].jsonPayload)["triad"]["state"]
+    check state["layout"]["workspaces"][0]["name"].getStr() == "Web"
+
   test "Niri window title update stays incremental":
     var model = configuredModel()
     model.applyMsg(

@@ -163,9 +163,11 @@ task testAll, "Run all explicit test suites":
 task liveReload,
   "Build release binaries, install them, and restart the live Triad manager":
   buildReleaseBinaries()
+  exec "sh tools/build_wayland_proxy.sh"
   exec "./triad live-reload"
 
 task debugLiveReload,
   "Build debug-symbolized binaries, install them, and restart the live Triad manager":
   buildDebugBinaries()
+  exec "sh tools/build_wayland_proxy.sh"
   exec "./triad live-reload"

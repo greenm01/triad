@@ -70,10 +70,27 @@
             };
           };
 
+          triadWaylandProxy = pkgs.rustPlatform.buildRustPackage {
+            pname = "triad-wayland-proxy";
+            version = "0.1.0";
+            src = lib.cleanSourceWith {
+              src = ./wayland-proxy;
+              filter = path: type: type != "directory" || baseNameOf path != "target";
+            };
+            cargoLock.lockFile = ./wayland-proxy/Cargo.lock;
+            meta = {
+              description = "Wayland workspace protocol bridge for Triad";
+              license = lib.licenses.mit;
+              platforms = lib.platforms.linux;
+              mainProgram = "triad-wayland-proxy";
+            };
+          };
+
           dankShell = inputs.dank-material-shell.packages.${system}.dms-shell;
 
           sessionRuntimePackages = [
             triad
+            triadWaylandProxy
             pkgs.river
             pkgs.dbus
             pkgs.pipewire
@@ -100,66 +117,10 @@
 
           managerLoop = pkgs.writeShellApplication {
             name = "triad-manager-loop";
-            runtimeInputs = [
-              pkgs.coreutils
-              pkgs.gnused
-            ];
+            runtimeInputs = [ triadWaylandProxy ];
             text = ''
-              state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/triad"
-              mkdir -p "$state_dir"
-              triad_bin="''${TRIAD_BIN:-${triad}/bin/triad}"
-              triad_args=""
-
-              case "''${TRIAD_DEV_MODE:-}" in
-                1|true|TRUE|yes|YES|on|ON)
-                  triad_args="--dev-mode"
-                  export TRIAD_DEV_MODE=1
-                  export TRIAD_BEHAVIOR_LOG="''${TRIAD_BEHAVIOR_LOG:-1}"
-                  ;;
-              esac
-
-              rapid_restarts=0
-
-              while :; do
-                start_sec="$(date +%s)"
-                stamp="$(date +%Y%m%d-%H%M%S)"
-                log="$state_dir/triad-$stamp.log"
-                latest="$state_dir/triad-latest.log"
-
-                ln -sfn "$log" "$latest" 2>/dev/null || true
-                printf '%s\n' "triad-manager-loop: starting triad, log=$log" >&2
-
-                set +e
-                "$triad_bin" $triad_args >>"$log" 2>&1
-                status="$?"
-                set -e
-                end_sec="$(date +%s)"
-                runtime_sec=$((end_sec - start_sec))
-
-                if [ "$runtime_sec" -lt 5 ]; then
-                  rapid_restarts=$((rapid_restarts + 1))
-                else
-                  rapid_restarts=0
-                fi
-
-                if [ "$status" -eq 0 ]; then
-                  if [ "$rapid_restarts" -ge 3 ]; then
-                    printf '%s\n' "triad-manager-loop: triad exited cleanly after ''${runtime_sec}s; rapid restart count ''${rapid_restarts}, backing off" >&2
-                    sleep 5
-                  else
-                    printf '%s\n' "triad-manager-loop: triad exited cleanly after ''${runtime_sec}s; restarting" >&2
-                    sleep 0.2
-                  fi
-                else
-                  if [ "$rapid_restarts" -ge 3 ]; then
-                    printf '%s\n' "triad-manager-loop: triad exited with status $status after ''${runtime_sec}s; rapid restart count ''${rapid_restarts}, backing off" >&2
-                    sleep 5
-                  else
-                    printf '%s\n' "triad-manager-loop: triad exited with status $status after ''${runtime_sec}s; restarting" >&2
-                    sleep 1
-                  fi
-                fi
-              done
+              export TRIAD_BIN="''${TRIAD_BIN:-${triad}/bin/triad}"
+              exec ${triad}/libexec/triad/triad-manager-loop
             '';
           };
 
@@ -295,6 +256,7 @@
         {
           inherit
             triad
+            triadWaylandProxy
             triadSession
             riverTriadSession
             managerLoop
