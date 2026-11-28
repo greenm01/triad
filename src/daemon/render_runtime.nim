@@ -2,7 +2,9 @@ import std/[json, monotimes, options, tables, times]
 import protocols/river/client as river
 import ../core/render_visibility
 import ../state/engine
-import ../systems/[daemon_view, layout_projection, recent_windows, window_rules]
+import
+  ../systems/
+    [daemon_view, layout_projection, recent_windows, window_rules, window_stacking]
 import ../types/projection_values
 import ../types/runtime_values
 import ../utils/[behavior_log, overview_hit_test]
@@ -71,72 +73,6 @@ proc configuredPresentationMode*(model: Model): uint32 =
 proc hasPresentationPreference*(model: Model): bool =
   model.effectivePresentationMode().hasPreference
 
-proc isDescendantRiverWindow(daemon: TriadDaemon, child, ancestor: uint32): bool =
-  if child == 0 or ancestor == 0 or child == ancestor:
-    return false
-  var current = child
-  var depth = 0
-  while current != 0 and depth < 64:
-    let winOpt = daemon.currentModel.windowDataForRiverId(current)
-    if winOpt.isNone:
-      return false
-    let parent = uint32(uint32(winOpt.get().parentExternalId))
-    if parent == 0:
-      return false
-    if parent == ancestor:
-      return true
-    current = parent
-    inc depth
-  false
-
-proc logicalWindowSortKey(daemon: TriadDaemon, id: uint32): uint32 =
-  let logicalId = daemon.currentModel.windowForRiverId(id)
-  if uint32(logicalId) != 0:
-    return uint32(logicalId)
-  uint32(id)
-
-proc windowOrAncestorStackLayer(daemon: TriadDaemon, id: uint32): int =
-  if id == 0:
-    return 0
-  var current = id
-  var depth = 0
-  while current != 0 and depth < 64:
-    let winOpt = daemon.currentModel.windowDataForRiverId(current)
-    if winOpt.isNone:
-      return 0
-    let win = winOpt.get()
-    if win.isUnmanagedGlobal:
-      return 2
-    if win.isOverlay:
-      result = max(result, 1)
-    let parent = uint32(uint32(win.parentExternalId))
-    if parent == 0:
-      return
-    current = parent
-    inc depth
-
-proc desiredStackCmp(daemon: TriadDaemon, a, b: uint32): int =
-  if daemon.isDescendantRiverWindow(a, b):
-    return 1
-  if daemon.isDescendantRiverWindow(b, a):
-    return -1
-  let aLayer = daemon.windowOrAncestorStackLayer(a)
-  let bLayer = daemon.windowOrAncestorStackLayer(b)
-  if aLayer != bLayer:
-    return cmp(aLayer, bLayer)
-  cmp(daemon.logicalWindowSortKey(a), daemon.logicalWindowSortKey(b))
-
-proc sortDesiredIds(daemon: TriadDaemon, ids: var seq[uint32]) =
-  if ids.len < 2:
-    return
-  for idx in 1 ..< ids.len:
-    let item = ids[idx]
-    var pos = idx
-    while pos > 0 and daemon.desiredStackCmp(item, ids[pos - 1]) < 0:
-      ids[pos] = ids[pos - 1]
-      dec pos
-    ids[pos] = item
-
 proc orderedDesiredIds*(daemon: TriadDaemon): seq[uint32] =
   for id in daemon.desiredPlacements.keys:
     if daemon.desiredPlacementOrder.find(id) == -1:
@@ -144,7 +80,7 @@ proc orderedDesiredIds*(daemon: TriadDaemon): seq[uint32] =
   for id in daemon.desiredPlacementOrder:
     if daemon.desiredPlacements.hasKey(id) and result.find(id) == -1:
       result.add(id)
-  daemon.sortDesiredIds(result)
+  daemon.currentModel.sortStackIds(result)
 
 proc orderedDesiredInstructions*(daemon: TriadDaemon): seq[RenderInstruction] =
   proc desiredInstruction(id: uint32): RenderInstruction =
@@ -190,7 +126,7 @@ proc renderOrderKey(daemon: TriadDaemon, ids: seq[uint32]): seq[uint32] =
     let isFloating = winOpt.isSome and winOpt.get().isFloating
     let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
     let isMaximized = daemon.currentModel.effectivelyMaximizedForRiverId(id)
-    var flags = uint32(daemon.windowOrAncestorStackLayer(id) shl 4)
+    var flags = uint32(daemon.currentModel.windowOrAncestorStackLayer(id) shl 4)
     if isScratchpad:
       flags = flags or 1'u32
     if isFloating:
@@ -498,44 +434,9 @@ proc renderDesiredPlacements*(daemon: var TriadDaemon) =
   daemon.syncBspPreselectionSurfaces(daemon.currentBspPreselections)
 
   if orderChanged:
-    for id in ids:
+    for id in daemon.currentModel.stackOrder(ids):
       if daemon.windowNodes.hasKey(id):
-        let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
-        let isScratchpad =
-          daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
-        let winOpt = daemon.currentModel.windowDataForRiverId(id)
-        let isFloating = winOpt.isSome and winOpt.get().isFloating
-        let isDragged = id == daemon.currentModel.draggedPointerRiverId()
-        let isFullscreen = winOpt.isSome and winOpt.get().isFullscreen
-        let isMaximized = daemon.currentModel.effectivelyMaximizedForRiverId(id)
-        if not isFloating and not isScratchpad and
-            (isFullscreen or isMaximized or id == highlighted or isDragged):
-          daemon.windowNodes[id].placeTop()
-
-    for id in ids:
-      if daemon.windowNodes.hasKey(id):
-        let visibleScratchpad = daemon.currentModel.visibleScratchpadRiverId()
-        let isScratchpad =
-          daemon.currentModel.isScratchpadVisible and visibleScratchpad == id
-        let winOpt = daemon.currentModel.windowDataForRiverId(id)
-        let isFloating = winOpt.isSome and winOpt.get().isFloating
-        let isDragged = id == daemon.currentModel.draggedPointerRiverId()
-        if isFloating or isScratchpad or id == highlighted or isDragged:
-          daemon.windowNodes[id].placeTop()
-
-    for id in ids:
-      if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 1:
         daemon.windowNodes[id].placeTop()
-
-    for id in ids:
-      if daemon.windowNodes.hasKey(id) and daemon.windowOrAncestorStackLayer(id) >= 2:
-        daemon.windowNodes[id].placeTop()
-
-    if highlighted != 0 and daemon.windowNodes.hasKey(highlighted):
-      daemon.windowNodes[highlighted].placeTop()
-    let dragged = daemon.currentModel.draggedPointerRiverId()
-    if dragged != 0 and daemon.windowNodes.hasKey(dragged):
-      daemon.windowNodes[dragged].placeTop()
 
   if daemon.ownedShellSurfaceId != 0 and
       daemon.surfaceTable.hasKey(daemon.ownedShellSurfaceId):

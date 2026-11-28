@@ -1,7 +1,7 @@
 import std/math
 import tcore_support
 import ../src/core/[layout_selection_codec, native_layout_codec]
-import ../src/systems/daemon_view
+import ../src/systems/[daemon_view, window_stacking]
 import ../src/systems/runtime
 import ../src/types/janet_layouts
 
@@ -1161,6 +1161,57 @@ suite "Core Runtime Logic: window movement":
     check not allOutputVisibility.clipped
     check visibilityBounds == allOutputBounds
     check state.visible
+
+  test "Floating windows stay above the focused tiled window":
+    var model = configuredModel()
+    model.setupSideBySideOutputs()
+    for id in 1'u32 .. 3'u32:
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: id, appId: "app", title: $id)
+      )
+    let geom = Rect(x: 100, y: 100, w: 400, h: 300)
+    for id in [2'u32, 3'u32]:
+      check model.setWindowFloating(
+        model.windowForExternal(ExternalWindowId(id)), true, geom
+      )
+    var ids = @[1'u32, 2'u32, 3'u32]
+    model.sortStackIds(ids)
+
+    model.focusExternal(3)
+    model.focusExternal(2)
+    model.focusExternal(1)
+    check model.stackOrder(ids) == @[1'u32, 3'u32, 2'u32]
+
+    model.focusExternal(3)
+    check model.stackOrder(ids) == @[1'u32, 2'u32, 3'u32]
+
+  test "Focused fullscreen covers floating windows and maximized does not":
+    var model = configuredModel()
+    model.setupSideBySideOutputs()
+    for id in 1'u32 .. 2'u32:
+      model.applyMsg(
+        Msg(kind: MsgKind.WlWindowCreated, windowId: id, appId: "app", title: $id)
+      )
+    check model.setWindowFloating(
+      model.windowForExternal(ExternalWindowId(2)),
+      true,
+      Rect(x: 100, y: 100, w: 400, h: 300),
+    )
+    var ids = @[1'u32, 2'u32]
+    model.sortStackIds(ids)
+
+    model.focusExternal(1)
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleMaximized))
+    check model.effectivelyMaximizedForRiverId(1)
+    check model.stackOrder(ids) == @[1'u32, 2'u32]
+
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleMaximized))
+    model.applyMsg(Msg(kind: MsgKind.CmdToggleFullscreen))
+    check model.modelWindow(1).isFullscreen
+    check model.stackOrder(ids) == @[2'u32, 1'u32]
+
+    model.focusExternal(2)
+    check model.stackOrder(ids) == @[1'u32, 2'u32]
 
   test "Floating window past the screen edge keeps its on-screen borders":
     var model = configuredModel()
