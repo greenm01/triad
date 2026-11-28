@@ -7,7 +7,7 @@ from posix import
   TPollfd, close, fcntl, F_GETFL, F_SETFL, O_NONBLOCK, Pid, getpgrp, kill, pipe, read,
   write
 import ../src/config/parser
-import ../src/core/[effects, msg, niri_state, restore_state]
+import ../src/core/[effects, layout_selection_codec, msg, niri_state, restore_state]
 import
   ../src/daemon/[
     bindings_runtime, capture_sessions_runtime, child_process_runtime, cursor_shake,

@@ -6,6 +6,9 @@ from ../types/runtime_values import
   JanetLayoutConfig, JanetLayoutId, LayoutMode, LayoutSelection, LayoutSelectionKind,
   NativeLayoutId
 
+proc `==`*(a, b: JanetLayoutId): bool {.borrow.}
+proc `==`*(a, b: NativeLayoutId): bool {.borrow.}
+
 proc janetLayoutId*(value: string): JanetLayoutId =
   JanetLayoutId(value)
 
