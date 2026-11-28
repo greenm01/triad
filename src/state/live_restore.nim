@@ -58,6 +58,7 @@ proc restoredTagData*(source: lr.RestoredTagState): RestoredTagData =
   result = RestoredTagData(
     slot: source.tagId,
     name: source.name,
+    explicitlyCreated: source.explicitlyCreated,
     layoutMode: source.layoutMode,
     customLayoutId: source.customLayoutId,
     nativeLayoutId: source.nativeLayoutId,
@@ -189,6 +190,7 @@ proc liveRestoreState*(model: Model): LiveRestoreState =
     var restoredTag = lr.RestoredTagState(
       tagId: tag.slot,
       name: tag.name,
+      explicitlyCreated: tag.explicitlyCreated,
       layoutMode: tag.layoutMode,
       customLayoutId: tag.customLayoutId,
       nativeLayoutId: tag.nativeLayoutId,
@@ -512,6 +514,7 @@ proc tagStateJson(tag: lr.RestoredTagState): JsonNode =
   %*{
     "id": tag.tagId,
     "name": tag.name,
+    "explicitly_created": tag.explicitlyCreated,
     "layout_mode": ord(tag.layoutMode),
     "layout_kind":
       if tag.customLayoutId.layoutIdString().len > 0:

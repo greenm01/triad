@@ -212,6 +212,8 @@ proc materializeRestoredTarget(model: var Model, slot: uint32): TagId =
 
   if result != NullTagId and restoredTag.isSome:
     let restored = restoredTag.get()
+    if restored.explicitlyCreated:
+      model.markWorkspaceCreated(result)
     discard model.setTagRestoredState(
       result, restored.name, restored.layoutMode, restored.customLayoutId,
       restored.nativeLayoutId, restored.targetViewportXOffset,

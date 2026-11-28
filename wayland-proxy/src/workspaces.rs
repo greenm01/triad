@@ -1,4 +1,4 @@
-use crate::ipc::{Ipc, Snapshot, Workspace};
+use crate::ipc::{Ipc, Snapshot, Workspace, WorkspaceAction, WorkspaceKey};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
@@ -12,6 +12,7 @@ use wl_proxy::{
             ext_workspace_group_handle_v1::{
                 ExtWorkspaceGroupHandleV1 as Group,
                 ExtWorkspaceGroupHandleV1GroupCapabilities as GroupCapabilities,
+                ExtWorkspaceGroupHandleV1Handler,
             },
             ext_workspace_handle_v1::{
                 ExtWorkspaceHandleV1 as Handle, ExtWorkspaceHandleV1Handler,
@@ -34,6 +35,7 @@ pub struct Outputs {
 
 struct GroupState {
     handle: Weak<Group>,
+    output: u32,
     outputs: BTreeMap<u64, Weak<WlOutput>>,
 }
 
@@ -46,8 +48,8 @@ struct WorkspaceState {
 pub struct Binding {
     manager: Weak<Manager>,
     groups: BTreeMap<String, GroupState>,
-    workspaces: BTreeMap<u32, WorkspaceState>,
-    pending: Vec<u32>,
+    workspaces: BTreeMap<WorkspaceKey, WorkspaceState>,
+    pending: Vec<WorkspaceAction>,
     last_snapshot: Option<Arc<Snapshot>>,
     started: bool,
     epoch: u64,
@@ -117,7 +119,7 @@ impl Binding {
             .names
             .values()
             .map(String::as_str)
-            .filter(|name| snapshot.outputs.contains(*name))
+            .filter(|name| snapshot.outputs.contains_key(*name))
             .collect();
         let mut changed = false;
         for (id, workspace) in &mut self.workspaces {
@@ -125,7 +127,12 @@ impl Binding {
                 .workspaces
                 .get(id)
                 .and_then(|row| live.get(row.output.as_str()).copied());
-            if workspace.group.as_deref() != next
+            if (workspace.group.as_deref() != next
+                || next.is_some_and(|name| {
+                    self.groups
+                        .get(name)
+                        .is_some_and(|group| group.output != snapshot.outputs[name])
+                }))
                 && let Some(group) = workspace
                     .group
                     .take()
@@ -154,12 +161,11 @@ impl Binding {
                 handle.send_removed();
                 changed = true;
             }
-            self.pending.retain(|pending| pending != id);
             false
         });
 
         self.groups.retain(|name, group| {
-            if live.contains(name.as_str()) {
+            if live.contains(name.as_str()) && snapshot.outputs[name] == group.output {
                 return true;
             }
             if let Some(handle) = group.handle.upgrade().filter(|g| g.client_id().is_some()) {
@@ -181,10 +187,24 @@ impl Binding {
             let group = self.groups.entry((*name).to_owned()).or_insert_with(|| {
                 let handle = manager.new_send_workspace_group();
                 handle.set_forward_to_server(false);
-                handle.send_capabilities(GroupCapabilities::default());
+                let output = snapshot.outputs[*name];
+                if snapshot.session.is_some()
+                    && output != 0
+                    && let Ok(requests) = manager.try_get_handler_ref::<ManagerRequests>()
+                {
+                    handle.set_handler(GroupRequests {
+                        name: (*name).to_owned(),
+                        output,
+                        binding: requests.binding.clone(),
+                    });
+                    handle.send_capabilities(GroupCapabilities::CREATE_WORKSPACE);
+                } else {
+                    handle.send_capabilities(GroupCapabilities::default());
+                }
                 changed = true;
                 GroupState {
                     handle: Rc::downgrade(&handle),
+                    output,
                     outputs: BTreeMap::new(),
                 }
             });
@@ -236,9 +256,8 @@ impl Binding {
                     });
                 }
                 if row.configured {
-                    handle.send_id(&id.to_string());
+                    handle.send_id(&row.slot.to_string());
                 }
-                handle.send_capabilities(WorkspaceCapabilities::ACTIVATE);
                 changed = true;
                 created = true;
                 WorkspaceState {
@@ -260,6 +279,18 @@ impl Binding {
             }
             if created || workspace.row.index != row.index {
                 handle.send_coordinates(&row.index.to_ne_bytes());
+                changed = true;
+            }
+            if created || workspace.row.can_remove != row.can_remove {
+                let mut capabilities = WorkspaceCapabilities::ACTIVATE;
+                if snapshot.session.is_some() && matches!(id, WorkspaceKey::Runtime(_)) {
+                    capabilities |=
+                        WorkspaceCapabilities::ASSIGN | WorkspaceCapabilities::DEACTIVATE;
+                    if row.can_remove {
+                        capabilities |= WorkspaceCapabilities::REMOVE;
+                    }
+                }
+                handle.send_capabilities(capabilities);
                 changed = true;
             }
             if created || (workspace.row.active, workspace.row.urgent) != (row.active, row.urgent) {
@@ -297,24 +328,10 @@ impl ExtWorkspaceManagerV1Handler for ManagerRequests {
             return;
         };
         let mut binding = binding.borrow_mut();
-        let (epoch, snapshot) = self.ipc.current();
-        let last = std::mem::take(&mut binding.pending)
-            .into_iter()
-            .rev()
-            .find(|id| {
-                binding
-                    .workspaces
-                    .get(id)
-                    .and_then(|w| w.handle.upgrade())
-                    .is_some_and(|w| w.client_id().is_some())
-                    && snapshot
-                        .as_ref()
-                        .is_some_and(|s| s.workspaces.contains_key(id))
-            });
-        if epoch == binding.epoch
-            && let Some(id) = last
-        {
-            self.ipc.queue_activation(epoch, id);
+        let (epoch, _) = self.ipc.current();
+        let batch = std::mem::take(&mut binding.pending);
+        if epoch == binding.epoch && !batch.is_empty() {
+            self.ipc.queue_batch(epoch, batch);
         }
     }
 
@@ -328,21 +345,84 @@ impl ExtWorkspaceManagerV1Handler for ManagerRequests {
 }
 
 struct WorkspaceRequests {
-    id: u32,
+    id: WorkspaceKey,
     binding: Weak<RefCell<Binding>>,
+}
+
+impl WorkspaceRequests {
+    fn queue(
+        &self,
+        handle: &Rc<Handle>,
+        action: impl FnOnce(&Binding, &Workspace) -> Option<WorkspaceAction>,
+    ) {
+        let Some(binding) = self.binding.upgrade() else {
+            return;
+        };
+        let mut binding = binding.borrow_mut();
+        if let Some(workspace) = binding.workspaces.get(&self.id)
+            && workspace.handle.ptr_eq(&Rc::downgrade(handle))
+            && let Some(action) = action(&binding, &workspace.row)
+        {
+            binding.pending.push(action);
+        }
+    }
 }
 
 impl ExtWorkspaceHandleV1Handler for WorkspaceRequests {
     fn handle_activate(&mut self, handle: &Rc<Handle>) {
+        self.queue(handle, |_, _| {
+            Some(WorkspaceAction::Activate { workspace: self.id })
+        });
+    }
+
+    fn handle_assign(&mut self, handle: &Rc<Handle>, group: &Rc<Group>) {
+        self.queue(handle, |binding, _| {
+            let requests = group.try_get_handler_ref::<GroupRequests>().ok()?;
+            let current = binding.groups.get(&requests.name)?;
+            (matches!(self.id, WorkspaceKey::Runtime(_))
+                && current.output != 0
+                && current.handle.ptr_eq(&Rc::downgrade(group)))
+            .then_some(WorkspaceAction::Assign {
+                workspace: self.id,
+                output: current.output,
+            })
+        });
+    }
+
+    fn handle_deactivate(&mut self, handle: &Rc<Handle>) {
+        self.queue(handle, |_, _| {
+            matches!(self.id, WorkspaceKey::Runtime(_))
+                .then_some(WorkspaceAction::Deactivate { workspace: self.id })
+        });
+    }
+
+    fn handle_remove(&mut self, handle: &Rc<Handle>) {
+        self.queue(handle, |_, row| {
+            row.can_remove
+                .then_some(WorkspaceAction::Remove { workspace: self.id })
+        });
+    }
+}
+
+struct GroupRequests {
+    name: String,
+    output: u32,
+    binding: Weak<RefCell<Binding>>,
+}
+
+impl ExtWorkspaceGroupHandleV1Handler for GroupRequests {
+    fn handle_create_workspace(&mut self, handle: &Rc<Group>, name: &str) {
         if let Some(binding) = self.binding.upgrade() {
             let mut binding = binding.borrow_mut();
-            let current = binding
-                .workspaces
-                .get(&self.id)
-                .and_then(|w| w.handle.upgrade());
-            if current.is_some_and(|active| Rc::ptr_eq(&active, handle)) {
-                binding.pending.retain(|id| *id != self.id);
-                binding.pending.push(self.id);
+            if binding
+                .groups
+                .get(&self.name)
+                .is_some_and(|group| group.handle.ptr_eq(&Rc::downgrade(handle)))
+            {
+                binding.pending.push(WorkspaceAction::Create {
+                    output: self.output,
+                    name: name.to_owned(),
+                });
             }
         }
     }

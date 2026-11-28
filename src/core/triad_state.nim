@@ -1,4 +1,4 @@
-import std/[algorithm, json, options, tables]
+import std/[algorithm, json, monotimes, options, tables]
 import layout_descriptor_codec
 import layout_mode_codec
 import layout_selection_codec
@@ -10,6 +10,9 @@ from ../types/runtime_values import
   LayoutSource, SplitTreeNodeMode, WindowRuleIdleInhibitMode
 
 export shell_snapshot
+
+# Runtime workspace and output IDs are scoped to this daemon process.
+let workspaceSession* = getMonoTime().ticks
 
 proc nullableString(value: string): JsonNode =
   if value.len == 0:
@@ -233,6 +236,9 @@ proc triadWorkspaceLayoutJson*(workspace: ShellWorkspace): JsonNode =
 
   %*{
     "tag_id": workspace.tagId,
+    "runtime_id": workspace.runtimeId,
+    "explicitly_created": workspace.explicitlyCreated,
+    "can_remove": workspace.canRemove,
     "workspace_idx": workspace.workspaceIdx,
     "name": nullableString(workspace.name),
     "output": nullableString(workspace.outputName),
@@ -297,6 +303,7 @@ proc triadOutputJson(output: ShellOutput): JsonNode =
   let scale = if output.scale > 0.0'f32: output.scale else: 1.0'f32
   %*{
     "id": output.id,
+    "runtime_id": output.runtimeId,
     "name": output.name,
     "connected": true,
     "is_primary": output.isPrimary,
@@ -546,6 +553,7 @@ proc triadCapabilitiesJson*(captureSessionsSupported = true): JsonNode =
     "overview": true,
     "workspace_creation": true,
     "workspace_switching": true,
+    "workspace_batch": true,
     "workspace_content_scroll": true,
     "window_focus": true,
     "window_close": true,
@@ -567,6 +575,7 @@ proc triadStateJson*(
   %*{
     "version": snapshot.version,
     "capabilities": triadCapabilitiesJson(captureSessionsSupported),
+    "workspace_session": $workspaceSession,
     "overview": triadOverviewJson(snapshot),
     "layout": triadLayoutStateJson(snapshot),
     "keyboard_layouts": keyboardLayouts["names"],

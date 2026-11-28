@@ -1,36 +1,70 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     io::{self, BufRead, BufReader, Read, Write},
     os::unix::net::UnixStream,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc::SyncSender},
     thread,
     time::Duration,
 };
 
 const MAX_LINE: u64 = 16 * 1024 * 1024;
+const MAX_REQUEST_LINE: usize = 256 * 1024;
 const IPC_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Snapshot {
-    pub outputs: BTreeSet<String>,
-    pub workspaces: BTreeMap<u32, Workspace>,
+    pub session: Option<String>,
+    pub outputs: BTreeMap<String, u32>,
+    pub workspaces: BTreeMap<WorkspaceKey, Workspace>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceKey {
+    Runtime(u32),
+    Slot(u32),
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum WorkspaceAction {
+    Create {
+        output: u32,
+        name: String,
+    },
+    Activate {
+        workspace: WorkspaceKey,
+    },
+    Assign {
+        workspace: WorkspaceKey,
+        output: u32,
+    },
+    Deactivate {
+        workspace: WorkspaceKey,
+    },
+    Remove {
+        workspace: WorkspaceKey,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Workspace {
+    pub slot: u32,
     pub index: u32,
     pub name: String,
     pub output: String,
     pub active: bool,
     pub urgent: bool,
     pub configured: bool,
+    pub can_remove: bool,
 }
 
 #[derive(Deserialize)]
 struct State {
+    workspace_session: Option<String>,
     layout: Layout,
     outputs: Vec<Output>,
 }
@@ -42,6 +76,8 @@ struct Layout {
 
 #[derive(Deserialize)]
 struct Output {
+    #[serde(default)]
+    runtime_id: u32,
     name: String,
     connected: bool,
 }
@@ -49,6 +85,12 @@ struct Output {
 #[derive(Deserialize)]
 struct Row {
     tag_id: u32,
+    #[serde(default)]
+    runtime_id: u32,
+    #[serde(default)]
+    explicitly_created: bool,
+    #[serde(default)]
+    can_remove: bool,
     workspace_idx: u32,
     name: Option<String>,
     output: Option<String>,
@@ -62,21 +104,33 @@ struct Row {
 impl From<State> for Snapshot {
     fn from(state: State) -> Self {
         Self {
+            session: state.workspace_session,
             outputs: state
                 .outputs
                 .into_iter()
                 .filter(|o| o.connected)
-                .map(|o| o.name)
+                .map(|o| (o.name, o.runtime_id))
                 .collect(),
             workspaces: state
                 .layout
                 .workspaces
                 .into_iter()
-                .filter(|w| w.is_configured || w.occupied || w.is_active || w.is_output_visible)
+                .filter(|w| {
+                    w.is_configured
+                        || w.explicitly_created
+                        || w.occupied
+                        || w.is_active
+                        || w.is_output_visible
+                })
                 .map(|w| {
                     (
-                        w.tag_id,
+                        if w.runtime_id != 0 {
+                            WorkspaceKey::Runtime(w.runtime_id)
+                        } else {
+                            WorkspaceKey::Slot(w.tag_id)
+                        },
                         Workspace {
+                            slot: w.tag_id,
                             index: w.workspace_idx,
                             name: w
                                 .name
@@ -86,6 +140,7 @@ impl From<State> for Snapshot {
                             active: w.is_output_visible,
                             urgent: w.is_urgent,
                             configured: w.is_configured,
+                            can_remove: w.can_remove,
                         },
                     )
                 })
@@ -103,7 +158,7 @@ struct Feed {
 #[derive(Clone)]
 pub struct Ipc {
     feed: Arc<Mutex<Feed>>,
-    actions: SyncSender<(u64, u32)>,
+    actions: SyncSender<(u64, Vec<WorkspaceAction>)>,
 }
 
 fn read_json(reader: &mut impl BufRead) -> io::Result<Value> {
@@ -125,7 +180,7 @@ fn wake_main(mut wake: &UnixStream) {
     let _ = wake.write(&[1]);
 }
 
-fn subscribe(path: &PathBuf, feed: &Mutex<Feed>, wake: &UnixStream) -> io::Result<()> {
+fn subscribe(path: &Path, feed: &Mutex<Feed>, wake: &UnixStream) -> io::Result<()> {
     let mut socket = UnixStream::connect(path)?;
     socket.set_write_timeout(Some(IPC_TIMEOUT))?;
     writeln!(
@@ -145,6 +200,13 @@ fn subscribe(path: &PathBuf, feed: &Mutex<Feed>, wake: &UnixStream) -> io::Resul
             let snapshot = Snapshot::from(serde_json::from_value::<State>(event["state"].take())?);
             let mut feed = feed.lock().unwrap();
             if feed.snapshot.as_deref() != Some(&snapshot) {
+                if feed
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|old| old.session != snapshot.session)
+                {
+                    feed.epoch += 1;
+                }
                 feed.snapshot = Some(Arc::new(snapshot));
                 wake_main(wake);
             }
@@ -153,17 +215,52 @@ fn subscribe(path: &PathBuf, feed: &Mutex<Feed>, wake: &UnixStream) -> io::Resul
     }
 }
 
-fn activate(path: &PathBuf, id: u32) -> io::Result<()> {
+fn send_request(path: &Path, request: &Value) -> io::Result<Value> {
+    let request = serde_json::to_vec(request)?;
+    if request.len() > MAX_REQUEST_LINE {
+        return Err(io::Error::other(
+            "workspace batch exceeds the Triad IPC line limit",
+        ));
+    }
     let mut socket = UnixStream::connect(path)?;
     socket.set_read_timeout(Some(IPC_TIMEOUT))?;
     socket.set_write_timeout(Some(IPC_TIMEOUT))?;
-    writeln!(
-        socket,
-        "{}",
-        json!({"Action":{"FocusWorkspace":{"reference":{"Id":id}}}})
-    )?;
-    if read_json(&mut BufReader::new(socket))?.get("Ok").is_none() {
-        return Err(io::Error::other("Triad rejected workspace activation"));
+    socket.write_all(&request)?;
+    socket.write_all(b"\n")?;
+    read_json(&mut BufReader::new(socket))
+}
+
+fn apply_batch(
+    state_path: &Path,
+    niri_path: &Path,
+    snapshot: &Snapshot,
+    batch: &[WorkspaceAction],
+) -> io::Result<()> {
+    if let Some(session) = &snapshot.session {
+        let reply = send_request(
+            state_path,
+            &json!({"triad": {
+                "version": 1, "request": "workspace-batch", "session": session, "actions": batch,
+            }}),
+        )?;
+        if reply["ok"] != true {
+            return Err(io::Error::other(format!(
+                "Triad rejected workspace batch: {reply}"
+            )));
+        }
+    } else if let Some(slot) = batch.iter().rev().find_map(|action| match action {
+        WorkspaceAction::Activate { workspace } => {
+            snapshot.workspaces.get(workspace).map(|row| row.slot)
+        }
+        _ => None,
+    }) {
+        let reply = send_request(
+            niri_path,
+            &json!({"Action":{"FocusWorkspace":{"reference":{"Id":slot}}}}),
+        )?;
+        if reply.get("Ok").is_none() {
+            return Err(io::Error::other("Triad rejected workspace activation"));
+        }
     }
     Ok(())
 }
@@ -175,9 +272,10 @@ impl Ipc {
         wake.set_nonblocking(true)?;
         let feed = Arc::new(Mutex::new(Feed::default()));
         let reader = feed.clone();
+        let subscription_path = state_path.clone();
         thread::spawn(move || {
             loop {
-                let result = subscribe(&state_path, &reader, &wake);
+                let result = subscribe(&subscription_path, &reader, &wake);
                 {
                     let mut feed = reader.lock().unwrap();
                     if feed.snapshot.take().is_some() {
@@ -192,20 +290,20 @@ impl Ipc {
             }
         });
 
-        let (actions, requests) = std::sync::mpsc::sync_channel(32);
+        let (actions, requests) = std::sync::mpsc::sync_channel::<(u64, Vec<WorkspaceAction>)>(32);
         let writer = feed.clone();
         thread::spawn(move || {
-            while let Ok((epoch, id)) = requests.recv() {
-                let ready = {
+            while let Ok((epoch, batch)) = requests.recv() {
+                let snapshot = {
                     let feed = writer.lock().unwrap();
-                    feed.epoch == epoch
-                        && feed
-                            .snapshot
-                            .as_ref()
-                            .is_some_and(|s| s.workspaces.contains_key(&id))
+                    if feed.epoch != epoch {
+                        continue;
+                    }
+                    feed.snapshot.clone()
                 };
-                if ready && let Err(error) = activate(&niri_path, id) {
-                    eprintln!("triad-wayland-proxy: workspace activation failed: {error}");
+                let Some(snapshot) = snapshot else { continue };
+                if let Err(error) = apply_batch(&state_path, &niri_path, &snapshot, &batch) {
+                    eprintln!("triad-wayland-proxy: workspace commit failed: {error}");
                 }
             }
         });
@@ -217,9 +315,9 @@ impl Ipc {
         (feed.epoch, feed.snapshot.clone())
     }
 
-    pub fn queue_activation(&self, epoch: u64, id: u32) {
-        if let Err(error) = self.actions.try_send((epoch, id)) {
-            eprintln!("triad-wayland-proxy: could not queue workspace activation: {error}");
+    pub fn queue_batch(&self, epoch: u64, batch: Vec<WorkspaceAction>) {
+        if let Err(error) = self.actions.try_send((epoch, batch)) {
+            eprintln!("triad-wayland-proxy: could not queue workspace batch: {error}");
         }
     }
 }
@@ -240,14 +338,20 @@ mod tests {
             ]}
         })).unwrap();
         let snapshot = Snapshot::from(state);
-        assert_eq!(snapshot.outputs, BTreeSet::from(["DP-1".to_owned()]));
+        assert_eq!(snapshot.outputs, BTreeMap::from([("DP-1".to_owned(), 0)]));
         assert_eq!(
-            snapshot.workspaces.keys().copied().collect::<Vec<_>>(),
+            snapshot
+                .workspaces
+                .values()
+                .map(|row| row.slot)
+                .collect::<Vec<_>>(),
             [1, 2, 3]
         );
-        assert_eq!(snapshot.workspaces[&1].name, "1");
-        assert_eq!(snapshot.workspaces[&2].name, "Web");
-        assert!(snapshot.workspaces[&2].active && snapshot.workspaces[&2].urgent);
-        assert!(!snapshot.workspaces[&1].active);
+        let one = &snapshot.workspaces[&WorkspaceKey::Slot(1)];
+        let two = &snapshot.workspaces[&WorkspaceKey::Slot(2)];
+        assert_eq!(one.name, "1");
+        assert_eq!(two.name, "Web");
+        assert!(two.active && two.urgent);
+        assert!(!one.active);
     }
 }

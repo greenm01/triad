@@ -353,6 +353,8 @@ proc applyCommand*(
     result.dirty = model.focusWorkspaceIndex(msg.workspaceIndex)
   of MsgKind.CmdNewWorkspace:
     result.dirty = model.focusNewWorkspaceOnActiveOutput()
+  of MsgKind.CmdWorkspaceBatch:
+    result.dirty = model.applyWorkspaceActions(msg.workspaceActions)
   of MsgKind.CmdReorderWorkspaceIndex:
     result.dirty =
       model.reorderWorkspaceIndex(msg.reorderWorkspaceIndex, msg.reorderTargetIndex)

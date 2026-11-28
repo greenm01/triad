@@ -111,6 +111,53 @@ proc inactiveOutputLocalFocusScenario(
   )
 
 suite "Core Runtime Logic: output sticky scratchpad":
+  test "Workspace protocol removal protects configured and occupied workspaces":
+    var model = configuredModel()
+    model.addTestOutput(1, "DP-1", 0, 0, 1280, 720)
+    let output = model.outputForExternal(ExternalOutputId(1))
+    let prior = model.activeTag
+    let slot = model.nextDynamicWorkspaceSlot()
+    model.applyMsg(Msg(
+      kind: MsgKind.CmdWorkspaceBatch,
+      workspaceActions: @[WorkspaceAction(
+        kind: WorkspaceActionKind.Create, outputId: uint32(output), name: "Tools"
+      )],
+    ))
+    let created = model.tagForSlot(slot)
+    require created != NullTagId
+    check model.activeTag == prior
+    check model.workspaceCanRemove(created)
+
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: slot))
+    model.applyMsg(Msg(
+      kind: MsgKind.WlWindowCreated, windowId: 1, appId: "tool", title: "Tool"
+    ))
+    model.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 2))
+    model.applyMsg(Msg(
+      kind: MsgKind.CmdWorkspaceBatch,
+      workspaceActions: @[
+        WorkspaceAction(kind: WorkspaceActionKind.Remove, workspaceId: uint32(created)),
+        WorkspaceAction(
+          kind: WorkspaceActionKind.Remove, workspaceId: uint32(model.tagForSlot(1))
+        ),
+      ],
+    ))
+    check model.tagForSlot(slot) == created
+    check model.tagForSlot(1) != NullTagId
+    check model.shellSnapshot().windows[0].tagId == some(slot)
+
+    model.applyMsg(Msg(kind: MsgKind.WlWindowDestroyed, destroyedId: 1))
+    check model.workspaceCanRemove(created)
+    let restore = parseLiveRestoreJson(model.liveRestoreJson()).get()
+    var restored = configuredModel()
+    restored.addTestOutput(1, "DP-1", 0, 0, 1280, 720)
+    restored.applyLiveRestore(restore.pendingRestoreState())
+    restored.applyMsg(Msg(kind: MsgKind.CmdFocusTag, focusTag: 1))
+    let restoredWorkspace = restored.tagData(restored.tagForSlot(slot))
+    require restoredWorkspace.isSome
+    check restoredWorkspace.get().name == "Tools"
+    check restoredWorkspace.get().explicitlyCreated
+
   test "Explicit workspace focus reasserts focus for the already active workspace":
     var model = initRuntimeStateFromConfig(
       Config(workspaces: WorkspaceConfig(defaultCount: 3))

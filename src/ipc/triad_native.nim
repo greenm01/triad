@@ -47,6 +47,38 @@ proc stringFromField(node: JsonNode, field: string): string =
   else:
     ""
 
+proc workspaceActionFromJson(node: JsonNode): Option[WorkspaceAction] =
+  if node.kind != JObject:
+    return
+  var action: WorkspaceAction
+  case stringFromField(node, "action")
+  of "create": action.kind = WorkspaceActionKind.Create
+  of "activate": action.kind = WorkspaceActionKind.Activate
+  of "assign": action.kind = WorkspaceActionKind.Assign
+  of "deactivate": action.kind = WorkspaceActionKind.Deactivate
+  of "remove": action.kind = WorkspaceActionKind.Remove
+  else: return
+
+  if action.kind in {WorkspaceActionKind.Create, WorkspaceActionKind.Assign}:
+    action.outputId = uintFromField(node, "output").get(0'u32)
+    if action.outputId == 0:
+      return
+  if action.kind == WorkspaceActionKind.Create:
+    if not node.hasKey("name") or node["name"].kind != JString or
+        '\0' in node["name"].getStr():
+      return
+    action.name = node["name"].getStr()
+  else:
+    if not node.hasKey("workspace") or node["workspace"].kind != JObject:
+      return
+    let workspace = node["workspace"]
+    action.workspaceId = uintFromField(workspace, "runtime").get(0'u32)
+    action.slot = uintFromField(workspace, "slot").get(0'u32)
+    if action.workspaceId == 0 and
+        (action.kind != WorkspaceActionKind.Activate or action.slot == 0):
+      return
+  some(action)
+
 proc hasEvent(node: JsonNode, eventName: string): bool =
   if node.kind != JObject or not node.hasKey("events"):
     return eventName == "layout"
@@ -448,6 +480,23 @@ proc handleTriadRequest*(
 
   let request = stringFromField(payload, "request")
   case request
+  of "workspace-batch":
+    if stringFromField(payload, "session") != $workspaceSession:
+      result.reply = errReply("stale workspace session")
+      return
+    if not payload.hasKey("actions") or payload["actions"].kind != JArray or
+        payload["actions"].len == 0:
+      result.reply = errReply("workspace batch requires a nonempty actions array")
+      return
+    var actions: seq[WorkspaceAction]
+    for node in payload["actions"]:
+      let action = workspaceActionFromJson(node)
+      if action.isNone:
+        result.reply = errReply("invalid workspace action")
+        return
+      actions.add(action.get())
+    result.messages.add(Msg(kind: MsgKind.CmdWorkspaceBatch, workspaceActions: actions))
+    result.reply = ackReply()
   of "state":
     result.reply = okReply(
       %*{

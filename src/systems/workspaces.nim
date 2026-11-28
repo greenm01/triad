@@ -584,6 +584,8 @@ proc pruneDynamicWorkspaces*(model: var Model): bool =
       continue
     if model.tagHasNonStickyLiveWindows(tagId):
       continue
+    if model.tagData(tagId).get().explicitlyCreated:
+      continue
     if model.focusedDurableWorkspace(tagId):
       continue
     if model.tagVisibleOnOutput(tagId):

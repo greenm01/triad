@@ -53,6 +53,8 @@ type
 
   ShellWorkspace* = object
     tagId*: uint32
+    runtimeId*: uint32
+    explicitlyCreated*, canRemove*: bool
     workspaceIdx*: uint32
     name*: string
     layoutMode*: LayoutMode
@@ -113,6 +115,7 @@ type
 
   ShellOutput* = object
     id*: uint32
+    runtimeId*: uint32
     name*: string
     x*, y*, w*, h*: int32
     refreshRate*: int32

@@ -45,7 +45,7 @@ You can also use Janet to write custom layouts. See [docs/tiling_wm_categories.m
 
 Triad exposes its own state socket for native integrations. It can also launch shell profiles with a compatibility socket for shells that consume Niri's workspace IPC.
 
-Triad supplies `ext-workspace-v1` on River builds that lack it so standard Wayland clients can list and switch workspaces. It works with stock Noctalia and Waybar's `ext/workspaces` module. When the [proxy helper](docs/ext-workspace-v1.md) is installed, Triad starts it automatically for managed shells as needed and uses River's implementation when available.
+Triad supplies `ext-workspace-v1` on River builds that lack it. Standard Wayland clients can list, create, activate, deactivate, move, and remove workspaces according to the advertised capabilities. It works with stock Noctalia and Waybar's `ext/workspaces` module. When the [proxy helper](docs/ext-workspace-v1.md) is installed, Triad starts it automatically for managed shells as needed and uses River's implementation when available.
 
 | Shell | Native IPC | Niri IPC |
 | :--- | :--- | :--- |

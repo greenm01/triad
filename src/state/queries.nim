@@ -110,7 +110,7 @@ proc restoreDefaultMasterRatio(model: Model): float32 =
     DefaultMasterRatio
 
 proc hasDurableTagState*(model: Model, tag: TagData): bool =
-  if tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller or
+  if tag.explicitlyCreated or tag.name.len > 0 or tag.layoutMode != LayoutMode.Scroller or
       string(tag.customLayoutId).len > 0 or
       tag.nativeLayoutId.nativeLayoutIdString().len > 0:
     return true
@@ -242,7 +242,8 @@ proc reusableEmptyWorkspaceSlot*(
     if tagId == NullTagId:
       continue
     let tagOpt = model.tagData(tagId)
-    if tagOpt.isNone or not model.hasDurableTagState(tagOpt.get()):
+    if tagOpt.isNone or tagOpt.get().explicitlyCreated or
+        not model.hasDurableTagState(tagOpt.get()):
       continue
     if model.tagHasNonStickyLiveWindows(tagId) or model.tagVisibleOnOutput(tagId):
       continue
@@ -795,6 +796,19 @@ proc restoreSlotHasPendingWindow*(model: Model, slot: uint32): bool =
     if restoreSlots.find(slot) != -1:
       return true
   false
+
+proc workspaceCanRemove*(model: Model, tagId: TagId): bool =
+  let tag = model.tagData(tagId)
+  if tag.isNone or tagId == model.activeTag or
+      model.workspaceSlotConfigured(tag.get().slot) or model.tagVisibleOnOutput(tagId) or
+      model.restoreSlotHasPendingWindow(tag.get().slot):
+    return false
+  for _ in model.windowsOnTagWithId(tagId):
+    return false
+  for mask in model.scratchpadRestoreTags.values:
+    if mask.contains(tag.get().bit):
+      return false
+  true
 
 proc restoreWindow*(
     model: Model, externalId: ExternalWindowId

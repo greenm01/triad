@@ -33,13 +33,21 @@ first with `triad-wayland-proxy serve`.
 The default socket is `$XDG_RUNTIME_DIR/triad-workspaces-$WAYLAND_DISPLAY`
 using the basename of River's display. Both commands accept `--socket PATH`
 to select a different listener. `serve` uses the session's Triad sockets by
-default. For a custom session, `TRIAD_SOCKET` and `TRIAD_NIRI_SOCKET` override
-the state and activation endpoints. The helper exits when its River session ends.
+default. For a custom session, `TRIAD_SOCKET` overrides the state and workspace
+action endpoint, and `TRIAD_NIRI_SOCKET` overrides the activation fallback for
+older daemons. The helper exits when its River session ends.
 
-The proxy supports workspace listing and activation. Protocol versions it
-forwards are bounded by the bundled proxy library. Upstream Wayland peer
-credentials identify the proxy process, which can affect PID-based window
-rules. The session display continues to accept direct connections.
+The proxy lists workspaces and accepts create, activate, assign, deactivate,
+and remove requests. Each Wayland commit applies one batch in Triad. Creation
+keeps an empty workspace available without taking focus. Assignment preserves
+focus on the current output and replaces a moved workspace if one was visible
+there. Deactivation selects another workspace on the same output when available.
+Removal is available for empty, inactive dynamic workspaces.
+
+Protocol versions it forwards are bounded by the bundled proxy library.
+Upstream Wayland peer credentials identify the proxy process, which can affect
+PID-based window rules. The session display continues to accept direct
+connections.
 
 With both binaries built, the isolated smoke test is available through
 `python3 wayland-proxy/tests/smoke.py`. Add `--wlr-randr /path/to/wlr-randr` to
@@ -52,10 +60,9 @@ Triad already has native IPC. It also has a Niri-compatible path for shells that
 expect Niri's workspace stream. `ext-workspace-v1` is the better path for
 workspace buttons.
 
-The protocol is narrow. It gives shells a list of workspaces, their state, their
-grouping, and a few requests: activate, remove, maybe rename. That is the slice
-of Triad a bar needs. It is not a replacement for Triad IPC, Janet, layout
-control, diagnostics, or scripting.
+The protocol gives shells the workspace list, state, and grouping. Clients can
+request activation, deactivation, assignment to a group, creation, and removal
+according to the capabilities advertised on each object.
 
 The shape:
 
@@ -93,15 +100,13 @@ Triad tags map naturally to workspaces:
 
 | Triad | ext-workspace-v1 |
 | :--- | :--- |
-| tag ID | workspace `id` |
+| configured workspace slot | optional workspace `id` |
 | tag name or slot label | workspace `name` |
-| active tag | `active` state |
-| attention request | `urgent` state |
-| pruned or hidden tag | `hidden` state, or remove the workspace |
+| workspace shown on its output | `active` state |
+| pruned workspace | `removed` event |
 | focus workspace command | client `activate` request |
 
-Triad should keep using its own IPC for full control. `ext-workspace-v1` should
-only carry the workspace state shells already know how to consume.
+Triad IPC also handles layout control, diagnostics, and scripting.
 
 ## References
 

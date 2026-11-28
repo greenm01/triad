@@ -11,6 +11,18 @@ type
     PointerShow
     PointerHide
 
+  WorkspaceActionKind* {.pure.} = enum
+    Create
+    Activate
+    Assign
+    Deactivate
+    Remove
+
+  WorkspaceAction* = object
+    kind*: WorkspaceActionKind
+    workspaceId*, slot*, outputId*: uint32
+    name*: string
+
   MsgKind* {.pure.} = enum
     # Wayland Events
     WlWindowCreated
@@ -183,6 +195,7 @@ type
     CmdSelectWindow
     CmdFocusTag
     CmdNewWorkspace
+    CmdWorkspaceBatch
     CmdFocusWorkspaceIndex
     CmdReorderWorkspaceIndex
     CmdMoveToWorkspaceIndex
@@ -428,6 +441,8 @@ type
       focusTag*: uint32
     of MsgKind.CmdFocusWorkspaceIndex, MsgKind.CmdMoveToWorkspaceIndex:
       workspaceIndex*: uint32
+    of MsgKind.CmdWorkspaceBatch:
+      workspaceActions*: seq[WorkspaceAction]
     of MsgKind.CmdReorderWorkspaceIndex:
       reorderWorkspaceIndex*: uint32
       reorderTargetIndex*: uint32

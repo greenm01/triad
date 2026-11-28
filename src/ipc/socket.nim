@@ -490,11 +490,11 @@ proc startIpcServer*(
                         dispatchBinding(triad.bindingDispatch.get()) & "\L"
                       )
                     break
-                  if triad.reply.len > 0:
-                    await client.send(triad.reply & "\L")
                   for msg in triad.messages:
                     inc ipcPerfCounters.dispatchedMessages
                     onMsg(msg)
+                  if triad.reply.len > 0:
+                    await client.send(triad.reply & "\L")
                   for event in triad.initialEvents:
                     await client.send(event & "\L")
                   if triad.subscribeLayout or triad.subscribeState or

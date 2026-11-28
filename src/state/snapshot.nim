@@ -214,6 +214,7 @@ proc addShellOutputs(snapshot: var ShellSnapshot, model: Model) =
       snapshot.outputs.add(
         ShellOutput(
           id: uint32(output.externalId),
+          runtimeId: uint32(outputId),
           name: model.shellOutputName(outputId),
           x: output.x,
           y: output.y,
@@ -320,6 +321,9 @@ proc shellSnapshot*(model: Model): ShellSnapshot =
     result.workspaces.add(
       ShellWorkspace(
         tagId: slot,
+        runtimeId: uint32(tagId),
+        explicitlyCreated: tag.explicitlyCreated,
+        canRemove: model.workspaceCanRemove(tagId),
         workspaceIdx: uint32(idx + 1),
         name: tag.name,
         layoutMode: tag.layoutMode,

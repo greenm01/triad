@@ -1,4 +1,4 @@
-"""Exercise workspace discovery and activation using the public Wayland wire API."""
+"""Exercise workspace discovery and actions using the public Wayland wire API."""
 import socket
 import struct
 
@@ -78,7 +78,9 @@ class WorkspaceClient:
         elif target == self.manager and opcode == 1:
             self.workspaces[value] = {}
         elif target in self.groups:
-            if opcode in (1, 2):
+            if opcode == 0:
+                self.groups[target]["capabilities"] = value
+            elif opcode in (1, 2):
                 (self.groups[target]["outputs"].add if opcode == 1 else
                  self.groups[target]["outputs"].remove)(value)
             elif opcode in (3, 4):
@@ -93,6 +95,8 @@ class WorkspaceClient:
                 self.workspaces[target]["name"] = read_string(payload)[0]
             elif opcode == 3:
                 self.workspaces[target]["active"] = bool(value & 1)
+            elif opcode == 4:
+                self.workspaces[target]["capabilities"] = value
             elif opcode == 5:
                 assert all(target not in group["workspaces"] for group in self.groups.values())
                 del self.workspaces[target]

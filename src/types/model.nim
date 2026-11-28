@@ -65,6 +65,7 @@ type
     slot*: uint32
     bit*: TagMask
     name*: string
+    explicitlyCreated*: bool
     layoutMode*: LayoutMode
     customLayoutId*: JanetLayoutId
     nativeLayoutId*: NativeLayoutId
@@ -417,6 +418,7 @@ type
   RestoredTagData* = object
     slot*: uint32
     name*: string
+    explicitlyCreated*: bool
     layoutMode*: LayoutMode
     customLayoutId*: JanetLayoutId
     nativeLayoutId*: NativeLayoutId

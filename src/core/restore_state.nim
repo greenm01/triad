@@ -168,6 +168,8 @@ proc parseTagState(state: var LiveRestoreState, node: JsonNode) =
 
   if node.hasKey("name"):
     tag.name = stringFromJson(node["name"])
+  if node.hasKey("explicitly_created"):
+    tag.explicitlyCreated = node["explicitly_created"].getBool()
   if node.hasKey("custom_layout"):
     let custom = stringFromJson(node["custom_layout"]).strip()
     if custom.len > 0:

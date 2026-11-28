@@ -77,6 +77,7 @@ type
   RestoredTagState* = object
     tagId*: uint32
     name*: string
+    explicitlyCreated*: bool
     layoutMode*: LayoutMode
     customLayoutId*: JanetLayoutId
     nativeLayoutId*: NativeLayoutId

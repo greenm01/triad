@@ -113,6 +113,9 @@ proc setTagName*(model: var Model, tagId: TagId, name: string): bool =
   model.tags.mEntity(tagId).name = name
   true
 
+proc markWorkspaceCreated*(model: var Model, tagId: TagId) =
+  model.tags.mEntity(tagId).explicitlyCreated = true
+
 proc setTagMasterCount*(model: var Model, tagId: TagId, count: int): bool =
   if model.tags.entity(tagId).isNone:
     return false

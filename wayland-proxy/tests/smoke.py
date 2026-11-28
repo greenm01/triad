@@ -1,6 +1,6 @@
 """Run the bridge against an isolated two-output River session."""
 import argparse
-from contextlib import ExitStack, closing
+from contextlib import ExitStack, closing, suppress
 import json
 import os
 from pathlib import Path
@@ -33,28 +33,120 @@ def terminate(process):
             process.wait()
 
 
+def workspace_actions(first, second, match, workspaces):
+    def group_for(client, name):
+        handle = client.workspace_id(name)
+        return next(key for key, group in client.groups.items() if handle in group["workspaces"])
+
+    def has_workspace(client, name):
+        return any(row.get("name") == name for row in client.workspaces.values())
+
+    source = group_for(first, "Web")
+    destination = next(group for group in first.groups if group != source)
+    assert all(group["capabilities"] == 1 for group in first.groups.values())
+    first.send(source, 0, string("Sandbox"))
+    first.send(destination, 0, string("Standby"))
+    first.sync()
+    second.send(second.manager, 0)
+    second.sync()
+    assert not has_workspace(first, "Sandbox") and not has_workspace(second, "Sandbox")
+
+    first.send(first.manager, 0)
+    match(first, "create did not publish empty workspaces", lambda:
+          has_workspace(first, "Sandbox") and has_workspace(first, "Standby"))
+    sandbox = first.workspace_id("Sandbox")
+    assert group_for(first, "Sandbox") == source
+    assert not first.workspaces[sandbox]["active"]
+    assert first.workspaces[sandbox]["capabilities"] == 15
+    assert first.workspaces[first.workspace_id("Web")]["capabilities"] & 4 == 0
+
+    first.send(sandbox, 3, words(destination))
+    first.send(first.manager, 0)
+    match(first, "assign did not move the inactive workspace", lambda:
+          group_for(first, "Sandbox") == destination)
+    assert not first.workspaces[sandbox]["active"]
+    assert first.workspaces[first.workspace_id("Web")]["active"]
+
+    before = len(first.events)
+    first.send(sandbox, 3, words(source))
+    first.send(sandbox, 1)
+    first.send(first.manager, 0)
+    match(first, "assign and activate did not apply together", lambda:
+          group_for(first, "Sandbox") == source and first.workspaces[sandbox]["active"])
+    assert first.events[before:].count((first.manager, 2)) == 1
+    assert first.workspace_id("Sandbox") == sandbox
+    assert first.workspaces[sandbox]["capabilities"] & 4 == 0
+
+    first.send(sandbox, 4)
+    first.send(first.manager, 0)
+    first.sync()
+    assert first.workspaces[sandbox]["active"]
+    first.send(sandbox, 2)
+    first.send(first.manager, 0)
+    match(first, "deactivate did not select a replacement", lambda:
+          not first.workspaces[sandbox]["active"] and
+          any(first.workspaces[handle]["active"] for handle in first.groups[source]["workspaces"]))
+    assert first.workspaces[sandbox]["capabilities"] & 4
+
+    first.send(sandbox, 1)
+    first.send(first.manager, 0)
+    match(first, "workspace was not reactivated", lambda: first.workspaces[sandbox]["active"])
+    source_output = next(row["output"] for row in workspaces() if row["name"] == "Sandbox")
+    first.send(sandbox, 3, words(destination))
+    first.send(first.manager, 0)
+    match(first, "assign did not replace the active workspace on its old output", lambda:
+          group_for(first, "Sandbox") == destination and not first.workspaces[sandbox]["active"])
+    assert next(row["output"] for row in workspaces() if row["is_active"]) == source_output
+
+    first.send(sandbox, 1)
+    first.sync()
+    match(second, "second client did not see removal capability", lambda:
+          has_workspace(second, "Sandbox") and
+          second.workspaces[second.workspace_id("Sandbox")]["capabilities"] & 4)
+    old_slot = next(row["tag_id"] for row in workspaces() if row["name"] == "Sandbox")
+    second.send(second.workspace_id("Sandbox"), 4)
+    second.send(group_for(second, "Sandbox"), 0, string("Reused"))
+    second.send(second.manager, 0)
+    match(first, "remove and create did not replace the workspace", lambda:
+          not has_workspace(first, "Sandbox") and has_workspace(first, "Reused"))
+    reused = first.workspace_id("Reused")
+    assert reused != sandbox
+    assert next(row["tag_id"] for row in workspaces() if row["name"] == "Reused") == old_slot
+    first.send(source, 0, string("Commit marker"))
+    first.send(first.manager, 0)
+    match(first, "stale-handle batch did not finish", lambda: has_workspace(first, "Commit marker"))
+    assert not next(row["is_output_visible"] for row in workspaces() if row["name"] == "Reused")
+
+    first.send(reused, 4)
+    first.send(first.workspace_id("Standby"), 4)
+    first.send(first.workspace_id("Commit marker"), 4)
+    first.send(first.manager, 0)
+    match(first, "remove did not clean up both workspaces", lambda: len(first.workspaces) == 3)
+
+
 class NativeWorkspaceServer(StreamRequestHandler):
     def handle(self):
-        while header := self.rfile.read(8):
-            target, header = struct.unpack("=2I", header)
-            opcode = header & 0xffff
-            payload = self.rfile.read((header >> 16) - 8)
-            if target == 1 and opcode == 1:
-                registry, = struct.unpack("=I", payload)
-                self.send(registry, 0, words(71) + string(MANAGER) + words(1))
-            elif target == 1 and opcode == 0:
-                callback, = struct.unpack("=I", payload)
-                self.send(callback, 0, words(0))
-                self.send(1, 1, words(callback))
-            elif target == registry and opcode == 0:
-                name, = struct.unpack_from("=I", payload)
-                interface, end = read_string(payload[4:])
-                version, manager = struct.unpack_from("=2I", payload, 4 + end)
-                assert (name, interface, version) == (71, MANAGER, 1)
-                workspace = 0xff000000
-                self.send(manager, 1, words(workspace))
-                self.send(workspace, 1, string("Native workspace"))
-                self.send(manager, 2)
+        with suppress(ConnectionResetError, BrokenPipeError):
+            while header := self.rfile.read(8):
+                target, header = struct.unpack("=2I", header)
+                opcode = header & 0xffff
+                payload = self.rfile.read((header >> 16) - 8)
+                if target == 1 and opcode == 1:
+                    registry, = struct.unpack("=I", payload)
+                    self.send(registry, 0, words(71) + string(MANAGER) + words(1))
+                elif target == 1 and opcode == 0:
+                    callback, = struct.unpack("=I", payload)
+                    self.send(callback, 0, words(0))
+                    self.send(1, 1, words(callback))
+                elif target == registry and opcode == 0:
+                    name, = struct.unpack_from("=I", payload)
+                    interface, end = read_string(payload[4:])
+                    version, manager = struct.unpack_from("=2I", payload, 4 + end)
+                    assert (name, interface, version) == (71, MANAGER, 1)
+                    workspace = 0xff000000
+                    self.send(manager, 1, words(workspace))
+                    self.send(workspace, 1, string("Native workspace"))
+                    self.send(manager, 2)
 
     def send(self, target, opcode, payload=b""):
         self.wfile.write(words(target, ((8 + len(payload)) << 16) | opcode) + payload)
@@ -209,9 +301,29 @@ shells {{
                   any(key != old_group and original in group["workspaces"]
                       for key, group in first.groups.items()))
             assert first.workspace_id("Web") == original
+            if args.legacy:
+                assert all(group["capabilities"] == 0 for group in first.groups.values())
+                assert all(row["capabilities"] == 1 for row in first.workspaces.values())
+            else:
+                workspace_actions(first, second, match, workspaces)
             if args.wlr_randr:
+                if not args.legacy:
+                    current_group = next(key for key, group in first.groups.items()
+                                         if original in group["workspaces"])
+                    first.send(current_group, 0, string("Disconnected"))
+                    first.sync()
                 run(args.wlr_randr, "--output", target, "--off")
                 match(first, "removed display still has a workspace group", lambda: len(first.groups) == 1)
+                if not args.legacy:
+                    remaining_group = next(iter(first.groups))
+                    first.send(remaining_group, 0, string("Still connected"))
+                    first.send(first.manager, 0)
+                    match(first, "hotplug batch did not finish", lambda:
+                          any(row.get("name") == "Still connected" for row in first.workspaces.values()))
+                    assert all(row["name"] != "Disconnected" for row in workspaces())
+                    first.send(first.workspace_id("Still connected"), 4)
+                    first.send(first.manager, 0)
+                    match(first, "hotplug marker was not removed", lambda: len(first.workspaces) == 3)
 
             first.send(first.manager, 1)
             first.sync()
@@ -222,6 +334,9 @@ shells {{
             third.bind_manager()
             match(third, "reconnected client missed workspace state",
                   lambda: any(row.get("name") == "Web" for row in third.workspaces.values()))
+            if not args.legacy:
+                third.send(next(iter(third.groups)), 0, string("Previous session"))
+                third.sync()
 
             daemon.terminate()
             daemon.wait(timeout=4)
@@ -230,6 +345,12 @@ shells {{
             start("triad-restarted", [args.triad, "supervise"], TRIAD_WORKSPACE_PROXY="0")
             match(third, "workspaces did not recover after Triad restart",
                   lambda: len(third.workspaces) == 3 and len(third.groups) == (1 if args.wlr_randr else 2))
+            if not args.legacy:
+                third.send(next(iter(third.groups)), 0, string("Current session"))
+                third.send(third.manager, 0)
+                match(third, "reconnected client could not create a workspace", lambda:
+                      any(row.get("name") == "Current session" for row in third.workspaces.values()))
+                assert all(row.get("name") != "Previous session" for row in third.workspaces.values())
             wait_for("opted-out shell did not launch", launched.exists)
             assert launched.read_text() == display_lock.stem
 
@@ -250,5 +371,6 @@ if __name__ == "__main__":
     parser.add_argument("--proxy", default="./wayland-proxy/target/debug/triad-wayland-proxy")
     parser.add_argument("--wlr-randr", help="also exercise output removal")
     parser.add_argument("--wtype", help="send the workspace shortcut through River")
+    parser.add_argument("--legacy", action="store_true", help="test activation against an older Triad daemon")
     smoke(parser.parse_args())
     print("Workspace proxy smoke test passed")
