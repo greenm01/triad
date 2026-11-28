@@ -340,12 +340,11 @@ suite "Core Runtime Logic: parented geometry":
       Config(
         layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules:
-          @[
-            WindowRule(
-              appIdMatch: "editor", respectSizeHintsSet: true, respectSizeHints: false
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            appIdMatch: "editor", respectSizeHintsSet: true, respectSizeHints: false
+          )
+        ],
       )
     ).model
     model.applyMsg(
@@ -513,11 +512,10 @@ suite "Core Runtime Logic: parented geometry":
           animationSpeed: 0.5,
         ),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules:
-          @[
-            WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true),
-            WindowRule(appIdMatch: "pinentry", openFocusedSet: true, openFocused: false),
-          ],
+        windowRules: @[
+          WindowRule(appIdMatch: "keepassxc", dialogViewportJump: true),
+          WindowRule(appIdMatch: "pinentry", openFocusedSet: true, openFocused: false),
+        ],
       )
     ).model
     model.applyMsg(
@@ -655,16 +653,15 @@ suite "Core Runtime Logic: parented geometry":
       Config(
         layout: LayoutConfig(gaps: 10, defaultColumnWidth: 0.7),
         workspaces: WorkspaceConfig(defaultCount: 3),
-        windowRules:
-          @[
-            WindowRule(
-              appIdMatch: "pinentry",
-              openFloatingSet: true,
-              openFloating: false,
-              openFocusedSet: true,
-              openFocused: false,
-            )
-          ],
+        windowRules: @[
+          WindowRule(
+            appIdMatch: "pinentry",
+            openFloatingSet: true,
+            openFloating: false,
+            openFocusedSet: true,
+            openFocused: false,
+          )
+        ],
       )
     ).model
     model.applyMsg(
