@@ -21,7 +21,6 @@ proc settleShellLifecycle(runner: var ShellRunner, model: Model, socketPath: str
     runner.advanceStopCommands(monotonicMs())
     sleep(5)
 
-
 proc installAppIdentityFixture() =
   let apps =
     getTempDir() / ("triad-compat-apps-" & $getCurrentProcessId()) / "applications"
@@ -279,8 +278,11 @@ proc singleShellModel(
       configured: true,
       enabled: enabled,
       active: "test-shell",
-      profiles:
-        @[ShellProfileConfig(name: "test-shell", launch: launch, stop: stop, niriCompat: niriCompat)],
+      profiles: @[
+        ShellProfileConfig(
+          name: "test-shell", launch: launch, stop: stop, niriCompat: niriCompat
+        )
+      ],
     )
   )
 
@@ -468,9 +470,8 @@ suite "Shell compatibility contracts":
     check closeWin.messages[0].kind == MsgKind.CmdCloseWindowById
     check closeWin.messages[0].closeWindowId == 10
 
-    let invalidClose = handleNiriRequest(
-      """{"Action":{"CloseWindow":{"id":999}}}""", snapshot
-    )
+    let invalidClose =
+      handleNiriRequest("""{"Action":{"CloseWindow":{"id":999}}}""", snapshot)
     check invalidClose.messages.len == 0
     check parseJson(invalidClose.reply).hasKey("Err")
 
@@ -546,16 +547,14 @@ suite "Shell compatibility contracts":
     check unmaximizeToEdges.messages[0].kind == MsgKind.WlWindowUnmaximizeRequested
     check unmaximizeToEdges.messages[0].unmaximizeRequestId == 10
 
-    let fullscreenById = handleNiriRequest(
-      """{"Action":{"FullscreenWindow":{"id":10}}}""", snapshot
-    )
+    let fullscreenById =
+      handleNiriRequest("""{"Action":{"FullscreenWindow":{"id":10}}}""", snapshot)
     check fullscreenById.messages.len == 1
     check fullscreenById.messages[0].kind == MsgKind.CmdToggleFullscreenById
     check fullscreenById.messages[0].fullscreenWindowId == 10
 
-    let floatingById = handleNiriRequest(
-      """{"Action":{"ToggleWindowFloating":{"id":10}}}""", snapshot
-    )
+    let floatingById =
+      handleNiriRequest("""{"Action":{"ToggleWindowFloating":{"id":10}}}""", snapshot)
     check floatingById.messages.len == 1
     check floatingById.messages[0].kind == MsgKind.CmdSetWindowFloatingById
     check floatingById.messages[0].floatingWindowId == 10
@@ -812,13 +811,11 @@ suite "Shell compatibility contracts":
         check resolved == some(id)
 
     check resolveCommandId("minimized") == some(CommandId.Minimize)
-    check resolveCommandId("restore_minimized") ==
-      some(CommandId.RestoreMinimized)
+    check resolveCommandId("restore_minimized") == some(CommandId.RestoreMinimized)
 
   test "binding command identity ignores arguments":
-    let recent = KeyBindingConfig(
-      key: "grave", command: "recent-window-next --filter app-id"
-    )
+    let recent =
+      KeyBindingConfig(key: "grave", command: "recent-window-next --filter app-id")
     check recent.resolvedCommandId() == some(CommandId.RecentWindowNext)
     let spawn = KeyBindingConfig(key: "t", command: "spawn foot")
     check spawn.resolvedCommandId() == some(CommandId.Spawn)
@@ -1053,26 +1050,24 @@ suite "Shell compatibility contracts":
     check forwarded.messages[0].kind == MsgKind.CmdFocusWorkspaceIndex
     check forwarded.messages[0].workspaceIndex == 2
 
-    let focusMonitor = buildNiriCliRequest(
-      @["msg", "action", "focus-monitor", "triad-0"]
-    )
+    let focusMonitor =
+      buildNiriCliRequest(@["msg", "action", "focus-monitor", "triad-0"])
     check focusMonitor.kind == NiriCliKind.NckRequest
-    let focusMonitorForwarded = handleNiriRequest(focusMonitor.socketPayload, snapshotForShell())
+    let focusMonitorForwarded =
+      handleNiriRequest(focusMonitor.socketPayload, snapshotForShell())
     check focusMonitorForwarded.messages.len == 1
     check focusMonitorForwarded.messages[0].kind == MsgKind.CmdFocusOutput
 
-    let fullscreen = buildNiriCliRequest(
-      @["msg", "action", "fullscreen-window", "--id", "10"]
-    )
+    let fullscreen =
+      buildNiriCliRequest(@["msg", "action", "fullscreen-window", "--id", "10"])
     check fullscreen.kind == NiriCliKind.NckRequest
-    let fullscreenForwarded = handleNiriRequest(fullscreen.socketPayload, snapshotForShell())
+    let fullscreenForwarded =
+      handleNiriRequest(fullscreen.socketPayload, snapshotForShell())
     check fullscreenForwarded.messages.len == 1
     check fullscreenForwarded.messages[0].kind == MsgKind.CmdToggleFullscreenById
 
     let reorder = buildNiriCliRequest(
-      @[
-        "msg", "action", "move-workspace-to-index", "2", "--reference", "1"
-      ]
+      @["msg", "action", "move-workspace-to-index", "2", "--reference", "1"]
     )
     check reorder.kind == NiriCliKind.NckRequest
     let reorderForwarded = handleNiriRequest(reorder.socketPayload, snapshotForShell())
@@ -1695,7 +1690,6 @@ exit "${TRIAD_FAKE_SHELL_EXIT:-0}"
     let calls = readFile(fake.logPath)
     check calls.count("stop") == 1
 
-
   test "Final recovery attempt keeps a healthy shell tracked":
     let tmp = getTempDir() / ("triad-shell-recovery-final-" & $getCurrentProcessId())
     if dirExists(tmp):
@@ -1959,8 +1953,7 @@ suite "injectable shell lifecycle":
     let model = singleShellModel(@["fake-shell", "launch"], @[])
     let handle = newFakeProcessHandle(1001)
     runner.queueFakeShellLaunch(
-      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
-      nowMs = 0'i64,
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test", nowMs = 0'i64
     )
     runner.advanceShellLifecycle(model, "niri.sock", 300'i64)
     check runner.trackedProcess == handle
@@ -1972,8 +1965,7 @@ suite "injectable shell lifecycle":
     let handle = newFakeProcessHandle(1002)
     handle.setFakeExitCode(7)
     runner.queueFakeShellLaunch(
-      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
-      nowMs = 0'i64,
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test", nowMs = 0'i64
     )
     runner.advanceShellLifecycle(model, "niri.sock", 1'i64)
     check runner.recoveryPending
@@ -1994,8 +1986,13 @@ suite "injectable shell lifecycle":
     let handle = newFakeProcessHandle(1005)
     handle.setFakeExitCode(7)
     runner.queueFakeShellLaunch(
-      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
-      nowMs = 0'i64, retryAllowed = true,
+      handle,
+      model.shells.profiles[0],
+      model.shells,
+      "niri.sock",
+      "test",
+      nowMs = 0'i64,
+      retryAllowed = true,
     )
     runner.recoveryAttempts = 2
 
@@ -2018,8 +2015,7 @@ suite "injectable shell lifecycle":
     let model = singleShellModel(@["fake-shell", "launch"], @[])
     let handle = newFakeProcessHandle(1003)
     runner.queueFakeShellLaunch(
-      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
-      nowMs = 0'i64,
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test", nowMs = 0'i64
     )
     var disabled = model
     disabled.shells.enabled = false
@@ -2035,8 +2031,7 @@ suite "injectable shell lifecycle":
     let model = singleShellModel(@["fake-shell", "launch"], @[])
     let handle = newFakeProcessHandle(1004)
     runner.queueFakeShellLaunch(
-      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
-      nowMs = 0'i64,
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test", nowMs = 0'i64
     )
 
     runner.stopShellsForShutdown()
@@ -2051,8 +2046,7 @@ suite "injectable shell lifecycle":
     let model = singleShellModel(@["fake-shell", "launch"], @[])
     let handle = newFakeProcessHandle(1004)
     runner.queueFakeShellLaunch(
-      handle, model.shells.profiles[0], model.shells, "niri.sock", "test",
-      nowMs = 0'i64,
+      handle, model.shells.profiles[0], model.shells, "niri.sock", "test", nowMs = 0'i64
     )
     runner.recoveryPending = true
     runner.recoveryAttempts = MaxShellRecoveryAttempts
