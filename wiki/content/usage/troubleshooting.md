@@ -87,7 +87,7 @@ If Triad starts but no bar or shell appears, check the log for failed launch
 entries. Verify the shell command is on `PATH`:
 
 ```bash
-which noctalia-shell
+which noctalia
 which waybar
 ```
 
@@ -99,6 +99,15 @@ profile "waybar" {
   stop   "pkill" "-x" "waybar"
 }
 ```
+
+## Workspace Buttons Are Missing
+
+Run `triad msg workspaces` to check that Triad sees your workspaces. On River
+builds that lack `ext-workspace-v1`, check that `triad-wayland-proxy` is installed
+and that the bar is launched through a Triad shell profile. For Waybar, check
+that your config uses `ext/workspaces`. For stock Noctalia 5.6, check that the
+workspaces widget is present in the bar. See
+[Shell Setup](@/configuration/shell-setup.md#standard-wayland-workspaces) for examples.
 
 ## Config Edit Breaks Startup
 
@@ -155,3 +164,6 @@ nimble liveReload
 
 This builds release binaries, captures a restore snapshot, and asks the running
 manager to restart. Your windows stay in place.
+
+The shell manager and workspace proxy can stay running through a WM reload.
+Starting a new River/Triad session loads the newly installed processes.

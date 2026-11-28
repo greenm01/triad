@@ -12,9 +12,7 @@ external_links_no_follow = false
 external_links_no_referrer = true
 
 [markdown.highlighting]
-# Whether to highlight code blocks
-render = true
-# The theme to use for code highlighting
+style = "inline"
 theme = "github-dark"
 
 [search]

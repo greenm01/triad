@@ -85,6 +85,12 @@ cd triad
 nimble installSession
 ```
 
+Install Rust 1.89 or later with Cargo before running `nimble installSession`
+to include the optional workspace bridge. The helper provides
+`ext-workspace-v1` for managed shells on River builds that lack it. The
+[Shell Setup guide](@/configuration/shell-setup.md#standard-wayland-workspaces)
+covers Noctalia and Waybar configuration.
+
 ## Test Before You Leap
 
 Don't log out yet. Test Triad from your current desktop. 

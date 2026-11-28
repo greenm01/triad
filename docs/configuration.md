@@ -85,14 +85,18 @@ capture-session {
 ### Shell & Bar Profiles
 Manage shells and status bars in the `shells` block. Triad sets `$TRIAD_SOCKET` for every profile. Use `niri-compat #true` if a shell needs the Niri IPC facade and `$NIRI_SOCKET`.
 
+For standard Wayland workspace buttons, use stock Noctalia 5.6 or Waybar's
+`ext/workspaces` module. Triad starts the installed
+[workspace proxy](ext-workspace-v1.md) as needed for managed shells.
+
 **Example Profile:**
 ```kdl
 shells {
+  enabled #true
   active "waybar"
   profile "waybar" {
     launch "waybar"
     stop "pkill" "-x" "waybar"
-    niri-compat #true
   }
 }
 ```

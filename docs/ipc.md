@@ -66,7 +66,8 @@ Triad broadcasts its life. State changes, focus shifts, windows opening—it’s
 Listen in:
 `triad msg event-stream`
 
-We also talk the Waybar dialect. Noctalia and Waylee understand it.
+Shells can subscribe through Niri-compatible IPC. Clients such as stock
+Noctalia and Waybar can also use [standard Wayland workspaces](ext-workspace-v1.md).
 
 ---
 
@@ -127,6 +128,30 @@ Bark orders in JSON:
 ```json
 {"triad":{"version":1,"request":"action","action":"focus-workspace","workspace_idx":2}}
 ```
+
+The Wayland workspace proxy uses `workspace-batch` to pass one protocol commit
+to Triad. Check `capabilities.workspace_batch` and use the `workspace_session`
+token from the native state payload. Workspace and output `runtime_id` values
+are scoped to that daemon session. A workspace runtime ID identifies the
+workspace even if its displayed position changes.
+
+```json
+{
+  "triad": {
+    "version": 1,
+    "request": "workspace-batch",
+    "session": "<workspace_session>",
+    "actions": [
+      {"action":"assign","workspace":{"runtime":4},"output":2},
+      {"action":"activate","workspace":{"runtime":4}}
+    ]
+  }
+}
+```
+
+The action names are `create`, `activate`, `assign`, `deactivate`, and `remove`.
+Creation takes an `output` runtime ID and a `name`. The acknowledgement
+confirms the batch was queued. Subscribe to state changes for the result.
 
 ### Stay Informed
 Subscribe to the pulse:

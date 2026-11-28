@@ -14,8 +14,9 @@ at runtime.
 
 ```kdl
 shells {
+  enabled #true
   active "noctalia"
-  cycle  "noctalia" "waylee" "waybar"
+  cycle  "noctalia" "wayle" "waybar"
 
   watchdog {
     enabled  #true
@@ -23,18 +24,17 @@ shells {
   }
 
   profile "noctalia" {
-    launch "noctalia-shell"
-    stop   "pkill" "-f" "noctalia-shell"
+    launch "noctalia"
+    stop   "pkill" "-x" "noctalia"
     niri-compat #true
   }
 
   profile "waybar" {
     launch "waybar"
     stop   "pkill" "-x" "waybar"
-    niri-compat #true
   }
 
-  profile "waylee" {
+  profile "wayle" {
     launch "wayle"
     stop   "pkill" "-x" "wayle"
     niri-compat #true
@@ -50,10 +50,11 @@ shells {
 
 | Setting | Type | Description |
 |---|---|---|
+| `enabled` | Bool | Enable managed shell profiles. |
 | `active` | String | Profile to launch at startup. |
 | `cycle` | List | Profiles to rotate through with `cycle-shell`. |
-| `watchdog.enabled` | Bool | Restart the shell if it crashes. |
-| `watchdog.fallback` | String | Profile to use if the active shell fails repeatedly. |
+| `watchdog.enabled` | Bool | Recover the active shell when its tracked process exits. |
+| `watchdog.fallback` | String | Profile to select when the active shell exits or holds exclusive focus past the watchdog timeout. |
 
 Each profile takes:
 
@@ -61,53 +62,74 @@ Each profile takes:
 |---|---|---|
 | `launch` | String argv | Command to start the shell. |
 | `stop` | String argv | Command to stop it cleanly. |
-| `niri-compat` | Bool | Set `$NIRI_SOCKET` and expose the compatibility IPC facade used by Noctalia, DankMaterialShell, Waylee, and Waybar's `niri/workspaces` module. |
+| `niri-compat` | Bool | Set `$NIRI_SOCKET` for clients that use Niri-compatible IPC. |
+
+## Standard Wayland Workspaces
+
+Stock Noctalia 5.6 and Waybar's `ext/workspaces` module use
+`ext-workspace-v1` to list workspaces and switch between them. On River builds
+that lack the protocol, Triad automatically starts `triad-wayland-proxy` for
+managed shells when the helper is installed. When River advertises the protocol
+itself, managed shells use River directly. Set `TRIAD_WORKSPACE_PROXY=0` in
+Triad's environment to opt out of the helper.
+
+The bridge also supports creating workspaces, moving them between outputs,
+and deactivating them. Clients can remove empty, inactive dynamic workspaces.
+Each client decides which actions to expose. Noctalia 5.6 uses the bridge for
+workspace display and switching. See the
+[bridge documentation](https://github.com/greenm01/triad/blob/master/docs/ext-workspace-v1.md)
+for installation, available actions, and how to run other clients through it.
 
 ## Supported Shells
 
 ### Waybar
 
-Waybar reads standard Wayland protocols for most modules. Its
-`niri/workspaces` module uses Triad's compatibility IPC facade, so add
-`niri-compat #true` when you want Waybar workspace buttons.
+Use a Waybar build that includes `ext/workspaces`. Add the module to your
+Waybar config to show workspace names on each monitor and switch by clicking:
 
-```kdl
-profile "waybar" {
-  launch "waybar"
-  stop   "pkill" "-x" "waybar"
-  niri-compat #true
+```json
+{
+  "modules-left": ["ext/workspaces"],
+  "ext/workspaces": {
+    "on-click": "activate",
+    "all-outputs": false,
+    "format": "{name}",
+    "sort-by-name": false,
+    "sort-by-coordinates": true
+  }
 }
 ```
 
-### Noctalia, DankMaterialShell, and Waylee
+For Waybar's `niri/workspaces` module or other Niri modules, set
+`niri-compat #true` in the Waybar profile.
 
-These shells consume the compatibility IPC schema. Set `niri-compat #true` in
-their profiles. Triad sets `$NIRI_SOCKET` to a compatibility socket and
-translates events from its native snapshot.
+### Noctalia
 
-```kdl
-profile "noctalia" {
-  launch "noctalia-shell"
-  stop   "pkill" "-f" "noctalia-shell"
-  niri-compat #true
-}
+For stock Noctalia 5.6, use the `noctalia` profile above. Niri-compatible IPC
+supplies additional window and application metadata to Noctalia. The
+Triad-native Noctalia fork can read that metadata directly from Triad.
+
+Set label preferences in a TOML file under `~/.config/noctalia/`:
+
+```toml
+[widget.workspaces]
+show_labels = true
+label_source = "id"
 ```
 
-Waylee uses the same compatibility path:
+Use `label_source = "name"` for workspace names. See
+[Noctalia's workspace widget documentation](https://docs.noctalia.dev/noctalia/v5.6.0/bar/widgets/workspaces/)
+for the other settings.
 
-```kdl
-profile "waylee" {
-  launch "wayle"
-  stop   "pkill" "-x" "wayle"
-  niri-compat #true
-}
-```
+### DankMaterialShell and Wayle
+
+Set `niri-compat #true` in these profiles. Triad exposes the Niri workspace,
+window, output, overview, and keyboard layout events through `$NIRI_SOCKET`.
 
 ## Workspace Names in Your Bar
 
-Workspace names you set in `workspace-rules` flow through IPC to your shell
-automatically. Name your workspaces once in your Triad config and they appear
-in every bar without any further coordination:
+Name workspaces in `workspace-rules`. These names are available to shell
+clients over the workspace protocol and through IPC.
 
 ```kdl
 workspaces {
@@ -125,44 +147,7 @@ workspace-rules {
 }
 ```
 
-### Waybar
-
-Add `niri-compat #true` to the Waybar profile. Triad then sets `$NIRI_SOCKET`
-and Waybar's `niri/workspaces` module reads from it.
-
-```kdl
-profile "waybar" {
-  launch "waybar"
-  stop   "pkill" "-x" "waybar"
-  niri-compat #true
-}
-```
-
-In your Waybar JSON config, set `"all-outputs": false` so each bar instance
-shows only the workspaces belonging to its own monitor — essential for
-multi-monitor setups:
-
-```json
-"modules-left": ["niri/workspaces"],
-
-"niri/workspaces": {
-  "on-click": "activate",
-  "all-outputs": false,
-  "format": "{index}",
-  "format-icons": {
-    "active":  "󱓻",
-    "urgent":  "󱓻",
-    "default": "",
-    "1": "1", "2": "2", "3": "3",
-    "4": "4", "5": "5", "6": "6",
-    "7": "7", "8": "8", "9": "9"
-  }
-}
-```
-
-With `"all-outputs": false`, the workspace bar on each monitor shows only
-the workspaces assigned to that output. Pin workspaces to specific monitors
-in `workspace-rules` or the `output` block:
+Pin workspaces to specific monitors in `workspace-rules` or the `output` block:
 
 ```kdl
 workspace-rules {
@@ -170,37 +155,6 @@ workspace-rules {
   workspace 5 name="media" open-on-output="DP-2"
 }
 ```
-
-### Noctalia
-
-Noctalia receives workspace state directly via the event stream — names and
-active state update automatically. In Noctalia's `settings.json`, the
-`Workspace` widget in your bar config controls display:
-
-```json
-{
-  "id": "Workspace",
-  "labelMode": "index",
-  "hideUnoccupied": false,
-  "showLabelsOnlyWhenOccupied": true,
-  "enableScrollWheel": true
-}
-```
-
-Set `"labelMode": "name"` to show workspace names instead of numbers. Noctalia
-will use the names from your `workspace-rules` directly.
-
-### DankMaterialShell
-
-DankMaterialShell also uses `niri-compat #true` and reads workspace state from
-the same Niri-compatible event stream. No additional configuration is needed
-beyond the profile entry.
-
-### Waylee
-
-Waylee also uses `niri-compat #true`. It reads workspaces, windows, outputs,
-overview state, and keyboard layout events through the same `$NIRI_SOCKET`
-facade.
 
 ### Exporting Sockets to the Session
 

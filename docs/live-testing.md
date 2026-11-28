@@ -186,9 +186,9 @@ When `shells { enabled #true }` is configured, Triad starts the active shell
 profile with a private Niri-compatible environment when that profile has
 `niri-compat #true`. Startup still waits until the first River manage pass has
 restored window/output state. During live reload, the exiting manager leaves its
-tracked shell process alive for the handoff; the replacement manager then runs
-configured stop commands for shell profiles and spawns the active profile after
-initial manage. To include that in live smoke:
+tracked shell process alive for the handoff. The supervised shell manager owns
+the shell and keeps the active profile running through a WM reload. To include
+shell compatibility in live smoke:
 
 ```bash
 TRIAD_LIVE_TEST_SHELL=1 ./tools/live_smoke.sh
@@ -200,10 +200,11 @@ query Triad through the shell-facing `$NIRI_SOCKET`. Triad also prepends
 `$XDG_RUNTIME_DIR/triad-shell-compat/share` to the shell profile's
 `XDG_DATA_DIRS` so shells can resolve Triad-provided desktop/icon aliases
 without changing the rest of the user session.
-Use this path for Niri-aware shell profiles such as DankMaterialShell, Waylee,
-or Waybar configured with `niri/workspaces`. Noctalia v5 normally uses native
-Triad IPC instead; use the Niri compatibility path only for older or explicitly
-Niri-configured Noctalia profiles.
+Use this path for Niri-aware shell profiles such as DankMaterialShell, Wayle,
+or Waybar configured with `niri/workspaces`. Stock Noctalia 5.6 uses
+[standard Wayland workspaces](ext-workspace-v1.md) for workspace buttons and
+can also consume Niri-compatible metadata. The Triad-native fork can use
+Triad IPC for metadata.
 
 The Niri facade exposes each window's native Wayland `app_id`; shell clients
 must use that value when associating Niri windows with foreign toplevels. It

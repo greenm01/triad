@@ -347,13 +347,17 @@ shells {
   profile "waybar" {
     launch "waybar"
     stop "pkill" "-x" "waybar"
-    niri-compat #true
   }
 }
 ```
 
 The profile commands are plain argv-style entries. Replace them with the shell
-or bar commands you use. See `examples/config/niltempus_config.kdl` in the
+or bar commands you use. For workspace buttons, configure Waybar's
+`ext/workspaces` module. On River builds that lack `ext-workspace-v1`, install
+the [workspace proxy](docs/ext-workspace-v1.md). `nimble installSession` builds
+and installs it when Rust 1.89 or later and Cargo are available.
+
+See `examples/config/niltempus_config.kdl` in the
 GitHub repository for a setup with multiple profiles, including Noctalia and
 DankMaterialShell.
 
@@ -362,9 +366,10 @@ DankMaterialShell.
 Triad does not install Noctalia. Install Noctalia first, then add a Triad shell
 profile that launches its command.
 
-Noctalia v5 has native Triad IPC. Use the native profile path unless you are
-intentionally running an older Noctalia build that only understands the
-Niri-compatible workspace API.
+Stock Noctalia 5.6 uses `ext-workspace-v1` for workspace buttons and can read
+additional shell metadata over Niri-compatible IPC. Use
+`niri-compat #true` for the stock build and `#false` for the
+[Triad-native fork](https://github.com/greenm01/noctalia-shell/tree/triad-native-ipc-v5).
 
 If `noctalia` is on `PATH`, enable a profile in
 `~/.config/triad/config.kdl`:
@@ -383,7 +388,7 @@ shells {
   profile "noctalia" {
     launch "noctalia"
     stop "pkill" "-x" "noctalia"
-    niri-compat #false
+    niri-compat #true
   }
 }
 ```
@@ -394,7 +399,7 @@ If you install Noctalia to a fixed prefix, use the full binary path:
 profile "noctalia" {
   launch "/home/you/.local/opt/noctalia-v5/bin/noctalia"
   stop "pkill" "-x" "noctalia"
-  niri-compat #false
+  niri-compat #true
 }
 ```
 
@@ -428,9 +433,7 @@ shells {
 }
 ```
 
-`niri-compat #true` is only required for shells or older shell builds that
-consume Niri-compatible workspace IPC. Leave it `#false` for Noctalia v5's
-native Triad integration.
+Waybar's `niri/workspaces` module also uses `niri-compat #true`.
 
 See [docs/configuration.md](docs/configuration.md) for the full config surface.
 

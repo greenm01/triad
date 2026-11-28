@@ -40,4 +40,4 @@ Isaac Freund explains the design in [Separating the Wayland Compositor and Windo
 
 *   **Crash-resilient.** Layout errors never reach the compositor. Long-running scripts survive reloads without losing context.
 *   **Fast.** Written in Nim. No object graph to walk.
-*   **Shell-ready.** Triad-native IPC is our primary integration, but we also provide a compatibility socket for Waybar, Noctalia, and Waylee.
+*   **Shell-ready.** Triad provides native IPC, Niri-compatible IPC, and an [`ext-workspace-v1` bridge](@/configuration/shell-setup.md#standard-wayland-workspaces) for stock Noctalia and Waybar on River builds that lack the protocol.

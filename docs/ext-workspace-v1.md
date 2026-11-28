@@ -44,6 +44,10 @@ focus on the current output and replaces a moved workspace if one was visible
 there. Deactivation selects another workspace on the same output when available.
 Removal is available for empty, inactive dynamic workspaces.
 
+Stock Noctalia 5.6 uses the protocol for workspace display and switching.
+See [Shell Setup](https://triadwm.org/configuration/shell-setup/) for current
+Noctalia and Waybar configuration examples.
+
 Protocol versions it forwards are bounded by the bundled proxy library.
 Upstream Wayland peer credentials identify the proxy process, which can affect
 PID-based window rules. The session display continues to accept direct
@@ -90,7 +94,7 @@ what matters for an `ext-workspace-v1` integration.
 | :--- | :--- | :--- | :--- |
 | [Noctalia v5](https://github.com/noctalia-dev/noctalia) | Native IPC in the [Triad fork](https://github.com/greenm01/noctalia-shell/tree/triad-native-ipc-v5). Upstream 5.6 detects the Niri socket. | Upstream 5.6 has an `ext-workspace-v1` backend. | Triad uses the installed proxy for managed shell launches on River builds that lack native workspace support. |
 | [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) | Niri IPC; native IPC fork/PR pending | Documented for workspace integration | Good target for the standard workspace path. |
-| [Waybar](https://github.com/Alexays/Waybar) | Niri IPC; native IPC fork/PR pending | Documented through `ext/workspaces` | Best first bar target. It may require an experimental Waybar build. |
+| [Waybar](https://github.com/Alexays/Waybar) | Niri IPC; native IPC fork/PR pending | Uses `ext/workspaces` | Verified with Waybar 0.15. |
 | [Wayle](https://github.com/wayle-rs/wayle) | Niri IPC; native IPC fork/PR pending | Not confirmed in public docs | Track as a later shell target. Current public docs describe compositor-specific workspace modules. |
 | [Ironbar](https://github.com/JakeStanger/ironbar) | Niri IPC; native IPC fork/PR pending | Not confirmed in current docs | Track as a later bar target. Prior discussion asked for the standard workspace protocol, but current support needs verification. |
 

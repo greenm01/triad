@@ -34,6 +34,10 @@ input {
 | `repeat-rate` | Hz | Keys repeated per second while held. |
 | `repeat-delay` | ms | Delay before key repeat starts. |
 
+With multiple configured layouts, Triad reports River's active layout over
+shell IPC as you switch. It applies the keymap when configuring a keyboard or
+when its XKB settings change.
+
 To list available layouts, variants, and options:
 
 ```bash
